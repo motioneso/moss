@@ -24,6 +24,8 @@ export {
   renderAndCap
 } from "./output-validation.js";
 export type {
+  AdmissionPath,
+  ConversationProvenancePort,
   ActiveModulesResolver,
   CallCardDetails,
   PerCallResolution,

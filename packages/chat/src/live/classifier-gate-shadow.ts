@@ -26,6 +26,8 @@ export const SHADOW_OBSERVATION_BUFFER_LIMIT = 200;
 
 export interface ClassifierGateShadowTurnInput {
   readonly actorUserId: string;
+  /** Conversation captured with privacy at turn start, before any mode wait. */
+  readonly threadId: string | null;
   readonly surface: ChatSurface;
   /** The accepted original text. Never logged. */
   readonly message: string;
@@ -62,7 +64,12 @@ export interface ClassifierGateShadowRunnerDeps {
   readonly dataContext: DataContextRunner;
   readonly tokens: {
     /** Mints a short-lived gate token with the captured tool allowlist. */
-    mint(actorUserId: string, correlationId: string, allowedToolNames: Set<string>): string;
+    mint(
+      actorUserId: string,
+      correlationId: string,
+      threadId: string | null,
+      allowedToolNames: Set<string>
+    ): string;
     /** Revokes that token alone. */
     revoke(correlationId: string): void;
   };
@@ -217,7 +224,7 @@ export function createClassifierGateShadowRunner(
       if (new TextEncoder().encode(input.message).length > GATE_LIMITS.maxMessageBytes) return;
 
       const allowedToolNames = new Set(await deps.listToolNames(actorUserId));
-      const token = deps.tokens.mint(actorUserId, turnId, allowedToolNames);
+      const token = deps.tokens.mint(actorUserId, turnId, input.threadId, allowedToolNames);
       try {
         const ports = deps.createPorts(actorUserId, token, turnId);
         let resolved: ClassifierHandle | null | undefined;
@@ -279,6 +286,7 @@ export function createClassifierGateShadowRunner(
         });
         const outcome = await gate.evaluate({
           actorUserId,
+          threadId: input.threadId,
           message: input.message,
           hasAttachment: input.hasAttachment,
           incognito: false,
@@ -453,6 +461,7 @@ export function beginClassifierGateShadowTurn(
   message: string,
   incognito: boolean,
   options: {
+    readonly threadId: string | null;
     readonly hasAttachment: boolean;
     readonly signal: AbortSignal;
     readonly turnId?: string;
@@ -464,6 +473,7 @@ export function beginClassifierGateShadowTurn(
   const turnId = options.turnId ?? randomUUID();
   runner?.start({
     actorUserId,
+    threadId: options.threadId,
     surface,
     message,
     turnId,

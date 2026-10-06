@@ -34,6 +34,13 @@ export interface DestructiveWordPostAllowed {
  */
 export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
   {
+    // This owner acknowledgement is introduced by the separately developed capture branch.
+    // Keep it blocked even if that branch's route metadata is absent or permissive on integration.
+    pattern: /^\/api\/meetings\/recording-notice$/,
+    category: "data_scope_consent",
+    writesOnly: true
+  },
+  {
     pattern: /^\/api\/people\/notes-settings$/,
     category: "prompt_shaping",
     writesOnly: true,

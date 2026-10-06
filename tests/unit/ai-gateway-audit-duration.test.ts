@@ -49,6 +49,8 @@ async function runYoloAndCaptureAudit(
   const tokens = new SessionTokenRegistry();
   const confirmations = new ConfirmationRegistry();
   const gateway = new AssistantToolGateway({
+    // This fixture exercises ordinary policy on an explicitly clean conversation.
+    provenance: { isTainted: async () => false, recordAdmission: async () => {} },
     resolveActiveModules: async () => [manifestWithTool(toolOverrides)],
     repository: {
       insertActionAuditLog: async (
@@ -67,7 +69,12 @@ async function runYoloAndCaptureAudit(
     confirmTimeoutMs: 50,
     yoloMode: async () => true
   });
-  const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+  const token = tokens.mint({
+    threadId: "clean-thread",
+    actorUserId: "u1",
+    chatSessionId: "c1",
+    allowedToolNames: null
+  });
   await gateway.callTool(token, "acme.write", {});
   await vi.waitFor(() => expect(audits).toHaveLength(1));
   return audits[0]!;
@@ -113,6 +120,8 @@ describe("gateway audit duration + trusted auditOutcome (#2175 Task 7)", () => {
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
+      // This fixture exercises ordinary policy on an explicitly clean conversation.
+      provenance: { isTainted: async () => false, recordAdmission: async () => {} },
       resolveActiveModules: async () => [
         manifestWithTool({
           execute: async (): Promise<ToolResult> => ({ data: { written: true } })
@@ -136,7 +145,12 @@ describe("gateway audit duration + trusted auditOutcome (#2175 Task 7)", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "c1",
+      allowedToolNames: null
+    });
 
     // The auto-run limiter defaults to 10 calls per window; the 11th call in the same window
     // trips the denial branch before runHandler ever runs.

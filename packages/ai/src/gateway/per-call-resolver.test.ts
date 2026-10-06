@@ -82,6 +82,8 @@ function build(
   const tokens = new SessionTokenRegistry();
   const confirmations = new ConfirmationRegistry();
   const gateway = new AssistantToolGateway({
+    // This fixture exercises ordinary policy on an explicitly clean conversation.
+    provenance: { isTainted: async () => false, recordAdmission: async () => {} },
     resolveActiveModules: async () => [module],
     runner: {
       withDataContext: async (_access: unknown, work: (db: unknown) => unknown) => work({})
@@ -98,7 +100,12 @@ function build(
     perCallResolvers: { "app.callAction": resolver },
     ...options.deps
   });
-  const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+  const token = tokens.mint({
+    threadId: "clean-thread",
+    actorUserId: "u1",
+    chatSessionId: "s1",
+    allowedToolNames: null
+  });
   return {
     gateway,
     token,

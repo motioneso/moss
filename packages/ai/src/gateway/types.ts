@@ -9,6 +9,29 @@ import type {
   ToolServices
 } from "@moss/module-sdk";
 
+export type AdmissionPath =
+  | "tool_external_content"
+  | "app_action_outside"
+  | "attachment_read"
+  | "recall_memory_turn"
+  | "recall_cross_tool"
+  | "recall_notes"
+  | "launch_memory_seed"
+  | "seed_route"
+  | "evening_seed"
+  | "module_control_context"
+  | "native_vault_read"
+  | "outside_agent_read"
+  | "outside_agent_web"
+  | "outside_agent_shell"
+  | "outside_agent_launch";
+
+export interface ConversationProvenancePort {
+  /** Missing, legacy and foreign threads are tainted. The actor owns the lookup scope. */
+  isTainted(actorUserId: string, threadId: string | undefined): Promise<boolean>;
+  recordAdmission(actorUserId: string, threadId: string, path: AdmissionPath): Promise<void>;
+}
+
 export interface CallCardDetails {
   readonly target: string | null;
   readonly fields: readonly { readonly label: string; readonly value: string }[];

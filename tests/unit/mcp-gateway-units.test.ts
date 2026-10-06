@@ -21,6 +21,15 @@ import type {
   ToolResult
 } from "@moss/module-sdk";
 
+// These fixtures exercise existing policy rules with explicitly clean provenance.
+const cleanProvenance = { isTainted: async () => false, recordAdmission: async () => {} };
+const cleanThreadIdentity = (chatSessionId: string) => ({
+  actorUserId: "u1",
+  chatSessionId,
+  threadId: "clean-thread",
+  allowedToolNames: null
+});
+
 describe("module-sdk tool contract", () => {
   it("lets a module declare a tool with an execute handler", async () => {
     const ctx: ToolContext = { actorUserId: "u1", requestId: "r1", chatSessionId: "s1" };
@@ -98,7 +107,8 @@ describe("session token registry", () => {
     expect(registry.verify(token)).toEqual({
       actorUserId: "u1",
       chatSessionId: "s1",
-      allowedToolNames: null
+      allowedToolNames: null,
+      threadId: null
     });
 
     registry.revoke(token);
@@ -215,6 +225,7 @@ describe("native Claude tool permission bridge", () => {
     const emitted: unknown[] = [];
     const created: unknown[] = [];
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
@@ -231,7 +242,7 @@ describe("native Claude tool permission bridge", () => {
       notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
       confirmTimeoutMs: 1000
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("s1"));
 
     const pending = gateway.requestNativeToolPermission(token, {
       toolName: "Bash",
@@ -275,6 +286,7 @@ describe("native Claude tool permission bridge", () => {
     const tokens = new SessionTokenRegistry();
     const emitted: unknown[] = [];
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
         createPendingAssistantAction: async () => ({ id: "native-action-timeout" })
@@ -288,7 +300,7 @@ describe("native Claude tool permission bridge", () => {
       notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
       confirmTimeoutMs: 5
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("s1"));
 
     await expect(
       gateway.requestNativeToolPermission(token, {
@@ -316,6 +328,7 @@ describe("native Claude tool permission bridge", () => {
     const emitted: unknown[] = [];
     const created: unknown[] = [];
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
@@ -332,7 +345,7 @@ describe("native Claude tool permission bridge", () => {
       notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
       confirmTimeoutMs: 5
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("s1"));
 
     await expect(
       gateway.requestNativeToolPermission(token, {
@@ -352,6 +365,7 @@ describe("native Claude tool permission bridge", () => {
     // the allowlist stays minimal; anything unlisted keeps the confirm path (here: timeout→deny).
     const tokens = new SessionTokenRegistry();
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
         createPendingAssistantAction: async () => ({ id: "native-action-grep" })
@@ -365,7 +379,7 @@ describe("native Claude tool permission bridge", () => {
       notifier: { emit: () => undefined },
       confirmTimeoutMs: 5
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("s1"));
 
     await expect(
       gateway.requestNativeToolPermission(token, { toolName: "Grep", toolInput: {} })
@@ -388,6 +402,7 @@ describe("native Claude tool permission bridge", () => {
     const resolved: unknown[] = [];
     let createPendingCalled = false;
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
@@ -410,7 +425,7 @@ describe("native Claude tool permission bridge", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
 
     const result = await gateway.requestNativeToolPermission(token, {
       toolName,
@@ -441,6 +456,7 @@ describe("native Claude tool permission bridge", () => {
       const confirmations = new ConfirmationRegistry();
       const emitted: unknown[] = [];
       const gateway = new AssistantToolGateway({
+        provenance: cleanProvenance,
         resolveActiveModules: async () => [],
         repository: {
           createPendingAssistantAction: async () => ({ id: "pending_gated" }),
@@ -456,7 +472,7 @@ describe("native Claude tool permission bridge", () => {
         confirmTimeoutMs: 50,
         yoloMode: async () => true
       });
-      const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+      const token = tokens.mint(cleanThreadIdentity("c1"));
 
       const pending = gateway.requestNativeToolPermission(token, {
         toolName,
@@ -494,6 +510,7 @@ describe("native Claude tool permission bridge", () => {
     const confirmations = new ConfirmationRegistry();
     const emitted: unknown[] = [];
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
         createPendingAssistantAction: async () => ({ id: "pending_config" }),
@@ -509,7 +526,7 @@ describe("native Claude tool permission bridge", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
 
     const pending = gateway.requestNativeToolPermission(token, {
       toolName: "Write",
@@ -534,6 +551,7 @@ describe("native Claude tool permission bridge", () => {
     const emitted: Array<{ kind: string; actionRequestId?: string }> = [];
     let actionNumber = 0;
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
         createPendingAssistantAction: async () => ({ id: `pending_path_${++actionNumber}` }),
@@ -549,7 +567,7 @@ describe("native Claude tool permission bridge", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
 
     const expectGated = async (filePath: string) => {
       const pending = gateway.requestNativeToolPermission(token, {
@@ -585,6 +603,7 @@ describe("native Claude tool permission bridge", () => {
     const confirmations = new ConfirmationRegistry();
     const emitted: unknown[] = [];
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
         createPendingAssistantAction: async () => ({ id: "pending_1" }),
@@ -600,7 +619,7 @@ describe("native Claude tool permission bridge", () => {
       confirmTimeoutMs: 50,
       yoloMode
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
 
     const pending = gateway.requestNativeToolPermission(token, {
       toolName: "Write",
@@ -683,6 +702,7 @@ describe("gateway audit outcome truth (#1252)", () => {
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [manifestWithTool(toolOverrides)],
       repository: {
         insertActionAuditLog: async (
@@ -702,7 +722,7 @@ describe("gateway audit outcome truth (#1252)", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
     const response = await gateway.callTool(token, "acme.write", {});
     await vi.waitFor(() => expect(audits).toHaveLength(1));
     return { audit: audits[0]!, response };
@@ -756,6 +776,7 @@ describe("gateway audit outcome truth (#1252)", () => {
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [
         manifestWithTool({
           execute: async (): Promise<ToolResult> => ({ data: { status: "error" } })
@@ -778,7 +799,7 @@ describe("gateway audit outcome truth (#1252)", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
     await gateway.callTool(token, "acme.write", {});
 
     const actionResult = notified.find((record) => record.outcome !== undefined);
@@ -827,6 +848,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
     const confirmations = new ConfirmationRegistry();
     let actionRequested = false;
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [
         {
           id: "danger_module",
@@ -879,7 +901,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
       yoloMode: async () => true
     });
 
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
     const response = await gateway.callTool(token, "danger.nuke", {});
 
     expect(actionRequested).toBe(true);
@@ -896,6 +918,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
     const confirmations = new ConfirmationRegistry();
     let actionRequested = false;
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [
         {
           id: "plain_module",
@@ -937,7 +960,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
       yoloMode: async () => true
     });
 
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
     const response = await gateway.callTool(token, "plain.write", {});
 
     expect(actionRequested).toBe(true);

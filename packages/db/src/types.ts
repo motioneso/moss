@@ -932,6 +932,14 @@ export interface ChatThreadsTable {
   conversation_summary: string | null;
 }
 
+export interface ChatConversationProvenanceTable {
+  thread_id: string;
+  owner_user_id: string;
+  tainted_at: NullableTimestampColumn;
+  first_admission_path: ColumnType<string | null, string | null | undefined, string | null>;
+  created_at: TimestampColumn;
+}
+
 export interface ChatClassifierShadowRecordsTable {
   id: ColumnType<string, string | undefined, string>;
   owner_user_id: string;
@@ -1928,6 +1936,7 @@ export interface MossDatabase {
   "app.moss_model_activity_log": MossModelActivityLogTable;
   "app.moss_activity_detail": MossActivityDetailTable;
   "app.chat_threads": ChatThreadsTable;
+  "app.chat_conversation_provenance": ChatConversationProvenanceTable;
   "app.chat_messages": ChatMessagesTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_classifier_release_eligibility": ChatClassifierReleaseEligibilityTable;

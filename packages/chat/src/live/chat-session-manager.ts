@@ -276,7 +276,11 @@ export class ChatSessionManager {
       // Task 4.1 (#2901) — the classifier gate runs before any engine launch (`on` only). A
       // handled turn returns here; a decline falls through to the default model path unchanged.
       // #2934 — the gate captures this turn's privacy before its mode wait and returns it.
-      const { result: gated, requestIncognito } = await tryGatedTurn(
+      const {
+        result: gated,
+        requestIncognito,
+        requestThreadId
+      } = await tryGatedTurn(
         this.lifecycleHost,
         actorUserId,
         surface,
@@ -301,8 +305,11 @@ export class ChatSessionManager {
         this.pendingForcedReplay.add(sessionKey);
         session = await this.ensureSession(actorUserId, userName, undefined, surface);
       }
-      // #2934 finding 1 — fail closed on privacy mismatch: refuse another thread's model.
-      if (session.incognito !== requestIncognito)
+      // Refuse another conversation's model, including a same-privacy resume during the mode wait.
+      if (
+        session.incognito !== requestIncognito ||
+        (requestThreadId !== null && session.threadId !== requestThreadId)
+      )
         return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
       const turnProviderIdentity = session.providerIdentity;
       gateShadow = beginClassifierGateShadowTurn(
@@ -313,6 +320,7 @@ export class ChatSessionManager {
         // #2934 — the turn's own privacy, not the session resolved after the wait.
         requestIncognito,
         {
+          threadId: requestThreadId,
           hasAttachment: (opts?.attachments?.length ?? 0) > 0,
           signal: controller.signal,
           // #2956: the shadow record shares the turn-start id.
@@ -375,10 +383,13 @@ export class ChatSessionManager {
             userName,
             session
           );
-          // #2934 round 2 — a new chat inside the heal: re-check stop and privacy before resubmit.
+          // A new chat inside the heal: re-check stop, identity and privacy before resubmit.
           if (controller.signal.aborted)
             return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
-          if (session.incognito !== requestIncognito)
+          if (
+            session.incognito !== requestIncognito ||
+            (requestThreadId !== null && session.threadId !== requestThreadId)
+          )
             return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
           await assertProviderIdentityForPendingTurn(
             turnProviderIdentity,
@@ -538,6 +549,7 @@ export class ChatSessionManager {
           model: session.model
         },
         {
+          threadId: session.threadId,
           invokedToolNames,
           answerProvenance,
           attachments:

@@ -53,6 +53,8 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     await deps.persistence.openNewConversation(actorUserId, undefined, surface);
     threadState = await deps.persistence.getCurrentThreadState(actorUserId, surface);
   }
+  // Bind once, before persona or tool-menu awaits can overlap a conversation switch.
+  const threadId = threadState?.id ?? null;
   const persona =
     typeof deps.persona === "string"
       ? deps.persona
@@ -64,7 +66,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     baseDir: deps.neutralBase,
     persona
   });
-  const mcpConfig = await deps.mintMcpToken?.(actorUserId, sessionKey);
+  const mcpConfig = await deps.mintMcpToken?.(actorUserId, sessionKey, threadId);
   if (!sequenceBySession.has(sessionKey)) sequenceBySession.set(sessionKey, 0);
   const nextSequence = () => {
     const next = (sequenceBySession.get(sessionKey) ?? 0) + 1;
@@ -75,7 +77,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     providerConfigId,
     acpAgentId,
     ...(acpModel ? { acpModel } : {}),
-    ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {}),
+    ...(threadId ? { conversationId: threadId, userId: actorUserId } : {}),
     ...(mcpConfig?.token && deps.acpPermissionDeciderForToken
       ? { acpPermissionDecider: deps.acpPermissionDeciderForToken(mcpConfig.token) }
       : {}),
@@ -98,7 +100,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     : "";
   const { recent: recentTurns, oldSummary } = await deps.persistence.listPriorTurns(
     actorUserId,
-    { forceReplay: opts?.forceReplay },
+    { forceReplay: opts?.forceReplay, threadId },
     surface
   );
   if (threadState?.incognito && surface !== DEFAULT_CHAT_SURFACE) {
@@ -144,6 +146,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   const session: UserSession = {
     actorUserId,
     surface,
+    threadId,
     engine,
     provider,
     model,

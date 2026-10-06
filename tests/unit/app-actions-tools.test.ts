@@ -7,6 +7,7 @@ import {
   type DataContextRunner
 } from "@moss/db";
 import { HttpError, type ToolContext } from "@moss/module-sdk";
+import { buildRouteCatalog } from "@moss/module-registry";
 
 import {
   createAppActionCallServices,
@@ -17,6 +18,7 @@ import {
   aggregateConsentCalls,
   appActionCatalog,
   appActionContext,
+  appActionManifests,
   blockedWellnessCalls,
   makeAppActionGateway,
   medicationSentinel,
@@ -95,6 +97,7 @@ function harness(
   return {
     ...makeAppActionGateway({
       runner,
+      provenance: { isTainted: async () => false, recordAdmission: async () => undefined },
       appActions,
       autoApprove: options.autoApprove,
       forceConfirm: options.forceConfirm,
@@ -116,6 +119,45 @@ function expectRefusal(result: unknown, reason: string) {
 }
 
 describe("app actions: real gateway/manifest boundary with fake persistence and transport", () => {
+  it("refuses the recording notice acknowledgement before any transport or approval", async () => {
+    const meetings = appActionManifests.find((module) => module.id === "meetings")!;
+    const catalog = buildRouteCatalog(
+      [
+        {
+          ...meetings,
+          routes: [
+            {
+              method: "PUT",
+              path: "/api/meetings/recording-notice",
+              permissionId: "meetings.view",
+              chat: {
+                access: "write",
+                title: "Acknowledge recording notice",
+                content: "user_authored"
+              }
+            }
+          ]
+        }
+      ],
+      []
+    );
+    const call = vi.fn<AppActionsService["call"]>().mockResolvedValue({ status: 200, body: {} });
+    const h = makeAppActionGateway({
+      runner: {} as DataContextRunner,
+      appActions: { catalog: () => catalog, call }
+    });
+    expectRefusal(
+      await h.call({
+        method: "PUT",
+        path: "/api/meetings/recording-notice",
+        body: { policyVersion: "current" }
+      }),
+      "blocked"
+    );
+    expect(call).not.toHaveBeenCalled();
+    expect(h.events).toEqual([]);
+  });
+
   it.each([
     ["blocked", "/api/me/profile", "PATCH"],
     ["unknown_route", "/api/not-a-real-route", "GET"],
@@ -404,6 +446,27 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
     const result = await h.call({ method: "GET", path: "/api/me/themes" });
     expect(result).toMatchObject({ ok: false, error: "Tool app.callAction failed" });
     expect(JSON.stringify([result, h.events])).not.toContain("PRIVATE_DEPENDENCY_SENTINEL");
+  });
+
+  it("returns not_ready with safe recovery when the final pre-run lookup throws", async () => {
+    const h = harness({ autoApprove: false });
+    const pending = h.call({ method: "DELETE", path: "/api/me/themes/theme-a" });
+    await vi.waitFor(() =>
+      expect(h.events.some((event) => event.kind === "action_request")).toBe(true)
+    );
+    const card = h.events.find((event) => event.kind === "action_request")!;
+    vi.spyOn(h.preferences, "get").mockImplementation(() => {
+      throw new HttpError(503, "PRIVATE_FINAL_LOOKUP_SENTINEL");
+    });
+    h.confirmations.resolve(card.actionRequestId, "confirmed");
+    const result = await pending;
+    expect(result).toMatchObject({ ok: false, error: expect.stringMatching(/^not_ready:/) });
+    expect(JSON.stringify(result)).toContain("Wait");
+    expect(JSON.stringify([result, h.events])).not.toContain("PRIVATE_FINAL_LOOKUP_SENTINEL");
+    expect(h.callSpy).not.toHaveBeenCalled();
+    expect(h.events).not.toContainEqual(
+      expect.objectContaining({ kind: "action_result", outcome: "executed" })
+    );
   });
 
   it.each(["input", "context"] as const)(

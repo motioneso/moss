@@ -14,6 +14,7 @@ import type { ChatSkillDto } from "@moss/shared";
 import { composeTurnText } from "../../apps/web/src/chat/skill-autocomplete.js";
 import { renderPersona, type PersonaFs } from "../../packages/chat/src/live/persona.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
 
 /**
@@ -63,6 +64,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
   let appDb: Kysely<MossDatabase>;
   let bootstrapDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let repository: AiRepository;
   let tokens: SessionTokenRegistry;
   let confirmations: ConfirmationRegistry;
@@ -85,6 +87,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
       maxConnections: 1
     });
     runner = new DataContextRunner(appDb);
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
     repository = new AiRepository();
   });
 
@@ -109,7 +112,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
     gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => sink.push({ chatSessionId, record }) },
@@ -138,7 +141,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
   it("blocks a skill-sourced write until approved — identical to a plain-text write", async () => {
     const turnText = composeTurnText(skillFixture(), "please write hello for me");
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-skill-write",
       allowedToolNames: null
     });
@@ -174,7 +177,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
     const yoloGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -183,7 +186,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
     });
     const turnText = composeTurnText(skillFixture(), "clean up the stale draft, update it");
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-skill-yolo",
       allowedToolNames: null
     });
@@ -230,7 +233,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
     // no PersonaFs seam at all, so nothing on this path can reach the persona file.
     const turnText = composeTurnText(skillFixture(), "please write hello for me");
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-skill-persona",
       allowedToolNames: null
     });

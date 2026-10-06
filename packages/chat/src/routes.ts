@@ -425,13 +425,14 @@ export function registerChatRoutes(
           repository: classifierShadowRepository,
           dataContext: dependencies.dataContext,
           tokens: {
-            mint: (actorUserId, correlationId, allowedToolNames) => {
+            mint: (actorUserId, correlationId, threadId, allowedToolNames) => {
               // #2956: the shadow passes its turn id as the correlation id, so the
               // gate session files its tool rows under the chat turn. Revoke clears it.
               wiring.tokens.setCurrentTurnId(`classifier-gate:${correlationId}`, correlationId);
               return wiring.tokens.mint(
                 {
                   actorUserId,
+                  threadId,
                   chatSessionId: `classifier-gate:${correlationId}`,
                   allowedToolNames
                 },
@@ -477,7 +478,7 @@ export function registerChatRoutes(
     classifierGateShadow,
     mcpTokenLifecycle: wiring
       ? {
-          mint: async (actorUserId: string, chatSessionId: string) => {
+          mint: async (actorUserId: string, chatSessionId: string, threadId: string | null) => {
             // Capture the actor's current executable tool set as the per-session allowlist.
             // Bare tool names (e.g. "example.read") — same format as tools/list and tools/call params.name.
             // The mcp__jarvis__<name> prefix is a client-side CLI convention that never reaches the server.
@@ -488,6 +489,7 @@ export function registerChatRoutes(
               token: wiring.tokens.mint({
                 actorUserId,
                 chatSessionId,
+                threadId,
                 allowedToolNames
               }),
               mcpServerUrl: wiring.mcpServerUrl

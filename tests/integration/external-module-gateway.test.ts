@@ -1,3 +1,5 @@
+import { ChatRepository } from "../../packages/chat/src/repository.js";
+import { ConversationProvenanceStore } from "../../packages/chat/src/conversation-provenance.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
 
@@ -87,16 +89,21 @@ describe("external module AssistantToolGateway", () => {
       { actorUserId: ids.userA, requestId: "external-install-grant" },
       (scopedDb) => repository.setActionPolicy(scopedDb, "acme", "messages", "trusted_auto")
     );
+    const thread = await runner.withDataContext({ actorUserId: ids.userA }, (db) =>
+      new ChatRepository().openNewThread(db, { title: "Clean outbound-policy conversation" })
+    );
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => manifests,
       repository,
       runner,
+      provenance: new ConversationProvenanceStore(runner),
       tokens,
       confirmations,
       notifier: { emit: (_session, record) => emitted.push(record) },
       confirmTimeoutMs: 5_000
     });
     const token = tokens.mint({
+      threadId: thread.id,
       actorUserId: ids.userA,
       chatSessionId: "external",
       allowedToolNames: null

@@ -12,10 +12,12 @@ import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { TasksRepository, tasksModuleManifest } from "@moss/tasks";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 
 describe("Tasks agency tools through AssistantToolGateway", () => {
   let appDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let aiRepository: AiRepository;
   let tasksRepository: TasksRepository;
   let tokens: SessionTokenRegistry;
@@ -28,6 +30,7 @@ describe("Tasks agency tools through AssistantToolGateway", () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
     runner = new DataContextRunner(appDb);
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
     aiRepository = new AiRepository();
     tasksRepository = new TasksRepository();
   });
@@ -54,7 +57,7 @@ describe("Tasks agency tools through AssistantToolGateway", () => {
     gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [tasksModuleManifest],
       repository: aiRepository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => sink.push({ chatSessionId, record }) },
@@ -114,7 +117,7 @@ describe("Tasks agency tools through AssistantToolGateway", () => {
 
   function tokenFor(userId: string) {
     return tokens.mint({
-      actorUserId: userId,
+      ...conversations.bindingFor(userId),
       chatSessionId: `tasks-${userId}`,
       allowedToolNames: null
     });

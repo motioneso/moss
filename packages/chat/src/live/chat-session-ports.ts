@@ -50,7 +50,7 @@ export interface ChatPersistencePort {
   /** Prior stored turns split into recent verbatim turns + older rolling summary. */
   listPriorTurns(
     actorUserId: string,
-    opts?: { readonly forceReplay?: boolean },
+    opts?: { readonly forceReplay?: boolean; readonly threadId?: string | null },
     surface?: ChatSurface
   ): Promise<{
     recent: readonly { role: "user" | "assistant"; content: string }[];
@@ -63,6 +63,8 @@ export interface ChatPersistencePort {
     assistantReply: string,
     executed: { provider: ProviderKind; model: string },
     opts?: {
+      /** Captured conversation; null refuses persistence, omitted keeps legacy lookup. */
+      readonly threadId?: string | null;
       readonly invokedToolNames?: ReadonlySet<string>;
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
       /** #1133 — display metadata for files sent with this turn (user-message tool_metadata). */
@@ -155,6 +157,8 @@ export interface Clock {
  * along, because a handled read/write is a real module action with a real result.
  */
 export interface HandledTurnOptions {
+  /** Captured conversation; null refuses persistence, omitted keeps legacy lookup. */
+  readonly threadId?: string | null;
   readonly sourceFreshness?: SourceFreshnessV1 | null;
   readonly attachments?: readonly ChatAttachmentDto[];
   readonly actionResults?: readonly ActionResultMetadata[];
@@ -208,7 +212,8 @@ export interface ChatSessionManagerDeps {
   readonly idleWatchdogMs?: number;
   readonly mintMcpToken?: (
     actorUserId: string,
-    chatSessionId: string
+    chatSessionId: string,
+    threadId: string | null
   ) => Promise<{ token: string; mcpServerUrl: string }>;
   readonly revokeMcpToken?: (chatSessionId: string) => void;
   /** Refresh the session token's TTL on activity, so a live session's token never

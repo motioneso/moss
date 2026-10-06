@@ -38,6 +38,7 @@ import {
 
 import { resolveEffectiveTimezone } from "./locale-utils.js";
 import { ChatRepository } from "./repository.js";
+import { ConversationProvenanceStore } from "./conversation-provenance.js";
 import { ChatUserMemorySettingsRepository } from "./memory-settings-repository.js";
 import { buildCalendarWriteService } from "./calendar-write-impl.js";
 import { buildEmailWriteService } from "./email-write-impl.js";
@@ -172,6 +173,7 @@ export function buildChatGatewayDependencies(args: {
     repository: args.repository,
     runner: args.runner,
     tokens: args.tokens,
+    provenance: new ConversationProvenanceStore(args.runner),
     confirmations: args.confirmations,
     notifier: args.notifier,
     ...(appResolver && args.appActions

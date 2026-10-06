@@ -57,6 +57,8 @@ const build = (setup: Setup) => {
   const created: unknown[] = [];
   const tokens = new SessionTokenRegistry();
   const gateway = new AssistantToolGateway({
+    // This fixture exercises ordinary policy on an explicitly clean conversation.
+    provenance: { isTainted: async () => false, recordAdmission: async () => {} },
     resolveActiveModules: async () => [module],
     repository: {
       createPendingAssistantAction: async (_db: unknown, input: unknown) => {
@@ -79,7 +81,12 @@ const build = (setup: Setup) => {
       getFamilyManifest: async () => null
     })
   });
-  const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+  const token = tokens.mint({
+    threadId: "clean-thread",
+    actorUserId: "u1",
+    chatSessionId: "s1",
+    allowedToolNames: null
+  });
   return { gateway, token, handler, runsWithoutAsking, emitted, created };
 };
 

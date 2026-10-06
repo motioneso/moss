@@ -13,6 +13,7 @@ import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { HttpError, type MossModuleManifest, type ToolExecute } from "@moss/module-sdk";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
 
 describe("AssistantToolGateway", () => {
@@ -22,6 +23,7 @@ describe("AssistantToolGateway", () => {
   let appDb: Kysely<MossDatabase>;
   let bootstrapDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let repository: AiRepository;
   let tokens: SessionTokenRegistry;
   let confirmations: ConfirmationRegistry;
@@ -52,6 +54,7 @@ describe("AssistantToolGateway", () => {
       maxConnections: 1
     });
     runner = new DataContextRunner(appDb);
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
     repository = new AiRepository();
   });
 
@@ -77,7 +80,7 @@ describe("AssistantToolGateway", () => {
       new AssistantToolGateway({
         resolveActiveModules: async () => [exampleToolModule],
         repository,
-        runner,
+        ...conversations.gatewayDependencies,
         tokens,
         confirmations,
         notifier: { emit: (chatSessionId, record) => sink.push({ chatSessionId, record }) },
@@ -135,7 +138,7 @@ describe("AssistantToolGateway", () => {
     const webGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [webModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -147,7 +150,7 @@ describe("AssistantToolGateway", () => {
       expect(listed.map((tool) => tool.name)).toEqual(["web.search", "web.read"]);
 
       const token = tokens.mint({
-        actorUserId: ids.userA,
+        ...conversations.bindingFor(ids.userA),
         chatSessionId: "web-s1",
         allowedToolNames: null
       });
@@ -171,7 +174,7 @@ describe("AssistantToolGateway", () => {
         throw new Error("resolver/DB unavailable");
       },
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens, // SHARED registry from beforeEach, so the minted token below verifies
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -182,7 +185,7 @@ describe("AssistantToolGateway", () => {
     // callTool: mint a VALID token (allowedToolNames: null) so it clears token verification
     // and proceeds into executableTools → resolver, which throws → reject (not a degraded set).
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "fail-closed",
       allowedToolNames: null
     });
@@ -229,7 +232,7 @@ describe("AssistantToolGateway", () => {
     const safeGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [safeErrorModule],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -240,7 +243,7 @@ describe("AssistantToolGateway", () => {
       })
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "safe-errors",
       allowedToolNames: null
     });
@@ -309,7 +312,7 @@ describe("AssistantToolGateway", () => {
     const serviceGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [module],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -332,7 +335,7 @@ describe("AssistantToolGateway", () => {
     expect(listed.map((tool) => tool.name)).toEqual(["svc.autoWrite"]);
 
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "svc-session",
       allowedToolNames: null
     });
@@ -344,7 +347,7 @@ describe("AssistantToolGateway", () => {
 
   it("runs a read tool immediately under the caller's RLS scope", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s1",
       allowedToolNames: null
     });
@@ -360,7 +363,7 @@ describe("AssistantToolGateway", () => {
 
   it("blocks a write until approved, emits a card, then executes", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s1",
       allowedToolNames: null
     });
@@ -385,7 +388,7 @@ describe("AssistantToolGateway", () => {
 
   it("confirms a write:auto tool when module agency trust is off", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-auto-write",
       allowedToolNames: null
     });
@@ -403,7 +406,7 @@ describe("AssistantToolGateway", () => {
     const trustedGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -420,7 +423,7 @@ describe("AssistantToolGateway", () => {
       })
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-trusted-auto-write",
       allowedToolNames: null
     });
@@ -455,7 +458,7 @@ describe("AssistantToolGateway", () => {
       resolveActiveModules: async () => [destructiveAutoModule]
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-destructive-auto",
       allowedToolNames: null
     });
@@ -471,7 +474,7 @@ describe("AssistantToolGateway", () => {
   it("keeps destructive tools behind confirmation under YOLO (#2419)", async () => {
     const yoloGateway = createGateway({ yoloMode: async () => true });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-yolo-destructive",
       allowedToolNames: null
     });
@@ -496,7 +499,7 @@ describe("AssistantToolGateway", () => {
   it("auto-runs eligible write tools under YOLO and records yolo audit mode", async () => {
     const yoloGateway = createGateway({ yoloMode: async () => true });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-yolo",
       allowedToolNames: null
     });
@@ -524,7 +527,7 @@ describe("AssistantToolGateway", () => {
   it("falls back to confirmation when YOLO resolver is false", async () => {
     const gatedGateway = createGateway({ yoloMode: async () => false });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-yolo-off",
       allowedToolNames: null
     });
@@ -542,7 +545,7 @@ describe("AssistantToolGateway", () => {
     const eagerGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: {
@@ -556,7 +559,7 @@ describe("AssistantToolGateway", () => {
       confirmTimeoutMs: 1_000
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-eager",
       allowedToolNames: null
     });
@@ -579,14 +582,14 @@ describe("AssistantToolGateway", () => {
     const fastTimeoutGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
       confirmTimeoutMs: 20
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-timeout",
       allowedToolNames: null
     });
@@ -703,7 +706,7 @@ describe("AssistantToolGateway", () => {
 
   it("returns a denied result without calling the handler", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s1",
       allowedToolNames: null
     });
@@ -720,7 +723,7 @@ describe("AssistantToolGateway", () => {
 
   it("blocks destructive tools the same as writes (no run-immediately path)", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s1",
       allowedToolNames: null
     });
@@ -737,7 +740,7 @@ describe("AssistantToolGateway", () => {
 
   it("returns a safe error and never leaks internal details", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s1",
       allowedToolNames: null
     });
@@ -750,7 +753,7 @@ describe("AssistantToolGateway", () => {
 
   it("acts only as the token's user; input cannot override identity", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userB,
+      ...conversations.bindingFor(ids.userB),
       chatSessionId: "s2",
       allowedToolNames: null
     });
@@ -769,7 +772,7 @@ describe("AssistantToolGateway", () => {
 
   it("renders a uniform-list tool result as a Markdown pipe table (end-to-end)", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-tabular",
       allowedToolNames: null
     });
@@ -787,7 +790,7 @@ describe("AssistantToolGateway", () => {
 
   it("blocks a tool call when allowedToolNames is set and the tool is not in it", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-allowlist",
       allowedToolNames: new Set(["example.write"])
     });
@@ -803,7 +806,7 @@ describe("AssistantToolGateway", () => {
 
   it("allows a tool call when allowedToolNames is null (unrestricted)", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-unrestricted",
       allowedToolNames: null
     });
@@ -822,7 +825,7 @@ describe("AssistantToolGateway", () => {
       resolveActiveModules: async (actorUserId) =>
         actorUserId === ids.userA ? [exampleToolModule] : [],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: () => {} },
@@ -871,7 +874,7 @@ describe("AssistantToolGateway", () => {
     expect(names).not.toContain("settings.yolo.enable");
 
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-excluded-yolo",
       allowedToolNames: null
     });
@@ -936,7 +939,7 @@ describe("AssistantToolGateway", () => {
       yoloMode: async () => true
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-yolo-confirm-mechanisms",
       allowedToolNames: null
     });
@@ -964,7 +967,7 @@ describe("AssistantToolGateway", () => {
       yoloMode: async () => false
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-yolo-off-confirm-mechanisms",
       allowedToolNames: null
     });

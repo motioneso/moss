@@ -5,6 +5,7 @@ import {
   ConfirmationRegistry,
   SessionTokenRegistry,
   type AiRepository,
+  type ConversationProvenancePort,
   type PerCallResolver,
   type GatewaySessionRecord
 } from "@moss/ai";
@@ -24,7 +25,8 @@ export const appActionActor = "00000000-0000-4000-8000-000000000001";
 export const appActionContext: ToolContext = {
   actorUserId: appActionActor,
   requestId: "app-action-boundary",
-  chatSessionId: "app-action-session"
+  chatSessionId: "app-action-session",
+  threadId: "00000000-0000-4000-8000-000000000091"
 };
 export const appActionManifests = getBuiltInModuleManifests();
 export const appActionCatalog = buildRouteCatalog(appActionManifests, []);
@@ -54,6 +56,8 @@ export function makeAppActionGateway(options: {
   appActions: AppActionsService;
   repository?: AiRepository;
   actorUserId?: string;
+  threadId?: string;
+  provenance?: ConversationProvenancePort;
   autoApprove?: boolean;
   confirmTimeoutMs?: number;
   /** Test-only policy seam for a call forced to confirm (for example, later taint policy). */
@@ -105,6 +109,7 @@ export function makeAppActionGateway(options: {
   const services = createAppActionCallServices({ appActions: options.appActions, resolver });
   const dependencies = {
     ...wired,
+    ...(options.provenance ? { provenance: options.provenance } : {}),
     confirmTimeoutMs: options.confirmTimeoutMs ?? 2_000,
     logger: { error: vi.fn() },
     ...(options.forceConfirm
@@ -120,6 +125,7 @@ export function makeAppActionGateway(options: {
   const gateway = new AssistantToolGateway(dependencies);
   const token = tokens.mint({
     actorUserId,
+    threadId: options.threadId ?? appActionContext.threadId,
     chatSessionId: appActionContext.chatSessionId,
     allowedToolNames: new Set(["app.findAction", "app.callAction"])
   });

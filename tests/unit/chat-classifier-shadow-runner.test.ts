@@ -164,6 +164,7 @@ function harness(
 function input(turnId = "turn-1") {
   return {
     actorUserId: "user-1",
+    threadId: "thread-1",
     surface: normalizeChatSurface("drawer"),
     message: "what is on my calendar today",
     turnId,
@@ -267,7 +268,7 @@ describe("shadow decisions", () => {
         toolName: "listVisibleEvents"
       })
     );
-    expect(h.mint).toHaveBeenCalledWith("user-1", "turn-1", expect.any(Set));
+    expect(h.mint).toHaveBeenCalledWith("user-1", "turn-1", "thread-1", expect.any(Set));
     expect(h.revoke).toHaveBeenCalledWith("turn-1");
   });
 

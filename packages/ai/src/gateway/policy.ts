@@ -40,8 +40,11 @@ export async function resolvePolicy(
   confirmOverride: boolean,
   lookup: ActionPolicyLookup,
   sortedSafe = false,
-  perCallResolved = false
+  perCallResolved = false,
+  conversationTainted = false,
+  confirmWhenTainted = false
 ): Promise<PolicyDecision> {
+  if (conversationTainted && (tool.risk !== "read" || confirmWhenTainted)) return "confirm";
   if (tool.risk === "read") return "run";
   if (tool.risk === "destructive") return "confirm";
   if (sortedSafe && tool.isExternal === true) return confirmOverride ? "confirm" : "run";

@@ -24,12 +24,14 @@ import {
 import type { CreateSportsFollowRequest, SportsFollowDto } from "@moss/shared";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
 
 describe("AssistantToolGateway self-operation", () => {
   let appDb: Kysely<MossDatabase>;
   let bootstrapDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let repository: AiRepository;
   let tokens: SessionTokenRegistry;
   let confirmations: ConfirmationRegistry;
@@ -56,6 +58,7 @@ describe("AssistantToolGateway self-operation", () => {
       maxConnections: 1
     });
     runner = new DataContextRunner(appDb);
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
     repository = new AiRepository();
   });
 
@@ -119,7 +122,7 @@ describe("AssistantToolGateway self-operation", () => {
     const installGrantGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -127,7 +130,7 @@ describe("AssistantToolGateway self-operation", () => {
       actionPolicy: (ctx) => dbBackedActionPolicy(ctx)
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-install-grant",
       allowedToolNames: null
     });
@@ -149,7 +152,7 @@ describe("AssistantToolGateway self-operation", () => {
     const settingsGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [settingsModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -174,7 +177,7 @@ describe("AssistantToolGateway self-operation", () => {
       })
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-settings-affects-query-keys",
       allowedToolNames: null
     });
@@ -201,7 +204,7 @@ describe("AssistantToolGateway self-operation", () => {
     const overrideGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -209,7 +212,7 @@ describe("AssistantToolGateway self-operation", () => {
       actionPolicy: (ctx) => dbBackedActionPolicy(ctx)
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-always-confirm-override",
       allowedToolNames: null
     });
@@ -266,7 +269,7 @@ describe("AssistantToolGateway self-operation", () => {
     const calendarGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [calendarModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -275,7 +278,7 @@ describe("AssistantToolGateway self-operation", () => {
       toolServices: { calendarWrite: fakeCalendarWrite }
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-calendar-install-grant",
       allowedToolNames: null
     });
@@ -357,7 +360,7 @@ describe("AssistantToolGateway self-operation", () => {
     const sportsGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [sportsModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -365,7 +368,7 @@ describe("AssistantToolGateway self-operation", () => {
       actionPolicy: (ctx) => dbBackedSportsActionPolicy(ctx)
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-sports-install-grant",
       allowedToolNames: null
     });
@@ -427,7 +430,7 @@ describe("AssistantToolGateway self-operation", () => {
     const sportsGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [sportsModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -436,12 +439,12 @@ describe("AssistantToolGateway self-operation", () => {
     });
 
     const tokenA = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-sports-rls-a",
       allowedToolNames: null
     });
     const tokenB = tokens.mint({
-      actorUserId: ids.userB,
+      ...conversations.bindingFor(ids.userB),
       chatSessionId: "s-sports-rls-b",
       allowedToolNames: null
     });
@@ -550,7 +553,7 @@ describe("AssistantToolGateway self-operation", () => {
       const gateway = new AssistantToolGateway({
         resolveActiveModules: async () => [exampleToolModule],
         repository,
-        runner,
+        ...conversations.gatewayDependencies,
         tokens,
         confirmations,
         notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -564,7 +567,7 @@ describe("AssistantToolGateway self-operation", () => {
       // a user's explicit choice). Reusing userA here left every call stuck on the confirm path,
       // hanging the very first loop iteration in confirmAndRun with no assertion failure.
       const token = tokens.mint({
-        actorUserId: ids.userB,
+        ...conversations.bindingFor(ids.userB),
         chatSessionId: "s-rl-auto",
         allowedToolNames: null
       });
@@ -625,7 +628,7 @@ describe("AssistantToolGateway self-operation", () => {
       const gateway = new AssistantToolGateway({
         resolveActiveModules: async () => [exampleToolModule],
         repository,
-        runner,
+        ...conversations.gatewayDependencies,
         tokens,
         confirmations,
         notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -635,7 +638,7 @@ describe("AssistantToolGateway self-operation", () => {
       // #1264 Task 13: userB — see the same-named test above for why userA is poisoned to
       // tier "always_confirm" by the earlier "stored always_confirm override" test.
       const token = tokens.mint({
-        actorUserId: ids.userB,
+        ...conversations.bindingFor(ids.userB),
         chatSessionId: "s-rl-confirm-still-runs",
         allowedToolNames: null
       });
@@ -688,7 +691,7 @@ describe("AssistantToolGateway self-operation", () => {
       const gateway = new AssistantToolGateway({
         resolveActiveModules: async () => [exampleToolModule],
         repository,
-        runner,
+        ...conversations.gatewayDependencies,
         tokens,
         confirmations,
         notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -696,12 +699,12 @@ describe("AssistantToolGateway self-operation", () => {
         yoloMode: async () => true
       });
       const tokenA = tokens.mint({
-        actorUserId: ids.userA,
+        ...conversations.bindingFor(ids.userA),
         chatSessionId: "s-rl-yolo-a",
         allowedToolNames: null
       });
       const tokenB = tokens.mint({
-        actorUserId: ids.userB,
+        ...conversations.bindingFor(ids.userB),
         chatSessionId: "s-rl-yolo-b",
         allowedToolNames: null
       });
@@ -746,14 +749,14 @@ describe("AssistantToolGateway self-operation", () => {
       const gateway = new AssistantToolGateway({
         resolveActiveModules: async () => [exampleToolModule],
         repository,
-        runner,
+        ...conversations.gatewayDependencies,
         tokens,
         confirmations,
         notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
         confirmTimeoutMs: 30_000
       });
       const token = tokens.mint({
-        actorUserId: ids.userA,
+        ...conversations.bindingFor(ids.userA),
         chatSessionId: "s-rl-read",
         allowedToolNames: null
       });

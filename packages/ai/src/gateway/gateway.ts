@@ -20,6 +20,7 @@ import {
 import { actionHoldDurationMs, emitActionResultRecord } from "./action-result-record.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
+import { isConversationTainted } from "./conversation-policy.js";
 import { recordGatewayAudit } from "./gateway-audit.js";
 import { prepareToolCall, servicesForTool } from "./per-call-resolution.js";
 import { liveStreamResult, renderAndCap } from "./output-validation.js";
@@ -59,6 +60,7 @@ import { isSelfOperationExcluded } from "./self-operation.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type {
   ActiveModulesResolver,
+  ConversationProvenancePort,
   GatewayDeclineReason,
   GatewayGateOutcome,
   GatewayToolResponse,
@@ -83,6 +85,7 @@ export interface AssistantToolGatewayDependencies {
   readonly agencyPrefs?: (ctx: ToolContext) => AgencyPrefLookup;
   readonly actionPolicy?: (ctx: ToolContext) => ActionPolicyLookup;
   readonly yoloMode?: (ctx: ToolContext) => Promise<boolean>;
+  readonly provenance?: ConversationProvenancePort;
   readonly perCallResolvers?: Readonly<Record<string, PerCallResolver>>;
   /** Factories must return capabilities bound to the resolved input/context, never raw services. */
   readonly perCallServices?: Readonly<Record<string, PerCallServices>>;
@@ -292,12 +295,14 @@ export class AssistantToolGateway {
     | { found: ExecutableTool; input: Record<string, unknown>; ctx: ToolContext }
     | { failure: GatewayToolResponse; reason: GatewayDeclineReason }
   > {
-    const { actorUserId, chatSessionId, allowedToolNames } = this.deps.tokens.verify(token);
+    const { actorUserId, chatSessionId, threadId, allowedToolNames } =
+      this.deps.tokens.verify(token);
     const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
     const ctx: ToolContext = {
       actorUserId,
       requestId: `mcp_${randomUUID()}`,
       chatSessionId,
+      ...(threadId ? { threadId } : {}),
       localTimezone,
       // Only the MCP transport passes a sink; every other caller sends nowhere.
       ...(onProgress ? { reportProgress: onProgress } : {})
@@ -349,6 +354,12 @@ export class AssistantToolGateway {
     ctx: ToolContext
   ): Promise<{ kind: "yolo-confirm" | "yolo-run" | "auto-run" | "confirm" }> {
     if (found.resolution?.forceConfirm) return { kind: "confirm" };
+    const confirmWhenTainted = found.resolution?.confirmWhenTainted ?? false;
+    if (found.tool.risk === "read" && !confirmWhenTainted) return { kind: "auto-run" };
+    const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
+    if (conversationTainted && (found.tool.risk !== "read" || confirmWhenTainted)) {
+      return { kind: "confirm" };
+    }
     const perCallResolved = found.resolution !== undefined;
     const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
     const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
@@ -366,7 +377,9 @@ export class AssistantToolGateway {
           perCallResolved
         ))
         ? { kind: "yolo-confirm" }
-        : { kind: "yolo-run" };
+        : (await isConversationTainted(this.deps.provenance, ctx))
+          ? { kind: "confirm" }
+          : { kind: "yolo-run" };
     }
     return (await resolvePolicy(
       found.tool,
@@ -374,8 +387,10 @@ export class AssistantToolGateway {
       confirmOverride,
       effectiveLookup,
       await this.computeSortedSafe(found, ctx),
-      perCallResolved
-    )) === "run"
+      perCallResolved,
+      conversationTainted,
+      confirmWhenTainted
+    )) === "run" && !(await isConversationTainted(this.deps.provenance, ctx))
       ? { kind: "auto-run" }
       : { kind: "confirm" };
   }
@@ -451,7 +466,7 @@ export class AssistantToolGateway {
     token: string,
     request: NativeToolPermissionRequest
   ): Promise<NativeToolPermissionResponse> {
-    const { actorUserId, chatSessionId } = this.deps.tokens.verify(token);
+    const { actorUserId, chatSessionId, threadId } = this.deps.tokens.verify(token);
     const toolName = safeNativeToolName(request.toolName);
     if (toolName.startsWith("mcp__jarvis__") && toolName.length > "mcp__jarvis__".length) {
       return { decision: "allow", reason: "First-party Moss MCP transport." };
@@ -468,6 +483,7 @@ export class AssistantToolGateway {
       actorUserId,
       requestId,
       chatSessionId,
+      ...(threadId ? { threadId } : {}),
       localTimezone: (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined
     };
 
@@ -479,7 +495,8 @@ export class AssistantToolGateway {
         } catch {
           return false;
         }
-      })());
+      })()) &&
+      !(await isConversationTainted(this.deps.provenance, ctx));
 
     if (yoloGranted) {
       // #1085 F4: Jarvis observes the permission grant, not the native tool's completion. Persist

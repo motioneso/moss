@@ -7,6 +7,7 @@ import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import { memoryModuleManifest } from "@moss/memory";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 
 const { Client } = pg;
 
@@ -34,6 +35,7 @@ interface InvocationResponse {
 describe("memory graph assistant tools", () => {
   let appDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let boss: PgBoss;
   let server: ReturnType<typeof createApiServer>;
   let originalSecretKey: string | undefined;
@@ -61,6 +63,7 @@ describe("memory graph assistant tools", () => {
     server = createApiServer({ appDb, boss, logger: false });
     await server.ready();
     runner = new DataContextRunner(appDb);
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
   });
 
   afterAll(async () => {
@@ -136,7 +139,7 @@ describe("memory graph assistant tools", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [memoryModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
@@ -152,7 +155,7 @@ describe("memory graph assistant tools", () => {
       })
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "memory-chat",
       allowedToolNames: null
     });

@@ -30,10 +30,11 @@ import type { ActionAuditAgentSummary, ActionAuditInputSummary } from "@moss/sha
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository } from "../repository.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
+import { isConversationTainted } from "./conversation-policy.js";
 import { actionResultRecord } from "./action-result-record.js";
 import { APPROVAL_REFUSED_REASON } from "./native-tool-guard.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
-import type { SessionNotifier } from "./types.js";
+import type { ConversationProvenancePort, SessionNotifier } from "./types.js";
 
 /**
  * One built-in tool ask from the outside agent (ACP `session/request_permission`).
@@ -74,6 +75,7 @@ export interface AcpPermissionGatewayDeps {
   readonly notifier: SessionNotifier;
   readonly confirmTimeoutMs: number;
   readonly yoloMode?: (ctx: ToolContext) => Promise<boolean>;
+  readonly provenance?: ConversationProvenancePort;
 }
 
 const ACP_TOOL_MODULE_ID = "acp-builtin";
@@ -227,7 +229,7 @@ export async function requestAcpBuiltInPermission(
   token: string,
   request: AcpBuiltInPermissionRequest
 ): Promise<AcpBuiltInPermissionResponse> {
-  const { actorUserId, chatSessionId } = deps.tokens.verify(token);
+  const { actorUserId, chatSessionId, threadId } = deps.tokens.verify(token);
   const input = request.toolInput;
   const requestId = `acp_${randomUUID()}`;
   const access: AccessContext = { actorUserId, requestId };
@@ -252,10 +254,32 @@ export async function requestAcpBuiltInPermission(
   });
 
   const startedAt = Date.now();
+  const family = acpRequestFamily(builtIn);
+  const classification = classifyAcpPermission(builtIn, folders);
+  const conversationTainted = await isConversationTainted(deps.provenance, {
+    actorUserId,
+    ...(threadId ? { threadId } : {})
+  });
+  const taintRequiresApproval =
+    conversationTainted &&
+    (family === "write" ||
+      family === "shell" ||
+      family === "web" ||
+      classification.verdict === "ask");
   // Reuse the effective actor setting on every eligible ask; never override hard denials.
   if (
-    classifyAcpPermission(builtIn, folders).verdict === "ask" &&
-    (await deps.yoloMode?.({ actorUserId, requestId, chatSessionId })) === true
+    !taintRequiresApproval &&
+    classification.verdict === "ask" &&
+    (await deps.yoloMode?.({
+      actorUserId,
+      requestId,
+      chatSessionId,
+      ...(threadId ? { threadId } : {})
+    })) === true &&
+    !(await isConversationTainted(deps.provenance, {
+      actorUserId,
+      ...(threadId ? { threadId } : {})
+    }))
   ) {
     await writeAcpAuditLine(deps, access, chatSessionId, {
       toolName: builtIn.toolName ?? "(unnamed)",
@@ -275,7 +299,7 @@ export async function requestAcpBuiltInPermission(
     };
   }
   let humanHoldDurationMs: number | null = null;
-  const result = await decideAcpPermission(builtIn, folders, async () => {
+  const ask = async (): Promise<"allow" | "deny"> => {
     const toolName = builtIn.toolName ?? "";
     const action = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       deps.repository.createPendingAssistantAction(scopedDb, {
@@ -361,7 +385,13 @@ export async function requestAcpBuiltInPermission(
     } finally {
       deps.confirmations.markDone(action.id);
     }
-  });
+  };
+  // The folder policy may ordinarily allow a local write. A tainted conversation raises that
+  // floor to the same approval callback; it never overrides an existing hard denial.
+  const result: Awaited<ReturnType<typeof decideAcpPermission>> =
+    taintRequiresApproval && classification.verdict === "allow"
+      ? { decision: await ask(), asked: true, reason: null }
+      : await decideAcpPermission(builtIn, folders, ask);
 
   const holdDurationMs = result.asked ? humanHoldDurationMs : null;
   if (!result.asked && result.decision === "deny") {

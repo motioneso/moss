@@ -23,6 +23,7 @@ import { PreferencesRepository } from "@moss/structured-state";
 import type { MossActionPermissionTier } from "@moss/module-sdk";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 
 /**
  * T11 — email reply agency, gateway-level acceptance (spec §8, plan #629).
@@ -48,6 +49,7 @@ const THREAD_ID = "gmail-thread-abc123";
 describe("email reply tools — gateway acceptance", () => {
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let repository: AiRepository;
 
   beforeAll(async () => {
@@ -55,6 +57,7 @@ describe("email reply tools — gateway acceptance", () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     dataContext = new DataContextRunner(appDb);
+    conversations = await createCleanConversationFixture(dataContext, [ids.userA, ids.userB]);
     repository = new AiRepository();
   });
   afterAll(async () => {
@@ -183,7 +186,7 @@ describe("email reply tools — gateway acceptance", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [emailModuleManifest],
       repository,
-      runner: dataContext,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -229,7 +232,7 @@ describe("email reply tools — gateway acceptance", () => {
     const { impl, calls } = buildEmailImpl();
     const { gateway, tokens, emitted } = buildGateway({ emailWrite: impl }, "trusted_auto");
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-auto",
       allowedToolNames: null
     });
@@ -270,7 +273,7 @@ describe("email reply tools — gateway acceptance", () => {
     const { impl, calls } = buildEmailImpl();
     const { gateway, tokens, emitted } = buildGateway({ emailWrite: impl }, "ask_each_time");
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-confirm",
       allowedToolNames: null
     });
@@ -330,7 +333,7 @@ describe("email reply tools — gateway acceptance", () => {
     // trusted_auto has NO effect on a destructive tool: policy.ts confirms it regardless.
     const { gateway, tokens, emitted } = buildGateway({ emailWrite: impl }, "trusted_auto");
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-send",
       allowedToolNames: null
     });
@@ -361,7 +364,7 @@ describe("email reply tools — gateway acceptance", () => {
     const { impl, calls } = buildEmailImpl();
     const { gateway, tokens } = buildGateway({ emailWrite: impl }, "trusted_auto");
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-hostile",
       allowedToolNames: null
     });

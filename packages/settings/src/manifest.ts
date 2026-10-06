@@ -627,12 +627,17 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       id: "app.callAction",
       description:
-        "Call a discovered app route as the signed-in user, subject to route policy and module consent. Destructive actions require approval; successful changes refresh the module's screens.",
+        "Call an app route with the user's consent. Destructive actions ask. Writes and outbound reads also ask for missing or outside-content conversation provenance. Successful changes refresh the module's screens.",
       errors: [
         {
           code: "unknown_route",
           class: "validation",
           description: "No declared app action matches the method and path."
+        },
+        {
+          code: "not_ready",
+          class: "transient",
+          description: "The action catalog or final permission check is unavailable."
         },
         {
           code: "blocked",
@@ -657,6 +662,11 @@ export const settingsModuleManifest: MossModuleManifest = {
         }
       ],
       remediations: [
+        {
+          id: "app.retry_ready_action",
+          description: "Wait for the app to finish loading, then find and review the action again.",
+          path: "/today"
+        },
         {
           id: "app.find_available_action",
           description:

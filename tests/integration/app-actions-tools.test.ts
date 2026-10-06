@@ -10,6 +10,7 @@ import { PreferencesRepository } from "@moss/structured-state";
 import { WellnessRepository } from "@moss/wellness";
 
 import { createApiServer } from "../../apps/api/src/server.js";
+import { ChatRepository } from "../../packages/chat/src/repository.js";
 import {
   createAppActionsService,
   type AppActionCallInput,
@@ -39,6 +40,7 @@ describe("app actions through the real gateway and app routes", () => {
   let callSpy: MockInstance<AppActionsService["call"]>;
   let checkinId: string;
   let medicationId: string;
+  const threadByActor = new Map<string, string>();
   const preferences = new PreferencesRepository();
   const grants = createActAsGrantRegistry();
   const mintSpy = vi.spyOn(grants, "mint");
@@ -56,6 +58,7 @@ describe("app actions through the real gateway and app routes", () => {
       runner,
       appActions,
       repository: new AiRepository(),
+      threadId: threadByActor.get(options.actorUserId ?? ids.userA),
       confirmTimeoutMs: 10_000,
       ...options
     });
@@ -86,6 +89,12 @@ describe("app actions through the real gateway and app routes", () => {
     // A single connection exposes any unused outer gateway transaction around app route injection.
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     runner = new DataContextRunner(appDb);
+    for (const actorUserId of [ids.userA, ids.userB]) {
+      const thread = await runner.withDataContext({ actorUserId }, (db) =>
+        new ChatRepository().openNewThread(db, { title: "App action integration" })
+      );
+      threadByActor.set(actorUserId, thread.id);
+    }
     boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
     server = createApiServer({ appDb, boss, actAsGrants: grants, logger: false });
     await server.ready();

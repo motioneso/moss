@@ -7,6 +7,44 @@ const manifests = getBuiltInModuleManifests();
 const catalog = buildRouteCatalog(manifests, []);
 
 describe("slice 4 review corrections", () => {
+  it("cannot acknowledge the separately developed recording notice through app actions", () => {
+    const meetings = manifests.find((module) => module.id === "meetings")!;
+    // Compatibility fixture only: the real endpoint lives on the separate capture branch.
+    const combined = buildRouteCatalog(
+      [
+        {
+          ...meetings,
+          routes: [
+            {
+              method: "PUT",
+              path: "/api/meetings/recording-notice",
+              permissionId: "meetings.view",
+              chat: {
+                access: "write",
+                title: "Acknowledge recording notice",
+                content: "user_authored"
+              }
+            }
+          ]
+        }
+      ],
+      []
+    );
+    expect(combined.resolve("PUT", "/api/meetings/recording-notice")?.route.policy).toMatchObject({
+      access: "blocked",
+      blockedBecause: "data_scope_consent"
+    });
+  });
+
+  it("lists final pre-run unavailability and its recovery on app.callAction", () => {
+    const feature = manifests
+      .find((module) => module.id === "settings")!
+      .features!.find((entry) => entry.id === "app.callAction")!;
+    expect(feature.errors).toContainEqual(expect.objectContaining({ code: "not_ready" }));
+    expect(feature.remediations).toContainEqual(
+      expect.objectContaining({ id: "app.retry_ready_action" })
+    );
+  });
   it.each([
     ["ai", "GET", "/api/ai/activity-lines"],
     ["memory", "GET", "/api/memory/graph/recall"],

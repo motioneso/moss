@@ -699,38 +699,24 @@ call it. It records against the thread bound to the token, never one named in th
 
 ### 4.7 Migration DDL (`packages/chat/sql/NNNN_chat_conversation_provenance.sql`)
 
-`NNNN` is the next free number at build time (`0284` today). Register it in the chat manifest
-`migrations` and `ownedTables` (`chat/src/manifest.ts:43-73`).
+The next free number was reserved as `0291` for Slice 6 after checking live main, all open PRs,
+and the locally held Meetings work. `0289` belongs to Slice 5 and `0290` to the separate recording
+notice correction. Register the chat-owned table and migration in the manifest.
 
-```sql
-CREATE TABLE app.chat_conversation_provenance (
-  thread_id uuid PRIMARY KEY REFERENCES app.chat_threads (id) ON DELETE CASCADE,
-  owner_user_id uuid NOT NULL REFERENCES app.users (id) ON DELETE CASCADE,
-  tainted_at timestamptz,
-  first_admission_path text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  CHECK ((tainted_at IS NULL) = (first_admission_path IS NULL))
-);
+The authoritative DDL is [`0291_chat_conversation_provenance.sql`](../../../packages/chat/sql/0291_chat_conversation_provenance.sql).
+The original sketch required three corrections before implementation:
 
-ALTER TABLE app.chat_conversation_provenance ENABLE ROW LEVEL SECURITY;
-ALTER TABLE app.chat_conversation_provenance FORCE ROW LEVEL SECURITY;
+- Owner-column equality alone does not establish ownership of the parent thread. Every runtime
+  policy also checks the actual thread owner; sharing a thread does not share its safety state.
+- `UPDATE ... WITH CHECK (tainted_at IS NOT NULL)` prevents clean reset but does not preserve
+  identity or the first timestamp/path. An immutable-field trigger protects those values too.
+- Runtime does not receive direct DELETE. Otherwise delete followed by clean INSERT could erase
+  known taint. Legitimate thread/private-chat/account deletion still cascades through foreign keys.
 
-CREATE POLICY chat_conversation_provenance_select ON app.chat_conversation_provenance
-  FOR SELECT TO jarvis_app_runtime USING (owner_user_id = app.current_actor_user_id());
-CREATE POLICY chat_conversation_provenance_insert ON app.chat_conversation_provenance
-  FOR INSERT TO jarvis_app_runtime WITH CHECK (owner_user_id = app.current_actor_user_id());
-CREATE POLICY chat_conversation_provenance_update ON app.chat_conversation_provenance
-  FOR UPDATE TO jarvis_app_runtime
-  USING (owner_user_id = app.current_actor_user_id())
-  WITH CHECK (owner_user_id = app.current_actor_user_id() AND tainted_at IS NOT NULL);
-CREATE POLICY chat_conversation_provenance_delete ON app.chat_conversation_provenance
-  FOR DELETE TO jarvis_app_runtime USING (owner_user_id = app.current_actor_user_id());
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON app.chat_conversation_provenance TO jarvis_app_runtime;
-```
-
-The update policy's `WITH CHECK` means a row can become tainted but never clean again. The builder
-copies role and function names from `0149_chat_skills.sql:20-44` if they differ from the above.
+RLS is enabled and forced, and no worker/admin private-data bypass is added. New-thread creation
+inserts the clean row in the same transaction. No migration backfills older threads as clean.
+The repository is the only application path that creates clean rows; the SQL INSERT privilege is
+not claimed to prohibit an arbitrary owner-scoped direct clean INSERT into a legacy missing row.
 
 ### 4.8 The three tools (Settings manifest, beside `app.getMapSlice`)
 
@@ -988,6 +974,24 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
   records taint yet except direct port calls in tests.
 
 ### Slice 7: every admission path records taint
+
+**Additional verification requirements from Slice 6 review (#3065, phase-1 merge blockers):**
+
+- Include remote integration tool descriptions and input schemas exposed through `tools/list`.
+  They are outside text before any result runs (`integrations/src/tool-manifests.ts` to the
+  gateway DTO and MCP transport). Record admission against the bound thread before exposure, or
+  establish an explicit trusted-descriptor sanitization boundary. Result-only admission misses
+  this prompt surface.
+- Coordinate admission with dispatch, rather than assuming a fresh boolean lookup is an atomic
+  barrier. Slice 6 rechecks after asynchronous policy lookups, but handler transaction acquisition,
+  app-route preflight and native/outside-agent audit waits remain possible interleavings before
+  dispatch. Exercise an admission arriving in each gap and establish the required ordering before
+  claiming every tainted write is protected.
+- Bind notes privacy lookup and cross-tool recall to the turn thread. `notes-tool-trust.ts` still
+  selects the actor's current thread, while `runReadToolForActor` currently has no bound thread.
+  Pass identity through cross-tool collection/runtime and require owner/surface-scoped lookup;
+  test private A to ordinary B switching, missing/foreign identity and ordinary recall behavior.
+  This pre-existing privacy seam is not repaired by Slice 6.
 
 - **Files:**
   - `packages/chat/src/live/context-admission.ts` (new) and every admission site in 1.4 (a, c, d,
@@ -1449,3 +1453,45 @@ and invalid/replayed bindings likewise retain their explicit codes. Unexpected r
 become fixed `not_ready`; arbitrary transport errors remain generic, with a sentinel regression
 proving dependency HttpError text is not exposed. No request, row, target or provider text is
 interpolated into these refusal messages.
+
+### 8.11 Slice 6 provenance and binding verification (2026-10-06)
+
+Slice 5 correction `8dd0046c58002f9fe061d2ff94785cbbcfc2aee6` passed every exact-head hosted
+workflow, including all 38 app-action database cases with zero skips and the real browser card
+suite. The final pre-run exception wrapper now has its own sentinel regression: removing it
+exposes the private sentinel and fails the required `not_ready` assertion. The action-run app-map
+entry also names that failure and recovery, rather than listing it only on search.
+
+The durable store is owner-only, missing/foreign/legacy state is tainted, and first admission
+cannot be overwritten or deleted through the runtime role. New conversations receive a clean row
+atomically. The token captures a thread at launch; normal, live-gate and shadow-gate contexts use
+that capture instead of looking up the currently selected conversation. Token identity primitives
+are snapshotted and frozen; the gate's narrowly growing tool allowlist remains intentionally shared.
+
+Binding alone was insufficient: replay and completion previously selected the current thread
+after awaits. They now take an explicit owner/surface-checked thread, refuse missing/foreign
+bindings rather than falling back, and keep the manager's original turn identity through initial
+launch and retry. Both replay and save paths have removal controls. Conversation selection and
+activity ordering are checked so a late A completion cannot undo a later switch to B.
+
+The common policy floor covers normal tools, classifier dry-run/execute, native writes and
+outside-agent writes/shell/web calls. Plain reads remain reads; model-chosen outbound app GETs
+require confirmation when tainted. Missing bindings, unavailable storage and absent composition
+ports fail closed. Policy checks are repeated after asynchronous policy/YOLO lookups. No production
+admission site records state yet: that is Slice 7, and the concurrency requirements above remain
+open. The notice line/card admission behavior also remains Slice 7.
+
+The independent recording-notice acknowledgement route on the held capture branch is explicitly
+blocked by central path policy, even under permissive metadata. This is compatibility coverage
+with a synthetic route declaration, not a claim that the two branches have been combined/tested.
+The older Wellness check-in nested-connection problem and retained-data consent-revocation gap
+remain outside this change.
+
+Existing trusted-auto/YOLO database fixtures use real new owner threads and the production
+provenance store, so unknown-history fallback cannot mask the policy assertions. New DB cases cover
+row ownership/admin isolation, parent forgery, monotonic taint, private/account cascades, restart,
+bound-token decisions, resume races and SQL rollback-only negative controls. Local pure checks and
+removal controls are recorded in the PR. The isolated gate cannot start here because Docker is
+absent; no bare database test, provider call, credentials, device permission or real recording is
+used. Exact-head hosted DB/browser outcomes must be recorded after the push. Live product proof
+and the remaining Phase 1 slices still block completion/merge.

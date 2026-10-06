@@ -55,10 +55,12 @@ import {
 } from "@moss/notes";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 
 describe("notes write assistant tools", () => {
   const prefs = new PreferencesRepository();
   let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let root: string;
   let db: Kysely<MossDatabase>;
   let syncs: string[];
@@ -74,6 +76,7 @@ describe("notes write assistant tools", () => {
     await resetFoundationDatabase();
     db = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     runner = new DataContextRunner(db);
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
     root = await mkdtemp(join(tmpdir(), `jarv1s-notes-write-${randomUUID()}-`));
     process.env["JARVIS_NOTES_ROOTS"] = root;
     syncs = [];
@@ -177,7 +180,7 @@ describe("notes write assistant tools", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [notesModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
@@ -196,7 +199,7 @@ describe("notes write assistant tools", () => {
       toolServices: { notesSync: service }
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "notes-chat",
       allowedToolNames: null
     });
@@ -231,7 +234,7 @@ describe("notes write assistant tools", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [notesModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
@@ -250,7 +253,7 @@ describe("notes write assistant tools", () => {
       toolServices: { notesSync: service }
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "notes-chat-overwrite",
       allowedToolNames: null
     });

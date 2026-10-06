@@ -1,3 +1,5 @@
+import { ChatRepository } from "../../packages/chat/src/repository.js";
+import { ConversationProvenanceStore } from "../../packages/chat/src/conversation-provenance.js";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -614,6 +616,7 @@ describe("HTTP resolve endpoint", () => {
 });
 
 describe("native permission YOLO", () => {
+  let cleanThreadId: string;
   let appDb: Kysely<MossDatabase>;
   let tokens: SessionTokenRegistry;
   let confirmations: ConfirmationRegistry;
@@ -636,6 +639,10 @@ describe("native permission YOLO", () => {
 
   async function buildApp(yoloGrant: boolean | "effective"): Promise<FastifyInstance> {
     runner = new DataContextRunner(appDb);
+    const thread = await runner.withDataContext({ actorUserId: ids.userA }, (db) =>
+      new ChatRepository().openNewThread(db, { title: "Clean native permission conversation" })
+    );
+    cleanThreadId = thread.id;
     repository = new AiRepository();
     tokens = new SessionTokenRegistry();
     confirmations = new ConfirmationRegistry();
@@ -643,6 +650,7 @@ describe("native permission YOLO", () => {
       resolveActiveModules: async () => [],
       repository,
       runner,
+      provenance: new ConversationProvenanceStore(runner),
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -725,6 +733,7 @@ describe("native permission YOLO", () => {
         (scopedDb) => repository.listAssistantActions(scopedDb)
       );
       const token = tokens.mint({
+        threadId: cleanThreadId,
         actorUserId: ids.userA,
         chatSessionId,
         allowedToolNames: null
@@ -788,6 +797,7 @@ describe("native permission YOLO", () => {
     try {
       await setEffectiveYoloState(state);
       const token = tokens.mint({
+        threadId: cleanThreadId,
         actorUserId: ids.userA,
         chatSessionId: randomUUID(),
         allowedToolNames: null
@@ -816,6 +826,7 @@ describe("native permission YOLO", () => {
     try {
       await setEffectiveYoloState({ master: true, allowed: true, enabled: true });
       const token = tokens.mint({
+        threadId: cleanThreadId,
         actorUserId: ids.userA,
         chatSessionId: randomUUID(),
         allowedToolNames: null

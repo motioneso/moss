@@ -61,7 +61,8 @@ export const chatModuleManifest = {
       "sql/0255_chat_classifier_shadow_retention.sql",
       "sql/0271_chat_classifier_shadow_reviews.sql",
       "sql/0276_meeting_chat_cleanup.sql",
-      "sql/0277_chat_surface_immutable.sql"
+      "sql/0277_chat_surface_immutable.sql",
+      "sql/0291_chat_conversation_provenance.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -71,7 +72,8 @@ export const chatModuleManifest = {
       "app.chat_skills",
       "app.chat_classifier_shadow_records",
       "app.chat_classifier_release_eligibility",
-      "app.chat_classifier_shadow_reviews"
+      "app.chat_classifier_shadow_reviews",
+      "app.chat_conversation_provenance"
     ]
   },
   permissions: [
@@ -108,6 +110,14 @@ export const chatModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "chat.conversation_write_confirmation",
+      description:
+        "Writes ask when the bound conversation has outside or unknown history, even in YOLO. " +
+        "Stored state survives restart. Automatic outside-content recording is still pending; " +
+        "protection is incomplete.",
+      featureFlagId: "chat.module"
+    },
     {
       id: "chat.acp_answers",
       description:
