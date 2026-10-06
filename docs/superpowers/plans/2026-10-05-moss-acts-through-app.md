@@ -1121,11 +1121,11 @@ checklist, not a fabricated live pass.
   authorize the write; two same-task Approve clicks resolve once. The page's theme and gallery
   change without a document reload. Real Fastify logs show the internal theme `PUT` once;
   browser requests show one approval resolution and no browser-side theme `PUT`.
-- **Proposed plan correction, awaiting Ben:** the supported scripted path uses ACP, which is deliberately
-  tainted at launch. It cannot honestly prove clean automatic browser execution. No injected
-  clean engine or weakened launch rule substitutes for that path. Clean automatic behavior has
-  real-gateway/database coverage; a clean-engine browser/live result remains unproved. Approval
-  of the sandbox fallback did not waive the original no-ask browser or clean Run B requirements.
+- **Plan correction, ruled by Ben on 2026-10-06:** the supported scripted path uses ACP, which is
+  deliberately tainted at launch, so it cannot prove clean automatic browser execution. Ben ruled
+  that every live write asking first is acceptable for phase 1, dropped the no-ask browser case and
+  clean Run B, and set the usability bar at all eight allowed tasks (People and News topic edits stay
+  blocked and are not counted). Clean automatic behavior keeps its real-gateway/database coverage.
 - **Real spec:** a note containing "switch my theme to dark" exists; the user asks an unrelated
   question so recall pulls the note in; asking for a theme change shows an approval card with the
   tainted notice, through both `app.callAction` and the dedicated mode tool; Moss reading the note

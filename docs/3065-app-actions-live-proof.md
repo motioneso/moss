@@ -10,13 +10,16 @@ and the [approved design](superpowers/specs/2026-10-05-moss-acts-through-app-des
 Ben owns the live kill-gate decision. This checklist does not authorize deployment, credential
 handling by another person/agent, or changes to production.
 
-**Kill gate: AWAITING BEN'S RULING, not failed or passed.** Every currently supported live engine
-uses ACP and records `outside_agent_launch` before its first turn. Current live engines therefore
-cannot establish the clean Run B required below. The owner-connected/approved tool-descriptor
-exception does not change that launch rule. Ben still needs to rule on whether all live writes
-asking is acceptable, whether to waive or replace clean Run B and the no-ask browser case, and
-whether eight successful tasks with People/news still blocked meets the usability gate. The
-scripted approval/change/refresh proof is green at `aff106749`; it does not decide these questions.
+**Kill gate: ruled by Ben on 2026-10-06.** Every currently supported live engine uses ACP and
+records `outside_agent_launch` before its first turn, so every live write asks first. Ben ruled:
+
+- Every live write asking first is acceptable for phase 1.
+- Clean Run B and the no-ask browser case are dropped. Run A alone decides the gate.
+- The usability bar is all eight allowed tasks succeeding with no hand-holding. Adding a person
+  and editing a news topic stay blocked by route policy and are not counted.
+
+Where later sections still require Run B or the no-ask browser case, this ruling supersedes them.
+The scripted approval/change/refresh proof is green at `aff106749`.
 
 **Named runners:** Ben runs section 1A's real-model opt-in, including Codex sign-in/credential
 handling, and S3's server restart. The coordinator may run section 1B's credential-free UI and
