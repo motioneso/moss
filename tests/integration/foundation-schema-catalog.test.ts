@@ -603,7 +603,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0287", name: "0287_companion_recording_capabilities.sql" },
         { version: "0288", name: "0288_meeting_recording_connections.sql" },
         { version: "0290", name: "0290_meeting_recording_notice.sql" },
-        { version: "0292", name: "0292_meeting_minimal.sql" }
+        { version: "0292", name: "0292_meeting_minimal.sql" },
+        { version: "0295", name: "0295_meeting_capture_start_limits.sql" }
       ]);
     } finally {
       await client.end();

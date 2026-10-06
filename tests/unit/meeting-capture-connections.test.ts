@@ -1,3 +1,4 @@
+import { MeetingCaptureStartLimiter } from "../../packages/meetings/src/capture-start-limiter.js";
 import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { captureMetadataJson } from "../../packages/meetings/src/capture-metadata.js";
 import { assertCaptureAudioAdmission } from "../../packages/meetings/src/capture-domain.js";
@@ -39,6 +40,7 @@ const inventory: MeetingCaptureInventory = {
   systemAudioPermission: "granted"
 };
 function fixture() {
+  vi.spyOn(MeetingCaptureStartLimiter.prototype, "consume").mockResolvedValue();
   let clock = now;
   const actor = {
     actorUserId: owner,
@@ -73,6 +75,8 @@ function fixture() {
     resolveBrowser: vi.fn(async () => browser),
     resolveCompanion: vi.fn(),
     resolveRecording: vi.fn(async () => actor),
+    acquireRecordingBinding: async () => ({ release: async () => {} }),
+    scheduleMaintenance: async () => {},
     assertRecordingBinding: vi.fn(async () => ({ expiresAt: later })),
     assertBinding: vi.fn(),
     device: vi.fn(async () => ({ displayName: "Mac", expiresAt: later })),

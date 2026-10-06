@@ -343,7 +343,7 @@ describe("Meetings export worker grants and owner RLS", () => {
   });
 
   it.each(actors)(
-    "direct worker reads succeed with no owner WHERE and isolate $label on all nine tables",
+    "direct worker reads succeed with no owner WHERE and isolate $label on every declared export table",
     async (actor) => {
       await workerContext.withDataContext(actor, async (db) => {
         for (const { key, table, columns } of meetingExportTables) {
@@ -414,7 +414,7 @@ describe("Meetings export worker grants and owner RLS", () => {
 
   for (const { table, columns, derived } of meetingExportTables) {
     it.each(["INSERT", "UPDATE", "DELETE"] as const)(
-      `worker cannot %s ${table}`,
+      `worker cannot perform unsafe %s on ${table} (UPDATE targets owner_user_id)`,
       async (operation) => {
         const qualified = sql.table(`app.${table}`);
         const columnList = sql.join(columns.map((column) => sql.ref(column)));

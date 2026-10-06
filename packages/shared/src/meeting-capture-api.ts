@@ -39,7 +39,14 @@ export interface MeetingCaptureGap {
     | "interrupted"
     | "discarded";
 }
+export type MeetingCaptureRevocationReason =
+  | "device-unavailable"
+  | "recording-permission-revoked"
+  | "session-ended"
+  | "connection-replaced"
+  | "expired";
 export interface MeetingCaptureState {
+  readonly revocationReason?: MeetingCaptureRevocationReason;
   readonly revision?: string;
   readonly transcriptRevision?: number;
   readonly leaseMs?: number;

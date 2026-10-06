@@ -20,3 +20,7 @@ export * from "./target-identity-guard.js";
 export * from "./trust-proxy.js";
 export * from "./types.js";
 export * from "./urls.js";
+
+export * from "./abortable-data-context.js";
+
+export * from "./owned-pg-client.js";

@@ -148,7 +148,7 @@ function ipRateLimit(max: number) {
 }
 function failure(error: unknown, reply: FastifyReply) {
   if (error instanceof MeetingCaptureError) {
-    if (error.httpStatus === 429) reply.header("Retry-After", "1");
+    if (error.httpStatus === 429) reply.header("Retry-After", String(error.retryAfterSeconds));
     return reply.code(error.httpStatus).send({ code: error.code });
   }
   const unavailable = captureAuthorizationError(error);

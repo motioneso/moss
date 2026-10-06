@@ -66,7 +66,8 @@ describe("meetings composition", () => {
       "app.meeting_capture_connections",
       "app.meeting_capture_start_cancellations",
       "app.meeting_recording_notices",
-      "app.meeting_stop_summaries"
+      "app.meeting_stop_summaries",
+      "app.meeting_capture_start_limits"
     ]);
     const chat = getBuiltInModuleManifests().find((manifest) => manifest.id === "chat");
     expect(chat?.database?.migrations).toEqual(
@@ -121,10 +122,12 @@ describe("meetings composition", () => {
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
       "meetings.setup",
+      "meetings.mac_link_controls",
       "meetings.automatic_summary",
       "meetings.recording_notice",
       "transcribe.meeting",
       "meetings.native_capture",
+      "meetings.mac_recording_status",
       "meetings.account_export",
       "meetings.history",
       "meetings.unsaved_changes",

@@ -5,7 +5,7 @@ import { toWebHeaders } from "./headers.js";
 
 export class SessionBindingError extends Error {
   readonly httpStatus = 403;
-  constructor() {
+  constructor(readonly bindingReason: "session-ended" | "device-unavailable" = "session-ended") {
     super("Session binding unavailable");
     this.name = "SessionBindingError";
   }
@@ -62,7 +62,7 @@ export function createSessionBindingsService(deps: {
       [input.deviceId, input.actorUserId, now()]
     );
     const row = result.rows[0];
-    if (!row) throw unavailable();
+    if (!row) throw new SessionBindingError("device-unavailable");
     return { displayName: row.display_name, expiresAt: row.expires_at };
   }
   return {

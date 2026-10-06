@@ -27,7 +27,8 @@ export const meetingsModuleManifest = {
       "sql/0284_meeting_capture.sql",
       "sql/0288_meeting_recording_connections.sql",
       "sql/0290_meeting_recording_notice.sql",
-      "sql/0292_meeting_minimal.sql"
+      "sql/0292_meeting_minimal.sql",
+      "sql/0295_meeting_capture_start_limits.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -46,7 +47,8 @@ export const meetingsModuleManifest = {
       "app.meeting_capture_connections",
       "app.meeting_capture_start_cancellations",
       "app.meeting_recording_notices",
-      "app.meeting_stop_summaries"
+      "app.meeting_stop_summaries",
+      "app.meeting_capture_start_limits"
     ]
   },
   permissions: [
@@ -84,7 +86,7 @@ export const meetingsModuleManifest = {
       id: "meetings.module-settings",
       label: "Meetings",
       description:
-        "Choose your Mac and exact audio sources, review the recording notice, and set summary style and automatic summaries. Run setup again here.",
+        "Choose your Mac and exact audio sources, unlink a Mac or turn off recording permission, review the recording notice, and set summary style and automatic summaries. Run setup again here.",
       path: "/settings?section=modules&module=meetings",
       scope: "user",
       permissionId: "meetings.write",
@@ -163,6 +165,19 @@ export const meetingsModuleManifest = {
         "Set up your Mac connection, audio sources, recording notice and summary defaults once, or continue with notes without a recorder. Finish setup saves preferences only. Linking, creating and opening never record."
     },
     {
+      id: "meetings.mac_link_controls",
+      description:
+        "Settings → Meetings offers confirmed Unlink and a recording-only switch-off per Mac. Pending and failed changes show. Notes, transcripts and defaults remain. Permission ends on Unlink, revoke or device expiry, with no expiry of its own.",
+      remediations: [
+        {
+          id: "meetings.restore_mac_link",
+          path: "/settings?section=profile",
+          description:
+            "Link again or request a recording connection update in Trail Marker and approve it in Profile settings. Neither starts capture. If Unlink or switch-off is unconfirmed, use local Stop, check the connection and retry."
+        }
+      ]
+    },
+    {
       id: "meetings.automatic_summary",
       description:
         "After Stop finalizes meaningful text, one bounded summary runs by default (Settings switch). It renames a still-Untitled meeting from the overview’s first sentence. Failures stay visible; Rewrite summary retries with your configured model."
@@ -216,14 +231,14 @@ export const meetingsModuleManifest = {
           code: "meeting_capture_rate_limited",
           class: "transient",
           description:
-            "Capture transport is temporarily rate limited. Moss honors Retry-After while keeping Pause and Stop available."
+            "Start is limited per account to 10 requests per minute and 60 per hour, alongside transport limits. Moss honors Retry-After while keeping Pause and Stop available."
         },
         {
           code: "meeting_capture_unavailable",
           class: "prerequisite",
           remediationRef: "meetings.connect_recorder",
           description:
-            "The recording connection is unavailable, expired or revoked. Check the companion connection in Settings and complete its one-time recording upgrade if requested."
+            "The recording connection is unavailable, expired or revoked. Review Settings → Meetings for the exact Mac and recording permission. Link again or approve a one-time recording connection update in Profile settings if needed."
         },
         {
           code: "meeting_capture_processing_unavailable",
@@ -236,7 +251,7 @@ export const meetingsModuleManifest = {
           code: "meeting_capture_interrupted",
           class: "transient",
           description:
-            "The recorder or its connection was interrupted. Check the native recorder, review any gap, and explicitly resume with the intended sources."
+            "Recording was interrupted. Terminal status identifies Mac unlink/device expiry, permission revoke, browser-session end, connection replacement or capture expiry. Review setup and create a new meeting after recording authority ends."
         },
         {
           code: "meeting_capture_conflict",
@@ -260,9 +275,9 @@ export const meetingsModuleManifest = {
       remediations: [
         {
           id: "meetings.connect_recorder",
-          path: "/meetings",
+          path: "/settings?section=modules&module=meetings",
           description:
-            "Connect Trail Marker in Settings and approve its recording capability once. Open New meeting, review the named sources (change them in Settings → Meetings), then Start."
+            "Open Settings → Meetings and check the exact Mac, permission and sources. Link or restore recording access from Profile settings if needed, then Run setup again. Open New meeting and explicitly press Start."
         },
         {
           id: "meetings.configure_transcription",
@@ -271,6 +286,11 @@ export const meetingsModuleManifest = {
             "An admin configures the transcription endpoint and model in AI providers. The selected route must return clip timestamps; unsupported responses stop processing without provider fallback."
         }
       ]
+    },
+    {
+      id: "meetings.mac_recording_status",
+      description:
+        "The Mac shows a floating pill with actual captured audio levels and a menu-bar red dot. Silence makes the waveform flat. Closing hides the pill until next Start; Stop clears both. No system notification is posted."
     },
     {
       id: "meetings.account_export",
@@ -617,7 +637,8 @@ export const meetingsModuleManifest = {
           countPredicate: "owner_user_id = $1::uuid"
         },
         { table: "app.meeting_recording_notices", countPredicate: "owner_user_id = $1::uuid" },
-        { table: "app.meeting_stop_summaries", countPredicate: "owner_user_id = $1::uuid" }
+        { table: "app.meeting_stop_summaries", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_start_limits", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }

@@ -27,6 +27,7 @@ import {
   registerMeetingExportRoutes,
   MeetingExportService,
   MEETING_STOP_SUMMARY_QUEUES,
+  MEETING_CAPTURE_MAINTENANCE_QUEUES,
   createMeetingStopSummaryScheduler,
   registerMeetingStopSummaryWorker
 } from "@moss/meetings";
@@ -2845,7 +2846,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: meetingsModuleManifest,
     sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
-    queueDefinitions: MEETING_STOP_SUMMARY_QUEUES,
+    queueDefinitions: [...MEETING_STOP_SUMMARY_QUEUES, ...MEETING_CAPTURE_MAINTENANCE_QUEUES],
     registerRoutes: (server, deps) => {
       registerMeetingCaptureRoutes(server, {
         ...createMeetingCaptureRuntime(deps),

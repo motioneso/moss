@@ -360,6 +360,8 @@ function fixture() {
     },
     resolveBrowser: vi.fn(),
     resolveCompanion: vi.fn(),
+    acquireRecordingBinding: async () => ({ release: async () => {} }),
+    scheduleMaintenance: async () => {},
     assertRecordingBinding: vi.fn(async () => ({ expiresAt: at(7200000) })),
     assertBinding: vi.fn(async () => {
       expect(active).toBeLessThanOrEqual(1);

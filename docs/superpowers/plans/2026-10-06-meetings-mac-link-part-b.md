@@ -4,8 +4,8 @@ Status: approved implementation, draft pull request only. No merge or deployment
 
 ## Source and branch
 
-Build from repaired, published Part A, PR #3079 at `5cd2550eba229820dd14fe404e84ced79f7b83a2`,
-tree `f2feda36e7b6c63bf59c8a6703947233bb8aa9eb`. The branch is
+Build from repaired, published Part A, PR #3079 at `1b1e459c4d0ea87e3e13d11b1093e4f853b58673`,
+tree `a0f3403b0de7f5d72d69efab60d67be036dd3c13`. The branch is
 `feat/2981-meetings-mac-link`, with intended PR base `feat/2981-meetings-minimal`.
 
 The approved controls and test matrix are the Link design sign-off in
@@ -56,6 +56,52 @@ Record separately which checks ran locally, which are authored for hosted execut
 require owner-controlled hardware. T14 is the live linked-Mac path and cannot be claimed by a mock,
 portable source check or CI unit test.
 
+## Implementation boundaries
+
+Per-grant live operations, provider admission and later persistence acquire the existing
+device/meeting locks before an auth-owned row fence, and release that fence only after the
+application transaction commits or rolls back. Start, connection registration and command
+polling retain their separate authorization prechecks. Auth row
+contention fails temporarily, rather than falsely revoking a grant. Provider dispatch is admitted
+inside this fence; its result is awaited after release. Work already admitted to a provider can
+continue after revocation, while a fresh authorization fence protects later persistence. This is
+not a claim that revocation cancels a provider's accepted request.
+
+A metadata-only maintenance queue rechecks grants without another browser or native request.
+Start and its first job commit together. Each sequence advance and successor job also commit
+together; a repeated delivery cannot fork the chain. The API consumes these jobs through the
+existing auth and owner-scoped application ports. The existing worker remains the sole queue
+supervisor. No worker access to auth secrets or new database role is introduced.
+
+Maintenance owns and closes its database transports on cancellation, including a stalled
+connection handshake, query or idle teardown. Its configured single-crash recovery budget includes
+the recurrence and polling time before a crash. That budget assumes the API, database and queue
+supervisor can run within their deadlines. A prolonged process/database outage cannot guarantee
+a persisted update within 30 seconds; the native lease remains a separate recording stop bound.
+The hosted no-traffic, active-job crash, rollback and replay tests must execute before this becomes
+a verified timing claim.
+
+Native logout deletes only the row matching the presented credential's canonical digest, and
+returns 204 after deletion or confirmed absence. This lets a retained credential finish Unlink
+after a lost response or earlier Settings deletion. Malformed credentials and cookies still fail;
+ordinary device authentication is unchanged. Native cleanup still requires a confirmed 204.
+
+Migration 0295 stores bounded Start timestamps per owner. Its account lock spans every API
+instance, with the database clock read after acquiring that lock. Failed requests and replays
+consume admission capacity. Export grants contain only the owner ID and timestamps; deletion
+cascades from the owning user.
+
+The T1/T2 negative proofs have two complementary forms: end-to-end tests disable each actual
+device deletion, while isolated binding tests remove the device check. Device deletion also
+cascades its capability, so removing only one redundant liveness check does not make an unlinked
+device valid. T6 additionally removes owner RLS inside a rollback-only transaction and rechecks
+owner denial after restoration. T11 temporarily grants forbidden export columns, then verifies
+denial after rollback. These are authored database proofs, not local execution claims.
+
+The [recording-pill concept](../mockups/meetings-mac-link/recording-pill-concept.png) is a design
+mockup, not an installed-app screenshot or evidence of real capture. Hardware binding remains
+deferred at the credential storage/server verifier boundary.
+
 ## Work and integration lanes
 
 1. Auth/capture server: preserve capability lifetime, durable account rate limits, revocation settlement,
@@ -88,6 +134,38 @@ Run appropriate unit/component and portable checks, six TypeScript configuration
 format, file-size, design-token, UI-class, catalogue, date, password-source, dependency, migration
 and app-map checks against the final tree. Retain exact negative-proof records. Security and live
 claims remain unverified where their required execution has not happened.
+
+## Local verification and remaining gates
+
+The final relevant unit/component group passed 83 suites and 1,065 tests. Root, tests, web,
+finance, job-search and food TypeScript configurations passed, as did full ESLint and Prettier,
+file-size, design-token, UI-class, migrated-section, catalogue, ambient-date, password-source,
+package-dependency, migration-number and app-map checks. The production web bundle built;
+its large-chunk advisory remains an advisory.
+
+The server's database-free negative runner observes ten named failures followed by restored
+passes: missing device, capability and browser session; the post-fence deadline; each account
+rate limit; logger redaction; and owned-transport connect settlement, forced idle close and query
+abort. Five owned-client tests use the installed pg client with a synthetic protocol transport,
+including transaction cancellation. They are not real database or live TLS tests. The Settings
+lane also observed seven stale-response, identity and repeated-action protections fail with
+their guard removed and pass after restoration.
+
+Portable production C checks and seven negative cases passed, including captured amplitude,
+silence, stale levels, clock rollback, queue publication/capacity and sample ordering. The native
+negative runners' anchors and harness self-tests passed, and the existing Backtrack source checker
+caught all seven planted violations. These checks do not compile Swift or execute XCTest.
+
+The canonical database gate was attempted and exited before launch because Docker is unavailable.
+Real-auth integration, migration, owner export/cascade, RLS/column-grant mutations, no-traffic
+timing and crash recovery remain authored for hosted execution. Browser acceptance was not run
+here; the executor also previously rejected Chromium's socket operation. Native Release/XCTest,
+its 12 new T12/T13 mutations, installed Apple SDK checks, live TLS and the owner-controlled
+linked-Mac T14 path remain unexecuted. No real audio or provider recording occurred.
+
+Independent source review found no remaining blocking source issue after the cancellation and
+crash-recovery corrections. This is code-complete, unverified until the exact published candidate
+passes its hosted checks and the assembled owner-run live path is recorded on the draft PR.
 
 ## Publication
 

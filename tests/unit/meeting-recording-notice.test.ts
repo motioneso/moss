@@ -94,6 +94,8 @@ describe("account recording notice", () => {
         dataContext: { withDataContext: vi.fn() },
         resolveBrowser: vi.fn(),
         resolveCompanion: vi.fn(),
+        acquireRecordingBinding: async () => ({ release: async () => {} }),
+        scheduleMaintenance: async () => {},
         assertBinding: vi.fn(),
         device: vi.fn(),
         assertModuleAvailable: vi.fn(),

@@ -76,6 +76,8 @@ describe("assembled native heartbeat and conditional browser transport", () => {
       }),
       resolveCompanion: vi.fn(),
       assertBinding: vi.fn(),
+      acquireRecordingBinding: async () => ({ release: async () => {} }),
+      scheduleMaintenance: async () => {},
       assertRecordingBinding: async () => ({ expiresAt: grant.expires_at }),
       device: vi.fn(),
       assertModuleAvailable: vi.fn(),

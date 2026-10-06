@@ -1,3 +1,10 @@
+import { RecordingCapabilityError } from "./recording-capability-error.js";
+import {
+  acquireCaptureBinding,
+  probeCaptureBinding,
+  type CaptureBindingInput,
+  type CaptureBindingLease
+} from "./capture-binding.js";
 import { createHash } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import type pg from "pg";
@@ -12,17 +19,7 @@ import type { CompanionContext, CompanionDevicesService } from "./companion-devi
 import type { BrowserSessionBinding } from "./session-bindings.js";
 import { digestsMatch } from "./companion-crypto.js";
 
-export class RecordingCapabilityError extends Error {
-  readonly statusCode: number;
-  constructor(
-    readonly httpStatus: 400 | 403 | 409 | 429 = 403,
-    readonly retryAfterSeconds = 60
-  ) {
-    super("Recording connection unavailable");
-    this.name = "RecordingCapabilityError";
-    this.statusCode = httpStatus;
-  }
-}
+export { RecordingCapabilityError } from "./recording-capability-error.js";
 
 export interface RecordingCapabilityContext extends CompanionContext {
   readonly capabilityRevision: number;
@@ -30,6 +27,8 @@ export interface RecordingCapabilityContext extends CompanionContext {
 }
 
 export interface RecordingCapabilitiesService {
+  acquireCaptureBinding(input: CaptureBindingInput): Promise<CaptureBindingLease>;
+  probeCaptureBinding(input: CaptureBindingInput, signal: AbortSignal): Promise<void>;
   resolve(input: {
     headers: IncomingHttpHeaders;
     requestId: string;
@@ -152,6 +151,8 @@ export function createRecordingCapabilitiesService(deps: {
     };
   }
   return {
+    acquireCaptureBinding: (input) => acquireCaptureBinding(pool, input),
+    probeCaptureBinding: (input, signal) => probeCaptureBinding(pool, input, signal),
     async resolve({ headers, requestId }) {
       const proof = headers["x-moss-recording-proof"];
       if (headers.cookie || typeof proof !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(proof))

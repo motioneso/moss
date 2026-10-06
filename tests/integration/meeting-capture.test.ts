@@ -72,6 +72,9 @@ async function fixture(acknowledgeNotice = true) {
       )
     ).meeting;
   const meeting = await createMeeting();
+  await sql`DELETE FROM app.meeting_capture_start_limits WHERE owner_user_id=${owner.actorUserId}::uuid`.execute(
+    bootstrap
+  );
   if (acknowledgeNotice)
     await context.withDataContext(owner, (db) =>
       new MeetingRecordingNoticeRepository().acknowledge(db, MEETING_RECORDING_NOTICE.policyVersion)
@@ -87,6 +90,8 @@ async function fixture(acknowledgeNotice = true) {
       capabilityRevision: revision,
       expiresAt: browser.expiresAt
     }),
+    acquireRecordingBinding: async () => ({ release: async () => {} }),
+    scheduleMaintenance: async () => {},
     assertRecordingBinding: async (input) => {
       if (
         input.actorUserId !== owner.actorUserId ||

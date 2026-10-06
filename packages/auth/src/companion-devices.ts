@@ -57,6 +57,7 @@ export interface CompanionDevicesService {
   ): Promise<CompanionHeartbeatResponse>;
   rename(ctx: CompanionContext, displayName: string): Promise<CompanionDeviceSummary>;
   logout(ctx: CompanionContext): Promise<void>;
+  logoutCredential(input: { headers: IncomingHttpHeaders }): Promise<void>;
 }
 
 interface CompanionDevicesDeps {
@@ -165,6 +166,20 @@ export function createCompanionDevicesService(deps: CompanionDevicesDeps): Compa
       return { id: row.id, displayName: row.display_name };
     },
 
+    async logoutCredential({ headers }) {
+      const credential = readCompanionCredential(headers);
+      if (
+        headers.cookie !== undefined ||
+        !credential ||
+        !/^tm1_[A-Za-z0-9_-]{43}$/.test(credential)
+      )
+        throw new CompanionAuthError("companion_credential_invalid", 401);
+      // Logout alone may retire an expired credential or confirm that it was already removed.
+      // No identity or reusable authorization is returned, including on a lost-response retry.
+      await pool.query("DELETE FROM app.companion_devices WHERE credential_hash = $1", [
+        sha256Base64url(credential)
+      ]);
+    },
     async logout(ctx) {
       // Deleting the row is the revocation. Nothing is retained to retry with.
       await pool.query("DELETE FROM app.companion_devices WHERE id = $1 AND user_id = $2", [

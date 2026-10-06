@@ -21,7 +21,12 @@ describe("worker cron-engine ownership (F14 one-cron-owner)", () => {
   it("builds the worker boss with schedule:true and supervise:true", () => {
     // The worker is the SOLE cron + supervisor owner. migrate/createSchema stay
     // at createPgBossClient's defaults (false).
-    expect(WORKER_BOSS_OPTIONS).toEqual({ schedule: true, supervise: true });
+    expect(WORKER_BOSS_OPTIONS).toEqual({
+      schedule: true,
+      supervise: true,
+      superviseIntervalSeconds: 1,
+      monitorIntervalSeconds: 1
+    });
   });
 
   it("emits an observable pgboss.schedule_mode startup log", () => {

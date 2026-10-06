@@ -112,7 +112,10 @@ const GRACEFUL_STOP_TIMEOUT_MS = 10_000;
 // ---------------------------------------------------------------------------
 export const WORKER_BOSS_OPTIONS: Partial<ConstructorOptions> = {
   schedule: true,
-  supervise: true
+  supervise: true,
+  // Recover a crashed capture-maintenance attempt inside its30-second lease.
+  superviseIntervalSeconds: 1,
+  monitorIntervalSeconds: 1
 };
 
 /**

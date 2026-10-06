@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type {
   MeetingCaptureGap,
+  MeetingCaptureRevocationReason,
   MeetingCaptureAudioInput,
   MeetingCaptureControlInput,
   MeetingCaptureInventory,
@@ -18,7 +19,9 @@ import {
 export class MeetingCaptureError extends Error {
   constructor(
     readonly code = "meeting_capture_unavailable",
-    readonly httpStatus = 401
+    readonly httpStatus = 401,
+    readonly retryAfterSeconds = 1,
+    readonly revocationReason?: MeetingCaptureRevocationReason
   ) {
     super(code);
   }
@@ -34,6 +37,8 @@ export interface CaptureEpoch {
   modelRoute: string;
 }
 export interface CaptureStoredState {
+  maintenanceSequence?: number;
+  revocationReason?: MeetingCaptureRevocationReason;
   gaps: MeetingCaptureGap[];
   gapLimitReached: boolean;
   generation: number;

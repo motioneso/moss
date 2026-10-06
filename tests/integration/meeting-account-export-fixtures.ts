@@ -140,6 +140,12 @@ export const meetingExportTables = [
     derived: ["device_id", "connection_id"]
   },
   {
+    key: "capture_start_limits",
+    table: "meeting_capture_start_limits",
+    columns: ["owner_user_id", "started_at"],
+    derived: []
+  },
+  {
     key: "stop_summaries",
     table: "meeting_stop_summaries",
     columns: [
@@ -482,6 +488,9 @@ export async function seedMeetingAccountExport(
     MEETING_RECORDING_NOTICE.policyVersion
   );
   await sql`INSERT INTO app.meeting_capture_connections (device_id,connection_id,device_name,verifier_hash,capability_revision,inventory_json,last_seen_at,expires_at) VALUES (${randomUUID()}::uuid,${randomUUID()}::uuid,${marker + " connection"},${"0".repeat(64)},1,'{}',now(),now()+interval '1 hour')`.execute(
+    db.db
+  );
+  await sql`INSERT INTO app.meeting_capture_start_limits (started_at) VALUES (ARRAY[clock_timestamp()]) ON CONFLICT(owner_user_id) DO UPDATE SET started_at=EXCLUDED.started_at`.execute(
     db.db
   );
   await sql`INSERT INTO app.meeting_capture_start_cancellations (meeting_id,request_key,device_id,connection_id) VALUES (${meeting.id}::uuid,${randomUUID()}::uuid,${randomUUID()}::uuid,${randomUUID()}::uuid)`.execute(

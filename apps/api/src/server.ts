@@ -1,3 +1,4 @@
+import { createMeetingCaptureMaintenanceRuntime } from "./meeting-capture-maintenance-runtime.js";
 import { recordingLoggerOptions } from "./recording-logger-options.js";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -262,6 +263,13 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       logger: server.log
     });
   const ownsAuthRuntime = options.authRuntime === undefined;
+  const captureMaintenance = createMeetingCaptureMaintenanceRuntime({
+    producer: boss,
+    workerConnectionString: getMossDatabaseUrls().worker,
+    appConnectionString: getMossDatabaseUrls().app,
+    auth: authRuntime
+  });
+  server.addHook("preClose", async () => captureMaintenance.close());
   const AUTH_MAX = parsePositiveIntEnv(resolveMossEnv(process.env, "JARVIS_RL_AUTH_MAX"), 10);
 
   registerRequestTimeZoneHook(server);
@@ -576,6 +584,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         resolveCompanion: (input) => authRuntime.companionDevices.resolve(input),
         resolveRecording: (input) => authRuntime.recordingCapabilities.resolve(input),
         assertRecordingBinding: (input) => authRuntime.recordingCapabilities.assertLive(input),
+        acquireRecordingBinding: (input) =>
+          authRuntime.recordingCapabilities.acquireCaptureBinding(input),
         assertBinding: (input) => authRuntime.sessionBindings.assertLive(input),
         device: (input) => authRuntime.sessionBindings.device(input),
         trustedOrigins: authRuntime.trustedOrigins
@@ -760,9 +770,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   });
 
   server.addHook("onReady", async () => {
-    if (ownsBoss) {
-      await boss.start();
-    }
+    // The maintenance runtime starts the producer first, including injected producers.
+    await captureMaintenance.start();
   });
 
   server.addHook("onClose", async () => {

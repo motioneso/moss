@@ -167,6 +167,7 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.meeting_capture_receipts",
         "app.meeting_capture_connections",
         "app.meeting_capture_start_cancellations",
+        "app.meeting_capture_start_limits",
         "app.meeting_recording_notices",
         "app.meeting_stop_summaries",
         // Workshop projects own their durable feed; both cascade with their owner.

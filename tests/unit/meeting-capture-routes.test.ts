@@ -17,6 +17,8 @@ function dependencies(): MeetingCaptureDependencies {
     resolveCompanion: vi.fn(async () => {
       throw Error("synthetic unavailable");
     }),
+    acquireRecordingBinding: async () => ({ release: async () => {} }),
+    scheduleMaintenance: async () => {},
     assertBinding: vi.fn(),
     device: vi.fn(),
     assertModuleAvailable: vi.fn(),

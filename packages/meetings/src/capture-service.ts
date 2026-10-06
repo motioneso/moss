@@ -1,3 +1,5 @@
+import type { CaptureMaintenanceScheduler } from "./capture-maintenance.js";
+import { settleCaptureRevocation, withCaptureBindingTransaction } from "./capture-binding.js";
 import type { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
 import { MeetingPreferencesRepository, savedCaptureSelection } from "./preferences.js";
 import { MeetingRecordingNoticeRepository } from "./recording-notice.js";
@@ -66,6 +68,13 @@ export interface CaptureRecordingBinding extends CaptureCompanionBinding {
   readonly expiresAt: Date;
 }
 export interface MeetingCaptureDependencies {
+  readonly scheduleMaintenance: CaptureMaintenanceScheduler;
+  readonly acquireRecordingBinding: (input: {
+    actorUserId: string;
+    sessionId: string;
+    deviceId: string;
+    capabilityRevision: number;
+  }) => Promise<{ release(): Promise<void> }>;
   readonly resolveRecording?: (input: {
     headers: IncomingHttpHeaders;
     requestId: string;
@@ -193,7 +202,19 @@ export class MeetingCaptureService {
     }
   }
   private async preflight(grant: CaptureGrant, actor: AccessContext) {
-    await this.liveBinding(grant, actor);
+    try {
+      await this.liveBinding(grant, actor);
+    } catch (error) {
+      await settleCaptureRevocation(
+        this.deps,
+        actor,
+        grant,
+        error,
+        this.repository,
+        this.connections
+      );
+      throw error;
+    }
     await this.deps.assertModuleAvailable(actor);
   }
   private valid(grant: CaptureGrant | null, meetingId: string, deviceId?: string) {
@@ -260,10 +281,32 @@ export class MeetingCaptureService {
     await this.liveBinding(grant, proof.actor);
     return grant;
   }
+  private async nativeTransaction<T>(
+    proof: NativeProof,
+    work: (db: DataContextDb, grant: CaptureGrant) => Promise<T>
+  ) {
+    try {
+      return await withCaptureBindingTransaction(
+        this.deps,
+        proof.actor,
+        (db) => this.locked(db, proof),
+        work
+      );
+    } catch (error) {
+      await settleCaptureRevocation(
+        this.deps,
+        proof.actor,
+        proof.grant,
+        error,
+        this.repository,
+        this.connections
+      );
+      throw error;
+    }
+  }
   async status(headers: IncomingHttpHeaders, requestId: string, input: MeetingCaptureStatusInput) {
     const proof = await this.authenticate(headers, requestId, input.meetingId, input.grantId);
-    return this.deps.dataContext.withDataContext(proof.actor, async (db) => {
-      const grant = await this.locked(db, proof);
+    return this.nativeTransaction(proof, async (db, grant) => {
       const state = captureState(grant);
       const previousRevision = captureView(grant, state, this.now()).revision;
       await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
@@ -348,12 +391,16 @@ export class MeetingCaptureService {
           try {
             await this.liveBinding(grant, actor);
           } catch (error) {
-            if (error instanceof MeetingCaptureError && error.httpStatus === 401)
+            if (error instanceof MeetingCaptureError && error.httpStatus === 401) {
               state.desired = "revoked";
-            else throw error;
+              state.revocationReason = error.revocationReason;
+            } else throw error;
           }
         }
-        if (grant.expires_at <= this.now() || grant.status === "revoked") state.desired = "revoked";
+        if (grant.expires_at <= this.now() || grant.status === "revoked") {
+          state.desired = "revoked";
+          state.revocationReason ??= grant.expires_at <= this.now() ? "expired" : undefined;
+        }
         if (
           state.desired === "stopped" &&
           state.finalizationDeadline !== null &&
@@ -469,79 +516,84 @@ export class MeetingCaptureService {
       input.command === "record"
         ? await this.deps.processingAvailability(actor).catch(() => null)
         : null;
-    return this.deps.dataContext.withDataContext(actor, async (db) => {
-      const grant = await this.controlGrant(db, actor, grantId, meetingId, input, proof);
-      const previous = await this.repository.receipt(db, grant.id, input.requestKey, fingerprint);
-      if (previous?.result_json)
-        return { capture: captureView(grant, captureState(grant), this.now()) };
-      if (input.command === "record" && (!processing?.ready || !processing.modelRoute))
-        throw new MeetingCaptureError("meeting_capture_processing_unavailable", 503);
-      const state = captureState(grant);
-      await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
-      if (grant.status !== "approved") expireCaptureLease(state, this.now(), grant.expires_at);
-      let command = input;
-      if (input.command === "record") {
-        // Legacy source-bearing controls can replay their receipt, but cannot create a new epoch.
-        if (input.selection) throw new MeetingCaptureError("meeting_capture_setup_required", 409);
-        const preferences = await this.preferences.get(db);
-        const source = preferences.rememberedSource;
-        if (
-          !preferences.setupCompletedAt ||
-          !source ||
-          source.deviceId !== grant.device_id ||
-          source.mode !== preferences.defaultCaptureMode
-        )
-          throw new MeetingCaptureError("meeting_capture_setup_required", 409);
-        const connection = await this.connections.connection(db, grant.device_id);
-        if (
-          !connection ||
-          connection.connection_id !== grant.connection_id ||
-          connection.capability_revision !== grant.capability_revision ||
-          connection.expires_at <= this.now() ||
-          this.now().getTime() - connection.last_seen_at.getTime() > 30000
-        )
-          throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
-        state.inventory = JSON.parse(connection.inventory_json) as NonNullable<
-          typeof state.inventory
-        >;
-        if (grant.status === "approved") state.lastSeenAt = connection.last_seen_at.toISOString();
-        command = {
-          ...input,
-          selection: savedCaptureSelection(source, state.inventory),
-          noticeAcknowledged: true
-        };
-        await this.repository.bindNotice(db, grant, await this.notices.requireCurrent(db));
-      }
-      applyCaptureControl(state, command, this.now(), processing?.modelRoute ?? "");
-      if (grant.status === "approved" && input.command === "record")
-        await this.repository.renewClaim(
-          db,
-          grant,
-          new Date(Math.min(this.now().getTime() + 60000, grant.expires_at.getTime()))
-        );
-      if (grant.status === "approved" && !grant.credential_hash) {
-        state.observed =
-          input.command === "record"
-            ? null
-            : {
-                generation: state.generation,
-                phase: input.command === "pause" ? "paused" : "stopped"
-              };
-      }
-      await this.repository.save(db, grant, state);
-      if (input.command === "stop")
-        await this.stopTranscript(db, meetingId, input.requestKey, state);
-      await this.scheduleSummary(db, actor, grant, state, input.command === "stop");
-      const result = { capture: captureView(grant, state, this.now()) };
-      await this.repository.reserve(db, grant.id, {
-        requestKey: input.requestKey,
-        kind: "control",
-        fingerprint,
-        metadata: { command: input.command },
-        result
-      });
-      return result;
-    });
+    return withCaptureBindingTransaction(
+      this.deps,
+      actor,
+      (db) => this.controlGrant(db, actor, grantId, meetingId, input, proof),
+      async (db, grant) => {
+        const previous = await this.repository.receipt(db, grant.id, input.requestKey, fingerprint);
+        if (previous?.result_json)
+          return { capture: captureView(grant, captureState(grant), this.now()) };
+        if (input.command === "record" && (!processing?.ready || !processing.modelRoute))
+          throw new MeetingCaptureError("meeting_capture_processing_unavailable", 503);
+        const state = captureState(grant);
+        await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
+        if (grant.status !== "approved") expireCaptureLease(state, this.now(), grant.expires_at);
+        let command = input;
+        if (input.command === "record") {
+          // Legacy source-bearing controls can replay their receipt, but cannot create a new epoch.
+          if (input.selection) throw new MeetingCaptureError("meeting_capture_setup_required", 409);
+          const preferences = await this.preferences.get(db);
+          const source = preferences.rememberedSource;
+          if (
+            !preferences.setupCompletedAt ||
+            !source ||
+            source.deviceId !== grant.device_id ||
+            source.mode !== preferences.defaultCaptureMode
+          )
+            throw new MeetingCaptureError("meeting_capture_setup_required", 409);
+          const connection = await this.connections.connection(db, grant.device_id);
+          if (
+            !connection ||
+            connection.connection_id !== grant.connection_id ||
+            connection.capability_revision !== grant.capability_revision ||
+            connection.expires_at <= this.now() ||
+            this.now().getTime() - connection.last_seen_at.getTime() > 30000
+          )
+            throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
+          state.inventory = JSON.parse(connection.inventory_json) as NonNullable<
+            typeof state.inventory
+          >;
+          if (grant.status === "approved") state.lastSeenAt = connection.last_seen_at.toISOString();
+          command = {
+            ...input,
+            selection: savedCaptureSelection(source, state.inventory),
+            noticeAcknowledged: true
+          };
+          await this.repository.bindNotice(db, grant, await this.notices.requireCurrent(db));
+        }
+        applyCaptureControl(state, command, this.now(), processing?.modelRoute ?? "");
+        if (grant.status === "approved" && input.command === "record")
+          await this.repository.renewClaim(
+            db,
+            grant,
+            new Date(Math.min(this.now().getTime() + 60000, grant.expires_at.getTime()))
+          );
+        if (grant.status === "approved" && !grant.credential_hash) {
+          state.observed =
+            input.command === "record"
+              ? null
+              : {
+                  generation: state.generation,
+                  phase: input.command === "pause" ? "paused" : "stopped"
+                };
+        }
+        await this.repository.save(db, grant, state);
+        if (input.command === "stop")
+          await this.stopTranscript(db, meetingId, input.requestKey, state);
+        await this.scheduleSummary(db, actor, grant, state, input.command === "stop");
+        const result = { capture: captureView(grant, state, this.now()) };
+        await this.repository.reserve(db, grant.id, {
+          requestKey: input.requestKey,
+          kind: "control",
+          fingerprint,
+          metadata: { command: input.command },
+          result
+        });
+        return result;
+      },
+      input.command !== "revoke"
+    );
   }
   private async stopTranscript(
     db: DataContextDb,
@@ -621,8 +673,7 @@ export class MeetingCaptureService {
   ): Promise<MeetingCaptureAudioReceipt> {
     const proof = await this.authenticate(headers, requestId, input.meetingId, input.grantId);
     const { pcm, fingerprint } = decodeCaptureAudio(input);
-    const reservation = await this.deps.dataContext.withDataContext(proof.actor, async (db) => {
-      const grant = await this.locked(db, proof);
+    const reservation = await this.nativeTransaction(proof, async (db, grant) => {
       await this.repository.reconcileExpiredAudio(db, grant, captureState(grant), this.now());
       const prior = await this.repository.receipt(db, grant.id, input.requestKey, fingerprint);
       if (prior) {
@@ -665,12 +716,10 @@ export class MeetingCaptureService {
       ): Promise<T> => {
         if (dispatched) throw new MeetingCaptureError("meeting_capture_conflict", 409);
         await this.preflight(proof.grant, proof.actor);
-        const admitted = await this.deps.dataContext.withDataContext(proof.actor, async (db) => {
-          const grant = await this.locked(db, proof);
+        const admitted = await this.nativeTransaction(proof, async (db, grant) => {
           assertCaptureAudioAdmission(captureState(grant), input, this.now());
           if (validate) await validate(db);
-          // This port uses the independent auth pool, never module availability/app connections.
-          await this.liveBinding(grant, proof.actor);
+          // The bounded admission transaction holds its auth fence through commit.
           this.valid(grant, input.meetingId, grant.device_id);
           assertCaptureAudioAdmission(captureState(grant), input, this.now());
           if (signal.aborted) throw new MeetingCaptureError("meeting_capture_interrupted", 409);
@@ -729,9 +778,7 @@ export class MeetingCaptureService {
       }
       await this.preflight(proof.grant, proof.actor);
       processingStage = "persistence";
-      return await this.deps.dataContext.withDataContext(proof.actor, async (db) => {
-        const grant = await this.locked(db, proof);
-        await this.liveBinding(grant, proof.actor);
+      return await this.nativeTransaction(proof, async (db, grant) => {
         this.valid(grant, input.meetingId, grant.device_id);
         const state = captureState(grant);
         await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
@@ -833,9 +880,7 @@ export class MeetingCaptureService {
       };
       // Revoked/deleted authorization suppresses even failure receipts from native callers.
       await this.preflight(proof.grant, proof.actor);
-      return this.deps.dataContext.withDataContext(proof.actor, async (db) => {
-        const grant = await this.locked(db, proof);
-        await this.liveBinding(grant, proof.actor);
+      return this.nativeTransaction(proof, async (db, grant) => {
         this.valid(grant, input.meetingId, grant.device_id);
         const previous = await this.repository.receipt(db, grant.id, input.requestKey, fingerprint);
         if (previous?.result_json)

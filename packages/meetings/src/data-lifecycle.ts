@@ -20,6 +20,7 @@ export interface MeetingsExportSection {
   readonly capture_grants: readonly ExportRow[];
   readonly capture_connections: readonly ExportRow[];
   readonly capture_start_cancellations: readonly ExportRow[];
+  readonly capture_start_limits: readonly ExportRow[];
 }
 
 /**
@@ -141,6 +142,12 @@ export async function collectMeetingsExportSection(
       SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",request_key::text AS "requestKey",created_at AS "createdAt"
       FROM app.meeting_capture_start_cancellations WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY created_at,request_key
     `
+    ),
+    capture_start_limits: await readRows(
+      scopedDb,
+      sql<
+        Record<string, unknown>
+      >`SELECT owner_user_id::text AS "ownerUserId", started_at AS "startedAt" FROM app.meeting_capture_start_limits WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY owner_user_id`
     ),
     stop_summaries: await readRows(
       scopedDb,
