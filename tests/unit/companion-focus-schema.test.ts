@@ -1,6 +1,8 @@
 import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
 import {
+  FOCUS_IMAGE_MAX_CHARS,
+  FOCUS_JUDGE_BODY_LIMIT_BYTES,
   focusContextRouteSchema,
   focusCorrectRouteSchema,
   focusJudgeRouteSchema
@@ -11,10 +13,15 @@ import {
 // additionalProperties: false strips unknown keys rather than rejecting them.
 async function post(
   bodySchema: unknown,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  bodyLimit?: number
 ): Promise<{ status: number; body: Record<string, unknown> | undefined }> {
   const app = Fastify();
-  app.post("/probe", { schema: { body: bodySchema as never } }, async (req) => req.body);
+  app.post(
+    "/probe",
+    { schema: { body: bodySchema as never }, ...(bodyLimit ? { bodyLimit } : {}) },
+    async (req) => req.body
+  );
   const res = await app.inject({
     method: "POST",
     url: "/probe",
@@ -129,6 +136,46 @@ describe("focusJudgeRouteSchema request", () => {
   });
 });
 
+describe("focusJudgeRouteSchema image (#3067)", () => {
+  const jpeg = (chars: number) => `data:image/jpeg;base64,${"A".repeat(chars)}`;
+  const prefix = "data:image/jpeg;base64,".length;
+
+  it("accepts a JPEG data URL right at the cap", async () => {
+    const image = jpeg(FOCUS_IMAGE_MAX_CHARS - prefix);
+    const { status, body } = await post(
+      focusJudgeRouteSchema.body,
+      { ...VALID_JUDGE, image },
+      FOCUS_JUDGE_BODY_LIMIT_BYTES
+    );
+    expect(status).toBe(200);
+    expect(body?.image).toBe(image);
+  });
+
+  it("rejects one character over the cap (fails if the bound is missing)", async () => {
+    const { status } = await post(
+      focusJudgeRouteSchema.body,
+      { ...VALID_JUDGE, image: jpeg(FOCUS_IMAGE_MAX_CHARS - prefix + 1) },
+      FOCUS_JUDGE_BODY_LIMIT_BYTES
+    );
+    expect(status).toBe(400);
+  });
+
+  it.each([
+    ["a PNG", "data:image/png;base64,AAAA"],
+    ["a remote address", "https://example.com/shot.jpg"],
+    ["non-base64 text", "data:image/jpeg;base64,not base64!"],
+    ["an empty payload", "data:image/jpeg;base64,"],
+    ["an empty string", ""]
+  ])("rejects %s", async (_name, image) => {
+    const { status } = await post(focusJudgeRouteSchema.body, { ...VALID_JUDGE, image });
+    expect(status).toBe(400);
+  });
+
+  it("leaves room in the route limit for the largest picture plus the rest of the body", () => {
+    expect(FOCUS_JUDGE_BODY_LIMIT_BYTES).toBeGreaterThan(FOCUS_IMAGE_MAX_CHARS + 2048);
+  });
+});
+
 describe("focusJudgeRouteSchema response", () => {
   it("writes only the four declared fields even if the handler returns more", async () => {
     // Serializing an object that carries an extra key must not emit it. Fails if the schema
@@ -168,13 +215,20 @@ describe("focusContextRouteSchema response", () => {
       async () => ({
         block: null,
         judgmentReady: false,
+        judgeTakesImages: false,
+        judgeName: null,
         ownerUserId: "leak"
       })
     );
     const res = await app.inject({ method: "POST", url: "/probe", payload: {} });
     await app.close();
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ block: null, judgmentReady: false });
+    expect(JSON.parse(res.body)).toEqual({
+      block: null,
+      judgmentReady: false,
+      judgeTakesImages: false,
+      judgeName: null
+    });
   });
 
   it("serializes a block with exactly its four fields", async () => {
@@ -190,7 +244,9 @@ describe("focusContextRouteSchema response", () => {
           endsAt: "2026-09-20T18:00:00.000Z",
           description: "private notes"
         },
-        judgmentReady: true
+        judgmentReady: true,
+        judgeTakesImages: true,
+        judgeName: "Clef-flash (Cloudflare)"
       })
     );
     const res = await app.inject({ method: "POST", url: "/probe", payload: {} });

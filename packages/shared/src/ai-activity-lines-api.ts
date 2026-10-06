@@ -95,7 +95,7 @@ export type ActivityLineDetailDto = {
   readonly expiresAt: string;
 };
 
-/** Small numbers and flags only (tools, tools_failed, jev_agreed, confidence); never text. */
+/** Small numbers and flags only (tools, tools_failed, jev_agreed, confidence, images); never text. */
 export type ActivityFactCountsDto = Record<string, number | boolean>;
 
 export type ActivityLineDto = {

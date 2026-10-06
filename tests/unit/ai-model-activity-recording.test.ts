@@ -218,15 +218,17 @@ describe("model activity recording (plan 3.6a, #2889)", () => {
       result: "completed",
       actionCode: "c".repeat(100),
       turnId: "t".repeat(200),
-      factCounts: { tools: 3, jev_agreed: true, note: "must not store" } as unknown as Record<
-        string,
-        number | boolean
-      >,
+      factCounts: {
+        tools: 3,
+        jev_agreed: true,
+        images: 1,
+        note: "must not store"
+      } as unknown as Record<string, number | boolean>,
       detail: { quote: "q".repeat(3000), resultLine: "r".repeat(600) }
     });
     expect(bounded.actionCode!.length).toBe(64);
     expect(bounded.turnId!.length).toBe(128);
-    expect(bounded.factCounts).toEqual({ tools: 3, jev_agreed: true });
+    expect(bounded.factCounts).toEqual({ tools: 3, jev_agreed: true, images: 1 });
     expect(new TextEncoder().encode(bounded.detail!.quote!).length).toBeLessThanOrEqual(2000);
     expect(bounded.detail!.resultLine!.length).toBe(500);
   });

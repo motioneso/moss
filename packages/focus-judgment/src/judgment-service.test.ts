@@ -147,7 +147,12 @@ describe("no model bound: nothing is processed", () => {
     const h = harness();
     h.setModel(false);
     const context = await h.service.currentContext(DB, T0);
-    expect(context).toEqual({ block: null, judgmentReady: false });
+    expect(context).toEqual({
+      block: null,
+      judgmentReady: false,
+      judgeTakesImages: false,
+      judgeName: null
+    });
   });
 
   it("refuses to judge with the model call count still zero and nothing stored", async () => {

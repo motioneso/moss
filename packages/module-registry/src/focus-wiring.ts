@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from "fastify";
 
 import {
   AiRepository,
+  choiceModelTakesImages,
   createAiSecretCipher,
   generateChoices,
   generateStructured,
@@ -76,6 +77,8 @@ export function createFocusJudgmentService(deps: FocusWiringDeps): FocusJudgment
       );
       return result.ok ? { ok: true, object: result.object } : { ok: false, error: result.error };
     },
+    // The image, when there is one, rides in `input`; generateChoices refuses it unless the model
+    // row (passed whole, so its capabilities come too) can read pictures.
     choose: async (scopedDb, input) => {
       const model = await repository.resolveFocusJudgeModel(scopedDb);
       if (!model) return { ok: false, error: "needs_config" };
@@ -84,6 +87,17 @@ export function createFocusJudgmentService(deps: FocusWiringDeps): FocusJudgment
         { ...input, explicitModel: model },
         { repository, cipher, logger: deps.logger }
       );
+    },
+    // #3067: the Mac offers the picture source only when this says the judge takes one. It uses
+    // the same test generateChoices applies, so the offer and the call never disagree.
+    describeJudge: async (scopedDb) => {
+      const model = await repository.resolveFocusJudgeModel(scopedDb);
+      if (!model) return null;
+      const provider = await repository.selectProviderBaseUrl(scopedDb, model.provider_config_id);
+      return {
+        name: `${model.display_name} (${model.provider_display_name})`,
+        takesImages: provider !== undefined && choiceModelTakesImages(model, provider.base_url)
+      };
     },
     logger: deps.logger
   };
