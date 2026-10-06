@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DataContextRunner, type AccessContext, type DataContextDb } from "@moss/db";
 import type { CapturedRouteSchema } from "@moss/module-sdk";
+import { memoryPendingCandidateCursorPattern } from "@moss/shared";
 
 import { renderAndCap } from "../../packages/ai/src/gateway/output-validation.js";
 import { createAppActionsService } from "../../packages/chat/src/app-actions.js";
@@ -24,7 +25,14 @@ import { makeRecordingDb } from "./helpers/recording-db.js";
 const ACTOR_ID = "00000000-0000-4000-8000-000000000001";
 const FACT_ID = "00000000-0000-4000-8000-000000000002";
 const ACCEPT_PATH = "/api/memory/candidates/00000000-0000-4000-8000-000000000003/accept";
-const CREATED_AT = "2026-10-06T12:00:00.000Z";
+const CREATED_AT = "2026-10-06T12:00:00.123Z";
+const CURSOR_TIME = "2026-10-06T12:00:00.123456Z";
+const cursorSchema = {
+  type: "string",
+  minLength: 64,
+  maxLength: 64,
+  pattern: memoryPendingCandidateCursorPattern
+};
 const access: AccessContext = { actorUserId: ACTOR_ID, requestId: "memory-contract" };
 const apps: FastifyInstance[] = [];
 const databases: DataContextDb[] = [];
@@ -84,6 +92,23 @@ function candidate(index: number): MemoryCandidateRecord {
     createdAt: new Date(CREATED_AT),
     updatedAt: new Date(CREATED_AT),
     resolvedAt: null
+  };
+}
+
+function cursorFor(index: number) {
+  return `${CURSOR_TIME}_${candidate(index).id}`;
+}
+
+function page(
+  items: MemoryCandidateRecord[],
+  total: number,
+  remainingCount = total - items.length
+) {
+  return {
+    items,
+    total,
+    remainingCount,
+    nextCursor: remainingCount > 0 ? `${CURSOR_TIME}_${items.at(-1)!.id}` : null
   };
 }
 
@@ -148,79 +173,83 @@ describe("memory candidate HTTP contract", () => {
   });
 
   it.each([
-    { label: "the first page", offset: 0, count: 5, total: 12, remaining: 7 },
-    { label: "a middle page", offset: 5, count: 5, total: 12, remaining: 2 },
-    { label: "the last partial page", offset: 11, count: 1, total: 12, remaining: 0 },
-    { label: "the exact end", offset: 12, count: 0, total: 12, remaining: 0 },
-    { label: "past the end", offset: 13, count: 0, total: 12, remaining: 0 },
-    { label: "all 5 pending suggestions", offset: 0, count: 5, total: 5, remaining: 0 },
-    { label: "an empty pending list", offset: 0, count: 0, total: 0, remaining: 0 }
+    { label: "the first page", after: undefined, start: 0, count: 5, total: 12, remaining: 7 },
+    {
+      label: "a middle page after earlier decisions",
+      after: 4,
+      start: 5,
+      count: 5,
+      total: 10,
+      remaining: 2
+    },
+    { label: "the last partial page", after: 10, start: 11, count: 1, total: 10, remaining: 0 },
+    { label: "the exact end", after: 11, start: 12, count: 0, total: 10, remaining: 0 },
+    { label: "past the end", after: 12, start: 13, count: 0, total: 10, remaining: 0 },
+    {
+      label: "all 5 pending suggestions",
+      after: undefined,
+      start: 0,
+      count: 5,
+      total: 5,
+      remaining: 0
+    },
+    { label: "an empty pending list", after: undefined, start: 0, count: 0, total: 0, remaining: 0 }
   ])(
-    "serializes exact items and counts for $label",
-    async ({ offset, count, total, remaining }) => {
+    "serializes exact cursor-page items and counts for $label",
+    async ({ after, start, count, total, remaining }) => {
       const h = harness();
-      const listPending = vi
+      const items = Array.from({ length: count }, (_, index) => candidate(start + index));
+      const list = vi
         .spyOn(MemoryCandidatesRepository.prototype, "listPendingWithCount")
-        .mockResolvedValue({
-          items: Array.from({ length: count }, (_, index) => candidate(offset + index)),
-          total
-        });
-
+        .mockResolvedValue(page(items, total, remaining));
       const response = await h.app.inject({
         method: "GET",
-        url: `/api/memory/candidates?offset=${offset}`
+        url: `/api/memory/candidates${after === undefined ? "" : `?cursor=${cursorFor(after)}`}`
       });
-
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
-        items: Array.from({ length: count }, (_, index) => ({
-          id: candidate(offset + index).id,
-          title: `Suggestion ${offset + index + 1}`,
-          summary: `Suggestion ${offset + index + 1}`,
-          titleTruncated: false,
-          summaryTruncated: false,
-          recordKind: "preference",
-          provenance: (offset + index) % 2 === 0 ? "volunteered" : "inferred",
-          createdAt: CREATED_AT
-        })),
         total,
         hasMore: remaining > 0,
         remainingCount: remaining,
-        nextOffset: remaining > 0 ? offset + count : null
+        nextCursor: remaining > 0 ? cursorFor(start + count - 1) : null,
+        items: items.map((item, index) => ({
+          id: item.id,
+          title: `Suggestion ${start + index + 1}`,
+          summary: `Suggestion ${start + index + 1}`,
+          titleTruncated: false,
+          summaryTruncated: false,
+          recordKind: "preference",
+          provenance: item.provenance,
+          createdAt: CREATED_AT
+        }))
       });
       expect(Object.keys(response.json())).toEqual([
         "total",
         "hasMore",
         "remainingCount",
-        "nextOffset",
+        "nextCursor",
         "items"
       ]);
       expect(parseCompleteBody(renderBody(response.json()))).toEqual(response.json());
       expect(h.withDataContext).toHaveBeenCalledExactlyOnceWith(access, expect.any(Function));
-      expect(listPending).toHaveBeenCalledExactlyOnceWith(h.scoped, ACTOR_ID, 5, offset);
+      expect(list).toHaveBeenCalledExactlyOnceWith(
+        h.scoped,
+        ACTOR_ID,
+        5,
+        after === undefined ? undefined : { createdAt: CURSOR_TIME, id: candidate(after).id }
+      );
       expect(h.queries).toEqual([]);
     }
   );
 
-  it("defaults to the first page when offset is omitted", async () => {
-    const h = harness();
-    const list = vi
-      .spyOn(MemoryCandidatesRepository.prototype, "listPendingWithCount")
-      .mockResolvedValue({ items: [], total: 0 });
-    const response = await h.app.inject({ method: "GET", url: "/api/memory/candidates" });
-    expect(response.statusCode).toBe(200);
-    expect(list).toHaveBeenCalledExactlyOnceWith(h.scoped, ACTOR_ID, 5, 0);
-    expect(response.json().nextOffset).toBeNull();
-  });
-
-  it("discovers paging in app.findAction and reads the next page through the real HTTP transport", async () => {
+  it("discovers cursor paging in app.findAction and reads the next page through the real HTTP transport", async () => {
     const h = harness();
     await h.app.ready();
     const catalog = createRouteCatalogHolder();
     catalog.set(buildRouteCatalog([memoryModuleManifest], h.captured));
     const list = vi
       .spyOn(MemoryCandidatesRepository.prototype, "listPendingWithCount")
-      .mockResolvedValue({ items: [candidate(5)], total: 6 });
+      .mockResolvedValue(page([candidate(5)], 6, 0));
     const gateway = makeAppActionGateway({
       runner: h.dataContext,
       provenance: {
@@ -243,11 +272,7 @@ describe("memory candidate HTTP contract", () => {
             method: "GET",
             path: "/api/memory/candidates",
             inputShape: {
-              querystring: expect.objectContaining({
-                properties: {
-                  offset: { type: "integer", minimum: 0, maximum: 2147483647, default: 0 }
-                }
-              })
+              querystring: expect.objectContaining({ properties: { cursor: cursorSchema } })
             }
           })
         ])
@@ -256,7 +281,7 @@ describe("memory candidate HTTP contract", () => {
     const result = await gateway.call({
       method: "GET",
       path: "/api/memory/candidates",
-      query: { offset: "5" }
+      query: { cursor: cursorFor(4) }
     });
     expect(result).toMatchObject({
       ok: true,
@@ -266,32 +291,55 @@ describe("memory candidate HTTP contract", () => {
           total: 6,
           remainingCount: 0,
           hasMore: false,
-          nextOffset: null,
+          nextCursor: null,
           items: [expect.objectContaining({ id: candidate(5).id })]
         }
       }
     });
-    expect(list).toHaveBeenCalledExactlyOnceWith(h.scoped, ACTOR_ID, 5, 5);
+    expect(list).toHaveBeenCalledExactlyOnceWith(h.scoped, ACTOR_ID, 5, {
+      createdAt: CURSOR_TIME,
+      id: candidate(4).id
+    });
     expect(gateway.events.filter((event) => event.kind === "action_request")).toEqual([]);
   });
 
-  it.each(["-1", "1.5", "nope", "2147483648", "Infinity", "1&offset=2"])(
-    "rejects invalid offset %s before actor resolution or persistence",
-    async (offset) => {
-      const h = harness();
-      const response = await h.app.inject({
-        method: "GET",
-        url: `/api/memory/candidates?offset=${offset}`
-      });
-      expect(response.statusCode).toBe(400);
-      expect(h.resolveAccessContext).not.toHaveBeenCalled();
-      expect(h.withDataContext).not.toHaveBeenCalled();
-      expect(h.queries).toEqual([]);
-    }
-  );
+  it.each([
+    "",
+    "garbage",
+    cursorFor(0).slice(0, -1),
+    `${cursorFor(0)}x`,
+    cursorFor(0).replace("2026-10-06", "0000-10-06"),
+    cursorFor(0).replace("2026-10-06", "2026-02-29"),
+    cursorFor(0).replace("2026-10-06", "2026-02-30"),
+    cursorFor(0).replace("12:00:00", "24:00:00"),
+    cursorFor(0).replace("12:00:00", "12:60:00"),
+    cursorFor(0).replace(".123456Z", ".123Z"),
+    `${cursorFor(0)}&cursor=${cursorFor(1)}`
+  ])("rejects invalid cursor %s before actor resolution or persistence", async (cursor) => {
+    const h = harness();
+    const response = await h.app.inject({
+      method: "GET",
+      url: `/api/memory/candidates?cursor=${cursor}`
+    });
+    expect(response.statusCode).toBe(400);
+    expect(h.resolveAccessContext).not.toHaveBeenCalled();
+    expect(h.withDataContext).not.toHaveBeenCalled();
+    expect(h.queries).toEqual([]);
+  });
+
+  it("rejects obsolete offset paging before actor resolution or persistence", async () => {
+    const h = harness();
+    const response = await h.app.inject({ method: "GET", url: "/api/memory/candidates?offset=5" });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: "Use cursor paging; omit cursor to start, then pass nextCursor"
+    });
+    expect(h.resolveAccessContext).not.toHaveBeenCalled();
+    expect(h.withDataContext).not.toHaveBeenCalled();
+  });
 
   it.each(["captured Fastify schema", "manifest fallback"] as const)(
-    "advertises pending suggestion paging using the %s",
+    "advertises stable cursor paging and newer-arrival semantics using the %s",
     async (source) => {
       const h = harness();
       await h.app.ready();
@@ -301,11 +349,12 @@ describe("memory candidate HTTP contract", () => {
       ).resolve("GET", "/api/memory/candidates")?.route;
       expect(route?.inputShape?.querystring).toEqual({
         type: "object",
-        description:
-          "List five pending suggestions at a time. Start at offset 0, then pass the returned nextOffset to read the next page.",
         additionalProperties: false,
-        properties: { offset: { type: "integer", minimum: 0, maximum: 2147483647, default: 0 } }
+        description:
+          "List five pending suggestions at a time. Omit cursor to start, then pass nextCursor unchanged. Decisions do not shift pages. Total counts all current pending suggestions; remainingCount counts only those after this page. Restart without cursor for newer arrivals.",
+        properties: { cursor: cursorSchema }
       });
+      expect(JSON.stringify(route?.inputShape)).not.toContain("offset");
     }
   );
 
@@ -333,7 +382,9 @@ describe("memory candidate HTTP contract", () => {
         ...candidate(index),
         payloadJson: { recordKind: "preference", ...payload }
       })),
-      total: 7
+      total: 7,
+      remainingCount: 2,
+      nextCursor: cursorFor(4)
     });
 
     const response = await h.app.inject({ method: "GET", url: "/api/memory/candidates" });
@@ -371,7 +422,9 @@ describe("memory candidate HTTP contract", () => {
         { ...candidate(0), payloadJson: { summary: prefix } },
         { ...candidate(1), payloadJson: { summary: ">" } }
       ],
-      total: 2
+      total: 2,
+      remainingCount: 0,
+      nextCursor: null
     });
     const response = await h.app.inject({ method: "GET", url: "/api/memory/candidates" });
     expect(response.statusCode).toBe(200);
@@ -396,7 +449,9 @@ describe("memory candidate HTTP contract", () => {
           { ...candidate(0), payloadJson: { summary } },
           { ...candidate(1), payloadJson: { summary: multiline } }
         ],
-        total: 2
+        total: 2,
+        remainingCount: 0,
+        nextCursor: null
       });
       const response = await h.app.inject({ method: "GET", url: "/api/memory/candidates" });
       expect(response.statusCode).toBe(200);

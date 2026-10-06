@@ -230,21 +230,22 @@ describe("GET /api/memory/candidates", () => {
     );
     const orderedIds = [...ownItems.keys()].sort();
     const deliveredIds: string[] = [];
-    for (const offset of [...Array.from({ length: 11 }, (_, i) => i * 5), 51, 52, 57]) {
+    let cursor: string | null = null;
+    for (let offset = 0; offset < orderedIds.length; offset += 5) {
       const res = await server.inject({
         method: "GET",
-        url: `/api/memory/candidates?offset=${offset}`,
+        url: `/api/memory/candidates${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
         headers: authHeaders(ids.userC)
       });
       expect(res.statusCode).toBe(200);
-      const body = res.json<{ items: { id: string }[] }>();
+      const body: { items: { id: string }[]; nextCursor: string | null } = res.json();
       const expectedIds = orderedIds.slice(offset, offset + 5);
       const remainingCount = Math.max(0, 52 - offset - expectedIds.length);
       expect(body).toEqual({
         total: 52,
         hasMore: remainingCount > 0,
         remainingCount,
-        nextOffset: remainingCount > 0 ? offset + expectedIds.length : null,
+        nextCursor: remainingCount > 0 ? `2026-10-06T12:00:00.000000Z_${expectedIds.at(-1)}` : null,
         items: expectedIds.map((id) => ({
           id,
           ...ownItems.get(id),
@@ -254,12 +255,33 @@ describe("GET /api/memory/candidates", () => {
           provenance: "volunteered"
         }))
       });
-      if (offset % 5 === 0 && offset <= 50) deliveredIds.push(...body.items.map((item) => item.id));
+      deliveredIds.push(...body.items.map((item) => item.id));
+      cursor = body.nextCursor;
       expect(res.body).not.toContain("Other owner overflow suggestion");
       expect(res.body).not.toContain("Rejected overflow suggestion");
     }
     expect(deliveredIds).toEqual(orderedIds);
     expect(new Set(deliveredIds).size).toBe(52);
+    expect(cursor).toBeNull();
+
+    for (const endCursor of [
+      `2026-10-06T12:00:00.000000Z_${orderedIds.at(-1)}`,
+      "2026-10-06T11:59:59.999999Z_00000000-0000-4000-8000-000000000001"
+    ]) {
+      const res = await server.inject({
+        method: "GET",
+        url: `/api/memory/candidates?cursor=${encodeURIComponent(endCursor)}`,
+        headers: authHeaders(ids.userC)
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        items: [],
+        total: 52,
+        hasMore: false,
+        remainingCount: 0,
+        nextCursor: null
+      });
+    }
 
     const other = await server.inject({
       method: "GET",
@@ -283,7 +305,7 @@ describe("GET /api/memory/candidates", () => {
       total: 0,
       hasMore: false,
       remainingCount: 0,
-      nextOffset: null
+      nextCursor: null
     });
   });
 });

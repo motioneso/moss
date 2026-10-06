@@ -4,6 +4,8 @@ import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 
+import type { MemoryCandidateCursor } from "./candidate-cursor.js";
+
 export type MemoryCandidateKind = "entity" | "fact" | "alias" | "supersession" | "conflict";
 export type MemoryCandidateAction = "create" | "update" | "link" | "supersede" | "reject";
 export type MemoryCandidateStatus = "pending" | "promoted" | "rejected" | "merged" | "suppressed";
@@ -153,32 +155,54 @@ export class MemoryCandidatesRepository {
     scopedDb: DataContextDb,
     ownerUserId: string,
     limit: number,
-    offset = 0
-  ): Promise<{ items: MemoryCandidateRecord[]; total: number }> {
+    cursor?: MemoryCandidateCursor
+  ): Promise<{
+    items: MemoryCandidateRecord[];
+    total: number;
+    remainingCount: number;
+    nextCursor: string | null;
+  }> {
     assertDataContextDb(scopedDb);
-    // Keep the count even past the last page, using one owner-scoped SQL snapshot.
+    const afterCursor = cursor
+      ? sql`created_at < ${cursor.createdAt}::timestamptz
+          OR (created_at = ${cursor.createdAt}::timestamptz AND id > ${cursor.id}::uuid)`
+      : sql`true`;
+    // Each page counts one owner-scoped snapshot. Older rows keep their place after decisions.
     const result = await sql<
-      Omit<CandidateRow, "id"> & { id: string | null; pending_count: string }
+      Omit<CandidateRow, "id"> & {
+        id: string | null;
+        pending_count: string;
+        eligible_count: string;
+        page_cursor: string | null;
+      }
     >`
       WITH pending AS (
         SELECT * FROM app.memory_candidates
         WHERE owner_user_id = ${ownerUserId}::uuid AND status = 'pending'
-      )
-      SELECT page.*, totals.pending_count
-      FROM (SELECT count(*) AS pending_count FROM pending) totals
+      ), eligible AS (SELECT * FROM pending WHERE ${afterCursor})
+      SELECT page.*, totals.pending_count, totals.eligible_count
+      FROM (
+        SELECT (SELECT count(*) FROM pending) AS pending_count,
+               (SELECT count(*) FROM eligible) AS eligible_count
+      ) totals
       LEFT JOIN (
-        SELECT * FROM pending
+        SELECT *, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+          || '_' || id::text AS page_cursor
+        FROM eligible
         ORDER BY created_at DESC, id
         LIMIT ${Math.max(1, Math.min(100, Math.trunc(limit)))}
-        OFFSET ${Math.max(0, Math.min(2147483647, Math.trunc(offset)))}
       ) page ON true
       ORDER BY page.created_at DESC, page.id
     `.execute(scopedDb.db);
+    const items = result.rows.flatMap((row) =>
+      row.id === null ? [] : [mapCandidate({ ...row, id: row.id })]
+    );
+    const remainingCount = Math.max(0, Number(result.rows[0]?.eligible_count ?? 0) - items.length);
     return {
-      items: result.rows.flatMap((row) =>
-        row.id === null ? [] : [mapCandidate({ ...row, id: row.id })]
-      ),
-      total: Number(result.rows[0]?.pending_count ?? 0)
+      items,
+      total: Number(result.rows[0]?.pending_count ?? 0),
+      remainingCount,
+      nextCursor: remainingCount > 0 ? (result.rows.at(-1)?.page_cursor ?? null) : null
     };
   }
 

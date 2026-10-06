@@ -14,6 +14,7 @@ import {
 import { RuntimeConfigResolver } from "@moss/settings";
 
 import { pendingCandidateItem } from "./candidate-labels.js";
+import { parseMemoryCandidateCursor } from "./candidate-cursor.js";
 import { MemoryCandidatesRepository } from "./candidates-repository.js";
 import { MemoryDashboardService } from "./dashboard-service.js";
 import type {
@@ -68,27 +69,36 @@ export function registerMemoryDashboardRoutes(
 
   server.get(
     "/api/memory/candidates",
-    { schema: getMemoryPendingCandidatesRouteSchema },
+    {
+      schema: getMemoryPendingCandidatesRouteSchema,
+      preValidation: async (request, reply) => {
+        if (Object.hasOwn(request.query as object, "offset")) {
+          return reply
+            .code(400)
+            .send({ error: "Use cursor paging; omit cursor to start, then pass nextCursor" });
+        }
+      }
+    },
     async (request, reply) => {
       try {
-        const { offset } = request.query as { offset: number };
-        // Fastify's numeric coercion can admit Infinity; never dispatch a non-finite offset.
-        if (!Number.isSafeInteger(offset)) return reply.code(400).send({ error: "Invalid offset" });
+        const { cursor: encodedCursor } = request.query as { cursor?: string };
+        const cursor =
+          encodedCursor === undefined ? undefined : parseMemoryCandidateCursor(encodedCursor);
+        if (cursor === null) return reply.code(400).send({ error: "Invalid cursor" });
         const access = await dependencies.resolveAccessContext(request);
         return await dependencies.dataContext.withDataContext(access, async (scopedDb) => {
           const pending = await candidatesRepo.listPendingWithCount(
             scopedDb,
             access.actorUserId,
             PENDING_CANDIDATE_LIMIT,
-            offset
+            cursor
           );
           const items = pending.items.map(pendingCandidateItem);
-          const remainingCount = Math.max(0, pending.total - offset - items.length);
           return {
             total: pending.total,
-            hasMore: remainingCount > 0,
-            remainingCount,
-            nextOffset: remainingCount > 0 ? offset + items.length : null,
+            hasMore: pending.remainingCount > 0,
+            remainingCount: pending.remainingCount,
+            nextCursor: pending.nextCursor,
             items
           };
         });

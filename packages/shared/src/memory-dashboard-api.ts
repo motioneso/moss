@@ -145,26 +145,43 @@ const pendingCandidateSchema = {
   }
 } as const;
 
+export const memoryPendingCandidateCursorPattern =
+  "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+
 export const getMemoryPendingCandidatesRouteSchema = {
   querystring: {
     type: "object",
     description:
-      "List five pending suggestions at a time. Start at offset 0, then pass the returned nextOffset to read the next page.",
+      "List five pending suggestions at a time. Omit cursor to start, then pass nextCursor unchanged. Decisions do not shift pages. Total counts all current pending suggestions; remainingCount counts only those after this page. Restart without cursor for newer arrivals.",
     additionalProperties: false,
     properties: {
-      offset: { type: "integer", minimum: 0, maximum: 2147483647, default: 0 }
+      cursor: {
+        type: "string",
+        minLength: 64,
+        maxLength: 64,
+        pattern: memoryPendingCandidateCursorPattern
+      }
     }
   },
   response: {
     200: {
       type: "object",
       additionalProperties: false,
-      required: ["total", "hasMore", "remainingCount", "nextOffset", "items"],
+      required: ["total", "hasMore", "remainingCount", "nextCursor", "items"],
       properties: {
-        total: { type: "integer", minimum: 0 },
+        total: {
+          type: "integer",
+          minimum: 0,
+          description:
+            "All of your currently pending suggestions, including ones before this cursor."
+        },
         hasMore: { type: "boolean" },
-        remainingCount: { type: "integer", minimum: 0 },
-        nextOffset: { type: ["integer", "null"], minimum: 0 },
+        remainingCount: {
+          type: "integer",
+          minimum: 0,
+          description: "Currently pending suggestions after this page in creation-time/ID order."
+        },
+        nextCursor: { type: ["string", "null"], maxLength: 64 },
         items: { type: "array", items: pendingCandidateSchema }
       }
     },

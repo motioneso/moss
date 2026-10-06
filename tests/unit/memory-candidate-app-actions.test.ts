@@ -73,12 +73,12 @@ describe("memory suggestions through app actions", () => {
     );
   });
 
-  it("forwards the next page offset through app.callAction without an approval card", async () => {
+  it("forwards the next page cursor through app.callAction without an approval card", async () => {
     const h = harness();
     const input = {
       method: "GET",
       path: "/api/memory/candidates",
-      query: { offset: "5" }
+      query: { cursor: `2026-10-06T12:00:00.123456Z_${CANDIDATE_ID}` }
     } as const;
     expect(await h.call(input)).toMatchObject({ ok: true });
     expect(h.callSpy).toHaveBeenCalledExactlyOnceWith(input, expect.anything());

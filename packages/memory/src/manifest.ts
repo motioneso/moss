@@ -396,9 +396,9 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.pending_suggestion_counts",
       description:
-        "Chat pages through your pending suggestions, 5 at a time, using offset and nextOffset. " +
-        "Total/remaining counts exclude other users and resolved suggestions. Text has excerpt " +
-        "flags; IDs and approval labels stay complete."
+        "Chat reads 5 pending suggestions per cursor page; decisions do not shift later pages. " +
+        "Total counts all pending, remaining counts after the page. Restart for newer arrivals. " +
+        "Text has excerpt flags; IDs and approval labels stay complete."
     },
     {
       id: "memory.notes_ingest",
