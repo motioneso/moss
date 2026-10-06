@@ -57,6 +57,8 @@
     "smoke:compose:prod": "tsx scripts/smoke-compose.ts --compose-file infra/docker-compose.prod.yml --build",
     "uat:provision:smoke": "tsx tests/uat/provisioner.ts",
     "test:uat": "tsx tests/uat/run-uat.ts",
+    "test:uat:3065": "tsx tests/uat/run-app-actions-uat.ts scripted",
+    "test:uat:3065-real": "tsx tests/uat/run-app-actions-uat.ts real",
     "test:today-briefings-degraded": "tsx tests/uat/run-uat.ts today-briefings-degraded.uat.spec.ts",
     "test:uat:2689-cli-update-card": "tsx tests/uat/run-uat.ts 2689-cli-update-card.uat.spec.ts",
     "test:uat:1571-weather": "tsx tests/uat/run-uat.ts 1571-weather-location-and-units.uat.spec.ts",

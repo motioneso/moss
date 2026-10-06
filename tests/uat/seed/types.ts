@@ -53,6 +53,7 @@ export type UatChatScript =
   | "1992-chat-archive-status"
   | "1883-vault-search-dependency-failure"
   | "2911-shadow-delete"
+  | "3065-app-actions"
   | "classifier-shadow";
 
 export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
@@ -64,6 +65,7 @@ export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "1992-chat-archive-status",
   "1883-vault-search-dependency-failure",
   "2911-shadow-delete",
+  "3065-app-actions",
   "classifier-shadow"
 ];
 

@@ -1,7 +1,8 @@
 # Moss acts through its own app
 
-- **Status:** design approved by Ben, 2026-10-05. Slice 7 implementation is recorded below;
-  new database verification awaits hosted CI and Slice 8 remains unbuilt.
+- **Status:** design approved by Ben, 2026-10-05. Slice 7 passed hosted verification at
+  `a77aa4744`; Slice 8 browser/owner-proof tooling is implemented with hosted browser verification
+  pending. Owner-run live proof remains outstanding.
 - **Issue:** #3065
 - **Related:** #2998 (self-knowledge by construction), #3023 (custom themes), #3022, #3024, #3025,
   #3026, July self-operation specs (`2026-07-26-module-self-operation-settings-commands.md`,
@@ -344,13 +345,19 @@ text, candidate labels, native paths or result content.
   permission ask. This conservative fallback is active. Server-side native/ACP reservations cover
   the observed permission/audit callback, not unobservable external-process completion.
 
-These behaviors have focused unit and guard-removal coverage. New PostgreSQL suites for trigger
-initialization, direct-clean-INSERT denial, reservations/lock interleavings, restart/orphans,
-owner isolation, classifier admission and native reports are authored but await exact-head hosted
-CI. Docker is absent in the local execution environment, so the supported isolated database gate
-cannot start. Final local counts/typecheck outcomes belong on the PR; no passing full local suite,
-local database or live-product pass is asserted here. Slice 8 browser/live proof remains unbuilt,
-so Phase 1 is not complete or ready to merge.
+These behaviors have focused unit and guard-removal coverage. At `a77aa4744`, all four integration
+shards and all acceptance groups passed; all 25 tracked target suites ran 344/344 with zero skips.
+The two unrelated integration skips and existing acceptance fixmes are not passing proof. Docker
+is absent locally, so no local database pass is claimed.
+
+Slice 8 uses the supported scripted ACP path with its real outside-context approval, then checks
+exactly-once theme change and immediate screen refresh. ACP starts tainted, so this browser case
+does not establish clean automatic execution, and a real Codex/ACP read followed by approval does
+not establish a clean-to-tainted transition. Those boundaries are explicit in plan section 8.13 and
+`docs/3065-app-actions-live-proof.md`. The owner confirmed no sandbox dev access; the
+fallback is hosted browser verification plus that checklist, never fabricated live proof. Real
+provider/live-dev results are still outstanding, and Phase 1 remains unverified for completion or
+merge.
 
 ### Approval card
 
