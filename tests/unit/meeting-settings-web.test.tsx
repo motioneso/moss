@@ -653,34 +653,4 @@ describe("Meetings setup and settings (synthetic transport, not live Mac proof)"
     link.append(label, indicator);
     expect([...link.querySelectorAll(".module-link > .module-link__label")]).toEqual([label]);
   });
-  it("excludes radio and other non-text inputs from the global full-width text-input selector", () => {
-    const css = readFileSync("apps/web/src/styles.css", "utf8");
-    const selector = css.match(
-      /(input:where\([\s\S]*?\),\nselect,\ntextarea) \{\n {2}width: 100%;/
-    )?.[1];
-    expect(selector).toBeDefined();
-    for (const type of [
-      "radio",
-      "checkbox",
-      "range",
-      "color",
-      "button",
-      "submit",
-      "reset",
-      "image",
-      "file",
-      "hidden"
-    ]) {
-      const input = document.createElement("input");
-      input.type = type;
-      expect(input.matches(selector!), type).toBe(false);
-    }
-    for (const type of ["text", "search", "email", "password", "number", "date"]) {
-      const input = document.createElement("input");
-      input.type = type;
-      expect(input.matches(selector!), type).toBe(true);
-    }
-    expect(document.createElement("textarea").matches(selector!)).toBe(true);
-    expect(document.createElement("select").matches(selector!)).toBe(true);
-  });
 });

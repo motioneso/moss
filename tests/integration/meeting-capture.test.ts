@@ -256,6 +256,13 @@ describe("shared meeting recording protocol (isolated gate only)", () => {
     }));
     try {
       await registerMeetingStopSummaryWorker(workerBoss, workerContext, generate);
+      // Claim authorizes the recorder; audio still requires its explicit recording acknowledgement.
+      await f.service.status(active.headers, "recording", {
+        meetingId: f.meeting.id,
+        grantId: active.grantId,
+        inventory,
+        observed: { generation: 1, phase: "recording" }
+      });
       f.advance(2000);
       expect(
         await f.service.audio(active.headers, "summary-evidence", {

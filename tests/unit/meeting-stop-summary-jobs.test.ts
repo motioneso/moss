@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PgBoss } from "@moss/jobs";
-import type { DataContextRunner } from "@moss/db";
+import { DataContextRunner } from "@moss/db";
 import {
   createMeetingStopSummaryScheduler,
   registerMeetingStopSummaryWorker,
@@ -82,5 +82,27 @@ describe("automatic summary queue", () => {
     expect(generate).not.toHaveBeenCalled();
     await run([{ id, data: { actorUserId: id, resourceId: id, idempotencyKey: id } }]);
     expect(generate).toHaveBeenCalledWith({ actorUserId: id, requestId: id }, id, id);
+  });
+  it("completes a valid queued job when its owner-scoped meeting lookup finds no row", async () => {
+    let run!: (jobs: { id: string; data: unknown }[]) => Promise<unknown>;
+    const work = vi.fn(async (_queue: string, _options: unknown, handler: typeof run) => {
+      run = handler;
+      return "worker";
+    });
+    const db = makeRecordingDb();
+    const context = new DataContextRunner(db.scoped.db);
+    vi.spyOn(context, "withDataContext").mockImplementation(async (_actor, operation) =>
+      operation(db.scoped)
+    );
+    const generator = vi.fn();
+    await registerMeetingStopSummaryWorker({ work } as unknown as PgBoss, context, generator);
+    await expect(
+      run([{ id, data: { actorUserId: id, resourceId: id, idempotencyKey: id } }])
+    ).resolves.toBeUndefined();
+    expect(context.withDataContext).toHaveBeenCalledOnce();
+    expect(db.queries).toHaveLength(1);
+    expect(db.queries[0]?.sql).toContain('"app"."meeting_records"');
+    expect(db.queries[0]?.sql).toContain("for update");
+    expect(generator).not.toHaveBeenCalled();
   });
 });

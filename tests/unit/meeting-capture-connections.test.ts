@@ -1,5 +1,6 @@
 import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { captureMetadataJson } from "../../packages/meetings/src/capture-metadata.js";
+import { assertCaptureAudioAdmission } from "../../packages/meetings/src/capture-domain.js";
 import { MEETING_RECORDING_NOTICE } from "@moss/shared";
 import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
 import { createHash } from "node:crypto";
@@ -12,6 +13,7 @@ import {
 } from "../../packages/meetings/src/capture-connection-repository.js";
 import {
   MeetingCaptureRepository,
+  captureState,
   type CaptureGrant
 } from "../../packages/meetings/src/capture-repository.js";
 import {
@@ -389,6 +391,40 @@ describe("shared connection explicit Start and native claim", () => {
     await expect(
       f.service.claim(f.headers, "wrong-hash", { ...f.claim, credentialHash: "a".repeat(64) })
     ).rejects.toMatchObject({ code: "meeting_capture_conflict" });
+  });
+  it("admits the first audio only after the claimed native recorder acknowledges recording", async () => {
+    const f = fixture();
+    await f.service.start(f.browser, meetingId, f.start);
+    await f.service.claim(f.headers, "claim", f.claim);
+    const at = new Date(now.getTime() + 2000);
+    f.setClock(at);
+    const clip = {
+      meetingId,
+      grantId: requestKey,
+      requestKey,
+      generation: 1,
+      epoch: 1,
+      sourceId: "mic",
+      sequence: 0,
+      startMs: 0,
+      endMs: 1000,
+      sampleRateHz: 16000,
+      pcmBase64: Buffer.alloc(32000, 1).toString("base64")
+    };
+    expect(captureState(f.grant!).observed).toBeNull();
+    expect(() => assertCaptureAudioAdmission(captureState(f.grant!), clip, at)).toThrow(
+      "meeting_capture_interrupted"
+    );
+    vi.spyOn(f.grants, "reconcileExpiredAudio").mockResolvedValue();
+    vi.spyOn(f.grants, "save").mockImplementation(async (_db, grant, state) => {
+      grant.state_json = JSON.stringify(state);
+    });
+    await new MeetingCaptureService(f.deps, f.grants, undefined, f.connections).status(
+      { authorization: `Bearer mm1_${owner}.${requestKey}.${"s".repeat(43)}` },
+      "recording",
+      { meetingId, grantId: requestKey, inventory, observed: { generation: 1, phase: "recording" } }
+    );
+    expect(assertCaptureAudioAdmission(captureState(f.grant!), clip, at).epoch).toBe(1);
   });
   it("cancels fresh claimed state after waiting for the device lock, never a stale approved snapshot", async () => {
     const f = fixture();

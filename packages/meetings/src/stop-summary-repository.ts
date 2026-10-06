@@ -63,9 +63,13 @@ export class MeetingStopSummaryRepository {
       // Optional queue infrastructure must never roll back the capture Stop/cutoff.
       await sql`ROLLBACK TO SAVEPOINT meeting_summary_enqueue`.execute(db.db);
       await sql`RELEASE SAVEPOINT meeting_summary_enqueue`.execute(db.db);
-      await this.skip(db, row.meeting_id, "meeting_output_queue_unavailable");
-      row.status = "skipped";
-      row.code = "meeting_output_queue_unavailable";
+      // Early dispatch is only an optimization: the admitted delayed job remains valid.
+      // Leave early_enqueued false so a later finalized observation may try again.
+      if (!early) {
+        await this.skip(db, row.meeting_id, "meeting_output_queue_unavailable");
+        row.status = "skipped";
+        row.code = "meeting_output_queue_unavailable";
+      }
       return false;
     }
   }

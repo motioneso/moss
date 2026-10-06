@@ -165,7 +165,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.automatic_summary",
       description:
-        "Automatic summaries are on by default and can be switched off in Settings. Stop queues one bounded attempt after the meaningful transcript is finalized. Failures stay visible; Rewrite summary explicitly retries with the configured model."
+        "After Stop finalizes meaningful text, one bounded summary runs by default (Settings switch). It renames a still-Untitled meeting from the overview’s first sentence. Failures stay visible; Rewrite summary retries with your configured model."
     },
     {
       id: "meetings.recording_notice",
@@ -315,7 +315,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.referenced_evidence",
       description:
-        "Open an exact cited passage beside the current transcript. Close evidence returns to review. Invalid links and unavailable revisions show an explanation; they never redirect a citation to newer text."
+        "Citations scroll to an exact passage beside your notes. Continue editing there, or use Meetings to return to the list. Invalid links and unavailable revisions explain the problem; citations never substitute newer text."
     },
     {
       id: "meetings.private_exports",
@@ -496,7 +496,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.questions",
       description:
-        "Ask Moss uses current meeting evidence and exact citations in shared chat. Admin pins/locked defaults apply; unavailable enabled overrides fail closed. API-key only, no actions. Transient refresh errors preserve open drafts."
+        "The open meeting attaches to normal chat automatically with saved notes and transcript citations. Remove meeting context to use general chat. API-key only, no actions; admin pins and locked defaults apply. Unavailable overrides fail closed."
     },
     {
       id: "meetings.transcript_storage",

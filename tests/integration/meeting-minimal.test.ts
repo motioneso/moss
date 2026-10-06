@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql, type Kysely } from "kysely";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
-import { createPgBossClient, type PgBoss } from "@moss/jobs";
+import { createPgBossClient, scopedJobDatabase, sendJob, type PgBoss } from "@moss/jobs";
 import { MEETING_RECORDING_NOTICE, type MeetingOutputContent } from "@moss/shared";
 import { MeetingRecordsRepository } from "../../packages/meetings/src/repository.js";
 import { MeetingTranscriptRepository } from "../../packages/meetings/src/transcript-repository.js";
@@ -264,38 +264,107 @@ describe("minimal meeting lifecycle (real isolated storage, synthetic provider)"
       ).toMatchObject({ status: "skipped" });
     }
   );
-  it("makes an early enqueue failure terminal even when the original delayed job exists", async () => {
+  it.each([false, true])(
+    "preserves delayed admission after partial early enqueue failure (retry early: %s)",
+    async (retryEarly) => {
+      const f = await fixture({ finalized: false });
+      const row = await f.stop();
+      const jobs = () =>
+        sql<{
+          data: { actorUserId: string; resourceId: string; idempotencyKey: string };
+        }>`SELECT data FROM pgboss.job WHERE name=${MEETING_STOP_SUMMARY_QUEUE} AND data->>'resourceId'=${f.meeting.id}`.execute(
+          bootstrap
+        );
+      const [delayed] = (await jobs()).rows;
+      expect(delayed).toBeDefined();
+      await context.withDataContext(owner, async (db) => {
+        await records.get(db, f.meeting.id, { forUpdate: true });
+        await sql`UPDATE app.meeting_capture_grants SET status='complete',state_json=${JSON.stringify({ ...f.state, finalized: true })} WHERE id=${f.grantId}::uuid`.execute(
+          db.db
+        );
+        await summaries.schedule(
+          db,
+          owner,
+          {
+            meetingId: f.meeting.id,
+            grantId: f.grantId,
+            deadline: f.deadline,
+            finalized: true,
+            stoppedNow: false
+          },
+          async (transaction, payload, at) => {
+            await sendJob(boss, MEETING_STOP_SUMMARY_QUEUE, payload, {
+              db: scopedJobDatabase(transaction),
+              startAfter: at,
+              singletonKey: `${payload.idempotencyKey}:finalized`
+            });
+            // A SQL error after partial enqueue must roll back only that early job.
+            await sql`SELECT * FROM app.synthetic_unavailable_summary_queue`.execute(
+              transaction.db
+            );
+          }
+        );
+      });
+      expect((await jobs()).rows).toEqual([delayed]);
+      expect(
+        await context.withDataContext(owner, (db) => summaries.row(db, f.meeting.id))
+      ).toMatchObject({
+        status: "waiting",
+        code: null,
+        early_enqueued: false,
+        request_key: row.request_key
+      });
+      expect(
+        await context.withDataContext(owner, (db) => summaries.status(db, f.meeting.id))
+      ).toMatchObject({ status: "waiting" });
+      if (retryEarly) {
+        await f.stop(false, true);
+        await f.stop(false, true);
+        expect((await jobs()).rows).toHaveLength(2);
+        expect(
+          await context.withDataContext(owner, (db) => summaries.row(db, f.meeting.id))
+        ).toMatchObject({ early_enqueued: true });
+      }
+      const generate = generator();
+      const service = new MeetingOutputService(workerContext, generate);
+      const payload = delayed!.data;
+      expect(
+        await service.generateOnStop(
+          { actorUserId: payload.actorUserId },
+          payload.resourceId,
+          payload.idempotencyKey
+        )
+      ).toMatchObject({ status: "saved" });
+      expect(await service.generateOnStop(owner, f.meeting.id, row.request_key)).toMatchObject({
+        status: "saved",
+        replayed: true
+      });
+      expect(generate).toHaveBeenCalledOnce();
+      expect(
+        await context.withDataContext(owner, (db) => summaries.status(db, f.meeting.id))
+      ).toMatchObject({ status: "saved" });
+    }
+  );
+  it("treats a deleted meeting's retained queued summary as done without provider work", async () => {
     const f = await fixture({ finalized: false });
     const row = await f.stop();
-    await context.withDataContext(owner, async (db) => {
-      await records.get(db, f.meeting.id, { forUpdate: true });
-      await summaries.schedule(
-        db,
-        owner,
-        {
-          meetingId: f.meeting.id,
-          grantId: f.grantId,
-          deadline: f.deadline,
-          finalized: true,
-          stoppedNow: false
-        },
-        async (transaction) => {
-          await sql`SELECT * FROM app.synthetic_unavailable_summary_queue`.execute(transaction.db);
-        }
-      );
-    });
-    const generate = generator();
+    await context.withDataContext(owner, (db) =>
+      db.db.deleteFrom("app.meeting_records").where("id", "=", f.meeting.id).execute()
+    );
     expect(
-      await new MeetingOutputService(workerContext, generate).generateOnStop(
-        owner,
-        f.meeting.id,
-        row.request_key
-      )
+      await context.withDataContext(owner, (db) => summaries.row(db, f.meeting.id))
     ).toBeNull();
-    expect(generate).not.toHaveBeenCalled();
     expect(
-      await context.withDataContext(owner, (db) => summaries.status(db, f.meeting.id))
-    ).toMatchObject({ status: "failed", code: "meeting_output_queue_unavailable" });
+      (
+        await sql`SELECT id FROM pgboss.job WHERE name=${MEETING_STOP_SUMMARY_QUEUE} AND data->>'resourceId'=${f.meeting.id}`.execute(
+          bootstrap
+        )
+      ).rows
+    ).toHaveLength(1);
+    const generate = generator();
+    const service = new MeetingOutputService(workerContext, generate);
+    await expect(service.generateOnStop(owner, f.meeting.id, row.request_key)).resolves.toBeNull();
+    expect(generate).not.toHaveBeenCalled();
   });
   it("persists unavailable-model failure and never retries provider dispatch", async () => {
     const f = await fixture();
@@ -344,7 +413,7 @@ describe("minimal meeting lifecycle (real isolated storage, synthetic provider)"
     for (const actorUserId of [ids.userB, ids.adminUser])
       await expect(
         service.generateOnStop({ actorUserId }, f.meeting.id, row.request_key)
-      ).rejects.toMatchObject({ code: "meeting_not_found" });
+      ).resolves.toBeNull();
     expect(generate).not.toHaveBeenCalled();
     for (const query of [
       sql`SELECT credential_hash FROM app.meeting_capture_grants WHERE id=${f.grantId}::uuid`,

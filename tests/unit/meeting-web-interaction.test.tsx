@@ -289,6 +289,57 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       phase: "idle"
     });
   });
+  it("a row click does not mean its uncached notes editor is ready before going offline", async () => {
+    client.removeQueries({ queryKey: api.meetingKeys.record(meeting.id), exact: true });
+    let failRead!: (error: Error) => void;
+    vi.mocked(api.getMeeting).mockReturnValue(
+      new Promise((_resolve, reject) => {
+        failRead = reject;
+      })
+    );
+    await mount("/meetings");
+    await click(meeting.title);
+    expect(location).toBe(`?id=${meeting.id}`);
+    expect(api.getMeeting).toHaveBeenCalledWith(meeting.id);
+    expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(0);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Loading meeting…");
+    await act(async () => failRead(new TypeError("Failed to fetch while offline")));
+    await flush();
+    expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(0);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Couldn’t load this meeting");
+  });
+  it("waiting for the delayed record permits notes editing and the intended offline-save failure", async () => {
+    client.removeQueries({ queryKey: api.meetingKeys.record(meeting.id), exact: true });
+    let finishRead!: (value: { meeting: MeetingRecord }) => void;
+    vi.mocked(api.getMeeting).mockReturnValue(
+      new Promise((resolve) => {
+        finishRead = resolve;
+      })
+    );
+    await mount("/meetings");
+    await click(meeting.title);
+    expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(0);
+    await act(async () => finishRead({ meeting }));
+    await flush();
+    expect(
+      renderer.root
+        .findAllByType("label")
+        .find((node) => node.props.htmlFor === "meeting-personal-notes")?.children
+    ).toContain("Notes");
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.disabled).not.toBe(
+      true
+    );
+    vi.mocked(api.saveMeetingNotes).mockRejectedValue(
+      new TypeError("Failed to fetch while offline")
+    );
+    await typeNotes("Keep these edits after canceling.");
+    await awaitAutosave();
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
+      "Keep these edits after canceling."
+    );
+    expect(JSON.stringify(renderer.toJSON())).toContain("Couldn’t save. Your edits are kept here.");
+    expect(hasSessionUnsavedChanges(client)).toBe(true);
+  });
   it("canceling delete keeps edits and does not issue a delete", async () => {
     await mount();
     await typeNotes("Keep me");

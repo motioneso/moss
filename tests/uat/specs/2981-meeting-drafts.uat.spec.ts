@@ -198,6 +198,11 @@ test("Confirmed sign-out discards meeting notes without a second native warning 
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
     await meetingRow(page, title).click();
     const notes = page.getByRole("textbox", { name: "Notes", exact: true });
+    // A row click changes the route before its initial record GET necessarily resolves.
+    // Go offline only once the real, labelled editor is mounted and editable.
+    await expect(page).toHaveURL(new RegExp(`id=${fixtureId}`));
+    await expect(notes).toBeVisible();
+    await expect(notes).toBeEditable();
     await page.context().setOffline(true);
     await notes.fill("Keep these edits after canceling.");
     await expect(

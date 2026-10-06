@@ -56,7 +56,18 @@ export class MeetingOutputService {
     requestKey: string
   ): Promise<MeetingOutputResult | null> {
     const admitted = await this.dataContext.withDataContext(actor, async (db) => {
-      await this.repository.lock(db, meetingId);
+      try {
+        await this.repository.lock(db, meetingId);
+      } catch (error) {
+        // Deletion cascades the intent, but its metadata-only job may still be queued.
+        if (
+          error instanceof MeetingOutputError &&
+          error.code === "meeting_not_found" &&
+          error.statusCode === 404
+        )
+          return null;
+        throw error;
+      }
       const input = await this.stopSummaries.admit(db, meetingId, requestKey);
       if (!input) return null;
       return { input, reservation: await this.reserve(db, meetingId, input) };

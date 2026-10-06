@@ -197,6 +197,7 @@ function setup() {
     state,
     requests,
     actors,
+    dataContext,
     scopedDb,
     lock,
     request,
@@ -625,6 +626,50 @@ describe("meeting output generation service", () => {
 });
 
 describe("automatic summary shares durable output reservation", () => {
+  it("finishes a queued summary whose meeting was deleted without admission or dispatch", async () => {
+    const f = setup();
+    f.lock.mockRejectedValue(new MeetingOutputError("meeting_not_found", 404));
+    await expect(f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).resolves.toBeNull();
+    expect(f.admit).not.toHaveBeenCalled();
+    expect(f.reserve).not.toHaveBeenCalled();
+    expect(f.generator).not.toHaveBeenCalled();
+  });
+  it.each([
+    new Error("Database unavailable"),
+    new MeetingOutputError("meeting_forbidden", 403),
+    new MeetingOutputError("meeting_not_found", 500)
+  ])("does not hide an unrelated meeting-lock failure: %s", async (error) => {
+    const f = setup();
+    f.lock.mockRejectedValue(error);
+    await expect(f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).rejects.toBe(error);
+    expect(f.admit).not.toHaveBeenCalled();
+    expect(f.generator).not.toHaveBeenCalled();
+  });
+  it("does not treat a later admission error as a deleted meeting", async () => {
+    const f = setup();
+    const error = new MeetingOutputError("meeting_not_found", 404);
+    f.admit.mockRejectedValue(error);
+    await expect(f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).rejects.toBe(error);
+    expect(f.generator).not.toHaveBeenCalled();
+  });
+  it("does not swallow a context authorization failure before the meeting lookup", async () => {
+    const f = setup();
+    const error = new MeetingOutputError("meeting_not_found", 404);
+    vi.spyOn(f.dataContext, "withDataContext").mockRejectedValue(error);
+    await expect(f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).rejects.toBe(error);
+    expect(f.lock).not.toHaveBeenCalled();
+    expect(f.generator).not.toHaveBeenCalled();
+  });
+  it("keeps provider failure durable rather than swallowing it as a deleted meeting", async () => {
+    const f = setup();
+    f.generator.mockRejectedValue(new MeetingOutputError("meeting_not_found", 404));
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "failed",
+      code: "meeting_not_found"
+    });
+    expect(f.generator).toHaveBeenCalledOnce();
+    expect(f.finish).toHaveBeenCalledOnce();
+  });
   it("reserves before dispatch and never charges again for repeated Stop or status jobs", async () => {
     const f = setup();
     f.generator.mockImplementation(async () => {

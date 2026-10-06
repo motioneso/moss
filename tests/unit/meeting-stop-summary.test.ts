@@ -204,6 +204,56 @@ describe("automatic summary finalization admission", () => {
     );
     expect(enqueue).toHaveBeenCalledOnce();
   });
+  it("preserves the admitted delayed summary when optional early enqueue fails", async () => {
+    const f = fixture();
+    const initialDb = makeRecordingDb({ rows: [{ ...f.row }] });
+    vi.mocked(f.repo.row).mockResolvedValueOnce(null);
+    const enqueue = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Queue outage"));
+    const input = {
+      meetingId,
+      grantId,
+      deadline: f.row.due_at.toISOString(),
+      finalized: false,
+      stoppedNow: true
+    };
+    await f.repo.schedule(initialDb.scoped, { actorUserId: meetingId }, input, enqueue);
+    await f.repo.schedule(
+      f.scoped,
+      { actorUserId: meetingId },
+      { ...input, finalized: true, stoppedNow: false },
+      enqueue
+    );
+    expect(enqueue.mock.calls.map((call) => call[3])).toEqual([false, true]);
+    expect(f.queries.map((query) => query.sql)).toEqual([
+      "SAVEPOINT meeting_summary_enqueue",
+      "ROLLBACK TO SAVEPOINT meeting_summary_enqueue",
+      "RELEASE SAVEPOINT meeting_summary_enqueue"
+    ]);
+    expect(f.row).toMatchObject({ status: "waiting", code: null, early_enqueued: false });
+    expect(await f.repo.admit(f.scoped, meetingId, requestKey)).toMatchObject({ requestKey });
+  });
+  it("can retry optional early enqueue after a transient failure", async () => {
+    const f = fixture();
+    const enqueue = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Queue outage"))
+      .mockResolvedValueOnce(undefined);
+    const input = {
+      meetingId,
+      grantId,
+      deadline: f.row.due_at.toISOString(),
+      finalized: true,
+      stoppedNow: false
+    };
+    await f.repo.schedule(f.scoped, { actorUserId: meetingId }, input, enqueue);
+    await f.repo.schedule(f.scoped, { actorUserId: meetingId }, input, enqueue);
+    expect(enqueue).toHaveBeenCalledTimes(2);
+    expect(f.queries.at(-1)?.sql).toContain("SET early_enqueued=true");
+    expect(f.row).toMatchObject({ status: "waiting", code: null });
+  });
   it("cannot create an automatic attempt on an ordinary status read", async () => {
     const f = fixture();
     vi.mocked(f.repo.row).mockResolvedValue(null);

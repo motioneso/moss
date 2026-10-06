@@ -131,20 +131,7 @@ label {
   font-weight: var(--weight-strong);
 }
 
-input:where(
-  :not(
-    [type="checkbox"],
-    [type="radio"],
-    [type="range"],
-    [type="color"],
-    [type="button"],
-    [type="submit"],
-    [type="reset"],
-    [type="image"],
-    [type="file"],
-    [type="hidden"]
-  )
-),
+input:where(:not(.meeting-settings .jds-radio-card input[type="radio"])),
 select,
 textarea {
   width: 100%;

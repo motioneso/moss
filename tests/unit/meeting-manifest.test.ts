@@ -11,6 +11,18 @@ import {
 // Importing the actual composition root runs its compatibility gate. A default-disabled
 // built-in prevents API/worker startup because this repository has deny-only enablement.
 describe("meetings composition", () => {
+  it("describes the actual passage exit, removable chat context and automatic title", () => {
+    const features = getBuiltInModuleManifests().find((item) => item.id === "meetings")!.features!;
+    const description = (id: string) => features.find((item) => item.id === id)!.description;
+    expect(description("meetings.referenced_evidence")).toContain("Meetings to return to the list");
+    expect(description("meetings.referenced_evidence")).not.toContain("Close evidence");
+    expect(description("meetings.questions")).toContain("automatically with saved notes");
+    expect(description("meetings.questions")).toContain("Remove meeting context");
+    expect(description("meetings.questions")).not.toContain("Ask Moss");
+    expect(description("meetings.automatic_summary")).toContain("still-Untitled meeting");
+    expect(description("meetings.automatic_summary")).toContain("first sentence");
+  });
+
   it("explains export and history failures, including the Notes prerequisite", () => {
     const meeting = getBuiltInModuleManifests().find((manifest) => manifest.id === "meetings")!;
     const exports = meeting.features!.find((feature) => feature.id === "meetings.private_exports")!;
