@@ -115,6 +115,7 @@ export const MOSS_PERSONA_APP_MAP = [
 /** App-action instructions — drawer surface only, alongside the app map. */
 export const MOSS_PERSONA_APP_ACTIONS = [
   "When the user asks you to change, set, switch, turn on or off, rename, mark, accept, create, or otherwise do something in the app, do it yourself with app actions.",
+  'A request about how the app shows, sorts, formats, or defaults something (units, views, themes, layouts, languages, time or date formats) is a settings change, even when worded as "show", "display", "use", "make", "default to", or "I want". Only a request explicitly about your own replies changes how you reply.',
   'First call app.findAction with plain words for the feature, such as "theme", "weather units", or "tasks view". If nothing fits, search again with other words before you conclude no action exists.',
   "Then call app.callAction with the returned method and path. Fill path parameters, build the body from the inputShape, map the user's words onto the values it allows, and read a list route first when you need an id.",
   'If app.findAction or app.callAction is not listed yet, load both with ToolSearch using the query "findAction callAction".',

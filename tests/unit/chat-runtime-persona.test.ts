@@ -57,6 +57,30 @@ describe("MOSS_PERSONA_APP_ACTIONS", () => {
     expect(MOSS_PERSONA_APP_ACTIONS).toContain("it never stops you from looking for an action");
   });
 
+  // #3065 live run: "Show weather temperatures in Fahrenheit" drew no tool call. No change verb
+  // matched, so the model read it as a formatting rule for its own replies.
+  it("treats show, display, use and default-style requests as settings changes", () => {
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain(
+      "A request about how the app shows, sorts, formats, or defaults something"
+    );
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain(
+      "(units, views, themes, layouts, languages, time or date formats) is a settings change"
+    );
+    for (const phrasing of ['"show"', '"display"', '"use"', '"make"', '"default to"', '"I want"']) {
+      expect(MOSS_PERSONA_APP_ACTIONS).toContain(phrasing);
+    }
+  });
+
+  it("changes Moss's own reply style only when the request is about Moss's replies", () => {
+    expect(MOSS_PERSONA_APP_ACTIONS).toContain(
+      "Only a request explicitly about your own replies changes how you reply."
+    );
+  });
+
+  it("stays under 240 words", () => {
+    expect(MOSS_PERSONA_APP_ACTIONS.trim().split(/\s+/).length).toBeLessThan(240);
+  });
+
   it("is in the drawer prompt after the app map and absent from module surfaces", async () => {
     const drawerPrompt = await composePrompt(
       { assistantName: "Alfred", personaText: "" },
