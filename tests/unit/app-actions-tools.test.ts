@@ -6,7 +6,7 @@ import {
   type DataContextDb,
   type DataContextRunner
 } from "@moss/db";
-import type { ToolContext } from "@moss/module-sdk";
+import { HttpError, type ToolContext } from "@moss/module-sdk";
 
 import {
   createAppActionCallServices,
@@ -370,7 +370,8 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
     h.confirmations.resolve(card.actionRequestId, "confirmed");
     const result = await pending;
     expect(h.callSpy).not.toHaveBeenCalled();
-    expect(JSON.stringify(result)).toMatch(/consent_off|failed/);
+    expect(result).toMatchObject({ ok: false, error: expect.stringMatching(/^consent_off:/) });
+    expect(JSON.stringify(result)).toContain("Settings");
     expect(h.events).not.toContainEqual(
       expect.objectContaining({ kind: "action_result", outcome: "executed" })
     );
@@ -387,11 +388,22 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
       { id: "theme-a", name: "Replacement target", tokens: themeTokens }
     ]);
     h.confirmations.resolve(card.actionRequestId, "confirmed");
-    await pending;
+    expect(await pending).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/^approval_changed:/)
+    });
     expect(h.callSpy).not.toHaveBeenCalled();
     expect(h.events).not.toContainEqual(
       expect.objectContaining({ kind: "action_result", outcome: "executed" })
     );
+  });
+
+  it("does not expose arbitrary transport HttpError text when safe refusals are enabled", async () => {
+    const h = harness();
+    h.callSpy.mockRejectedValueOnce(new HttpError(503, "PRIVATE_DEPENDENCY_SENTINEL"));
+    const result = await h.call({ method: "GET", path: "/api/me/themes" });
+    expect(result).toMatchObject({ ok: false, error: "Tool app.callAction failed" });
+    expect(JSON.stringify([result, h.events])).not.toContain("PRIVATE_DEPENDENCY_SENTINEL");
   });
 
   it.each(["input", "context"] as const)(
@@ -409,7 +421,9 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
           : appActionContext;
       const retargeted =
         changed === "input" ? { method: "DELETE" as const, path: "/api/me/themes/theme-a" } : input;
-      await expect(services.appActions.call(retargeted, ctx)).rejects.toThrow();
+      await expect(services.appActions.call(retargeted, ctx)).rejects.toThrow(
+        /^invalid_call_binding:/
+      );
       expect(h.callSpy).not.toHaveBeenCalled();
     }
   );
@@ -489,7 +503,9 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
     if (resolution.kind !== "proceed") return;
     const services = h.services(input, appActionContext, resolution);
     await services.appActions.call(input, appActionContext);
-    await expect(services.appActions.call(input, appActionContext)).rejects.toThrow();
+    await expect(services.appActions.call(input, appActionContext)).rejects.toThrow(
+      /^invalid_call_binding:/
+    );
     expect(h.callSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -1423,3 +1423,29 @@ destructive with the actor-owned fact preview. `GET /api/ai/activity-lines` reta
 turn quotes and is now the thirteenth independent retained-content consent block. The current
 inventory is 101 reads, 51 writes, 18 destructive operations and 223 blocks (393 total). These
 changes do not claim to solve the older UI/automatic-recall revocation gap.
+
+### 8.10 Slice 5 review and first hosted verification (2026-10-06)
+
+The first hosted run passed 12,332 unit tests but the new app-action integration file never ran its
+38 cases: its setup tried the existing Wellness check-in POST on a one-connection pool. That
+handler starts a scoped write then resolves module availability through another root transaction,
+so setup returned 500. The nearby Unauthorized log belongs to a separate data-export negative
+test, not this request. The fixture now proves its authenticated actor before seeding, creates
+only the check-in through the actor-scoped repository, and verifies it through a real authenticated
+read. Medication/therapy fixtures still use the real routes. The pool stays at one, and the actual
+gateway, route, consent, target, concurrent-read and approval-storage assertions are unchanged.
+This fixes test setup, not the older Wellness handler's nested-transaction behavior. Hosted DB
+execution must pass before claiming those cases verified.
+
+Two other stale fixtures are corrected: the integration confirmation-tool list includes the new
+static fail-closed transport declaration, and the same-task double-Approve browser test locates
+the shared button by accessible role/name while preserving two synchronous clicks and the exact
+one-request assertion.
+
+Post-approval refusals now use the shared HTTP error class with fixed, bounded reason/recovery
+messages, and the app-action tool allows those safe messages. The consent regression was first
+seen failing when it demanded `consent_off` instead of accepting generic failure. Target changes
+and invalid/replayed bindings likewise retain their explicit codes. Unexpected resolver errors
+become fixed `not_ready`; arbitrary transport errors remain generic, with a sentinel regression
+proving dependency HttpError text is not exposed. No request, row, target or provider text is
+interpolated into these refusal messages.

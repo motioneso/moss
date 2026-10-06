@@ -7,6 +7,7 @@ import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import { createRouteCatalogHolder } from "@moss/module-registry";
 import { PreferencesRepository } from "@moss/structured-state";
+import { WellnessRepository } from "@moss/wellness";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import {
@@ -77,6 +78,7 @@ describe("app actions through the real gateway and app routes", () => {
       body: { granted: value }
     });
     expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ effective: value, explicit: value });
   }
 
   beforeAll(async () => {
@@ -92,13 +94,28 @@ describe("app actions through the real gateway and app routes", () => {
     appActions = createAppActionsService({ server, catalog, grants, readTurnId: () => null });
     callSpy = vi.spyOn(appActions, "call");
 
-    const checkin = await browser({
-      method: "POST",
-      path: "/api/wellness/checkins",
-      body: { feelingCore: "happy", note: therapySentinel }
+    // Prove the seeded bearer session reaches the real actor before attributing fixture errors
+    // to authentication. These requests still use the full API auth and route-guard stack.
+    const authenticated = await browser({ method: "GET", path: "/api/me" });
+    expect(authenticated.statusCode, "fixture bearer session must authenticate").toBe(200);
+    expect(authenticated.json()).toMatchObject({ user: { id: ids.userA } });
+
+    // POST /wellness/checkins has an existing nested active-module lookup in its recall refresh.
+    // Seed the needed row through the actor-scoped repository so that unrelated route behavior
+    // cannot consume our sole connection before the app-action pool-one regressions even start.
+    const wellness = new WellnessRepository();
+    const checkin = await runner.withDataContext(access, (db) =>
+      wellness.createCheckin(db, { feelingCore: "happy", note: therapySentinel }, "UTC")
+    );
+    expect(checkin).toMatchObject({ owner_user_id: ids.userA, note: therapySentinel });
+    checkinId = checkin.id;
+    const checkins = await browser({ method: "GET", path: "/api/wellness/checkins" });
+    expect(checkins.statusCode).toBe(200);
+    expect(checkins.json()).toMatchObject({
+      checkins: expect.arrayContaining([
+        expect.objectContaining({ id: checkinId, ownerUserId: ids.userA, note: therapySentinel })
+      ])
     });
-    expect(checkin.statusCode).toBe(201);
-    checkinId = checkin.json<{ checkin: { id: string } }>().checkin.id;
     const medication = await browser({
       method: "POST",
       path: "/api/wellness/medications",
@@ -106,19 +123,30 @@ describe("app actions through the real gateway and app routes", () => {
     });
     expect(medication.statusCode).toBe(201);
     medicationId = medication.json<{ medication: { id: string } }>().medication.id;
+    expect(medication.json()).toMatchObject({
+      medication: {
+        id: medicationId,
+        ownerUserId: ids.userA,
+        name: medicationSentinel,
+        frequencyType: "as_needed"
+      }
+    });
     const therapy = await browser({
       method: "POST",
       path: "/api/wellness/therapy-notes",
       body: { body: therapySentinel }
     });
     expect(therapy.statusCode).toBe(201);
+    expect(therapy.json()).toMatchObject({
+      note: { ownerUserId: ids.userA, body: therapySentinel }
+    });
     // Demonstrate that the withheld records really exist and ordinary actor-scoped routes return them.
-    expect((await browser({ method: "GET", path: "/api/wellness/medications" })).body).toContain(
-      medicationSentinel
-    );
-    expect((await browser({ method: "GET", path: "/api/wellness/therapy-notes" })).body).toContain(
-      therapySentinel
-    );
+    const medications = await browser({ method: "GET", path: "/api/wellness/medications" });
+    expect(medications.statusCode).toBe(200);
+    expect(medications.body).toContain(medicationSentinel);
+    const therapyNotes = await browser({ method: "GET", path: "/api/wellness/therapy-notes" });
+    expect(therapyNotes.statusCode).toBe(200);
+    expect(therapyNotes.body).toContain(therapySentinel);
   });
 
   afterAll(async () => {

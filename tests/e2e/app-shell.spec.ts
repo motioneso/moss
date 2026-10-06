@@ -584,13 +584,14 @@ test.describe("Chat drawer — Approve/Reject card", () => {
 
     // Two synchronous clicks in the same JS task — no await between them — so both handler
     // invocations race the same pre-mutate tick.
-    await page.evaluate(() => {
-      const button = document.querySelector(
-        ".action-request-card .primary-button"
-      ) as HTMLButtonElement;
-      button.click();
-      button.click();
-    });
+    await page
+      .locator(".action-request-card")
+      .getByRole("button", { name: "Approve", exact: true })
+      .evaluate((element) => {
+        const button = element as HTMLButtonElement;
+        button.click();
+        button.click();
+      });
 
     await expect(page.locator(".action-request-actions")).toHaveCount(0);
     await expect(page.getByText("Resolving…")).toBeVisible();

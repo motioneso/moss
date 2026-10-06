@@ -712,6 +712,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       description:
         "Call a discovered app route as the signed-in user. Fill path parameters in path; send query and body separately. Blocked routes are refused, consent is checked, and destructive actions require approval. Returns HTTP status and body.",
       permissionId: "settings.write",
+      safeErrors: true,
       risk: "write",
       selfOperationGrant: "confirm_always",
       executionPolicy: "confirm",

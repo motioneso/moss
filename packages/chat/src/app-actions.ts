@@ -5,6 +5,7 @@ import type { ActiveModulesResolver, PerCallResolution, PerCallResolver } from "
 
 import {
   canonicalAppPath,
+  HttpError,
   type RouteCatalog,
   type RouteCatalogHolder,
   type ToolContext
@@ -45,10 +46,22 @@ export class AppActionNotReadyError extends Error {
   }
 }
 
-/** Safe, fixed reasons only: never include a rejected request or response in the error. */
-export class AppActionRefusedError extends Error {
-  constructor(readonly code: string) {
-    super(`App action refused: ${code}`);
+const REFUSAL_MESSAGES = {
+  unknown_route: "The route or target is no longer available. Find the action again.",
+  blocked: "This action is outside the allowed route policy. Use the relevant app screen.",
+  consent_off:
+    "The module's AI consent is off. Review it in Settings; this approval cannot enable it.",
+  not_ready: "App actions are not ready. Wait for the app to finish starting, then retry.",
+  approval_changed:
+    "The action or target changed while approval was waiting. Find the action again and review a fresh request.",
+  invalid_call_binding:
+    "This approval no longer matches a single-use request. Request the action again for a fresh review."
+} as const;
+
+/** Safe fixed codes and recovery text only, never caller input or dependency error text. */
+export class AppActionRefusedError extends HttpError {
+  constructor(readonly code: keyof typeof REFUSAL_MESSAGES) {
+    super(code === "not_ready" ? 503 : 409, `${code}: ${REFUSAL_MESSAGES[code]}`);
   }
 }
 
@@ -162,14 +175,24 @@ export function createAppActionCallServices(deps: {
           consumed = true;
           // Consent, module availability and destructive labels may change while a card waits.
           // Any difference needs a fresh call/card, never silent retargeting under old approval.
-          const current = await deps.resolver(input, ctx);
+          let current: PerCallResolution;
+          try {
+            current = await deps.resolver(input, ctx);
+          } catch {
+            throw new AppActionRefusedError("not_ready");
+          }
           if (current.kind === "refuse") throw new AppActionRefusedError(current.reason);
           if (!isDeepStrictEqual(current, resolution)) {
             throw new AppActionRefusedError("approval_changed");
           }
           const bound = actionInput(input);
           if (!bound) throw new AppActionRefusedError("invalid_call_binding");
-          return deps.appActions.call(bound, ctx);
+          try {
+            return await deps.appActions.call(bound, ctx);
+          } catch {
+            // Safe-errors exposes our fixed refusals, never arbitrary dependency HttpErrors.
+            throw new Error("App action transport failed");
+          }
         }
       }
     };
