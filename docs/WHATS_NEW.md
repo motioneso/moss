@@ -42,6 +42,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Repeated notices keep their own cards.** When two notices arrive with the same title, each one now keeps its own card with its own details. [PR #3063](https://github.com/motioneso/moss/pull/3063)
 - **Small settings screen fixes.** Admin menu labels now meet the minimum text size, and the Activity filter row wraps instead of running off the edge on narrow phones. [PR #3060](https://github.com/motioneso/moss/pull/3060)
 
 ### 2026-10-04
