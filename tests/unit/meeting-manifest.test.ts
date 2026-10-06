@@ -50,7 +50,9 @@ describe("meetings composition", () => {
       "app.meeting_export_requests",
       "app.meeting_capture_links",
       "app.meeting_capture_grants",
-      "app.meeting_capture_receipts"
+      "app.meeting_capture_receipts",
+      "app.meeting_capture_connections",
+      "app.meeting_capture_start_cancellations"
     ]);
     const chat = getBuiltInModuleManifests().find((manifest) => manifest.id === "chat");
     expect(chat?.database?.migrations).toEqual(
@@ -68,13 +70,16 @@ describe("meetings composition", () => {
       })
     ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
-      "POST /api/meetings/capture/link",
-      "POST /api/meetings/capture/redeem",
+      "POST /api/meetings/capture/connection",
+      "POST /api/meetings/capture/commands",
+      "POST /api/meetings/capture/claim",
+      "GET /api/meetings/capture/devices",
+      "POST /api/meetings/records/:id/capture/cancel-start",
       "POST /api/meetings/capture/status",
       "POST /api/meetings/capture/control",
       "POST /api/meetings/capture/audio",
       "GET /api/meetings/records/:id/capture",
-      "POST /api/meetings/records/:id/capture/approve",
+      "POST /api/meetings/records/:id/capture/start",
       "POST /api/meetings/records/:id/capture/control",
       "POST /api/meetings/history/search",
       "GET /api/meetings/history/:id",

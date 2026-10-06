@@ -28,6 +28,8 @@ export interface ModuleWebContribution {
   readonly moduleId: string;
   readonly routes?: readonly ModuleWebRoute[];
   readonly todayWidgets?: readonly ModuleTodayWidget[];
+  /** Persistent module controls, mounted by the signed-in shell across route changes. */
+  readonly persistentControls?: ReactNode;
   readonly commandPaletteEntries?: readonly ModulePaletteEntry[];
   readonly onboarding?: ModuleOnboardingContribution;
 }

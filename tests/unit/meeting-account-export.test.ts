@@ -34,6 +34,8 @@ const collections = [
   "action_candidates",
   "export_receipts",
   "export_requests",
+  "capture_connections",
+  "capture_start_cancellations",
   "capture_grants"
 ] as const;
 
@@ -110,7 +112,7 @@ describe("Meetings account-export collector", () => {
     );
   });
 
-  it("reads exactly nine source tables with explicit columns, actor predicates and stable order", async () => {
+  it("reads exactly eleven source tables with explicit columns, actor predicates and stable order", async () => {
     const { db, queries, scopedDb } = harness();
     try {
       const section = await collectMeetingsExportSection(scopedDb, ctx);
@@ -180,7 +182,7 @@ describe("Meetings account-export collector", () => {
       ]);
       expect(result.export_receipts).toEqual([{ receiptJson: '{"writeStatus":"saved"}' }]);
       expect(result.export_requests).toEqual([{ resultJson: null }]);
-      expect(queries).toHaveLength(9);
+      expect(queries).toHaveLength(11);
       expect(JSON.parse(JSON.stringify(result))).toEqual(result);
     } finally {
       await db.destroy();
@@ -196,8 +198,17 @@ describe("Meetings account-export collector", () => {
       new URL("../../packages/meetings/sql/0284_meeting_capture.sql", import.meta.url),
       "utf8"
     );
+    const connectionMigration = await readFile(
+      new URL(
+        "../../packages/meetings/sql/0288_meeting_recording_connections.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
     const migration =
-      originalMigration + (captureMigration.match(/-- Capture account export[\s\S]*$/)?.[0] ?? "");
+      originalMigration +
+      (captureMigration.match(/-- Capture account export[\s\S]*$/)?.[0] ?? "") +
+      (connectionMigration.match(/-- Capture connection account export[\s\S]*$/)?.[0] ?? "");
     const { db, queries, scopedDb } = harness();
     try {
       await collectMeetingsExportSection(scopedDb, ctx);

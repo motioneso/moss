@@ -19,6 +19,7 @@ import { useLocation, useNavigate } from "react-router";
 import { listNotifications, listThemes, sendChatTurn, signOut } from "../api/client";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { buildShellNavigation, resolvePageHeading, webRoutes } from "../app-route-metadata";
+import { ModulePersistentControls } from "./module-persistent-controls";
 import { ModuleSettingsButton } from "./module-settings-button";
 import { useUserLocale } from "../locale/locale-format";
 import { queryKeys, resolveQueryKeyToken } from "../api/query-keys";
@@ -509,6 +510,7 @@ export function AppShell(props: AppShellProps) {
             </div>
           </header>
 
+          <ModulePersistentControls disabledModuleIds={props.disabledModuleIds ?? []} />
           <div
             className={`workspace-body ${dockChat && chatOpen ? "workspace-body--docked" : ""} ${expanded ? "workspace-body--expanded" : ""}`}
           >

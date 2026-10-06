@@ -5,12 +5,14 @@ import type {
   MeetingCaptureControlInput,
   MeetingCaptureInventory,
   MeetingCaptureState,
-  MeetingCaptureSelection
+  MeetingCaptureSelection,
+  MeetingCaptureProcessingState
 } from "@moss/shared";
 import {
   MEETING_CAPTURE_MAX_AUDIO_BYTES,
   MEETING_CAPTURE_MAX_CLIP_MS,
-  MEETING_CAPTURE_FINALIZATION_MS
+  MEETING_CAPTURE_FINALIZATION_MS,
+  MEETING_CAPTURE_LEASE_MS
 } from "@moss/shared";
 
 export class MeetingCaptureError extends Error {
@@ -43,6 +45,10 @@ export interface CaptureStoredState {
   inventory: MeetingCaptureInventory | null;
   observed: MeetingCaptureState["observed"];
   lastSeenAt: string | null;
+  recordedDurationMs?: number;
+  transcriptRevision?: number;
+  finalized?: boolean;
+  processing?: MeetingCaptureProcessingState;
 }
 export function elapsed(state: CaptureStoredState, at: Date): number {
   return Math.max(0, at.getTime() - Date.parse(state.originAt));
@@ -50,12 +56,12 @@ export function elapsed(state: CaptureStoredState, at: Date): number {
 export function expireCaptureLease(state: CaptureStoredState, at: Date, expiresAt?: Date): void {
   if (
     state.desired === "recording" &&
-    (!state.lastSeenAt || at.getTime() - Date.parse(state.lastSeenAt) > 10000)
+    (!state.lastSeenAt || at.getTime() - Date.parse(state.lastSeenAt) > MEETING_CAPTURE_LEASE_MS)
   ) {
     const leaseEnd = new Date(
       Math.min(
         at.getTime(),
-        Date.parse(state.lastSeenAt ?? state.originAt) + 10000,
+        Date.parse(state.lastSeenAt ?? state.originAt) + MEETING_CAPTURE_LEASE_MS,
         expiresAt?.getTime() ?? Date.parse(state.originAt) + 7200000
       )
     );
@@ -121,7 +127,13 @@ export function validateCaptureSelection(
   )
     invalid();
   if (selection.mode === "selected-app") {
-    if (!inventory.applications.some((app) => app.appProcessTreeId === selection.appProcessTreeId))
+    if (
+      !inventory.applications.some(
+        (app) =>
+          app.appProcessTreeId === selection.appProcessTreeId &&
+          (!selection.applicationId || app.applicationId === selection.applicationId)
+      )
+    )
       invalid();
   } else if (selection.mode === "computer-audio") {
     if (
@@ -147,14 +159,9 @@ export function applyCaptureControl(
   const atMs = elapsed(state, at);
   if (input.command === "record") {
     if (state.gapLimitReached) throw new MeetingCaptureError("meeting_capture_limit", 413);
-    if (
-      !["idle", "paused"].includes(state.desired) ||
-      !input.selection ||
-      input.noticeAcknowledged !== true ||
-      !state.inventory
-    )
+    if (!["idle", "paused"].includes(state.desired) || !input.selection || !state.inventory)
       invalid();
-    if (!state.lastSeenAt || at.getTime() - Date.parse(state.lastSeenAt) > 10000)
+    if (!state.lastSeenAt || at.getTime() - Date.parse(state.lastSeenAt) > MEETING_CAPTURE_LEASE_MS)
       throw new MeetingCaptureError("meeting_capture_interrupted", 409);
     if (state.epochs.length >= 64) throw new MeetingCaptureError("meeting_capture_limit", 413);
     validateCaptureSelection(input.selection, state.inventory);
@@ -255,7 +262,12 @@ export function assertCaptureAudioAdmission(
   const epoch = state.epochs.find(
     (entry) => entry.epoch === input.epoch && entry.generation === input.generation
   );
-  if (!epoch || input.startMs < epoch.startMs || input.endMs > elapsed(state, at))
+  if (
+    !epoch ||
+    input.startMs < epoch.startMs ||
+    input.endMs > elapsed(state, at) ||
+    elapsed(state, at) - input.endMs > MEETING_CAPTURE_FINALIZATION_MS
+  )
     throw new MeetingCaptureError("meeting_capture_conflict", 409);
   if (
     input.sourceId !== epoch.selection.microphone.sourceId &&
@@ -265,19 +277,25 @@ export function assertCaptureAudioAdmission(
     invalid();
   const finalFlush =
     state.desired === "stopped" &&
+    !state.finalized &&
     state.finalizationDeadline !== null &&
     at.getTime() <= Date.parse(state.finalizationDeadline) &&
-    epoch === state.epochs.at(-1) &&
     state.observed?.phase === "stopped" &&
+    state.observed.generation === state.generation;
+  const resumedFlush =
+    epoch.endMs !== null &&
+    epoch !== state.epochs.at(-1) &&
+    state.desired === "recording" &&
+    state.observed?.phase === "recording" &&
     state.observed.generation === state.generation;
   if (
     !finalFlush &&
     (state.desired !== "recording" ||
-      state.generation !== input.generation ||
+      (!resumedFlush && state.generation !== input.generation) ||
       state.observed?.phase !== "recording" ||
-      state.observed.generation !== input.generation ||
+      (!resumedFlush && state.observed.generation !== input.generation) ||
       !state.lastSeenAt ||
-      at.getTime() - Date.parse(state.lastSeenAt) > 10000)
+      at.getTime() - Date.parse(state.lastSeenAt) > MEETING_CAPTURE_LEASE_MS)
   )
     throw new MeetingCaptureError("meeting_capture_interrupted", 409);
   if (

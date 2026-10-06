@@ -13,6 +13,16 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         }
         var batches: [Batch] = []
         var failures: [MeetingAudioFailure] = []
+        var droppedSampleTimes: [Double] = []
+        var receivedSampleTimes: [Double] = []
+        func receive(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double,
+                     frameCount: Int, sampleAt: (Int) -> Float) {
+            receivedSampleTimes.append(sampleTime)
+            receive(hostTimeNanoseconds: hostTimeNanoseconds, sampleRate: sampleRate, frameCount: frameCount, sampleAt: sampleAt)
+        }
+        func drop(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int) {
+            droppedSampleTimes.append(sampleTime)
+        }
 
         func receive(hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int, sampleAt: (Int) -> Float) {
             batches.append(Batch(
@@ -39,11 +49,16 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             mBytesPerFrame: 8, mChannelsPerFrame: 2, mBitsPerChannel: 32, mReserved: 0
         )
         var verifiedFormat: AudioStreamBasicDescription?
+        var configuredOutput = AudioStreamBasicDescription(mSampleRate: 48000, mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagsNativeFloatPacked, mBytesPerPacket: 4, mFramesPerPacket: 1,
+            mBytesPerFrame: 4, mChannelsPerFrame: 1, mBitsPerChannel: 32, mReserved: 0)
+        var nextSampleTime: Double = 0
         var capacity: UInt32 = 8
         var verifiedCapacity: UInt32?
         var context: MeetingMicrophoneRenderContext?
         var onRender: (() -> Void)?
         var onListener: (() -> Void)?
+        var onFormatRead: (() -> Void)?
         var corruptBuffer: ((UnsafeMutablePointer<AudioBufferList>) -> Void)?
         var renderStatus: OSStatus = noErr
         var renderCount = 0
@@ -74,9 +89,13 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         func inputFormat() throws -> AudioStreamBasicDescription {
             formatReads += 1
             try step(formatReads == 1 ? "format" : "verifyFormat")
+            onFormatRead?()
             return formatReads == 1 ? format : (verifiedFormat ?? format)
         }
-        func configureMonoOutput(sampleRate: Double) throws { try step("mono"); configuredRate = sampleRate }
+        func outputFormat() throws -> AudioStreamBasicDescription { configuredOutput }
+        func configureMonoOutput(sampleRate: Double) throws {
+            try step("mono"); configuredRate = sampleRate; configuredOutput.mSampleRate = sampleRate
+        }
         func maximumFramesPerSlice() throws -> UInt32 {
             capacityReads += 1
             try step(capacityReads == 1 ? "capacity" : "verifyCapacity")
@@ -117,13 +136,17 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         @discardableResult
         func emit(
             at hostTime: UInt64 = 100, frames: UInt32 = 3,
-            validHostTime: Bool = true, to savedContext: MeetingMicrophoneRenderContext? = nil
+            validHostTime: Bool = true, validSampleTime: Bool = true, sampleTime: Double? = nil, to savedContext: MeetingMicrophoneRenderContext? = nil
         ) -> OSStatus {
             guard let target = savedContext ?? context else { return kAudioUnitErr_Uninitialized }
             var flags: AudioUnitRenderActionFlags = []
             var timestamp = AudioTimeStamp()
             timestamp.mHostTime = hostTime
-            timestamp.mFlags = validHostTime ? .hostTimeValid : .sampleTimeValid
+            timestamp.mSampleTime = sampleTime ?? nextSampleTime
+            nextSampleTime = timestamp.mSampleTime + Double(frames)
+            timestamp.mFlags = []
+            if validHostTime { timestamp.mFlags.insert(.hostTimeValid) }
+            if validSampleTime { timestamp.mFlags.insert(.sampleTimeValid) }
             return target.render(flags: &flags, timestamp: &timestamp, frameCount: frames)
         }
     }
@@ -240,15 +263,14 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         }
     }
 
-    func testFormatNotificationDuringStartupPreventsStart() {
+    func testUnchangedFormatNotificationDuringStartupAllowsStart() throws {
         let unit = FakeUnit()
         unit.onListener = { [weak unit] in unit?.context?.formatDidChange() }
         let capture = unit.capture()
-        XCTAssertThrowsError(try capture.start(into: Receiver())) {
-            XCTAssertEqual($0 as? MeetingAudioFailure, .invalidFormat)
-        }
-        XCTAssertFalse(unit.events.contains("start"))
-        XCTAssertNil(unit.context)
+        try capture.start(into: Receiver())
+        XCTAssertTrue(unit.events.contains("start"))
+        XCTAssertGreaterThan(unit.formatReads, 2)
+        try capture.stop()
     }
 
     func testStopFailureRetainsContextAndBlocksRestartUntilRetry() throws {
@@ -348,20 +370,30 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         }
     }
 
-    func testMissingOrNonMonotonicHostTimestampFailsClosed() throws {
-        for missingFlag in [true, false] {
+    func testMissingHardwareClockFlagsFailClosed() throws {
+        for missingHost in [true, false] {
             let unit = FakeUnit()
             let capture = unit.capture()
             let receiver = Receiver()
             try capture.start(into: receiver)
-            if !missingFlag { unit.emit(at: 100) }
-            unit.emit(at: 99, validHostTime: !missingFlag)
+            unit.emit(validHostTime: !missingHost, validSampleTime: missingHost)
             unit.emit(at: 200)
             XCTAssertEqual(receiver.failures, [.invalidTimestamp])
-            XCTAssertEqual(unit.renderCount, missingFlag ? 0 : 1)
-            XCTAssertEqual(receiver.batches.count, missingFlag ? 0 : 1)
+            XCTAssertEqual(unit.renderCount, 0)
+            XCTAssertTrue(receiver.batches.isEmpty)
             try capture.stop()
         }
+    }
+
+    func testSampleClockIsForwardedDespiteHarmlessHostJitter() throws {
+        let unit = FakeUnit(), receiver = Receiver()
+        let capture = unit.capture()
+        try capture.start(into: receiver)
+        unit.emit(at: 100)
+        unit.emit(at: 99)
+        XCTAssertEqual(receiver.receivedSampleTimes, [0, 3])
+        XCTAssertTrue(receiver.failures.isEmpty)
+        try capture.stop()
     }
 
     func testRenderFailureIsReportedOnceAndNoSamplesEscape() throws {
@@ -403,7 +435,15 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
 
     func testFormatChangeDuringRenderRejectsTheInFlightBatchAndLaterCallbacks() throws {
         let unit = FakeUnit()
-        unit.onRender = { [weak unit] in unit?.context?.formatDidChange() }
+        unit.onRender = { [weak unit] in
+            guard let unit else { return }
+            var changed = unit.format
+            changed.mSampleRate = 44_100
+            unit.verifiedFormat = changed
+            unit.context?.formatDidChange()
+            // Explicit synthetic control-plane recheck races the in-flight render.
+            unit.context?.verifyFormatIfNeeded()
+        }
         let capture = unit.capture()
         let receiver = Receiver()
         try capture.start(into: receiver)
@@ -415,15 +455,16 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         try capture.stop()
     }
 
-    func testOverlappingRenderReportsFailureInsteadOfSilentlyDroppingSamples() throws {
+    func testOverlappingRenderReportsDroppedIntervalWithoutPausing() throws {
         let unit = FakeUnit()
         unit.onRender = { [weak unit] in _ = unit?.emit(at: 200) }
         let capture = unit.capture()
         let receiver = Receiver()
         try capture.start(into: receiver)
         unit.emit()
-        XCTAssertEqual(receiver.failures, [.bufferFull])
-        XCTAssertTrue(receiver.batches.isEmpty)
+        XCTAssertTrue(receiver.failures.isEmpty)
+        XCTAssertEqual(receiver.droppedSampleTimes, [3])
+        XCTAssertEqual(receiver.batches.count, 1)
         XCTAssertEqual(unit.renderCount, 1)
         try capture.stop()
     }
@@ -464,6 +505,89 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             XCTAssertThrowsError(try capture.start(into: Receiver()))
             XCTAssertFalse(unit.events.contains("callback"))
         }
+    }
+
+    func testFormatNoticeNeverQueriesHardwareInsideTheNotification() throws {
+        let unit = FakeUnit(), receiver = Receiver()
+        let capture = unit.capture()
+        try capture.start(into: receiver)
+        let reads = unit.formatReads
+        unit.context?.formatDidChange()
+        XCTAssertEqual(unit.formatReads, reads)
+        unit.context?.verifyFormatIfNeeded()
+        XCTAssertEqual(unit.formatReads, reads + 1)
+        unit.emit()
+        XCTAssertTrue(receiver.failures.isEmpty)
+        XCTAssertEqual(receiver.batches.count, 1)
+        try capture.stop()
+    }
+
+    func testActualOutputFormatChangeClosesAdmissionEvenWhenInputIsUnchanged() throws {
+        let unit = FakeUnit(), receiver = Receiver()
+        let capture = unit.capture()
+        try capture.start(into: receiver)
+        unit.configuredOutput.mSampleRate = 44_100
+        unit.context?.formatDidChange()
+        unit.context?.verifyFormatIfNeeded()
+        unit.emit()
+        XCTAssertEqual(receiver.failures, [.invalidFormat])
+        XCTAssertEqual(unit.renderCount, 0)
+        try capture.stop()
+    }
+
+    func testPendingFormatNoticeQuarantinesCallbacksUntilUnchangedFormatIsVerified() throws {
+        let unit = FakeUnit(), receiver = Receiver()
+        let capture = unit.capture()
+        try capture.start(into: receiver)
+        unit.context?.formatDidChange()
+        unit.emit()
+        XCTAssertEqual(unit.renderCount, 0)
+        XCTAssertTrue(receiver.batches.isEmpty)
+        XCTAssertEqual(receiver.droppedSampleTimes, [0])
+        XCTAssertTrue(receiver.failures.isEmpty)
+        unit.context?.verifyFormatIfNeeded()
+        unit.emit(at: 200)
+        XCTAssertEqual(receiver.receivedSampleTimes, [3])
+        XCTAssertTrue(receiver.failures.isEmpty)
+        try capture.stop()
+    }
+
+    func testUnchangedNoticeDuringRenderDropsOnlyThatCallbackWithoutPausing() throws {
+        let unit = FakeUnit(), receiver = Receiver()
+        let capture = unit.capture()
+        try capture.start(into: receiver)
+        unit.onRender = { [weak unit] in unit?.context?.formatDidChange() }
+        unit.emit()
+        XCTAssertTrue(receiver.batches.isEmpty)
+        XCTAssertEqual(receiver.droppedSampleTimes, [0])
+        unit.onRender = nil
+        unit.context?.verifyFormatIfNeeded()
+        unit.emit(at: 200)
+        XCTAssertEqual(receiver.receivedSampleTimes, [3])
+        XCTAssertTrue(receiver.failures.isEmpty)
+        try capture.stop()
+    }
+
+    func testNoticeDuringVerificationRequiresAnotherReadBeforeCallbackAdmission() throws {
+        let unit = FakeUnit(), receiver = Receiver()
+        let capture = unit.capture()
+        try capture.start(into: receiver)
+        unit.onFormatRead = { [weak unit] in
+            unit?.context?.formatDidChange()
+            unit?.context?.verifyFormatIfNeeded() // Reentrant control check must not clear quarantine.
+        }
+        unit.context?.formatDidChange()
+        let before = unit.formatReads
+        unit.context?.verifyFormatIfNeeded()
+        XCTAssertEqual(unit.formatReads, before + 1)
+        unit.emit()
+        XCTAssertTrue(receiver.batches.isEmpty)
+        unit.onFormatRead = nil
+        unit.context?.verifyFormatIfNeeded()
+        unit.emit(at: 200)
+        XCTAssertEqual(receiver.receivedSampleTimes, [3])
+        XCTAssertTrue(receiver.failures.isEmpty)
+        try capture.stop()
     }
 
 }

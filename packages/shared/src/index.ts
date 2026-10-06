@@ -5,6 +5,7 @@ export type Brand<TValue, TBrand extends string> = TValue & {
 export type { MossError, MossErrorClass } from "@moss/module-sdk/errors";
 
 export * from "./app-map-core.js";
+export * from "./decision-model-presets.js";
 export * from "./schema-fragments.js";
 export * from "./ai-action-policy-api.js";
 export * from "./ai-api.js";

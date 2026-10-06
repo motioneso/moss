@@ -14,18 +14,39 @@ final class MeetingCaptureRuntime {
 
     private let queue = DispatchQueue(label: "com.moss.meeting.capture-control")
     private let factory: DeviceFactory
+    private let captureLease = MeetingAudioLease()
     private var machine = MeetingCaptureMachine()
     private var devices: [MeetingAudioSource: MeetingAudioCapturing] = [:]
     private var pending: [PendingSource] = []
     private var retainedGaps: [MeetingAudioGap] = []
     private var epochStart: UInt64 = 0
     private var nextSessionEpoch: UInt64 = 1
+    private var dispatchCursor = 0
     private var hadExpiredAudio = false
     private var pauseBoundary: (at: UInt64, epoch: UInt64, sources: [MeetingAudioSource])?
 
     init(factory: @escaping DeviceFactory) { self.factory = factory }
 
+    func updateCaptureLease(until deadline: UInt64) { captureLease.update(deadline: deadline) }
+
     var snapshot: MeetingCaptureMachine { queue.sync { machine } }
+    var isAwaitingOutputAudio: Bool {
+        queue.sync {
+            guard machine.state == .recording, machine.selection?.output != nil else { return false }
+            guard let output = pending.first(where: { $0.buffer.epoch == machine.epoch && $0.buffer.source == .output }) else { return true }
+            return output.buffer.diagnostics.acceptedCallbacks == 0
+        }
+    }
+    var audioDiagnostics: [MeetingAudioSource: MeetingAudioBuffer.Diagnostics] {
+        queue.sync {
+            Dictionary(uniqueKeysWithValues: pending.filter { $0.buffer.epoch == machine.epoch }
+                .map { ($0.buffer.source, $0.buffer.diagnostics) })
+        }
+    }
+
+    func isBacklogged(at now: UInt64) -> Bool {
+        queue.sync { pending.contains { $0.buffer.isBacklogged(nowNanoseconds: now) } }
+    }
 
     func prepare(selection: MeetingNativeSelection, readiness: MeetingNativeReadiness, at: UInt64) throws {
         try queue.sync { try machine.prepare(selection: selection, readiness: readiness, at: at) }
@@ -73,7 +94,7 @@ final class MeetingCaptureRuntime {
         guard Set(created.keys) == expected else { throw MeetingAudioFailure.invalidSelection }
         let sourceOrder = MeetingAudioSource.allCases.filter { expected.contains($0) }
         let fresh = try sourceOrder.map { source in
-            PendingSource(buffer: try MeetingAudioBuffer(source: source, epoch: candidate.epoch, originNanoseconds: at),
+            PendingSource(buffer: try MeetingAudioBuffer(source: source, epoch: candidate.epoch, originNanoseconds: at, lease: captureLease),
                           cutoff: nil, inFlightSequence: nil, offeredChunk: nil)
         }
         devices = created
@@ -94,11 +115,13 @@ final class MeetingCaptureRuntime {
         }
     }
 
-    func pause(at: UInt64) throws {
+    func pause(at: UInt64, captureCutoffNanoseconds: UInt64? = nil) throws {
         try queue.sync {
             try machine.pause(at: at)
-            rememberPause(at: at)
-            closeCurrentEpoch(at: at)
+            let cutoff = min(at, captureCutoffNanoseconds ?? at)
+            rememberPause(at: cutoff)
+            closeCurrentEpoch(at: cutoff)
+            applyCutoff(cutoff, epoch: machine.epoch)
             do { try stopDevices() } catch { machine.fail(); throw error }
         }
     }
@@ -125,8 +148,18 @@ final class MeetingCaptureRuntime {
         }
     }
 
-    private func applyStopCutoff(_ cutoff: UInt64) {
-        for index in pending.indices {
+    func tightenPauseCutoff(to cutoff: UInt64) {
+        queue.sync {
+            guard machine.state == .paused || machine.state == .stopping else { return }
+            applyCutoff(cutoff, epoch: machine.epoch)
+            if let pause = pauseBoundary { pauseBoundary = (min(pause.at, cutoff), pause.epoch, pause.sources) }
+        }
+    }
+
+    private func applyStopCutoff(_ cutoff: UInt64) { applyCutoff(cutoff, epoch: nil) }
+
+    private func applyCutoff(_ cutoff: UInt64, epoch: UInt64?) {
+        for index in pending.indices where epoch == nil || pending[index].buffer.epoch == epoch {
             pending[index].buffer.close()
             pending[index].cutoff = min(pending[index].cutoff ?? cutoff, cutoff)
             if let offered = pending[index].offeredChunk, offered.packet.endNanoseconds > cutoff {
@@ -205,15 +238,29 @@ final class MeetingCaptureRuntime {
                 throw error
             }
         }
+        var lostUnknownReceipt = false
         for index in pending.indices {
+            gaps.append(contentsOf: pending[index].buffer.drainCaptureGaps(cutoffNanoseconds: pending[index].cutoff))
             let expired = pending[index].buffer.expire(nowNanoseconds: at)
             if !expired.isEmpty { hadExpiredAudio = true }
             gaps.append(contentsOf: expired)
             if let offered = pending[index].offeredChunk,
                pending[index].buffer.peek(cutoffNanoseconds: pending[index].cutoff)?.sequence != offered.packet.sequence {
+                // Receipt outcome is unknown after expiry. A later packet cannot reuse or
+                // guess the server's sequence cursor. Retire this source's remaining tail,
+                // visibly; explicit Resume creates a new source epoch with a fresh cursor.
+                lostUnknownReceipt = true
+                if let gap = pending[index].buffer.discard(reason: .retentionDeclined) { gaps.append(gap) }
+                pending[index].cutoff = min(pending[index].cutoff ?? at, at)
                 pending[index].inFlightSequence = nil
                 pending[index].offeredChunk = nil
             }
+        }
+        if lostUnknownReceipt, machine.state == .recording {
+            try machine.pause(at: at)
+            rememberPause(at: at)
+            closeCurrentEpoch(at: at)
+            do { try stopDevices() } catch { machine.fail(); retainedGaps = gaps; throw error }
         }
         pruneClosedSources()
         if machine.state == .stopping, let deadline = machine.finalizationDeadlineNanoseconds, at >= deadline {
@@ -230,7 +277,8 @@ final class MeetingCaptureRuntime {
     /// from it. Queue serialization makes Pause and NEW send initiation mutually ordered.
     /// Caller may keep the bounded packet for an in-flight request only; received receipts release it.
     func dispatchNext(at: UInt64, initiate: (MeetingAudioPacket) -> Void) throws -> Bool {
-        try dispatch(at: at, targetDurationNanoseconds: nil, latestEndNanoseconds: nil, initiate: initiate)
+        try dispatch(at: at, targetDurationNanoseconds: nil, latestEndNanoseconds: nil,
+                     eligibleSources: Set(MeetingAudioSource.allCases), initiate: { packet, _ in initiate(packet) })
     }
 
     /// Real upload path: coalesce five seconds by default, retaining the exact packet on retry.
@@ -238,20 +286,34 @@ final class MeetingCaptureRuntime {
     /// the ten-second wire cap. The 2,097,152-sample ring leaves receipt/clock headroom even
     /// at 192kHz; it is still a byte cap, not a promise of sixty seconds of retained audio.
     func dispatchNextChunk(at: UInt64, targetDurationNanoseconds: UInt64 = 5_000_000_000,
-                           latestEndNanoseconds: UInt64? = nil, initiate: (MeetingAudioPacket) -> Void) throws -> Bool {
+                           latestEndNanoseconds: UInt64? = nil, eligibleSources: Set<MeetingAudioSource> = Set(MeetingAudioSource.allCases), initiate: (MeetingAudioPacket) -> Void) throws -> Bool {
         guard (1...5_000_000_000).contains(targetDurationNanoseconds) else {
             throw MeetingAudioFailure.invalidSelection
         }
         return try dispatch(at: at, targetDurationNanoseconds: targetDurationNanoseconds,
-                            latestEndNanoseconds: latestEndNanoseconds, initiate: initiate)
+                            latestEndNanoseconds: latestEndNanoseconds, eligibleSources: eligibleSources, initiate: { packet, _ in initiate(packet) })
+    }
+
+    func dispatchNextChunkWithAdmission(at: UInt64, targetDurationNanoseconds: UInt64 = 5_000_000_000,
+                                        latestEndNanoseconds: UInt64? = nil,
+                                        eligibleSources: Set<MeetingAudioSource> = Set(MeetingAudioSource.allCases),
+                                        initiate: (MeetingAudioPacket, MeetingAudioBuffer) -> Void) throws -> Bool {
+        guard (1...5_000_000_000).contains(targetDurationNanoseconds) else { throw MeetingAudioFailure.invalidSelection }
+        return try dispatch(at: at, targetDurationNanoseconds: targetDurationNanoseconds,
+                            latestEndNanoseconds: latestEndNanoseconds, eligibleSources: eligibleSources, initiate: initiate)
     }
 
     private func dispatch(at: UInt64, targetDurationNanoseconds: UInt64?, latestEndNanoseconds: UInt64?,
-                          initiate: (MeetingAudioPacket) -> Void) throws -> Bool {
+                          eligibleSources: Set<MeetingAudioSource>, initiate: (MeetingAudioPacket, MeetingAudioBuffer) -> Void) throws -> Bool {
         try queue.sync {
             let gaps = try serviceLocked(at: at)
             retainedGaps = gaps
-            for index in pending.indices where pending[index].inFlightSequence == nil {
+            guard !pending.isEmpty else { return false }
+            for offset in pending.indices {
+                let index = (dispatchCursor + offset) % pending.count
+                guard pending[index].inFlightSequence == nil,
+                      !pending[index].buffer.isScopeVerificationPending,
+                      eligibleSources.contains(pending[index].buffer.source) else { continue }
                 // A retained old epoch may send a short tail only after explicit retained-audio
                 // consent on Resume, or Stop. Pause itself never admits a new send.
                 let chunk = pending[index].offeredChunk ?? pending[index].buffer.peekChunk(
@@ -263,7 +325,8 @@ final class MeetingCaptureRuntime {
                                           now: at) else { continue }
                 pending[index].offeredChunk = chunk
                 pending[index].inFlightSequence = chunk.packet.sequence
-                initiate(chunk.packet)
+                dispatchCursor = (index + 1) % pending.count
+                initiate(chunk.packet, pending[index].buffer)
                 return true
             }
             return false

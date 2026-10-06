@@ -2,7 +2,7 @@
 
 Approved product design; implementation and release verification pending
 
-Version 0.3 • 3 October 2026 • Build issue #2981
+Version 0.4 • 6 October 2026 • Build issue #2981
 
 ## 1 Purpose and decisions
 
@@ -18,6 +18,26 @@ The product direction and revised mockups were approved on 3 October 2026; imple
 - Phone-call capture is deferred. Mobile in-person capture remains a later phase.
 - The user chooses the capture mode and their default. The first choice is explicit; broader computer capture is never enabled as a silent fallback. Mockups must use the new Moss design system.
 - Processing and model configuration belongs in Settings → AI providers. Setup focuses on capture. Interface copy is concise, with explanations where a decision or problem requires them.
+
+### Approved reliability and connection revision (6 October 2026)
+
+Owner testing of PR #3056 found unreliable capture and too much setup friction. The revised
+product direction is: connect the companion once, then use one Start meeting action in Moss.
+Remember the explicitly chosen recording device, microphone and app/mode; keep an optional Change
+control. Remove per-meeting Prepare, browser approval and notice checkboxes. Complete connection
+in the current Moss tab rather than opening the OS default browser. List navigation remains
+available while a persistent recording control shows the actual capture state.
+
+Connection, capture and transcription are independent. Ordinary timestamp jitter, unchanged
+format notifications, brief network gaps and one failed transcription chunk must not be reported
+as a lost microphone. Show transcription delay and unrecoverable gaps honestly. Pause and Stop
+remain immediately available locally. The bounded memory and authorization limits below still
+apply; this revision does not authorize recording on connect, scope broadening, unbounded offline
+capture, a disk audio archive, or new live credentials/permissions.
+
+See the [repair plan](../plans/2026-10-06-2981-capture-reliability-and-connection.md) for reproduced
+defects, remaining unknowns, the one-time capability migration and regression gates. Earlier
+synthetic/CI passes are not evidence that these real-device failures are resolved.
 
 ### Proposed first release
 
@@ -37,7 +57,7 @@ Defaults and targets below are proposed. Current-code observations are sourced; 
 
 ### Three explicit capture modes
 
-CAP 1. Require an initial mode choice and offer “Use as my default.” Remember only the user's explicit default, show it before each Start, and allow a per-meeting override. Never broaden capture after failure. A mode change during a meeting requires Pause, explicit selection and notice, then Resume with a new source epoch.
+CAP 1. Require an initial explicit mode/source choice, then remember the device, microphone UID and stable selected-app identity after a successful explicit Start. Show a concise source summary with Change before each Start. Re-resolve the chosen app instance and device; if either is missing, ask for that source or an explicit change, never a broader fallback. A mode change during a meeting requires Pause, explicit selection and Resume with a new source epoch. No repeated recording-notice checkbox is required.
 
 | Mode | Audio captured |
 | Microphone and computer audio | Selected microphone plus the declared computer-output scope. Warn that unrelated apps, notifications, and media can be included. |
@@ -102,9 +122,9 @@ The four screens share one meeting identity. Follow the new Moss design system a
 
 ### Setup
 
-Show title, three capture modes, “Use as my default,” microphone, relevant app or output scope, and source meters. In microphone-only mode, output reads “Not captured.” Computer mode has one short warning about unrelated app audio. Processing configuration is in Settings → AI providers. Disabled Start gives a specific remedy, such as “Transcription unavailable” with an “AI providers” link.
+Show an optional title, the remembered device/microphone/source summary, Change and one Start meeting action. Change exposes the three capture modes, microphone, relevant app or output scope, and source health. The first use requires an explicit source choice; an omitted title receives a deterministic editable meeting title. In microphone-only mode, output reads “Not captured.” Computer mode has one short warning about unrelated app audio. Processing configuration is in Settings → AI providers. Disabled Start gives a specific remedy, such as “Transcription unavailable” with an “AI providers” link.
 
-Start requires compatibility, permissions, authentication, and configured processing. Local preflight does not send audio. Present required recording notice once at the relevant decision and retain its policy version internally. Enforce privacy and consent requirements without repeating reassurance throughout the screen.
+Start requires compatibility, permissions, authentication and configured processing. Readiness checks and short-lived session authorization happen behind that one action. Local preflight does not send audio. Integrate the recording capability and concise first-use notice into the shared companion connection approval, retaining its policy version internally. The first explicit Start may request the OS microphone permission; permission approval by itself does not start an expired or cancelled command. Never add a separate Prepare/Approve sequence per meeting.
 
 ### Live meeting
 
@@ -166,7 +186,7 @@ Mockups cover Setup modes, capture failures, live and completed Ask Moss, provis
 
 The conceptual lifecycle is Draft, Ready, Recording, Paused, Stopping, Processing, and Reviewable. Failed and Interrupted carry a reason and recoverable artifacts. Capture, transcription, summary, and export each have their own status; a failure in one must not falsely mark every part failed. Stop and close are idempotent.
 
-Ready requires preflight. Start binds owner, device, mode, precise output scope, sources, profile, and notice acknowledgement. Pause immediately stops capture and every new outbound audio send, including queued chunks. Already submitted audio may still return results, labeled as pre-pause processing. Freeze queues within their expiry limits. Resume rechecks policy and permissions, explicitly permits sending retained pre-pause audio, and starts a new epoch with a visible gap. Mode or scope changes require review before Resume. Stop releases devices and fixes an immutable cutoff; its disclosed finalization may flush the final partial chunk and retry retained pre-cutoff audio, never post-cutoff samples.
+Ready requires preflight. Each explicit Start binds owner, device, current connection generation, mode, precise output scope, sources, profile and the approved capability/notice policy version. Connecting or reconnecting never creates a Start. A command must be claimed within its bounded lifetime; a stale command cannot start capture after restart. Pause immediately stops capture and every new outbound audio send, including queued chunks. Already submitted audio may still return results, labeled as pre-pause processing. Freeze queues within their expiry limits. Resume rechecks policy and permissions, explicitly permits sending retained pre-pause audio, and starts a new epoch with a visible gap. Mode or scope changes require review before Resume. Stop releases devices and fixes an immutable cutoff; its disclosed finalization may flush the final partial chunk and retry retained pre-cutoff audio, never post-cutoff samples.
 
 ### Ordering and revisions
 
@@ -178,11 +198,11 @@ TRAN 3. Reconnect sends the last acknowledged cursor and reconciles missing rang
 
 ### Backpressure and close
 
-Proposed limits: at most 60 seconds of unacknowledged in-memory audio per source and an initial two-hour session limit, both configurable within tested bounds. Monitor queue age, memory, upload failures, and provider limits. Warn at 30 seconds of backlog. At the cap, stop capture or apply an explicitly selected loss policy; never consume unbounded memory or drop audio silently.
+Repair limits: at most 60 seconds of unacknowledged in-memory audio per source, with explicit sample/byte and total-process caps, and an initial two-hour session limit. State the shorter effective capacity at the active sample rate. Monitor queue age, memory, upload failures and provider limits. Warn at 30 seconds of backlog or earlier byte-pressure. At the cap, visibly pause capture; mark any already lost interval as a gap. An individual processing failure may release only its terminal chunk with a visible gap; transient failures retain/retry the same chunk within the bound. Never let one slow source starve another, consume unbounded memory, or drop audio silently.
 
 The default proposal keeps raw audio transient. A crash, long outage, or failed request may lose unacknowledged audio. The optional recovery buffer in section 9 changes that tradeoff. Do not promise offline transcription, complete crash recovery, or whole-meeting re-transcription without retained audio.
 
-After Stop, close with final sequence boundaries for each source. Flush and drain only pre-cutoff audio within a proposed 60-second deadline, then mark unfinished ranges pending or failed and allow Review. Late results create transcript revisions and mark dependent output stale without rewriting reviewed summaries, exports, or accepted Tasks. A server-side capture lease expires abandoned sessions as Interrupted. If the responsible client or server crashes without a retained copy, record the affected gap rather than claiming recovery.
+After Stop, close with final sequence boundaries for each source. Flush and drain only pre-cutoff audio within a proposed 60-second deadline, then mark unfinished ranges pending or failed and allow Review. Late results create transcript revisions and mark dependent output stale without rewriting reviewed summaries, exports, or accepted Tasks. A bounded server-side capture lease expires abandoned sessions as Interrupted. Its local deadline must exceed individual request deadlines and tolerate brief network gaps; expiry pauses locally and requires explicit Resume, not automatic recording after reconnect. Terminal finalization releases the recorder/session slot without requiring manual device disconnection; pending pre-cutoff processing remains distinct from live capture. If the responsible client or server crashes without a retained copy, record the affected gap rather than claiming recovery.
 
 <!-- PAGE -->
 
@@ -245,7 +265,9 @@ VAULT 2. Display “Saved to vault” only after confirming the write; display �
 
 Moss requires owner-only data unless explicitly shared, with no admin private-data bypass. Apply this to audio, transcripts, notes, summaries, chat context and answers, evidence, exports, search, and events. Chat caches and indexes carry the same scope and retention. Admin health or usage views expose no private content. [1]
 
-The existing Trail Marker credential is restricted to its companion identity and device connection API. Do not widen it to carry meetings, notes, Tasks, or admin data. Propose separately scoped meeting-device authorization through an explicit approval flow, bound to the owner and device, revocable, short-lived where practical, and limited to the allowed meeting operations. Provider keys remain on the server. These are implementation requirements that need end-to-end verification, not claims about current meeting code. [10]
+The existing Trail Marker credential remains an identity/connection credential, never general meeting, transcript, note, Task or admin authorization. A separate owner/device recording capability is approved once in the shared connection flow, with policy version, expiry/revocation and a clear upgrade for previously paired devices. Existing devices migrate without that capability; identity pairing alone grants no recording access. Independent recording-capability proof is bound inside that same one-time approval and kept in the native Keychain, so the legacy connection credential alone cannot impersonate a recorder. Capability approval is cookie-only and origin-bound. Backtrack consent remains independent.
+
+Readiness/command bootstrap must verify device identity, that capability and its independent proof. Only an explicit, current browser Start may create short-lived exact meeting/device authority; bootstrap may claim only that current, bounded command. Audio/status/control remain authorized by the meeting grant rather than the bare companion credential. Claims and Start retries must be idempotent without retaining plaintext credentials server-side. Device/capability revocation, account changes and browser-session revocation invalidate derived authority; late callbacks cannot restore it. Provider keys remain on the server. These are requirements to verify end to end, not claims that live grants have been changed. [10]
 
 Trail Marker is currently an unsigned, un-notarized local macOS development build. Packaging, stable signing, OS permissions, update trust, and Windows distribution need release decisions before an installable companion is promised. Do not instruct users to bypass platform security warnings as a shipping workflow. [11]
 
@@ -259,7 +281,7 @@ Set separate retention policies for transient audio, any recovery buffer, transc
 
 ### Workplace and provider requirements
 
-Before deployment, confirm employer policy, participant notice and consent requirements, approved providers, data region, training use, and vendor retention. Cloud acceptance in product planning is not permission to send actual workplace recordings. A disclosure and acknowledgement help users follow policy; they are not a legal compliance guarantee.
+Before deployment, confirm employer policy, participant notice and consent requirements, approved providers, data region, training use, and vendor retention. Cloud acceptance in product planning is not permission to send actual workplace recordings. A concise first-use disclosure and explicit Start help users follow policy; they are not a legal compliance guarantee. The repair removes the repeated per-meeting notice checkbox, not participant notice obligations.
 
 Disclose processing destinations and policy in AI providers and applicable first-use notice, not repeated Setup details. Computer mode retains its short unrelated-audio warning. Capture choice is separate from provider permission. Prevent undisclosed fallback, exclude content and secrets from telemetry, and verify deletion across storage, chat caches, providers, and backups.
 

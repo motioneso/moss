@@ -1,3 +1,4 @@
+import { captureMetadataJson } from "./capture-metadata.js";
 import { createHash } from "node:crypto";
 import { sql } from "kysely";
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
@@ -6,6 +7,7 @@ import type {
   MeetingCaptureAudioReceipt,
   MeetingCaptureState
 } from "@moss/shared";
+import { MEETING_CAPTURE_LEASE_MS } from "@moss/shared";
 import {
   elapsed,
   MeetingCaptureError,
@@ -22,22 +24,16 @@ export interface CaptureGrant {
   verifier_hash: string;
   credential_hash: string | null;
   session_id: string | null;
-  status: "pending" | "approved" | "active" | "revoked";
+  status: "pending" | "approved" | "active" | "finalizing" | "complete" | "revoked";
+  connection_id?: string | null;
+  capability_revision?: number | null;
+  claim_expires_at?: Date | null;
+  start_request_key?: string | null;
+  start_fingerprint?: string | null;
   created_at: Date;
   expires_at: Date;
   state_json: string | null;
 }
-export type CaptureLink = Pick<
-  CaptureGrant,
-  | "id"
-  | "meeting_id"
-  | "owner_user_id"
-  | "device_id"
-  | "device_name"
-  | "verifier_hash"
-  | "created_at"
-  | "expires_at"
-> & { status: "pending" | "approved" };
 export interface CaptureReceipt {
   request_key: string;
   kind: "control" | "audio";
@@ -45,6 +41,8 @@ export interface CaptureReceipt {
   metadata_json: string;
   result_json: string | null;
   created_at: Date;
+  attempts?: number;
+  retry_at?: Date | null;
 }
 export function captureState(grant: CaptureGrant): CaptureStoredState {
   if (!grant.state_json) throw new MeetingCaptureError();
@@ -56,7 +54,25 @@ export function captureView(
   at: Date
 ): MeetingCaptureState {
   const epoch = state.epochs.at(-1);
+  const semanticState = { ...state, lastSeenAt: undefined, recordedDurationMs: undefined };
   return {
+    revision: createHash("sha256")
+      .update(captureMetadataJson({ state: semanticState, status: grant.status }))
+      .digest("hex")
+      .slice(0, 32),
+    transcriptRevision: state.transcriptRevision ?? 0,
+    leaseMs: MEETING_CAPTURE_LEASE_MS,
+    recordedDurationMs: state.recordedDurationMs ?? 0,
+    finalization:
+      state.desired === "stopped"
+        ? state.finalized ||
+          grant.status === "complete" ||
+          (state.finalizationDeadline !== null &&
+            at.getTime() >= Date.parse(state.finalizationDeadline))
+          ? "complete"
+          : "pending"
+        : "none",
+    processing: state.processing ?? { status: "ready" },
     gaps: state.gaps,
     gapLimitReached: state.gapLimitReached,
     grantId: grant.id,
@@ -104,55 +120,11 @@ export class MeetingCaptureRepository {
       );
     return result.rows[0] ?? null;
   }
-  async links(db: DataContextDb, meetingId: string): Promise<CaptureLink[]> {
-    return (
-      await sql<CaptureLink>`SELECT * FROM app.meeting_capture_links WHERE meeting_id=${meetingId}::uuid AND status='pending' AND expires_at>now() ORDER BY created_at DESC LIMIT 20`.execute(
-        db.db
-      )
-    ).rows;
-  }
-  async link(db: DataContextDb, id: string, lock = false): Promise<CaptureLink | null> {
-    return (
-      (
-        await sql<CaptureLink>`SELECT * FROM app.meeting_capture_links WHERE id=${id}::uuid ${lock ? sql`FOR UPDATE` : sql``}`.execute(
-          db.db
-        )
-      ).rows[0] ?? null
-    );
-  }
-  async createLink(
-    db: DataContextDb,
-    input: {
-      meetingId: string;
-      deviceId: string;
-      deviceName: string;
-      verifierHash: string;
-      expiresAt: Date;
-    }
-  ): Promise<CaptureLink> {
-    // Per-owner transaction lock bounds concurrent bootstrap requests without any meeting access.
-    await sql`SELECT pg_advisory_xact_lock(hashtextextended(current_setting('app.actor_user_id'),2981))`.execute(
+  async renewClaim(db: DataContextDb, grant: CaptureGrant, deadline: Date) {
+    await sql`UPDATE app.meeting_capture_grants SET claim_expires_at=${deadline} WHERE id=${grant.id}::uuid AND status='approved' AND credential_hash IS NULL`.execute(
       db.db
     );
-    await sql`DELETE FROM app.meeting_capture_links WHERE expires_at<now()`.execute(db.db);
-    const count = await sql<{
-      count: string;
-    }>`SELECT count(*)::text AS count FROM app.meeting_capture_links`.execute(db.db);
-    if (Number(count.rows[0]?.count) >= 20)
-      throw new MeetingCaptureError("meeting_capture_limit", 413);
-    const result =
-      await sql<CaptureLink>`INSERT INTO app.meeting_capture_links (meeting_id,device_id,device_name,verifier_hash,expires_at) VALUES (${input.meetingId}::uuid,${input.deviceId}::uuid,${input.deviceName},${input.verifierHash},${input.expiresAt}) RETURNING *`.execute(
-        db.db
-      );
-    return result.rows[0]!;
-  }
-  async approve(db: DataContextDb, link: CaptureLink, sessionId: string, expiresAt: Date) {
-    await sql`INSERT INTO app.meeting_capture_grants (id,meeting_id,device_id,device_name,verifier_hash,session_id,status,created_at,expires_at) VALUES (${link.id}::uuid,${link.meeting_id}::uuid,${link.device_id}::uuid,${link.device_name},${link.verifier_hash},${sessionId}::uuid,'approved',${link.created_at},${expiresAt})`.execute(
-      db.db
-    );
-    await sql`UPDATE app.meeting_capture_links SET status='approved' WHERE id=${link.id}::uuid`.execute(
-      db.db
-    );
+    grant.claim_expires_at = deadline;
   }
   async activate(
     db: DataContextDb,
@@ -167,12 +139,28 @@ export class MeetingCaptureRepository {
   async save(db: DataContextDb, grant: CaptureGrant, state: CaptureStoredState) {
     if (Buffer.byteLength(JSON.stringify(state)) > 500000)
       throw new MeetingCaptureError("meeting_capture_limit", 413);
-    await sql`UPDATE app.meeting_capture_grants SET status=${state.desired === "revoked" ? "revoked" : grant.status},state_json=${JSON.stringify(state)} WHERE id=${grant.id}::uuid`.execute(
+    if (grant.status === "approved" && !grant.credential_hash && state.desired === "stopped")
+      state.finalized = true;
+    const status =
+      state.desired === "revoked"
+        ? "revoked"
+        : state.desired === "stopped" &&
+            (state.finalized ||
+              (state.observed?.phase === "stopped" &&
+                state.observed.generation === state.generation))
+          ? state.finalized
+            ? "complete"
+            : "finalizing"
+          : grant.status;
+    const serialized = JSON.stringify(state);
+    if (grant.state_json === serialized && grant.status === status) return;
+    await sql`UPDATE app.meeting_capture_grants SET status=${status},state_json=${serialized} WHERE id=${grant.id}::uuid`.execute(
       db.db
     );
-    grant.state_json = JSON.stringify(state);
-    if (state.desired === "revoked") grant.status = "revoked";
+    grant.state_json = serialized;
+    grant.status = status;
   }
+
   async revokeExpired(db: DataContextDb, meetingId: string, at: Date) {
     await sql`UPDATE app.meeting_capture_grants SET status='revoked' WHERE meeting_id=${meetingId}::uuid AND expires_at<=${at} AND status<>'revoked'`.execute(
       db.db
@@ -240,7 +228,7 @@ export class MeetingCaptureRepository {
     if (Number(ownerRecent.rows[0]?.count) >= 120)
       throw new MeetingCaptureError("meeting_capture_rate_limited", 429);
     const pending =
-      await sql`SELECT 1 FROM app.meeting_capture_receipts WHERE grant_id=${grant.id}::uuid AND kind='audio' AND result_json IS NULL LIMIT 1`.execute(
+      await sql`SELECT 1 FROM app.meeting_capture_receipts WHERE grant_id=${grant.id}::uuid AND kind='audio' AND metadata_json::jsonb->>'sourceId'=${input.sourceId} AND result_json IS NULL LIMIT 1`.execute(
         db.db
       );
     if (pending.rows.length) throw new MeetingCaptureError("meeting_capture_busy", 409);
@@ -274,8 +262,44 @@ export class MeetingCaptureRepository {
       }
     });
   }
-  async finish(db: DataContextDb, grantId: string, result: MeetingCaptureAudioReceipt) {
-    await sql`UPDATE app.meeting_capture_receipts SET result_json=${JSON.stringify(result)} WHERE grant_id=${grantId}::uuid AND request_key=${result.requestKey}::uuid AND result_json IS NULL`.execute(
+  async retry(
+    db: DataContextDb,
+    grantId: string,
+    receipt: CaptureReceipt,
+    at: Date
+  ): Promise<boolean> {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(current_setting('app.actor_user_id'),2982))`.execute(
+      db.db
+    );
+    const pending = await sql<{
+      count: string;
+    }>`SELECT count(*)::text AS count FROM app.meeting_capture_receipts WHERE kind='audio' AND result_json IS NULL AND created_at>${new Date(at.getTime() - 60000)}`.execute(
+      db.db
+    );
+    const metadata = JSON.parse(receipt.metadata_json) as { sourceId: string };
+    const sourcePending =
+      await sql`SELECT 1 FROM app.meeting_capture_receipts WHERE grant_id=${grantId}::uuid AND kind='audio' AND result_json IS NULL AND metadata_json::jsonb->>'sourceId'=${metadata.sourceId} LIMIT 1`.execute(
+        db.db
+      );
+    if (Number(pending.rows[0]?.count) >= 2 || sourcePending.rows.length)
+      throw new MeetingCaptureError("meeting_capture_busy", 409);
+    if (
+      (receipt.attempts ?? 1) >= 4 ||
+      at.getTime() - receipt.created_at.getTime() >= 60000 ||
+      (receipt.retry_at && receipt.retry_at > at)
+    )
+      return false;
+    const result =
+      await sql`UPDATE app.meeting_capture_receipts SET result_json=NULL,retry_at=NULL,attempts=attempts+1 WHERE grant_id=${grantId}::uuid AND request_key=${receipt.request_key}::uuid AND attempts<4 AND created_at>${new Date(at.getTime() - 60000)} AND (retry_at IS NULL OR retry_at<=${at}) AND result_json::jsonb->>'retryable'='true' RETURNING request_key`.execute(
+        db.db
+      );
+    return result.rows.length > 0;
+  }
+  async finish(db: DataContextDb, grantId: string, result: MeetingCaptureAudioReceipt, at: Date) {
+    const retryAt = result.retryable
+      ? new Date(at.getTime() + (result.retryAfterMs ?? 1000))
+      : null;
+    await sql`UPDATE app.meeting_capture_receipts SET result_json=${JSON.stringify(result)},retry_at=${retryAt} WHERE grant_id=${grantId}::uuid AND request_key=${result.requestKey}::uuid AND (result_json IS NULL OR result_json::jsonb->>'retryable'='true')`.execute(
       db.db
     );
   }
@@ -286,7 +310,7 @@ export class MeetingCaptureRepository {
     at: Date
   ): Promise<void> {
     const expired =
-      await sql<CaptureReceipt>`SELECT * FROM app.meeting_capture_receipts WHERE grant_id=${grant.id}::uuid AND kind='audio' AND result_json IS NULL AND created_at<=${new Date(at.getTime() - 60000)} ORDER BY created_at LIMIT 32`.execute(
+      await sql<CaptureReceipt>`SELECT * FROM app.meeting_capture_receipts WHERE grant_id=${grant.id}::uuid AND kind='audio' AND (result_json IS NULL OR result_json::jsonb->>'retryable'='true') AND created_at<=${new Date(at.getTime() - 60000)} ORDER BY created_at LIMIT 32`.execute(
         db.db
       );
     for (const receipt of expired.rows) {
@@ -312,13 +336,30 @@ export class MeetingCaptureRepository {
         },
         at
       );
-      await this.finish(db, grant.id, {
-        requestKey: receipt.request_key,
-        status: "failed",
-        code: "meeting_capture_interrupted"
-      });
+      await this.finish(
+        db,
+        grant.id,
+        {
+          requestKey: receipt.request_key,
+          status: "failed",
+          code: "meeting_capture_interrupted",
+          reason: "audio-expired",
+          stage: "dispatch",
+          retryable: false
+        },
+        at
+      );
     }
     if (expired.rows.length) await this.save(db, grant, state);
+  }
+  async hasPendingAudio(db: DataContextDb, grantId: string): Promise<boolean> {
+    return (
+      (
+        await sql`SELECT 1 FROM app.meeting_capture_receipts WHERE grant_id=${grantId}::uuid AND kind='audio' AND (result_json IS NULL OR result_json::jsonb->>'retryable'='true') LIMIT 1`.execute(
+          db.db
+        )
+      ).rows.length > 0
+    );
   }
   async transcriptHead(db: DataContextDb, meetingId: string) {
     const result = await sql<{

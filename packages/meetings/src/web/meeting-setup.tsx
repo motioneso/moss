@@ -1,48 +1,32 @@
-import { Link } from "react-router";
 import { useEffect, useRef } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, randomUuid } from "@moss/module-web-sdk";
-import { Button, Field, FormLabel, Note, SectionHead, RadioCardGroup, Switch } from "@moss/ui";
+import { Button, Field, FormLabel, SectionHead } from "@moss/ui";
 import type { CreateMeetingRecordInput } from "@moss/shared";
-import {
-  createMeeting,
-  getMeetingPreferences,
-  putMeetingPreferences,
-  meetingKeys
-} from "./client.js";
-import { CAPTURE_MODES, type CaptureMode } from "./capture-modes.js";
+import { createMeeting, meetingKeys } from "./client.js";
 import { captureKeys } from "./capture-client.js";
-import { newCaptureSession, type CaptureSession } from "./capture-session.js";
+import { newCaptureSession, startMeetingCapture, type CaptureSession } from "./capture-session.js";
+import { useSessionDraft } from "./session-draft.js";
+import { CaptureReady } from "./capture-ready.js";
+import { useReadyCapture } from "./capture-choice.js";
 
 interface SetupDraft {
   readonly title: string;
-  readonly mode: CaptureMode | null;
   readonly request: CreateMeetingRecordInput | null;
-  readonly defaultSaving?: boolean;
-  readonly createPending?: boolean;
+  readonly creating: boolean;
+  readonly error: string | null;
 }
 const setupKey = ["meetings", "setup-draft"] as const;
-
 export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) => void }) {
   const client = useQueryClient();
-  const form = useQuery<SetupDraft>({
-    queryKey: setupKey,
-    queryFn: () => ({ title: "", mode: null, request: null }),
-    initialData: { title: "", mode: null, request: null },
-    enabled: false,
-    gcTime: Infinity
-  });
-  const sessionEntry = useRef(client.getQueryCache().find({ queryKey: setupKey, exact: true }));
-  const sameSession = () =>
-    client.getQueryCache().find({ queryKey: setupKey, exact: true }) === sessionEntry.current;
-  const title = form.data.title;
-  const chosenMode = form.data.mode;
-  function updateForm(change: Partial<SetupDraft>) {
-    if (sameSession())
-      client.setQueryData<SetupDraft>(setupKey, (current) =>
-        current ? { ...current, ...change } : undefined
-      );
-  }
+  const form = useSessionDraft<SetupDraft>(setupKey, () => ({
+    title: "",
+    request: null,
+    creating: false,
+    error: null
+  }));
+  const ready = useReadyCapture();
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -50,170 +34,122 @@ export function MeetingSetup({ onCreated }: { readonly onCreated: (id: string) =
       active.current = false;
     };
   }, []);
-  const preferences = useQuery({
-    queryKey: meetingKeys.preferences,
-    queryFn: getMeetingPreferences
-  });
-  const mode = chosenMode ?? preferences.data?.defaultCaptureMode ?? null;
-  const saveDefault = useMutation({
-    mutationFn: putMeetingPreferences,
-    onMutate: () => updateForm({ defaultSaving: true }),
-    onSettled: () => updateForm({ defaultSaving: false }),
-    onSuccess: (saved) => {
-      if (sameSession()) client.setQueryData(meetingKeys.preferences, saved);
-    }
-  });
-  const titleValid =
-    title.trim().length > 0 &&
-    !title.includes("\0") &&
-    new TextEncoder().encode(title.trim()).length <= 240;
-  const create = useMutation({
-    mutationFn: createMeeting,
-    onSettled: () => updateForm({ createPending: false }),
-    onError: (error) => {
-      // A definite validation rejection has not created anything; let the person correct input.
-      if (error instanceof ApiError && error.status === 400) {
-        updateForm({ request: null });
-      }
-    },
-    onSuccess: ({ meeting, created }) => {
-      if (!sameSession()) return;
-      const selectedMode =
-        client.getQueryData<SetupDraft>(setupKey)?.mode ??
-        preferences.data?.defaultCaptureMode ??
-        null;
-      if (!client.getQueryData(captureKeys.session(meeting.id))) {
-        const captureSession = newCaptureSession();
-        client.setQueryData<CaptureSession>(captureKeys.session(meeting.id), {
-          ...captureSession,
-          choice: { ...captureSession.choice, mode: selectedMode }
+  const title = form.data.title;
+  const titleValid = !title.includes("\0") && new TextEncoder().encode(title.trim()).length <= 240;
+  const canStart =
+    !!ready.device &&
+    !ready.device.busy &&
+    !!ready.selection &&
+    ready.devices.data?.processingReady === true &&
+    !ready.devices.isError;
+  async function submit(record: boolean) {
+    const current = client.getQueryData<SetupDraft>(setupKey);
+    if (!current || current.creating || !titleValid || (record && !canStart)) return;
+    const request = current.request ?? {
+      title: current.title.trim() || "New meeting",
+      requestKey: randomUuid()
+    };
+    form.update((value) => ({ ...value, request, creating: true, error: null }));
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 12000);
+    try {
+      const { meeting, created } = await createMeeting(request, controller.signal);
+      if (!form.currentSession()) return;
+      if (created) client.setQueryData(meetingKeys.record(meeting.id), { meeting });
+      client.setQueryData<CaptureSession>(captureKeys.session(meeting.id), {
+        ...newCaptureSession(),
+        choice: ready.choice
+      });
+      form.update(() => ({ title: "", request: null, creating: false, error: null }));
+      void client.invalidateQueries({ queryKey: meetingKeys.history });
+      if (record && ready.device && ready.selection) {
+        void startMeetingCapture(client, meeting.id, meeting.title, {
+          deviceId: ready.device.deviceId,
+          connectionId: ready.device.connectionId,
+          expectedRevision: ready.device.revision,
+          selection: ready.selection,
+          requestKey: randomUuid()
+        }).then((started) => {
+          if (started) void ready.remember().catch(() => undefined);
         });
       }
-      updateForm({ request: null, title: "", mode: null });
-      if (created) client.setQueryData(meetingKeys.record(meeting.id), { meeting });
-      else void client.invalidateQueries({ queryKey: meetingKeys.record(meeting.id), exact: true });
-      void client.invalidateQueries({ queryKey: meetingKeys.history });
       if (active.current) onCreated(meeting.id);
+    } catch (error) {
+      form.update((value) => ({
+        ...value,
+        creating: false,
+        request: error instanceof ApiError && error.status === 400 ? null : value.request,
+        error:
+          "Couldn’t confirm the draft. Retry uses the same request so you won’t create a duplicate."
+      }));
+    } finally {
+      clearTimeout(deadline);
     }
-  });
-  function submit() {
-    const current = client.getQueryData<SetupDraft>(setupKey);
-    if (!current || current.createPending) return;
-    const input = current.request ?? { title: current.title.trim(), requestKey: randomUuid() };
-    updateForm({ request: input, createPending: true });
-    create.mutate(input);
   }
   return (
-    <>
-      <section className="meetings-section">
-        <SectionHead number="01" title="Set up your meeting" rule />
-        <div className="meetings-title-input">
-          <Field>
-            <FormLabel htmlFor="meeting-title">Meeting title</FormLabel>
-            <input
-              className="jds-input meetings-input"
-              id="meeting-title"
-              value={title}
-              maxLength={240}
-              disabled={create.isPending || form.data.createPending || form.data.request !== null}
-              onChange={(event) => {
-                updateForm({ title: event.target.value });
-              }}
-            />
-          </Field>
-        </div>
-        {title && !titleValid ? (
-          <p role="alert" className="jds-hint jds-hint--error">
-            Use a shorter title and remove any unsupported characters.
-          </p>
-        ) : null}
-        <RadioCardGroup
-          name="meeting-capture-mode"
-          ariaLabel="Capture mode"
-          value={mode}
-          options={CAPTURE_MODES}
-          onChange={(mode) => updateForm({ mode })}
-        />
-        <div className="meetings-actions">
-          <Switch
-            ariaLabel="Use this capture mode as my default"
-            label="Use this capture mode as my default"
-            checked={mode !== null && preferences.data?.defaultCaptureMode === mode}
-            disabled={
-              !mode || !preferences.isSuccess || saveDefault.isPending || form.data.defaultSaving
-            }
-            onChange={(checked) => {
-              if (client.getQueryData<SetupDraft>(setupKey)?.defaultSaving) return;
-              updateForm({ defaultSaving: true });
-              saveDefault.mutate({ defaultCaptureMode: checked ? mode : null });
+    <section className="meetings-section">
+      <SectionHead number="01" title="New meeting" rule />
+      <div className="meetings-title-input">
+        <Field>
+          <FormLabel htmlFor="meeting-title">Meeting title (optional)</FormLabel>
+          <input
+            className="jds-input meetings-input"
+            id="meeting-title"
+            value={title}
+            maxLength={240}
+            disabled={form.data.creating || !!form.data.request}
+            placeholder="New meeting"
+            onChange={(event) => {
+              const title = event.target.value;
+              form.update((current) => ({ ...current, title }));
             }}
           />
-        </div>
-        {preferences.isPending ? (
-          <p role="status" className="jds-hint">
-            Loading your capture default…
-          </p>
-        ) : null}
-        {preferences.isError ? (
-          <div role="alert">
-            <p className="jds-hint jds-hint--error">
-              Couldn’t load your capture default. You can still choose a mode for this setup.
-            </p>
-            <Button variant="link" onClick={() => void preferences.refetch()}>
-              Retry loading default
-            </Button>
-          </div>
-        ) : null}
-        {saveDefault.isPending ? (
-          <p role="status" className="jds-hint">
-            Saving your default…
-          </p>
-        ) : null}
-        {saveDefault.isError ? (
-          <p role="alert" className="jds-hint jds-hint--error">
-            Couldn’t save your default. Try the switch again.
-          </p>
-        ) : null}
-        {mode === "computer-audio" ? (
-          <Note variant="practical">
-            Computer audio can include other apps, media, and notifications.
-          </Note>
-        ) : null}
-      </section>
-      <section className="meetings-section">
-        <SectionHead number="02" title="Check the sources" rule />
-        <Note variant="practical">
-          <p id="meeting-capture-unavailable">
-            Create a draft, then connect Trail Marker on your Mac to choose sources and record. You
-            can also keep notes without recording.
-          </p>
-          <p>
-            Manage transcription and summaries in{" "}
-            <Link to="/settings?section=aiproviders">AI providers</Link>.
-          </p>
-        </Note>
-        {create.isError ? (
-          <p role="alert" className="jds-hint jds-hint--error">
-            Couldn’t create or confirm the draft. Correct any invalid title, or retry the same
-            request to avoid a duplicate.
-          </p>
-        ) : null}
-        <div className="meetings-actions">
-          <Button
-            onClick={submit}
-            disabled={create.isPending || form.data.createPending || !titleValid}
-          >
-            {create.isPending || form.data.createPending
-              ? "Creating draft…"
-              : create.isError || form.data.request
-                ? "Retry creating draft"
-                : "Create draft"}
-          </Button>
-          <Button disabled aria-describedby="meeting-capture-unavailable">
-            Start meeting
-          </Button>
-        </div>
-      </section>
-    </>
+        </Field>
+      </div>
+      {!titleValid ? (
+        <p role="alert" className="jds-hint jds-hint--error">
+          Use a shorter title and remove unsupported characters.
+        </p>
+      ) : null}
+      <CaptureReady
+        devices={ready.devices.data?.devices ?? []}
+        deviceId={ready.deviceId}
+        choice={ready.choice}
+        onDevice={ready.onDevice}
+        onChoice={ready.onChoice}
+        unavailable={ready.devices.isError}
+      />
+      {ready.devices.isPending ? (
+        <p role="status" className="jds-hint">
+          Checking your companion connection…
+        </p>
+      ) : null}
+      {ready.devices.data && !ready.devices.data.processingReady ? (
+        <p role="status" className="jds-hint">
+          Transcription unavailable. Check{" "}
+          <Link to="/settings?section=aiproviders">AI providers</Link>.
+        </p>
+      ) : null}
+      {form.data.error ? (
+        <p role="alert" className="jds-hint jds-hint--error">
+          {form.data.error}
+        </p>
+      ) : null}
+      <div className="meetings-actions">
+        <Button
+          disabled={form.data.creating || !titleValid || !canStart}
+          onClick={() => void submit(true)}
+        >
+          {form.data.creating ? "Starting…" : "Start meeting"}
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={form.data.creating || !titleValid}
+          onClick={() => void submit(false)}
+        >
+          {form.data.error ? "Retry creating draft" : "Create draft"}
+        </Button>
+      </div>
+    </section>
   );
 }

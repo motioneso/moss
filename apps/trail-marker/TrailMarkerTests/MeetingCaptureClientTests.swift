@@ -55,6 +55,40 @@ final class MeetingCaptureClientTests: XCTestCase {
         XCTAssertLessThanOrEqual(client.largestBufferedResponseBytes, MeetingCaptureClient.maximumResponseBytes)
     }
 
+    func testConnectionBootstrapRequiresIndependentProofBeforeAnyRequest() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MeetingCaptureFixtureProtocol.self]
+        let client = MeetingCaptureClient(instance: try InstanceURL.parse("https://moss.example").get(), configuration: config)
+        defer { client.close() }
+        let inventory = MeetingCaptureInventory(microphones: [], applications: [],
+            computerAudio: .init(available: false, excludedProcessTreeIds: []), microphonePermission: .unknown, systemAudioPermission: .unknown)
+        do {
+            _ = try await client.register(.init(connectionId: UUID().uuidString,
+                verifierHash: String(repeating: "a", count: 64), inventory: inventory),
+                companionCredential: "tm1_synthetic-fixture", recordingProof: "")
+            XCTFail("A legacy credential alone must not reach recorder connection bootstrap")
+        } catch { XCTAssertEqual(error as? MeetingHostError, .authorizationExpired) }
+    }
+
+    func testRetryAfterSupportsSecondsAndHTTPDateWithoutEarlyRetry() throws {
+        let url = try XCTUnwrap(URL(string: "https://moss.example/api/meetings/capture/status"))
+        let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 429, httpVersion: nil, headerFields: ["Retry-After": "120"]))
+        XCTAssertEqual(MeetingCaptureClient.retryDelay(response), 120000)
+        let dated = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 503, httpVersion: nil,
+            headerFields: ["Retry-After": "Tue, 06 Oct 2026 04:02:00 GMT"]))
+        XCTAssertEqual(MeetingCaptureClient.retryDelay(dated, now: try XCTUnwrap(ServerTime.parse("2026-10-06T04:00:00Z"))), 120000)
+    }
+
+    func testConnectionAndClaimWireNeverEmbedProofOrBearerInJSON() throws {
+        let claim = MeetingRecordingClaimBody(connectionId: "connection", verifier: String(repeating: "v", count: 43),
+            grantId: "grant", credentialHash: MeetingCaptureClient.verifierHash("mm1_generated-only-locally"))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(claim)) as? [String: Any])
+        XCTAssertEqual(Set(json.keys), Set(["connectionId", "verifier", "grantId", "credentialHash"]))
+        XCTAssertNil(json["credential"])
+        XCTAssertNil(json["recordingProof"])
+        XCTAssertEqual((json["credentialHash"] as? String)?.count, 64)
+    }
+
     func testCompanionCredentialCannotAuthorizeAudio() throws {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MeetingCaptureFixtureProtocol.self]

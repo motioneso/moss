@@ -7,6 +7,8 @@ Baseline: `12ff22bf0af2125f75eaf3b2b48363d95311fd1b`.
 Current migration numbering: see the [package migration note](../../../packages/meetings/README.md#migration-numbering).
 The numbered checkpoint descriptions below retain their historical evidence.
 
+The current next step is the approved [6 October reliability and connection repair](2026-10-06-2981-capture-reliability-and-connection.md). Owner hardware testing failed after the synthetic checkpoint; do not treat the older green runs below as native acceptance.
+
 ## Verified seams and decisions
 
 - Shared wire contracts are exported from `packages/shared/src/index.ts:20–27`;

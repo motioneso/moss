@@ -14,6 +14,7 @@ struct MeetingProcessRoot: Equatable {
     let process: MeetingProcessIdentity
     let bundlePath: String
     let label: String
+    var applicationId: String? = nil
 }
 
 /// Selected-app membership must satisfy both ancestry and the selected app's bundle boundary.
@@ -71,7 +72,8 @@ struct MeetingInventorySnapshot {
             return Resolved(selection: MeetingNativeSelection(microphoneDeviceID: microphone, output: nil), members: [], exclusions: [])
         case "selected-app":
             guard let id = choice.appProcessTreeId, let root = applications[id],
-                  choice.outputSourceId != nil, choice.scope == nil else { throw MeetingHostError.unavailable }
+                  choice.outputSourceId != nil, choice.scope == nil,
+                  choice.applicationId == nil || choice.applicationId == root.applicationId else { throw MeetingHostError.unavailable }
             let members = MeetingProcessScope.members(of: root, processes: processes)
             let ids = members.compactMap { audioObjects[$0.pid] }.sorted()
             guard !ids.isEmpty, !members.contains(where: { excluded.contains($0) }) else { throw MeetingHostError.unavailable }
@@ -88,8 +90,9 @@ struct MeetingInventorySnapshot {
             guard !ids.isEmpty else { throw MeetingHostError.unavailable }
             let selection = MeetingNativeSelection(microphoneDeviceID: microphone, output: .excludingProcesses(ids))
             try selection.validate()
-            return Resolved(selection: selection, members: [], exclusions: excluded,
-                outputRoutes: audioRoutes.filter { pair in !excluded.contains { $0.pid == pair.key } })
+            // Computer capture deliberately includes unrelated apps. Their process/route
+            // churn does not change the approved Moss exclusion or the tap's own route.
+            return Resolved(selection: selection, members: [], exclusions: excluded)
         default: throw MeetingHostError.unavailable
         }
     }
@@ -109,7 +112,7 @@ final class MeetingCaptureInventoryReader {
             let label = (try? string(device, selector: kAudioObjectPropertyName)) ?? "Microphone"
             guard label != "Moss meeting capture" else { continue }
             microphones[uid] = device
-            wireMicrophones.append(.init(deviceId: uid, sourceId: "microphone-\(device)", label: String(label.prefix(120))))
+            wireMicrophones.append(.init(deviceId: uid, sourceId: "microphone-\(MeetingCaptureClient.verifierHash(uid).prefix(24))", label: String(label.prefix(120))))
         }
         let processes = try processSnapshot()
         let byPID = Dictionary(uniqueKeysWithValues: processes.map { ($0.pid, $0) })
@@ -124,7 +127,7 @@ final class MeetingCaptureInventoryReader {
             }
             guard app.activationPolicy == .regular, !app.isTerminated else { continue }
             applications[process.key] = MeetingProcessRoot(process: process, bundlePath: bundle,
-                label: String((app.localizedName ?? "Application").prefix(120)))
+                label: String((app.localizedName ?? "Application").prefix(120)), applicationId: app.bundleIdentifier)
         }
         let excluded = MeetingProcessScope.exclusions(bundlePaths: mossBundles, processes: processes)
         var audioObjects: [Int32: AudioObjectID] = [:]
@@ -149,7 +152,7 @@ final class MeetingCaptureInventoryReader {
         let hasOwnExclusion = excluded.contains { $0.pid == ProcessInfo.processInfo.processIdentifier && audioObjects[$0.pid] != nil }
         let wireApps = applications.values.filter {
             MeetingProcessScope.members(of: $0, processes: processes).contains { audioObjects[$0.pid] != nil }
-        }.map { MeetingCaptureInventory.Application(appProcessTreeId: $0.process.key, label: $0.label) }
+        }.map { MeetingCaptureInventory.Application(appProcessTreeId: $0.process.key, label: $0.label, applicationId: $0.applicationId) }
         let wire = MeetingCaptureInventory(microphones: wireMicrophones.sorted { $0.label < $1.label },
             applications: wireApps.sorted { $0.label < $1.label },
             computerAudio: .init(available: hasOwnExclusion, excludedProcessTreeIds: excluded.map(\.key)),

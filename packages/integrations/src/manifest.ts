@@ -79,8 +79,8 @@ export const integrationsModuleManifest = {
       id: "integrations.connection_classifier_opt_in",
       description:
         "With a connection's classifier switch on, each tool on for chat answers quick requests " +
-        "once sorted and prepared. A kept-out tool stays out; a changed tool drops out until it " +
-        "is prepared again."
+        "once sorted and prepared, except look-up tools, which it never offers. A kept-out " +
+        "tool stays out; a changed tool drops out until prepared again."
     },
     {
       id: "integrations.connection_classifier_panel",

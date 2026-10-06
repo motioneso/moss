@@ -60,7 +60,7 @@ final class MeetingAudioBufferTests: XCTestCase {
         }
     }
     func testDurationCapAndExpiryHaveExactBoundaries() throws {
-        let ring = try buffer()
+        let ring = try MeetingAudioBuffer(source: .microphone, epoch: 1, originNanoseconds: 0)
         put(ring)
         XCTAssertFalse(ring.isBacklogged(nowNanoseconds: 29_999_999_999))
         XCTAssertTrue(ring.isBacklogged(nowNanoseconds: 30_000_000_000))
@@ -180,7 +180,7 @@ final class MeetingAudioBufferTests: XCTestCase {
         XCTAssertEqual(chunk.packet.endNanoseconds, 5_000_000_000)
     }
 
-    func testCallbackContentionReturnsBeforeControlIsReleasedAndLatchesFault() throws {
+    func testCallbackContentionReturnsBeforeControlIsReleasedAndReportsGap() throws {
         let ring = try buffer()
         let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
         let firstDone = expectation(description: "Initial sample copied")
@@ -196,17 +196,24 @@ final class MeetingAudioBufferTests: XCTestCase {
         XCTAssertEqual(entered.wait(timeout: .now() + 2), .success)
         DispatchQueue.global().async {
             ring.receive(hostTimeNanoseconds: 125_000, sampleRate: 8000, frameCount: 1, sampleAt: { _ in 1 })
-            ring.fail(.invalidFormat)
             contendedDone.fulfill()
         }
         wait(for: [contendedDone], timeout: 1)
         release.signal()
         wait(for: [firstDone], timeout: 2)
-        XCTAssertEqual(ring.failure, .bufferFull)
+        XCTAssertNil(ring.failure)
         XCTAssertEqual(ring.peek()?.samples, [0.5])
-        put(ring, at: 125_000, count: 1)
+        put(ring, at: 250_000, count: 1)
+        XCTAssertNil(ring.failure)
+        XCTAssertEqual(ring.drainCaptureGaps(), [MeetingAudioGap(source: .microphone, epoch: 1,
+            startNanoseconds: 125_000, endNanoseconds: 250_000, reason: .callbackContention)])
+        let beforeGap = try XCTUnwrap(ring.peekChunk(targetDurationNanoseconds: 1_000_000,
+            cutoffNanoseconds: nil, allowPartial: false))
+        XCTAssertEqual(beforeGap.packet.samples, [0.5])
+        XCTAssertEqual(beforeGap.throughSequence, 0)
         XCTAssertTrue(ring.acknowledge(sequence: 0))
-        XCTAssertNil(ring.peek())
+        XCTAssertEqual(ring.peek()?.startNanoseconds, 250_000)
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
     }
 
     func testDiscardReportsRetentionGapAndRejectsInvalidChunkDurations() throws {
@@ -247,7 +254,7 @@ final class MeetingAudioBufferTests: XCTestCase {
         }
         XCTAssertNil(ring.failure)
         XCTAssertEqual(ring.expire(nowNanoseconds: 64_000_000_000), [MeetingAudioGap(source: .output,
-            epoch: 3, startNanoseconds: 0, endNanoseconds: 4_000_000_001, reason: .expired)])
+            epoch: 3, startNanoseconds: 0, endNanoseconds: 4_000_000_000, reason: .expired)])
         XCTAssertNil(ring.peek())
         XCTAssertTrue(ring.expire(nowNanoseconds: 65_000_000_000).isEmpty)
     }
@@ -274,6 +281,118 @@ final class MeetingAudioBufferTests: XCTestCase {
         for next in separate {
             XCTAssertNil(MeetingAudioBuffer.coalescedGap(previous, next, toleranceNanoseconds: tolerance))
         }
+    }
+
+    func testHardwareSampleClockIgnoresHostJitterAndDriftForThousandsOfChunks() throws {
+        let ring = try buffer(samples: 1024, blocks: 2)
+        let origin: UInt64 = 1_000_000_123
+        var previousEnd = origin
+        for index in 0..<5000 {
+            let offset = UInt64(index * 512)
+            let nominal = try XCTUnwrap(MeetingAudioSampleClock.nanoseconds(frames: offset, sampleRate: 44_100))
+            // Alternating 2 ms timestamp jitter plus a gradual 5 ms drift. Neither loses samples.
+            let jitter: Int64 = index == 0 ? 0 : (index % 2 == 0 ? 2_000_000 : -2_000_000) + Int64(index * 1000)
+            let observed = UInt64(Int64(origin + nominal) + jitter)
+            ring.receive(sampleTime: Double(offset) - 512, hostTimeNanoseconds: observed,
+                         sampleRate: 44_100, frameCount: 512, sampleAt: { _ in 0.25 })
+            XCTAssertNil(ring.failure)
+            let packet = try XCTUnwrap(ring.peek())
+            XCTAssertEqual(packet.startNanoseconds, previousEnd)
+            XCTAssertEqual(packet.sampleOffset, offset)
+            XCTAssertEqual(packet.timelineOriginNanoseconds, origin)
+            previousEnd = packet.endNanoseconds
+            XCTAssertTrue(ring.acknowledge(sequence: packet.sequence))
+        }
+        XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 5000)
+        XCTAssertEqual(ring.diagnostics.sampleDiscontinuities, 0)
+        XCTAssertGreaterThan(ring.diagnostics.maximumHostClockDifferenceNanoseconds, 2_000_000)
+        XCTAssertEqual(previousEnd, origin + MeetingAudioSampleClock.nanoseconds(frames: 2_560_000, sampleRate: 44_100)!)
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+    }
+
+    func testUnknownHardwareSampleGapOrRepeatNeverBecomesInventedContinuity() throws {
+        for next in [Double(7), 9] {
+            let ring = try buffer()
+            ring.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 8, sampleAt: { _ in 1 })
+            ring.receive(sampleTime: next, hostTimeNanoseconds: 1_000_000, sampleRate: 8000, frameCount: 8, sampleAt: { _ in 2 })
+            XCTAssertEqual(ring.failure, .invalidTimestamp)
+            XCTAssertEqual(ring.diagnostics.sampleDiscontinuities, 1)
+            XCTAssertEqual(ring.peek()?.samples, Array(repeating: Float(1), count: 8))
+            XCTAssertTrue(ring.acknowledge(sequence: 0))
+            XCTAssertNil(ring.peek())
+        }
+    }
+
+    func testDroppedFinalCallbackSurvivesCloseWithoutAnotherCallback() throws {
+        let ring = try buffer()
+        put(ring)
+        ring.drop(sampleTime: 8, hostTimeNanoseconds: 1_000_000, sampleRate: 8000, frameCount: 8)
+        ring.close()
+        XCTAssertEqual(ring.drainCaptureGaps(cutoffNanoseconds: 1_500_000), [MeetingAudioGap(source: .microphone,
+            epoch: 1, startNanoseconds: 1_000_000, endNanoseconds: 1_500_000, reason: .callbackContention)])
+        XCTAssertNil(ring.failure)
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+    }
+
+    func testContentionTelemetryIsBoundedAndExhaustionIsExplicit() throws {
+        let ring = try buffer()
+        for index in 0..<64 {
+            ring.drop(sampleTime: Double(index), hostTimeNanoseconds: UInt64(index) * 125_000,
+                      sampleRate: 8000, frameCount: 1)
+        }
+        XCTAssertNil(ring.failure)
+        ring.drop(sampleTime: 64, hostTimeNanoseconds: 8_000_000, sampleRate: 8000, frameCount: 1)
+        XCTAssertEqual(ring.failure, .bufferFull)
+        XCTAssertEqual(ring.drainCaptureGaps().count, 1)
+        XCTAssertEqual(ring.diagnostics.droppedCallbacks, 64)
+        XCTAssertEqual(ring.diagnostics.dropMailboxOverflows, 1)
+    }
+
+    func testStopHonorsObservedHostBoundaryWhenSampleClockDrifts() throws {
+        let ring = try buffer()
+        ring.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 8, sampleAt: { _ in 1 })
+        ring.receive(sampleTime: 8, hostTimeNanoseconds: 1_500_000, sampleRate: 8000, frameCount: 8, sampleAt: { _ in 2 })
+        ring.close()
+        let packet = try XCTUnwrap(ring.peekChunk(targetDurationNanoseconds: 5_000_000_000,
+            cutoffNanoseconds: 2_000_000, allowPartial: true)?.packet)
+        XCTAssertEqual(packet.samples.count, 12, "Only four samples in the drifted callback precede Stop")
+        XCTAssertLessThanOrEqual(packet.endNanoseconds, 2_000_000)
+    }
+
+    func testHighRateCapacityWarnsBeforeItsShorterMemoryLimit() throws {
+        let capacity = MeetingAudioBuffer.effectiveCapacityNanoseconds(sampleRate: 192_000)
+        XCTAssertEqual(capacity, 10_922_666_667)
+        let ring = try MeetingAudioBuffer(source: .output, epoch: 1, originNanoseconds: 0)
+        ring.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 192_000, frameCount: 512, sampleAt: { _ in 0 })
+        XCTAssertFalse(ring.isBacklogged(nowNanoseconds: capacity / 2 - 1))
+        XCTAssertTrue(ring.isBacklogged(nowNanoseconds: capacity / 2))
+    }
+
+    func testFormatFailureDuringContentionKeepsItsReason() throws {
+        let ring = try buffer()
+        ring.receive(hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 1) { _ in
+            ring.fail(.invalidFormat)
+            return 0.5
+        }
+        XCTAssertEqual(ring.failure, .invalidFormat)
+        XCTAssertNil(ring.peek())
+    }
+
+    func testCaptureLeaseClosesAdmissionWithoutWaitingForControlThread() throws {
+        let lease = MeetingAudioLease(deadline: 1_000_000)
+        let ring = try MeetingAudioBuffer(source: .microphone, epoch: 1, originNanoseconds: 0,
+            sampleCapacity: 32, blockCapacity: 8, lease: lease)
+        ring.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 8, sampleAt: { _ in 1 })
+        var readPostLease = false
+        ring.receive(sampleTime: 8, hostTimeNanoseconds: 1_000_000, sampleRate: 8000, frameCount: 8,
+            sampleAt: { _ in readPostLease = true; return 2 })
+        XCTAssertFalse(readPostLease, "Expired lease must reject before reading samples")
+        XCTAssertEqual(ring.failure, .leaseExpired)
+        lease.update(deadline: 30_000_000_000)
+        ring.receive(sampleTime: 8, hostTimeNanoseconds: 1_000_000, sampleRate: 8000, frameCount: 8, sampleAt: { _ in 3 })
+        XCTAssertEqual(ring.peek()?.samples, [Float](repeating: 1, count: 8))
+        XCTAssertTrue(ring.acknowledge(sequence: 0))
+        XCTAssertNil(ring.peek(), "Renewing transport must not reopen expired admission")
     }
 
 }

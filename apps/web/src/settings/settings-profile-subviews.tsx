@@ -40,6 +40,7 @@ import {
   type ExportJobStatus
 } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
+import { RecordingCapabilities } from "../companion/recording-capabilities.js";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { formatDate, useUserLocale } from "../locale/locale-format.js";
 import { useFeedback } from "./settings-feedback.js";
@@ -261,8 +262,9 @@ export function MacCompanion() {
       />
       <Row
         name="How linking works"
-        desc="The Mac opens a page in your browser and asks for your approval. Approve it and the Mac gets a key of its own — never your password and never your browser session. That key lets it read which focus block you have on, report which app is in front while one is on, and receive a nudge decision. Nothing else."
+        desc="Approve the connection in this browser. A supported Mac also asks once for meeting recording access; recording begins only when you choose Start with named sources. It can read which focus block you have on, report the foreground app during focus, and receive nudge decisions. Focus, Backtrack and Meetings share this connection, while Backtrack keeps its separate consent settings. The Mac never receives your password or browser session."
       />
+      <RecordingCapabilities />
       <Row
         name="Where a linked Mac appears"
         desc="Under Active sessions below, by the name the Mac gave itself. Sign it out there to break the link."

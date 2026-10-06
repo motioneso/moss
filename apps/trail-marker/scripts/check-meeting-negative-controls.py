@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove two native audio guards with synthetic XCTest negative controls.
+"""Prove native audio guards with synthetic XCTest negative controls.
 
 Run only in an isolated macOS CI checkout after its normal positive tests. No
 capture adapter or permission flow is instantiated by the selected tests. Each
@@ -25,8 +25,8 @@ CONTROLS = (
     {
         "name": "closed-callback-admission",
         "test": "testPauseClosesAdmissionWithoutDiscardingPrePauseAudio",
-        "before": "guard accepting, storedFailure == nil, callbackFailures.value == 0 else { return }",
-        "after": "guard storedFailure == nil, callbackFailures.value == 0 else { return }",
+        "before": "    func close() {\n        closed.insert(1)\n        lock.lock()\n        accepting = false\n        lock.unlock()\n    }",
+        "after": "    func close() {}",
         "assertion": "XCTAssertNil failed",
     },
     {
@@ -35,6 +35,20 @@ CONTROLS = (
         "before": "peekChunk(targetDurationNanoseconds: nil, cutoffNanoseconds: cutoffNanoseconds,",
         "after": "peekChunk(targetDurationNanoseconds: nil, cutoffNanoseconds: nil,",
         "assertion": "XCTAssertNil failed",
+    },
+    {
+        "name": "hardware-sample-continuity",
+        "test": "testUnknownHardwareSampleGapOrRepeatNeverBecomesInventedContinuity",
+        "before": "guard nextSampleTime.map({ sampleTime == $0 }) ?? true,",
+        "after": "guard true,",
+        "assertion": "XCTAssertEqual failed",
+    },
+    {
+        "name": "finite-capture-lease",
+        "test": "testCaptureLeaseClosesAdmissionWithoutWaitingForControlThread",
+        "before": "guard host + duration <= deadline, clockOrigin + endOffset <= deadline else {",
+        "after": "guard host <= UInt64.max else {",
+        "assertion": "XCTAssertFalse failed",
     },
 )
 
@@ -255,7 +269,7 @@ def main():
             run_control(control, original, folder)
     finally:
         SOURCE.write_bytes(original)
-    print("Both native negative controls failed meaningfully and passed after byte-for-byte restoration.")
+    print("All native negative controls failed meaningfully and passed after byte-for-byte restoration.")
 
 
 if __name__ == "__main__":

@@ -3,6 +3,14 @@ import type pg from "pg";
 import { isUuid } from "@moss/db";
 import { toWebHeaders } from "./headers.js";
 
+export class SessionBindingError extends Error {
+  readonly httpStatus = 403;
+  constructor() {
+    super("Session binding unavailable");
+    this.name = "SessionBindingError";
+  }
+}
+
 export interface BrowserSessionBinding {
   readonly actorUserId: string;
   readonly requestId: string;
@@ -35,7 +43,7 @@ export function createSessionBindingsService(deps: {
   now?: () => Date;
 }): SessionBindingsService {
   const now = deps.now ?? (() => new Date());
-  const unavailable = () => new Error("Session binding unavailable");
+  const unavailable = () => new SessionBindingError();
   async function session(actorUserId: string, sessionId: string) {
     const result = await deps.pool.query<{ expires_at: Date }>(
       `SELECT s.expires_at FROM app.better_auth_sessions s JOIN app.users u ON u.id=s.user_id

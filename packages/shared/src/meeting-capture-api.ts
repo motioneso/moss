@@ -5,10 +5,16 @@ export const MEETING_CAPTURE_CREDENTIAL_PREFIX = "mm1_";
 export const MEETING_CAPTURE_MAX_AUDIO_BYTES = 3840000;
 export const MEETING_CAPTURE_MAX_CLIP_MS = 10000;
 export const MEETING_CAPTURE_FINALIZATION_MS = 60000;
+export const MEETING_CAPTURE_LEASE_MS = 30000;
+export const MEETING_CAPTURE_CLAIM_MS = 60000;
 export type MeetingCapturePermission = "granted" | "denied" | "unknown";
 export interface MeetingCaptureInventory {
   readonly microphones: readonly { deviceId: string; sourceId: string; label: string }[];
-  readonly applications: readonly { appProcessTreeId: string; label: string }[];
+  readonly applications: readonly {
+    appProcessTreeId: string;
+    applicationId?: string;
+    label: string;
+  }[];
   readonly computerAudio: { available: boolean; excludedProcessTreeIds: readonly string[] };
   readonly microphonePermission: MeetingCapturePermission;
   readonly systemAudioPermission: MeetingCapturePermission;
@@ -34,6 +40,12 @@ export interface MeetingCaptureGap {
     | "discarded";
 }
 export interface MeetingCaptureState {
+  readonly revision?: string;
+  readonly transcriptRevision?: number;
+  readonly leaseMs?: number;
+  readonly recordedDurationMs?: number;
+  readonly finalization?: "none" | "pending" | "complete";
+  readonly processing?: MeetingCaptureProcessingState;
   readonly gaps: readonly MeetingCaptureGap[];
   readonly gapLimitReached: boolean;
   readonly grantId: string;
@@ -84,6 +96,9 @@ export type MeetingCaptureRedeemResult =
     };
 export interface MeetingCaptureStatusInput {
   readonly gaps?: readonly MeetingCaptureGap[];
+  readonly finalized?: boolean;
+  /** Native acknowledged cumulative recording time, excluding paused/idle time. */
+  readonly recordedDurationMs?: number;
   readonly meetingId: string;
   readonly grantId: string;
   readonly inventory: MeetingCaptureInventory;
@@ -117,10 +132,122 @@ export interface MeetingCaptureAudioReceipt {
   readonly status: "pending" | "saved" | "failed";
   readonly transcriptRevision?: number;
   readonly code?: string;
+  readonly reason?: string;
+  readonly stage?: MeetingCaptureFailureStage;
+  readonly retryable?: boolean;
+  readonly retryAfterMs?: number;
+  readonly httpStatus?: number;
   readonly replayed?: boolean;
 }
 export interface MeetingCaptureBrowserStatus {
+  readonly revision?: string;
+  readonly retryAfterMs?: number;
   readonly pendingLinks: readonly MeetingCapturePendingLink[];
   readonly capture: MeetingCaptureState | null;
   readonly processingReady: boolean;
+}
+
+export type MeetingCaptureFailureStage =
+  | "configuration"
+  | "dispatch"
+  | "response"
+  | "validation"
+  | "persistence"
+  | "authorization";
+export interface MeetingCaptureProcessingFailure {
+  readonly code: string;
+  readonly reason: string;
+  readonly stage: MeetingCaptureFailureStage;
+  readonly retryable: boolean;
+  readonly retryAfterMs?: number;
+  readonly httpStatus?: number;
+}
+export interface MeetingCaptureProcessingState {
+  readonly status: "ready" | "delayed";
+  readonly reason?: string;
+  readonly stage?: MeetingCaptureFailureStage;
+  readonly retryable?: boolean;
+  readonly retryAfterMs?: number;
+  readonly httpStatus?: number;
+}
+export interface MeetingCaptureConnectionInput {
+  readonly connectionId: string;
+  readonly verifierHash: string;
+  readonly inventory: MeetingCaptureInventory;
+}
+export interface MeetingCaptureConnectionResult {
+  readonly connectionId: string;
+  readonly revision: number;
+  readonly leaseMs: number;
+  readonly expiresAt: string;
+}
+export interface MeetingCaptureDevice {
+  readonly busy?: boolean;
+  readonly capturePhase?: "starting" | "recording" | "paused" | "finalizing" | null;
+  readonly finalizationDeadline?: string | null;
+  readonly deviceId: string;
+  readonly deviceName: string;
+  readonly connectionId: string;
+  readonly revision: number;
+  readonly capabilityRevision: number;
+  readonly inventory: MeetingCaptureInventory;
+  readonly lastSeenAt: string;
+  readonly expiresAt: string;
+}
+export interface MeetingCaptureDevicesResult {
+  readonly devices: readonly MeetingCaptureDevice[];
+  readonly processingReady: boolean;
+}
+export interface MeetingCaptureStartInput {
+  readonly deviceId: string;
+  readonly connectionId: string;
+  readonly expectedRevision: number;
+  readonly requestKey: string;
+  readonly selection: MeetingCaptureSelection;
+}
+export interface MeetingCaptureCommandsInput {
+  readonly connectionId: string;
+  readonly verifier: string;
+  readonly revision?: string;
+  readonly waitMs?: number;
+}
+export interface MeetingCaptureCommandsResult {
+  readonly revision: string;
+  readonly retryAfterMs: number;
+  readonly command: null | {
+    readonly meetingId: string;
+    readonly grantId: string;
+    readonly ownerUserId: string;
+    readonly generation: number;
+    readonly capabilityRevision: number;
+    /** The deadline to claim this explicit Start. */
+    readonly expiresAt: string;
+    readonly selection: MeetingCaptureSelection;
+  };
+}
+export interface MeetingCaptureClaimInput {
+  readonly connectionId: string;
+  readonly verifier: string;
+  readonly grantId: string;
+  /** SHA256 hex digest of the complete, native-created mm1 bearer. */
+  readonly credentialHash: string;
+}
+export interface MeetingCaptureClaimResult {
+  readonly meetingId: string;
+  readonly grantId: string;
+  readonly expiresAt: string;
+  readonly capture: MeetingCaptureState;
+}
+
+export type MeetingCaptureDevicesResponse = MeetingCaptureDevicesResult;
+
+export interface MeetingCaptureCancelStartInput {
+  readonly deviceId: string;
+  readonly connectionId: string;
+  /** Original explicit Start key. Cancels even when Start has not reached the server. */
+  readonly requestKey: string;
+}
+export interface MeetingCaptureCancelStartResult {
+  readonly cancelled: true;
+  readonly capture: MeetingCaptureState | null;
 }

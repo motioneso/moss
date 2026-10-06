@@ -107,6 +107,8 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
         );
+      if (path === "/api/meetings/capture/devices")
+        return new Response(JSON.stringify({ devices: [], processingReady: false }));
       if (!path.startsWith("/api/meetings/records/"))
         throw new Error(`Unexpected unit request: ${path}`);
       if (path.endsWith("/capture"))
@@ -401,49 +403,15 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       vi.mocked(api.createMeeting).mock.calls[0]?.[0]
     );
   });
-  it.each([false, true])(
-    "carries the explicit setup mode into capture (override: %s)",
-    async (override) => {
-      vi.mocked(api.getMeetingPreferences).mockResolvedValue({
-        defaultCaptureMode: "selected-app"
-      });
-      vi.mocked(api.createMeeting).mockResolvedValue({ meeting, created: true });
-      await mount("/meetings");
-      await act(async () => {
-        renderer.root
-          .findByProps({ id: "meeting-title" })
-          .props.onChange({ target: { value: "Design review" } });
-        if (override)
-          renderer.root.findByProps({ type: "radio", value: "microphone-only" }).props.onChange();
-      });
-      await click("Create draft");
-      expect(client.getQueryData<CaptureSession>(captureKeys.session(meeting.id))?.choice).toEqual({
-        mode: override ? "microphone-only" : "selected-app",
-        microphoneId: "",
-        applicationId: "",
-        notice: false
-      });
-      expect(api.putMeetingPreferences).not.toHaveBeenCalled();
-    }
-  );
-  it("never saves a default just by choosing a mode; explicit switch saves it", async () => {
-    vi.mocked(api.putMeetingPreferences).mockResolvedValue({ defaultCaptureMode: "selected-app" });
+  it("carries a remembered mode into a notes draft without starting capture", async () => {
+    vi.mocked(api.getMeetingPreferences).mockResolvedValue({ defaultCaptureMode: "selected-app" });
+    vi.mocked(api.createMeeting).mockResolvedValue({ meeting, created: true });
     await mount("/meetings");
-    await act(async () =>
-      renderer.root.findByProps({ type: "radio", value: "selected-app" }).props.onChange()
+    await click("Create draft");
+    expect(client.getQueryData<CaptureSession>(captureKeys.session(meeting.id))?.choice.mode).toBe(
+      "selected-app"
     );
-    await flush();
     expect(api.putMeetingPreferences).not.toHaveBeenCalled();
-    await act(async () =>
-      renderer.root
-        .findByProps({ "aria-label": "Use this capture mode as my default" })
-        .props.onChange({ target: { checked: true } })
-    );
-    await flush();
-    expect(api.putMeetingPreferences).toHaveBeenCalledWith(
-      { defaultCaptureMode: "selected-app" },
-      expect.anything()
-    );
   });
   it("remounts with edits retained only in the authenticated query client", async () => {
     await mount();

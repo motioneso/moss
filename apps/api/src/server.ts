@@ -1,3 +1,4 @@
+import { recordingLoggerOptions } from "./recording-logger-options.js";
 import { createHash, randomUUID } from "node:crypto";
 
 import helmet from "@fastify/helmet";
@@ -247,7 +248,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   const dataContext = new DataContextRunner(appDb);
   const aiRepository = new AiRepository();
   const server = Fastify({
-    logger: options.logger ?? true,
+    logger: recordingLoggerOptions(options.logger),
     // Honor XFF only when an explicit opt-in confirms a trusted reverse proxy is in
     // front. Without this, XFF is attacker-controlled and must not key the rate limiter.
     trustProxy
@@ -573,6 +574,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       meetingCaptureAuthorization: {
         resolveBrowser: (input) => authRuntime.sessionBindings.resolveBrowser(input),
         resolveCompanion: (input) => authRuntime.companionDevices.resolve(input),
+        resolveRecording: (input) => authRuntime.recordingCapabilities.resolve(input),
+        assertRecordingBinding: (input) => authRuntime.recordingCapabilities.assertLive(input),
         assertBinding: (input) => authRuntime.sessionBindings.assertLive(input),
         device: (input) => authRuntime.sessionBindings.device(input),
         trustedOrigins: authRuntime.trustedOrigins

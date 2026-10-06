@@ -146,6 +146,8 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
         );
+      if (path === "/api/meetings/capture/devices")
+        return new Response(JSON.stringify({ devices: [], processingReady: false }));
       if (path.endsWith("/capture"))
         return new Response(
           JSON.stringify({ pendingLinks: [], capture: null, processingReady: false })

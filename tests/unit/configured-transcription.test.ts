@@ -98,6 +98,109 @@ afterEach(() => {
 });
 
 describe("configured timestamped transcription", () => {
+  it("retries a response-body connection failure without retaining transport text", async () => {
+    const h = setup();
+    const input = await h.input();
+    const activity = vi.fn();
+    installModelActivityRecorder(activity);
+    h.fetch.mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.error(new TypeError("private transcript synthetic-secret"));
+          }
+        })
+      )
+    );
+    const error = await h.transcribe(actor, input).catch((failure: unknown) => failure);
+    expect(error).toMatchObject({ reason: "provider-network", stage: "response", retryable: true });
+    expect(activity).toHaveBeenCalledWith(
+      expect.objectContaining({ failureCode: "provider_down" })
+    );
+    expect(JSON.stringify([error, activity.mock.calls])).not.toMatch(
+      /private transcript|synthetic-secret/
+    );
+  });
+  it.each([
+    [429, "provider-rate-limited", true, "rate_limited"],
+    [503, "provider-unavailable", true, "provider_down"],
+    [401, "provider-authentication", false, "auth_failed"],
+    [400, "provider-response-invalid", false, "bad_shape"]
+  ] as const)(
+    "describes HTTP %i failures without provider content",
+    async (status, reason, retryable, activityCode) => {
+      const h = setup();
+      const input = await h.input();
+      const activity = vi.fn();
+      installModelActivityRecorder(activity);
+      h.fetch.mockResolvedValue(
+        new Response("private transcript synthetic-secret", {
+          status,
+          headers: { "retry-after": "7" }
+        })
+      );
+      const error = await h.transcribe(actor, input).catch((failure: unknown) => failure);
+      expect(error).toMatchObject({
+        code: "failed",
+        reason,
+        stage: "response",
+        retryable,
+        httpStatus: status
+      });
+      if (retryable) expect(error).toMatchObject({ retryAfterMs: 7000 });
+      expect(activity).toHaveBeenCalledWith(expect.objectContaining({ failureCode: activityCode }));
+      expect(JSON.stringify([error, activity.mock.calls])).not.toMatch(
+        /private transcript|synthetic-secret/
+      );
+      expect(h.fetch).toHaveBeenCalledTimes(1);
+    }
+  );
+  it("distinguishes invalid provider timestamps from a network failure", async () => {
+    const h = setup();
+    const input = await h.input();
+    h.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          text: "private transcript",
+          segments: [{ start: 4, end: 2, text: "private transcript" }]
+        })
+      )
+    );
+    await expect(h.transcribe(actor, input)).rejects.toMatchObject({
+      reason: "provider-response-invalid",
+      stage: "validation",
+      retryable: false
+    });
+    h.fetch.mockRejectedValue(new Error("private transcript synthetic-secret"));
+    await expect(h.transcribe(actor, input)).rejects.toMatchObject({
+      reason: "provider-network",
+      stage: "dispatch",
+      retryable: true
+    });
+  });
+  it("distinguishes the provider deadline from explicit capture cancellation", async () => {
+    const deadline = new AbortController();
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
+    const h = setup();
+    const input = await h.input();
+    h.fetch.mockImplementation(() => new Promise<Response>(() => {}));
+    const pending = h.transcribe(actor, input);
+    const assertion = expect(pending).rejects.toMatchObject({
+      code: "failed",
+      reason: "provider-timeout",
+      retryable: true
+    });
+    await vi.waitFor(() => expect(h.fetch).toHaveBeenCalledOnce());
+    deadline.abort(new DOMException("synthetic deadline", "TimeoutError"));
+    await assertion;
+    await expect(
+      h.transcribe(actor, { ...input, signal: AbortSignal.abort() })
+    ).rejects.toMatchObject({
+      code: "interrupted",
+      reason: "cancelled",
+      retryable: false
+    });
+  });
   it("revalidates a provider changed while waiting for final dispatch admission", async () => {
     const h = setup();
     const input = await h.input();

@@ -168,3 +168,8 @@
     display: grid;
   }
 }
+
+.meetings-recording-strip {
+  padding: var(--space-3) var(--space-4);
+  min-width: 0;
+}

@@ -2,14 +2,16 @@ import CryptoKit
 import Foundation
 
 /// A dedicated ephemeral transport: no cookies, redirects, disk cache, or provider credentials.
-/// tm1 is accepted only by the two identity bootstrap methods, never capture methods.
+/// Identity bootstrap also requires the independent recording proof; capture uses per-Start mm1.
 final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
     static let maximumResponseBytes = 262144
+    static let requestDeadline: TimeInterval = 12
     private struct PendingResponse {
         var bytes = Data()
         var response: URLResponse?
         var failure: Error?
         let complete: (Data?, URLResponse?, Error?) -> Void
+        let deadline: DispatchWorkItem
     }
     private let lock = NSLock()
     private var pending: [Int: PendingResponse] = [:]
@@ -30,8 +32,8 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
         config.urlCredentialStorage = nil
         config.urlCache = nil
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        config.timeoutIntervalForRequest = 8
-        config.timeoutIntervalForResource = 50
+        config.timeoutIntervalForRequest = Self.requestDeadline
+        config.timeoutIntervalForResource = 30
         session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }
 
@@ -41,17 +43,29 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
         SHA256.hash(data: Data(verifier.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
-    func link(meetingId: String, verifier: String, companionCredential: String) async throws -> MeetingCaptureLink {
-        struct Body: Encodable { let meetingId: String; let verifierHash: String }
-        guard companionCredential.hasPrefix("tm1_") else { throw MeetingHostError.authorizationExpired }
-        return try await post("link", body: Body(meetingId: meetingId, verifierHash: Self.verifierHash(verifier)), credential: companionCredential)
+    func register(_ body: MeetingRecordingConnectionBody, companionCredential: String,
+                  recordingProof: String) async throws -> MeetingRecordingConnectionReply {
+        try checkBootstrap(companionCredential, proof: recordingProof)
+        return try await post("connection", body: body, credential: companionCredential, proof: recordingProof)
     }
 
-    func redeem(meetingId: String, challengeId: String, verifier: String,
-                companionCredential: String) async throws -> MeetingCaptureRedemption {
-        struct Body: Encodable { let meetingId: String; let challengeId: String; let verifier: String }
-        guard companionCredential.hasPrefix("tm1_") else { throw MeetingHostError.authorizationExpired }
-        return try await post("redeem", body: Body(meetingId: meetingId, challengeId: challengeId, verifier: verifier), credential: companionCredential)
+    func commands(_ body: MeetingRecordingCommandsBody, companionCredential: String,
+                  recordingProof: String) async throws -> MeetingRecordingCommandsReply {
+        try checkBootstrap(companionCredential, proof: recordingProof)
+        return try await post("commands", body: body, credential: companionCredential, proof: recordingProof)
+    }
+
+    func claim(_ body: MeetingRecordingClaimBody, companionCredential: String,
+               recordingProof: String) async throws -> MeetingRecordingClaimReply {
+        try checkBootstrap(companionCredential, proof: recordingProof)
+        return try await post("claim", body: body, credential: companionCredential, proof: recordingProof)
+    }
+
+    private func checkBootstrap(_ credential: String, proof: String) throws {
+        guard credential.hasPrefix("tm1_"), proof.count == 43,
+              proof.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }) else {
+            throw MeetingHostError.authorizationExpired
+        }
     }
 
     func status(_ body: MeetingCaptureStatusBody, credential: String) async throws -> MeetingCaptureReply {
@@ -69,7 +83,7 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
     func beginAudio(_ body: MeetingCaptureAudioBody, credential: String,
                     completion: @escaping (Result<MeetingCaptureReceipt, Error>) -> Void) throws -> URLSessionDataTask {
         try checkMeetingCredential(credential)
-        let request = try makeRequest("audio", body: body, credential: credential, timeout: 45)
+        let request = try makeRequest("audio", body: body, credential: credential, timeout: 25)
         return begin(request) { data, response, error in
             completion(Self.decode(data: data, response: response, error: error))
         }
@@ -79,8 +93,9 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
         guard credential.hasPrefix("mm1_") else { throw MeetingHostError.authorizationExpired }
     }
 
-    private func post<Body: Encodable, Reply: Decodable>(_ path: String, body: Body, credential: String) async throws -> Reply {
-        let request = try makeRequest(path, body: body, credential: credential)
+    private func post<Body: Encodable, Reply: Decodable>(_ path: String, body: Body, credential: String,
+                                                       proof: String? = nil) async throws -> Reply {
+        let request = try makeRequest(path, body: body, credential: credential, proof: proof)
         do {
             return try await withCheckedThrowingContinuation { continuation in
                 _ = begin(request) { data, response, error in
@@ -93,13 +108,14 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
     }
 
     private func makeRequest<Body: Encodable>(_ path: String, body: Body, credential: String,
-                                               timeout: TimeInterval = 8) throws -> URLRequest {
+                                               timeout: TimeInterval = MeetingCaptureClient.requestDeadline, proof: String? = nil) throws -> URLRequest {
         var request = URLRequest(url: instance.endpoint("/api/meetings/capture/\(path)"))
         request.httpMethod = "POST"
         request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(credential)", forHTTPHeaderField: "Authorization")
+        if let proof { request.setValue(proof, forHTTPHeaderField: "X-Moss-Recording-Proof") }
         request.httpBody = try JSONEncoder().encode(body)
         return request
     }
@@ -109,6 +125,9 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
         if error != nil { return .failure(MeetingHostError.network) }
         guard let response = response as? HTTPURLResponse else { return .failure(MeetingHostError.invalidResponse) }
         if response.statusCode == 401 || response.statusCode == 403 { return .failure(MeetingHostError.authorizationExpired) }
+        if response.statusCode == 429 || (500...599).contains(response.statusCode) {
+            return .failure(MeetingHostError.retryAfter(milliseconds: Self.retryDelay(response)))
+        }
         guard (200...299).contains(response.statusCode) else { return .failure(MeetingHostError.rejected) }
         guard let data, data.count <= maximumResponseBytes, let reply = try? JSONDecoder().decode(Reply.self, from: data) else {
             return .failure(MeetingHostError.invalidResponse)
@@ -116,12 +135,30 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
         return .success(reply)
     }
 
+    static func retryDelay(_ response: HTTPURLResponse, now: Date = Date()) -> UInt64 {
+        let value = response.value(forHTTPHeaderField: "Retry-After") ?? ""
+        let seconds: Double
+        if let number = Double(value), number.isFinite { seconds = number }
+        else {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+            seconds = formatter.date(from: value)?.timeIntervalSince(now) ?? 2
+        }
+        return UInt64(min(86400, max(1, seconds)) * 1000)
+    }
+
     private func begin(_ request: URLRequest,
                        complete: @escaping (Data?, URLResponse?, Error?) -> Void) -> URLSessionDataTask {
         let task = session.dataTask(with: request)
+        // URLSession's request timeout is an idle-data timeout. Enforce an absolute bound too,
+        // so a trickling response cannot hold control beyond the finite capture lease.
+        let deadline = DispatchWorkItem { [weak task] in task?.cancel() }
         lock.lock()
-        pending[task.taskIdentifier] = PendingResponse(complete: complete)
+        pending[task.taskIdentifier] = PendingResponse(complete: complete, deadline: deadline)
         lock.unlock()
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + request.timeoutInterval, execute: deadline)
         task.resume()
         return task
     }
@@ -157,6 +194,7 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
         lock.lock()
         let entry = pending.removeValue(forKey: task.taskIdentifier)
         lock.unlock()
+        entry?.deadline.cancel()
         entry?.complete(entry?.bytes, entry?.response, entry?.failure ?? error)
     }
 

@@ -11,6 +11,7 @@ struct MeetingCaptureInventory: Codable, Equatable {
     struct Application: Codable, Equatable {
         let appProcessTreeId: String
         let label: String
+        var applicationId: String? = nil
     }
     struct ComputerAudio: Codable, Equatable {
         let available: Bool
@@ -34,6 +35,7 @@ struct MeetingCaptureChoice: Codable, Equatable {
     let outputSourceId: String?
     let appProcessTreeId: String?
     let scope: Scope?
+    var applicationId: String? = nil
 }
 struct MeetingCaptureObserved: Codable, Equatable {
     let generation: Int
@@ -57,6 +59,12 @@ struct MeetingRemoteCapture: Decodable {
     let elapsedMs: UInt64
     let gaps: [MeetingCaptureGap]?
     let gapLimitReached: Bool?
+    var revision: String? = nil
+    var recordedDurationMs: UInt64? = nil
+    var finalization: String? = nil
+    var processing: MeetingProcessingStatus? = nil
+    var transcriptRevision: Int? = nil
+    var leaseMs: UInt64? = nil
 
     func validate() throws {
         guard generation >= 0, generation <= 9_007_199_254_740_991, epoch <= 64,
@@ -66,27 +74,19 @@ struct MeetingRemoteCapture: Decodable {
     }
 }
 struct MeetingCaptureReply: Decodable { let capture: MeetingRemoteCapture }
-struct MeetingCaptureLink: Decodable {
-    let challengeId: String
-    let meetingId: String
-    let deviceId: String
-    let expiresAt: String
-}
-struct MeetingCaptureRedemption: Decodable {
-    let status: String
-    let credential: String?
-    let grantId: String?
-    let expiresAt: String?
-}
 struct MeetingCaptureReceipt: Decodable {
     let requestKey: String
     let status: String
     let code: String?
+    var reason: String? = nil
+    var stage: String? = nil
+    var retryable: Bool? = nil
+    var retryAfterMs: UInt64? = nil
 
     /// Both successful processing and a terminal processing failure release transient audio.
     /// An unrelated receipt or pending work never acknowledges this request's packet.
     func releasesAudio(matching expectedKey: String) -> Bool {
-        requestKey == expectedKey && ["saved", "failed"].contains(status)
+        requestKey == expectedKey && (status == "saved" || (status == "failed" && retryable != true))
     }
 }
 struct MeetingCaptureStatusBody: Encodable {
@@ -95,6 +95,8 @@ struct MeetingCaptureStatusBody: Encodable {
     let inventory: MeetingCaptureInventory
     let observed: MeetingCaptureObserved
     var gaps: [MeetingCaptureGap] = []
+    var finalized: Bool? = nil
+    var recordedDurationMs: UInt64? = nil
 }
 struct MeetingCaptureControlBody: Encodable {
     let meetingId: String
@@ -119,18 +121,25 @@ struct MeetingCaptureAudioBody: Encodable {
 
 enum MeetingHostError: Error, Equatable {
     case invalidActivation, wrongInstance, unavailable, permissionDenied, sourceChanged
-    case authorizationExpired, rejected, network, invalidResponse, cleanupFailed
+    case authorizationExpired, rejected, network, invalidResponse, cleanupFailed, bufferExhausted
+    case retryAfter(milliseconds: UInt64)
+    var retryDelayMilliseconds: UInt64? {
+        if case .retryAfter(let milliseconds) = self { return milliseconds }
+        return nil
+    }
     var message: String {
         switch self {
-        case .invalidActivation: return "Open this meeting from Moss to prepare capture."
-        case .wrongInstance: return "Link Trail Marker to the same Moss instance before preparing this meeting."
-        case .unavailable: return "That audio source is unavailable. Choose a current source and press Record again."
-        case .permissionDenied: return "Allow microphone access in System Settings, then prepare this meeting again."
-        case .sourceChanged: return "An audio source changed. Capture has stopped. Check the source and press Record again."
-        case .authorizationExpired: return "Meeting approval ended. Open this meeting from Moss and approve this Mac again."
+        case .invalidActivation: return "Open this meeting from Moss to choose audio sources."
+        case .wrongInstance: return "Link Trail Marker to the same Moss instance before starting this meeting."
+        case .unavailable: return "That audio source is unavailable. Choose an available source in Moss."
+        case .permissionDenied: return "Allow microphone access in System Settings, then press Start in Moss."
+        case .sourceChanged: return "An audio source changed. Capture has stopped. Check the source and press Resume in Moss."
+        case .authorizationExpired: return "Meeting approval ended. Reconnect this Mac in Moss before recording again."
         case .rejected: return "Moss did not accept the capture request. Check this meeting in Moss."
-        case .network: return "Moss is unreachable. Capture is paused. Reconnect and press Record again."
+        case .network: return "Moss is unreachable. Capture is paused. Reconnect and press Resume in Moss."
         case .invalidResponse: return "Moss returned an incompatible meeting response. Update both apps before trying again."
+        case .bufferExhausted: return "Audio memory reached its limit. Capture is paused. Reconnect and press Resume in Moss."
+        case .retryAfter: return "Moss is temporarily busy. Capture continues only within its current connection lease."
         case .cleanupFailed: return "Audio cleanup is incomplete. Capture and sending are blocked; retry Stop before continuing."
         }
     }
@@ -163,12 +172,16 @@ struct MeetingActivation: Equatable {
     }
 }
 
-/// A command is accepted once, only in this actively prepared session. A reconnect establishes
+/// A command is accepted once, only in this claimed native session. A reconnect establishes
 /// a new generation floor instead of executing a stale "recording" response.
 struct MeetingCommandFence {
     private(set) var highestGeneration = -1
     private(set) var needsReconnectBaseline = true
     mutating func interrupt() { needsReconnectBaseline = true }
+    mutating func acceptFreshStart(generation: Int) {
+        highestGeneration = generation - 1
+        needsReconnectBaseline = false
+    }
     mutating func shouldStart(generation: Int, desired: String) -> Bool {
         guard generation >= 0 else { return false }
         if needsReconnectBaseline {
@@ -197,5 +210,115 @@ enum MeetingGapDelivery {
     static func remaining(_ pending: [MeetingCaptureGap], acknowledgedIDs: Set<String>, limitReached: Bool) -> [MeetingCaptureGap] {
         if limitReached { return [] }
         return pending.filter { !acknowledgedIDs.contains($0.id) }
+    }
+}
+
+struct MeetingProcessingStatus: Codable, Equatable {
+    let status: String
+    var reason: String? = nil
+    var stage: String? = nil
+    var retryable: Bool? = nil
+    var retryAfterMs: UInt64? = nil
+}
+struct MeetingRecordingConnectionBody: Encodable {
+    let connectionId: String
+    let verifierHash: String
+    let inventory: MeetingCaptureInventory
+}
+struct MeetingRecordingConnectionReply: Decodable {
+    let connectionId: String
+    let revision: Int
+    let leaseMs: UInt64
+    let expiresAt: String
+}
+struct MeetingRecordingCommandsBody: Encodable {
+    let connectionId: String
+    let verifier: String
+    var revision: String? = nil
+    var waitMs: UInt64 = 10000
+}
+struct MeetingRecordingCommand: Codable, Equatable {
+    let meetingId: String
+    let grantId: String
+    let ownerUserId: String
+    let expiresAt: String
+    let selection: MeetingCaptureChoice
+    let capabilityRevision: Int
+    var generation: Int = 1
+}
+struct MeetingRecordingCommandsReply: Decodable {
+    let revision: String
+    let command: MeetingRecordingCommand?
+    let retryAfterMs: UInt64
+}
+struct MeetingRecordingClaimBody: Encodable {
+    let connectionId: String
+    let verifier: String
+    let grantId: String
+    let credentialHash: String
+}
+struct MeetingRecordingClaimReply: Decodable {
+    let meetingId: String
+    let grantId: String
+    let expiresAt: String
+    let capture: MeetingRemoteCapture
+}
+
+/// The permission dialog can return after Stop, reconnect or command expiry. Revalidate the
+/// exact authority that opened it before letting that continuation acquire audio resources.
+struct MeetingStartPermissionFence {
+    let sessionGeneration: Int
+    let captureGeneration: Int
+    let grantId: String
+    let deviceId: String
+    let expiresAt: Date?
+
+    func permits(session currentSession: Int, capture: MeetingRemoteCapture, now: Date,
+                 cancelled: Bool, stopped: Bool) -> Bool {
+        !cancelled && !stopped && currentSession == sessionGeneration &&
+            capture.generation == captureGeneration && capture.grantId == grantId && capture.deviceId == deviceId &&
+            capture.desired == "recording" && (expiresAt.map { now < $0 } ?? true) &&
+            (ServerTime.parse(capture.expiresAt).map { now < $0 } ?? false)
+    }
+}
+
+/// A retry always reuses the complete locally generated bearer and its hash. Neither a lost
+/// response nor polling the same command mints a replacement authority for that Start.
+struct MeetingPendingStart {
+    private(set) var command: MeetingRecordingCommand
+    let credential: String
+    private let connectionId: String
+    private let deviceId: String
+
+    init(command: MeetingRecordingCommand, connectionId: String, deviceId: String,
+         secret: String = LinkAttempt.makeVerifier()) {
+        self.command = command
+        self.connectionId = connectionId
+        self.deviceId = deviceId
+        credential = "mm1_\(command.ownerUserId).\(command.grantId).\(secret)"
+    }
+
+    /// A browser Resume may renew a still-unclaimed grant. Refresh its bounded command,
+    /// never its bearer. Old responses cannot roll back a newer generation or cross bindings.
+    @discardableResult mutating func refresh(_ next: MeetingRecordingCommand,
+                                             connectionId: String, deviceId: String) throws -> Bool {
+        guard self.connectionId == connectionId, self.deviceId == deviceId,
+              next.grantId == command.grantId, next.ownerUserId == command.ownerUserId,
+              next.meetingId == command.meetingId, next.capabilityRevision == command.capabilityRevision,
+              next.generation > 0, next.generation <= 9_007_199_254_740_991 else {
+            throw MeetingHostError.invalidResponse
+        }
+        if next.generation < command.generation { return false }
+        if next.generation == command.generation {
+            guard next == command else { throw MeetingHostError.invalidResponse }
+            return false
+        }
+        command = next
+        return true
+    }
+
+    func body(verifier: String) -> MeetingRecordingClaimBody {
+        .init(connectionId: connectionId, verifier: verifier, grantId: command.grantId,
+              credentialHash: MeetingCaptureClient.verifierHash(credential))
     }
 }

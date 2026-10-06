@@ -16,6 +16,8 @@ export interface MeetingsExportSection {
   readonly export_receipts: readonly ExportRow[];
   readonly export_requests: readonly ExportRow[];
   readonly capture_grants: readonly ExportRow[];
+  readonly capture_connections: readonly ExportRow[];
+  readonly capture_start_cancellations: readonly ExportRow[];
 }
 
 /**
@@ -122,6 +124,20 @@ export async function collectMeetingsExportSection(
       FROM app.meeting_export_requests
       WHERE owner_user_id = ${ownerUserId}::uuid
       ORDER BY meeting_id, request_key
+    `
+    ),
+    capture_connections: await readRows(
+      scopedDb,
+      sql<Record<string, unknown>>`
+      SELECT device_id::text AS "deviceId",owner_user_id::text AS "ownerUserId",device_name AS "deviceName",inventory_json AS "inventoryJson",last_seen_at AS "lastSeenAt",expires_at AS "expiresAt"
+      FROM app.meeting_capture_connections WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY device_id
+    `
+    ),
+    capture_start_cancellations: await readRows(
+      scopedDb,
+      sql<Record<string, unknown>>`
+      SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",request_key::text AS "requestKey",created_at AS "createdAt"
+      FROM app.meeting_capture_start_cancellations WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY created_at,request_key
     `
     ),
     capture_grants: await readRows(

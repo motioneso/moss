@@ -1,25 +1,302 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ApiError, randomUuid } from "@moss/module-web-sdk";
-import type { MeetingCaptureBrowserStatus, MeetingCaptureControlInput } from "@moss/shared";
-import { approveCaptureDevice, captureKeys, controlCapture } from "./capture-client.js";
-import { emptyCaptureChoice, type CaptureChoice } from "./capture-presentation.js";
+import type {
+  MeetingCaptureBrowserStatus,
+  MeetingCaptureControlInput,
+  MeetingCaptureCancelStartInput,
+  MeetingCaptureStartInput,
+  MeetingCaptureState
+} from "@moss/shared";
+import {
+  CaptureRequestError,
+  captureKeys,
+  controlCapture,
+  cancelCaptureStart,
+  reconcileCaptureStatus,
+  startCapture
+} from "./capture-client.js";
+import {
+  choiceFromCapture,
+  emptyCaptureChoice,
+  type CaptureChoice
+} from "./capture-presentation.js";
 import { isMeetingAccessDenied, meetingKeys } from "./client.js";
+import { refreshCaptureStatus } from "./capture-status.js";
 
 type CaptureRequest =
-  | { readonly kind: "approve"; readonly challengeId: string }
+  | { readonly kind: "start"; readonly input: MeetingCaptureStartInput }
+  | { readonly kind: "cancel-start"; readonly input: MeetingCaptureCancelStartInput }
   | { readonly kind: "control"; readonly input: MeetingCaptureControlInput };
 interface CaptureOperation {
   readonly request: CaptureRequest;
   readonly phase: "sending" | "retry";
+  readonly retryAt?: number;
 }
 export interface CaptureSession {
   readonly grantId: string | null;
+  readonly startRequest: MeetingCaptureStartInput | null;
+  readonly choiceGeneration: number | null;
   readonly choice: CaptureChoice;
   readonly operation: CaptureOperation | null;
   readonly error: string | null;
 }
+export interface ActiveCapture {
+  readonly meetingId: string;
+  readonly title: string;
+}
 export function newCaptureSession(): CaptureSession {
-  return { grantId: null, choice: emptyCaptureChoice, operation: null, error: null };
+  return {
+    grantId: null,
+    startRequest: null,
+    choiceGeneration: null,
+    choice: emptyCaptureChoice,
+    operation: null,
+    error: null
+  };
+}
+const runs = new WeakMap<QueryClient, Map<string, AbortController>>();
+const stopping = new WeakMap<QueryClient, Map<string, Promise<void>>>();
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true }
+    );
+  });
+}
+function acceptCapture(
+  client: QueryClient,
+  id: string,
+  capture: MeetingCaptureState,
+  start: boolean,
+  previousGrantId: string | null = null
+) {
+  const currentCapture = client.getQueryData<MeetingCaptureBrowserStatus>(
+    captureKeys.status(id)
+  )?.capture;
+  if (
+    start &&
+    currentCapture &&
+    currentCapture.grantId !== capture.grantId &&
+    currentCapture.grantId !== previousGrantId
+  )
+    return false;
+  if (
+    currentCapture?.grantId === capture.grantId &&
+    (currentCapture.generation > capture.generation ||
+      (currentCapture.generation === capture.generation &&
+        Date.parse(currentCapture.serverTime) > Date.parse(capture.serverTime)))
+  )
+    return false;
+  client.setQueryData<MeetingCaptureBrowserStatus>(captureKeys.status(id), (current) => {
+    if (
+      current?.capture &&
+      (current.capture.grantId !== capture.grantId ||
+        current.capture.generation > capture.generation) &&
+      !start
+    )
+      return current;
+    return {
+      ...current,
+      capture,
+      pendingLinks: [],
+      processingReady: current?.processingReady ?? true
+    };
+  });
+  return true;
+}
+async function send(client: QueryClient, id: string, request: CaptureRequest) {
+  const key = captureKeys.session(id);
+  const identity = client.getQueryCache().find({ queryKey: key, exact: true });
+  const authorized = () =>
+    identity === client.getQueryCache().find({ queryKey: key, exact: true }) &&
+    !isMeetingAccessDenied(client.getQueryState(meetingKeys.record(id))?.error) &&
+    !isMeetingAccessDenied(client.getQueryState(captureKeys.status(id))?.error);
+  const pending = client.getQueryData<CaptureSession>(key)?.operation;
+  const previousGrantId =
+    client.getQueryData<MeetingCaptureBrowserStatus>(captureKeys.status(id))?.capture?.grantId ??
+    null;
+  const priority =
+    request.kind === "cancel-start" ||
+    (request.kind === "control" && request.input.command !== "record");
+  if (
+    !authorized() ||
+    (pending?.request.kind === request.kind &&
+      pending.request.input.requestKey === request.input.requestKey &&
+      (pending.retryAt ?? 0) > Date.now()) ||
+    (pending?.phase === "sending" &&
+      pending.request.kind === "control" &&
+      request.kind === "control" &&
+      (pending.request.input.command === request.input.command ||
+        (pending.request.input.command === "stop" && request.input.command !== "revoke"))) ||
+    (pending &&
+      !priority &&
+      (pending.phase === "sending" ||
+        pending.request.input.requestKey !== request.input.requestKey))
+  )
+    return;
+  let registry = runs.get(client);
+  if (!registry) {
+    registry = new Map();
+    runs.set(client, registry);
+  }
+  if (priority) registry.get(id)?.abort();
+  const controller = new AbortController();
+  registry.set(id, controller);
+  const current = () => authorized() && registry!.get(id) === controller;
+  const update = (change: Partial<CaptureSession>) => {
+    if (current())
+      client.setQueryData<CaptureSession>(key, (value) =>
+        value ? { ...value, ...change } : undefined
+      );
+  };
+  update({
+    operation: { request, phase: "sending" },
+    error: null,
+    ...(request.kind === "start" ? { startRequest: request.input } : {})
+  });
+  // A control response must never sit behind a long status read.
+  await client.cancelQueries({ queryKey: captureKeys.status(id), exact: true });
+  for (let attempt = 0; attempt < 3 && current(); attempt += 1) {
+    try {
+      const result =
+        request.kind === "start"
+          ? await startCapture(id, request.input, controller.signal)
+          : request.kind === "cancel-start"
+            ? await cancelCaptureStart(id, request.input, controller.signal)
+            : await controlCapture(id, request.input, controller.signal);
+      if (!current()) return;
+      const accepted = result.capture
+        ? acceptCapture(client, id, result.capture, request.kind === "start", previousGrantId)
+        : true;
+      if (!result.capture && request.kind === "cancel-start") {
+        const existing = client.getQueryData<MeetingCaptureBrowserStatus>(captureKeys.status(id));
+        if (!existing?.capture) {
+          client.setQueryData<MeetingCaptureBrowserStatus>(captureKeys.status(id), {
+            capture: null,
+            pendingLinks: [],
+            processingReady: existing?.processingReady ?? true
+          });
+          if (client.getQueryData<ActiveCapture>(captureKeys.active)?.meetingId === id)
+            client.setQueryData(captureKeys.active, null);
+        }
+      }
+      update({
+        operation: null,
+        error: null,
+        ...(request.kind === "cancel-start" ? { startRequest: null } : {})
+      });
+      refreshCaptureStatus(client, id);
+      void client.invalidateQueries({ queryKey: meetingKeys.history });
+      return accepted;
+    } catch (error) {
+      if (!current()) return;
+      if (isMeetingAccessDenied(error)) {
+        client.removeQueries({ queryKey: key, exact: true });
+        client.removeQueries({ queryKey: captureKeys.active, exact: true });
+        void client.invalidateQueries({ queryKey: meetingKeys.record(id), exact: true });
+        return;
+      }
+      if (priority && error instanceof ApiError && error.status === 409 && attempt < 2) {
+        try {
+          const latest = (await reconcileCaptureStatus(id, controller.signal)).capture;
+          if (!current()) return;
+          if (latest && request.kind === "control" && latest.grantId === request.input.grantId) {
+            acceptCapture(client, id, latest, false);
+            if (latest.desired === "stopped" || latest.desired === "revoked") {
+              update({ operation: null, error: null });
+              return;
+            }
+            if (latest.generation !== request.input.expectedGeneration) {
+              request = {
+                kind: "control",
+                input: {
+                  ...request.input,
+                  expectedGeneration: latest.generation,
+                  requestKey: randomUuid()
+                }
+              };
+              update({ operation: { request, phase: "sending" } });
+              continue;
+            }
+          }
+        } catch {
+          /* Fall through to the visible recovery state after the bounded reconciliation. */
+        }
+      }
+      const processingUnavailable =
+        error instanceof ApiError && error.code === "meeting_capture_processing_unavailable";
+      const recorderBusy = error instanceof ApiError && error.code === "meeting_capture_busy";
+      const definite =
+        processingUnavailable ||
+        (error instanceof ApiError && [400, 409, 413, 422].includes(error.status));
+      const delay = Math.max(
+        500 * 2 ** attempt,
+        error instanceof CaptureRequestError ? error.retryAt - Date.now() : 0
+      );
+      if (!definite && attempt < 2 && delay <= 5000) {
+        try {
+          await pause(delay, controller.signal);
+        } catch {
+          return;
+        }
+        continue;
+      }
+      update({
+        operation: definite
+          ? null
+          : {
+              request,
+              phase: "retry",
+              retryAt: error instanceof CaptureRequestError ? error.retryAt : undefined
+            },
+        error: processingUnavailable
+          ? "Transcription unavailable. Check Settings → AI providers, then try again."
+          : error instanceof CaptureRequestError && error.status === 429
+            ? "The server asked us to wait before retrying. Trail Marker’s local Pause and Stop remain available."
+            : recorderBusy
+              ? "This Mac is still recording or finishing the previous meeting. Stop it and wait for the transcript to finish, then try Start again."
+              : definite
+                ? "The connection or sources changed. Check the source summary and try again."
+                : "The command is unconfirmed. Check Trail Marker’s indicator. Stop remains available; retry uses the same request."
+      });
+      if (
+        definite &&
+        request.kind === "start" &&
+        client.getQueryData<ActiveCapture>(captureKeys.active)?.meetingId === id &&
+        !client.getQueryData<MeetingCaptureBrowserStatus>(captureKeys.status(id))?.capture
+      )
+        client.setQueryData(captureKeys.active, null);
+      refreshCaptureStatus(client, id);
+      return;
+    }
+  }
+}
+export async function startMeetingCapture(
+  client: QueryClient,
+  id: string,
+  title: string,
+  input: MeetingCaptureStartInput
+) {
+  if (!client.getQueryData(captureKeys.session(id)))
+    client.setQueryData(captureKeys.session(id), newCaptureSession());
+  client.setQueryData<ActiveCapture>(captureKeys.active, { meetingId: id, title });
+  return send(client, id, { kind: "start", input });
+}
+export function effectiveCaptureChoice(
+  session: CaptureSession,
+  capture: MeetingCaptureState | null | undefined
+): CaptureChoice {
+  if (!capture) return session.choice;
+  return session.grantId === capture.grantId && session.choiceGeneration === capture.generation
+    ? session.choice
+    : choiceFromCapture(capture);
 }
 export function useCaptureSession(id: string) {
   const client = useQueryClient();
@@ -32,90 +309,121 @@ export function useCaptureSession(id: string) {
     gcTime: Infinity
   });
   const identity = client.getQueryCache().find({ queryKey: key, exact: true });
-  const authorized = () =>
-    client.getQueryCache().find({ queryKey: key, exact: true }) === identity &&
-    !isMeetingAccessDenied(client.getQueryState(meetingKeys.record(id))?.error) &&
-    !isMeetingAccessDenied(client.getQueryState(captureKeys.status(id))?.error);
+  const retryAt = query.data.operation?.retryAt;
+  useEffect(() => {
+    if (!retryAt || retryAt <= Date.now()) return;
+    const timer = setTimeout(() => {
+      if (identity !== client.getQueryCache().find({ queryKey: key, exact: true })) return;
+      client.setQueryData<CaptureSession>(key, (current) =>
+        current?.operation?.retryAt === retryAt
+          ? { ...current, operation: { ...current.operation, retryAt: undefined } }
+          : current
+      );
+    }, retryAt - Date.now());
+    return () => clearTimeout(timer);
+  }, [client, id, identity, retryAt]);
   function update(change: (current: CaptureSession) => CaptureSession) {
-    if (authorized())
+    if (identity === client.getQueryCache().find({ queryKey: key, exact: true }))
       client.setQueryData<CaptureSession>(key, (current) =>
         current ? change(current) : undefined
       );
   }
-  async function send(request: CaptureRequest) {
-    const pending = client.getQueryData<CaptureSession>(key)?.operation;
-    if (!authorized() || pending?.phase === "sending" || (pending && pending.request !== request))
-      return;
-    update((current) => ({ ...current, operation: { request, phase: "sending" }, error: null }));
-    await client.cancelQueries({ queryKey: captureKeys.status(id), exact: true });
-    if (!authorized()) return;
-    try {
-      if (request.kind === "approve") await approveCaptureDevice(id, request.challengeId);
-      else {
-        const result = await controlCapture(id, request.input);
-        if (!authorized()) return;
-        client.setQueryData<MeetingCaptureBrowserStatus>(captureKeys.status(id), (current) =>
-          current &&
-          current.capture?.grantId === result.capture.grantId &&
-          (current.capture.generation < result.capture.generation ||
-            (current.capture.generation === result.capture.generation &&
-              Date.parse(current.capture.serverTime) <= Date.parse(result.capture.serverTime)))
-            ? { ...current, capture: result.capture }
-            : current
-        );
-      }
-      if (!authorized()) return;
-      update((current) => ({ ...current, operation: null }));
-      void client.invalidateQueries({ queryKey: captureKeys.status(id), exact: true });
-      void client.invalidateQueries({ queryKey: meetingKeys.history });
-    } catch (error) {
-      if (!authorized()) return;
-      if (isMeetingAccessDenied(error)) {
-        client.removeQueries({ queryKey: key, exact: true });
-        void client.invalidateQueries({ queryKey: meetingKeys.record(id), exact: true });
-        void client.invalidateQueries({ queryKey: captureKeys.status(id), exact: true });
-        return;
-      }
-      const processingUnavailable =
-        error instanceof ApiError && error.code === "meeting_capture_processing_unavailable";
-      const definite =
-        processingUnavailable ||
-        (error instanceof ApiError && [400, 409, 413, 422].includes(error.status));
-      update((current) => ({
-        ...current,
-        operation: definite ? null : { request, phase: "retry" },
-        error: processingUnavailable
-          ? "Transcription unavailable. Check Settings → AI providers, then try again."
-          : definite
-            ? "The capture state changed or these sources are unavailable. Refresh and check the selection."
-            : "Couldn’t confirm the command. Check Trail Marker’s recording indicator, then retry the same request."
-      }));
-      if (definite)
-        void client.invalidateQueries({ queryKey: captureKeys.status(id), exact: true });
-    }
-  }
   return {
     state: query.data,
-    bindGrant: (grantId: string) =>
-      update((current) =>
-        current.grantId === grantId
-          ? current
-          : {
-              ...current,
-              grantId,
-              choice: { ...emptyCaptureChoice, mode: current.choice.mode }
-            }
-      ),
+    bindCapture: (capture: MeetingCaptureState) => {
+      const current = client.getQueryData<CaptureSession>(key);
+      if (current?.grantId === capture.grantId && current.choiceGeneration === capture.generation)
+        return;
+      update((current) => ({
+        ...current,
+        grantId: capture.grantId,
+        choiceGeneration: capture.generation,
+        choice: choiceFromCapture(capture)
+      }));
+    },
     updateChoice: (change: Partial<CaptureChoice>) =>
-      update((current) =>
-        current.operation ? current : { ...current, choice: { ...current.choice, ...change } }
-      ),
-    approve: (challengeId: string) => send({ kind: "approve", challengeId }),
+      update((current) => {
+        const capture = client.getQueryData<MeetingCaptureBrowserStatus>(
+          captureKeys.status(id)
+        )?.capture;
+        return {
+          ...current,
+          ...(capture ? { grantId: capture.grantId, choiceGeneration: capture.generation } : {}),
+          choice: { ...effectiveCaptureChoice(current, capture), ...change }
+        };
+      }),
     control: (input: Omit<MeetingCaptureControlInput, "requestKey">) =>
-      send({ kind: "control", input: { ...input, requestKey: randomUuid() } }),
+      send(client, id, { kind: "control", input: { ...input, requestKey: randomUuid() } }),
+    stop: () => {
+      let registry = stopping.get(client);
+      if (!registry) {
+        registry = new Map();
+        stopping.set(client, registry);
+      }
+      const pendingStop = registry.get(id);
+      if (pendingStop) return pendingStop;
+      const stopped = (async () => {
+        // Stop supersedes an uncertain Start/Pause and reconciles the latest generation first.
+        runs.get(client)?.get(id)?.abort();
+        await client.cancelQueries({ queryKey: captureKeys.status(id), exact: true });
+        const state = client.getQueryData<CaptureSession>(key);
+        let capture = client.getQueryData<MeetingCaptureBrowserStatus>(
+          captureKeys.status(id)
+        )?.capture;
+        const start =
+          state?.operation?.request.kind === "start"
+            ? state.operation.request.input
+            : !capture
+              ? state?.startRequest
+              : null;
+        if (start) {
+          if (identity !== client.getQueryCache().find({ queryKey: key, exact: true })) return;
+          await send(client, id, {
+            kind: "cancel-start",
+            input: {
+              requestKey: start.requestKey,
+              deviceId: start.deviceId,
+              connectionId: start.connectionId
+            }
+          });
+          return;
+        }
+        if (!capture) {
+          try {
+            capture = (await reconcileCaptureStatus(id)).capture;
+          } catch {
+            /* An unresolved Stop stays visible; it never creates a new Start. */
+          }
+        }
+        if (identity !== client.getQueryCache().find({ queryKey: key, exact: true })) return;
+        if (capture && capture.desired !== "stopped" && capture.desired !== "revoked")
+          await send(client, id, {
+            kind: "control",
+            input: {
+              grantId: capture.grantId,
+              command: "stop",
+              expectedGeneration: capture.generation,
+              requestKey: randomUuid()
+            }
+          });
+        else
+          update((current) => ({
+            ...current,
+            operation: null,
+            error: capture
+              ? null
+              : "No recording was confirmed. Check Trail Marker’s local Stop before closing it."
+          }));
+      })();
+      registry.set(id, stopped);
+      void stopped.finally(() => {
+        if (registry!.get(id) === stopped) registry!.delete(id);
+      });
+      return stopped;
+    },
     retry: () => {
       const request = client.getQueryData<CaptureSession>(key)?.operation?.request;
-      if (request) void send(request);
+      if (request) void send(client, id, request);
     }
   };
 }

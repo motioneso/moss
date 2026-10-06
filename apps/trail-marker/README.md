@@ -36,9 +36,12 @@ warning. There is no public release yet — this is a local developer build only
 Trail Marker keeps these outside the app bundle, so quitting or reinstalling the app does not
 reset them:
 
-- **Keychain**: generic-password items under service `com.moss.trailmarker` (the link credential,
-  and Backtrack's buffer key). Remove them with Keychain Access (search "trailmarker") or
-  `security delete-generic-password -s com.moss.trailmarker` (once per item).
+- **Keychain**: the link credential and Backtrack buffer key use `com.moss.trailmarker`.
+  Meeting recording proof and pending approval proof use separate recording namespaces, scoped
+  to the instance origin and device. For a deliberate first-run reset, use Keychain Access
+  (search "trailmarker") to remove the development identity's matching items. Deleting only the
+  base service does not remove its separate recording proofs. Ordinary logout clears the linked
+  identity's recording proofs.
 - **Preferences**: `UserDefaults` under the app's bundle identifier. Reset with
   `defaults delete com.moss.trailmarker`.
 - **Backtrack's offline buffer**: `~/Library/Application Support/com.moss.trailmarker/Backtrack/buffer.bin`,
@@ -116,37 +119,59 @@ PR; Phase 2 stays gated until both CPU and usefulness pass.
 ## Meeting recorder development path
 
 Meeting output capture requires macOS 14.2 or later. Build locally with the Xcode instructions
-above; this branch does not provide a signed distribution or Windows recorder.
+above; this branch does not provide a signed distribution or Windows recorder. Preserve any local
+diagnostic changes before pulling this repair; use a clean worktree to compare them with the new
+source instead of replacing an existing test checkout.
 
-Moss can run on a remote or headless server. Run Trail Marker on the **recording client Mac**:
-the computer whose microphone and meeting-app/computer audio you want to capture. Moss does not
-need to be installed on that Mac, and recording does not use microphones or audio devices attached
-to the Moss server. The prepared companion sends captured audio to Moss for the configured
-processing route.
+Moss can run on a remote or headless server. Run Trail Marker on the **recording client Mac**,
+whose microphone and app/computer audio should be captured. Moss does not need to be installed on
+that Mac and never uses audio hardware attached to its server. Browser and companion connect to
+the same public HTTPS origin, including its port. “Same origin” means the same remote Moss server,
+not the same computer. Unencrypted HTTP is accepted only for loopback development addresses
+(`localhost`, `127.0.0.1`, or `::1`). The final canonical origin must be exposed directly; capture
+transport does not follow redirects or support path-prefix deployments.
 
-On the recording Mac, open Moss at its public HTTPS address and link Trail Marker to the same
-origin, including its port. “Same origin” means the same remote Moss server, not the same computer.
-Unencrypted HTTP is accepted only for loopback development addresses (`localhost`, `127.0.0.1`,
-or `::1`). A TLS reverse proxy must expose the final canonical origin directly: the native capture
-client does not follow redirects, and the meeting handoff currently expects Moss at the origin
-root rather than a path-prefix deployment.
+Connect Trail Marker through its existing one-time flow. New clients include meeting-recording
+capability in that approval; existing paired clients show a one-time upgrade in Moss. The independent
+recording proof is stored in this Mac's Keychain; the server holds its hash. Connecting or approving
+does not record. Backtrack keeps its separate existing consent and retention behavior.
 
-In Moss, create or reopen a meeting and choose Open recorder. In Trail Marker, explicitly prepare
-this Mac's microphone. Approve the named device in that meeting's browser panel, select the
-microphone and capture mode, acknowledge the notice, then press Record. The listed audio sources
-belong to that named companion. Viewing or controlling the meeting from a browser on another
-computer does not switch capture to that browser's machine or to the server. Browser-only capture
-is not implemented. Preparing or approving alone does not start recording. Transcription is
-configured only through AI providers in Moss.
+In Meetings, select this named Mac, a microphone and one of microphone-only, microphone + selected
+app, or microphone + computer audio, then choose **Start meeting**. Moss remembers the stable source
+identities; Change selects different ones. Missing or ambiguous sources require explicit selection
+and never widen capture. First use may request an OS microphone/system-audio permission. If Stop,
+revocation or expiry occurs while permission is pending, granting permission cannot start audio.
+There is no per-meeting Prepare, approval, notice checkbox or second Record button. Trail Marker
+keeps the current browser in place rather than launching the default browser for each meeting.
 
-The separate meeting menu-bar indicator opens Pause/Stop controls. It remains visible when the
-browser changes pages. Pause All, logout and quit close meeting capture; a failed device cleanup
-blocks continuation and keeps a visible cleanup state. Reconnect and app restart never resume
-recording automatically. Capture approval is ephemeral and must be renewed after restart.
+Viewing Moss from another computer controls the explicitly named recorder; it never switches to
+that browser's hardware or the server's hardware. Browser-only capture is not implemented.
+Transcription is configured only through AI providers in Moss.
 
-This is an unverified native development checkpoint. Use generated, non-sensitive test audio only
-until provider use and recording have been separately authorized. Actual microphone/system-audio
-consent, selected-app exclusion, computer-mode process identity, device release, Teams/Zoom,
-latency and CPU need testing on real hardware. Computer mode conservatively pauses on process
-changes; inability to resolve this host's audio-process identity disables that mode. Source labels
-are not speaker attribution. See `packages/meetings/README.md` for server and proof boundaries.
+The meeting menu-bar indicator has local Pause/Stop controls and remains visible across browser
+navigation. Moss also keeps recording controls available while visiting History or other modules.
+Pause closes inputs and starts no new audio uploads. Stop fixes the cutoff and drains only retained
+pre-cutoff audio for up to 60 seconds; a new native recording waits for this bounded finalization.
+Pause All, logout and quit close capture. Cleanup failures remain visible and block continuation.
+Reconnection and restart never issue a new Start or silently resume a paused/expired recording.
+
+Capture tolerates ordinary host-clock jitter, unchanged format notifications and brief callback
+contention. A terminal ASR failure records a gap for that chunk; it does not itself stop healthy
+inputs. Transcription delay and connectivity delay are distinct from recording state. Transient
+retries remain bounded by a 30-second authorization lease and transient memory: at most 60 seconds
+and 2,097,152 Float32 samples (8 MiB) per track, with at most 16 retained rings (128 MiB of sample storage) process-wide, plus bounded
+metadata/request buffers.
+At 48 kHz the sample bound is approximately 43.7 seconds. The first applicable bound wins; exhaustion
+pauses visibly. There is no audio disk spool or recovery after process exit.
+
+Computer mode verifies native Moss process exclusion and rechecks relevant changes; unrelated app
+process churn alone is not a reason to stop. A changed selected-app scope requires explicit Resume.
+Actual microphone/system-audio consent, selected-app isolation, safe computer exclusion, source
+changes, device release, Teams/Zoom, latency and CPU remain hardware acceptance work. Source labels
+are not speaker attribution.
+
+The first version passed generated tests but failed owner recording trials. The repair therefore
+needs fresh exact-head hosted checks and new hardware proof; synthetic tests are not that proof.
+Use generated or personal non-sensitive test audio for the owner-controlled trial. No live device
+permission, recording capability or provider credential was activated by development work. See
+`packages/meetings/README.md` and the 6 October connection/reliability plan for proof boundaries.

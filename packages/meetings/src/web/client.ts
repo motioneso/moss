@@ -65,9 +65,10 @@ export function meetingRecordQueryOptions(id: string) {
   };
 }
 export function createMeeting(
-  input: CreateMeetingRecordInput
+  input: CreateMeetingRecordInput,
+  signal?: AbortSignal
 ): Promise<{ meeting: MeetingRecord; created: boolean }> {
-  return requestJson("/api/meetings/records", { method: "POST", body: input });
+  return requestJson("/api/meetings/records", { method: "POST", body: input, signal });
 }
 export function saveMeetingNotes({
   meetingId,

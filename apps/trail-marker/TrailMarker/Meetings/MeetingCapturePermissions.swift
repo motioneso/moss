@@ -2,7 +2,7 @@ import AVFoundation
 import AppKit
 
 /// Querying authorization never requests it. System-audio permission has no equivalent public
-/// preflight here: only an explicit Record may create/start a tap and let macOS ask.
+/// preflight here: only an explicit Start may create/start a tap and let macOS ask.
 enum MeetingCapturePermissions {
     static var microphone: MeetingCapturePermission {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
