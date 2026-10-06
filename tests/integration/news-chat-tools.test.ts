@@ -118,7 +118,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
   afterAll(async () => harness.teardown());
 
   it("previewSource runs unconfirmed (read risk) and returns verified candidates", async () => {
-    const { gateway, emitted, mint } = harness.makeGateway();
+    const { gateway, emitted, mint } = await harness.makeGateway();
     const token = mint(ids.userA, "news-chat-preview");
 
     const result = await gateway.callTool(token, "news.previewSource", {
@@ -175,7 +175,10 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     });
     await harness.waitForRefreshSuccess("diagnostics-initial-wait");
 
-    const { gateway, emitted, mint } = harness.makeGateway({ diagnostics, boss: harness.appBoss });
+    const { gateway, emitted, mint } = await harness.makeGateway({
+      diagnostics,
+      boss: harness.appBoss
+    });
     const token = mint(ids.userA, "diagnostics-refresh");
     const first = await gateway.callTool(token, "settings.platformDiagnostics", {
       module: "news",
@@ -425,7 +428,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
   }, 60_000);
 
   it("confirmSource is confirm-gated: nothing executes until the owner confirms, then row + audit", async () => {
-    const { gateway, emitted, mint } = harness.makeGateway();
+    const { gateway, emitted, mint } = await harness.makeGateway();
     const token = mint(ids.userA, "news-chat-confirm");
     const preview = await harness.previewExampleFeed(gateway, token);
     const candidate = preview.candidates[0]!;
@@ -467,7 +470,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
   }, 30_000);
 
   it("confirmSource with a tampered domain fails closed: sanitized error, no row", async () => {
-    const { gateway, emitted, mint } = harness.makeGateway();
+    const { gateway, emitted, mint } = await harness.makeGateway();
     const token = mint(ids.userA, "news-chat-tamper");
     const preview = await harness.previewExampleFeed(gateway, token);
     const candidate = preview.candidates[0]!;
@@ -498,7 +501,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
   }, 30_000);
 
   it("rejects a cross-owner confirmationId replay as expired without writing", async () => {
-    const { gateway, emitted, mint } = harness.makeGateway();
+    const { gateway, emitted, mint } = await harness.makeGateway();
     const tokenA = mint(ids.userA, "news-chat-owner-a");
     const tokenB = mint(ids.userB, "news-chat-owner-b");
     const preview = await harness.previewExampleFeed(gateway, tokenA);
@@ -523,7 +526,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
   }, 30_000);
 
   it("refreshNews is confirmed, audited, and honest about asynchronous work", async () => {
-    const { gateway, emitted, mint } = harness.makeGateway();
+    const { gateway, emitted, mint } = await harness.makeGateway();
     const token = mint(ids.userA, "news-chat-refresh");
     const pending = gateway.callTool(token, "news.refreshNews", {});
     const request = await harness.waitForActionRequest(emitted, 0);

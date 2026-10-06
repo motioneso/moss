@@ -222,6 +222,7 @@ export const emailModuleManifest = {
         "failures, with source and gap metadata.",
       permissionId: "email.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {}

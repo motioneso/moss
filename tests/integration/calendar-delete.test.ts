@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import {
   ConnectorsRepository,
@@ -311,6 +311,9 @@ describe("Section C — manifest structure + gateway routing", () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     dataContext = new DataContextRunner(appDb);
+  });
+
+  beforeEach(async () => {
     conversations = await createCleanConversationFixture(dataContext, [ids.userA, ids.userB]);
   });
   afterAll(async () => {

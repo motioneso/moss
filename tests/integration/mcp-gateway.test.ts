@@ -54,7 +54,6 @@ describe("AssistantToolGateway", () => {
       maxConnections: 1
     });
     runner = new DataContextRunner(appDb);
-    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
     repository = new AiRepository();
   });
 
@@ -63,7 +62,9 @@ describe("AssistantToolGateway", () => {
     await appDb.destroy();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
+
     exampleToolCalls.length = 0;
     // #1308 defect 2: build the array as a local `sink` first and close the shared gateway's
     // notifier over that local, not over the outer `emitted` binding. `emitted` is a `let` that

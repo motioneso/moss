@@ -3,7 +3,7 @@ import type { DataContextRunner } from "@moss/db";
 import { ConversationProvenanceStore } from "../../../packages/chat/src/conversation-provenance.js";
 import { ChatRepository } from "../../../packages/chat/src/repository.js";
 
-/** Existing policy tests start on real new owner threads, not unknown-history fallback. */
+/** Create once per test: outside admission is sticky for every token sharing an owner thread. */
 export async function createCleanConversationFixture(
   runner: DataContextRunner,
   actorUserIds: readonly string[]

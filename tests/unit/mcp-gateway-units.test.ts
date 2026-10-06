@@ -12,6 +12,7 @@ import {
   renderAndCap,
   resolvePolicy,
   SessionTokenRegistry,
+  type ConversationProvenancePort,
   type ActionPolicyLookup
 } from "@moss/ai";
 import type {
@@ -22,7 +23,11 @@ import type {
 } from "@moss/module-sdk";
 
 // These fixtures exercise existing policy rules with explicitly clean provenance.
-const cleanProvenance = { isTainted: async () => false, recordAdmission: async () => {} };
+const cleanProvenance: ConversationProvenancePort = {
+  isTainted: async () => false,
+  recordAdmission: async () => {},
+  runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+};
 const cleanThreadIdentity = (chatSessionId: string) => ({
   actorUserId: "u1",
   chatSessionId,
@@ -742,20 +747,19 @@ describe("gateway audit outcome truth (#1252)", () => {
     }
   );
 
-  it("leaves the model-visible envelope byte-identical to pre-change rendering when auditing a module-reported error (#1252)", async () => {
+  it("preserves the outside-content rendering when auditing a module-reported error (#1252)", async () => {
     const data = { status: "error", message: "insufficient funds" };
     const { audit, response } = await runYoloAndCaptureAuditAndResponse({
       execute: async (): Promise<ToolResult> => ({ data })
     });
     expect(audit).toEqual({ outcome: "failed", errorClass: "module_reported" });
     // The audit row now reflects the module-reported error, but callTool's actual return value —
-    // what the model sees — must be exactly what runHandler would have produced without this
-    // change: an ok:true envelope rendering the handler's payload verbatim, computed here via the
+    // what the model sees — retains its normal outside-content envelope, computed here via the
     // same renderAndCap the gateway calls internally, so this fails if detection ever starts
     // altering (rather than just observing) the response.
     expect(response).toEqual({
       ok: true,
-      data: renderAndCap(undefined, { data }),
+      data: renderAndCap(undefined, { data }, "acme.write"),
       structuredData: data
     });
   });

@@ -552,14 +552,25 @@ export class DataContextChatPersistence implements ChatPersistencePort {
 
   async getThreadContext(
     actorUserId: string,
-    surface?: ChatSurface
+    surface?: ChatSurface,
+    threadId?: string | null
   ): Promise<{ threadTitle: string | null; localTimezone: string | null; incognito: boolean }> {
     const chatSurface = normalizeChatSurface(surface);
     return this.run(actorUserId, "get-thread-context", async (scopedDb) => {
       const [thread, localeRaw] = await Promise.all([
-        this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface),
+        threadId === undefined
+          ? this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)
+          : threadId
+            ? this.chat.getThreadById(scopedDb, threadId, chatSurface)
+            : undefined,
         this.localePreferences?.get(scopedDb, "locale") ?? null
       ]);
+      if (
+        threadId !== undefined &&
+        (!thread || thread.owner_user_id !== actorUserId || thread.surface !== chatSurface)
+      ) {
+        throw new Error("Conversation is unavailable for context retrieval");
+      }
       const title = thread?.title ?? null;
       // #2157: the prompt's time block must agree with the clock tool and Settings.
       const localTimezone = resolveEffectiveTimezone(localeRaw);

@@ -58,6 +58,7 @@ export function makeAppActionGateway(options: {
   actorUserId?: string;
   threadId?: string;
   provenance?: ConversationProvenancePort;
+  yoloMode?: boolean;
   autoApprove?: boolean;
   confirmTimeoutMs?: number;
   /** Test-only policy seam for a call forced to confirm (for example, later taint policy). */
@@ -110,6 +111,7 @@ export function makeAppActionGateway(options: {
   const dependencies = {
     ...wired,
     ...(options.provenance ? { provenance: options.provenance } : {}),
+    ...(options.yoloMode === undefined ? {} : { yoloMode: async () => options.yoloMode! }),
     confirmTimeoutMs: options.confirmTimeoutMs ?? 2_000,
     logger: { error: vi.fn() },
     ...(options.forceConfirm
@@ -127,7 +129,12 @@ export function makeAppActionGateway(options: {
     actorUserId,
     threadId: options.threadId ?? appActionContext.threadId,
     chatSessionId: appActionContext.chatSessionId,
-    allowedToolNames: new Set(["app.findAction", "app.callAction"])
+    allowedToolNames: new Set([
+      "app.findAction",
+      "app.callAction",
+      "settings.themeMode.set",
+      "chat.listTodaysTurns"
+    ])
   });
   return {
     gateway,
@@ -138,7 +145,9 @@ export function makeAppActionGateway(options: {
     resolver,
     services,
     call: (input: AppActionCallInput) => gateway.callTool(token, "app.callAction", input),
-    find: (query: string) => gateway.callTool(token, "app.findAction", { query })
+    find: (query: string) => gateway.callTool(token, "app.findAction", { query }),
+    theme: (mode: string) => gateway.callTool(token, "settings.themeMode.set", { mode }),
+    todaysTurns: () => gateway.callTool(token, "chat.listTodaysTurns", {})
   };
 }
 

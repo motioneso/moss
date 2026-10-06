@@ -87,6 +87,7 @@ export const goalsModuleManifest: MossModuleManifest = {
       description: "List all active goals for the user.",
       permissionId: "goals.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       outputSchema: { type: "object", additionalProperties: true },
       execute: goalListExecute
@@ -96,6 +97,7 @@ export const goalsModuleManifest: MossModuleManifest = {
       description: "Get a specific goal by ID, including its evidence.",
       permissionId: "goals.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["goalId"],
@@ -111,6 +113,7 @@ export const goalsModuleManifest: MossModuleManifest = {
       description: "Create a new long-running goal.",
       permissionId: "goals.create",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "goals_management",
       selfOperationGrant: "granted_at_install",

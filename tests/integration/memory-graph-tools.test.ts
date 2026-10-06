@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Kysely } from "kysely";
 import pg from "pg";
 
@@ -63,6 +63,9 @@ describe("memory graph assistant tools", () => {
     server = createApiServer({ appDb, boss, logger: false });
     await server.ready();
     runner = new DataContextRunner(appDb);
+  });
+
+  beforeEach(async () => {
     conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
   });
 

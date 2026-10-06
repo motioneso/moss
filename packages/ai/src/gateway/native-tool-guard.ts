@@ -27,6 +27,7 @@ const NATIVE_CONFIG_FILE_NAMES = new Set([
   // rewrite would let later Bash/Task hooks bypass the gateway and every audit row.
   ".jarvis-claude-permission-hook.mjs",
   ".jarvis-claude-settings.json",
+  ".jarvis-claude-mcp.json",
   ".jarvis-claude-permission-token",
   ".claude.json"
 ]);

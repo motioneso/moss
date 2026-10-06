@@ -232,6 +232,7 @@ const EXPECTED: readonly string[] = [
   "chat GET /api/chat/messages/:messageId/provenance/:supportId/dereference read",
   "chat POST /api/mcp blocked self_authority",
   "chat POST /internal/permission blocked self_authority",
+  "chat POST /internal/vault-read-report blocked self_authority",
   "chat GET /api/chat/skills blocked prompt_shaping",
   "chat GET /api/chat/skills/:id blocked prompt_shaping",
   "chat POST /api/chat/skills blocked prompt_shaping",

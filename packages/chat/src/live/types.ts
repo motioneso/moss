@@ -133,6 +133,8 @@ export interface EngineLaunchOpts {
 /** A persistent per-user CLI session. One instance per live session. */
 export interface CliChatEngine {
   readonly provider: ProviderKind;
+  /** This engine can read outside data without a permission callback; taint before launch. */
+  readonly admitsOutsideContentWithoutPermission?: boolean;
   /** True only when submit() starts a fresh MCP client for each turn. */
   readonly startsToolClientPerTurn?: boolean;
   /**

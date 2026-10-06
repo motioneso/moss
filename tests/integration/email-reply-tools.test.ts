@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
@@ -57,8 +57,11 @@ describe("email reply tools — gateway acceptance", () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     dataContext = new DataContextRunner(appDb);
-    conversations = await createCleanConversationFixture(dataContext, [ids.userA, ids.userB]);
     repository = new AiRepository();
+  });
+
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(dataContext, [ids.userA, ids.userB]);
   });
   afterAll(async () => {
     await appDb.destroy();

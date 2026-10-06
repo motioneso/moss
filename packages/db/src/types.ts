@@ -940,6 +940,12 @@ export interface ChatConversationProvenanceTable {
   created_at: TimestampColumn;
 }
 
+export interface ChatAutomaticActionReservationsTable {
+  thread_id: string;
+  owner_user_id: string;
+  reservation_id: string;
+}
+
 export interface ChatClassifierShadowRecordsTable {
   id: ColumnType<string, string | undefined, string>;
   owner_user_id: string;
@@ -1937,6 +1943,7 @@ export interface MossDatabase {
   "app.moss_activity_detail": MossActivityDetailTable;
   "app.chat_threads": ChatThreadsTable;
   "app.chat_conversation_provenance": ChatConversationProvenanceTable;
+  "app.chat_automatic_action_reservations": ChatAutomaticActionReservationsTable;
   "app.chat_messages": ChatMessagesTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_classifier_release_eligibility": ChatClassifierReleaseEligibilityTable;

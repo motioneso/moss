@@ -83,7 +83,11 @@ function build(
   const confirmations = new ConfirmationRegistry();
   const gateway = new AssistantToolGateway({
     // This fixture exercises ordinary policy on an explicitly clean conversation.
-    provenance: { isTainted: async () => false, recordAdmission: async () => {} },
+    provenance: {
+      isTainted: async () => false,
+      recordAdmission: async () => {},
+      runAutomatic: async (_actor, _thread, execute) => ({ kind: "ran", value: await execute() })
+    },
     resolveActiveModules: async () => [module],
     runner: {
       withDataContext: async (_access: unknown, work: (db: unknown) => unknown) => work({})

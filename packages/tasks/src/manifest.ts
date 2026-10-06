@@ -618,6 +618,7 @@ export const tasksModuleManifest = {
         "List tasks visible to the actor. Optional filters: listId, tagId, status (todo|done|archived), priority (1–5 integer), dueBefore/dueAfter (ISO 8601 date strings), quadrant (do|schedule|delegate|eliminate — Eisenhower matrix), completedAfter (ISO 8601 date-time — only tasks completed after this instant).",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {
@@ -640,6 +641,7 @@ export const tasksModuleManifest = {
         "Get a specific task by ID, including its subtasks and up to 10 most recent activity entries.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["taskId"],
@@ -655,6 +657,7 @@ export const tasksModuleManifest = {
         "Get the focus list — the highest-priority tasks to work on today: overdue tasks plus at-risk tasks (Medium+ priority, due within 48 h or do-date past), ranked by priority, urgency, and effort.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       outputSchema: taskItemsToolOutputSchema,
       execute: taskFocusExecute
@@ -665,6 +668,7 @@ export const tasksModuleManifest = {
         "Get tasks at risk of slipping: open, Medium+ priority, due within 48 hours or do-date passed, with no completed subtasks.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       outputSchema: taskItemsToolOutputSchema,
       execute: taskAtRiskExecute
@@ -675,6 +679,7 @@ export const tasksModuleManifest = {
         "Get all overdue tasks — open tasks whose due date is in the past, most overdue first.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       outputSchema: taskItemsToolOutputSchema,
       execute: taskOverdueExecute
@@ -684,6 +689,7 @@ export const tasksModuleManifest = {
       description: "List all task lists owned by the actor, ordered by position then name.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       outputSchema: taskListItemsToolOutputSchema,
       execute: taskListListsExecute
@@ -693,6 +699,7 @@ export const tasksModuleManifest = {
       description: "List all tags in a given task list.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["listId"],
@@ -708,6 +715,7 @@ export const tasksModuleManifest = {
       description: "Get the full activity stream for a task, in chronological order.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["taskId"],
@@ -813,6 +821,7 @@ export const tasksModuleManifest = {
       description: "Create a task list owned by the active actor.",
       permissionId: "tasks.create",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_changes",
       selfOperationGrant: "granted_at_install",
@@ -825,6 +834,7 @@ export const tasksModuleManifest = {
       description: "Rename a task list owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_changes",
       selfOperationGrant: "granted_at_install",
@@ -837,6 +847,7 @@ export const tasksModuleManifest = {
       description: "Create a tag in a task list owned by the active actor.",
       permissionId: "tasks.create",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_changes",
       selfOperationGrant: "granted_at_install",
@@ -849,6 +860,7 @@ export const tasksModuleManifest = {
       description: "Rename a tag owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_changes",
       selfOperationGrant: "granted_at_install",
@@ -861,6 +873,7 @@ export const tasksModuleManifest = {
       description: "Delete a task list owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_cleanup",
       selfOperationGrant: "user_promotable",
@@ -881,6 +894,7 @@ export const tasksModuleManifest = {
       description: "Delete a task tag owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_cleanup",
       selfOperationGrant: "user_promotable",

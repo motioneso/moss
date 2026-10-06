@@ -87,6 +87,7 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
     description: "Find a person by name or email address. Returns the matched person or null.",
     permissionId: "people:read",
     risk: "read",
+    content: "outside",
     inputSchema: {
       type: "object",
       required: ["query"],
@@ -103,6 +104,7 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
       "Each link includes a citationToken for source attribution.",
     permissionId: "people:read",
     risk: "read",
+    content: "outside",
     inputSchema: {
       type: "object",
       required: ["personId"],
@@ -117,6 +119,7 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
     description: "List recently seen people.",
     permissionId: "people:read",
     risk: "read",
+    content: "outside",
     inputSchema: {
       type: "object",
       properties: {
@@ -133,6 +136,7 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
     permissionId: "people:write",
     actionFamilyId: "people_review",
     risk: "write",
+    content: "user_authored",
     executionPolicy: "auto",
     selfOperationGrant: "granted_at_install",
     inputSchema: {
@@ -150,6 +154,7 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
     permissionId: "people:write",
     actionFamilyId: "people_review",
     risk: "write",
+    content: "user_authored",
     executionPolicy: "auto",
     selfOperationGrant: "granted_at_install",
     inputSchema: {

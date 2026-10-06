@@ -10,7 +10,13 @@ import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { AiRepository, createRealTmuxIo, type Multiplexer, type ProviderKind } from "@moss/ai";
+import {
+  AiRepository,
+  createRealTmuxIo,
+  type ConversationProvenancePort,
+  type Multiplexer,
+  type ProviderKind
+} from "@moss/ai";
 import type { AcpPermissionDecider } from "@moss/acp";
 import { resolveEffectiveTimezone } from "../locale-utils.js";
 import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "./chat-surface.js";
@@ -39,7 +45,7 @@ import type { ClassifierGateRunner } from "./classifier-gate-runner.js";
 import type { ClassifierGateShadowRunner } from "./classifier-gate-shadow.js";
 import { PassiveContextRetriever, type PassiveMemoryGraphRecallPort } from "./passive-retrieval.js";
 import { NotesContextRetriever } from "./notes-retrieval.js";
-import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
+import type { CrossToolReadRunner, CrossToolTurnBinding } from "./cross-tool-reasoning.js";
 import { ChatPriorityModelAdapter } from "./priority-model-adapter.js";
 
 import { resolveChatHome } from "./chat-home.js";
@@ -558,11 +564,13 @@ export interface CreateChatSessionRuntimeDeps {
     readonly readPersistentRuntimeConfig?: () => Promise<PersistentRuntimeLaunchConfig>;
   };
   /** Optional gateway for cross-tool pre-turn context fan-out. Structural — real AssistantToolGateway satisfies this. */
+  readonly conversationProvenance?: Pick<ConversationProvenancePort, "recordAdmission">;
   readonly crossToolGateway?: {
     runReadToolForActor(
       actorUserId: string,
       toolName: string,
-      rawInput: unknown
+      rawInput: unknown,
+      binding?: CrossToolTurnBinding
     ): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }>;
   };
   readonly connectorSyncAt?: (
@@ -706,6 +714,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
   manager = new ChatSessionManager({
     engineFactory: managerEngineFactory,
     persistence,
+    conversationProvenance: deps.conversationProvenance,
     personaFs: createRealPersonaFs(),
     clock: { now: () => Date.now() },
     idleMs: deps.idleMs ?? DEFAULT_IDLE_MS,
@@ -875,12 +884,13 @@ function buildCrossToolReadAdapter(gateway: {
   runReadToolForActor(
     actorUserId: string,
     toolName: string,
-    rawInput: unknown
+    rawInput: unknown,
+    binding?: CrossToolTurnBinding
   ): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }>;
 }): CrossToolReadRunner {
   return {
-    runReadTool: (actorUserId, toolName, input) =>
-      gateway.runReadToolForActor(actorUserId, toolName, input)
+    runReadTool: (actorUserId, toolName, input, binding) =>
+      gateway.runReadToolForActor(actorUserId, toolName, input, binding)
   };
 }
 

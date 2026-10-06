@@ -472,6 +472,7 @@ export const sportsModuleManifest = {
         "List compact, non-sensitive facts about the actor's followed teams/competitions playing today (one short line per follow). Read-only; briefing-oriented, not a live scores/schedule browser.",
       permissionId: "sports.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {
@@ -524,6 +525,7 @@ export const sportsModuleManifest = {
       permissionId: "sports.follow",
       actionFamilyId: "sports_follows",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -555,6 +557,7 @@ export const sportsModuleManifest = {
         "List the active actor's bounded public sports sources, assignments, health, timestamps, and safe recovery status. Never returns recipes or opaque parameters.",
       permissionId: "sports.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: sportsListSourcesExecute
     },
@@ -564,6 +567,7 @@ export const sportsModuleManifest = {
         "Preview and safely verify one public unauthenticated sports publisher and optional followed targets before confirmation. Returned headline samples are external publisher content.",
       permissionId: "sports.sources",
       risk: "read",
+      content: "outside",
       externalContent: true,
       inputSchema: previewSportsSourceSchema.body,
       execute: sportsPreviewSourceExecute
@@ -586,6 +590,7 @@ export const sportsModuleManifest = {
         "Preview an exact replacement assignment set for one sports source. Added target samples are external publisher content.",
       permissionId: "sports.sources",
       risk: "read",
+      content: "outside",
       externalContent: true,
       inputSchema: {
         type: "object",
@@ -621,6 +626,7 @@ export const sportsModuleManifest = {
         "Preview a bounded safe rebuild of one saved sports source recipe without changing it. Samples are external publisher content.",
       permissionId: "sports.sources",
       risk: "read",
+      content: "outside",
       externalContent: true,
       inputSchema: {
         type: "object",
@@ -670,6 +676,7 @@ export const sportsModuleManifest = {
       permissionId: "sports.sources",
       actionFamilyId: "sports.sources",
       risk: "destructive",
+      content: "user_authored",
       selfOperationGrant: "confirm_always",
       inputSchema: {
         type: "object",

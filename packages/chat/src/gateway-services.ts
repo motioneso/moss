@@ -10,7 +10,8 @@ import {
   type ActiveModulesResolver,
   type AssistantToolGatewayDependencies,
   type PlatformDiagnosticsService,
-  type SessionNotifier
+  type SessionNotifier,
+  type ConversationProvenancePort
 } from "@moss/ai";
 import { createBriefingRunJobReadService, createBriefingRunQueueService } from "@moss/briefings";
 import { CalendarRepository, sendCalendarCacheEvictJob } from "@moss/calendar";
@@ -147,6 +148,7 @@ export function buildChatGatewayDependencies(args: {
   webSearchEngineForActor?: (actorUserId: string) => Promise<"brave" | "model-native" | "none">;
   appMapService?: AppMapReadService;
   appActions?: AppActionsService;
+  conversationProvenance?: ConversationProvenancePort;
   platformDiagnostics?: PlatformDiagnosticsService;
   collaborators: {
     googleConnectionService?: GoogleConnectionService;
@@ -173,7 +175,7 @@ export function buildChatGatewayDependencies(args: {
     repository: args.repository,
     runner: args.runner,
     tokens: args.tokens,
-    provenance: new ConversationProvenanceStore(args.runner),
+    provenance: args.conversationProvenance ?? new ConversationProvenanceStore(args.runner),
     confirmations: args.confirmations,
     notifier: args.notifier,
     ...(appResolver && args.appActions

@@ -11,7 +11,14 @@ describe("first-party Moss MCP transport", () => {
     const yoloMode = vi.fn();
     const gateway = new AssistantToolGateway({
       // This fixture exercises ordinary policy on an explicitly clean conversation.
-      provenance: { isTainted: async () => false, recordAdmission: async () => {} },
+      provenance: {
+        isTainted: async () => false,
+        recordAdmission: async () => {},
+        runAutomatic: async (_actor, _thread, callback) => ({
+          kind: "ran",
+          value: await callback()
+        })
+      },
       resolveActiveModules: async () => [],
       repository: { createPendingAssistantAction } as never,
       runner: { withDataContext: vi.fn() } as never,
@@ -52,7 +59,14 @@ describe("first-party Moss MCP transport", () => {
     const resolveLocalTimezone = vi.fn(async () => null);
     const gateway = new AssistantToolGateway({
       // This fixture exercises ordinary policy on an explicitly clean conversation.
-      provenance: { isTainted: async () => false, recordAdmission: async () => {} },
+      provenance: {
+        isTainted: async () => false,
+        recordAdmission: async () => {},
+        runAutomatic: async (_actor, _thread, callback) => ({
+          kind: "ran",
+          value: await callback()
+        })
+      },
       resolveActiveModules: async () => [],
       repository: { createPendingAssistantAction } as never,
       runner: {
@@ -100,7 +114,14 @@ describe("logical action terminal results", () => {
     const handlerRequestIds: string[] = [];
     const gateway = new AssistantToolGateway({
       // This fixture exercises ordinary policy on an explicitly clean conversation.
-      provenance: { isTainted: async () => false, recordAdmission: async () => {} },
+      provenance: {
+        isTainted: async () => false,
+        recordAdmission: async () => {},
+        runAutomatic: async (_actor, _thread, callback) => ({
+          kind: "ran",
+          value: await callback()
+        })
+      },
       resolveActiveModules: async () => [
         {
           id: "demo-module",
@@ -116,6 +137,8 @@ describe("logical action terminal results", () => {
               permissionId: "demo-module.resume.write",
               actionFamilyId: "resume_changes",
               risk: "write",
+              content: "user_authored",
+              isExternal: false,
               executionPolicy: "auto",
               execute: async (_db, _toolInput, ctx) => {
                 handlerRequestIds.push(ctx.requestId);
@@ -226,7 +249,14 @@ describe("logical action terminal results", () => {
         invoke: async (thrown: unknown) => {
           const gateway = new AssistantToolGateway({
             // This fixture exercises ordinary policy on an explicitly clean conversation.
-            provenance: { isTainted: async () => false, recordAdmission: async () => {} },
+            provenance: {
+              isTainted: async () => false,
+              recordAdmission: async () => {},
+              runAutomatic: async (_actor, _thread, callback) => ({
+                kind: "ran",
+                value: await callback()
+              })
+            },
             resolveActiveModules: async () => [
               {
                 id: "demo-module",

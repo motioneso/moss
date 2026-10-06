@@ -29,6 +29,7 @@ import { CLAUDE_PERMISSION_HOOK_SOURCE } from "../../packages/chat/src/live/pers
 import { resolveYoloMode } from "../../packages/chat/src/routes.js";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
 
 async function runClaudePermissionHook(
@@ -91,6 +92,8 @@ function registerResolveRoute(
 
 describe("MCP HTTP transport", () => {
   let appDb: Kysely<MossDatabase>;
+  let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let app: FastifyInstance;
   let tokens: SessionTokenRegistry;
   let gateway: AssistantToolGateway;
@@ -99,7 +102,7 @@ describe("MCP HTTP transport", () => {
   beforeAll(async () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
-    const runner = new DataContextRunner(appDb);
+    runner = new DataContextRunner(appDb);
     const repository = new AiRepository();
 
     tokens = new SessionTokenRegistry();
@@ -110,6 +113,7 @@ describe("MCP HTTP transport", () => {
       resolveActiveModules: async () => [exampleToolModule],
       repository,
       runner,
+      provenance: new ConversationProvenanceStore(runner),
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -121,7 +125,8 @@ describe("MCP HTTP transport", () => {
     await app.ready();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
     exampleToolCalls.length = 0;
     emitted.length = 0;
   });
@@ -152,7 +157,7 @@ describe("MCP HTTP transport", () => {
 
   it("responds to initialize with MCP protocol version", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: randomUUID(),
       allowedToolNames: null
     });
@@ -172,7 +177,7 @@ describe("MCP HTTP transport", () => {
 
   it("returns 204 for notifications/initialized", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: randomUUID(),
       allowedToolNames: null
     });
@@ -187,7 +192,7 @@ describe("MCP HTTP transport", () => {
 
   it("tools/list returns executable tools and excludes declaration-only", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: randomUUID(),
       allowedToolNames: null
     });
@@ -211,7 +216,7 @@ describe("MCP HTTP transport", () => {
       resolveActiveModules: async (actorUserId) =>
         actorUserId === ids.userA ? [exampleToolModule] : [],
       repository: new AiRepository(),
-      runner: new DataContextRunner(appDb),
+      ...conversations.gatewayDependencies,
       tokens: scopedTokens,
       confirmations: new ConfirmationRegistry(),
       notifier: { emit: () => {} },
@@ -223,7 +228,7 @@ describe("MCP HTTP transport", () => {
     try {
       const callList = async (actorUserId: string) => {
         const token = scopedTokens.mint({
-          actorUserId,
+          ...conversations.bindingFor(actorUserId),
           chatSessionId: randomUUID(),
           allowedToolNames: null
         });
@@ -253,7 +258,7 @@ describe("MCP HTTP transport", () => {
 
   it("tools/call runs a read tool and returns MCP content", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: randomUUID(),
       allowedToolNames: null
     });
@@ -282,7 +287,7 @@ describe("MCP HTTP transport", () => {
 
   it("write call blocks, emits action_request, approves, executes", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: randomUUID(),
       allowedToolNames: null
     });
@@ -331,7 +336,7 @@ describe("MCP HTTP transport", () => {
   // either the broken or the fixed code.
   it("approve response is not observed until the tool's write has actually happened", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: randomUUID(),
       allowedToolNames: null
     });
@@ -390,7 +395,7 @@ describe("MCP HTTP transport", () => {
 
   it("tools/call returns an error when tool is not in the session allowlist", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: randomUUID(),
       allowedToolNames: new Set(["example.write"])
     });
@@ -415,6 +420,8 @@ describe("MCP HTTP transport", () => {
 
 describe("HTTP resolve endpoint", () => {
   let appDb: Kysely<MossDatabase>;
+  let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let appA: FastifyInstance;
   let appB: FastifyInstance;
   let tokens: SessionTokenRegistry;
@@ -423,7 +430,7 @@ describe("HTTP resolve endpoint", () => {
 
   beforeAll(async () => {
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
-    const runner = new DataContextRunner(appDb);
+    runner = new DataContextRunner(appDb);
     const repository = new AiRepository();
     tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
@@ -433,6 +440,7 @@ describe("HTTP resolve endpoint", () => {
       resolveActiveModules: async () => [exampleToolModule],
       repository,
       runner,
+      provenance: new ConversationProvenanceStore(runner),
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -450,7 +458,8 @@ describe("HTTP resolve endpoint", () => {
     await appB.ready();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
     exampleToolCalls.length = 0;
     emitted.length = 0;
   });
@@ -472,7 +481,7 @@ describe("HTTP resolve endpoint", () => {
 
   it("approve via HTTP unblocks the pending call and returns 204", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -511,7 +520,7 @@ describe("HTTP resolve endpoint", () => {
 
   it("cross-user resolve does NOT unblock the owner's pending call (IDOR guard)", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -568,7 +577,7 @@ describe("HTTP resolve endpoint", () => {
     // Same guard as the approve variant above, through the reject path (which
     // skips the ownership read and relies on the owner-scoped update).
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });

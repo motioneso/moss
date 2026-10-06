@@ -25,6 +25,7 @@ export {
 } from "./output-validation.js";
 export type {
   AdmissionPath,
+  AutomaticExecution,
   ConversationProvenancePort,
   ActiveModulesResolver,
   CallCardDetails,

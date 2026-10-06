@@ -58,7 +58,6 @@ describe("AssistantToolGateway self-operation", () => {
       maxConnections: 1
     });
     runner = new DataContextRunner(appDb);
-    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
     repository = new AiRepository();
   });
 
@@ -67,7 +66,9 @@ describe("AssistantToolGateway self-operation", () => {
     await appDb.destroy();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
+
     exampleToolCalls.length = 0;
     emitted = [];
     tokens = new SessionTokenRegistry();
@@ -388,8 +389,8 @@ describe("AssistantToolGateway self-operation", () => {
     // gateway (calling SportsService.followTeam/unfollowTeam directly with a scoped db); this
     // proves it through the tool/gateway path — i.e. that AssistantToolGateway.callTool threads
     // *the calling token's* actorUserId into the data context, not some cached/ambient one. That
-    // threading is the trust boundary self-operation introduces: these tools run with no
-    // confirmation card, so nothing else stands between an untrusted call and the DB.
+    // threading remains the RLS trust boundary. The initial calls on each clean thread run
+    // automatically; Alice's later call confirms because following admits sports source text.
     const grantManifest: SelfOperationManifestInput = {
       id: sportsModuleManifest.id,
       assistantTools: sportsModuleManifest.assistantTools,
@@ -453,6 +454,12 @@ describe("AssistantToolGateway self-operation", () => {
       competitionKey: "nfl"
     });
     expect(followed.ok).toBe(true);
+    expect(
+      await conversations.gatewayDependencies.provenance.isTainted(
+        ids.userA,
+        conversations.bindingFor(ids.userA).threadId
+      )
+    ).toBe(true);
 
     // The actual assertion: user B's own token, entering via the same gateway/tool path an
     // untrusted request would use, must not see or remove user A's follow. Mutation-tight against
@@ -469,9 +476,15 @@ describe("AssistantToolGateway self-operation", () => {
 
     // Positive control: user A's own call still finds and removes the row it owns — proves the
     // follow genuinely exists and user B's `removed: false` isn't vacuously true for everyone.
-    const aliceUnfollow = await sportsGateway.callTool(tokenA, "sports.unfollowTeam", {
+    emitted.length = 0;
+    const pendingAliceUnfollow = sportsGateway.callTool(tokenA, "sports.unfollowTeam", {
       competitionKey: "nfl"
     });
+    const request = await waitForActionRequest();
+    expect(request.toolName).toBe("sports.unfollowTeam");
+    expect(emitted[0]?.record).toMatchObject({ outsideContentNotice: true });
+    await sportsGateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
+    const aliceUnfollow = await pendingAliceUnfollow;
     expect(aliceUnfollow.ok).toBe(true);
     if (aliceUnfollow.ok) {
       expect(aliceUnfollow.structuredData).toEqual({ removed: true });

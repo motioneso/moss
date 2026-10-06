@@ -10,10 +10,16 @@
   gate.
 - **Delivery:** one worktree, one branch, one PR. Eight builder slices, each sized for one session.
   Phase 1 ships as one unit, so nothing merges until slice 8 records the live proof.
+- **Current implementation:** Slice 7 is implemented in the working tree; section 8.12 is the
+  current source-level ruling. New database suites await exact-head hosted CI. Slice 8 is unbuilt;
+  this is not database, live-product, completion or merge proof.
 
 ## 1. Seams
 
-Every capability the plan relies on, cited at `340f03f4f`. Anything not citable is in section 1.9.
+This section preserves the pre-build seam inventory at `340f03f4f`; its line numbers and
+"today" statements are historical. The Slice 7 admission additions and current contracts below,
+and the implementation ruling in section 8.12, supersede the baseline where they differ. Anything
+not citable in the original inventory is in section 1.9.
 
 ### 1.1 Sign-in and request handling
 
@@ -95,28 +101,35 @@ test reports the exact figure.
 
 ### 1.4 Outside content: every admission path
 
-| #   | Path                                                        | Where                                                                      | Slice 7 action                                     |
-| --- | ----------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------- |
-| a   | Memory seed at launch                                       | `chat/src/live/chat-session-launch.ts:93-98,111`                           | admit, taints                                      |
-| b   | Replay of prior turns and summary at launch                 | `chat-session-launch.ts:99-119,160-165`; `persistence.ts:213-243`          | no new taint; the thread row carries it            |
-| b3  | Native CLI resume                                           | `structured-claude-engine.ts:528-531`; `structured-gemini-engine.ts:91`    | as b                                               |
-| c   | Per-turn passive memory recall                              | `chat/src/live/engine-text.ts:84-101`                                      | admit, taints                                      |
-| d   | Per-turn cross-tool read (notes, email, calendar, tasks)    | `engine-text.ts:102-110`; `cross-tool-reasoning.ts:6,86-114`               | admit, taints                                      |
-| e   | Per-turn notes retrieval                                    | `engine-text.ts:111-121`                                                   | admit, taints                                      |
-| f   | Combiner that prepends c, d, e to the user text             | `engine-text.ts:154-160`; `chat-context-blocks.ts:41`                      | accepts admitted blocks only                       |
-| g   | Attachment manifest (metadata only)                         | `chat-session-manager.ts:337-339`; `attachments-manifest.ts:12-27`         | no taint; file bytes come by tool                  |
-| h   | Module control context from the request body                | `chat-session-manager.ts:340-342`; `live-routes.ts:817,855`                | admit, taints                                      |
-| i   | Seed route                                                  | `live-routes.ts:446-479`; `chat-session-launch.ts:193-205`                 | admit, taints                                      |
-| j   | Evening interview seed (briefing text)                      | `live-routes.ts:398-432,610-630`; `module-registry/src/index.ts:3713-3726` | admit, taints                                      |
-| k   | Persona and system prompt                                   | `chat/src/live/runtime.ts:100-125,886-920`                                 | no taint                                           |
-| l   | Tool results                                                | `ai/src/gateway/run-tool-handler.ts:80-90`                                 | taint unless the effective tool is `user_authored` |
-| m   | Classifier-gate handled turn                                | `classifier-gate-lifecycle.ts:185`                                         | covered by l (gate calls go through the gateway)   |
-| n   | Meeting chat                                                | `meetings/src/meeting-chat-service.ts:58,96`                               | out of scope: separate tool-less generation        |
-| o   | Claude CLI native vault reads (`Read`, `Glob`, `Grep`)      | see 1.4.2                                                                  | hook reports first, taint recorded, then allow     |
-| p   | Outside-agent (ACP) reads, web fetches, web searches, shell | `ai/src/gateway/acp-permission.ts:101,225,256-276,399`; `gateway.ts:564`   | taint on every allowed read, web or shell ask      |
+| #   | Path                                                                 | Where                                                                      | Slice 7 action                                                            |
+| --- | -------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| a   | Memory seed at launch                                                | `chat/src/live/chat-session-launch.ts:93-98,111`                           | admit, taints                                                             |
+| b   | Replay of prior turns and summary at launch                          | `chat-session-launch.ts:99-119,160-165`; `persistence.ts:213-243`          | no new taint; the thread row carries it                                   |
+| b3  | Native CLI resume                                                    | `structured-claude-engine.ts:528-531`; `structured-gemini-engine.ts:91`    | as b                                                                      |
+| c   | Per-turn passive memory recall                                       | `chat/src/live/engine-text.ts:84-101`                                      | admit, taints                                                             |
+| d   | Per-turn cross-tool read (notes, email, calendar, tasks)             | `engine-text.ts:102-110`; `cross-tool-reasoning.ts:6,86-114`               | admit, taints                                                             |
+| e   | Per-turn notes retrieval                                             | `engine-text.ts:111-121`                                                   | admit, taints                                                             |
+| f   | Combiner that prepends c, d, e to the user text                      | `engine-text.ts:154-160`; `chat-context-blocks.ts:41`                      | accepts admitted blocks only                                              |
+| g   | Attachment manifest (metadata only)                                  | `chat-session-manager.ts:337-339`; `attachments-manifest.ts:12-27`         | no taint; file bytes come by tool                                         |
+| h   | Module control context from the request body                         | `chat-session-manager.ts:340-342`; `live-routes.ts:817,855`                | admit, taints                                                             |
+| i   | Seed route                                                           | `live-routes.ts:446-479`; `chat-session-launch.ts:193-205`                 | admit, taints                                                             |
+| j   | Evening interview seed (briefing text)                               | `live-routes.ts:398-432,610-630`; `module-registry/src/index.ts:3713-3726` | admit, taints                                                             |
+| k   | Persona and system prompt                                            | `chat/src/live/runtime.ts:100-125,886-920`                                 | no taint                                                                  |
+| l   | Tool results                                                         | `ai/src/gateway/run-tool-handler.ts:80-90`                                 | taint unless the effective tool is `user_authored`                        |
+| m   | Classifier-gate handled turn                                         | `classifier-gate-lifecycle.ts:185`                                         | result covered by l; pre-call inputs by q and r                           |
+| n   | Meeting chat                                                         | `meetings/src/meeting-chat-service.ts:58,96`                               | out of scope: separate tool-less generation                               |
+| o   | Claude CLI native vault reads (`Read`, `Glob`, `Grep`)               | see 1.4.2                                                                  | hook reports first, taint recorded, then allow                            |
+| p   | Outside-agent (ACP) reads, web fetches, web searches, shell          | `ai/src/gateway/acp-permission.ts`; `chat/src/live/chat-session-launch.ts` | admit allowed read/web/shell asks; also taint ACP before launch           |
+| q   | Outside tool descriptors, including classifier menus                 | `ai/src/gateway/gateway.ts`; `chat/src/live/classifier-gate-wiring.ts`     | admit `tool_external_descriptors` before returning descriptors            |
+| r   | Classifier candidate IDs and labels                                  | `chat/src/live/classifier-gate-wiring.ts`                                  | normalize, then admit valid nonempty snapshots as `classifier_candidates` |
+| s   | Model-visible remote schema errors and forwarded safe handler errors | `ai/src/gateway/gateway.ts`; `run-tool-handler.ts`; `content-admission.ts` | schema text uses descriptor admission; safe errors use result admission   |
+| t   | Allowed native non-vault output                                      | `ai/src/gateway/native-permission-handler.ts`                              | admit `native_tool_result` before permission allow                        |
 
 Rows c, d and e run on every turn. A block taints only when it is admitted non-empty: an empty
-recall, an empty notes block or an empty cross-tool read records nothing (decision 2.19).
+recall, an empty notes block or an empty cross-tool read records nothing (decision 2.19). Rows q–t
+are the Slice 7 source-level additions, not part of the original inventory. Direct model-visible
+outside results and nonempty progress use row l; internal cross-tool retrieval is admitted at row d
+only when its rendered block is nonempty. No-taint and excluded paths remain listed above.
 
 #### 1.4.1 Read tools: the mark is opt-in today
 
@@ -300,8 +313,10 @@ module name (`query-keys.ts:139`). Sports and News keep their own key lists
 9. **Admission is enforced by type.** Context blocks reach the prompt combiner only as an
    `AdmittedContext` value, and only the admission function makes one. A source test backs this up
    (slice 7).
-10. **New threads get a clean row in the same transaction as the thread insert.** Threads from
-    before this ships have no row and count as tainted.
+10. **New threads get a clean row in the same transaction as the thread insert.** Migration
+    `0293` makes this database-trigger initialization, not an application clean INSERT. Runtime
+    INSERT requires a tainted timestamp and path; a legacy missing row cannot be filled in as
+    clean. Threads from before this ships are not backfilled and count as tainted.
 11. **The provenance row is not in the user data export.** It is derived metadata, not user content.
 12. **`content` governs every response, not only reads.** A write's response enters the model's
     context too, so a route's `content` class decides whether any response taints and gets wrapped.
@@ -334,14 +349,16 @@ module name (`query-keys.ts:139`). Sports and News keep their own key lists
     and implies `"outside"`; `"user_authored"` with `externalContent: true` fails the assertion.
     External module tools default to `"outside"` with no declaration needed.
 21. **Native vault reads stay, and the server hears each one first.** Moss uses them heavily. The
-    hook sends a read report to the server, which records `tool_external_content` before the hook
+    hook sends a read report to the server, which records `native_vault_read` before the hook
     allows the read. If the report fails or the token is missing, the hook denies the read. Both
     hook copies change, and the one-shot hook gains the report URL and token. Gemini and Codex give
     no native reads (1.4.2). Outside agents over ACP ask the gateway in-process. It records taint on
     every allowed ask in the read, web or shell family, at both allow exits, because a fetched page
     or a `curl` brings outside text in as surely as a file read. Keeping the agent out of the notes
     folders would not cover the web. If slice 7 finds an agent can read, fetch or run a command
-    without raising an ask, its threads are tainted from launch.
+    without raising an ask, its threads are tainted from launch. Slice 7 uses that conservative
+    fallback for ACP engines, in addition to recording the asks it does observe. Other native
+    permissions that can return outside output record `native_tool_result` before allow.
 22. **July families are blocked by two independent nets.** `CHAT_BLOCKED_PATH_RULES` gains path
     patterns for every family with routes (the list in 4.2), so a new route in a family is caught
     without a table row. A pattern may block writes only where reading is harmless. Separately, a
@@ -662,26 +679,40 @@ export type AdmissionPath =
   | "evening_seed"
   | "module_control_context"
   | "native_vault_read"
+  | "native_tool_result"
   | "outside_agent_read"
   | "outside_agent_web"
   | "outside_agent_shell"
-  | "outside_agent_launch"; // only if slice 7 finds an agent acting without an ask (1.9)
+  | "outside_agent_launch"
+  | "tool_external_descriptors"
+  | "classifier_candidates";
+
+export type AutomaticExecution<T> =
+  | { readonly kind: "ran"; readonly value: T }
+  | { readonly kind: "confirm" };
 
 export interface ConversationProvenancePort {
-  // threadId undefined, no row, or a thread the actor does not own => true
+  // Missing/foreign/legacy state or an outstanding reservation => true.
   isTainted(actorUserId: string, threadId: string | undefined): Promise<boolean>;
   recordAdmission(actorUserId: string, threadId: string, path: AdmissionPath): Promise<void>;
+  // Optional for compatibility; automatic execution refuses a missing implementation.
+  runAutomatic?<T>(
+    actorUserId: string,
+    threadId: string | undefined,
+    execute: () => Promise<T>
+  ): Promise<AutomaticExecution<T>>;
 }
 
-// packages/chat/src/live/context-admission.ts (new)
+// packages/chat/src/live/context-admission.ts
+const admitted = Symbol("admitted context"); // module-private brand
 export interface AdmittedContext {
   readonly text: string;
-  readonly __admitted: unique symbol;
+  readonly [admitted]: true;
 }
 
 export function admitToContext(
   deps: { recordForThread(threadId: string, path: AdmissionPath): Promise<void> },
-  threadId: string,
+  threadId: string | null,
   path: AdmissionPath,
   text: string
 ): Promise<AdmittedContext | null>; // null for empty or whitespace text; nothing recorded
@@ -692,10 +723,18 @@ export function admitToContext(
 // 204 after the admission is recorded; any failure is non-2xx and the hook denies the read.
 ```
 
-The prompt combiner (`chat-context-blocks.ts:41`) and the launch and seed submit sites accept only
-`AdmittedContext`. The report route is declared in the chat manifest beside
-`/internal/permission` (`chat/src/manifest.ts:332`) and is under `/internal/*`, so chat can never
-call it. It records against the thread bound to the token, never one named in the body.
+The prompt combiner consumes `AdmittedContext` values. `prepareTurnText` produces a branded
+`PreparedTurn` for `submitPreparedTurn`; seed submission uses `submitAdmittedContext`. Launch
+replay remains the explicit exception: already admitted memory seed is combined with replay of
+the same bound thread, whose durable state carries prior taint. Empty/whitespace blocks return
+`null` before any record; nonempty blocks await recording before a branded value is returned.
+
+`AssistantToolGateway.recordContextForSession(token, path)` verifies the token and derives actor
+and thread before recording. The native report route is declared in the chat manifest beside
+`/internal/permission` and is under `/internal/*`, so `app.callAction` cannot invoke it. It validates
+the report body but records only token-derived actor/thread and `native_vault_read`, never file
+content or body-supplied identity. Both hooks require the successful report before allowing a vault
+read. Gateway outcomes use fixed admission-failure text when recording fails.
 
 ### 4.7 Migration DDL (`packages/chat/sql/NNNN_chat_conversation_provenance.sql`)
 
@@ -703,8 +742,10 @@ The next free number was reserved as `0291` for Slice 6 after checking live main
 and the locally held Meetings work. `0289` belongs to Slice 5 and `0290` to the separate recording
 notice correction. Register the chat-owned table and migration in the manifest.
 
-The authoritative DDL is [`0291_chat_conversation_provenance.sql`](../../../packages/chat/sql/0291_chat_conversation_provenance.sql).
-The original sketch required three corrections before implementation:
+The Slice 6 DDL is [`0291_chat_conversation_provenance.sql`](../../../packages/chat/sql/0291_chat_conversation_provenance.sql),
+which remains unchanged. Slice 7 adds
+[`0293_chat_automatic_action_reservations.sql`](../../../packages/chat/sql/0293_chat_automatic_action_reservations.sql).
+The original sketch required three corrections before Slice 6 implementation:
 
 - Owner-column equality alone does not establish ownership of the parent thread. Every runtime
   policy also checks the actual thread owner; sharing a thread does not share its safety state.
@@ -713,10 +754,22 @@ The original sketch required three corrections before implementation:
 - Runtime does not receive direct DELETE. Otherwise delete followed by clean INSERT could erase
   known taint. Legitimate thread/private-chat/account deletion still cascades through foreign keys.
 
-RLS is enabled and forced, and no worker/admin private-data bypass is added. New-thread creation
-inserts the clean row in the same transaction. No migration backfills older threads as clean.
-The repository is the only application path that creates clean rows; the SQL INSERT privilege is
-not claimed to prohibit an arbitrary owner-scoped direct clean INSERT into a legacy missing row.
+RLS is enabled and forced, and no worker/admin private-data bypass is added. The Slice 6
+implementation inserted clean provenance from the repository, leaving a direct runtime clean
+INSERT into a legacy missing row possible. That is historical, not the current contract.
+
+Migration `0293` tightens the runtime INSERT policy to require nonnull `tainted_at` and
+`first_admission_path`. A restricted SECURITY DEFINER `AFTER INSERT` trigger initializes clean
+provenance only for a newly inserted parent thread, within the same transaction. Its policy checks
+trigger depth and actual parent ownership; the repository no longer inserts clean provenance.
+Neither migration backfills legacy threads as clean. Runtime may introduce known-tainted history,
+but cannot manufacture a clean legacy row. These SQL protections have authored hosted tests;
+local source inspection is not a passing database verdict.
+
+`0293` also adds `app.chat_automatic_action_reservations`, with only `thread_id`, `owner_user_id`
+and `reservation_id`, owner/parent-scoped RLS and thread/account deletion cascades. Section 8.12
+describes claim/admission serialization and release. It has no deadline, lease renewal or restart
+cleanup; an orphan remains fail-closed.
 
 ### 4.8 The three tools (Settings manifest, beside `app.getMapSlice`)
 
@@ -970,10 +1023,13 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
   - Purging a private chat deletes its provenance row.
   - User B cannot read or update user A's row; a tainted row cannot be set back to clean.
   - Each protection test observed failing with its check removed.
-- **Done:** taint decides confirm for every gateway path, keyed by the bound thread. Nothing
-  records taint yet except direct port calls in tests.
+- **Slice 6 endpoint (historical):** taint decided confirm for gateway paths, keyed by the bound
+  thread; production admission was still deferred. Section 8.12 records the current Slice 7 state.
 
 ### Slice 7: every admission path records taint
+
+The original build requirements below remain the acceptance checklist. Current implementation
+details and the outstanding hosted/live verification limits are recorded in section 8.12.
 
 **Additional verification requirements from Slice 6 review (#3065, phase-1 merge blockers):**
 
@@ -1012,7 +1068,7 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
     allow exits (YOLO `:256-276`, final `:399`): `read` records `outside_agent_read`, `web`
     records `outside_agent_web`, `shell` records `outside_agent_shell`. A failed record denies the
     ask. If the 1.9 question finds an agent acting without an ask, the ACP session launch records
-    `outside_agent_launch` instead.
+    `outside_agent_launch` as well; the current ACP engine uses this conservative fallback.
   - `apps/web/src/chat/action-request-card.tsx`: one notice line when `outsideContentNotice`.
 - **Tests:**
   - `tests/integration/conversation-provenance.test.ts`:
@@ -1049,6 +1105,9 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
   on.
 
 ### Slice 8: browser test and live proof
+
+**Current status (2026-10-06): unbuilt.** The files, commands and live proof below are requirements,
+not results. Slice 7 unit checks do not satisfy this slice.
 
 - **Files:** `tests/uat/specs/3065-app-actions.uat.spec.ts` (scripted model, auto-run paths);
   `tests/uat/specs/3065-app-actions-real.uat.spec.ts` (real model, gated on
@@ -1456,6 +1515,9 @@ interpolated into these refusal messages.
 
 ### 8.11 Slice 6 provenance and binding verification (2026-10-06)
 
+**Historical checkpoint:** this section records the Slice 6 state before Slice 7. The current
+implementation ruling in section 8.12 supersedes its deferred-admission and concurrency statements.
+
 Slice 5 correction `8dd0046c58002f9fe061d2ff94785cbbcfc2aee6` passed every exact-head hosted
 workflow, including all 38 app-action database cases with zero skips and the real browser card
 suite. The final pre-run exception wrapper now has its own sentinel regression: removing it
@@ -1495,3 +1557,125 @@ removal controls are recorded in the PR. The isolated gate cannot start here bec
 absent; no bare database test, provider call, credentials, device permission or real recording is
 used. Exact-head hosted DB/browser outcomes must be recorded after the push. Live product proof
 and the remaining Phase 1 slices still block completion/merge.
+
+### 8.12 Current Slice 7 implementation ruling (2026-10-06)
+
+This is the source-level implementation record for Slice 7, superseding the historical Slice 6
+checkpoint above. It does not certify the database behavior or a live product run. Applied migration
+`0291` is unchanged; the new `0293` migration and the code using it must ship together.
+
+#### Durable clean authority and automatic execution
+
+- New-thread clean provenance is initialized by the database trigger in `0293`, in the parent
+  insert transaction. Direct runtime clean INSERT is forbidden, including into a legacy missing
+  row. Old threads are not backfilled as clean. Existing monotonic-taint and owner/parent checks
+  remain in force.
+- `ConversationProvenanceStore.runAutomatic` uses a short actor-scoped claim transaction: lock the
+  owned provenance row, require an existing clean row and no reservation, and insert a fresh opaque
+  reservation ID. The transaction commits and returns its connection before the protected callback
+  starts. Handler transaction acquisition and composition-owned app-route preflight therefore run
+  under a committed reservation without holding the claim transaction's connection.
+- `recordAdmission` takes the same provenance-row lock. After that lock resolves, a separate SQL
+  statement checks for a reservation using a fresh READ COMMITTED snapshot. A reservation rejects
+  admission; content is withheld rather than exposed while an automatic callback is active. If
+  admission wins first, the subsequent automatic claim sees taint and returns `confirm` without
+  dispatching. This is the implemented ordering mechanism; a repeated boolean lookup alone is not
+  described as an atomic barrier.
+- The callback runs only after a successful claim. Its actual promise must settle before cleanup;
+  release matches thread, owner and that exact reservation ID. Callback/release failures do not
+  turn into a second automatic execution or a second approval attempt. Acquisition failure can
+  fall back to confirmation; an uncertain committed reservation is deliberately retained.
+- Reservations have no timeout, expiry, cancellation release or restart cleanup. An orphaned
+  reservation makes `isTainted` true, prevents another automatic claim, and rejects new content
+  admission. Wait for a still-running action or start a new chat; if an action may have run, inspect
+  the app before retrying. Opening a new chat does not clear the old row. Normal thread/account
+  deletion still cascades. There is no automatic orphan recovery that guesses an action ended.
+- Gateway automatic dispatch uses this port for non-read calls and outbound-read overrides; a
+  missing `runAutomatic` port cannot authorize execution. Dry-run does not acquire a reservation
+  or admit a result. The automatic callback's result is admitted after release.
+- **Native/ACP boundary:** Moss serializes outside-content admission with automatic permission
+  decisions. It does not serialize or observe the outside engine's eventual operation. A bound
+  in-flight request can linearize permission decision → admission even if its allow response is
+  delivered later. This does not claim that every physically executed native write after taint
+  asks. Terminal native/ACP grant success is deferred until required admission succeeds; failed
+  admission produces denial rather than a false successful grant. The server records permission,
+  not the external operation's completion.
+
+Source: `packages/chat/src/conversation-provenance.ts`, `packages/chat/sql/0293_chat_automatic_action_reservations.sql`,
+`packages/ai/src/gateway/content-admission.ts` and `gateway.ts`.
+
+#### Admission coverage and no-content cases
+
+- Default-engine pre-turn passive memory, cross-tool reads and notes retrieval use
+  `recall_memory_turn`, `recall_cross_tool` and `recall_notes`. Launch memory uses
+  `launch_memory_seed`; ordinary/evening seeds use `seed_route`/`evening_seed`; request-supplied
+  module-control text uses `module_control_context`. Nonempty blocks await admission before prompt
+  assembly/submission; whitespace-only blocks record nothing. Retrieval may return no context,
+  but a failed admission cannot be treated as successful exposure. The live classifier can handle
+  a turn before default-engine retrieval; it admits its own inputs as described below.
+- Notes privacy lookup and internal cross-tool reads carry the captured thread and session/surface
+  binding. Notes uses owner/surface-checked `getThreadById`, not the currently selected thread;
+  missing, foreign or private bindings yield no notes. An internal read that contributes no rendered
+  cross-tool block does not create a separate result admission.
+- Gateway successful outside results record `tool_external_content`, with `app_action_outside`
+  for `app.callAction` and `attachment_read` for `chat.readAttachment`. This covers ordinary,
+  confirmed and classifier execution, including structured data and media. Nonempty outside
+  progress is recorded before delivery; progress during a held automatic reservation may be
+  withheld. Only explicitly trusted `user_authored` outcomes without external markers are exempt.
+- Model-visible schema-validation errors from an external or unstamped tool can quote remote
+  schema field names. The normal `callTool` path records `tool_external_descriptors` before returning
+  that text, including when the token never listed tools. `callToolForGate` does not expose the
+  validation text: it returns the fixed `invalid_input` decline and makes no admission for that
+  failure. Other classifier inputs may already have tainted its thread.
+- A genuine `HttpError` message forwarded by a `safeErrors` tool is an admission-bearing handler outcome,
+  even for a tool whose successful content is `user_authored`. It uses the applicable result path
+  above. Fixed generic handler failures do not expose that error text and do not create an error
+  admission. A failed admission replaces the outcome with fixed `context_admission_unavailable`
+  recovery text, never the withheld result, schema text, media or safe-error message.
+- MCP `tools/list` uses token-bound `listToolsForSession` and admits `tool_external_descriptors`
+  before returning any outside tool descriptors. The classifier factory makes the same decision
+  before projecting away `isExternal`: any classifier-capable tool not stamped `false` requires
+  admission before the menu returns. This covers module labels, classifier descriptions and
+  schemas, in both live and shadow attempts; unavailable recording prevents classifier exposure.
+- Classifier candidate hooks finish their actor-scoped database work first. The factory then uses
+  `normalizeClassifierCandidates`, rejects malformed/oversize lists and admits only valid nonempty
+  snapshots under `classifier_candidates`. It returns ID/label-only copies after admission, so no
+  second connection is acquired while the hook holds the first. Empty/malformed candidates stay
+  candidate-clean and never reach argument choice/extraction. Admission metadata carries only the
+  token-derived identity and fixed path, never labels or candidate IDs.
+- Both persistent and one-shot Claude vault-read hooks await
+  `POST /internal/vault-read-report` before allowing `Read`/`Glob`/`Grep`. Missing tokens, failed
+  reports or unavailable recording deny the read. The route records `native_vault_read` from the
+  verified token. Other nontrivial native permission allows record `native_tool_result` before
+  grant because the server does not observe the resulting output; local read-only metadata tools
+  and first-party Moss MCP transport retain their explicit exceptions.
+- Every observed ACP allowed read/web/shell permission records `outside_agent_read`,
+  `outside_agent_web` or `outside_agent_shell`, including YOLO, folder-policy and confirmed paths.
+  The ACP engine declares `admitsOutsideContentWithoutPermission`; launch records
+  `outside_agent_launch` before starting it. This conservative fallback is active, not an unresolved
+  assumption that every outside-agent operation raises an ask. Admission failure prevents launch
+  or permission allow.
+- Typed user text, trusted persona/system/time metadata, attachment manifests without bytes and
+  explicitly trusted app/source readouts remain no-taint paths. Bound-thread replay/resume retains
+  existing durable state instead of manufacturing clean history. Meeting chat remains the
+  separately scoped tool-less generation path. Every built-in read tool declares its content class,
+  checked by the API's `onReady` assertion. Approval notices use the token-bound safety lookup;
+  the lookup also treats an outstanding reservation as unsafe authority.
+
+Sources: the admission sites in section 1.4, `context-admission.ts`, `engine-text.ts`,
+`chat-session-launch.ts`, `notes-tool-trust.ts`, `runtime.ts`, `classifier-gate-wiring.ts`,
+`packages/chat/src/mcp-transport.ts`, and the gateway's `run-tool-handler.ts`,
+`native-permission-handler.ts` and `acp-permission.ts`.
+
+#### Verification boundary
+
+Focused pure/unit suites and isolated guard-removal checks cover admission-before-exposure,
+fail-closed results, classifier choices/extraction, empty-block negatives and dispatch ordering.
+They do not establish PostgreSQL lock, policy, trigger or crash-recovery behavior. The authored
+hosted suites include `conversation-provenance-binding.test.ts`, `conversation-provenance.test.ts`,
+`conversation-automatic-reservation.test.ts`, `classifier-context-admission.test.ts` and
+`native-vault-read-admission.test.ts`, plus schema-catalog assertions and rollback-only SQL
+negative controls. The supported isolated DB gate cannot start in this environment because Docker
+is absent; those database suites await exact-head hosted CI. Final local test/typecheck receipts
+and counts will be recorded on the PR; no passing full local suite, local DB pass or live product
+proof is claimed here. Slice 8 is unbuilt, and phase 1 remains unverified for completion/merge.

@@ -97,7 +97,11 @@ function harness(
   return {
     ...makeAppActionGateway({
       runner,
-      provenance: { isTainted: async () => false, recordAdmission: async () => undefined },
+      provenance: {
+        isTainted: async () => false,
+        recordAdmission: async () => undefined,
+        runAutomatic: async (_actor, _thread, run) => ({ kind: "ran", value: await run() })
+      },
       appActions,
       autoApprove: options.autoApprove,
       forceConfirm: options.forceConfirm,
@@ -298,7 +302,8 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
     } as DataContextRunner;
     const h = makeAppActionGateway({
       runner,
-      appActions: { catalog: () => appActionCatalog, call }
+      appActions: { catalog: () => appActionCatalog, call },
+      provenance: { isTainted: async () => false, recordAdmission: async () => undefined }
     });
     const input = {
       method: "PATCH" as const,

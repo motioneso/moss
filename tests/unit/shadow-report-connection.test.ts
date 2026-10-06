@@ -148,7 +148,7 @@ describe("shadow report's declared mismatch fixture", () => {
       resolveActiveModules,
       dataContext: h.runner,
       classifierDeps: {} as never,
-      gateway: {} as never
+      gateway: { recordContextForSession: vi.fn(async () => {}) } as never
     })(UAT_ADMIN_ID, "unused-fixture-token");
     const [declared] = await ports.listTools();
     expect(declared?.name).toBe(SHADOW_REPORT_MODEL_TOOL);

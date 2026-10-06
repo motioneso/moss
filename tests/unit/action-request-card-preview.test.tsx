@@ -206,7 +206,7 @@ describe("app action details", () => {
     );
     expect(html).toContain("<q>Weekend theme &lt;script&gt;no()&lt;/script&gt;</q>");
     expect(html).toContain("**Evening**");
-    expect(html).toContain("read outside content in this chat");
+    expect(html).toContain("outside or unverified context");
     client.clear();
   });
 
@@ -221,7 +221,7 @@ describe("app action details", () => {
     expect(html).toContain("**Evening**");
     expect(html).toContain(">false</dd>");
     expect(html).not.toContain("<script>");
-    expect(html).not.toContain("read outside content");
+    expect(html).not.toContain("outside or unverified context");
   });
 
   it("only shows an outside-content notice when the server explicitly supplies true", () => {
@@ -231,7 +231,7 @@ describe("app action details", () => {
       summary: "Change",
       outsideContentNotice: true
     });
-    expect(html).toContain("read outside content in this chat");
+    expect(html).toContain("outside or unverified context");
   });
 
   it("preserves valid module refresh identifiers and discards malformed lists", () => {

@@ -352,26 +352,23 @@ describe("app action declarations", () => {
     });
   });
 
-  it("marks only dedicated own-record writes user_authored", () => {
+  it("marks dedicated own-record and status-only writes user_authored", () => {
     for (const name of [
       "settings.themeMode.set",
       "settings.locale.setTimezone",
       "settings.locale.setRegionAndDateFormat",
       "settings.quietHours.set",
-      "settings.undoLast"
+      "settings.undoLast",
+      "settings.notificationPreference.setEnabled"
     ]) {
       expect(
         settingsModuleManifest.assistantTools?.find((tool) => tool.name === name)?.content
       ).toBe("user_authored");
     }
+    // Geocoding returns provider-supplied place text rather than only an own-record status.
     expect(
       settingsModuleManifest.assistantTools?.find(
         (tool) => tool.name === "settings.weatherLocation.set"
-      )?.content
-    ).not.toBe("user_authored");
-    expect(
-      settingsModuleManifest.assistantTools?.find(
-        (tool) => tool.name === "settings.notificationPreference.setEnabled"
       )?.content
     ).not.toBe("user_authored");
   });

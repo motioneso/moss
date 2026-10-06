@@ -7,6 +7,7 @@ import type { StoredAttachmentMeta } from "../attachments-service.js";
 import { answerDetailSteps } from "./activity-detail-steps.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
+import { admissionForActor, admitToContext, submitPreparedTurn } from "./context-admission.js";
 import { buildEngineText } from "./engine-text.js";
 import {
   assertProviderIdentityForPendingTurn,
@@ -211,12 +212,14 @@ export class ChatSessionManager {
     userName: string,
     seed: string,
     idempotencyKey?: string,
-    surface?: string
+    surface?: string,
+    admissionPath: "seed_route" | "evening_seed" = "seed_route"
   ): Promise<void> {
     return seedChatContext({
       actorUserId,
       userName,
       seed,
+      admissionPath,
       ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(surface ? { surface } : {}),
       deps: this.deps,
@@ -329,9 +332,16 @@ export class ChatSessionManager {
       );
 
       const attachments = opts?.attachments ?? [];
-      const { text: builtEngineText, pendingItems } = await buildEngineText(
+      const moduleControl = await admitToContext(
+        admissionForActor(this.deps.conversationProvenance, actorUserId),
+        session.threadId,
+        "module_control_context",
+        opts?.moduleControl ?? ""
+      );
+      const engineText = await buildEngineText(
         {
           persistence: this.deps.persistence,
+          conversationProvenance: this.deps.conversationProvenance,
           passiveRetrieval: this.deps.passiveRetrieval,
           notesRetrieval: this.deps.notesRetrieval,
           crossToolRead: this.deps.crossToolRead,
@@ -340,14 +350,11 @@ export class ChatSessionManager {
         },
         actorUserId,
         text,
-        surface
+        surface,
+        { threadId: session.threadId, chatSessionId: sessionKey },
+        { attachmentManifest: renderAttachmentsManifest(attachments), moduleControl }
       );
-      // #1133 — attachments ride as a server-composed manifest appended AFTER all user text.
-      const manifest = renderAttachmentsManifest(attachments);
-      const withAttachments = manifest ? `${builtEngineText}\n\n${manifest}` : builtEngineText;
-      const engineText = opts?.moduleControl
-        ? `${withAttachments}\n\n${opts.moduleControl}`
-        : withAttachments;
+      const { pendingItems } = engineText;
       const currentProvider = await this.deps.persistence.resolveActiveProvider(actorUserId);
       await assertProviderIdentityForPendingTurn(turnProviderIdentity, currentProvider);
       this.emit(actorUserId, surface, { kind: "user", text });
@@ -358,7 +365,7 @@ export class ChatSessionManager {
       if (controller.signal.aborted)
         return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
       try {
-        await session.engine.submit(engineText);
+        await submitPreparedTurn(session.engine, engineText);
       } catch (err) {
         // #2934 finding 1 — a stop around a failed submit refuses instead of resubmitting.
         if (controller.signal.aborted)
@@ -398,7 +405,7 @@ export class ChatSessionManager {
           toolsListBaseline = session.mcpToken // #2164 r21 — recapture against the fresh token
             ? this.deps.getToolsListObservationCount?.(session.mcpToken)
             : undefined;
-          await session.engine.submit(engineText);
+          await submitPreparedTurn(session.engine, engineText);
         } else {
           throw err;
         }

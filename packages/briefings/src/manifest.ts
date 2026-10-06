@@ -121,6 +121,7 @@ export const briefingsModuleManifest = {
       permissionId: "briefings.run",
       actionFamilyId: "briefing_runs",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       // Re-running only writes a new dated report; earlier reports stay. Not destructive, so
       // installing the module grants normal use (Ben's ruling on Food, 2026-08-19).
@@ -171,6 +172,7 @@ export const briefingsModuleManifest = {
         "failed, or not_found. Check again later while pending; never re-run to check.",
       permissionId: "briefings.view",
       risk: "read",
+      content: "outside",
       externalContent: true,
       inputSchema: {
         type: "object",

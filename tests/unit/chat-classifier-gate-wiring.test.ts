@@ -23,6 +23,7 @@ const calendarTool = {
   description: "List events",
   permissionId: "calendar.view",
   risk: "read",
+  isExternal: false,
   inputSchema: {
     type: "object",
     properties: { window: { type: "string", enum: ["today", "tomorrow"] } },
@@ -43,6 +44,7 @@ const switchTool = {
   description: "Set a switch",
   permissionId: "home.control",
   risk: "write",
+  isExternal: false,
   inputSchema: {
     type: "object",
     properties: { device: { type: "string" }, state: { type: "string", enum: ["on", "off"] } },
@@ -88,7 +90,7 @@ function makeFactory(
   const factory = createClassifierGatePortsFactory({
     resolveActiveModules: async () => overrides.manifests?.() ?? [manifest],
     dataContext,
-    gateway: { callToolForGate } as never,
+    gateway: { callToolForGate, recordContextForSession: vi.fn(async () => {}) } as never,
     classifierDeps: {
       repository: {
         resolveSortingModel: vi.fn(async () => null),

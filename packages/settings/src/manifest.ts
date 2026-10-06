@@ -625,10 +625,21 @@ export const settingsModuleManifest: MossModuleManifest = {
       ]
     },
     {
+      id: "app.outsideContentApproval",
+      description:
+        "Outside tool descriptions and results, recalled notes or memory, attachments and outside-agent content make later writes ask. Public app source, app-map reads and simple saved-setting acknowledgements do not add outside content."
+    },
+    {
       id: "app.callAction",
       description:
-        "Call an app route with the user's consent. Destructive actions ask. Writes and outbound reads also ask for missing or outside-content conversation provenance. Successful changes refresh the module's screens.",
+        "Call app routes as you. Destructive actions ask. After outside content enters a chat, writes and outbound reads ask, including in YOLO mode. Missing provenance also asks. Successful changes refresh screens.",
       errors: [
+        {
+          code: "context_admission_unavailable",
+          class: "transient",
+          description:
+            "Outside content was withheld because conversation provenance could not be recorded or an automatic action is pending. Wait for pending actions or start a new chat; check any action result before retrying."
+        },
         {
           code: "unknown_route",
           class: "validation",
@@ -662,6 +673,12 @@ export const settingsModuleManifest: MossModuleManifest = {
         }
       ],
       remediations: [
+        {
+          id: "app.retry_after_content_admission",
+          description:
+            "Wait for pending actions or start a new chat. If an action ran, check its result in the module before retrying.",
+          path: "/today"
+        },
         {
           id: "app.retry_ready_action",
           description: "Wait for the app to finish loading, then find and review the action again.",
@@ -737,6 +754,7 @@ export const settingsModuleManifest: MossModuleManifest = {
         "Look up a bounded slice of the app's declared screens, settings, features, errors, and remediations. Supply at least one of screenId, settingId, errorCode, or query — a call with none of them is rejected.",
       permissionId: "settings.view",
       risk: "read",
+      content: "user_authored",
       inputSchema: appGetMapSliceInputSchema,
       outputSchema: appGetMapSliceOutputSchema,
       execute: appGetMapSliceExecute
@@ -747,6 +765,7 @@ export const settingsModuleManifest: MossModuleManifest = {
         "Inspect bounded platform health and actor-scoped operational observations. Source provenance is returned only when requested and is limited to safe relative excerpts.",
       permissionId: "settings.view",
       risk: "read",
+      content: "outside",
       inputSchema: platformDiagnosticsInputSchema,
       outputSchema: platformDiagnosticsOutputSchema,
       execute: platformDiagnosticsExecute
@@ -822,6 +841,7 @@ export const settingsModuleManifest: MossModuleManifest = {
         "Turn a module's notifications on or off for this user, optionally clearing its unread count.",
       permissionId: "settings.write",
       risk: "write",
+      content: "user_authored",
       selfOperationGrant: "granted_at_install",
       actionFamilyId: "settings.preference-write",
       executionPolicy: "auto",

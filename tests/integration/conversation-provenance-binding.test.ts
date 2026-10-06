@@ -8,6 +8,7 @@ import {
   AssistantToolGateway,
   ConfirmationRegistry,
   SessionTokenRegistry,
+  type ConversationProvenancePort,
   type GatewaySessionRecord
 } from "@moss/ai";
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -37,10 +38,18 @@ const read = (threadId: string, actorUserId: string = ids.userA) =>
   );
 async function legacyThread(): Promise<string> {
   const threadId = randomUUID();
-  await asActor(ids.userA, (db) =>
-    sql`INSERT INTO app.chat_threads (id, owner_user_id, title)
-        VALUES (${threadId}::uuid, ${ids.userA}::uuid, 'legacy conversation')`.execute(db.db)
-  );
+  // Reproduce a pre-migration thread. Disabling only this trigger is confined to
+  // the bootstrap transaction, and restored before commit (or by rollback).
+  await bootstrap.transaction().execute(async (transaction) => {
+    await sql`ALTER TABLE app.chat_threads DISABLE TRIGGER chat_threads_initialize_provenance`.execute(
+      transaction
+    );
+    await sql`INSERT INTO app.chat_threads (id, owner_user_id, title)
+        VALUES (${threadId}::uuid, ${ids.userA}::uuid, 'legacy conversation')`.execute(transaction);
+    await sql`ALTER TABLE app.chat_threads ENABLE TRIGGER chat_threads_initialize_provenance`.execute(
+      transaction
+    );
+  });
   return threadId;
 }
 async function assumeActor(transaction: Transaction<MossDatabase>, actorUserId: string) {
@@ -166,11 +175,54 @@ describe("conversation provenance ownership and lifecycle", () => {
     for (const rowOwner of [ids.userA, ids.userB]) {
       await assertDenied(() =>
         asActor(ids.userB, (db) =>
-          db.db.insertInto(table).values({ thread_id: legacy, owner_user_id: rowOwner }).execute()
+          db.db
+            .insertInto(table)
+            .values({
+              thread_id: legacy,
+              owner_user_id: rowOwner,
+              tainted_at: new Date(),
+              first_admission_path: "attachment_read"
+            })
+            .execute()
         )
       );
     }
     expect(await read(legacy)).toEqual([]);
+  });
+
+  it("cannot invent clean provenance for a legacy thread through the runtime role", async () => {
+    const legacy = await legacyThread();
+    await assertDenied(() =>
+      asActor(ids.userA, (db) =>
+        db.db.insertInto(table).values({ thread_id: legacy, owner_user_id: ids.userA }).execute()
+      )
+    );
+    expect(await store.isTainted(ids.userA, legacy)).toBe(true);
+    expect(await read(legacy)).toEqual([]);
+  });
+
+  it("initializes direct runtime thread inserts through the trigger, with no callable clean helper", async () => {
+    const threadId = randomUUID();
+    await asActor(ids.userA, (db) =>
+      sql`INSERT INTO app.chat_threads (id, owner_user_id, title)
+          VALUES (${threadId}::uuid, ${ids.userA}::uuid, 'direct new thread')`.execute(db.db)
+    );
+    expect(await store.isTainted(ids.userA, threadId)).toBe(false);
+    const privilege = await sql<{ allowed: boolean }>`
+      SELECT has_function_privilege('jarvis_app_runtime',
+        'app.initialize_chat_conversation_provenance()', 'EXECUTE') AS allowed
+    `.execute(appDb);
+    expect(privilege.rows).toEqual([{ allowed: false }]);
+    const legacy = await legacyThread();
+    await expect(
+      bootstrap.transaction().execute(async (transaction) => {
+        await sql`SET LOCAL ROLE jarvis_migration_owner`.execute(transaction);
+        await transaction
+          .insertInto(table)
+          .values({ thread_id: legacy, owner_user_id: ids.userA })
+          .execute();
+      })
+    ).rejects.toThrow();
   });
 
   it("rejects a missing parent admission rather than reporting it recorded", async () => {
@@ -256,6 +308,52 @@ describe("conversation provenance ownership and lifecycle", () => {
 });
 
 describe("rollback-only provenance negative controls", () => {
+  it("clean legacy insertion assertion fails if the tainted-only INSERT check is removed", async () => {
+    const legacy = await legacyThread();
+    await expect(
+      bootstrap.transaction().execute(async (transaction) => {
+        await sql`ALTER POLICY chat_conversation_provenance_insert ON app.chat_conversation_provenance
+          WITH CHECK (owner_user_id = app.current_actor_user_id() AND EXISTS (
+            SELECT 1 FROM app.chat_threads thread
+            WHERE thread.id = thread_id AND thread.owner_user_id = app.current_actor_user_id()
+          ))`.execute(transaction);
+        await assumeActor(transaction, ids.userA);
+        await assertDenied(() =>
+          transaction
+            .insertInto(table)
+            .values({ thread_id: legacy, owner_user_id: ids.userA })
+            .execute()
+        );
+        throw new Error("Clean insertion removal did not defeat assertion");
+      })
+    ).rejects.toBeInstanceOf(ProtectionFailure);
+    expect(await read(legacy)).toEqual([]);
+    expect(await store.isTainted(ids.userA, legacy)).toBe(true);
+  });
+
+  it("new-thread clean assertion fails without the initializer, and rollback restores it", async () => {
+    await expect(
+      bootstrap.transaction().execute(async (transaction) => {
+        await sql`ALTER TABLE app.chat_threads DISABLE TRIGGER chat_threads_initialize_provenance`.execute(
+          transaction
+        );
+        await assumeActor(transaction, ids.userA);
+        const id = randomUUID();
+        await sql`INSERT INTO app.chat_threads (id, owner_user_id, title)
+          VALUES (${id}::uuid, ${ids.userA}::uuid, 'initializer removal')`.execute(transaction);
+        const row = await transaction
+          .selectFrom(table)
+          .select("tainted_at")
+          .where("thread_id", "=", id)
+          .executeTakeFirst();
+        if (!row || row.tainted_at !== null)
+          throw new ProtectionFailure("New thread was not initialized clean");
+        throw new Error("Initializer removal did not defeat assertion");
+      })
+    ).rejects.toBeInstanceOf(ProtectionFailure);
+    expect(await store.isTainted(ids.userA, (await create()).id)).toBe(false);
+  });
+
   it.each([ids.userB, ids.adminUser])(
     "isolation assertion fails with RLS removed for %s, then is restored",
     async (actor) => {
@@ -285,12 +383,19 @@ describe("rollback-only provenance negative controls", () => {
     await expect(
       bootstrap.transaction().execute(async (transaction) => {
         await sql`ALTER POLICY chat_conversation_provenance_insert ON app.chat_conversation_provenance
-        WITH CHECK (owner_user_id = app.current_actor_user_id())`.execute(transaction);
+        WITH CHECK (owner_user_id = app.current_actor_user_id() AND tainted_at IS NOT NULL)`.execute(
+          transaction
+        );
         await assumeActor(transaction, ids.userB);
         await assertDenied(() =>
           transaction
             .insertInto(table)
-            .values({ thread_id: legacy, owner_user_id: ids.userB })
+            .values({
+              thread_id: legacy,
+              owner_user_id: ids.userB,
+              tainted_at: new Date(),
+              first_admission_path: "attachment_read"
+            })
             .execute()
         );
         throw new Error("Parent ownership removal did not defeat assertion");
@@ -298,7 +403,15 @@ describe("rollback-only provenance negative controls", () => {
     ).rejects.toBeInstanceOf(ProtectionFailure);
     await assertDenied(() =>
       asActor(ids.userB, (db) =>
-        db.db.insertInto(table).values({ thread_id: legacy, owner_user_id: ids.userB }).execute()
+        db.db
+          .insertInto(table)
+          .values({
+            thread_id: legacy,
+            owner_user_id: ids.userB,
+            tainted_at: new Date(),
+            first_admission_path: "attachment_read"
+          })
+          .execute()
       )
     );
   });
@@ -377,7 +490,8 @@ describe("rollback-only provenance negative controls", () => {
 function boundGateway(
   actorUserId: string,
   threadId: string | null,
-  pausePolicy?: () => Promise<void>
+  pausePolicy?: () => Promise<void>,
+  provenance: ConversationProvenancePort = new ConversationProvenanceStore(runner)
 ) {
   const calls = vi.fn(async () => ({ data: { changed: true } }));
   const family = {
@@ -401,6 +515,8 @@ function boundGateway(
         description: "Local sentinel write",
         permissionId: "provenance-test.write",
         risk: "write",
+        content: "user_authored",
+        isExternal: false,
         executionPolicy: "auto",
         actionFamilyId: family.id,
         inputSchema: { type: "object", properties: {} },
@@ -418,7 +534,7 @@ function boundGateway(
     tokens,
     confirmations,
     notifier: { emit: (_session, record) => records.push(record) },
-    provenance: new ConversationProvenanceStore(runner),
+    provenance,
     confirmTimeoutMs: 10_000,
     yoloMode: async () => {
       await pausePolicy?.();
@@ -476,11 +592,13 @@ describe("gateway decisions use durable token-bound conversation state", () => {
     "gate %s declines tainted, missing and foreign bindings",
     async (mode) => {
       const a = await create();
+      const cleanForeign = await create();
+      expect(await store.isTainted(ids.userA, cleanForeign.id)).toBe(false);
       await store.recordAdmission(ids.userA, a.id, "attachment_read");
       for (const [actor, thread] of [
         [ids.userA, a.id],
         [ids.userA, null],
-        [ids.userB, a.id]
+        [ids.userB, cleanForeign.id]
       ] as const) {
         const h = boundGateway(actor, thread);
         expect(await h.gateway.callToolForGate(h.token, "provenance-test.write", {}, mode)).toEqual(
@@ -497,6 +615,33 @@ describe("gateway decisions use durable token-bound conversation state", () => {
     await store.recordAdmission(ids.userA, a.id, "app_action_outside");
     await expectPending(boundGateway(ids.userA, a.id));
     await expectPending(boundGateway(ids.userA, a.id));
+  });
+
+  it("the foreign-binding gateway assertion fails for a deliberately leaky clean-row lookup", async () => {
+    const ownedClean = await create();
+    expect(await store.isTainted(ids.userA, ownedClean.id)).toBe(false);
+    const assertForeignRefused = async (provenance: ConversationProvenancePort) => {
+      const h = boundGateway(ids.userB, ownedClean.id, undefined, provenance);
+      const outcome = await h.gateway.callToolForGate(
+        h.token,
+        "provenance-test.write",
+        {},
+        "dry-run"
+      );
+      if (outcome.kind !== "declined" || outcome.reason !== "would_confirm") {
+        throw new ProtectionFailure("Foreign clean conversation became automatic authority");
+      }
+      expect(h.calls).not.toHaveBeenCalled();
+    };
+    await assertForeignRefused(store);
+    // Deliberately model removed owner filtering; the separate rollback controls test actual RLS.
+    const leaking = {
+      isTainted: (_actor: string, threadId: string | undefined) =>
+        store.isTainted(ids.userA, threadId),
+      recordAdmission: store.recordAdmission.bind(store)
+    };
+    await expect(assertForeignRefused(leaking)).rejects.toBeInstanceOf(ProtectionFailure);
+    await assertForeignRefused(store);
   });
 
   it("rechecks durable taint after the asynchronous YOLO decision", async () => {

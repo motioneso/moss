@@ -106,7 +106,8 @@ async function bootProbe(chat?: RouteChatPolicy) {
         // placeholders preserve the real route-coverage check, as in the integration probe.
         { method: "POST", url: "/api/chat/action-requests/:id/resolve" },
         { method: "POST", url: "/api/mcp" },
-        { method: "POST", url: "/internal/permission" }
+        { method: "POST", url: "/internal/permission" },
+        { method: "POST", url: "/internal/vault-read-report" }
       ]
     }
   });

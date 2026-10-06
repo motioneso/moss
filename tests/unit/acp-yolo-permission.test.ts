@@ -22,7 +22,11 @@ function setup(active = true) {
   const confirmations = new ConfirmationRegistry();
   const gateway = new AssistantToolGateway({
     // Exercise the existing permission rules with a verified clean conversation.
-    provenance: { isTainted: async () => false, recordAdmission: async () => {} },
+    provenance: {
+      isTainted: async () => false,
+      recordAdmission: async () => {},
+      runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+    },
     resolveActiveModules: async () => [],
     repository: { createPendingAssistantAction, insertActionAuditLog } as never,
     runner: {

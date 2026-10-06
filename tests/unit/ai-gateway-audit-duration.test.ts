@@ -50,7 +50,11 @@ async function runYoloAndCaptureAudit(
   const confirmations = new ConfirmationRegistry();
   const gateway = new AssistantToolGateway({
     // This fixture exercises ordinary policy on an explicitly clean conversation.
-    provenance: { isTainted: async () => false, recordAdmission: async () => {} },
+    provenance: {
+      isTainted: async () => false,
+      recordAdmission: async () => {},
+      runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+    },
     resolveActiveModules: async () => [manifestWithTool(toolOverrides)],
     repository: {
       insertActionAuditLog: async (
@@ -121,7 +125,14 @@ describe("gateway audit duration + trusted auditOutcome (#2175 Task 7)", () => {
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
       // This fixture exercises ordinary policy on an explicitly clean conversation.
-      provenance: { isTainted: async () => false, recordAdmission: async () => {} },
+      provenance: {
+        isTainted: async () => false,
+        recordAdmission: async () => {},
+        runAutomatic: async (_actor, _thread, callback) => ({
+          kind: "ran",
+          value: await callback()
+        })
+      },
       resolveActiveModules: async () => [
         manifestWithTool({
           execute: async (): Promise<ToolResult> => ({ data: { written: true } })

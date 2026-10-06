@@ -150,6 +150,7 @@ export const scratchpadModuleManifest = {
       description: "Read the user's scratchpad text.",
       permissionId: "scratchpad.read",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: scratchpadReadExecute
     },
@@ -158,6 +159,7 @@ export const scratchpadModuleManifest = {
       description: "Append a line to the user's scratchpad. Never replaces existing text.",
       permissionId: "scratchpad.write",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "scratchpad_changes",
       selfOperationGrant: "granted_at_install",

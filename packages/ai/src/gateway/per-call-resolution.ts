@@ -83,6 +83,7 @@ export async function prepareToolCall(
           ...found.tool,
           risk: resolution.risk,
           externalContent: resolution.externalContent,
+          content: resolution.externalContent ? "outside" : "user_authored",
           summarize: () => resolution.summary
         },
         dto: { ...found.dto, risk: resolution.risk },

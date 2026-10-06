@@ -18,6 +18,7 @@ import {
   safeErrorName
 } from "./dependency-failure.js";
 import { renderAndCap, sanitizeAssistantToolResult } from "./output-validation.js";
+import { toolHasOutsideContent } from "./content-admission.js";
 import type { GatewayToolResponse, PerCallResolution } from "./types.js";
 
 export interface GatewayLogger {
@@ -41,6 +42,8 @@ export interface ExecutableTool {
  */
 export interface RunHandlerOutcome {
   readonly response: GatewayToolResponse;
+  /** Handler-supplied safe error text still needs admission before entering model context. */
+  readonly requiresErrorAdmission?: boolean;
   readonly audit: {
     readonly outcome: InsertAuditLogInput["outcome"];
     readonly durationMs: number;
@@ -86,10 +89,9 @@ export async function runToolHandler(
         data: renderAndCap(
           found.tool.outputSchema,
           result,
-          // Scope trust-boundary wrapping to tools with untrusted external content only.
-          // Internal tools whose output Jarvis controls must not be wrapped (PR #435 sets
-          // externalContent: true on web.search + web.read; all others leave it unset).
-          found.tool.externalContent ? found.tool.name : undefined
+          // Only explicitly trusted user-authored results are exempt. Outside and unmarked
+          // results share the same trust-boundary wrapping as their admission policy.
+          toolHasOutsideContent(found.tool) ? found.tool.name : undefined
         ),
         structuredData: sanitized.data,
         // #1133 — media (image bytes) bypasses renderAndCap on purpose: sanitize's schema
@@ -126,19 +128,21 @@ export async function runToolHandler(
       ...(cause ? { cause } : {}),
       ...(errorName ? { errorName } : {})
     });
+    const forwardSafeError =
+      found.tool.safeErrors === true &&
+      nodeUtilTypes.isNativeError(error) &&
+      error instanceof HttpError;
     return {
+      ...(forwardSafeError ? { requiresErrorAdmission: true } : {}),
       response: {
         ok: false,
         // The cause id goes in the log above; the chat gets ordinary words. The model is free to
         // repeat this text to the user, so it must already read like something a person wrote.
-        error:
-          found.tool.safeErrors === true &&
-          nodeUtilTypes.isNativeError(error) &&
-          error instanceof HttpError
-            ? error.message
-            : cause
-              ? `Tool ${found.dto.name} failed: ${describeToolDependencyCause(cause)}.`
-              : `Tool ${found.dto.name} failed`
+        error: forwardSafeError
+          ? error.message
+          : cause
+            ? `Tool ${found.dto.name} failed: ${describeToolDependencyCause(cause)}.`
+            : `Tool ${found.dto.name} failed`
       },
       audit: {
         outcome: "failed",

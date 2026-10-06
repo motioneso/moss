@@ -24,7 +24,11 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
   const confirmations = new ConfirmationRegistry();
   const gateway = new AssistantToolGateway({
     // Exercise the existing permission rules with a verified clean conversation.
-    provenance: { isTainted: async () => false, recordAdmission: async () => {} },
+    provenance: {
+      isTainted: async () => false,
+      recordAdmission: async () => {},
+      runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+    },
     resolveActiveModules: async () => [],
     repository: {
       // Rows are numbered in creation order so two asks can be told apart.

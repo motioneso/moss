@@ -53,6 +53,7 @@ import {
   registerRouteEnablementGuard,
   assertRouteCoverage,
   assertRouteChatClassification,
+  assertReadToolContentDeclared,
   buildRouteCatalog,
   createRouteCatalogHolder,
   PLATFORM_UNGUARDED_ROUTES,
@@ -783,6 +784,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // packages/ai/src/gateway/policy.ts:40 confirms every external write unconditionally.
     // Never pass external manifests here.
     assertBuiltInSelfOperationManifests(getBuiltInModuleManifests());
+    // #3065: read results default to outside content; every built-in exemption is explicit.
+    assertReadToolContentDeclared(getBuiltInModuleManifests());
   });
 
   server.addHook("onReady", async () => {

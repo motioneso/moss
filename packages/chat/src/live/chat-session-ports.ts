@@ -4,7 +4,7 @@
  * names are re-exported from chat-session-manager.ts so existing import paths keep working.
  */
 
-import type { ProviderKind } from "@moss/ai";
+import type { ConversationProvenancePort, ProviderKind } from "@moss/ai";
 import type {
   AiAuthMethod,
   AnswerProvenanceMetadataV1,
@@ -118,7 +118,8 @@ export interface ChatPersistencePort {
   /** Return the current thread title and the user's persisted timezone (null if unset). */
   getThreadContext(
     actorUserId: string,
-    surface?: ChatSurface
+    surface?: ChatSurface,
+    threadId?: string | null
   ): Promise<{ threadTitle: string | null; localTimezone: string | null; incognito: boolean }>;
   /**
    * Make threadId the current thread for actorUserId (for resume). Returns true if
@@ -179,6 +180,7 @@ export interface ChatSessionManagerDeps {
     }
   ) => CliChatEngine | Promise<CliChatEngine>;
   readonly persistence: ChatPersistencePort;
+  readonly conversationProvenance?: Pick<ConversationProvenancePort, "recordAdmission">;
   /**
    * Task 4.1 (#2901) — the classifier gate lifecycle seam. When present, `runTurn` reads its admin
    * mode first; `off`/`shadow` do nothing (shadow wiring is 3.5), and `on` may handle the turn

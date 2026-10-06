@@ -210,7 +210,8 @@ export class ChatRepository {
 
     const now = new Date();
 
-    const thread = await scopedDb.db
+    // The database AFTER INSERT trigger atomically initializes clean provenance.
+    return scopedDb.db
       .insertInto("app.chat_threads")
       .values({
         id: randomUUID(),
@@ -224,14 +225,6 @@ export class ChatRepository {
       })
       .returningAll()
       .executeTakeFirstOrThrow();
-
-    // Only this new-thread path creates a clean row. The caller's DataContextDb
-    // transaction commits both inserts together; older threads stay unknown/tainted.
-    await scopedDb.db
-      .insertInto("app.chat_conversation_provenance")
-      .values({ thread_id: thread.id, owner_user_id: thread.owner_user_id })
-      .execute();
-    return thread;
   }
 
   /**

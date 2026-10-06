@@ -1,3 +1,10 @@
+import {
+  admissionForActor,
+  admitToContext,
+  admitOutsideAgentLaunch,
+  submitAdmittedContext,
+  type AdmittedContext
+} from "./context-admission.js";
 import { resolveMossEnv } from "@moss/db";
 
 import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js";
@@ -91,13 +98,31 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     engine,
     revokeMcpToken: deps.revokeMcpToken
   });
-  // Rebuild replay from live state for every launch; recall precedes conversation replay.
-  const recallResult = deps.recall ? await deps.recall.recall(actorUserId) : null;
-  const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
-  const seedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : 1500;
-  const memorySeed = recallResult
-    ? renderMemorySeedBlock(recallResult.episodicChunks, recallResult.facts, seedBudget)
-    : "";
+  let memorySeed: AdmittedContext | null;
+  try {
+    if (engine.admitsOutsideContentWithoutPermission) {
+      await admitOutsideAgentLaunch(
+        admissionForActor(deps.conversationProvenance, actorUserId),
+        threadId
+      );
+    }
+    // Rebuild replay from live state for every launch; recall precedes conversation replay.
+    const recallResult = deps.recall ? await deps.recall.recall(actorUserId) : null;
+    const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
+    const seedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : 1500;
+    memorySeed = await admitToContext(
+      admissionForActor(deps.conversationProvenance, actorUserId),
+      threadId,
+      "launch_memory_seed",
+      recallResult
+        ? renderMemorySeedBlock(recallResult.episodicChunks, recallResult.facts, seedBudget)
+        : ""
+    );
+  } catch (error) {
+    deps.revokeMcpToken?.(sessionKey);
+    await engine.kill().catch(() => undefined);
+    throw error;
+  }
   const { recent: recentTurns, oldSummary } = await deps.persistence.listPriorTurns(
     actorUserId,
     { forceReplay: opts?.forceReplay, threadId },
@@ -110,7 +135,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     throw new CliChatUnavailableError("private session unavailable");
   }
   const replayParts: string[] = [];
-  if (memorySeed) replayParts.push(memorySeed);
+  if (memorySeed) replayParts.push(memorySeed.text);
   if (oldSummary) replayParts.push(renderSummaryBlock(oldSummary));
   if (recentTurns.length > 0) replayParts.push(renderReplayBlock(recentTurns));
   const replayBatch = replayParts.length > 0 ? replayParts.join("\n\n") : undefined;
@@ -175,6 +200,7 @@ export interface SeedChatContextArgs {
   readonly userName: string;
   readonly seed: string;
   readonly idempotencyKey?: string;
+  readonly admissionPath?: "seed_route" | "evening_seed";
   readonly surface?: string;
   readonly deps: ChatSessionManagerDeps;
   readonly ensureSession: (
@@ -200,7 +226,14 @@ export async function seedChatContext(args: SeedChatContextArgs): Promise<void> 
   const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
   const session = await ensureSession(actorUserId, userName, undefined, chatSurface);
   if (idempotencyKey && session.seededContextKeys.has(idempotencyKey)) return;
-  await session.engine.submit(seed);
+  const admitted = await admitToContext(
+    admissionForActor(deps.conversationProvenance, actorUserId),
+    session.threadId,
+    args.admissionPath ?? "seed_route",
+    seed
+  );
+  if (!admitted) return;
+  await submitAdmittedContext(session.engine, admitted);
   session.transcriptOffset = await drainEngine(session.engine, session.transcriptOffset, pollMs);
   if (idempotencyKey) session.seededContextKeys.add(idempotencyKey);
   session.lastActivity = deps.clock.now();

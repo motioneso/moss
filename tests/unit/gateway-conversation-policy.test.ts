@@ -56,6 +56,7 @@ function build(
     risk: options.risk ?? "write",
     executionPolicy: "auto",
     isExternal: true,
+    content: "user_authored",
     runsWithoutAsking: async () => true,
     inputSchema: { type: "object", properties: {} },
     execute: handler,
@@ -71,7 +72,11 @@ function build(
     assistantTools: [tool]
   };
   const isTainted = vi.fn(async () => options.tainted ?? false);
-  const provenance: ConversationProvenancePort = { isTainted, recordAdmission: vi.fn() };
+  const provenance: ConversationProvenancePort = {
+    isTainted,
+    recordAdmission: vi.fn(),
+    runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+  };
   const createPending = vi.fn(async () => ({ id: "action-1" }));
   const audit = vi.fn(async () => undefined);
   const records: GatewaySessionRecord[] = [];
@@ -186,7 +191,8 @@ describe("bound conversation policy at every gateway entry", () => {
       for (const risk of ["write", "outbound", "destructive"] as const) {
         const h = build({ tainted: true, yolo, risk, tool: { isExternal: risk !== "write" } });
         await rejectPending(h, h.gateway.callTool(h.token, h.tool.name, {}));
-        expect(h.isTainted).toHaveBeenCalledExactlyOnceWith("actor-a", "thread-a");
+        expect(h.isTainted).toHaveBeenCalledTimes(2);
+        expect(h.isTainted).toHaveBeenLastCalledWith("actor-a", "thread-a");
         expect(h.yoloMode).not.toHaveBeenCalled();
       }
     }
@@ -254,22 +260,30 @@ describe("bound conversation policy at every gateway entry", () => {
     }
   );
 
-  it.each(failureCases)("ordinary reads remain available with %s", async (_label, options) => {
-    const h = build({ ...options, yolo: true, risk: "read" });
-    expect(await h.gateway.callTool(h.token, h.tool.name, {})).toMatchObject({ ok: true });
-    expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, "dry-run")).toEqual({
-      kind: "would_run",
-      approvalMode: "auto"
-    });
-    expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, "execute")).toMatchObject({
-      kind: "executed"
-    });
-    expect(await h.gateway.runReadToolForActor("actor-a", h.tool.name, {})).toMatchObject({
-      ok: true
-    });
-    expect(h.handler).toHaveBeenCalledTimes(3);
-    expect(h.createPending).not.toHaveBeenCalled();
-  });
+  it.each(failureCases)(
+    "declared user-authored reads remain available with %s",
+    async (_label, options) => {
+      const h = build({
+        ...options,
+        yolo: true,
+        risk: "read",
+        tool: { content: "user_authored", isExternal: false }
+      });
+      expect(await h.gateway.callTool(h.token, h.tool.name, {})).toMatchObject({ ok: true });
+      expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, "dry-run")).toEqual({
+        kind: "would_run",
+        approvalMode: "auto"
+      });
+      expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, "execute")).toMatchObject({
+        kind: "executed"
+      });
+      expect(await h.gateway.runReadToolForActor("actor-a", h.tool.name, {})).toMatchObject({
+        ok: true
+      });
+      expect(h.handler).toHaveBeenCalledTimes(3);
+      expect(h.createPending).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([false, true])(
     "outbound GET resolved as read requires confirmation only while tainted (tainted=%s)",
@@ -336,7 +350,7 @@ describe("bound conversation policy at every gateway entry", () => {
             reason: "would_confirm"
           });
         expect(h.handler).not.toHaveBeenCalled();
-        expect(checked).toHaveBeenCalledTimes(2);
+        expect(checked).toHaveBeenCalledTimes(entry === "ordinary" ? 3 : 2);
       }
     }
   );
@@ -356,7 +370,14 @@ describe("bound conversation policy at every gateway entry", () => {
           await waiting;
           return null;
         },
-        provenance: { isTainted: lookup, recordAdmission: vi.fn() }
+        provenance: {
+          isTainted: lookup,
+          recordAdmission: vi.fn(),
+          runAutomatic: async (_actor, _thread, callback) => ({
+            kind: "ran",
+            value: await callback()
+          })
+        }
       }
     });
     const pending = h.gateway.callTool(h.token, h.tool.name, {});
@@ -372,7 +393,7 @@ describe("bound conversation policy at every gateway entry", () => {
     await rejectPending(h, pending);
     expect(lookup).toHaveBeenNthCalledWith(1, "actor-a", "thread-a");
     expect(await h.gateway.callTool(resumed, h.tool.name, {})).toMatchObject({ ok: true });
-    expect(lookup).toHaveBeenNthCalledWith(2, "actor-a", "thread-b");
+    expect(lookup).toHaveBeenNthCalledWith(3, "actor-a", "thread-b");
     expect(h.handler).toHaveBeenCalledOnce();
   });
 });

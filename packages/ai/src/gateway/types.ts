@@ -21,15 +21,28 @@ export type AdmissionPath =
   | "evening_seed"
   | "module_control_context"
   | "native_vault_read"
+  | "native_tool_result"
   | "outside_agent_read"
   | "outside_agent_web"
   | "outside_agent_shell"
-  | "outside_agent_launch";
+  | "outside_agent_launch"
+  | "tool_external_descriptors"
+  | "classifier_candidates";
+
+export type AutomaticExecution<T> =
+  | { readonly kind: "ran"; readonly value: T }
+  | { readonly kind: "confirm" };
 
 export interface ConversationProvenancePort {
   /** Missing, legacy and foreign threads are tainted. The actor owns the lookup scope. */
   isTainted(actorUserId: string, threadId: string | undefined): Promise<boolean>;
   recordAdmission(actorUserId: string, threadId: string, path: AdmissionPath): Promise<void>;
+  /** Claim before execution, release only after its actual promise settles. No expiry. */
+  runAutomatic?<T>(
+    actorUserId: string,
+    threadId: string | undefined,
+    execute: () => Promise<T>
+  ): Promise<AutomaticExecution<T>>;
 }
 
 export interface CallCardDetails {

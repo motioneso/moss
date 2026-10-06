@@ -114,6 +114,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
       description: "List commitment candidates extracted from your chats, notes, and email.",
       permissionId: "commitments.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {
@@ -138,6 +139,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
         "Check which email threads the commitments closer look has already judged, and when.",
       permissionId: "commitments.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["threadRefs"],
@@ -152,6 +154,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
       description: "Get details and evidence for a specific commitment candidate.",
       permissionId: "commitments.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["candidateId"],
@@ -164,6 +167,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
       description: "Accept a commitment candidate as a real commitment.",
       permissionId: "commitments.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "commitment_review",
       selfOperationGrant: "granted_at_install",
@@ -179,6 +183,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
       description: "Reject a commitment candidate as not a real commitment.",
       permissionId: "commitments.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "commitment_review",
       selfOperationGrant: "granted_at_install",
@@ -194,6 +199,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
       description: "Snooze a commitment candidate until a later date.",
       permissionId: "commitments.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "commitment_review",
       selfOperationGrant: "granted_at_install",

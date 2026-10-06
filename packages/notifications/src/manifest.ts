@@ -279,6 +279,7 @@ export const notificationsModuleManifest = {
       description: "List notifications delivered to the active actor.",
       permissionId: "notifications.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {}

@@ -1,4 +1,13 @@
-import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance
+} from "vitest";
 import type { Kysely } from "kysely";
 
 import { AiRepository } from "@moss/ai";
@@ -11,6 +20,7 @@ import { WellnessRepository } from "@moss/wellness";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
+import { ConversationProvenanceStore } from "../../packages/chat/src/conversation-provenance.js";
 import {
   createAppActionsService,
   type AppActionCallInput,
@@ -52,6 +62,7 @@ describe("app actions through the real gateway and app routes", () => {
       autoApprove?: boolean;
       forceConfirm?: boolean;
       withoutPerCallWiring?: boolean;
+      yoloMode?: boolean;
     } = {}
   ) {
     return makeAppActionGateway({
@@ -63,6 +74,15 @@ describe("app actions through the real gateway and app routes", () => {
       ...options
     });
   }
+
+  beforeEach(async () => {
+    for (const actorUserId of [ids.userA, ids.userB]) {
+      const thread = await runner.withDataContext({ actorUserId }, (db) =>
+        new ChatRepository().openNewThread(db, { title: "Independent app-action policy test" })
+      );
+      threadByActor.set(actorUserId, thread.id);
+    }
+  });
 
   async function browser(input: AppActionCallInput) {
     return server.inject({
@@ -495,5 +515,68 @@ describe("app actions through the real gateway and app routes", () => {
     expect(h.events).not.toContainEqual(
       expect.objectContaining({ kind: "action_result", outcome: "executed" })
     );
+  });
+
+  it("keeps a clean thread clean across an app write and a dedicated theme write under YOLO", async () => {
+    const h = gateway({ yoloMode: true, autoApprove: false });
+    const provenance = new ConversationProvenanceStore(runner);
+    const threadId = threadByActor.get(ids.userA)!;
+    expect(await provenance.isTainted(ids.userA, threadId)).toBe(false);
+    expect(
+      await h.call({ method: "PUT", path: "/api/me/weather-unit", body: { unit: "metric" } })
+    ).toMatchObject({ ok: true });
+    expect(await provenance.isTainted(ids.userA, threadId)).toBe(false);
+    expect(await h.theme("dark")).toMatchObject({ ok: true });
+    expect(await provenance.isTainted(ids.userA, threadId)).toBe(false);
+    expect(h.events.filter((event) => event.kind === "action_request")).toEqual([]);
+    expect(
+      await runner.withDataContext(access, (db) => preferences.get(db, "themes.color-mode"))
+    ).toBe("dark");
+  });
+
+  it("reading other-thread turns taints app writes, outbound GETs and dedicated writes", async () => {
+    const h = gateway({ yoloMode: true, autoApprove: false });
+    const threadId = threadByActor.get(ids.userA)!;
+    const other = await runner.withDataContext(access, async (db) => {
+      const repository = new ChatRepository();
+      const thread = await repository.openNewThread(db, { title: "Other conversation" });
+      await repository.recordCompletedTurn(
+        db,
+        thread.id,
+        "OTHER_THREAD_CONTENT_3071",
+        "Earlier answer",
+        { provider: "offline", model: "fixture" }
+      );
+      return thread;
+    });
+    expect(other.id).not.toBe(threadId);
+    const result = await h.todaysTurns();
+    expect(result).toMatchObject({ ok: true });
+    expect(JSON.stringify(result)).toContain("OTHER_THREAD_CONTENT_3071");
+    const provenance = new ConversationProvenanceStore(runner);
+    expect(await provenance.isTainted(ids.userA, threadId)).toBe(true);
+    callSpy.mockClear();
+    mintSpy.mockClear();
+    for (const start of [
+      () => h.call({ method: "PUT", path: "/api/me/weather-unit", body: { unit: "imperial" } }),
+      () =>
+        h.call({ method: "GET", path: "/api/me/weather-location/search", query: { q: "Paris" } }),
+      () => h.theme("light")
+    ]) {
+      h.events.length = 0;
+      const pending = start();
+      await vi.waitFor(
+        () => expect(h.events.some((event) => event.kind === "action_request")).toBe(true),
+        { timeout: 5_000 }
+      );
+      const card = h.events.find((event) => event.kind === "action_request")!;
+      expect(card.outsideContentNotice).toBe(true);
+      expect(
+        await h.gateway.resolveActionRequest(ids.userA, card.actionRequestId, "rejected")
+      ).toBe("resolved");
+      expect(await pending).toMatchObject({ ok: false, denied: true });
+    }
+    expect(callSpy).not.toHaveBeenCalled();
+    expect(mintSpy).not.toHaveBeenCalled();
   });
 });

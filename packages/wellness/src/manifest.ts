@@ -286,6 +286,7 @@ export const wellnessModuleManifest = {
         "List the actor's recent feelings check-ins (most recent first): timestamp, core feeling, secondary feeling, intensity, and free-text note (may be null). Read-only.",
       permissionId: "wellness.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: wellnessRecentCheckInsExecute
     },
@@ -295,6 +296,7 @@ export const wellnessModuleManifest = {
         "Summarize the actor's medication adherence over the last 7 days as counts (scheduled, taken, skipped, PRN) and an adherence rate. Returns counts only, never a medication list. Read-only.",
       permissionId: "wellness.view",
       risk: "read",
+      content: "user_authored",
       inputSchema: { type: "object", properties: {} },
       execute: wellnessMedicationAdherenceExecute
     }

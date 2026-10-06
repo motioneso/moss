@@ -252,6 +252,10 @@ class FakePersistence implements ChatPersistencePort {
   }[] = [];
   newConversations = 0;
 
+  async getCurrentThreadState() {
+    return { id: `thread-${this.newConversations}`, incognito: false };
+  }
+
   async resolveActiveProvider(): Promise<{ provider: ProviderKind; model: string }> {
     return this.active;
   }
@@ -339,6 +343,7 @@ function makeManager(over: Partial<ChatSessionManagerDeps> = {}): Harness {
       return e;
     },
     persistence,
+    conversationProvenance: { recordAdmission: async () => undefined },
     personaFs: noopPersonaFs,
     clock,
     idleMs: 1_000,

@@ -305,6 +305,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       description: "Recall source-backed graph memory owned by the active actor.",
       permissionId: "memory.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -322,6 +323,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       permissionId: "memory.manage",
       actionFamilyId: "memory_management",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: memoryRememberToolInputSchema,
@@ -332,6 +334,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       description: "Forget a graph memory fact owned by the active actor.",
       permissionId: "memory.manage",
       risk: "destructive",
+      content: "user_authored",
       selfOperationGrant: "confirm_always",
       inputSchema: {
         type: "object",

@@ -77,12 +77,17 @@ import {
   serializeSettings
 } from "./memory-serializers.js";
 import { readStoredProvenance, provenanceCards } from "./live/answer-provenance.js";
-import { registerMcpTransportRoute, registerNativePermissionRoute } from "./mcp-transport.js";
+import {
+  registerMcpTransportRoute,
+  registerNativePermissionRoute,
+  registerVaultReadReportRoute
+} from "./mcp-transport.js";
 import { VaultContextRunner, getVaultBaseDir } from "@moss/vault";
 
 import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
+import { ConversationProvenanceStore } from "./conversation-provenance.js";
 import {
   registerMeetingChatBoundary,
   dereferenceMeetingCitation,
@@ -297,8 +302,7 @@ export function registerChatRoutes(
   const classifierShadowRepository =
     dependencies.classifierShadowRepository ?? new ClassifierShadowRepository();
 
-  // Phase 2: proxy notifier — created before gateway so the gateway has a notifier
-  // reference; real target is set after the manager is created.
+  // The proxy is wired before the manager supplies its live notifier.
   const notifierProxy: SessionNotifier = {
     emit(chatSessionId: string, record: GatewaySessionRecord) {
       realNotifier?.emit(chatSessionId, record);
@@ -307,6 +311,7 @@ export function registerChatRoutes(
   let realNotifier: ChatGatewayNotifier | null = null;
 
   const resolveActiveModules = dependencies.resolveActiveModules;
+  const conversationProvenance = new ConversationProvenanceStore(dependencies.dataContext);
   const mcpServerUrl = dependencies.mcpServerUrl;
   const wiring =
     resolveActiveModules && mcpServerUrl
@@ -333,6 +338,7 @@ export function registerChatRoutes(
               confirmations,
               notifier: notifierProxy,
               appActions,
+              conversationProvenance,
               collaborators: {
                 googleConnectionService: dependencies.googleConnectionService,
                 googleApiClient: dependencies.googleApiClient,
@@ -453,11 +459,11 @@ export function registerChatRoutes(
         })
       : undefined;
   const runtime = createChatSessionRuntime({
+    conversationProvenance,
     rootDb: dependencies.rootDb,
     dataContext: dependencies.dataContext,
     engineFactory: dependencies.chatEngineFactory,
-    // #342 (§3.5): only select the ACP engine ourselves when no explicit factory was injected. An
-    // explicit chatEngineFactory always wins for tests and embedders.
+    // An explicitly injected engine factory wins for tests and embedders.
     engineSelection: dependencies.chatEngineFactory ? undefined : dependencies.engineSelection,
     boss: dependencies.boss,
     connectorSyncAt: dependencies.connectorsRepository
@@ -602,6 +608,7 @@ export function registerChatRoutes(
   if (wiring) {
     registerMcpTransportRoute(server, { gateway: wiring.gateway, tokens: wiring.tokens });
     registerNativePermissionRoute(server, { gateway: wiring.gateway, tokens: wiring.tokens });
+    registerVaultReadReportRoute(server, { gateway: wiring.gateway, tokens: wiring.tokens });
 
     server.post<{ Params: { id: string }; Body: { status: string } }>(
       "/api/chat/action-requests/:id/resolve",

@@ -62,7 +62,8 @@ export const chatModuleManifest = {
       "sql/0271_chat_classifier_shadow_reviews.sql",
       "sql/0276_meeting_chat_cleanup.sql",
       "sql/0277_chat_surface_immutable.sql",
-      "sql/0291_chat_conversation_provenance.sql"
+      "sql/0291_chat_conversation_provenance.sql",
+      "sql/0293_chat_automatic_action_reservations.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -73,7 +74,8 @@ export const chatModuleManifest = {
       "app.chat_classifier_shadow_records",
       "app.chat_classifier_release_eligibility",
       "app.chat_classifier_shadow_reviews",
-      "app.chat_conversation_provenance"
+      "app.chat_conversation_provenance",
+      "app.chat_automatic_action_reservations"
     ]
   },
   permissions: [
@@ -114,14 +116,14 @@ export const chatModuleManifest = {
       id: "chat.conversation_write_confirmation",
       description:
         "Writes ask when the bound conversation has outside or unknown history, even in YOLO. " +
-        "Stored state survives restart. Automatic outside-content recording is still pending; " +
-        "protection is incomplete.",
+        "Outside content is recorded before admission and stored state survives restart. " +
+        "Native vault reads stop if their bound conversation cannot be recorded.",
       featureFlagId: "chat.module"
     },
     {
       id: "chat.acp_answers",
       description:
-        "General chat answers through the agent protocol. Selected-meeting questions use the configured API-key chat model without tools.",
+        "Outside-agent chats require approval for Moss changes from launch because not all native reads can be observed. Selected-meeting questions use the configured API-key model without tools.",
       featureFlagId: "chat.module"
     },
     {
@@ -483,6 +485,12 @@ export const chatModuleManifest = {
       permissionId: "chat.message"
     },
     {
+      method: "POST",
+      path: "/internal/vault-read-report",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
+      permissionId: "chat.message"
+    },
+    {
       method: "GET",
       path: "/api/chat/skills",
       chat: { access: "blocked", blockedBecause: "prompt_shaping" },
@@ -540,6 +548,7 @@ export const chatModuleManifest = {
       description: "List today's non-incognito chat turns for the active actor.",
       permissionId: "chat.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: chatListTodaysTurnsExecute
     },
@@ -549,6 +558,7 @@ export const chatModuleManifest = {
         "Read the active actor's latest bounded, redacted Moss web view and capability-level server facts.",
       permissionId: "chat.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", additionalProperties: false, properties: {} },
       outputSchema: chatGetCurrentViewOutputSchema,
       execute: chatGetCurrentViewExecute
@@ -559,6 +569,7 @@ export const chatModuleManifest = {
         "Read the server's current time and the user's timezone as of right now. Use when unsure of the current date or time.",
       permissionId: "chat.view",
       risk: "read",
+      content: "user_authored",
       inputSchema: { type: "object", additionalProperties: false, properties: {} },
       outputSchema: chatGetCurrentTimeOutputSchema,
       execute: chatGetCurrentTimeExecute
@@ -569,6 +580,7 @@ export const chatModuleManifest = {
         "Read a file the user attached to the current chat turn, by attachmentId from the turn's <attachments> manifest. Images return as viewable images; PDFs and text files return extracted text.",
       permissionId: "chat.view",
       risk: "read",
+      content: "outside",
       // #1133 — no outputSchema: the image case returns a `media` payload that schema
       // projection would drop (see gateway.runHandler media pass-through).
       inputSchema: {
@@ -584,6 +596,7 @@ export const chatModuleManifest = {
       description: "Set the assistant's default response style (concise, balanced, or detailed).",
       permissionId: "chat.message",
       risk: "write",
+      content: "user_authored",
       selfOperationGrant: "granted_at_install",
       actionFamilyId: "chat.preference-write",
       executionPolicy: "auto",
@@ -602,6 +615,7 @@ export const chatModuleManifest = {
         "delete that trial data.",
       permissionId: "chat.message",
       risk: "destructive",
+      content: "user_authored",
       selfOperationGrant: "confirm_always",
       inputSchema: chatDeleteClassifierShadowRecordsInputSchema,
       outputSchema: chatDeleteClassifierShadowRecordsOutputSchema,

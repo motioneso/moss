@@ -40,7 +40,11 @@ function build(
     } as never,
     notifier: { emit },
     confirmTimeoutMs: 500,
-    provenance: { isTainted, recordAdmission: vi.fn() },
+    provenance: {
+      isTainted,
+      recordAdmission: vi.fn(),
+      runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+    },
     yoloMode: async () => options.yolo ?? true,
     ...options.deps
   });

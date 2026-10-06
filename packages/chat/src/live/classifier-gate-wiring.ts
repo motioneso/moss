@@ -7,7 +7,11 @@ import {
   type ClassifierDeps
 } from "@moss/ai";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
-import type { MossModuleManifest, ToolContext } from "@moss/module-sdk";
+import {
+  normalizeClassifierCandidates,
+  type MossModuleManifest,
+  type ToolContext
+} from "@moss/module-sdk";
 import { MODULE_WORKER_SERVICE_KEY } from "@moss/shared";
 
 import type { ClassifierGatePorts, GateTool } from "./classifier-gate.js";
@@ -41,7 +45,7 @@ export type ClassifierGatePortsFactory = (
 export interface ClassifierGatePortsFactoryDeps {
   readonly resolveActiveModules: ActiveModulesResolver;
   readonly dataContext: DataContextRunner;
-  readonly gateway: Pick<AssistantToolGateway, "callToolForGate">;
+  readonly gateway: Pick<AssistantToolGateway, "callToolForGate" | "recordContextForSession">;
   readonly classifierDeps: ClassifierDeps;
   /** The human-readable area label shown to the classifier; defaults to the manifest name. */
   readonly moduleDescription?: (manifest: MossModuleManifest) => string;
@@ -161,14 +165,20 @@ export function createClassifierGatePortsFactory(
         listedIds.clear();
         const manifests = await deps.resolveActiveModules(actorUserId);
         const tools: GateTool[] = [];
+        let hasOutsideDescriptors = false;
         for (const manifest of manifests) {
           for (const tool of manifest.assistantTools ?? []) {
             if (!isClassifierCapable(tool)) continue;
+            // Decide before projection drops provenance; an unstamped tool is outside content.
+            if (tool.isExternal !== false) hasOutsideDescriptors = true;
             byName.set(tool.name, tool);
             const gateTool = asGateTool(manifest, tool, describe(manifest));
             listedIds.add(`${gateTool.moduleId}.${gateTool.name}`);
             tools.push(gateTool);
           }
+        }
+        if (hasOutsideDescriptors) {
+          await deps.gateway.recordContextForSession(token, "tool_external_descriptors");
         }
         return tools;
       },
@@ -183,7 +193,14 @@ export function createClassifierGatePortsFactory(
           // #2907 QA N1: never the live gate token. Use the attempt's non-secret correlation id.
           chatSessionId: correlationId ?? nextRequestId()
         };
-        return scoped((db) => manifestTool.classifier!.candidates!(db, ctx, { signal }));
+        const raw = await scoped((db) => manifestTool.classifier!.candidates!(db, ctx, { signal }));
+        const normalized = normalizeClassifierCandidates(raw);
+        if (!normalized.ok) throw new Error("invalid classifier candidates");
+        if (normalized.candidates.length > 0) {
+          // Admission acquires its own actor-scoped connection, after the hook released its own.
+          await deps.gateway.recordContextForSession(token, "classifier_candidates");
+        }
+        return normalized.candidates;
       },
       // Synchronous by contract. A tool is released when this attempt listed it: a module tool by
       // its author's classifier declaration, a connected tool by the declaration its synthetic

@@ -327,6 +327,7 @@ export const calendarModuleManifest = {
         "cache only on transient provider failures, with source and gap metadata.",
       permissionId: "calendar.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {

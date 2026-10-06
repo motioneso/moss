@@ -712,6 +712,7 @@ export const aiModuleManifest = {
       description: "List recent structured error events visible to the active actor.",
       permissionId: "ai.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {

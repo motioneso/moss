@@ -111,7 +111,7 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
 
       {props.outsideContentNotice ? (
         <p className="muted-text">
-          I read outside content in this chat, so changes need your approval.
+          This chat has outside or unverified context, so changes need your approval.
         </p>
       ) : null}
 

@@ -30,7 +30,6 @@ describe("Tasks agency tools through AssistantToolGateway", () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
     runner = new DataContextRunner(appDb);
-    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
     aiRepository = new AiRepository();
     tasksRepository = new TasksRepository();
   });
@@ -39,7 +38,9 @@ describe("Tasks agency tools through AssistantToolGateway", () => {
     await appDb.destroy();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
+
     // #1308 defect 2: build the array as a local `sink` FIRST and close the notifier over that
     // local, not over the outer `emitted` binding. `emitted` is a `let` that every beforeEach
     // reassigns to a new array; the notifier below only ever reads the `sink` it was created

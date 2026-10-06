@@ -347,6 +347,7 @@ export const newsModuleManifest = {
         "List the actor's top news headlines right now (one short 'Title — Source' line, max 5), composed from their enabled sources and topics. Read-only; briefing-oriented, not a full article browser.",
       permissionId: "news.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: newsTopHeadlinesTodayExecute
     },
@@ -356,6 +357,7 @@ export const newsModuleManifest = {
         "Show the actor's News source health and credential status. Read-only; if access failed, directs the actor to replace the key in News settings.",
       permissionId: "news.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: newsCredentialedSourceStatusExecute
     },
@@ -366,6 +368,7 @@ export const newsModuleManifest = {
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
@@ -389,6 +392,7 @@ export const newsModuleManifest = {
         "Verify a news publisher (URL or name) the actor wants to follow. Returns a confirmationId plus verified candidates (label + domain) for news.confirmSource. Read-only: verifies and caches candidates server-side, writes nothing.",
       permissionId: "news.prefs",
       risk: "read",
+      content: "outside",
       // Candidate labels are derived from fetched publisher pages/feeds — untrusted
       // external text, so the gateway wraps output in the trust envelope.
       externalContent: true,
@@ -439,6 +443,7 @@ export const newsModuleManifest = {
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -458,6 +463,7 @@ export const newsModuleManifest = {
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -480,6 +486,7 @@ export const newsModuleManifest = {
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -499,6 +506,7 @@ export const newsModuleManifest = {
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
