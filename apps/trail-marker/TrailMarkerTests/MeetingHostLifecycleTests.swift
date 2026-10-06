@@ -121,6 +121,32 @@ final class MeetingHostLifecycleTests: XCTestCase {
         XCTAssertEqual(fixture.device.starts, 1, "Closing the resumed session must not acquire the source again")
     }
 
+    func testAlreadyPausedCaptureAcknowledgesNewPauseGenerationWithoutTouchingDevices() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { XCTFail("Paused capture must not request permission again"); return false }
+        defer { host.shutdown(reason: "Synthetic test finished") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        host.sourceChanged()
+        XCTAssertEqual(host.phase, .paused)
+        let stops = fixture.device.stops
+        try await waitUntil(timeout: 4) { fixture.server.lastObservation?.phase == "paused" }
+        XCTAssertEqual(fixture.server.lastObservation?.generation, 1)
+        XCTAssertEqual(fixture.server.lastObservation?.errorCode, "native_capture_interrupted")
+
+        fixture.server.browserState("paused", generation: 2)
+        try await waitUntil(timeout: 6) { fixture.server.lastObservation?.generation == 2 }
+        XCTAssertEqual(fixture.server.lastObservation?.phase, "paused")
+        XCTAssertEqual(fixture.server.lastObservation?.errorCode, "native_capture_interrupted")
+        XCTAssertEqual(host.phase, .paused)
+        XCTAssertFalse(host.cleanupBlocked)
+        XCTAssertEqual(fixture.device.starts, 1)
+        XCTAssertEqual(fixture.device.stops, stops, "Acknowledging Pause must not close devices a second time")
+        XCTAssertEqual(fixture.server.controlCount, 0, "No duplicate Pause command is needed to acknowledge the version")
+    }
+
     func testRecoveredStoppedClaimNeverRequestsPermissionOrOpensHardware() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }
@@ -292,6 +318,40 @@ final class MeetingHostLifecycleTests: XCTestCase {
         }
     }
 
+    func testTerminalUploadFailureReportsOneGapWithExactWireIdentityAndBounds() async throws {
+        let failures = [
+            (code: "meeting_capture_processing_failed", reason: "invalid-response", gapReason: "processing-failed"),
+            (code: "meeting_capture_interrupted", reason: "capture-interrupted", gapReason: "processing-failed"),
+            (code: "meeting_capture_interrupted", reason: "audio-expired", gapReason: "interrupted")
+        ]
+        for failure in failures {
+            let fixture = try Fixture()
+            defer { fixture.close() }
+            fixture.permission = .granted
+            let host = fixture.host { false }
+            defer { host.shutdown(reason: "Synthetic gap regression finished") }
+            try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+            try await waitUntil { host.phase == .recording }
+            let buffer = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
+            // Fractional endpoints expose a second conversion that disagrees with the upload.
+            for index in 0..<5 {
+                buffer.receive(hostTimeNanoseconds: fixture.monotonic + 400_000 + UInt64(index) * 1_000_000_000,
+                    sampleRate: 8000, frameCount: 8000, sampleAt: { _ in 0.25 })
+            }
+            fixture.monotonic += 6_000_000_000
+            fixture.server.failAudio(code: failure.code, reason: failure.reason, gapReason: failure.gapReason, elapsedMs: 8000)
+            try await waitUntil(timeout: 6) { !fixture.server.reportedGaps.isEmpty }
+            let reports = fixture.server.reportedGaps
+            let retained = fixture.server.retainedGaps
+            XCTAssertEqual(fixture.server.audioCount, 1, "A terminal receipt must release the clip")
+            XCTAssertEqual(retained.count, 1, "Server and native reports must identify the same gap")
+            XCTAssertEqual(reports.count, 1)
+            XCTAssertEqual(reports.first, retained.first, "Keep the exact source, epoch, wire bounds and reason")
+            XCTAssertEqual(retained.first?.reason, failure.gapReason)
+            XCTAssertEqual(host.gapCount, 1, "The local failure diagnostic remains visible")
+        }
+    }
+
     private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition(), Date() < deadline { try await Task.sleep(nanoseconds: 10_000_000) }
@@ -300,10 +360,11 @@ final class MeetingHostLifecycleTests: XCTestCase {
 
     private final class Device: MeetingAudioCapturing {
         var starts = 0
+        var stops = 0
         var failStop = false
         var receiver: MeetingAudioReceiving?
         func start(into receiver: MeetingAudioReceiving) throws { starts += 1; self.receiver = receiver }
-        func stop() throws { if failStop { throw MeetingAudioFailure.cleanupFailed } }
+        func stop() throws { stops += 1; if failStop { throw MeetingAudioFailure.cleanupFailed } }
     }
 
     @MainActor
@@ -375,12 +436,22 @@ private final class FixtureServer {
     private var controls = 0
     private var requests = 0
     private var finished = false
+    private var observation: MeetingCaptureObserved?
+    private var audioFailure: (code: String, reason: String, gapReason: String)?
+    private var elapsedMs: UInt64 = 1000
+    private var audioRequests = 0
+    private var gaps: [MeetingCaptureGap] = []
+    private var gapReports: [MeetingCaptureGap] = []
     var loseFirstClaim = false
     var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stops }
     var controlCount: Int { lock.lock(); defer { lock.unlock() }; return controls }
     var requestCount: Int { lock.lock(); defer { lock.unlock() }; return requests }
     var finalized: Bool { lock.lock(); defer { lock.unlock() }; return finished }
     var claimHashes: [String] { lock.lock(); defer { lock.unlock() }; return hashes }
+    var lastObservation: MeetingCaptureObserved? { lock.lock(); defer { lock.unlock() }; return observation }
+    var audioCount: Int { lock.lock(); defer { lock.unlock() }; return audioRequests }
+    var retainedGaps: [MeetingCaptureGap] { lock.lock(); defer { lock.unlock() }; return gaps }
+    var reportedGaps: [MeetingCaptureGap] { lock.lock(); defer { lock.unlock() }; return gapReports }
     var command: MeetingRecordingCommand {
         .init(meetingId: meetingId, grantId: grantId, ownerUserId: ownerId,
             expiresAt: ServerTime.format(Self.baseTime.addingTimeInterval(60)),
@@ -390,9 +461,31 @@ private final class FixtureServer {
     func browserState(_ state: String, generation: Int) {
         lock.lock(); desired = state; self.generation = generation; lock.unlock()
     }
+    func failAudio(code: String, reason: String, gapReason: String, elapsedMs: UInt64) {
+        lock.lock(); audioFailure = (code, reason, gapReason); self.elapsedMs = elapsedMs; lock.unlock()
+    }
     func reply(path: String, body: [String: Any]) throws -> Data {
         lock.lock(); defer { lock.unlock() }
         requests += 1
+        if path.hasSuffix("/audio"), let failure = audioFailure,
+           let requestKey = body["requestKey"] as? String, let source = body["sourceId"] as? String,
+           let epoch = body["epoch"] as? UInt64, let start = body["startMs"] as? UInt64,
+           let end = body["endMs"] as? UInt64 {
+            audioRequests += 1
+            gaps.append(.init(id: requestKey, sourceId: source, epoch: epoch, startMs: start, endMs: end,
+                reason: failure.gapReason))
+            return try JSONSerialization.data(withJSONObject: ["requestKey": requestKey, "status": "failed", "code": failure.code,
+                "reason": failure.reason, "retryable": false])
+        }
+        if path.hasSuffix("/status"), let reports = body["gaps"] as? [[String: Any]] {
+            let decoded = try JSONDecoder().decode([MeetingCaptureGap].self, from: JSONSerialization.data(withJSONObject: reports))
+            gapReports.append(contentsOf: decoded)
+            for gap in decoded {
+                if let existing = gaps.first(where: { $0.id == gap.id }) {
+                    guard existing == gap else { throw URLError(.badServerResponse) }
+                } else { gaps.append(gap) }
+            }
+        }
         if path.hasSuffix("/control") { controls += 1 }
         if path.hasSuffix("/claim") {
             guard let hash = body["credentialHash"] as? String, hashes.first.map({ $0 == hash }) ?? true else {
@@ -405,12 +498,17 @@ private final class FixtureServer {
             desired = "stopped"; generation = 2; stops += 1
         }
         if path.hasSuffix("/status"), body["finalized"] as? Bool == true { finished = true }
+        if path.hasSuffix("/status"), let observed = body["observed"] as? [String: Any] {
+            observation = try JSONDecoder().decode(MeetingCaptureObserved.self,
+                from: JSONSerialization.data(withJSONObject: observed))
+        }
         let selection = try JSONSerialization.jsonObject(with: JSONEncoder().encode(command.selection))
         var capture: [String: Any] = ["grantId": grantId, "deviceId": deviceId, "deviceName": "Synthetic Mac",
             "generation": generation, "epoch": 1, "desired": desired, "selection": selection,
             "epochStartMs": 0, "expiresAt": ServerTime.format(Self.baseTime.addingTimeInterval(7200)),
-            "serverTime": ServerTime.format(Self.baseTime), "elapsedMs": 1000, "leaseMs": 30000,
-            "gaps": [], "gapLimitReached": false, "finalization": desired == "stopped" ? (finished ? "complete" : "pending") : "none"]
+            "serverTime": ServerTime.format(Self.baseTime), "elapsedMs": elapsedMs, "leaseMs": 30000,
+            "gaps": try JSONSerialization.jsonObject(with: JSONEncoder().encode(gaps)), "gapLimitReached": false,
+            "finalization": desired == "stopped" ? (finished ? "complete" : "pending") : "none"]
         if desired == "stopped" { capture["stopCutoffMs"] = 1000; capture["epochEndMs"] = 1000 }
         var reply: [String: Any] = ["capture": capture]
         if path.hasSuffix("/claim") {

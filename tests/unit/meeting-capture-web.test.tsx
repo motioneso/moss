@@ -421,6 +421,28 @@ describe("minimal capture browser regressions (synthetic transport, not live pro
     expect(client.getQueryData(["meetings", "new-meeting"])).toEqual({ phase: "idle" });
     expect(calls.some((call) => call.path.endsWith("/capture/start"))).toBe(false);
   });
+  it("enables explicit Resume after the Mac's error pause is acknowledged at the current generation", async () => {
+    status.capture = capture({
+      desired: "paused",
+      generation: 2,
+      observed: { generation: 1, phase: "paused", errorCode: "meeting_capture_interrupted" }
+    });
+    await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
+    expect(button("Resume")?.disabled).toBe(true);
+    status.capture = capture({
+      ...status.capture,
+      observed: { generation: 2, phase: "paused", errorCode: "meeting_capture_interrupted" }
+    });
+    act(() => client.setQueryData(captureKeys.status(meeting.id), { ...status }));
+    await settle();
+    expect(button("Resume")?.disabled).toBe(false);
+    expect(calls.filter((call) => call.body?.command === "record")).toHaveLength(0);
+    await click("Resume");
+    expect(calls.find((call) => call.body?.command === "record")?.body).toMatchObject({
+      expectedGeneration: 2,
+      command: "record"
+    });
+  });
   it.each(["start", "resume"] as const)(
     "drops late %s success/failure after the real auth reset",
     async (action) => {

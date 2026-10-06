@@ -279,6 +279,15 @@ final class MeetingCaptureHost: ObservableObject {
             phase = .paused
             message = "Paused. No new audio is captured or sent. Press Resume in Moss."
         }
+        if next.desired == "paused", phase == .paused, !cleanupBlocked, observed.generation != next.generation {
+            // A native fault may have already closed capture before Moss advances Pause.
+            // Acknowledge that version without reopening/stopping devices or losing the cause.
+            if let cutoff = try next.epochEndMs.map(nativeTime) {
+                pausedCaptureCutoff = min(pausedCaptureCutoff ?? cutoff, cutoff)
+                runtime.tightenPauseCutoff(to: cutoff)
+            }
+            observed = .init(generation: next.generation, phase: "paused", errorCode: observed.errorCode)
+        }
         guard start, !stoppedByUser, !controlInFlight, !cleanupBlocked, !gapCoverageIncomplete, let selection = next.selection else { return }
         if next.generation != initialStartGeneration { startCommandDeadline = nil }
         let generation = sessionGeneration
@@ -453,7 +462,8 @@ final class MeetingCaptureHost: ObservableObject {
         guard let client, let activation, let grantId, let credential,
               let epoch = epochs[packet.epoch], let origin = originNanoseconds,
               packet.startNanoseconds >= origin else { throw MeetingHostError.invalidResponse }
-        if (packet.endNanoseconds - origin) / 1_000_000 == (packet.startNanoseconds - origin) / 1_000_000 { return .tooShort }
+        if MeetingWireAudioBoundary.milliseconds(coveringNanoseconds: packet.endNanoseconds - origin)
+            == MeetingWireAudioBoundary.milliseconds(coveringNanoseconds: packet.startNanoseconds - origin) { return .tooShort }
         let bounds = try MeetingWireAudioBoundary(packet: packet, originNanoseconds: origin)
         let start = bounds.startMs
         let end = bounds.endMs
@@ -477,10 +487,12 @@ final class MeetingCaptureHost: ObservableObject {
                         let terminal = receipt.releasesAudio(matching: key)
                         let failed = terminal && receipt.status == "failed"
                         if failed {
-                            // Retain the failure range before deleting its transient audio. A
-                            // terminal receipt must never re-enter the Stop/retry upload loop.
-                            self.recordGap(source: source, epoch: epoch.remoteEpoch, start: packet.startNanoseconds,
-                                end: packet.endNanoseconds, reason: "processing-failed")
+                            // Replay the server's retained gap with the exact upload identity and
+                            // wire bounds; remapping native time would create a conflicting range.
+                            self.queueGap(.init(id: key, sourceId: source, epoch: epoch.remoteEpoch,
+                                startMs: start, endMs: end,
+                                reason: receipt.code == "meeting_capture_interrupted" && receipt.reason == "audio-expired"
+                                    ? "interrupted" : "processing-failed"))
                         }
                         if terminal {
                             self.uploadSequencer.acknowledge(epoch: epoch.remoteEpoch, source: source, callbackSequence: packet.sequence)

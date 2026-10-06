@@ -212,7 +212,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_capture",
       description:
-        "Link your Mac once and save sources in Settings. New meeting opens ready; only Start records. Pause and Stop stay on the meeting page. A nav dot and return timer show recording elsewhere. Windows capture is unavailable.",
+        "Link your Mac once and save sources in Settings. Only Start or Resume records. A confirmed capture-error pause allows Resume after source review. Pause and Stop stay on the meeting page; a nav dot shows recording elsewhere. Mac only.",
       errors: [
         {
           code: "meeting_capture_source_unavailable",
@@ -225,7 +225,7 @@ export const meetingsModuleManifest = {
           code: "meeting_capture_processing_failed",
           class: "transient",
           description:
-            "A transcription clip failed. Capture continues while transient failures retry within the memory limit; an unrecoverable clip leaves a visible gap."
+            "Capture continues while transient transcription failures retry. A terminal failed clip leaves one gap. Provider end rounding up to 100ms is clamped to the clip; other invalid intervals are rejected."
         },
         {
           code: "meeting_capture_rate_limited",
@@ -558,7 +558,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.transcript_review",
       description:
-        "Read live transcript timestamps and source labels beside notes, with inline missing-audio ranges. On phones they become tabs. Chat timestamp links scroll to exact evidence; older cited text remains identifiable."
+        "Read transcript timestamps and sources beside notes, or in phone tabs. Exact duplicate missing-audio ranges appear once; distinct gaps remain. Chat links scroll to cited evidence, including older text."
     },
     {
       id: "meetings.capture_default",

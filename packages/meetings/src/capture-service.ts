@@ -36,7 +36,11 @@ import {
   MeetingCaptureRepository,
   type CaptureGrant
 } from "./capture-repository.js";
-import { CaptureProcessingError, captureProcessingFailure } from "./capture-processing.js";
+import {
+  CaptureProcessingError,
+  captureProcessingFailure,
+  normalizeCaptureSegments
+} from "./capture-processing.js";
 import { MeetingCaptureConnectionRepository } from "./capture-connection-repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 
@@ -313,11 +317,12 @@ export class MeetingCaptureService {
       expireCaptureLease(state, this.now(), grant.expires_at);
       if (input.observed.generation > state.generation)
         throw new MeetingCaptureError("meeting_capture_conflict", 409);
+      let observed = input.observed;
       if (
         input.observed.generation === state.generation &&
         (input.observed.phase === "error" || input.observed.phase === "paused") &&
         state.desired === "recording"
-      )
+      ) {
         applyCaptureControl(
           state,
           {
@@ -328,15 +333,20 @@ export class MeetingCaptureService {
           },
           this.now()
         );
+        // This report already confirms the pause it caused; an error alone does not.
+        if (observed.phase === "paused") observed = { ...observed, generation: state.generation };
+      }
       for (const gap of input.gaps ?? []) retainCaptureGap(state, gap, this.now());
       state.inventory = input.inventory;
-      if (!state.gapLimitReached) state.observed = input.observed;
-      else if (
-        input.observed.generation === state.generation &&
-        (input.observed.phase === "paused" || input.observed.phase === "stopped")
-      ) {
-        // Keep the loss warning without hiding a current-generation safe stop acknowledgement.
-        state.observed = { ...input.observed, errorCode: "meeting_capture_limit" };
+      if (observed.generation >= (state.observed?.generation ?? 0)) {
+        if (!state.gapLimitReached) state.observed = observed;
+        else if (
+          observed.generation === state.generation &&
+          (observed.phase === "paused" || observed.phase === "stopped")
+        ) {
+          // Keep the loss warning without hiding a current-generation safe stop acknowledgement.
+          state.observed = { ...observed, errorCode: "meeting_capture_limit" };
+        }
       }
       if (
         input.recordedDurationMs !== undefined &&
@@ -756,26 +766,7 @@ export class MeetingCaptureService {
           stage: "validation",
           retryable: false
         });
-      let characters = 0;
-      for (const segment of generated.segments) {
-        characters += segment.text.length;
-        if (
-          !Number.isSafeInteger(segment.startMs) ||
-          !Number.isSafeInteger(segment.endMs) ||
-          segment.startMs < 0 ||
-          segment.endMs <= segment.startMs ||
-          segment.endMs > input.endMs - input.startMs ||
-          typeof segment.text !== "string" ||
-          segment.text.includes("\0") ||
-          characters > 64000
-        )
-          throw new CaptureProcessingError({
-            code: "meeting_capture_processing_failed",
-            reason: "timestamp-or-content-invalid",
-            stage: "validation",
-            retryable: false
-          });
-      }
+      const segments = normalizeCaptureSegments(generated.segments, input.endMs - input.startMs);
       await this.preflight(proof.grant, proof.actor);
       processingStage = "persistence";
       return await this.nativeTransaction(proof, async (db, grant) => {
@@ -829,7 +820,7 @@ export class MeetingCaptureService {
           requestKey: input.requestKey,
           expectedVersion: head.version,
           sources,
-          events: generated.segments.map((segment, index) => ({
+          events: segments.map((segment, index) => ({
             cursor: head.cursor + index + 1,
             segment: {
               meetingId: input.meetingId,
@@ -882,11 +873,11 @@ export class MeetingCaptureService {
       await this.preflight(proof.grant, proof.actor);
       return this.nativeTransaction(proof, async (db, grant) => {
         this.valid(grant, input.meetingId, grant.device_id);
+        const state = captureState(grant);
+        await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
         const previous = await this.repository.receipt(db, grant.id, input.requestKey, fingerprint);
         if (previous?.result_json)
           return JSON.parse(previous.result_json) as MeetingCaptureAudioReceipt;
-        const state = captureState(grant);
-        await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
         const retryable =
           failure.retryable &&
           (previous?.attempts ?? 1) < 4 &&

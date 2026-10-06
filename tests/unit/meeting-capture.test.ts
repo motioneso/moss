@@ -605,6 +605,57 @@ describe("capture service authorization and dispatch", () => {
     });
     expect(JSON.stringify([...f.receipts.values()])).not.toContain(input.pcmBase64);
   });
+  it.each([0, 1, 99, 100])(
+    "persists and clamps a provider end %dms beyond the clip without extending its source",
+    async (overshoot) => {
+      const f = fixture();
+      const input = { ...audio(), startMs: 500, endMs: 1500 };
+      vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, request) =>
+        request.dispatch(async () => ({
+          segments: [{ startMs: 20, endMs: 1000 + overshoot, text: "Rounded provider result" }],
+          modelRoute: "route"
+        }))
+      );
+      expect(await f.service.audio(f.headers, "rounded-end", input)).toMatchObject({
+        status: "saved"
+      });
+      expect(f.ingest.mock.calls[0]?.[1].events[0]?.segment).toMatchObject({
+        startMs: 520,
+        endMs: 1500
+      });
+      expect(f.ingest.mock.calls[0]?.[1].sources[0]?.endMs).toBe(1500);
+      expect(JSON.parse(f.grant.state_json!).gaps).toEqual([]);
+    }
+  );
+  it.each([
+    [0, 1101],
+    [0, 1500],
+    [-1, 1000],
+    [1000, 1001],
+    [1001, 1100],
+    [500, 500],
+    [600, 500],
+    [Number.NaN, 1000],
+    [0, Number.POSITIVE_INFINITY],
+    [0, 1000.5]
+  ])(
+    "rejects invalid provider interval %s..%s without transcript persistence",
+    async (startMs, endMs) => {
+      const f = fixture();
+      vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, request) =>
+        request.dispatch(async () => ({
+          segments: [{ startMs, endMs, text: "Invalid provider result" }],
+          modelRoute: "route"
+        }))
+      );
+      expect(await f.service.audio(f.headers, "invalid-end", audio())).toMatchObject({
+        status: "failed",
+        reason: "timestamp-or-content-invalid",
+        retryable: false
+      });
+      expect(f.ingest).not.toHaveBeenCalled();
+    }
+  );
   it.each(["tm1_wrong", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "mm1_bad"])(
     "rejects other credential families %s before data access",
     async (token) => {
@@ -747,6 +798,44 @@ describe("capture service authorization and dispatch", () => {
 });
 
 describe("capture processing stays independent", () => {
+  it("returns a receipt that expires during processing without adding a conflicting failure gap", async () => {
+    const f = fixture();
+    const input = audio();
+    const expired = {
+      requestKey: input.requestKey,
+      status: "failed" as const,
+      code: "meeting_capture_interrupted",
+      reason: "audio-expired",
+      stage: "authorization" as const,
+      retryable: false
+    };
+    let processingFailed = false;
+    vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, request) =>
+      request.dispatch(async () => {
+        processingFailed = true;
+        throw new Error("Synthetic late provider failure");
+      })
+    );
+    vi.mocked(f.repository.reconcileExpiredAudio).mockImplementation(async (_db, _grant, next) => {
+      if (!processingFailed) return;
+      f.receipts.get(input.requestKey)!.result_json = JSON.stringify(expired);
+      retainCaptureGap(
+        next,
+        {
+          id: input.requestKey,
+          sourceId: input.sourceId,
+          epoch: input.epoch,
+          startMs: input.startMs,
+          endMs: input.endMs,
+          reason: "interrupted"
+        },
+        at(2000)
+      );
+    });
+    expect(await f.service.audio(f.headers, "expired-during-processing", input)).toEqual(expired);
+    expect(f.ingest).not.toHaveBeenCalled();
+    expect(f.repository.finish).not.toHaveBeenCalled();
+  });
   it("retries a transient same-key clip without pausing capture or inventing a gap", async () => {
     const f = fixture(),
       clip = audio();

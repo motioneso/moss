@@ -25,6 +25,14 @@ export function TranscriptTimeline({
   readonly selectedId?: string;
   readonly search?: string;
 }) {
+  // Native and server reports can describe the same lost clip under different IDs.
+  // Keep the retained diagnostics intact and collapse only exact coverage duplicates.
+  const distinctGaps = new Map(
+    gaps.map((gap) => [
+      JSON.stringify([gap.sourceId, gap.epoch, gap.startMs, gap.endMs, gap.reason]),
+      gap
+    ])
+  );
   const rows: (
     | { kind: "segment"; start: number; segment: MeetingTranscriptSegment }
     | { kind: "gap"; start: number; gap: MeetingCaptureState["gaps"][number] }
@@ -35,7 +43,11 @@ export function TranscriptTimeline({
           !search || segment.text.toLocaleLowerCase().includes(search.toLocaleLowerCase())
       )
       .map((segment) => ({ kind: "segment" as const, start: segment.startMs, segment })),
-    ...gaps.map((gap) => ({ kind: "gap" as const, start: gap.startMs, gap }))
+    ...Array.from(distinctGaps.values(), (gap) => ({
+      kind: "gap" as const,
+      start: gap.startMs,
+      gap
+    }))
   ].sort((a, b) => a.start - b.start);
   return (
     <>

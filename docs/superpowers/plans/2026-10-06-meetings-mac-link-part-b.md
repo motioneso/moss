@@ -281,13 +281,48 @@ An additional API bundle attempt stopped before bundling: the executor's pnpm wr
 bootstrap into an unavailable directory. The app-map generator passed directly, but a standard
 API bundle is not claimed and remains a hosted check.
 
+## Live-recording follow-up on 387caf4ad
+
+Three issues found during an owner-run recording are repaired together. A genuine native paused
+report that causes the server's automatic Pause now acknowledges that exact new generation.
+Older reports cannot regress it; error-only and unrelated Pause requests still require a real
+acknowledgement. The Mac also acknowledges a newer Pause while already safely paused, without
+reopening devices. Resume remains an explicit browser action.
+
+Provider segment ends may overshoot the admitted clip by at most 100ms, inclusive, and are clamped
+before persistence. A 101ms overshoot, invalid start, nonfinite value, reversed or empty interval
+still fails. Native wire boundaries use the same upward rounding of cumulative sample time at
+both ends, avoiding truncated cumulative coverage without creating overlaps or accumulating drift.
+The integer wire representation still has less than 1ms of per-clip quantization; PCM duration
+validation and conservative Stop bounds remain in place.
+
+Native terminal failure reports reuse the upload request key, exact wire interval and server gap
+reason. Expiry reconciliation uses the same receipt identity, and a processing failure returns a
+receipt finalized by reconciliation instead of adding a conflicting gap. The transcript collapses
+exact duplicate source/epoch/interval/reason reports while retaining raw diagnostics and distinct
+gaps. Older near-overlapping reports are not merged speculatively.
+
+Regression checks exercise real service and Fastify route code with repository fixtures, plus web
+components with unit transports; these are not live database/browser proof. Native XCTest covers
+sample boundaries, the already-paused acknowledgement and terminal receipt identity. This Linux
+executor has no Swift/Xcode or Docker, so native execution and isolated database proof remain hosted
+or owner checks. The repaired live-recording path must still be exercised on the linked Mac.
+
+Local verification passed 1,010 tests across 71 relevant files, all six TypeScript configurations,
+full lint/format and required static checks. The pause, duplicate-gap, expiry-order and rounding
+regressions were observed failing before correction and passing afterward. Removing the 100ms
+limit made the 101ms rejection test fail, then pass after restoration. Independent review found
+and verified fixes for two conflicting-gap edge cases and ended with no remaining source blocker.
+Native source/anchor self-checks and portable sample-clock arithmetic passed; they do not replace
+the new XCTest cases or the owner's real-recording rerun.
+
 ## Publication
 
-Use explicit-path local commits and preserve a clean worktree. Publish only the new feature
-branch additively and open a draft stacked PR. A publication refusal or failure stops further
-attempts; supply the complete base-to-HEAD format-patch series as a ZIP attachment, with hashes
-and an independent fresh-base apply proving the final tree. Do not try an alternate publication
-route after a rejection.
+Use explicit-path local commits and preserve a clean worktree. Publish corrections additively to
+the existing draft feature branch, checking the expected remote head before a fast-forward update.
+Preserve the tested tree exactly. Do not overwrite a newly advanced branch or bypass an access
+denial. If a patch handoff is needed, include the complete base-to-HEAD series, hashes and an
+independent fresh-base apply proving the final tree.
 
 The product PR includes its own release note and accurate control/test status. No PR merge,
 production change, device-permission action, credential operation or real recording is authorized.
