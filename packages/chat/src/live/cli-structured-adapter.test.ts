@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it, afterAll } from "vitest";
 
 import type { GenerateStructuredProviderInput, ModelActivityEntry } from "@moss/ai";
+import { GATE_TIMEOUT_ABORT_REASON, installModelActivityRecorder } from "@moss/ai";
 
 import { CliStructuredAdapter } from "./cli-structured-adapter.js";
 import { AcpChatEngine } from "./acp-chat-engine.js";
@@ -343,6 +344,41 @@ describe("CliStructuredAdapter cancellation (#2276)", () => {
     await expect(
       adapter.generateStructured({ ...baseInput("module.job-fit"), signal: controller.signal })
     ).rejects.toThrow();
+  });
+
+  it("files nothing when the gate deadline aborts the call — the gate owns the line — #3064", async () => {
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      const controller = new AbortController();
+      const engine: CliChatEngine = {
+        provider: "anthropic",
+        async launch() {
+          return { offset: 0 };
+        },
+        async submit() {
+          controller.abort(GATE_TIMEOUT_ABORT_REASON);
+          await new Promise(() => undefined);
+        },
+        async interrupt() {},
+        async readNew() {
+          return { records: [], offset: 1, complete: true };
+        },
+        async isAlive() {
+          return true;
+        },
+        async kill() {},
+        async purgeTranscripts() {}
+      };
+      const adapter = new CliStructuredAdapter("anthropic", () => engine);
+
+      await expect(
+        adapter.generateStructured({ ...baseInput("module.job-fit"), signal: controller.signal })
+      ).rejects.toThrow("aborted");
+      expect(entries).toHaveLength(0);
+    } finally {
+      installModelActivityRecorder(null);
+    }
   });
 
   it("throws away a late answer when the internal timeout fires first", async () => {

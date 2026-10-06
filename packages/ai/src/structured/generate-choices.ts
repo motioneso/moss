@@ -11,6 +11,7 @@ import type { ModuleServiceKey } from "@moss/shared";
 import { parseAiApiKeyCredential } from "../credentials.js";
 import type { AiSecretCipher } from "../crypto.js";
 import {
+  isGateTimeoutAbort,
   modelActivityStructuredCode,
   recordModelActivity,
   type ModelActivityFailureCode
@@ -355,15 +356,20 @@ async function postSystemOne(
   }
 
   if (!posted.ok) {
-    recordSystemOneActivity(
-      model.provider_model_id,
-      posted.error === "aborted" ? "aborted" : "error",
-      {
-        ...activity,
-        durationMs: Date.now() - startedAt,
-        failureCode: posted.error === "aborted" ? "cancelled" : "unknown"
-      }
-    );
+    // #3064: one owner for the timeout line — the gate. An abort carrying the gate's own
+    // deadline reason files nothing here; the gate files the single line. Every other
+    // outcome records exactly as before.
+    if (posted.error !== "aborted" || !isGateTimeoutAbort(input.signal)) {
+      recordSystemOneActivity(
+        model.provider_model_id,
+        posted.error === "aborted" ? "aborted" : "error",
+        {
+          ...activity,
+          durationMs: Date.now() - startedAt,
+          failureCode: posted.error === "aborted" ? "cancelled" : "unknown"
+        }
+      );
+    }
     return posted;
   }
 

@@ -16,6 +16,42 @@ import type { ActivityDetailStep, ActivityFactCounts } from "@moss/db";
 
 export type ModelActivityOutcome = "ok" | "error" | "aborted";
 
+/**
+ * #3040: the abort reason the classifier gate sets on its own deadline. A layer that sees
+ * its caller signal abort with this reason knows the gate's time ran out — as opposed to
+ * the user stopping the turn — and records a timeout instead of a cancellation. A plain
+ * string (not an Error instance) so the check survives any module boundary.
+ */
+export const GATE_TIMEOUT_ABORT_REASON = "classifier_gate_timeout";
+
+/** True when the signal was aborted by the classifier gate's deadline. */
+export function isGateTimeoutAbort(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true && signal.reason === GATE_TIMEOUT_ABORT_REASON;
+}
+
+/**
+ * #3064: an abort-shaped error that carries the caller signal's abort reason. Layers that
+ * throw their own abort errors (instead of letting the signal's error propagate) use this
+ * so `withModelActivityRecording` can tell a gate timeout from a user stop.
+ */
+export function abortErrorFor(signal: AbortSignal | undefined): Error {
+  const error = new Error("aborted");
+  error.name = "AbortError";
+  if (signal?.reason !== undefined) {
+    (error as { reason?: unknown }).reason = signal.reason;
+  }
+  return error;
+}
+
+/** True when the thrown error carries the classifier gate's deadline reason. */
+export function isGateTimeoutError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { reason?: unknown }).reason === GATE_TIMEOUT_ABORT_REASON
+  );
+}
+
 /** Allow-listed failure vocabulary (spec section 5.4). Raw provider text is never stored. */
 export type ModelActivityFailureCode =
   | "timeout"
@@ -282,7 +318,9 @@ export async function withModelActivityRecording<T>(
     }
     return value;
   } catch (error) {
-    if (recorder) {
+    // #3064: one owner for the timeout line — the gate. A gate-timeout abort files nothing
+    // here; the gate files the single line. Every other throw records exactly as before.
+    if (!isGateTimeoutError(error) && recorder) {
       const aborted = error instanceof Error && error.name === "AbortError";
       invokeSafely(recorder, {
         ...context,
