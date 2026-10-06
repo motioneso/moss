@@ -199,7 +199,8 @@ export interface MeetingCaptureDevicesResult {
   readonly processingReady: boolean;
 }
 export interface MeetingCaptureStartInput {
-  readonly noticeAcknowledged: true;
+  /** Legacy input accepted during rollout; only the stored account acknowledgement authorizes capture. */
+  readonly noticeAcknowledged?: true;
   readonly deviceId: string;
   readonly connectionId: string;
   readonly expectedRevision: number;

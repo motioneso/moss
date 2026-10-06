@@ -1,3 +1,6 @@
+import { captureMetadataJson } from "../../packages/meetings/src/capture-metadata.js";
+import { MEETING_RECORDING_NOTICE } from "@moss/shared";
+import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type { MeetingCaptureInventory, MeetingCaptureStartInput } from "@moss/shared";
@@ -118,7 +121,8 @@ function fixture() {
         capability_revision: 1,
         claim_expires_at: input.claimExpiresAt,
         start_request_key: input.requestKey,
-        start_fingerprint: input.fingerprint
+        start_fingerprint: input.fingerprint,
+        notice_policy_version: input.noticePolicyVersion
       })
   );
   vi.spyOn(grants, "activate").mockImplementation(async (_db, row, credentialHash, state) => {
@@ -126,7 +130,15 @@ function fixture() {
     row.status = "active";
     row.state_json = JSON.stringify(state);
   });
-  const service = new MeetingCaptureConnectionService(deps, grants, connections);
+  const notices = new MeetingRecordingNoticeRepository();
+  vi.spyOn(notices, "get").mockResolvedValue({
+    currentNotice: MEETING_RECORDING_NOTICE,
+    acknowledgement: {
+      policyVersion: MEETING_RECORDING_NOTICE.policyVersion,
+      acknowledgedAt: now.toISOString()
+    }
+  });
+  const service = new MeetingCaptureConnectionService(deps, grants, connections, notices);
   const start: MeetingCaptureStartInput = {
     noticeAcknowledged: true,
     deviceId,
@@ -153,6 +165,7 @@ function fixture() {
   };
   return {
     service,
+    notices,
     deps,
     grants,
     connections,
@@ -169,30 +182,54 @@ function fixture() {
   };
 }
 describe("shared connection explicit Start and native claim", () => {
-  it("rejects an unacknowledged direct Start replay before returning the existing grant", async () => {
-    const f = fixture();
-    await f.service.start(f.browser, meetingId, f.start);
-    await expect(
-      f.service.start(f.browser, meetingId, {
-        ...f.start,
-        noticeAcknowledged: undefined
-      } as unknown as MeetingCaptureStartInput)
-    ).rejects.toMatchObject({ code: "meeting_capture_invalid_input", httpStatus: 400 });
-    expect(f.connections.create).toHaveBeenCalledOnce();
-  });
-  it.each([undefined, false])(
-    "rejects direct Start without recording notice (%s) before issuing a grant",
-    async (notice) => {
+  it.each([null, { policyVersion: "older-text", acknowledgedAt: now.toISOString() }])(
+    "rejects missing or stale stored notice even when a browser sends true (%s)",
+    async (acknowledgement) => {
       const f = fixture();
-      const input = { ...f.start, noticeAcknowledged: notice } as MeetingCaptureStartInput;
-      await expect(f.service.start(f.browser, meetingId, input)).rejects.toMatchObject({
-        code: "meeting_capture_invalid_input",
-        httpStatus: 400
+      vi.mocked(f.notices.get).mockResolvedValue({
+        currentNotice: MEETING_RECORDING_NOTICE,
+        acknowledgement
       });
+      await expect(
+        f.service.start(f.browser, meetingId, { ...f.start, noticeAcknowledged: true })
+      ).rejects.toMatchObject({ code: "meeting_capture_notice_required", httpStatus: 409 });
       expect(f.connections.create).not.toHaveBeenCalled();
-      expect(f.grant).toBeNull();
     }
   );
+  it("checks current account notice before replaying a previously accepted Start", async () => {
+    const f = fixture();
+    await f.service.start(f.browser, meetingId, f.start);
+    vi.mocked(f.notices.get).mockResolvedValue({
+      currentNotice: MEETING_RECORDING_NOTICE,
+      acknowledgement: { policyVersion: "older-text", acknowledgedAt: now.toISOString() }
+    });
+    await expect(f.service.start(f.browser, meetingId, f.start)).rejects.toMatchObject({
+      code: "meeting_capture_notice_required",
+      httpStatus: 409
+    });
+    expect(f.connections.create).toHaveBeenCalledOnce();
+  });
+  it("uses the account acknowledgement without another browser notice and binds its version", async () => {
+    const f = fixture();
+    await f.service.start(f.browser, meetingId, { ...f.start, noticeAcknowledged: undefined });
+    expect(f.grant?.notice_policy_version).toBe(MEETING_RECORDING_NOTICE.policyVersion);
+    await f.service.start(f.browser, meetingId, { ...f.start, noticeAcknowledged: undefined });
+    expect(f.connections.create).toHaveBeenCalledOnce();
+  });
+  it("preserves an exact legacy pending fingerprint but rejects changed retry metadata", async () => {
+    const f = fixture();
+    await f.service.start(f.browser, meetingId, f.start);
+    f.grant!.start_fingerprint = hash(
+      captureMetadataJson({ meetingId, sessionId: f.browser.sessionId, ...f.start })
+    );
+    expect(await f.service.start(f.browser, meetingId, f.start)).toMatchObject({
+      capture: { grantId: requestKey }
+    });
+    await expect(
+      f.service.start(f.browser, meetingId, { ...f.start, noticeAcknowledged: undefined })
+    ).rejects.toMatchObject({ code: "meeting_capture_conflict" });
+    expect(f.connections.create).toHaveBeenCalledOnce();
+  });
   it("registers readiness without creating a Start or touching meeting content", async () => {
     const f = fixture();
     await f.service.register(f.headers, "register", {

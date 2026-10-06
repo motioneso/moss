@@ -1,3 +1,4 @@
+import { MeetingRecordingNoticeRepository } from "./recording-notice.js";
 import { captureAuthorizationError } from "./capture-authorization.js";
 import { captureMetadataJson } from "./capture-metadata.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
@@ -17,7 +18,6 @@ import type {
 } from "@moss/shared";
 import {
   applyCaptureControl,
-  assertCaptureNoticeAcknowledged,
   assertCaptureAudioAdmission,
   decodeCaptureAudio,
   expireCaptureLease,
@@ -119,7 +119,8 @@ export class MeetingCaptureService {
     private readonly deps: MeetingCaptureDependencies,
     private readonly repository = new MeetingCaptureRepository(),
     private readonly transcript = new MeetingTranscriptRepository(),
-    private readonly connections = new MeetingCaptureConnectionRepository()
+    private readonly connections = new MeetingCaptureConnectionRepository(),
+    private readonly notices = new MeetingRecordingNoticeRepository()
   ) {
     this.now = deps.now ?? (() => new Date());
   }
@@ -369,7 +370,8 @@ export class MeetingCaptureService {
     meetingId: string,
     input: MeetingCaptureControlInput
   ) {
-    if (input.command === "record") assertCaptureNoticeAcknowledged(input);
+    if (input.command === "record")
+      await this.deps.dataContext.withDataContext(actor, (db) => this.notices.requireCurrent(db));
     const grant = await this.deps.dataContext.withDataContext(actor, (db) =>
       this.repository.grant(db, input.grantId)
     );
@@ -410,6 +412,7 @@ export class MeetingCaptureService {
       this.valid(grant, meetingId);
       await this.liveBinding(grant, actor);
     }
+    if (input.command === "record") await this.notices.requireCurrent(db);
     return grant;
   }
   private async control(
@@ -457,7 +460,14 @@ export class MeetingCaptureService {
         state.inventory = JSON.parse(connection.inventory_json) as typeof state.inventory;
         state.lastSeenAt = connection.last_seen_at.toISOString();
       }
-      applyCaptureControl(state, input, this.now(), processing?.modelRoute ?? "");
+      if (input.command === "record")
+        await this.repository.bindNotice(db, grant, await this.notices.requireCurrent(db));
+      applyCaptureControl(
+        state,
+        input.command === "record" ? { ...input, noticeAcknowledged: true } : input,
+        this.now(),
+        processing?.modelRoute ?? ""
+      );
       if (grant.status === "approved" && input.command === "record")
         await this.repository.renewClaim(
           db,

@@ -1,3 +1,5 @@
+import { MEETING_RECORDING_NOTICE } from "@moss/shared";
+import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql, type Kysely } from "kysely";
@@ -41,7 +43,7 @@ const inventory = {
   systemAudioPermission: "unknown" as const
 };
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
-async function fixture() {
+async function fixture(acknowledgeNotice = true) {
   let now = new Date(),
     revision = 1;
   const deviceId = randomUUID(),
@@ -59,6 +61,10 @@ async function fixture() {
       )
     ).meeting;
   const meeting = await createMeeting();
+  if (acknowledgeNotice)
+    await context.withDataContext(owner, (db) =>
+      new MeetingRecordingNoticeRepository().acknowledge(db, MEETING_RECORDING_NOTICE.policyVersion)
+    );
   // Auth and provider ports are synthetic. Storage, RLS, locks, receipts and transcript are real.
   const deps: MeetingCaptureDependencies = {
     dataContext: context,
@@ -103,7 +109,7 @@ async function fixture() {
     });
   await register();
   const startInput = {
-    noticeAcknowledged: true as const,
+    noticeAcknowledged: true as true | undefined,
     deviceId,
     connectionId,
     expectedRevision: 1,
@@ -144,6 +150,83 @@ async function fixture() {
   };
 }
 describe("shared meeting recording protocol (isolated gate only)", () => {
+  it("stores account notice across meetings and browser sessions, binds grants, and gates stale Start/Resume replays", async () => {
+    const f = await fixture(false);
+    const notices = new MeetingRecordingNoticeRepository();
+    await expect(f.start()).rejects.toMatchObject({ code: "meeting_capture_notice_required" });
+    const acknowledgement = await context.withDataContext(f.owner, (db) =>
+      notices.acknowledge(db, MEETING_RECORDING_NOTICE.policyVersion)
+    );
+    const started = await f.start(f.meeting.id, { ...f.startInput, noticeAcknowledged: undefined });
+    expect(
+      await context.withDataContext(f.owner, (db) =>
+        new MeetingCaptureRepository().grant(db, started.capture.grantId)
+      )
+    ).toMatchObject({ notice_policy_version: MEETING_RECORDING_NOTICE.policyVersion });
+    await f.service.cancelStart(f.browser, f.meeting.id, {
+      deviceId: f.deviceId,
+      connectionId: f.connectionId,
+      requestKey: f.startInput.requestKey
+    });
+    const secondMeeting = await f.createMeeting();
+    const nextBrowser = { ...f.browser, sessionId: randomUUID() };
+    expect(
+      await context.withDataContext(nextBrowser, (db) =>
+        new MeetingRecordingNoticeRepository().get(db)
+      )
+    ).toEqual(acknowledgement);
+    const request = { ...f.startInput, requestKey: randomUUID(), noticeAcknowledged: undefined };
+    const second = await f.connections.start(nextBrowser, secondMeeting.id, request);
+    await context.withDataContext(f.owner, (db) =>
+      sql`UPDATE app.meeting_recording_notices SET policy_version='previous-text'`.execute(db.db)
+    );
+    await expect(f.connections.start(nextBrowser, secondMeeting.id, request)).rejects.toMatchObject(
+      { code: "meeting_capture_notice_required" }
+    );
+    await f.service.browserControl(nextBrowser, secondMeeting.id, {
+      grantId: second.capture.grantId,
+      requestKey: randomUUID(),
+      expectedGeneration: 1,
+      command: "pause"
+    });
+    const resume = {
+      grantId: second.capture.grantId,
+      requestKey: randomUUID(),
+      expectedGeneration: 2,
+      command: "record" as const,
+      selection: request.selection
+    };
+    await expect(
+      f.service.browserControl(nextBrowser, secondMeeting.id, resume)
+    ).rejects.toMatchObject({ code: "meeting_capture_notice_required" });
+    // Simulate an existing grant migrated with NULL policy binding; safe controls remain available.
+    await context.withDataContext(f.owner, (db) =>
+      sql`UPDATE app.meeting_capture_grants SET notice_policy_version=NULL WHERE id=${second.capture.grantId}::uuid`.execute(
+        db.db
+      )
+    );
+    await context.withDataContext(f.owner, (db) =>
+      notices.acknowledge(db, MEETING_RECORDING_NOTICE.policyVersion)
+    );
+    await f.service.browserControl(nextBrowser, secondMeeting.id, resume);
+    expect(
+      await context.withDataContext(f.owner, (db) =>
+        new MeetingCaptureRepository().grant(db, second.capture.grantId)
+      )
+    ).toMatchObject({ notice_policy_version: MEETING_RECORDING_NOTICE.policyVersion });
+    await context.withDataContext(f.owner, (db) =>
+      sql`UPDATE app.meeting_recording_notices SET policy_version='previous-text'`.execute(db.db)
+    );
+    await expect(
+      f.service.browserControl(nextBrowser, secondMeeting.id, resume)
+    ).rejects.toMatchObject({ code: "meeting_capture_notice_required" });
+    await f.service.browserControl(nextBrowser, secondMeeting.id, {
+      grantId: second.capture.grantId,
+      requestKey: randomUUID(),
+      expectedGeneration: 3,
+      command: "stop"
+    });
+  });
   it("connection registration does not create meeting authority; Start enforces owner RLS", async () => {
     const f = await fixture();
     expect(

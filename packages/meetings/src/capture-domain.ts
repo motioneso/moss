@@ -146,7 +146,8 @@ export function validateCaptureSelection(
       invalid();
   } else invalid();
 }
-/** Standalone capture requires an explicit per-meeting notice until stored policy binding ships. */
+/** Internal transition guard: orchestration derives this flag from the current stored account
+ * acknowledgement. A client-supplied flag cannot satisfy the Start or Resume service gate. */
 export function assertCaptureNoticeAcknowledged(input: {
   readonly noticeAcknowledged?: unknown;
 }): void {

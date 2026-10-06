@@ -30,6 +30,7 @@ export interface CaptureGrant {
   claim_expires_at?: Date | null;
   start_request_key?: string | null;
   start_fingerprint?: string | null;
+  notice_policy_version?: string | null;
   created_at: Date;
   expires_at: Date;
   state_json: string | null;
@@ -96,6 +97,13 @@ export function captureView(
 }
 /** Module-owned RLS only. Callers authenticate before passing a scoped transaction. */
 export class MeetingCaptureRepository {
+  async bindNotice(db: DataContextDb, grant: CaptureGrant, policyVersion: string): Promise<void> {
+    assertDataContextDb(db);
+    await sql`UPDATE app.meeting_capture_grants SET notice_policy_version=${policyVersion} WHERE id=${grant.id}::uuid`.execute(
+      db.db
+    );
+    grant.notice_policy_version = policyVersion;
+  }
   async lockMeeting(db: DataContextDb, meetingId: string): Promise<void> {
     assertDataContextDb(db);
     const result =

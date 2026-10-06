@@ -1,3 +1,4 @@
+import { registerMeetingRecordingNoticeRoutes } from "./recording-notice-routes.js";
 import { captureAudioDiagnostic } from "./capture-diagnostics.js";
 import { captureAuthorizationError } from "./capture-authorization.js";
 import { Ajv } from "ajv";
@@ -136,7 +137,7 @@ const controlProperties = {
 const controlRequired = ["grantId", "requestKey", "expectedGeneration", "command"];
 const recordNoticeRequired = {
   if: { properties: { command: { const: "record" } }, required: ["command"] },
-  then: { required: ["selection", "noticeAcknowledged"] }
+  then: { required: ["selection"] }
 };
 const params = object({ id: uuid });
 /** Before credential resolution, rotating untrusted bearer/cookie bytes must not rotate buckets. */
@@ -164,6 +165,11 @@ export function registerMeetingCaptureRoutes(
 ): void {
   const service = new MeetingCaptureService(deps);
   const connections = new MeetingCaptureConnectionService(deps);
+  registerMeetingRecordingNoticeRoutes(server, {
+    dataContext: deps.dataContext,
+    resolveAccessContext: (request) =>
+      service.browser(request.headers, request.id, request.method !== "GET")
+  });
   const waiters = new CaptureWaiters();
   const noStore = async (_request: FastifyRequest, reply: FastifyReply) => {
     reply.header("Cache-Control", "no-store");
@@ -278,14 +284,17 @@ export function registerMeetingCaptureRoutes(
       config: ipRateLimit(60),
       schema: {
         params,
-        body: object({
-          deviceId: uuid,
-          connectionId: uuid,
-          expectedRevision: { type: "integer", minimum: 1 },
-          noticeAcknowledged: { const: true },
-          requestKey: uuid,
-          selection
-        })
+        body: object(
+          {
+            deviceId: uuid,
+            connectionId: uuid,
+            expectedRevision: { type: "integer", minimum: 1 },
+            noticeAcknowledged: { const: true },
+            requestKey: uuid,
+            selection
+          },
+          ["deviceId", "connectionId", "expectedRevision", "requestKey", "selection"]
+        )
       }
     },
     async (request, reply) => {

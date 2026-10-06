@@ -1,3 +1,5 @@
+import { MEETING_RECORDING_NOTICE } from "@moss/shared";
+import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
 import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type {
@@ -97,7 +99,7 @@ function audio(): MeetingCaptureAudioInput {
 }
 describe("native capture bounded domain", () => {
   it.each([undefined, false])(
-    "rejects recording without explicit notice acknowledgement (%s)",
+    "rejects an internal recording transition without its verified notice flag (%s)",
     (notice) => {
       const value = state();
       const input = {
@@ -109,7 +111,7 @@ describe("native capture bounded domain", () => {
       expect(value.epochs).toEqual([]);
     }
   );
-  it("rejects unacknowledged Resume while keeping Pause and Stop available", () => {
+  it("requires an internally verified notice flag for Resume but not Pause/Stop", () => {
     const value = recording();
     applyCaptureControl(value, command("pause", 1), at(2000));
     expect(() =>
@@ -387,10 +389,22 @@ function fixture() {
     last_seen_at: at(2000),
     expires_at: at(7200000)
   }));
-  const service = new MeetingCaptureService(deps, repository, transcript, connections);
+  const notices = new MeetingRecordingNoticeRepository();
+  vi.spyOn(notices, "get").mockResolvedValue({
+    currentNotice: MEETING_RECORDING_NOTICE,
+    acknowledgement: {
+      policyVersion: MEETING_RECORDING_NOTICE.policyVersion,
+      acknowledgedAt: origin.toISOString()
+    }
+  });
+  vi.spyOn(repository, "bindNotice").mockImplementation(async (_db, row, version) => {
+    row.notice_policy_version = version;
+  });
+  const service = new MeetingCaptureService(deps, repository, transcript, connections, notices);
   return {
     deps,
     service,
+    notices,
     grant,
     ingest,
     repository,
@@ -406,11 +420,40 @@ describe("capture service authorization and dispatch", () => {
     const resume = command("record", 2);
     await f.service.browserControl(f.browser, meetingId, resume);
     const receiptReads = vi.mocked(f.repository.receipt).mock.calls.length;
-    await expect(
-      f.service.browserControl(f.browser, meetingId, { ...resume, noticeAcknowledged: undefined })
-    ).rejects.toMatchObject({ code: "meeting_capture_invalid_input", httpStatus: 400 });
+    vi.mocked(f.notices.get).mockResolvedValue({
+      currentNotice: MEETING_RECORDING_NOTICE,
+      acknowledgement: { policyVersion: "older-text", acknowledgedAt: origin.toISOString() }
+    });
+    await expect(f.service.browserControl(f.browser, meetingId, resume)).rejects.toMatchObject({
+      code: "meeting_capture_notice_required",
+      httpStatus: 409
+    });
     expect(f.repository.receipt).toHaveBeenCalledTimes(receiptReads);
     expect(JSON.parse(f.grant.state_json!).generation).toBe(3);
+  });
+  it("requires current stored acknowledgement for Resume but keeps Pause and Stop independent", async () => {
+    const f = fixture();
+    vi.mocked(f.notices.get).mockResolvedValue({
+      currentNotice: MEETING_RECORDING_NOTICE,
+      acknowledgement: null
+    });
+    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    expect(f.notices.get).not.toHaveBeenCalled();
+    await expect(
+      f.service.browserControl(f.browser, meetingId, command("record", 2))
+    ).rejects.toMatchObject({ code: "meeting_capture_notice_required" });
+    await f.service.browserControl(f.browser, meetingId, command("stop", 2));
+    expect(f.notices.get).toHaveBeenCalledOnce();
+  });
+  it("resumes without per-request notice after current account acknowledgement", async () => {
+    const f = fixture();
+    f.grant.notice_policy_version = null;
+    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    await f.service.browserControl(f.browser, meetingId, {
+      ...command("record", 2),
+      noticeAcknowledged: undefined
+    });
+    expect(f.grant.notice_policy_version).toBe(MEETING_RECORDING_NOTICE.policyVersion);
   });
   it("keeps safe Stop acknowledgements and bounded final flush available after the gap cap", async () => {
     const f = fixture();

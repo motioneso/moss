@@ -198,6 +198,7 @@ export class MeetingCaptureConnectionRepository {
       connection: CaptureConnection;
       requestKey: string;
       fingerprint: string;
+      noticePolicyVersion: string;
       expiresAt: Date;
       claimExpiresAt: Date;
       state: CaptureStoredState;
@@ -205,8 +206,8 @@ export class MeetingCaptureConnectionRepository {
   ): Promise<CaptureGrant> {
     const c = input.connection;
     return (
-      await sql<CaptureGrant>`INSERT INTO app.meeting_capture_grants (meeting_id,device_id,device_name,verifier_hash,session_id,status,expires_at,state_json,connection_id,capability_revision,claim_expires_at,start_request_key,start_fingerprint)
-      VALUES (${input.meetingId}::uuid,${c.device_id}::uuid,${c.device_name},${c.verifier_hash},${input.sessionId}::uuid,'approved',${input.expiresAt},${JSON.stringify(input.state)},${c.connection_id}::uuid,${c.capability_revision},${input.claimExpiresAt},${input.requestKey}::uuid,${input.fingerprint}) RETURNING *`.execute(
+      await sql<CaptureGrant>`INSERT INTO app.meeting_capture_grants (meeting_id,device_id,device_name,verifier_hash,session_id,status,expires_at,state_json,connection_id,capability_revision,claim_expires_at,start_request_key,start_fingerprint,notice_policy_version)
+      VALUES (${input.meetingId}::uuid,${c.device_id}::uuid,${c.device_name},${c.verifier_hash},${input.sessionId}::uuid,'approved',${input.expiresAt},${JSON.stringify(input.state)},${c.connection_id}::uuid,${c.capability_revision},${input.claimExpiresAt},${input.requestKey}::uuid,${input.fingerprint},${input.noticePolicyVersion}) RETURNING *`.execute(
         db.db
       )
     ).rows[0]!;

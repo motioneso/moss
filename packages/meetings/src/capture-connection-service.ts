@@ -1,3 +1,4 @@
+import { MeetingRecordingNoticeRepository } from "./recording-notice.js";
 import { captureAuthorizationError } from "./capture-authorization.js";
 import { captureMetadataJson } from "./capture-metadata.js";
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -18,7 +19,6 @@ import {
 } from "@moss/shared";
 import {
   applyCaptureControl,
-  assertCaptureNoticeAcknowledged,
   MeetingCaptureError,
   validateCaptureSelection,
   type CaptureStoredState
@@ -48,7 +48,8 @@ export class MeetingCaptureConnectionService {
   constructor(
     private readonly deps: MeetingCaptureDependencies,
     private readonly grants = new MeetingCaptureRepository(),
-    readonly connections = new MeetingCaptureConnectionRepository()
+    readonly connections = new MeetingCaptureConnectionRepository(),
+    private readonly notices = new MeetingRecordingNoticeRepository()
   ) {
     this.now = deps.now ?? (() => new Date());
   }
@@ -199,6 +200,7 @@ export class MeetingCaptureConnectionService {
     input: MeetingCaptureStartInput,
     fingerprint: string
   ) {
+    await this.notices.requireCurrent(db);
     if (await this.connections.cancelled(db, input.requestKey))
       throw new MeetingCaptureError("meeting_capture_conflict", 409);
     const previous = await this.connections.byRequest(db, input.requestKey);
@@ -219,7 +221,7 @@ export class MeetingCaptureConnectionService {
     return null;
   }
   async start(actor: CaptureBrowserBinding, meetingId: string, input: MeetingCaptureStartInput) {
-    assertCaptureNoticeAcknowledged(input);
+    await this.deps.dataContext.withDataContext(actor, (db) => this.notices.requireCurrent(db));
     await this.deps.assertBinding({
       actorUserId: actor.actorUserId,
       sessionId: actor.sessionId,
@@ -238,6 +240,7 @@ export class MeetingCaptureConnectionService {
     return this.deps.dataContext.withDataContext(actor, async (db) => {
       await this.connections.lock(db, input.deviceId);
       await this.grants.lockMeeting(db, meetingId);
+      const noticePolicyVersion = await this.notices.requireCurrent(db);
       const raced = await this.replayStart(db, actor, meetingId, input, fingerprint);
       if (raced) return raced;
       if (!processing?.ready || !processing.modelRoute)
@@ -304,7 +307,7 @@ export class MeetingCaptureConnectionService {
           requestKey: input.requestKey,
           expectedGeneration: 0,
           command: "record",
-          noticeAcknowledged: input.noticeAcknowledged,
+          noticeAcknowledged: true,
           selection: input.selection
         },
         this.now(),
@@ -316,6 +319,7 @@ export class MeetingCaptureConnectionService {
         connection,
         requestKey: input.requestKey,
         fingerprint,
+        noticePolicyVersion,
         expiresAt: new Date(
           Math.min(
             this.now().getTime() + 7200000,

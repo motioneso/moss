@@ -47,7 +47,7 @@ describe("capture route credential boundaries", () => {
       expect(limits.get("/api/meetings/capture/connection")?.max).toBe(120);
       expect(limits.get("/api/meetings/capture/status")?.max).toBe(600);
       expect(limits.get("/api/meetings/capture/audio")?.max).toBe(120);
-      expect(limits.size).toBe(11);
+      expect(limits.size).toBe(12);
       for (const limiter of limits.values())
         expect(
           limiter.keyGenerator({
@@ -258,7 +258,7 @@ describe("exact capture source branch guards", () => {
 
 describe("recording notice route boundary", () => {
   it.each(["start", "control"])(
-    "rejects missing notice before %s handler and accepts explicit notice",
+    "allows %s without a per-request notice and leaves current account enforcement to the service",
     async (kind) => {
       const server = Fastify();
       const browser = vi.spyOn(MeetingCaptureService.prototype, "browser").mockResolvedValue({
@@ -282,7 +282,7 @@ describe("recording notice route boundary", () => {
           ? { ...common, deviceId: meetingId, connectionId: meetingId, expectedRevision: 1 }
           : { ...common, grantId: meetingId, expectedGeneration: 0, command: "record" };
       try {
-        for (const notice of [undefined, false, "true"]) {
+        for (const notice of [false, "true"]) {
           const response = await server.inject({
             method: "POST",
             url: `/api/meetings/records/${meetingId}/capture/${kind}`,
@@ -295,7 +295,7 @@ describe("recording notice route boundary", () => {
         const accepted = await server.inject({
           method: "POST",
           url: `/api/meetings/records/${meetingId}/capture/${kind}`,
-          payload: { ...payload, noticeAcknowledged: true }
+          payload
         });
         expect(accepted.statusCode).toBe(200);
         expect(kind === "start" ? start : control).toHaveBeenCalledOnce();
