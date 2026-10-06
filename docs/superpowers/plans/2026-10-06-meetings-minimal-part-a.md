@@ -4,7 +4,7 @@ Status: approved scoped implementation; draft pull request only, no merge or dep
 
 ## Source and boundary
 
-Build from PR #3056 at `ce573bcb70a6af1530259a68ab8371b704b793e5`.
+Build from PR #3056 at `2cdb2cd21cf7b0ebffcc586559623cf4eacf1428`.
 The approved design source is PR #3077 at `4d893f5c3bf7581f067cf412f9db1e6ef74cbe14`:
 `docs/superpowers/specs/2026-10-06-meetings-minimal-design.md` and its seven frozen mockups.
 Those source documents are copied unchanged here for reproducibility; their original draft
@@ -13,8 +13,8 @@ The mockup markup, styles, seven screens and critique were inspected before impl
 
 Part A keeps the existing one-time recording capability and explicit browser Start authority.
 It does not restore per-meeting Prepare/Approve. Creating, linking, and opening never record.
-The temporary per-request notice may be removed only when the server enforces stored current
-policy acknowledgement and binds the version to the grant. Pause/Stop remain notice-independent.
+The base already enforces the server-stored once-per-account current recording notice and
+binds it to each grant; retain that service, browser race fencing and migration 0290. Pause/Stop remain notice-independent.
 Existing denial, cancellation, cutoff, auth-reset and export safeguards remain in force.
 
 Part B remains separate and cannot start before Part A is published. Its link controls,
@@ -24,8 +24,8 @@ status may be displayed, without changing the link authorization model.
 
 ## Work lanes
 
-1. Server and contracts: new module migration 0290 (recheck open inventory before publication),
-   durable preferences, server-authored notice acknowledgement, saved-source Start validation,
+1. Server and contracts: new module migration 0292 (recheck open inventory before publication),
+   durable preferences, existing account-notice integration, saved-source Start validation,
    title updates, and bounded/idempotent summary dispatch after finalized meaningful transcript.
 2. Setup and settings: one-time setup and Settings → Meetings, existing device/capability status,
    source defaults and current notice, summary-on-Stop default on, shared input CSS correction.
@@ -49,6 +49,15 @@ status may be displayed, without changing the link authorization model.
 - No real credentials, audio, provider activation, OS permissions, production work or deployment.
 - Live owner-controlled Mac acceptance is outstanding. Even a green hosted run leaves this
   user-facing change code-complete, unverified until the real assembled path is recorded on the PR.
+
+## Local base and publication boundary
+
+The approved #3056 correction at `2cdb2cd21` is local only. Its one permitted plain push failed;
+no retry or alternate publication route is authorized. The user explicitly approved local Part A
+work atop it. Before publishing this branch, verify whether the owner has published that base.
+If it remains local, stop and disclose that the comparison would include the held #3056 commits.
+Do not publish those commits indirectly. PR #3071 separately owns migrations 0289, 0291 and 0293;
+this Part A reserves 0292, subject to a fresh collision check before publication.
 
 ## Publication
 
