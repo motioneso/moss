@@ -148,7 +148,17 @@ export const meetingExportTables = [
       "created_at",
       "expires_at"
     ],
-    derived: ["credential_hash", "verifier_hash", "session_id", "device_id"]
+    derived: [
+      "credential_hash",
+      "verifier_hash",
+      "session_id",
+      "device_id",
+      "connection_id",
+      "capability_revision",
+      "claim_expires_at",
+      "start_request_key",
+      "start_fingerprint"
+    ]
   }
 ] as const;
 
