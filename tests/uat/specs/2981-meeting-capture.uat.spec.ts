@@ -1,4 +1,5 @@
 import { assertMinimalMeetingWorkspace } from "./meeting-minimal-ui.js";
+import { assertMeetingLinkControls } from "./meeting-link-controls-ui.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
@@ -72,7 +73,7 @@ function clip(
 test("shared connection, single Start, recording controls, transcript and Stop→New recovery use real Moss routes (#2981)", async ({
   page
 }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(360_000);
   const project = requireUatProjectName();
   if (!project.startsWith("uat-")) throw new Error("Use the isolated UAT provisioner");
   if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
@@ -526,6 +527,9 @@ test("shared connection, single Start, recording controls, transcript and Stop�
       )
       .toMatchObject({ status: "skipped", code: "setting-off" });
     await expect(panel.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await native.close();
+    await assertMeetingLinkControls({ page, baseURL, paired, retainedMeetingId: meetingId });
+    deviceId = undefined; // The real Settings Unlink above already deleted the fixture device.
     const evidence = await exec("docker", [
       "exec",
       fixtureName,
@@ -539,7 +543,7 @@ test("shared connection, single Start, recording controls, transcript and Stop�
     expect(observations).toHaveLength(3);
     expect(observations.every((item) => item.generatedPcm && item.timestampsRequested)).toBe(true);
     console.log(
-      "MEETINGS_CAPTURE_UAT real UI/API: shared one-time connection approval in the existing tab; one-time settings and notice; New opens Untitled meeting without capture; rapid inline title entry; notes retained through explicit source-free Start; timer-only return link during list navigation; native acknowledgments; generated PCM through disclosed HTTP ASR; retained transcript; duplicate audio idempotent; Pause rejects dispatch; immutable Stop cutoff and bounded final flush; finalization retires authority; Stop → New → Start succeeds with remembered sources and the same server-stored account recording acknowledgement, with no per-meeting checkbox; summary route failure reported and Settings off yields skipped worker receipt. Synthetic transport only, not live Mac capture proof."
+      "MEETINGS_CAPTURE_UAT real UI/API: shared one-time connection approval in the existing tab; one-time settings and notice; New opens Untitled meeting without capture; rapid inline title entry; notes retained through explicit source-free Start; timer-only return link during list navigation; native acknowledgments; generated PCM through disclosed HTTP ASR; retained transcript; duplicate audio idempotent; Pause rejects dispatch; immutable Stop cutoff and bounded final flush; finalization retires authority; Stop → New → Start succeeds with remembered sources and the same server-stored account recording acknowledgement, with no per-meeting checkbox; summary route failure reported and Settings off yields skipped worker receipt; recording-only revoke preserves the link, real attempt/decide restores permission, and Settings Unlink rejects old credentials and audio while notes/transcripts remain visible. Synthetic transport only, not live Mac capture proof."
     );
   } finally {
     try {

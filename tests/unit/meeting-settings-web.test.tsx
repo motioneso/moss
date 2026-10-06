@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
-import { act, type ReactNode } from "react";
+import { act, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -19,6 +19,7 @@ import MeetingSettings from "../../packages/meetings/src/web/meeting-settings.js
 import { meetingSettingsKeys } from "../../packages/meetings/src/web/meeting-settings-state.js";
 import { meetingKeys } from "../../packages/meetings/src/web/client.js";
 import { captureKeys } from "../../packages/meetings/src/web/capture-client.js";
+import { meetingLinkKeys } from "../../packages/meetings/src/web/meeting-link-state.js";
 
 const now = "2026-10-06T12:00:00.000Z";
 const device: MeetingCaptureDevice = {
@@ -200,6 +201,23 @@ beforeEach(() => {
       return json(notice);
     }
     if (path === "/api/meetings/capture/devices") return json({ devices, processingReady });
+    if (path.startsWith("/api/me/sessions/") && options?.method === "DELETE") {
+      const id = decodeURIComponent(path.split("/").at(-1)!);
+      sessions = { sessions: sessions.sessions.filter((item) => item.id !== id) };
+      capabilities = { devices: capabilities.devices.filter((item) => item.deviceId !== id) };
+      devices = devices.filter((item) => item.deviceId !== id);
+      return json({ success: true });
+    }
+    if (path === "/api/companion/recording-capability/revoke") {
+      const id = body?.deviceId;
+      capabilities = {
+        devices: capabilities.devices.map((item) =>
+          item.deviceId === id ? { ...item, state: "revoked" } : item
+        )
+      };
+      devices = devices.filter((item) => item.deviceId !== id);
+      return new Response(null, { status: 204 });
+    }
     if (path === "/api/me/sessions") return json(sessions);
     if (path === "/api/companion/recording-capabilities") return json(capabilities);
     if (path === "/api/meetings/output-availability") return json(availability);
@@ -346,12 +364,12 @@ describe("Meetings setup and settings (synthetic transport, not live Mac proof)"
     await mount();
     expect(host.textContent).toContain("Studio Mac");
     expect(host.textContent).toContain("Trail Marker 1.4");
-    expect(host.textContent).toContain("Update recording access in Profile settings");
+    expect(host.textContent).toContain("Recording permission revoked");
     expect(host.textContent).toContain("Not confirmed yet");
     expect(host.textContent).toContain("Needs a transcription route");
     expect(host.textContent).toContain("Needs a summary-capable model");
     expect(host.textContent).toContain("CLI models cannot write meeting summaries today");
-    expect(button("Unlink")).toBeUndefined();
+    expect(button("Unlink").disabled).toBe(false);
     expect(button("Open System Settings")).toBeUndefined();
     expect(host.querySelector('a[href="/settings?section=profile"]')).not.toBeNull();
     expect(button("Finish setup").disabled).toBe(true);
@@ -637,6 +655,301 @@ describe("Meetings setup and settings (synthetic transport, not live Mac proof)"
     });
     await settle();
     expect(writes()).toHaveLength(0);
+  });
+
+  it("unlinks the exact row after confirmation while preserving saved sources, notes and transcript", async () => {
+    preferences = savedPreferences();
+    const second = {
+      ...sessions.sessions[0]!,
+      id: "other-mac",
+      deviceLabel: "Other Mac",
+      companion: { ...sessions.sessions[0]!.companion!, displayName: "Other Mac" }
+    };
+    sessions = { sessions: [...sessions.sessions, second] };
+    devices = [...devices, { ...device, deviceId: second.id, deviceName: "Other Mac" }];
+    capabilities = {
+      devices: [
+        ...capabilities.devices,
+        { ...capabilities.devices[0]!, deviceId: second.id, deviceName: "Other Mac" }
+      ]
+    };
+    const saved = preferences;
+    const notes = { personalNotes: "Keep these notes" };
+    const transcript = { segments: [{ text: "Keep this transcript" }] };
+    client.setQueryData(meetingKeys.record("meeting"), notes);
+    client.setQueryData(meetingKeys.transcript("meeting"), transcript);
+    await mount(
+      <StrictMode>
+        <MeetingSettings />
+      </StrictMode>
+    );
+    await select("meeting-settings-mac", second.id);
+    await click("Unlink");
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain("Unlink Studio Mac?");
+    expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(0);
+    await click("Unlink Mac");
+    expect(calls.filter((call) => call.method === "DELETE")).toEqual([
+      { path: `/api/me/sessions/${device.deviceId}`, method: "DELETE", body: undefined }
+    ]);
+    expect(host.textContent).toContain("Studio Mac unlinked");
+    expect(sessions.sessions).toEqual([second]);
+    expect(host.querySelector<HTMLSelectElement>("#meeting-settings-mac")?.value).toBe(second.id);
+    expect(preferences).toEqual(saved);
+    expect(writes()).toHaveLength(0);
+    expect(client.getQueryData(meetingKeys.record("meeting"))).toEqual(notes);
+    expect(client.getQueryData(meetingKeys.transcript("meeting"))).toEqual(transcript);
+  });
+  it("cancels Unlink without making a request, including Escape and the dialog backdrop", async () => {
+    await mount(<MeetingSettings />);
+    for (const cancel of ["button", "escape", "backdrop"]) {
+      await click("Unlink");
+      expect(document.activeElement?.textContent).toBe("Cancel");
+      await act(async () => {
+        if (cancel === "button") button("Cancel").click();
+        else if (cancel === "escape")
+          document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        else host.querySelector<HTMLElement>(".jds-dialog-scrim")!.click();
+      });
+      await settle();
+      expect(host.querySelector('[role="dialog"]')).toBeNull();
+    }
+    expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(0);
+    expect(host.textContent).toContain("Meeting recording enabled");
+  });
+  it.each(["unlink", "revoke"] as const)(
+    "keeps %s pending until confirmed and coalesces concurrent clicks",
+    async (kind) => {
+      let finish!: (response: Response) => void;
+      const normal = transport.getMockImplementation()!;
+      transport.mockImplementation((path, options) =>
+        options?.method === (kind === "unlink" ? "DELETE" : "POST")
+          ? new Promise<Response>((resolve) => {
+              calls.push({ path, method: options!.method! });
+              finish = resolve;
+            })
+          : normal(path, options)
+      );
+      await mount(<MeetingSettings />);
+      if (kind === "unlink") await click("Unlink");
+      act(() => {
+        const control =
+          kind === "unlink" ? button("Unlink Mac") : checkbox("Meeting recording on Studio Mac");
+        control.click();
+        control.click();
+      });
+      await settle();
+      expect(
+        calls.filter((call) => call.method === (kind === "unlink" ? "DELETE" : "POST"))
+      ).toHaveLength(1);
+      expect(checkbox("Meeting recording on Studio Mac").checked).toBe(true);
+      expect(checkbox("Meeting recording on Studio Mac").disabled).toBe(true);
+      expect(host.textContent).toContain(
+        kind === "unlink" ? "Unlinking Studio Mac" : "Turning off recording on Studio Mac"
+      );
+      await act(async () => finish(json({ message: "Unconfirmed" }, 503)));
+      await settle();
+      expect(host.textContent).toContain(
+        kind === "unlink" ? "Couldn’t confirm Unlink" : "Couldn’t confirm recording permission"
+      );
+      expect(checkbox("Meeting recording on Studio Mac").checked).toBe(true);
+      transport.mockImplementation(normal);
+      if (kind === "unlink") await click("Unlink Mac");
+      else await toggle("Meeting recording on Studio Mac");
+      expect(host.textContent).toContain(
+        kind === "unlink" ? "Studio Mac unlinked" : "Recording permission revoked for Studio Mac"
+      );
+      expect(
+        calls.filter((call) => call.method === (kind === "unlink" ? "DELETE" : "POST"))
+      ).toHaveLength(2);
+    }
+  );
+  it("turns off only recording through the canonical revoke endpoint and keeps the link and defaults", async () => {
+    preferences = savedPreferences();
+    const saved = preferences;
+    await mount(<MeetingSettings />);
+    await toggle("Meeting recording on Studio Mac");
+    expect(calls.filter((call) => call.method === "POST")).toEqual([
+      {
+        path: "/api/companion/recording-capability/revoke",
+        method: "POST",
+        body: { deviceId: device.deviceId }
+      }
+    ]);
+    expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(0);
+    expect(checkbox("Meeting recording on Studio Mac").checked).toBe(false);
+    expect(checkbox("Meeting recording on Studio Mac").disabled).toBe(true);
+    expect(button("Unlink")).toBeDefined();
+    expect(sessions.sessions).toHaveLength(1);
+    expect(preferences).toEqual(saved);
+    expect(writes()).toHaveLength(0);
+    expect(host.textContent).toContain("request a connection update in Trail Marker");
+  });
+  it.each(["unlink", "revoke"] as const)(
+    "rejects a stale %s click after the cached owner list denies access",
+    async (kind) => {
+      await mount(<MeetingSettings />);
+      if (kind === "unlink") await click("Unlink");
+      const control =
+        kind === "unlink" ? button("Unlink Mac") : checkbox("Meeting recording on Studio Mac");
+      const normal = transport.getMockImplementation()!;
+      transport.mockImplementation((path, options) =>
+        path === "/api/me/sessions"
+          ? Promise.resolve(json({ message: "Denied" }, 403))
+          : normal(path, options)
+      );
+      await act(async () => {
+        await client.refetchQueries({ queryKey: meetingSettingsKeys.sessions });
+        control.click();
+      });
+      await settle();
+      expect(host.textContent).toContain("Mac access could not be verified");
+      expect(calls.filter((call) => ["DELETE", "POST"].includes(call.method))).toHaveLength(0);
+    }
+  );
+  it("rechecks exact companion identity at confirmation and cannot delete a substituted browser session", async () => {
+    await mount(<MeetingSettings />);
+    await click("Unlink");
+    act(() => {
+      client.setQueryData(meetingSettingsKeys.sessions, {
+        sessions: [{ ...sessions.sessions[0]!, source: "browser" }]
+      });
+      button("Unlink Mac").click();
+    });
+    await settle();
+    expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(0);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it.each(["unlink", "revoke"] as const)(
+    "prevents a pre-%s list response restoring removed access",
+    async (kind) => {
+      const oldSessions = sessions,
+        oldCapabilities = capabilities;
+      const pending: { path: string; resolve: (response: Response) => void }[] = [];
+      const normal = transport.getMockImplementation()!;
+      await mount(<MeetingSettings />);
+      transport.mockImplementation((path, options) =>
+        !options?.method &&
+        ["/api/me/sessions", "/api/companion/recording-capabilities"].includes(path)
+          ? new Promise<Response>((resolve) => pending.push({ path, resolve }))
+          : normal(path, options)
+      );
+      act(() => {
+        void client.invalidateQueries({ queryKey: meetingSettingsKeys.sessions });
+        void client.invalidateQueries({ queryKey: meetingSettingsKeys.capabilities });
+      });
+      await settle();
+      const stale = [...pending];
+      transport.mockImplementation(normal);
+      if (kind === "unlink") {
+        await click("Unlink");
+        await click("Unlink Mac");
+      } else await toggle("Meeting recording on Studio Mac");
+      await act(async () => {
+        for (const read of stale)
+          read.resolve(json(read.path === "/api/me/sessions" ? oldSessions : oldCapabilities));
+      });
+      await settle();
+      expect(client.getQueryData(meetingSettingsKeys.sessions)).toEqual(sessions);
+      expect(client.getQueryData(meetingSettingsKeys.capabilities)).toEqual(capabilities);
+      expect(host.textContent).not.toContain("Meeting recording enabled");
+    }
+  );
+  it.each(["auth reset", "new route"] as const)(
+    "ignores both late Unlink success and failure after %s",
+    async (boundary) => {
+      for (const success of [true, false]) {
+        let finish!: (response: Response) => void;
+        const normal = transport.getMockImplementation()!;
+        transport.mockImplementation((path, options) =>
+          options?.method === "DELETE"
+            ? new Promise<Response>((resolve) => {
+                finish = resolve;
+              })
+            : normal(path, options)
+        );
+        await mount(<MeetingSettings />);
+        await click("Unlink");
+        act(() => button("Unlink Mac").click());
+        await act(async () => {
+          root.unmount();
+          if (boundary === "auth reset") await client.resetQueries();
+        });
+        root = createRoot(host);
+        transport.mockImplementation(normal);
+        await mount(<MeetingSettings />);
+        await toggle("Write a summary when I stop");
+        const newDraft = client.getQueryData(meetingSettingsKeys.draft);
+        const newAction = client.getQueryData(meetingLinkKeys.action);
+        await act(async () =>
+          finish(success ? json({ success: true }) : json({ message: "Old failure" }, 500))
+        );
+        await settle();
+        expect(client.getQueryData(meetingSettingsKeys.draft)).toEqual(newDraft);
+        expect(client.getQueryData(meetingLinkKeys.action)).toEqual(newAction);
+        expect(host.textContent).not.toContain("Studio Mac unlinked");
+        expect(host.textContent).not.toContain("Couldn’t confirm Unlink");
+        expect(client.getQueryData(meetingSettingsKeys.sessions)).toEqual(sessions);
+      }
+    }
+  );
+
+  it.each(["unlink", "revoke"] as const)(
+    "fences a late %s result when auth resets the still-mounted cache",
+    async (kind) => {
+      for (const success of [true, false]) {
+        let finish!: (response: Response) => void;
+        const normal = transport.getMockImplementation()!;
+        transport.mockImplementation((path, options) =>
+          options?.method === (kind === "unlink" ? "DELETE" : "POST")
+            ? new Promise<Response>((resolve) => {
+                finish = resolve;
+              })
+            : normal(path, options)
+        );
+        await mount(<MeetingSettings />);
+        if (kind === "unlink") {
+          await click("Unlink");
+          act(() => button("Unlink Mac").click());
+        } else act(() => checkbox("Meeting recording on Studio Mac").click());
+        await settle();
+        await act(async () => {
+          await client.resetQueries();
+        });
+        await settle();
+        const newer = client.getQueryData(meetingLinkKeys.action);
+        await act(async () =>
+          finish(
+            success
+              ? kind === "unlink"
+                ? json({ success: true })
+                : new Response(null, { status: 204 })
+              : json({ message: "Old failure" }, 500)
+          )
+        );
+        await settle();
+        expect(client.getQueryData(meetingLinkKeys.action)).toEqual(newer);
+        expect(client.getQueryData(meetingSettingsKeys.sessions)).toEqual(sessions);
+        expect(client.getQueryData(meetingSettingsKeys.capabilities)).toEqual(capabilities);
+        expect(checkbox("Meeting recording on Studio Mac").checked).toBe(true);
+        transport.mockImplementation(normal);
+        if (host.querySelector('[role="dialog"]')) await click("Cancel");
+      }
+    }
+  );
+  it("hides an old Unlink confirmation when auth resets into a different account", async () => {
+    await mount(<MeetingSettings />);
+    await click("Unlink");
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain("Studio Mac");
+    sessions = { sessions: [] };
+    capabilities = { devices: [] };
+    devices = [];
+    await act(async () => {
+      await client.resetQueries();
+    });
+    await settle();
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(host.textContent).not.toContain("Studio Mac");
+    expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(0);
   });
   it("limits the global navigation flex rule to its text label, not recording indicators", () => {
     const css = readFileSync("apps/web/src/styles.css", "utf8");

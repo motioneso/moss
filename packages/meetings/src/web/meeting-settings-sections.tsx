@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import {
   Badge,
@@ -8,11 +8,13 @@ import {
   RowIndex,
   RowIndexItem,
   SectionHead,
-  Select
+  Select,
+  Switch
 } from "@moss/ui";
 import type { MeetingCapturePermission } from "@moss/shared";
 import type { MeetingSettingsState } from "./meeting-settings-state.js";
 import { useMeetingDate } from "./locale.js";
+import { MeetingUnlinkDialog } from "./meeting-unlink-dialog.js";
 
 export function MeetingSettingsSection({
   number,
@@ -43,6 +45,7 @@ export function MeetingMacSettings({
   readonly onRunSetup?: () => void;
 }) {
   const { sessions, capabilities, devices, device, data, chooseDevice, saving } = state;
+  const [unlink, setUnlink] = useState<{ id: string; name: string } | null>(null);
   const date = useMeetingDate({
     month: "short",
     day: "numeric",
@@ -76,49 +79,72 @@ export function MeetingMacSettings({
         </p>
       ) : null}
       {linked.length ? (
-        <RowIndex density="compact">
-          {linked.map((session) => {
-            const capability = capabilities.data?.devices.find(
-              (item) => item.deviceId === session.id
-            );
-            const connected = devices.data?.devices.some((item) => item.deviceId === session.id);
-            return (
-              <RowIndexItem
-                key={session.id}
-                title={session.companion?.displayName ?? session.deviceLabel}
-                excerpt={
-                  <span>
-                    Trail Marker
-                    {session.companion?.appVersion ? ` ${session.companion.appVersion}` : ""}
-                    {" · "}Last contact{" "}
-                    {date(session.companion?.lastContactAt ?? session.lastSeenAt)}
-                    {" · "}
-                    {capabilities.isError
-                      ? "Recording access could not be checked"
-                      : capabilities.isPending
-                        ? "Checking recording access"
-                        : !capability
-                          ? "Recording access is not available"
-                          : capability.state === "approved"
-                            ? "Meeting recording enabled"
-                            : "Update recording access in Profile settings"}
-                    {" · "}
-                    {devices.isError
-                      ? "Connection not confirmed"
-                      : connected
-                        ? "Connected"
-                        : "Open Trail Marker to reconnect"}
-                  </span>
-                }
-                meta={
-                  <Badge tone={sessions.isError ? "amber" : "forest"}>
-                    {sessions.isError ? "Link status unconfirmed" : "Linked"}
-                  </Badge>
-                }
-              />
-            );
-          })}
-        </RowIndex>
+        <div className="meeting-settings-macs">
+          <RowIndex density="compact">
+            {linked.map((session) => {
+              const capability = capabilities.data?.devices.find(
+                (item) => item.deviceId === session.id
+              );
+              const connected = devices.data?.devices.some((item) => item.deviceId === session.id);
+              const name = session.companion?.displayName ?? session.deviceLabel;
+              return (
+                <RowIndexItem
+                  key={session.id}
+                  title={name}
+                  excerpt={
+                    <span>
+                      Trail Marker
+                      {session.companion?.appVersion ? ` ${session.companion.appVersion}` : ""}
+                      {" · "}Last contact{" "}
+                      {date(session.companion?.lastContactAt ?? session.lastSeenAt)}
+                      {" · "}
+                      {capabilities.isError
+                        ? "Recording access could not be checked"
+                        : capabilities.isPending
+                          ? "Checking recording access"
+                          : !capability
+                            ? "Recording access is not available"
+                            : capability.state === "approved"
+                              ? "Meeting recording enabled"
+                              : capability.state === "revoked"
+                                ? "Recording permission revoked"
+                                : "Update recording access in Profile settings"}
+                      {" · "}
+                      {devices.isError
+                        ? "Connection not confirmed"
+                        : connected
+                          ? "Connected"
+                          : "Open Trail Marker to reconnect"}
+                    </span>
+                  }
+                  meta={
+                    <div className="meeting-settings-stack">
+                      <Badge tone={sessions.isError ? "amber" : "forest"}>
+                        {sessions.isError ? "Link status unconfirmed" : "Linked"}
+                      </Badge>
+                      <Switch
+                        ariaLabel={`Meeting recording on ${name}`}
+                        label="Meeting recording"
+                        checked={capability?.state === "approved"}
+                        disabled={saving || !state.links.canChange(session.id, "revoke")}
+                        onChange={(enabled) => {
+                          if (!enabled) void state.links.change(session.id, "revoke");
+                        }}
+                      />
+                      <Button
+                        variant="secondary"
+                        disabled={saving || !state.links.canChange(session.id, "unlink")}
+                        onClick={() => setUnlink({ id: session.id, name })}
+                      >
+                        Unlink
+                      </Button>
+                    </div>
+                  }
+                />
+              );
+            })}
+          </RowIndex>
+        </div>
       ) : !sessions.isPending && !sessions.isError ? (
         <p role="status" className="jds-hint">
           No Mac is linked. Open Trail Marker on your Mac and connect it to this Moss account.
@@ -149,7 +175,7 @@ export function MeetingMacSettings({
         </p>
       ) : null}
       <div className="meeting-settings-actions">
-        <Link to="/settings?section=profile">Manage Mac link and recording access</Link>
+        <Link to="/settings?section=profile">Link a Mac or enable recording access</Link>
         {onRunSetup ? (
           <Button variant="secondary" disabled={saving} onClick={onRunSetup}>
             Run setup again
@@ -157,8 +183,34 @@ export function MeetingMacSettings({
         ) : null}
       </div>
       <p className="jds-hint">
-        To unlink a Mac, sign it out under Active sessions in Profile settings.
+        Turning off meeting recording keeps the Mac linked. To enable it again, request a connection
+        update in Trail Marker and approve it in Profile settings. Recording permission stays on
+        until you turn it off, unlink the Mac, or its device access expires.
       </p>
+      {state.links.message ? (
+        <p
+          role={state.links.failed ? "alert" : "status"}
+          className={state.links.failed ? "jds-hint jds-hint--error" : "jds-hint"}
+        >
+          {state.links.message}
+        </p>
+      ) : null}
+      {unlink && linked.some((session) => session.id === unlink.id) ? (
+        <MeetingUnlinkDialog
+          name={unlink.name}
+          pending={state.links.pending}
+          allowed={state.links.canChange(unlink.id, "unlink")}
+          error={
+            state.links.failed && state.links.deviceId === unlink.id ? state.links.message : null
+          }
+          onClose={() => setUnlink(null)}
+          onConfirm={() => {
+            void state.links.change(unlink.id, "unlink").then((confirmed) => {
+              if (confirmed) setUnlink(null);
+            });
+          }}
+        />
+      ) : null}
     </MeetingSettingsSection>
   );
 }

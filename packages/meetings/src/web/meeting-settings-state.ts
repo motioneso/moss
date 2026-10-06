@@ -24,12 +24,13 @@ import {
   useRecordingNotice
 } from "./recording-notice.js";
 import { useSessionDraft } from "./session-draft.js";
+import { meetingLinkKeys, useMeetingLinkActions } from "./meeting-link-state.js";
 
 export const meetingSettingsKeys = {
   draft: ["meetings", "settings-draft"] as const,
   availability: ["meetings", "output-availability"] as const,
-  sessions: ["settings", "sessions"] as const,
-  capabilities: ["companion", "recording-capabilities"] as const
+  sessions: meetingLinkKeys.sessions,
+  capabilities: meetingLinkKeys.capabilities
 };
 interface SettingsDraft {
   readonly loaded: boolean;
@@ -77,6 +78,7 @@ function savedDraft(preferences: MeetingCapturePreferences): SettingsDraft {
 }
 export function useMeetingSettings() {
   const client = useQueryClient();
+  const links = useMeetingLinkActions();
   const notice = useRecordingNotice();
   const preferences = useQuery({
     queryKey: meetingKeys.preferences,
@@ -197,6 +199,7 @@ export function useMeetingSettings() {
     if (
       !current?.loaded ||
       current.requestKey ||
+      links.pending ||
       client.getQueryState(meetingKeys.preferences)?.status !== "success"
     )
       return;
@@ -280,7 +283,8 @@ export function useMeetingSettings() {
     availability,
     macAccessDenied,
     visibleDevices,
-    saving: !!data.requestKey,
+    links,
+    saving: !!data.requestKey || links.pending,
     canSave:
       data.loaded &&
       (data.sourceChanged || Object.keys(data.summaryChanges).length > 0) &&

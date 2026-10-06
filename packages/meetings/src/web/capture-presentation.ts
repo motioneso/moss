@@ -46,7 +46,7 @@ export function captureStopped(capture: MeetingCaptureState | null | undefined):
   );
 }
 export function captureStatusLabel(capture: MeetingCaptureState, connected: boolean): string {
-  if (capture.desired === "revoked") return "Authorization revoked";
+  if (capture.desired === "revoked") return captureRevocationLabel(capture);
   if (capture.desired === "stopped" && captureAcknowledged(capture)) return "Stopped";
   if (capture.desired === "stopped" && capture.finalization === "complete")
     return "Recording authority ended";
@@ -60,6 +60,22 @@ export function captureStatusLabel(capture: MeetingCaptureState, connected: bool
   return { idle: "Connecting…", recording: "Starting…", paused: "Pausing…", stopped: "Stopping…" }[
     capture.desired
   ];
+}
+export function captureRevocationLabel(capture: MeetingCaptureState): string {
+  switch (capture.revocationReason) {
+    case "device-unavailable":
+      return "Mac unlinked or device access expired";
+    case "recording-permission-revoked":
+      return "Recording permission revoked";
+    case "session-ended":
+      return "Recording browser session ended";
+    case "connection-replaced":
+      return "Mac recording connection replaced";
+    case "expired":
+      return "Recording session expired";
+    default:
+      return "Recording authorization revoked";
+  }
 }
 export function captureSelection(
   choice: CaptureChoice,

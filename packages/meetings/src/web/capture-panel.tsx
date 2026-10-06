@@ -6,7 +6,7 @@ import { Button, Dialog } from "@moss/ui";
 import type { MeetingRecord } from "@moss/shared";
 import { captureKeys } from "./capture-client.js";
 import { CAPTURE_MODES } from "./capture-modes.js";
-import { captureStopped } from "./capture-presentation.js";
+import { captureRevocationLabel, captureStopped } from "./capture-presentation.js";
 import { useCaptureSession, startMeetingCapture, type ActiveCapture } from "./capture-session.js";
 import { getMeetingPreferences, isMeetingAccessDenied, meetingKeys } from "./client.js";
 import { useCaptureStatus } from "./capture-status.js";
@@ -128,10 +128,10 @@ export function CapturePanel({
       ? "Recording isn’t available on this server yet."
       : query.isError
         ? "Couldn’t confirm the recorder connection."
-        : (session.state.error ??
-          (revoked
-            ? "The recording connection ended. Run setup again."
-            : capture?.observed?.phase === "error"
+        : revoked && capture
+          ? `${captureRevocationLabel(capture)}. Recording stopped. Review setup before starting a new meeting.`
+          : (session.state.error ??
+            (capture?.observed?.phase === "error"
               ? "Recording was interrupted. Check your Mac and sources."
               : query.data?.processingReady === false
                 ? "Transcription isn’t available. Check AI providers."
@@ -208,7 +208,7 @@ export function CapturePanel({
           ) : null}
         </p>
       ) : null}
-      {stopped ? <Link to="/meetings">New meeting</Link> : null}
+      {stopped || revoked ? <Link to="/meetings">New meeting</Link> : null}
       {noticeOpen ? (
         <Dialog
           title={<span id="meeting-recording-notice-title">Recording notice</span>}

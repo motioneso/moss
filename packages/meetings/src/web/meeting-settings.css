@@ -53,3 +53,18 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.meeting-settings-macs .jds-index__row {
+  row-gap: var(--space-3);
+}
+
+.meeting-settings-macs .jds-index__excerpt {
+  display: block;
+  overflow: visible;
+}
+
+@media (max-width: 560px) {
+  .meeting-settings-macs .jds-index {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
