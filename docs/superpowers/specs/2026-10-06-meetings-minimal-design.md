@@ -35,19 +35,31 @@ using the one-time defaults.
 
 ## Current flow, per meeting
 
-Read from `packages/meetings/src/web/` on this branch (head `28a5a6beb`).
+Read from `packages/meetings/src/web/` on PR 3056, branch `feat/2981-native-meeting-capture`, head
+`515e1d39e`. The per-meeting "Prepare this meeting" and "Approve this device" steps are gone there;
+the Mac link and its recording permission are already one-time.
 
-1. Masthead hero ("Meeting companion"), then "01 Set up your meeting": title, three capture-mode
-   radio cards, a "Use this capture mode as my default" switch.
-2. "02 Check the sources": open Trail Marker on the Mac, choose Prepare this meeting.
-3. Back in Moss: "Allow <device> to capture <title>?", Approve this device ("This approval is for
-   this meeting").
-4. Pick the microphone, pick the app if selected-app.
-5. Tick "Participants have been notified and recording is permitted".
-6. Record.
+Once, before any meeting:
 
-Six steps across two apps before the first word is captured. The critique counts nine options on
-the setup screen before a meeting exists, and about seventeen on the meeting page before Record.
+- Link Trail Marker in Settings, Profile. Linking carries the one-time recording permission
+  ("Enable meeting recording"); a Mac linked before that asks for it there once.
+
+Per meeting:
+
+1. "01 New meeting": optional title, then "Your recording sources" on the same screen.
+2. Choose the Recording device (a connected Mac), the Capture mode radios, the Microphone, and the
+   Selected app when that mode is chosen. The last successful Start prefills these from the saved
+   `rememberedSource`; Change reopens them.
+3. Start meeting. One click creates the meeting and starts the Mac recording. Trail Marker asks
+   nothing; its menu bar item shows "● Meeting". Create draft makes the meeting without recording.
+4. Stop and review.
+
+The Mac side is already one click. What remains per meeting is the set of source pickers on the
+New meeting and meeting screens.
+
+There is no recording notice step at this head. The server no longer checks an acknowledgement on
+Start (see Recording notice); that regression is being fixed on PR 3056 before this redesign builds
+on it.
 
 ## Target flow
 
@@ -68,8 +80,11 @@ Shown once after install, on the Meetings page and in the module install flow. T
 hairline-ruled, numbered heads (screen 2).
 
 1. Your Mac
-   - Link Trail Marker to this account once.
-   - Status row: device name, app version, Linked.
+   - Link Trail Marker to this account once. The same browser approval grants the one-time
+     recording permission (PR 3056 already pairs both); setup does not ask for either again.
+   - Status row: device name, app version, Linked, last contact.
+   - Already linked in Settings, Profile: setup shows the row as done and skips the step.
+   - Unlink lives in Settings, Meetings and in Trail Marker (Security, R1 and R2).
 2. Permissions
    - Microphone and computer audio, each Allowed or Not allowed yet.
    - Not allowed yet offers Open System Settings and Check again.
@@ -130,22 +145,21 @@ hairline-ruled, numbered heads (screen 2).
 
 ### Remove from the meeting page
 
-| Today                                                          | Goes to                                             |
-| -------------------------------------------------------------- | --------------------------------------------------- |
-| Masthead hero and "View meeting history" button                | Removed; the list is the history (`/meetings`)      |
-| "Set up your meeting" section                                  | One-time setup                                      |
-| Capture-mode radio cards                                       | Settings, Meetings: Listen to                       |
-| "Use this capture mode as my default" switch                   | Removed; the setting is the default                 |
-| "Check the sources" section, Prepare this meeting instructions | One-time setup: Your Mac                            |
-| Approve this device, per meeting                               | One-time Mac link (see Security)                    |
-| Microphone and app pickers                                     | Settings, Meetings                                  |
-| Per-meeting consent checkbox                                   | One-time recording notice                           |
-| Disconnect device, Stop and disconnect device                  | Settings, Meetings: Unlink                          |
-| Retry capture command, Refresh capture status                  | One inline problem message with one fix             |
-| Summary template select, Generate summary                      | Summary writes on stop; Rewrite summary in the menu |
-| Generate new version, Compare with latest, Edit this version   | Menu: Earlier versions; edit inside the Summary tab |
-| Save notes button                                              | Autosave with "Saved"                               |
-| Any bespoke chat panel                                         | The normal docked chat drawer                       |
+"Today" is PR 3056 head `515e1d39e`.
+
+| Today                                                              | Goes to                                             |
+| ------------------------------------------------------------------ | --------------------------------------------------- |
+| Masthead hero and "View meeting history" button                    | Removed; the list is the history (`/meetings`)      |
+| "Your recording sources" block on New meeting and the meeting page | One-time setup                                      |
+| Capture-mode radio cards                                           | Settings, Meetings: Listen to                       |
+| Recording device select, Change                                    | One-time setup: Your Mac; Settings, Meetings        |
+| Microphone and Selected app selects                                | Settings, Meetings                                  |
+| Per-start notice (being restored on PR 3056)                       | One-time recording notice                           |
+| Retry capture command, Refresh capture status                      | One inline problem message with one fix             |
+| Summary template select, Generate summary                          | Summary writes on stop; Rewrite summary in the menu |
+| Generate new version, Compare with latest, Edit this version       | Menu: Earlier versions; edit inside the Summary tab |
+| Save notes button                                                  | Autosave with "Saved"                               |
+| Any bespoke chat panel                                             | The normal docked chat drawer                       |
 
 ## Meetings list
 
@@ -198,13 +212,15 @@ Every value is set in the app. No setting needs a hand-edited file.
 
 ### Preferences
 
-`packages/shared/src/meeting-preferences-api.ts` grows from `defaultCaptureMode` alone to:
+`packages/shared/src/meeting-preferences-api.ts` at PR 3056 head already holds
+`defaultCaptureMode` and `rememberedSource` (`deviceId`, `microphoneId`, optional `applicationId`,
+`mode`), written after each successful Start. Setup and Settings, Meetings write the same
+`rememberedSource`; Start stops rewriting it. The contract grows to:
 
 | Field                   | Type                                        | Default                      |
 | ----------------------- | ------------------------------------------- | ---------------------------- |
 | `defaultCaptureMode`    | existing enum or null                       | `computer-audio` after setup |
-| `defaultMicrophoneId`   | string or null                              | null (system default)        |
-| `defaultAppBundleId`    | string or null                              | null                         |
+| `rememberedSource`      | existing object or null                     | set by setup                 |
 | `summarizeOnStop`       | boolean                                     | true                         |
 | `summaryTemplateId`     | existing template id                        | general meeting              |
 | `noticeAcknowledgement` | `{ policyVersion, acknowledgedAt }` or null | null                         |
@@ -215,18 +231,27 @@ users see setup once. Module SQL lives in `packages/meetings/sql/`; add a new mi
 
 ### Recording notice
 
-The client sends `noticeAcknowledged: true` on every start today
-(`packages/shared/src/meeting-capture-api.ts:98`), and `capture-domain.ts` rejects a start without
-it. Change: the server reads the stored acknowledgement and binds its policy version to the
-session, as the original spec requires ("Start binds ... notice acknowledgement"). If the stored
-version is older than the current notice, Start returns a prerequisite error and the page asks
-once, then starts.
+At PR 3056 head `515e1d39e`, `POST /api/meetings/records/:id/capture/start` takes no notice
+acknowledgement and the server checks none; the per-start check in `capture-domain.ts` was lost
+when the one-time recording permission landed. That regression is being fixed on PR 3056 directly,
+restoring a server-checked acknowledgement on every Start, before this redesign builds on it.
+
+Change in this redesign: the client stops sending a per-start acknowledgement. The server reads the
+stored `noticeAcknowledgement` and binds its policy version to the grant, as the original spec
+requires ("Start binds ... notice acknowledgement"). If it is missing or older than the current
+notice, Start returns a prerequisite error and the page asks once, then starts (Security, R8).
 
 ### Start
 
-- One request from the meeting page starts capture on the linked Mac with the saved defaults.
-- Trail Marker must accept a start for a linked device without a per-meeting "Prepare this
-  meeting" click on the Mac. This is native app work and the largest build item.
+- The user always clicks Start. Nothing records on New meeting, on linking or on opening the page.
+- Already built at PR 3056 head: one browser request starts the linked Mac with no click on the
+  Mac, through the one-time recording permission and the per-meeting grant.
+- Still to build:
+  - The meeting page drops the source pickers. Start sends no selection; the server reads
+    `rememberedSource`, checks it against the connection's latest inventory, and fails with a
+    prerequisite error rather than substitute a source (R13).
+  - Stored notice binding (R8).
+  - Notification and on-screen panel on the Mac for every Start (R6).
 - Pause, stop, the stop cutoff and the existing capture lease limits are unchanged.
 
 ## Security
@@ -243,22 +268,26 @@ brief does not claim the new model is equivalent. Before build:
 
 ### Link design sign-off
 
-Reviewed 2026-10-06 against PR 3056, branch `feat/2981-native-meeting-capture`, head `af5082279`.
+Reviewed 2026-10-06 against PR 3056, branch `feat/2981-native-meeting-capture`, head `af5082279`;
+rechecked at `515e1d39e`.
 Design review only; no code was run.
 
-#### 0. The brief reads a superseded head
+#### 0. Baseline
 
-- "Current flow, per meeting" and "Recording notice" describe `28a5a6beb`. Commit `d15ce4506`
-  already replaced per-meeting device approval with a one-time recording capability, and
-  `packages/meetings/sql/0288_meeting_recording_connections.sql` revokes every legacy per-meeting
-  grant. At `af5082279` the Mac needs no "Prepare this meeting" click.
-- Most of the proposed link is therefore built. This sign-off covers the model at `af5082279` plus
-  the controls in 4.
-- Regression. At `af5082279`, `POST /api/meetings/records/:id/capture/start` takes no notice
-  acknowledgement, the server checks none, and the web UI shows no notice. The `28a5a6beb` check in
-  `capture-domain.ts` is gone. Control R8 restores it; it is a blocker, not a tidy-up.
+- Commit `d15ce4506` replaced per-meeting device approval with a one-time recording capability,
+  and `packages/meetings/sql/0288_meeting_recording_connections.sql` revokes every legacy
+  per-meeting grant. The Mac needs no "Prepare this meeting" click.
+- PR 3056 head is now `515e1d39e`, a merge of main with no meetings, auth, shared capture or
+  Trail Marker changes since `af5082279`. Everything below holds at both.
+- Most of the proposed link is therefore built. This sign-off covers that model plus the controls
+  in 4. The brief's flow sections now describe this head.
+- Regression. At this head, `POST /api/meetings/records/:id/capture/start` takes no notice
+  acknowledgement, the server checks none, and the web UI shows no notice. The per-start check in
+  `capture-domain.ts` from `28a5a6beb` is gone. It is being restored on PR 3056 before the redesign
+  builds on it; R8 then moves it to the stored, once-asked acknowledgement. Either way it is a
+  blocker, not a tidy-up.
 
-#### 1. Current model at `af5082279`
+#### 1. Current model at `515e1d39e`
 
 | Layer                | Secret                                                     | Mac storage                                                                                           | Server storage                                                                                      | Lifetime                                                                      | Revoke                                                                                                               |
 | -------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -439,13 +468,25 @@ choices now live in Settings."
 15. Live-path proof on a dev instance with a real linked Mac, recorded on the PR. No intercepted
     or faked data. Summary proof needs a summary-capable API-key model on that instance.
 
-## Open decisions for Ben
+## Decisions
 
-1. One-time Mac link instead of approving the device each meeting. Recommended; needs the security
-   review above.
-2. Recording notice asked once instead of per meeting. Recommended; reversible by asking again on a
-   policy version change.
-3. Summary writes automatically on stop, on by default. Recommended; switch in Settings.
+Decided by Ben, 2026-10-06:
+
+1. One-time Mac link instead of approving the device each meeting, with the controls in Link design
+   sign-off.
+2. Recording notice asked once, then asked again only when the notice's policy version changes.
+3. Summary writes automatically on stop, on by default, with a switch in Settings, Meetings.
+4. The user always clicks Start. Nothing records on linking, on New meeting or on opening a
+   meeting.
+
+Decided by default from the security review; the build uses these unless Ben overrides:
+
+5. Every Start shows a notification on the Mac and a panel that cannot be closed while recording
+   (R6).
+6. The recording permission lapses 90 days after the last Start, and the user re-confirms it once
+   (R9).
+7. Binding the link to the Mac's hardware (Secure Enclave key) is a later follow-up, not part of
+   this build.
 
 ## Out of scope
 
