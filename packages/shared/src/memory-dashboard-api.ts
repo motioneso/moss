@@ -146,18 +146,29 @@ const pendingCandidateSchema = {
 } as const;
 
 export const getMemoryPendingCandidatesRouteSchema = {
+  querystring: {
+    type: "object",
+    description:
+      "List five pending suggestions at a time. Start at offset 0, then pass the returned nextOffset to read the next page.",
+    additionalProperties: false,
+    properties: {
+      offset: { type: "integer", minimum: 0, maximum: 2147483647, default: 0 }
+    }
+  },
   response: {
     200: {
       type: "object",
       additionalProperties: false,
-      required: ["total", "hasMore", "remainingCount", "items"],
+      required: ["total", "hasMore", "remainingCount", "nextOffset", "items"],
       properties: {
         total: { type: "integer", minimum: 0 },
         hasMore: { type: "boolean" },
         remainingCount: { type: "integer", minimum: 0 },
+        nextOffset: { type: ["integer", "null"], minimum: 0 },
         items: { type: "array", items: pendingCandidateSchema }
       }
     },
+    400: errorResponseSchema,
     401: errorResponseSchema
   }
 } as const;

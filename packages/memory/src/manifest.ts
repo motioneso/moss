@@ -244,6 +244,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       method: "GET",
       path: "/api/memory/candidates",
       chat: { access: "read", title: "List pending suggested memory", content: "outside" },
+      requestSchema: getMemoryPendingCandidatesRouteSchema.querystring,
       responseSchema: getMemoryPendingCandidatesRouteSchema.response[200],
       permissionId: "memory.view"
     },
@@ -395,9 +396,9 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.pending_suggestion_counts",
       description:
-        "Chat lists up to 5 pending suggestions with title/summary excerpt flags and total/remaining " +
-        "counts. IDs and approval labels stay complete. Other users' suggestions and resolved " +
-        "suggestions are excluded."
+        "Chat pages through your pending suggestions, 5 at a time, using offset and nextOffset. " +
+        "Total/remaining counts exclude other users and resolved suggestions. Text has excerpt " +
+        "flags; IDs and approval labels stay complete."
     },
     {
       id: "memory.notes_ingest",

@@ -152,20 +152,32 @@ export class MemoryCandidatesRepository {
   async listPendingWithCount(
     scopedDb: DataContextDb,
     ownerUserId: string,
-    limit: number
+    limit: number,
+    offset = 0
   ): Promise<{ items: MemoryCandidateRecord[]; total: number }> {
     assertDataContextDb(scopedDb);
-    // Count the same owner-scoped snapshot before limiting the returned items.
-    const result = await sql<CandidateRow & { pending_count: string }>`
-      SELECT *, count(*) OVER () AS pending_count
-      FROM app.memory_candidates
-      WHERE owner_user_id = ${ownerUserId}::uuid
-        AND status = 'pending'
-      ORDER BY created_at DESC, id
-      LIMIT ${Math.max(1, Math.min(100, Math.trunc(limit)))}
+    // Keep the count even past the last page, using one owner-scoped SQL snapshot.
+    const result = await sql<
+      Omit<CandidateRow, "id"> & { id: string | null; pending_count: string }
+    >`
+      WITH pending AS (
+        SELECT * FROM app.memory_candidates
+        WHERE owner_user_id = ${ownerUserId}::uuid AND status = 'pending'
+      )
+      SELECT page.*, totals.pending_count
+      FROM (SELECT count(*) AS pending_count FROM pending) totals
+      LEFT JOIN (
+        SELECT * FROM pending
+        ORDER BY created_at DESC, id
+        LIMIT ${Math.max(1, Math.min(100, Math.trunc(limit)))}
+        OFFSET ${Math.max(0, Math.min(2147483647, Math.trunc(offset)))}
+      ) page ON true
+      ORDER BY page.created_at DESC, page.id
     `.execute(scopedDb.db);
     return {
-      items: result.rows.map(mapCandidate),
+      items: result.rows.flatMap((row) =>
+        row.id === null ? [] : [mapCandidate({ ...row, id: row.id })]
+      ),
       total: Number(result.rows[0]?.pending_count ?? 0)
     };
   }

@@ -73,6 +73,18 @@ describe("memory suggestions through app actions", () => {
     );
   });
 
+  it("forwards the next page offset through app.callAction without an approval card", async () => {
+    const h = harness();
+    const input = {
+      method: "GET",
+      path: "/api/memory/candidates",
+      query: { offset: "5" }
+    } as const;
+    expect(await h.call(input)).toMatchObject({ ok: true });
+    expect(h.callSpy).toHaveBeenCalledExactlyOnceWith(input, expect.anything());
+    expect(h.events.filter((event) => event.kind === "action_request")).toEqual([]);
+  });
+
   it("shows a card naming the suggestion and accepts only after approval", async () => {
     const h = harness();
     const pending = h.call(ACCEPT);

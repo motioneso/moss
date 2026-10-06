@@ -71,19 +71,24 @@ export function registerMemoryDashboardRoutes(
     { schema: getMemoryPendingCandidatesRouteSchema },
     async (request, reply) => {
       try {
+        const { offset } = request.query as { offset: number };
+        // Fastify's numeric coercion can admit Infinity; never dispatch a non-finite offset.
+        if (!Number.isSafeInteger(offset)) return reply.code(400).send({ error: "Invalid offset" });
         const access = await dependencies.resolveAccessContext(request);
         return await dependencies.dataContext.withDataContext(access, async (scopedDb) => {
           const pending = await candidatesRepo.listPendingWithCount(
             scopedDb,
             access.actorUserId,
-            PENDING_CANDIDATE_LIMIT
+            PENDING_CANDIDATE_LIMIT,
+            offset
           );
           const items = pending.items.map(pendingCandidateItem);
-          const remainingCount = Math.max(0, pending.total - items.length);
+          const remainingCount = Math.max(0, pending.total - offset - items.length);
           return {
             total: pending.total,
             hasMore: remainingCount > 0,
             remainingCount,
+            nextOffset: remainingCount > 0 ? offset + items.length : null,
             items
           };
         });

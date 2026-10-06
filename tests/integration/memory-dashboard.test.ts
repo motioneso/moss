@@ -199,7 +199,7 @@ describe("GET /api/memory/candidates", () => {
     expect(res.body).not.toContain("Other user's suggestion 3065");
   });
 
-  it("returns five complete owner-pending suggestions and counts the remaining 47", async () => {
+  it("pages through every owner-pending suggestion with stable ordering and exact counts through past the end", async () => {
     const ownItems = new Map<string, { title: string; summary: string; createdAt: string }>();
     for (let i = 0; i < 52; i += 1) {
       const summary =
@@ -218,33 +218,48 @@ describe("GET /api/memory/candidates", () => {
       (db) => candidatesRepo.markRejected(db, ids.userC, rejected.id, "not pending")
     );
 
-    const res = await server.inject({
-      method: "GET",
-      url: "/api/memory/candidates",
-      headers: authHeaders(ids.userC)
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json<{
-      items: { id: string }[];
-      total: number;
-      hasMore: boolean;
-      remainingCount: number;
-    }>();
-    expect(body).toMatchObject({ total: 52, hasMore: true, remainingCount: 47 });
-    expect(body.items).toHaveLength(5);
-    expect(new Set(body.items.map((item) => item.id)).size).toBe(5);
-    for (const item of body.items) {
-      expect(ownItems.has(item.id)).toBe(true);
-      expect(item).toEqual({
-        id: item.id,
-        ...ownItems.get(item.id),
-        titleTruncated: true,
-        summaryTruncated: true,
-        provenance: "volunteered"
+    // Give every row the same timestamp so paging also proves the ID tie-break order.
+    const createdAt = "2026-10-06T12:00:00.000Z";
+    await appDataContext.withDataContext(
+      { actorUserId: ids.userC, requestId: "tie-candidate-timestamps" },
+      (db) =>
+        sql`
+        UPDATE app.memory_candidates SET created_at = ${createdAt}::timestamptz
+        WHERE owner_user_id = ${ids.userC}::uuid
+      `.execute(db.db)
+    );
+    const orderedIds = [...ownItems.keys()].sort();
+    const deliveredIds: string[] = [];
+    for (const offset of [...Array.from({ length: 11 }, (_, i) => i * 5), 51, 52, 57]) {
+      const res = await server.inject({
+        method: "GET",
+        url: `/api/memory/candidates?offset=${offset}`,
+        headers: authHeaders(ids.userC)
       });
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ items: { id: string }[] }>();
+      const expectedIds = orderedIds.slice(offset, offset + 5);
+      const remainingCount = Math.max(0, 52 - offset - expectedIds.length);
+      expect(body).toEqual({
+        total: 52,
+        hasMore: remainingCount > 0,
+        remainingCount,
+        nextOffset: remainingCount > 0 ? offset + expectedIds.length : null,
+        items: expectedIds.map((id) => ({
+          id,
+          ...ownItems.get(id),
+          createdAt,
+          titleTruncated: true,
+          summaryTruncated: true,
+          provenance: "volunteered"
+        }))
+      });
+      if (offset % 5 === 0 && offset <= 50) deliveredIds.push(...body.items.map((item) => item.id));
+      expect(res.body).not.toContain("Other owner overflow suggestion");
+      expect(res.body).not.toContain("Rejected overflow suggestion");
     }
-    expect(res.body).not.toContain("Other owner overflow suggestion");
-    expect(res.body).not.toContain("Rejected overflow suggestion");
+    expect(deliveredIds).toEqual(orderedIds);
+    expect(new Set(deliveredIds).size).toBe(52);
 
     const other = await server.inject({
       method: "GET",
@@ -263,7 +278,13 @@ describe("GET /api/memory/candidates", () => {
       headers: authHeaders(ids.adminUser)
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ items: [], total: 0, hasMore: false, remainingCount: 0 });
+    expect(res.json()).toEqual({
+      items: [],
+      total: 0,
+      hasMore: false,
+      remainingCount: 0,
+      nextOffset: null
+    });
   });
 });
 
@@ -473,6 +494,100 @@ describe("pending-only memory candidate decisions", () => {
         await responses;
       } finally {
         for (const mark of marks) mark.mockRestore();
+      }
+    }
+  });
+
+  it("lets exactly one acceptance or rejection win when both decisions race", async () => {
+    const excerpt = `Concurrent accept and reject ${randomUUID()}`;
+    const candidate = await insertManualCandidate(ids.userA, excerpt);
+    const getById = MemoryCandidatesRepository.prototype.getById;
+    const markRejected = MemoryCandidatesRepository.prototype.markRejected;
+    let pendingReads = 0;
+    let rejectionEntries = 0;
+    let releaseDecisions!: () => void;
+    const decisionsReleased = new Promise<void>((resolve) => {
+      releaseDecisions = resolve;
+    });
+    // Hold acceptance after its real pending read and rejection before its real
+    // conditional update, so both actor-scoped transactions contend for the row.
+    const read = vi
+      .spyOn(MemoryCandidatesRepository.prototype, "getById")
+      .mockImplementation(async function (
+        this: MemoryCandidatesRepository,
+        scopedDb,
+        ownerUserId,
+        id
+      ) {
+        const row = await getById.call(this, scopedDb, ownerUserId, id);
+        if (ownerUserId === ids.userA && id === candidate.id && row?.status === "pending") {
+          pendingReads += 1;
+          await decisionsReleased;
+        }
+        return row;
+      });
+    const reject = vi
+      .spyOn(MemoryCandidatesRepository.prototype, "markRejected")
+      .mockImplementation(async function (
+        this: MemoryCandidatesRepository,
+        scopedDb,
+        ownerUserId,
+        id,
+        reason
+      ) {
+        if (ownerUserId === ids.userA && id === candidate.id) {
+          rejectionEntries += 1;
+          await decisionsReleased;
+        }
+        return markRejected.call(this, scopedDb, ownerUserId, id, reason);
+      });
+    const responses = Promise.all([
+      server.inject({
+        method: "POST",
+        url: `/api/memory/candidates/${candidate.id}/accept`,
+        headers: authHeaders(ids.userA)
+      }),
+      server.inject({
+        method: "POST",
+        url: `/api/memory/candidates/${candidate.id}/reject`,
+        headers: authHeaders(ids.userA),
+        payload: { reason: "rejection won" }
+      })
+    ]);
+    try {
+      await vi.waitFor(
+        () => {
+          expect(pendingReads).toBe(1);
+          expect(rejectionEntries).toBe(1);
+        },
+        { timeout: 5_000 }
+      );
+      releaseDecisions();
+      const [accepted, rejected] = await responses;
+      const acceptanceWon = accepted.statusCode === 200;
+      expect([accepted.statusCode, rejected.statusCode]).toEqual(
+        acceptanceWon ? [200, 404] : [404, 204]
+      );
+      expect((acceptanceWon ? rejected : accepted).json()).toEqual({
+        error: "Candidate not found or not pending"
+      });
+      if (acceptanceWon) expect(accepted.json()).toEqual({ accepted: true });
+      const state = await candidateDecisionState(candidate.id, excerpt);
+      expect(state.candidate).toMatchObject({
+        status: acceptanceWon ? "promoted" : "rejected",
+        promotion_reason: acceptanceWon ? "accepted via dashboard" : "rejection won",
+        resolved_at: expect.any(Date),
+        updated_at: expect.any(Date)
+      });
+      expect(state.facts).toHaveLength(acceptanceWon ? 1 : 0);
+      if (acceptanceWon) expect(state.facts[0]).toMatchObject({ object_text: excerpt });
+    } finally {
+      releaseDecisions();
+      try {
+        await responses;
+      } finally {
+        read.mockRestore();
+        reject.mockRestore();
       }
     }
   });

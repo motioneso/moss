@@ -5,14 +5,19 @@ import { DataContextRunner, type AccessContext, type DataContextDb } from "@moss
 import type { CapturedRouteSchema } from "@moss/module-sdk";
 
 import { renderAndCap } from "../../packages/ai/src/gateway/output-validation.js";
+import { createAppActionsService } from "../../packages/chat/src/app-actions.js";
 import {
   MemoryCandidatesRepository,
   type MemoryCandidateRecord
 } from "../../packages/memory/src/candidates-repository.js";
 import { registerMemoryDashboardRoutes } from "../../packages/memory/src/dashboard-routes.js";
 import { memoryModuleManifest } from "../../packages/memory/src/manifest.js";
-import { buildRouteCatalog } from "../../packages/module-registry/src/route-catalog.js";
+import {
+  buildRouteCatalog,
+  createRouteCatalogHolder
+} from "../../packages/module-registry/src/route-catalog.js";
 import { appCallActionOutputSchema } from "../../packages/settings/src/app-action-tools.js";
+import { makeAppActionGateway } from "../fixtures/app-actions-gateway.js";
 import { makeRecordingDb } from "./helpers/recording-db.js";
 
 // Real routes, validation, serialization and catalog; actor resolution and persistence are fakes.
@@ -59,7 +64,7 @@ function harness() {
     dataContext,
     resolveAccessContext
   });
-  return { app, scoped, queries, withDataContext, resolveAccessContext, captured };
+  return { app, scoped, queries, dataContext, withDataContext, resolveAccessContext, captured };
 }
 
 function candidate(index: number): MemoryCandidateRecord {
@@ -143,43 +148,164 @@ describe("memory candidate HTTP contract", () => {
   });
 
   it.each([
-    { label: "5 of 7 pending suggestions", count: 5, total: 7, hasMore: true, remaining: 2 },
-    { label: "all 5 pending suggestions", count: 5, total: 5, hasMore: false, remaining: 0 },
-    { label: "an empty pending list", count: 0, total: 0, hasMore: false, remaining: 0 }
+    { label: "the first page", offset: 0, count: 5, total: 12, remaining: 7 },
+    { label: "a middle page", offset: 5, count: 5, total: 12, remaining: 2 },
+    { label: "the last partial page", offset: 11, count: 1, total: 12, remaining: 0 },
+    { label: "the exact end", offset: 12, count: 0, total: 12, remaining: 0 },
+    { label: "past the end", offset: 13, count: 0, total: 12, remaining: 0 },
+    { label: "all 5 pending suggestions", offset: 0, count: 5, total: 5, remaining: 0 },
+    { label: "an empty pending list", offset: 0, count: 0, total: 0, remaining: 0 }
   ])(
     "serializes exact items and counts for $label",
-    async ({ count, total, hasMore, remaining }) => {
+    async ({ offset, count, total, remaining }) => {
       const h = harness();
       const listPending = vi
         .spyOn(MemoryCandidatesRepository.prototype, "listPendingWithCount")
         .mockResolvedValue({
-          items: Array.from({ length: count }, (_, index) => candidate(index)),
+          items: Array.from({ length: count }, (_, index) => candidate(offset + index)),
           total
         });
 
-      const response = await h.app.inject({ method: "GET", url: "/api/memory/candidates" });
+      const response = await h.app.inject({
+        method: "GET",
+        url: `/api/memory/candidates?offset=${offset}`
+      });
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
         items: Array.from({ length: count }, (_, index) => ({
-          id: `00000000-0000-4000-8000-${String(index + 100).padStart(12, "0")}`,
-          title: `Suggestion ${index + 1}`,
-          summary: `Suggestion ${index + 1}`,
+          id: candidate(offset + index).id,
+          title: `Suggestion ${offset + index + 1}`,
+          summary: `Suggestion ${offset + index + 1}`,
           titleTruncated: false,
           summaryTruncated: false,
           recordKind: "preference",
-          provenance: index % 2 === 0 ? "volunteered" : "inferred",
+          provenance: (offset + index) % 2 === 0 ? "volunteered" : "inferred",
           createdAt: CREATED_AT
         })),
         total,
-        hasMore,
-        remainingCount: remaining
+        hasMore: remaining > 0,
+        remainingCount: remaining,
+        nextOffset: remaining > 0 ? offset + count : null
       });
-      expect(Object.keys(response.json())).toEqual(["total", "hasMore", "remainingCount", "items"]);
+      expect(Object.keys(response.json())).toEqual([
+        "total",
+        "hasMore",
+        "remainingCount",
+        "nextOffset",
+        "items"
+      ]);
       expect(parseCompleteBody(renderBody(response.json()))).toEqual(response.json());
       expect(h.withDataContext).toHaveBeenCalledExactlyOnceWith(access, expect.any(Function));
-      expect(listPending).toHaveBeenCalledExactlyOnceWith(h.scoped, ACTOR_ID, 5);
+      expect(listPending).toHaveBeenCalledExactlyOnceWith(h.scoped, ACTOR_ID, 5, offset);
       expect(h.queries).toEqual([]);
+    }
+  );
+
+  it("defaults to the first page when offset is omitted", async () => {
+    const h = harness();
+    const list = vi
+      .spyOn(MemoryCandidatesRepository.prototype, "listPendingWithCount")
+      .mockResolvedValue({ items: [], total: 0 });
+    const response = await h.app.inject({ method: "GET", url: "/api/memory/candidates" });
+    expect(response.statusCode).toBe(200);
+    expect(list).toHaveBeenCalledExactlyOnceWith(h.scoped, ACTOR_ID, 5, 0);
+    expect(response.json().nextOffset).toBeNull();
+  });
+
+  it("discovers paging in app.findAction and reads the next page through the real HTTP transport", async () => {
+    const h = harness();
+    await h.app.ready();
+    const catalog = createRouteCatalogHolder();
+    catalog.set(buildRouteCatalog([memoryModuleManifest], h.captured));
+    const list = vi
+      .spyOn(MemoryCandidatesRepository.prototype, "listPendingWithCount")
+      .mockResolvedValue({ items: [candidate(5)], total: 6 });
+    const gateway = makeAppActionGateway({
+      runner: h.dataContext,
+      provenance: {
+        isTainted: async () => false,
+        recordAdmission: async () => undefined,
+        runAutomatic: async (_actor, _thread, run) => ({ kind: "ran", value: await run() })
+      },
+      appActions: createAppActionsService({
+        server: h.app,
+        catalog,
+        grants: { mint: () => "fake-grant", consume: () => null, peekActor: () => null },
+        readTurnId: () => null
+      })
+    });
+    expect(await gateway.find("pending suggested memory")).toMatchObject({
+      ok: true,
+      structuredData: {
+        actions: expect.arrayContaining([
+          expect.objectContaining({
+            method: "GET",
+            path: "/api/memory/candidates",
+            inputShape: {
+              querystring: expect.objectContaining({
+                properties: {
+                  offset: { type: "integer", minimum: 0, maximum: 2147483647, default: 0 }
+                }
+              })
+            }
+          })
+        ])
+      }
+    });
+    const result = await gateway.call({
+      method: "GET",
+      path: "/api/memory/candidates",
+      query: { offset: "5" }
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      structuredData: {
+        status: 200,
+        body: {
+          total: 6,
+          remainingCount: 0,
+          hasMore: false,
+          nextOffset: null,
+          items: [expect.objectContaining({ id: candidate(5).id })]
+        }
+      }
+    });
+    expect(list).toHaveBeenCalledExactlyOnceWith(h.scoped, ACTOR_ID, 5, 5);
+    expect(gateway.events.filter((event) => event.kind === "action_request")).toEqual([]);
+  });
+
+  it.each(["-1", "1.5", "nope", "2147483648", "Infinity", "1&offset=2"])(
+    "rejects invalid offset %s before actor resolution or persistence",
+    async (offset) => {
+      const h = harness();
+      const response = await h.app.inject({
+        method: "GET",
+        url: `/api/memory/candidates?offset=${offset}`
+      });
+      expect(response.statusCode).toBe(400);
+      expect(h.resolveAccessContext).not.toHaveBeenCalled();
+      expect(h.withDataContext).not.toHaveBeenCalled();
+      expect(h.queries).toEqual([]);
+    }
+  );
+
+  it.each(["captured Fastify schema", "manifest fallback"] as const)(
+    "advertises pending suggestion paging using the %s",
+    async (source) => {
+      const h = harness();
+      await h.app.ready();
+      const route = buildRouteCatalog(
+        [memoryModuleManifest],
+        source === "captured Fastify schema" ? h.captured : []
+      ).resolve("GET", "/api/memory/candidates")?.route;
+      expect(route?.inputShape?.querystring).toEqual({
+        type: "object",
+        description:
+          "List five pending suggestions at a time. Start at offset 0, then pass the returned nextOffset to read the next page.",
+        additionalProperties: false,
+        properties: { offset: { type: "integer", minimum: 0, maximum: 2147483647, default: 0 } }
+      });
     }
   );
 
