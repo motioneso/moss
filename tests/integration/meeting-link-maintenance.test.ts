@@ -1,3 +1,4 @@
+import { startMeetingCaptureSupervision } from "../../apps/worker/src/meeting-capture-supervisor.js";
 import { WORKER_BOSS_OPTIONS } from "../../apps/worker/src/worker.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -30,6 +31,7 @@ beforeAll(setupLinkDatabase);
 afterAll(closeLinkDatabase);
 const fixtures: Awaited<ReturnType<typeof linkFixture>>[] = [],
   consumers: PgBoss[] = [];
+const supervisors: ReturnType<typeof startMeetingCaptureSupervision>[] = [];
 async function fixture() {
   const f = await linkFixture();
   fixtures.push(f);
@@ -37,6 +39,7 @@ async function fixture() {
 }
 afterEach(async () => {
   vi.restoreAllMocks();
+  await Promise.all(supervisors.splice(0).map((value) => value.close()));
   for (const consumer of consumers.splice(0)) {
     await consumer.offWork(MEETING_CAPTURE_MAINTENANCE_QUEUE, { wait: true });
     await consumer.stop({ graceful: true });
@@ -62,6 +65,37 @@ async function worker(f: Awaited<ReturnType<typeof fixture>>) {
   await consumer.start();
   await registerMeetingCaptureMaintenanceWorker(consumer, f.maintenance);
   return consumer;
+}
+async function activeMaintenancePids(): Promise<number[]> {
+  const result = await bootstrap.query<{ pid: number; application_name: string }>(
+    "SELECT pid,application_name FROM pg_stat_activity WHERE datname=current_database() AND application_name IN ('moss-capture-auth-maintenance','moss-abortable-data-context') AND state<>'idle'"
+  );
+  // Healthy idle leases from earlier jobs may remain pooled. Require both actual
+  // in-flight leases before observing their disappearance, never an empty PID set.
+  expect(result.rows.map((row) => row.application_name).sort()).toEqual([
+    "moss-abortable-data-context",
+    "moss-capture-auth-maintenance"
+  ]);
+  return result.rows.map((row) => row.pid);
+}
+async function expectMaintenanceBackendsGone(pids: number[]): Promise<void> {
+  expect(pids).toHaveLength(2);
+  // TCP close is local. PostgreSQL notices the disconnect asynchronously; its
+  // source-level statement timeout bounds lock wait even while the blocker stays held.
+  await expect
+    .poll(
+      async () =>
+        Number(
+          (
+            await bootstrap.query(
+              "SELECT count(*) AS count FROM pg_stat_activity WHERE pid=ANY($1::int[])",
+              [pids]
+            )
+          ).rows[0].count
+        ),
+      { timeout: 5000, interval: 20 }
+    )
+    .toBe(0);
 }
 describe("durable capture revocation maintenance (isolated gate only)", () => {
   it.each(["unlink", "permission", "session"] as const)(
@@ -260,13 +294,42 @@ describe("durable capture revocation maintenance (isolated gate only)", () => {
     });
     consumers.push(supervisor);
     await supervisor.start();
+    supervisors.push(
+      startMeetingCaptureSupervision(supervisor, (error) => {
+        throw error;
+      })
+    );
     await worker(f);
     await expect
       .poll(async () => (await active.stored())?.status, { timeout: 29000, interval: 100 })
       .toBe("revoked");
     expect(Date.now() - unlinkedAt).toBeLessThan(30000);
   }, 45000);
-  it("R3 aborting a held real auth query drains both owned connections without false revocation", async () => {
+  it("R3 repeated successful checkpoints reuse bounded app and auth transports", async () => {
+    const f = await fixture(),
+      active = await f.begin();
+    const backends = async () =>
+      (
+        await bootstrap.query<{ pid: number; application_name: string }>(
+          "SELECT pid,application_name FROM pg_stat_activity WHERE datname=current_database() AND application_name IN ('moss-capture-auth-maintenance','moss-abortable-data-context') ORDER BY pid"
+        )
+      ).rows;
+    await maintainMeetingCapture(payload(f.browser.actorUserId, active.grantId), f.maintenance);
+    const initial = await backends();
+    for (const name of ["moss-capture-auth-maintenance", "moss-abortable-data-context"]) {
+      const count = initial.filter((row) => row.application_name === name).length;
+      expect(count).toBeGreaterThan(0);
+      expect(count).toBeLessThanOrEqual(2);
+    }
+    for (let version = 1; version < 4; version++)
+      await maintainMeetingCapture(
+        payload(f.browser.actorUserId, active.grantId, version),
+        f.maintenance
+      );
+    expect(await backends()).toEqual(initial);
+    expect(captureState((await active.stored())!).maintenanceSequence).toBe(4);
+  });
+  it("R3 aborting a held real auth query drains both cancelled pooled connections without false revocation", async () => {
     const f = await fixture(),
       active = await f.begin(),
       blocker = await bootstrap.connect();
@@ -295,19 +358,12 @@ describe("durable capture revocation maintenance (isolated gate only)", () => {
           { timeout: 1500, interval: 20 }
         )
         .toBeGreaterThan(0);
+      const pids = await activeMaintenancePids();
       controller.abort(new Error("synthetic job cancellation"));
       await failure;
       expect((await active.stored())?.status).toBe("active");
       expect(captureState((await active.stored())!).maintenanceSequence).toBe(0);
-      expect(
-        Number(
-          (
-            await bootstrap.query(
-              "SELECT count(*) AS count FROM pg_stat_activity WHERE application_name IN ('moss-capture-auth-maintenance','moss-abortable-data-context')"
-            )
-          ).rows[0].count
-        )
-      ).toBe(0);
+      await expectMaintenanceBackendsGone(pids);
     } finally {
       controller.abort();
       await blocker.query("ROLLBACK");
@@ -339,6 +395,7 @@ describe("durable capture revocation maintenance (isolated gate only)", () => {
           { timeout: 10000, interval: 20 }
         )
         .toBeGreaterThan(0);
+      const pids = await activeMaintenancePids();
       const started = Date.now();
       await consumer.offWork(MEETING_CAPTURE_MAINTENANCE_QUEUE, { wait: true });
       expect(Date.now() - started).toBeLessThan(5000);
@@ -352,15 +409,7 @@ describe("durable capture revocation maintenance (isolated gate only)", () => {
           )
         )?.state
       ).toBe("retry");
-      expect(
-        Number(
-          (
-            await bootstrap.query(
-              "SELECT count(*) AS count FROM pg_stat_activity WHERE application_name IN ('moss-capture-auth-maintenance','moss-abortable-data-context')"
-            )
-          ).rows[0].count
-        )
-      ).toBe(0);
+      await expectMaintenanceBackendsGone(pids);
     } finally {
       await blocker.query("ROLLBACK");
       blocker.release();

@@ -135,15 +135,15 @@ format, file-size, design-token, UI-class, catalogue, date, password-source, dep
 and app-map checks against the final tree. Retain exact negative-proof records. Security and live
 claims remain unverified where their required execution has not happened.
 
-## Local verification and remaining gates
+## Initial local verification and remaining gates
 
-The final relevant unit/component group passed 83 suites and 1,065 tests. Root, tests, web,
+The initial Part B unit/component group passed 83 suites and 1,065 tests. Root, tests, web,
 finance, job-search and food TypeScript configurations passed, as did full ESLint and Prettier,
 file-size, design-token, UI-class, migrated-section, catalogue, ambient-date, password-source,
 package-dependency, migration-number and app-map checks. The production web bundle built;
 its large-chunk advisory remains an advisory.
 
-The server's database-free negative runner observes ten named failures followed by restored
+The initial server database-free negative runner observed ten named failures followed by restored
 passes: missing device, capability and browser session; the post-fence deadline; each account
 rate limit; logger redaction; and owned-transport connect settlement, forced idle close and query
 abort. Five owned-client tests use the installed pg client with a synthetic protocol transport,
@@ -156,16 +156,78 @@ silence, stale levels, clock rollback, queue publication/capacity and sample ord
 negative runners' anchors and harness self-tests passed, and the existing Backtrack source checker
 caught all seven planted violations. These checks do not compile Swift or execute XCTest.
 
-The canonical database gate was attempted and exited before launch because Docker is unavailable.
-Real-auth integration, migration, owner export/cascade, RLS/column-grant mutations, no-traffic
-timing and crash recovery remain authored for hosted execution. Browser acceptance was not run
-here; the executor also previously rejected Chromium's socket operation. Native Release/XCTest,
+At the initial handoff, the canonical database gate had exited before launch because Docker is
+unavailable. Real-auth integration, migration, owner export/cascade, RLS/column-grant mutations,
+no-traffic timing and crash recovery were authored for hosted execution. Browser acceptance was
+not run here; the executor had also rejected Chromium's socket operation. Native Release/XCTest,
 its 12 new T12/T13 mutations, installed Apple SDK checks, live TLS and the owner-controlled
-linked-Mac T14 path remain unexecuted. No real audio or provider recording occurred.
+linked-Mac T14 path had not yet executed. Subsequent hosted results are recorded below; no real
+audio or provider recording occurred in this executor.
 
 Independent source review found no remaining blocking source issue after the cancellation and
 crash-recovery corrections. This is code-complete, unverified until the exact published candidate
 passes its hosted checks and the assembled owner-run live path is recorded on the draft PR.
+
+## PR #3082 review and first hosted execution
+
+The owner published the initial tree `b2dffd46ed83f1867c114604a44019f7ff036a63` at branch head
+`40f87fd37c81e472a24899319b3973a54aa2cd32`. GitHub's CI merge snapshot
+`20f7111baefc08a5e49fb53afd00d70a86762380` has that same tree; it is not the feature-branch head.
+Repairs are based on the published branch, and their patch is checked against both equivalent
+source trees. Migration 0292 belongs to the stacked Part A and remains unchanged.
+
+The first real-auth gate on PostgreSQL 17.11 passed 41 of 42 tests, including the active-job
+crash path. The abort case observed one server backend immediately after the local transport
+closed. PostgreSQL can still be waiting on the blocked query until its statement deadline;
+local socket completion does not acknowledge server process exit. The corrected tests identify
+both in-flight backend PIDs and require their count to reach exactly zero within five seconds,
+across all backend states and while the blocker remains held. They retain the active grant,
+unchanged sequence, shutdown deadline and successful retry assertions. Healthy idle pooled
+connections are intentionally retained and are not mistaken for cancelled leases.
+
+Review also identified excessive connection creation and global queue checks. Maintenance now
+borrows from bounded, role-specific pools. Clean completed transactions may be reused; failed,
+cancelled or unfinished transactions destroy their transport, and shutdown waits for actual
+transport closure. Fast supervision names only the capture-maintenance queue. Ordinary global
+supervision retains its existing cadence. The auth fence keeps SHARE locks because KEY SHARE
+would permit non-key changes to account status, expiry or capability revision during persistence.
+
+Moving the consumer to the worker is unavailable through the existing least-privilege interfaces:
+the worker cannot read the required Better Auth/device/capability rows or mutate capture grants,
+and the app queue role cannot claim or complete jobs. No suitable existing worker-callable auth
+status port was found. A safe relocation would need a separately designed facade; distributing
+general app/auth credentials to the worker is not the chosen repair. Under the owner's explicit
+fallback, the API retains the consumer and development Compose supplies its missing worker-role
+URL. Production Compose, its env example/setup generator and its smoke builder already provide
+that URL; their requirement is documented and checked. This changes deployment source only.
+
+The account-export collector already normalizes timestamp arrays to JSON ISO strings. Its
+independent database fixture only handled scalar dates, producing incorrect expectations for
+`startedAt`. A regression exposed that mismatch; fixture array normalization fixes it without
+changing the collector, column allowlists or grants.
+
+The hosted Mac Release build and installed SDK check passed, but XCTest exposed a queued control
+request creating a task after URLSession invalidation. The repair serializes request admission
+with close, owns and cancels control tasks, and checks their generation before dispatch. The
+late-permission and explicit-Resume tests join their actual tasks while preserving expiry and
+no-capture assertions. The repaired native tests still require hosted execution.
+
+Settings statuses now wrap beneath the Mac name, with controls in a separate column that stacks
+at narrow widths. The owner explicitly requested screenshots. The supported cloud browser
+rejected both file URLs and the loopback preview, so no screenshot or visual pass is claimed.
+Self-contained normal/narrow, light/dark fixtures render the real component with fictional data;
+they are included in the handoff for owner-side viewing, not represented as live-product proof.
+
+Repair verification: the broad 83-suite group passed 1,077 tests, and the separate deployment
+configuration suite passed its three tests, for 84 suites and 1,080 tests total. All six TypeScript
+configurations, full lint/format, the required static checks and the production web build passed.
+The independent export-oracle regression failed on the original Date-array mismatch and passed
+after correction. All 15 server guard-removal checks failed their intended named assertions and
+passed after restoration. Both native negative-runner anchor/harness checks passed; those are
+not native XCTest execution. Independent backend and native source reviews found no remaining
+blocking issue. Repaired real-PostgreSQL, Compose, browser, native XCTest and live TLS/hardware
+proof still require hosted or owner execution. The known stacked 0292 collision report is not
+addressed by renumbering Part A.
 
 ## Publication
 

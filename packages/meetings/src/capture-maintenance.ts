@@ -103,7 +103,7 @@ export async function maintainMeetingCapture(
     signal.throwIfAborted();
     const initial = await repository.grant(db, payload.resourceId);
     if (!initial) return;
-    // Owned app connection has source-level statement/idle deadlines and signal cancellation.
+    // The leased app connection has statement/idle deadlines and destructive cancellation.
     await sql`SET LOCAL lock_timeout='2s'`.execute(db.db);
     await connections.lock(db, initial.device_id);
     try {

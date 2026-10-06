@@ -9,6 +9,7 @@ on:
       - "apps/api/src/recording-logger-options.ts"
       - "apps/api/src/server.ts"
       - "apps/worker/src/worker.ts"
+      - "apps/worker/src/meeting-capture-supervisor.ts"
       - "apps/api/src/meeting-capture-maintenance-runtime.ts"
       - "apps/api/src/companion-routes.ts"
       - "apps/api/src/companion-recording-routes.ts"
@@ -29,6 +30,11 @@ on:
       - "tests/unit/queue-definitions.test.ts"
       - "tests/unit/owned-pg-client.test.ts"
       - "tests/unit/worker-schedule-mode.test.ts"
+      - "tests/unit/capture-maintenance-deployment.test.ts"
+      - "infra/docker-compose.yml"
+      - "infra/docker-compose.prod.yml"
+      - "infra/env.production.example"
+      - "scripts/setup-prod.ts"
       - "scripts/check-meeting-link-negative-controls.py"
       - ".github/workflows/meeting-link-security.yml"
   workflow_dispatch:
@@ -52,6 +58,10 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Verify pooled transport cancellation and capture-only supervision
+        run: |
+          node node_modules/vitest/vitest.mjs run tests/unit/owned-pg-client.test.ts tests/unit/meeting-capture-maintenance.test.ts tests/unit/worker-schedule-mode.test.ts tests/unit/capture-maintenance-deployment.test.ts
+          python3 scripts/check-meeting-link-negative-controls.py --unit
       - name: Verify real auth, database races and source restoration
         run: |
           set -euo pipefail

@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[1]
 UNIT = "tests/unit/meeting-link-security.test.ts"
 OWNED = "packages/db/src/owned-pg-client.ts"
+POOLED = "packages/db/src/abortable-pg-pool.ts"
 INTEGRATION = "tests/integration/meeting-link-security.test.ts"
 FENCE = "packages/auth/src/capture-binding.ts"
 BUDGET = "packages/meetings/src/capture-start-limiter.ts"
@@ -43,11 +44,26 @@ UNIT_CONTROLS = [
         mutation(OWNED, "rejectConnect?.(signal.reason);", "void signal.reason;")
     ], "tests/unit/owned-pg-client.test.ts", "owned-connect-settled-after-close"),
     control("R3-owned-idle-destroy", "force-closes even a successful idle", [
-        mutation(OWNED, "socket.destroy();", "void socket;")
+        mutation(OWNED, "this.socket.destroy();", "void this.socket;")
     ], "tests/unit/owned-pg-client.test.ts", "owned-idle-forced-close"),
     control("R3-owned-query-abort", "aborting a DataContext query", [
-        mutation(OWNED, 'signal.addEventListener("abort", abort, { once: true });', "void abort;")
-    ], "tests/unit/owned-pg-client.test.ts", "owned-transaction-settled-after-abort"),
+        mutation(POOLED, 'signal.addEventListener("abort", abort, { once: true });', "void abort;")
+    ], "tests/unit/owned-pg-client.test.ts", "pooled-transaction-settled-after-abort"),
+    control("R3-pooled-failed-discard", "discards a failed transaction", [
+        mutation(POOLED, "const discard = !reusable || signal.aborted;", "const discard = signal.aborted;")
+    ], "tests/unit/owned-pg-client.test.ts", "pooled-failed-lease-destroyed"),
+    control("R3-pooled-open-transaction", "never reuses a lease returned", [
+        mutation(POOLED, 'if (!client.isIdle()) throw new Error("Database lease returned with an open transaction");', 'if (false) throw new Error("Database lease returned with an open transaction");')
+    ], "tests/unit/owned-pg-client.test.ts", "pooled-open-transaction-rejected"),
+    control("R3-pooled-shutdown-drain", "pool shutdown waits for the actual close", [
+        mutation(POOLED, "await Promise.all(clients.map((client) => client.destroy()));", "void Promise.all(clients.map((client) => client.destroy()));")
+    ], "tests/unit/owned-pg-client.test.ts", "pooled-shutdown-waits-close"),
+    control("R3-capture-scoped-supervision", "checks only capture maintenance", [
+        mutation("apps/worker/src/meeting-capture-supervisor.ts", ".supervise(MEETING_CAPTURE_MAINTENANCE_QUEUE)", ".supervise()")
+    ], "tests/unit/meeting-capture-maintenance.test.ts", "capture-scoped-supervision"),
+    control("R3-no-global-fast-scan", "builds the worker boss", [
+        mutation("apps/worker/src/worker.ts", "  monitorIntervalSeconds: 1", "  superviseIntervalSeconds: 1,\n  monitorIntervalSeconds: 1")
+    ], "tests/unit/worker-schedule-mode.test.ts", "capture-global-default-cadence"),
     control("T1-T2-missing-device-fence", "rejects absent companion_devices", [
         mutation(FENCE, 'if (!device.rows.length) throw new SessionBindingError("device-unavailable");', 'if (false) throw new SessionBindingError("device-unavailable");')]),
     control("T3-missing-capability-fence", "rejects absent companion_recording_capabilities", [
@@ -67,6 +83,9 @@ UNIT_CONTROLS = [
 # Deleting a device also cascades its capability. These complementary Unlink mutations
 # disable the actual DELETE, not just one of several redundant device-liveness checks.
 HOSTED_CONTROLS = [
+    control("R3-auth-non-key-fence", "SHARE fences non-key user-status", [
+        mutation(FENCE, "WHERE id=$1 AND status='active' FOR SHARE NOWAIT", "WHERE id=$1 AND status='active' FOR KEY SHARE NOWAIT")
+    ], "tests/integration/meeting-link-races.test.ts", "capture-non-key-update-fenced"),
     control("T1-settings-unlink-delete", "T1/T2 settings Unlink", [mutation(
         "packages/auth/src/session-service.ts", '"DELETE FROM app.companion_devices WHERE id = $1 AND user_id = $2"',
         '"SELECT id FROM app.companion_devices WHERE id = $1 AND user_id = $2"')], INTEGRATION, "link-status-denial:device-unavailable"),
@@ -124,6 +143,12 @@ FAILURE_PATTERNS = {
     "R3-owned-connect-bridge": r"expected false to be true",
     "R3-owned-idle-destroy": r"expected undefined to be type of",
     "R3-owned-query-abort": r"expected false to be true",
+    "R3-pooled-failed-discard": r"expected false to be true",
+    "R3-pooled-open-transaction": r"expected",
+    "R3-pooled-shutdown-drain": r"expected true to be false",
+    "R3-capture-scoped-supervision": r"expected",
+    "R3-no-global-fast-scan": r"expected",
+    "R3-auth-non-key-fence": r"expected",
     **{name: r"^Error: promise resolved .* instead of rejecting" for name in [
         "T1-T2-missing-device-fence", "T3-missing-capability-fence", "T4-missing-session-fence",
         "T5-post-fence-deadline", "T5-claim-deadline", "T5-capture-lease", "T5-hard-cap", "T6-auth-device-owner",

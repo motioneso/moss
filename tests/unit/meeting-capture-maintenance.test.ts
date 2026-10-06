@@ -1,3 +1,7 @@
+import {
+  CAPTURE_SUPERVISE_INTERVAL_MS,
+  startMeetingCaptureSupervision
+} from "../../apps/worker/src/meeting-capture-supervisor.js";
 import { WORKER_BOSS_OPTIONS } from "../../apps/worker/src/worker.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MossAuthRuntime } from "@moss/auth";
@@ -47,6 +51,7 @@ afterEach(() => {
   hooks.workFailure = false;
   hooks.drain = async () => {};
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 const actorUserId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   grantId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -57,7 +62,7 @@ describe("durable capture maintenance", () => {
       MEETING_CAPTURE_MAINTENANCE_MS / 1000 +
       1 +
       queue.expireInSeconds! +
-      WORKER_BOSS_OPTIONS.superviseIntervalSeconds! +
+      CAPTURE_SUPERVISE_INTERVAL_MS / 1000 +
       WORKER_BOSS_OPTIONS.monitorIntervalSeconds! +
       queue.retryDelay! +
       1 +
@@ -210,5 +215,57 @@ describe("durable capture maintenance", () => {
     ]);
     await runtime.close();
     expect(hooks.events).toHaveLength(4);
+  });
+});
+
+describe("capture-only worker supervision", () => {
+  it("checks only capture maintenance, skips overlaps, and drains before close", async () => {
+    vi.useFakeTimers();
+    let release!: () => void;
+    const supervise = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        })
+    );
+    const supervisor = startMeetingCaptureSupervision({ supervise }, vi.fn());
+    expect(supervise, "capture-scoped-supervision").toHaveBeenCalledExactlyOnceWith(
+      "meetings.capture-maintenance"
+    );
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(supervise).toHaveBeenCalledTimes(1);
+    release();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(supervise).toHaveBeenCalledTimes(2);
+    let closed = false;
+    const pending = supervisor.close().then(() => {
+      closed = true;
+    });
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(closed).toBe(false);
+    expect(supervise).toHaveBeenCalledTimes(2);
+    release();
+    await pending;
+    expect(closed).toBe(true);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(supervise).toHaveBeenCalledTimes(2);
+  });
+  it("reports a failed check and recovers on its next capture-only tick", async () => {
+    vi.useFakeTimers();
+    const supervise = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("temporary failure"))
+      .mockResolvedValue(undefined);
+    const onError = vi.fn();
+    const supervisor = startMeetingCaptureSupervision({ supervise }, onError);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(onError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: "temporary failure" })
+    );
+    expect(supervise).toHaveBeenCalledTimes(2);
+    expect(supervise.mock.calls.every(([queue]) => queue === "meetings.capture-maintenance")).toBe(
+      true
+    );
+    await supervisor.close();
   });
 });

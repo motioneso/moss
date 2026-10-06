@@ -1,3 +1,4 @@
+import type { AbortablePgPool } from "@moss/db";
 import { RecordingCapabilityError } from "./recording-capability-error.js";
 import {
   acquireCaptureBinding,
@@ -71,6 +72,7 @@ const validProofHash = (hash: string) => /^[a-f0-9]{64}$/.test(hash);
 
 export function createRecordingCapabilitiesService(deps: {
   readonly pool: pg.Pool;
+  readonly maintenancePool: AbortablePgPool;
   readonly companionDevices: CompanionDevicesService;
   readonly now?: () => Date;
 }): RecordingCapabilitiesService {
@@ -152,7 +154,8 @@ export function createRecordingCapabilitiesService(deps: {
   }
   return {
     acquireCaptureBinding: (input) => acquireCaptureBinding(pool, input),
-    probeCaptureBinding: (input, signal) => probeCaptureBinding(pool, input, signal),
+    probeCaptureBinding: (input, signal) =>
+      probeCaptureBinding(deps.maintenancePool, input, signal),
     async resolve({ headers, requestId }) {
       const proof = headers["x-moss-recording-proof"];
       if (headers.cookie || typeof proof !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(proof))

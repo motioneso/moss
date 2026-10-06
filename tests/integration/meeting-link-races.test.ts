@@ -80,6 +80,43 @@ describe("real auth fence races (isolated gate only)", () => {
     });
     await lease.release();
   });
+  it.each(["user-status", "session-expiry", "device-expiry", "capability-revoke"] as const)(
+    "SHARE fences non-key %s updates until admitted work releases its binding",
+    async (target) => {
+      const f = await fixture();
+      const input = { ...f.browser, deviceId: f.deviceId, capabilityRevision: 1 };
+      const lease = await runtime.recordingCapabilities.acquireCaptureBinding(input);
+      const updater = await bootstrap.connect();
+      const query =
+        target === "user-status"
+          ? "UPDATE app.users SET status='deactivated' WHERE id=$1"
+          : target === "session-expiry"
+            ? "UPDATE app.better_auth_sessions SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1"
+            : target === "device-expiry"
+              ? "UPDATE app.companion_devices SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1"
+              : "UPDATE app.companion_recording_capabilities SET revoked_at=clock_timestamp(),revision=revision+1 WHERE device_id=$1";
+      const id =
+        target === "user-status"
+          ? f.browser.actorUserId
+          : target === "session-expiry"
+            ? f.browser.sessionId
+            : f.deviceId;
+      try {
+        await updater.query("BEGIN");
+        await updater.query("SET LOCAL lock_timeout='200ms'");
+        const blocked = await updater.query(query, [id]).catch((error: unknown) => error);
+        expect(blocked, "capture-non-key-update-fenced").toMatchObject({ code: "55P03" });
+        await updater.query("ROLLBACK");
+        await lease.release();
+        await updater.query(query, [id]);
+        await expect(runtime.recordingCapabilities.acquireCaptureBinding(input)).rejects.toThrow();
+      } finally {
+        await lease.release();
+        await updater.query("ROLLBACK");
+        updater.release();
+      }
+    }
+  );
   it.each(["device", "session"] as const)(
     "T1/T4 %s deletion cannot commit until an already-fenced transcript commit finishes",
     async (target) => {

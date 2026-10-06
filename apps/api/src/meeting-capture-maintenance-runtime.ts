@@ -1,5 +1,5 @@
 import type { MossAuthRuntime } from "@moss/auth";
-import { withAbortableDataContext } from "@moss/db";
+import { AbortablePgPool, withAbortableDataContext } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import {
   createMeetingCaptureMaintenanceScheduler,
@@ -7,7 +7,12 @@ import {
   MEETING_CAPTURE_MAINTENANCE_QUEUE
 } from "@moss/meetings";
 
-/** Queue claiming uses the existing worker role; capture data/identity stays in the API's ports. */
+/**
+ * Queue claiming uses the existing worker role, as does the API's external-module consumer.
+ * Auth-owned session/device/capability tables are unavailable to that role, and capture grants
+ * deny worker credential projections. Keep the consumer beside the API's auth/app ports rather
+ * than distribute auth credentials or widen the worker role. Background engines stay off here.
+ */
 export function createMeetingCaptureMaintenanceRuntime(input: {
   producer: PgBoss;
   workerConnectionString: string;
@@ -16,20 +21,28 @@ export function createMeetingCaptureMaintenanceRuntime(input: {
 }) {
   const consumer = createPgBossClient(input.workerConnectionString);
   let started = false;
+  let maintenancePool: AbortablePgPool | undefined;
   return {
     async start() {
+      const pool = new AbortablePgPool({
+        connectionString: input.appConnectionString,
+        application_name: "moss-abortable-data-context"
+      });
+      maintenancePool = pool;
       try {
         await input.producer.start();
         await consumer.start();
         started = true;
         await registerMeetingCaptureMaintenanceWorker(consumer, {
           withDataContext: (actor, signal, work) =>
-            withAbortableDataContext(input.appConnectionString, actor, signal, work),
+            withAbortableDataContext(pool, actor, signal, work),
           probeBinding: input.auth.recordingCapabilities.probeCaptureBinding,
           scheduleMaintenance: createMeetingCaptureMaintenanceScheduler(input.producer)
         });
       } catch (error) {
         await consumer.stop({ graceful: true });
+        await pool.close();
+        maintenancePool = undefined;
         started = false;
         throw error;
       }
@@ -38,6 +51,8 @@ export function createMeetingCaptureMaintenanceRuntime(input: {
       if (!started) return;
       await consumer.offWork(MEETING_CAPTURE_MAINTENANCE_QUEUE, { wait: true });
       await consumer.stop({ graceful: true });
+      await maintenancePool?.close();
+      maintenancePool = undefined;
       started = false;
     }
   };

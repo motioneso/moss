@@ -32,7 +32,8 @@ final class MeetingCaptureHost: ObservableObject {
     private var credential: String?
     private var grantId: String?
     private var grantExpiry: Date?
-    private var task: Task<Void, Never>?
+    private(set) var pollTask: Task<Void, Never>?
+    private(set) var controlTask: Task<Void, Never>?
     private var uploadTasks: [MeetingAudioSource: URLSessionDataTask] = [:]
     private var uploadRetryAt: [MeetingAudioSource: UInt64] = [:]
     private var uploadFailures: [MeetingAudioSource: Int] = [:]
@@ -149,7 +150,7 @@ final class MeetingCaptureHost: ObservableObject {
         if deadline <= self.ports.wallNow() { localControl("stop") }
         installServiceTimer()
         let generation = sessionGeneration
-        task = Task { [weak self] in await self?.poll(generation: generation) }
+        pollTask = Task { [weak self] in await self?.poll(generation: generation) }
     }
 
     private func poll(generation: Int) async {
@@ -219,6 +220,7 @@ final class MeetingCaptureHost: ObservableObject {
                 if !controlInFlight, controlOutbox.pending == nil {
                     try await apply(reply.capture, inventory: try ports.readInventory(), at: now)
                 }
+                guard generation == sessionGeneration, !Task.isCancelled else { return }
                 retryPendingControl()
                 // The status request has acknowledged this exact epoch before its first audio send.
                 uploadAdmitted = controlOutbox.pending == nil && !controlInFlight && MeetingSendAdmission.permits(phase: phase, desired: reply.capture.desired,
@@ -556,9 +558,14 @@ final class MeetingCaptureHost: ObservableObject {
         controlInFlight = true
         uploadAdmitted = false
         let generation = sessionGeneration
-        Task { [weak self] in
-            guard let self else { return }
-            defer { if generation == self.sessionGeneration { self.controlInFlight = false } }
+        controlTask = Task { [weak self] in
+            guard let self, generation == self.sessionGeneration, !Task.isCancelled else { return }
+            defer {
+                if generation == self.sessionGeneration {
+                    self.controlInFlight = false
+                    self.controlTask = nil
+                }
+            }
             do {
                 let reply = try await client.control(body, credential: credential)
                 guard generation == self.sessionGeneration else { return }
@@ -639,7 +646,8 @@ final class MeetingCaptureHost: ObservableObject {
         recordingDuration.pause(at: self.now())
         do { try runtime.terminate(at: self.now()) } catch { clean = false }
         sessionGeneration += 1
-        task?.cancel(); task = nil
+        pollTask?.cancel(); pollTask = nil
+        controlTask?.cancel(); controlTask = nil
         uploadTasks.values.forEach { $0.cancel() }; uploadTasks.removeAll()
         uploadRetryAt.removeAll(); uploadFailures.removeAll(); lastAudioDiagnostics.removeAll()
         client?.close(); client = nil

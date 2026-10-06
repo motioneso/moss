@@ -206,14 +206,18 @@ export function camelCase(column: string): string {
 }
 
 export function normalizeStoredRow(row: Record<string, unknown>): Record<string, unknown> {
-  // The selected original columns contain only scalar values, dates, and a JSONB string array.
+  // PostgreSQL returns timestamptz[] as Date[]; account archives contain JSON strings.
+  // Normalize the independent database oracle's arrays as well as scalar timestamps.
   // TEXT JSON must remain text, including whitespace, escaped NUL, and lone surrogates.
   return Object.fromEntries(
-    Object.entries(row).map(([column, value]) => [
-      camelCase(column),
-      value instanceof Date ? value.toISOString() : value
-    ])
+    Object.entries(row).map(([column, value]) => [camelCase(column), normalizeStoredValue(value)])
   );
+}
+
+function normalizeStoredValue(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(normalizeStoredValue);
+  return value;
 }
 
 export function sortExportRows(rows: readonly Record<string, unknown>[]) {

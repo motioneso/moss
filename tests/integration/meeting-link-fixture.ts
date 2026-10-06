@@ -8,6 +8,7 @@ import { expect, vi } from "vitest";
 import { createMossAuthRuntime, sha256Base64url, type MossAuthRuntime } from "@moss/auth";
 import {
   createDatabase,
+  AbortablePgPool,
   DataContextRunner,
   withAbortableDataContext,
   type DataContextDb,
@@ -51,12 +52,17 @@ export let bootstrap: pg.Pool,
   context: DataContextRunner,
   workerContext: DataContextRunner;
 let app: Kysely<MossDatabase>, worker: Kysely<MossDatabase>;
+let maintenancePool: AbortablePgPool;
 export async function setupLinkDatabase() {
   // The canonical gate alone may execute this fixture; there is no direct-DB override here.
   await resetEmptyFoundationDatabase();
   await setInstanceSetting("registration.requires_approval", { value: false });
   await setInstanceSetting("registration.enabled", { value: true });
   app = createDatabase({ connectionString: connectionStrings.app, maxConnections: 6 });
+  maintenancePool = new AbortablePgPool({
+    connectionString: connectionStrings.app,
+    application_name: "moss-abortable-data-context"
+  });
   worker = createDatabase({ connectionString: connectionStrings.worker });
   context = new DataContextRunner(app);
   workerContext = new DataContextRunner(worker);
@@ -68,6 +74,7 @@ export async function setupLinkDatabase() {
 export async function closeLinkDatabase() {
   await producer?.stop({ graceful: true });
   await runtime?.close();
+  await maintenancePool?.close();
   await Promise.all([bootstrap?.end(), app?.destroy(), worker?.destroy()]);
 }
 export async function linkFixture() {
@@ -241,7 +248,7 @@ export async function linkFixture() {
         actor: Parameters<DataContextRunner["withDataContext"]>[0],
         signal: AbortSignal,
         work: (db: DataContextDb) => Promise<T>
-      ) => withAbortableDataContext(connectionStrings.app, actor, signal, work),
+      ) => withAbortableDataContext(maintenancePool, actor, signal, work),
       probeBinding: runtime.recordingCapabilities.probeCaptureBinding,
       scheduleMaintenance: deps.scheduleMaintenance
     },

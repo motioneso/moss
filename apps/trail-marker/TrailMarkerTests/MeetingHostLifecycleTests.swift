@@ -114,6 +114,11 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try await waitUntil(timeout: 4) { host.phase == .recording }
         XCTAssertEqual(permissionRequests, 1)
         XCTAssertEqual(fixture.device.starts, 1)
+        let resumedPoll = try XCTUnwrap(host.pollTask)
+        XCTAssertTrue(host.shutdown(reason: "Explicit Resume regression finished"))
+        await resumedPoll.value
+        XCTAssertNil(host.pollTask)
+        XCTAssertEqual(fixture.device.starts, 1, "Closing the resumed session must not acquire the source again")
     }
 
     func testRecoveredStoppedClaimNeverRequestsPermissionOrOpensHardware() async throws {
@@ -198,9 +203,15 @@ final class MeetingHostLifecycleTests: XCTestCase {
         let buffer = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
         buffer.receive(hostTimeNanoseconds: fixture.monotonic, sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.5 })
         host.pauseFromUserClick()
+        let queuedControl = try XCTUnwrap(host.controlTask)
         XCTAssertTrue(host.recordingPresentation.showsRedDot)
         fixture.monotonic += 30_000_000_000
         host.service()
+        // Pause queued its Task on this actor, but expiry closed the client before that
+        // Task could start. Await it here so no failed request can leak into another test.
+        await queuedControl.value
+        XCTAssertEqual(fixture.server.controlCount, 0, "Expired queued controls must not reach transport")
+        XCTAssertNil(host.controlTask)
         XCTAssertFalse(host.recordingPresentation.showsPill)
         XCTAssertFalse(host.recordingPresentation.showsRedDot)
         XCTAssertNil(buffer.peek())
@@ -236,11 +247,17 @@ final class MeetingHostLifecycleTests: XCTestCase {
         defer { host.shutdown(reason: "Synthetic test finished") }
         try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
         await fulfillment(of: [entered], timeout: 2)
+        let suspendedPoll = try XCTUnwrap(host.pollTask)
+        let requestsBeforeExpiry = fixture.server.requestCount
         fixture.monotonic += 30_000_000_000
         host.service()
         permission?.resume(returning: true)
         permission = nil
-        await Task.yield()
+        // Wait for the actual permission continuation and poll to exit, not one
+        // scheduler yield that can leave old work running in the next XCTest.
+        await suspendedPoll.value
+        XCTAssertEqual(fixture.server.requestCount, requestsBeforeExpiry, "Late permission must not revalidate or restart expired authority")
+        XCTAssertNil(host.pollTask)
         XCTAssertEqual(host.phase, .stopped)
         XCTAssertFalse(host.recordingPresentation.showsPill)
         XCTAssertFalse(host.recordingPresentation.showsRedDot)
@@ -355,9 +372,13 @@ private final class FixtureServer {
     private var generation = 1
     private var hashes: [String] = []
     private var stops = 0
+    private var controls = 0
+    private var requests = 0
     private var finished = false
     var loseFirstClaim = false
     var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stops }
+    var controlCount: Int { lock.lock(); defer { lock.unlock() }; return controls }
+    var requestCount: Int { lock.lock(); defer { lock.unlock() }; return requests }
     var finalized: Bool { lock.lock(); defer { lock.unlock() }; return finished }
     var claimHashes: [String] { lock.lock(); defer { lock.unlock() }; return hashes }
     var command: MeetingRecordingCommand {
@@ -371,6 +392,8 @@ private final class FixtureServer {
     }
     func reply(path: String, body: [String: Any]) throws -> Data {
         lock.lock(); defer { lock.unlock() }
+        requests += 1
+        if path.hasSuffix("/control") { controls += 1 }
         if path.hasSuffix("/claim") {
             guard let hash = body["credentialHash"] as? String, hashes.first.map({ $0 == hash }) ?? true else {
                 throw URLError(.badServerResponse)

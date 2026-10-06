@@ -24,3 +24,5 @@ export * from "./urls.js";
 export * from "./abortable-data-context.js";
 
 export * from "./owned-pg-client.js";
+
+export * from "./abortable-pg-pool.js";

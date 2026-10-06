@@ -54,17 +54,41 @@
   }
 }
 
+.meeting-settings-macs .jds-index {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .meeting-settings-macs .jds-index__row {
   row-gap: var(--space-3);
 }
 
 .meeting-settings-macs .jds-index__excerpt {
+  grid-column: 1;
+  grid-row: 2;
   display: block;
   overflow: visible;
+}
+
+.meeting-settings-macs .jds-index__meta {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+
+.meeting-settings-mac-status {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 560px) {
   .meeting-settings-macs .jds-index {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .meeting-settings-macs .jds-index__meta {
+    grid-column: 1;
+    grid-row: auto;
   }
 }

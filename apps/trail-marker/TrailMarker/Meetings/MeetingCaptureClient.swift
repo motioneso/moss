@@ -15,6 +15,7 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
     }
     private let lock = NSLock()
     private var pending: [Int: PendingResponse] = [:]
+    private var closed = false
     private var responseHighWater = 0
     var largestBufferedResponseBytes: Int {
         lock.lock(); defer { lock.unlock() }
@@ -37,7 +38,13 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
         session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }
 
-    func close() { session.invalidateAndCancel() }
+    func close() {
+        lock.lock()
+        guard !closed else { lock.unlock(); return }
+        closed = true
+        lock.unlock()
+        session.invalidateAndCancel()
+    }
 
     static func verifierHash(_ verifier: String) -> String {
         SHA256.hash(data: Data(verifier.utf8)).map { String(format: "%02x", $0) }.joined()
@@ -84,7 +91,7 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
                     completion: @escaping (Result<MeetingCaptureReceipt, Error>) -> Void) throws -> URLSessionDataTask {
         try checkMeetingCredential(credential)
         let request = try makeRequest("audio", body: body, credential: credential, timeout: 25)
-        return begin(request) { data, response, error in
+        return try begin(request) { data, response, error in
             completion(Self.decode(data: data, response: response, error: error))
         }
     }
@@ -98,10 +105,12 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
         let request = try makeRequest(path, body: body, credential: credential, proof: proof)
         do {
             return try await withCheckedThrowingContinuation { continuation in
-                _ = begin(request) { data, response, error in
-                    let result: Result<Reply, Error> = Self.decode(data: data, response: response, error: error)
-                    continuation.resume(with: result)
-                }
+                do {
+                    _ = try begin(request) { data, response, error in
+                        let result: Result<Reply, Error> = Self.decode(data: data, response: response, error: error)
+                        continuation.resume(with: result)
+                    }
+                } catch { continuation.resume(throwing: error) }
             }
         } catch let error as MeetingHostError { throw error }
         catch { throw MeetingHostError.network }
@@ -150,12 +159,16 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
     }
 
     private func begin(_ request: URLRequest,
-                       complete: @escaping (Data?, URLResponse?, Error?) -> Void) -> URLSessionDataTask {
+                       complete: @escaping (Data?, URLResponse?, Error?) -> Void) throws -> URLSessionDataTask {
+        // URLSession raises an Objective-C exception for task creation after invalidation.
+        // Serialize creation/registration with close, including nonisolated async callers
+        // that passed a host generation check before hopping off the main actor.
+        lock.lock()
+        guard !closed else { lock.unlock(); throw MeetingHostError.authorizationExpired }
         let task = session.dataTask(with: request)
         // URLSession's request timeout is an idle-data timeout. Enforce an absolute bound too,
         // so a trickling response cannot hold control beyond the finite capture lease.
         let deadline = DispatchWorkItem { [weak task] in task?.cancel() }
-        lock.lock()
         pending[task.taskIdentifier] = PendingResponse(complete: complete, deadline: deadline)
         lock.unlock()
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + request.timeoutInterval, execute: deadline)

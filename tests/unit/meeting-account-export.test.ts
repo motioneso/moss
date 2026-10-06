@@ -19,7 +19,10 @@ import {
   applyMeetingTranscriptBatch,
   encodeMeetingTranscriptBatch
 } from "../../packages/meetings/src/transcript-batch.js";
-import { buildMeetingAccountExportInput } from "../integration/meeting-account-export-fixtures.js";
+import {
+  buildMeetingAccountExportInput,
+  normalizeStoredRow
+} from "../integration/meeting-account-export-fixtures.js";
 
 const ctx = {
   actorUserId: "00000000-0000-4000-8000-000000000001",
@@ -75,6 +78,29 @@ function harness(rows: Record<string, readonly Record<string, unknown>[]> = {}) 
 }
 
 describe("Meetings account-export collector", () => {
+  it("keeps Start timestamp arrays consistent across the database oracle and JSON exports", async () => {
+    const first = new Date("2026-10-06T10:00:00.123Z");
+    const second = new Date("2026-10-06T10:00:01.456Z");
+    const stored = { owner_user_id: ctx.actorUserId, started_at: [first, second] };
+    const expected = {
+      ownerUserId: ctx.actorUserId,
+      startedAt: ["2026-10-06T10:00:00.123Z", "2026-10-06T10:00:01.456Z"]
+    };
+    expect(normalizeStoredRow(stored)).toEqual(expected);
+    const { db, scopedDb } = harness({
+      meeting_capture_start_limits: [{ ownerUserId: ctx.actorUserId, startedAt: [first, second] }]
+    });
+    try {
+      const collected = (await collectMeetingsExportSection(scopedDb, ctx)).capture_start_limits;
+      expect(collected).toEqual([expected]);
+      expect(JSON.parse(JSON.stringify(collected))).toEqual([expected]);
+      expect(stored.started_at).toEqual([first, second]);
+      expect(stored.started_at[0]).toBeInstanceOf(Date);
+    } finally {
+      await db.destroy();
+    }
+  });
+
   it("uses a valid populated integration fixture with exact cited owner and due phrases", () => {
     const meetingId = "00000000-0000-4000-8000-000000000002";
     const { content, personalNotes } = buildMeetingAccountExportInput(meetingId, "UNIT-FIXTURE");

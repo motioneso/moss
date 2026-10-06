@@ -92,29 +92,34 @@ export function MeetingMacSettings({
                   key={session.id}
                   title={name}
                   excerpt={
-                    <span>
-                      Trail Marker
-                      {session.companion?.appVersion ? ` ${session.companion.appVersion}` : ""}
-                      {" · "}Last contact{" "}
-                      {date(session.companion?.lastContactAt ?? session.lastSeenAt)}
-                      {" · "}
-                      {capabilities.isError
-                        ? "Recording access could not be checked"
-                        : capabilities.isPending
-                          ? "Checking recording access"
-                          : !capability
-                            ? "Recording access is not available"
-                            : capability.state === "approved"
-                              ? "Meeting recording enabled"
-                              : capability.state === "revoked"
-                                ? "Recording permission revoked"
-                                : "Update recording access in Profile settings"}
-                      {" · "}
-                      {devices.isError
-                        ? "Connection not confirmed"
-                        : connected
-                          ? "Connected"
-                          : "Open Trail Marker to reconnect"}
+                    <span className="meeting-settings-mac-status">
+                      <span>
+                        Trail Marker
+                        {session.companion?.appVersion ? ` ${session.companion.appVersion}` : ""}
+                      </span>
+                      <span>
+                        Last contact {date(session.companion?.lastContactAt ?? session.lastSeenAt)}
+                      </span>
+                      <span>
+                        {capabilities.isError
+                          ? "Recording access could not be checked"
+                          : capabilities.isPending
+                            ? "Checking recording access"
+                            : !capability
+                              ? "Recording access is not available"
+                              : capability.state === "approved"
+                                ? "Meeting recording enabled"
+                                : capability.state === "revoked"
+                                  ? "Recording permission revoked"
+                                  : "Update recording access in Profile settings"}
+                      </span>
+                      <span>
+                        {devices.isError
+                          ? "Connection not confirmed"
+                          : connected
+                            ? "Connected"
+                            : "Open Trail Marker to reconnect"}
+                      </span>
                     </span>
                   }
                   meta={

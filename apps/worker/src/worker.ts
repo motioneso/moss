@@ -1,3 +1,4 @@
+import { startMeetingCaptureSupervision } from "./meeting-capture-supervisor.js";
 import { homedir } from "node:os";
 import type { ConstructorOptions, PgBoss } from "pg-boss";
 import { pino, type Logger as PinoLogger } from "pino";
@@ -113,8 +114,8 @@ const GRACEFUL_STOP_TIMEOUT_MS = 10_000;
 export const WORKER_BOSS_OPTIONS: Partial<ConstructorOptions> = {
   schedule: true,
   supervise: true,
-  // Recover a crashed capture-maintenance attempt inside its30-second lease.
-  superviseIntervalSeconds: 1,
+  // Global supervision keeps pg-boss's 60s cadence. Only the capture queue gets
+  // explicit fast checks from startMeetingCaptureSupervision below.
   monitorIntervalSeconds: 1
 };
 
@@ -562,11 +563,15 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // boss.stop() resolves — workerDb is the Kysely pool that job *handlers* run
   // against, so it must outlive the drain (pg-boss owns a separate connection).
   // -------------------------------------------------------------------------
+  const captureSupervision = startMeetingCaptureSupervision(boss, (error) => {
+    workerLogger.warn({ event: "capture_maintenance.supervision", message: error.message });
+  });
   async function shutdown(): Promise<void> {
+    const supervisionClosed = captureSupervision.close();
     await externalReconciler?.close();
     await externalRuntime?.close();
     await Promise.race([
-      boss.stop({ graceful: true }),
+      Promise.all([supervisionClosed, boss.stop({ graceful: true })]),
       new Promise<void>((resolve) => {
         setTimeout(resolve, GRACEFUL_STOP_TIMEOUT_MS);
       })
