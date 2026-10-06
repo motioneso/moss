@@ -73,12 +73,19 @@ export function registerMemoryDashboardRoutes(
       try {
         const access = await dependencies.resolveAccessContext(request);
         return await dependencies.dataContext.withDataContext(access, async (scopedDb) => {
-          const pending = await candidatesRepo.listPending(
+          const pending = await candidatesRepo.listPendingWithCount(
             scopedDb,
             access.actorUserId,
             PENDING_CANDIDATE_LIMIT
           );
-          return { items: pending.map(pendingCandidateItem) };
+          const items = pending.items.map(pendingCandidateItem);
+          const remainingCount = Math.max(0, pending.total - items.length);
+          return {
+            total: pending.total,
+            hasMore: remainingCount > 0,
+            remainingCount,
+            items
+          };
         });
       } catch (error) {
         return handleDashboardRouteError(error, reply);
@@ -92,8 +99,20 @@ export function registerMemoryDashboardRoutes(
       schema: postMemoryCandidateAcceptRouteSchema,
 
       // A plain accept has nothing to send; treat a missing body as an empty one.
-      preValidation: async (request) => {
+      preValidation: async (request, reply) => {
         request.body ??= {};
+        // Reject obsolete replacement arguments before validation can strip them.
+        const body = request.body;
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          (Object.hasOwn(body, "resolveConflictWithFactId") ||
+            Object.hasOwn(body, "supersedeFactIds"))
+        ) {
+          return reply.code(400).send({
+            error: "Accepting a suggestion adds a memory; it does not replace existing memories"
+          });
+        }
       }
     },
     async (request, reply) => {

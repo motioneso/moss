@@ -140,8 +140,11 @@ export const getMemoryPendingCandidatesRouteSchema = {
     200: {
       type: "object",
       additionalProperties: false,
-      required: ["items"],
+      required: ["total", "hasMore", "remainingCount", "items"],
       properties: {
+        total: { type: "integer", minimum: 0 },
+        hasMore: { type: "boolean" },
+        remainingCount: { type: "integer", minimum: 0 },
         items: { type: "array", items: pendingCandidateSchema }
       }
     },
@@ -152,6 +155,7 @@ export const getMemoryPendingCandidatesRouteSchema = {
 export const postMemoryCandidateAcceptRouteSchema = {
   body: {
     type: "object",
+    description: "Add the accepted suggestion as a new memory. Existing memories are kept.",
     additionalProperties: false,
     properties: {
       edited: {
@@ -167,9 +171,7 @@ export const postMemoryCandidateAcceptRouteSchema = {
           entityName: { type: "string" },
           entitySummary: { type: ["string", "null"] }
         }
-      },
-      resolveConflictWithFactId: { type: ["string", "null"] },
-      supersedeFactIds: { type: "array", items: { type: "string" } }
+      }
     }
   },
   response: {

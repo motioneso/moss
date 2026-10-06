@@ -166,6 +166,27 @@ export class MemoryCandidatesRepository {
     return result.rows.map(mapCandidate);
   }
 
+  async listPendingWithCount(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    limit: number
+  ): Promise<{ items: MemoryCandidateRecord[]; total: number }> {
+    assertDataContextDb(scopedDb);
+    // Count the same owner-scoped snapshot before limiting the returned items.
+    const result = await sql<CandidateRow & { pending_count: string }>`
+      SELECT *, count(*) OVER () AS pending_count
+      FROM app.memory_candidates
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND status = 'pending'
+      ORDER BY created_at DESC, id
+      LIMIT ${Math.max(1, Math.min(100, Math.trunc(limit)))}
+    `.execute(scopedDb.db);
+    return {
+      items: result.rows.map(mapCandidate),
+      total: Number(result.rows[0]?.pending_count ?? 0)
+    };
+  }
+
   async markSuppressed(
     scopedDb: DataContextDb,
     ownerUserId: string,

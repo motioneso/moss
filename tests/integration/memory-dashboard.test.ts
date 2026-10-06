@@ -198,6 +198,56 @@ describe("GET /api/memory/candidates", () => {
     expect(ids_).not.toContain(foreign.id);
     expect(res.body).not.toContain("Other user's suggestion 3065");
   });
+
+  it("reports how many owner-pending suggestions remain beyond the first 50", async () => {
+    const ownIds = new Set<string>();
+    for (let i = 0; i < 52; i += 1) {
+      ownIds.add((await insertManualCandidate(ids.userC, `Owner overflow suggestion ${i}`)).id);
+    }
+    await insertManualCandidate(ids.userD, "Other owner overflow suggestion");
+    const rejected = await insertManualCandidate(ids.userC, "Rejected overflow suggestion");
+    await appDataContext.withDataContext(
+      { actorUserId: ids.userC, requestId: "reject-overflow" },
+      (db) => candidatesRepo.markRejected(db, ids.userC, rejected.id, "not pending")
+    );
+
+    const res = await server.inject({
+      method: "GET",
+      url: "/api/memory/candidates",
+      headers: authHeaders(ids.userC)
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      items: { id: string }[];
+      total: number;
+      hasMore: boolean;
+      remainingCount: number;
+    }>();
+    expect(body).toMatchObject({ total: 52, hasMore: true, remainingCount: 2 });
+    expect(body.items).toHaveLength(50);
+    expect(body.items.every((item) => ownIds.has(item.id))).toBe(true);
+    expect(res.body).not.toContain("Other owner overflow suggestion");
+    expect(res.body).not.toContain("Rejected overflow suggestion");
+
+    const other = await server.inject({
+      method: "GET",
+      url: "/api/memory/candidates",
+      headers: authHeaders(ids.userD)
+    });
+    expect(other.statusCode).toBe(200);
+    expect(other.json()).toMatchObject({ total: 1, hasMore: false, remainingCount: 0 });
+    expect(other.json().items).toHaveLength(1);
+  });
+
+  it("returns zero counts for an admin with no own pending suggestions", async () => {
+    const res = await server.inject({
+      method: "GET",
+      url: "/api/memory/candidates",
+      headers: authHeaders(ids.adminUser)
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ items: [], total: 0, hasMore: false, remainingCount: 0 });
+  });
 });
 
 describe("POST /api/memory/candidates/:id/reject", () => {
@@ -259,6 +309,37 @@ describe("POST /api/memory/candidates/:id/suppress", () => {
 });
 
 describe("POST /api/memory/candidates/:id/accept", () => {
+  it.each(["resolveConflictWithFactId", "supersedeFactIds"] as const)(
+    "rejects the ignored %s argument before changing a suggestion or memory",
+    async (field) => {
+      const excerpt = `Unsupported replacement ${field} ${randomUUID()}`;
+      const candidate = await insertManualCandidate(ids.userA, excerpt);
+      const res = await server.inject({
+        method: "POST",
+        url: `/api/memory/candidates/${candidate.id}/accept`,
+        headers: authHeaders(ids.userA),
+        payload: { [field]: field === "supersedeFactIds" ? [randomUUID()] : randomUUID() }
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({
+        error: "Accepting a suggestion adds a memory; it does not replace existing memories"
+      });
+      await appDataContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "unsupported-replacement-check" },
+        async (db) => {
+          expect((await candidatesRepo.getById(db, ids.userA, candidate.id))?.status).toBe(
+            "pending"
+          );
+          const facts = await sql<{ id: string }>`
+            SELECT id FROM app.memory_facts
+            WHERE owner_user_id = ${ids.userA}::uuid AND object_text = ${excerpt}
+          `.execute(db.db);
+          expect(facts.rows).toHaveLength(0);
+        }
+      );
+    }
+  );
+
   it("accepts a fact candidate and creates a confirmed fact with confidence >= 0.90", async () => {
     const candidate = await insertPendingCandidate(ids.userA);
     const res = await server.inject({

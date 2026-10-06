@@ -388,9 +388,15 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.candidate_review",
       description:
-        "Review suggested memories in Memory settings or chat. Accept each pending suggestion once; a repeat or losing " +
-        "concurrent accept is refused as no longer pending. You can reject or suppress suggestions. " +
-        "Accepting from chat always asks first."
+        "Review, reject or suppress suggestions in Memory settings or chat. Accepting asks first in " +
+        "chat and adds a memory, keeping older ones. Each pending suggestion can be accepted once; " +
+        "repeat or losing concurrent accepts are refused."
+    },
+    {
+      id: "memory.pending_suggestion_counts",
+      description:
+        "Chat lists up to 50 of your pending suggestions, with the total, whether more exist and " +
+        "how many remain. Other users' suggestions and resolved suggestions are excluded."
     },
     {
       id: "memory.notes_ingest",
