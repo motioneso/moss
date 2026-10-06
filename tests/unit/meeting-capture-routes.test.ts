@@ -5,6 +5,7 @@ import {
   MeetingCaptureService,
   type MeetingCaptureDependencies
 } from "../../packages/meetings/src/capture-service.js";
+import { MeetingCaptureConnectionService } from "../../packages/meetings/src/capture-connection-service.js";
 const meetingId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 function dependencies(): MeetingCaptureDependencies {
   return {
@@ -179,6 +180,7 @@ describe("capture source envelope regression", () => {
           requestKey: meetingId,
           expectedGeneration: 0,
           command: "record",
+          noticeAcknowledged: true,
           selection
         }
       });
@@ -219,6 +221,7 @@ describe("exact capture source branch guards", () => {
           requestKey: meetingId,
           expectedGeneration: 0,
           command: "record",
+          noticeAcknowledged: true,
           selection
         }
       });
@@ -251,4 +254,57 @@ describe("exact capture source branch guards", () => {
       await server.close();
     }
   });
+});
+
+describe("recording notice route boundary", () => {
+  it.each(["start", "control"])(
+    "rejects missing notice before %s handler and accepts explicit notice",
+    async (kind) => {
+      const server = Fastify();
+      const browser = vi.spyOn(MeetingCaptureService.prototype, "browser").mockResolvedValue({
+        actorUserId: meetingId,
+        sessionId: meetingId,
+        expiresAt: new Date("2027-01-01")
+      });
+      const start = vi
+        .spyOn(MeetingCaptureConnectionService.prototype, "start")
+        .mockResolvedValue({ capture: {} as never });
+      const control = vi
+        .spyOn(MeetingCaptureService.prototype, "browserControl")
+        .mockResolvedValue({ capture: {} as never });
+      registerMeetingCaptureRoutes(server, dependencies());
+      const common = {
+        requestKey: meetingId,
+        selection: { mode: "microphone-only", microphone: { deviceId: "mic", sourceId: "mic" } }
+      };
+      const payload =
+        kind === "start"
+          ? { ...common, deviceId: meetingId, connectionId: meetingId, expectedRevision: 1 }
+          : { ...common, grantId: meetingId, expectedGeneration: 0, command: "record" };
+      try {
+        for (const notice of [undefined, false, "true"]) {
+          const response = await server.inject({
+            method: "POST",
+            url: `/api/meetings/records/${meetingId}/capture/${kind}`,
+            payload: { ...payload, ...(notice === undefined ? {} : { noticeAcknowledged: notice }) }
+          });
+          expect(response.statusCode).toBe(400);
+        }
+        expect(start).not.toHaveBeenCalled();
+        expect(control).not.toHaveBeenCalled();
+        const accepted = await server.inject({
+          method: "POST",
+          url: `/api/meetings/records/${meetingId}/capture/${kind}`,
+          payload: { ...payload, noticeAcknowledged: true }
+        });
+        expect(accepted.statusCode).toBe(200);
+        expect(kind === "start" ? start : control).toHaveBeenCalledOnce();
+      } finally {
+        browser.mockRestore();
+        start.mockRestore();
+        control.mockRestore();
+        await server.close();
+      }
+    }
+  );
 });

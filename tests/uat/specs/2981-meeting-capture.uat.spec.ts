@@ -146,12 +146,8 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     await page.getByLabel("Recording device", { exact: true }).selectOption(deviceId);
     await page.getByRole("radio", { name: /^Microphone only/ }).click();
     await page.getByLabel("Microphone", { exact: true }).selectOption("synthetic-device");
-    await expect(
-      page.getByRole("checkbox", {
-        name: "Participants have been notified and recording is permitted",
-        exact: true
-      })
-    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
+    await page.getByRole("checkbox", { name: "Recording notice", exact: true }).check();
     await connection.refresh();
     const created = page.waitForResponse(
       (response) =>
@@ -317,6 +313,8 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
       (response) =>
         response.url().endsWith("/capture/start") && response.request().method() === "POST"
     );
+    await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
+    await page.getByRole("checkbox", { name: "Recording notice", exact: true }).check();
     await page.getByRole("button", { name: "Start meeting", exact: true }).click();
     secondMeetingId = (await (await createdAgain).json()).meeting.id as string;
     const nextResponse = await startedAgain;

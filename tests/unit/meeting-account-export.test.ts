@@ -137,6 +137,50 @@ describe("Meetings account-export collector", () => {
     }
   });
 
+  it("allowlists recording export metadata without connection proofs or authorization material", async () => {
+    const expected = {
+      meeting_capture_connections: [
+        "device_id",
+        "owner_user_id",
+        "device_name",
+        "inventory_json",
+        "last_seen_at",
+        "expires_at"
+      ],
+      meeting_capture_start_cancellations: [
+        "meeting_id",
+        "owner_user_id",
+        "request_key",
+        "created_at"
+      ],
+      meeting_capture_grants: [
+        "id",
+        "meeting_id",
+        "owner_user_id",
+        "device_name",
+        "status",
+        "state_json",
+        "created_at",
+        "expires_at"
+      ]
+    };
+    const { db, queries, scopedDb } = harness();
+    try {
+      await collectMeetingsExportSection(scopedDb, ctx);
+      for (const [table, columns] of Object.entries(expected)) {
+        const query = queries.find((query) => query.sql.includes(`FROM app.${table}`))!;
+        expect(query).toBeDefined();
+        const selected = query.sql.match(/SELECT\s+([\s\S]*?)\s+FROM/)?.[1];
+        expect(selected?.split(",").map((part) => part.trim().split(/\s|::/)[0])).toEqual(columns);
+        expect(query.sql).not.toMatch(
+          /credential_hash|verifier_hash|proof_hash|session_id|connection_id|capability_revision|start_request_key|start_fingerprint|\btoken\b/i
+        );
+      }
+    } finally {
+      await db.destroy();
+    }
+  });
+
   it("keeps retained JSON text exact and normalizes dates, nulls and nested JSON values", async () => {
     const timestamp = new Date("2026-10-01T10:00:00.123Z");
     // TEXT JSON preserves unpaired surrogates, whitespace, and evidence from old revisions.

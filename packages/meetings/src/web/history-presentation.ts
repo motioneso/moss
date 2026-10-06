@@ -1,5 +1,5 @@
 import type { MeetingHistoryFilter, MeetingHistoryItem } from "@moss/shared";
-import { transcriptTime } from "./meeting-transcript.js";
+import { transcriptTime } from "./transcript-time.js";
 
 export const historyFilters: readonly { value: MeetingHistoryFilter; label: string }[] = [
   { value: "all", label: "All states" },

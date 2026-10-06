@@ -5,9 +5,9 @@ import { MemoryRouter } from "react-router";
 import { ApiError } from "@moss/module-web-sdk";
 import {
   MeetingTranscript,
-  TranscriptTimeline,
-  transcriptTime
+  TranscriptTimeline
 } from "../../packages/meetings/src/web/meeting-transcript.js";
+import { transcriptTime } from "../../packages/meetings/src/web/transcript-time.js";
 import {
   parseTranscriptEvidence,
   TranscriptEvidence

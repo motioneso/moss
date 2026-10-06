@@ -199,6 +199,7 @@ export interface MeetingCaptureDevicesResult {
   readonly processingReady: boolean;
 }
 export interface MeetingCaptureStartInput {
+  readonly noticeAcknowledged: true;
   readonly deviceId: string;
   readonly connectionId: string;
   readonly expectedRevision: number;

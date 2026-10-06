@@ -8,6 +8,7 @@ import { CaptureControls } from "./capture-controls.js";
 import { captureStopped } from "./capture-presentation.js";
 import { isMeetingAccessDenied } from "./client.js";
 import type { ActiveCapture } from "./capture-session.js";
+import "./capture-controls.css";
 function ActiveCaptureStrip({ active }: { readonly active: ActiveCapture }) {
   const query = useCaptureStatus(active.meetingId);
   const client = useQueryClient();

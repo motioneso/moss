@@ -17,6 +17,7 @@ import type {
 } from "@moss/shared";
 import {
   applyCaptureControl,
+  assertCaptureNoticeAcknowledged,
   assertCaptureAudioAdmission,
   decodeCaptureAudio,
   expireCaptureLease,
@@ -368,6 +369,7 @@ export class MeetingCaptureService {
     meetingId: string,
     input: MeetingCaptureControlInput
   ) {
+    if (input.command === "record") assertCaptureNoticeAcknowledged(input);
     const grant = await this.deps.dataContext.withDataContext(actor, (db) =>
       this.repository.grant(db, input.grantId)
     );

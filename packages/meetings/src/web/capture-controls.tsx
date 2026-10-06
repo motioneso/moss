@@ -8,8 +8,9 @@ import {
   captureSelection,
   captureStatusLabel
 } from "./capture-presentation.js";
+import { CaptureNotice } from "./capture-notice.js";
 import { useCaptureClock } from "./capture-clock.js";
-import { transcriptTime } from "./meeting-transcript.js";
+import { transcriptTime } from "./transcript-time.js";
 
 export function CaptureControls({
   id,
@@ -36,7 +37,12 @@ export function CaptureControls({
     capture?.inventory ?? null
   );
   const busy = session.state.operation?.phase === "sending";
+  const pending = session.state.operation?.request;
+  const retryNeedsNotice =
+    pending?.kind === "start" ||
+    (pending?.kind === "control" && pending.input.command === "record");
   const resumable =
+    session.state.noticeAcknowledged &&
     capture?.desired === "paused" &&
     captureAcknowledged(capture) &&
     connected &&
@@ -52,6 +58,13 @@ export function CaptureControls({
         : "No recording active";
   return (
     <>
+      {capture?.desired === "paused" ? (
+        <CaptureNotice
+          acknowledged={session.state.noticeAcknowledged}
+          onChange={session.acknowledgeNotice}
+          disabled={busy}
+        />
+      ) : null}
       <div className="meetings-actions">
         <span role="status">
           <Indicator
@@ -86,10 +99,11 @@ export function CaptureControls({
           <Button
             disabled={!resumable}
             onClick={() => {
-              if (resumable && capture && selection)
+              if (resumable && session.isNoticeAcknowledged() && capture && selection)
                 void session.control({
                   grantId: capture.grantId,
                   command: "record",
+                  noticeAcknowledged: true,
                   expectedGeneration: capture.generation,
                   selection
                 });
@@ -122,7 +136,10 @@ export function CaptureControls({
       {session.state.operation?.phase === "retry" ? (
         <Button
           variant="link"
-          disabled={(session.state.operation.retryAt ?? 0) > Date.now()}
+          disabled={
+            (session.state.operation.retryAt ?? 0) > Date.now() ||
+            (retryNeedsNotice && !session.state.noticeAcknowledged)
+          }
           onClick={session.retry}
         >
           Retry capture command

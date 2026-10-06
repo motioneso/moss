@@ -28,10 +28,18 @@ export interface ModuleWebContribution {
   readonly moduleId: string;
   readonly routes?: readonly ModuleWebRoute[];
   readonly todayWidgets?: readonly ModuleTodayWidget[];
-  /** Persistent module controls, mounted by the signed-in shell across route changes. */
-  readonly persistentControls?: ReactNode;
   readonly commandPaletteEntries?: readonly ModulePaletteEntry[];
   readonly onboarding?: ModuleOnboardingContribution;
+}
+
+/**
+ * Optional default export of `./web/persistent-controls`, discovered separately from `./web`.
+ * The shell loads only these entries across routes. Keep this entry's imports limited to its
+ * controls and their styles; never import the full web contribution or screen components.
+ */
+export interface ModulePersistentControlsContribution {
+  readonly moduleId: string;
+  readonly element: ReactNode;
 }
 
 export interface ModuleWebRoute {

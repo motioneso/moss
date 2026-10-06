@@ -18,6 +18,7 @@ import { CaptureSources } from "./capture-sources.js";
 import { isMeetingAccessDenied } from "./client.js";
 import { useCaptureStatus } from "./capture-status.js";
 import { CaptureControls } from "./capture-controls.js";
+import { CaptureNotice } from "./capture-notice.js";
 import { CaptureReady } from "./capture-ready.js";
 import { useReadyCapture } from "./capture-choice.js";
 export { captureQueryOptions } from "./capture-status.js";
@@ -55,6 +56,7 @@ function StartExistingMeeting({ meeting }: { readonly meeting: MeetingRecord }) 
   const client = useQueryClient();
   const session = useCaptureSession(meeting.id);
   const canStart =
+    session.state.noticeAcknowledged &&
     !!ready.device &&
     !ready.device.busy &&
     !!ready.selection &&
@@ -71,12 +73,19 @@ function StartExistingMeeting({ meeting }: { readonly meeting: MeetingRecord }) 
         onChoice={ready.onChoice}
         unavailable={ready.devices.isError}
       />
+      <CaptureNotice
+        acknowledged={session.state.noticeAcknowledged}
+        onChange={session.acknowledgeNotice}
+        disabled={session.state.operation?.phase === "sending"}
+      />
       <Button
         disabled={!canStart}
         onClick={() => {
-          if (!canStart || !ready.device || !ready.selection) return;
+          if (!canStart || !session.isNoticeAcknowledged() || !ready.device || !ready.selection)
+            return;
           session.updateChoice(ready.choice);
           void startMeetingCapture(client, meeting.id, meeting.title, {
+            noticeAcknowledged: true,
             deviceId: ready.device.deviceId,
             connectionId: ready.device.connectionId,
             expectedRevision: ready.device.revision,

@@ -1,4 +1,7 @@
-import type { ModuleWebContribution } from "@moss/module-web-sdk";
+import type {
+  ModulePersistentControlsContribution,
+  ModuleWebContribution
+} from "@moss/module-web-sdk";
 
 /**
  * Test-only stand-in for the Vite-generated `virtual:moss-module-web` module
@@ -63,3 +66,9 @@ export const MODULE_WEB_CONTRIBUTIONS: ReadonlyArray<{
   { moduleId: "meetings", load: () => import("@moss/meetings/web") },
   { moduleId: "workshop", load: () => import("@moss/workshop/web") }
 ];
+
+/** Only modules with the dedicated controls export are loaded by the persistent shell. */
+export const MODULE_PERSISTENT_CONTROLS: ReadonlyArray<{
+  readonly moduleId: string;
+  readonly load: () => Promise<{ readonly default: ModulePersistentControlsContribution }>;
+}> = [{ moduleId: "meetings", load: () => import("@moss/meetings/web/persistent-controls") }];

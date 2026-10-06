@@ -128,6 +128,7 @@ function fixture() {
   });
   const service = new MeetingCaptureConnectionService(deps, grants, connections);
   const start: MeetingCaptureStartInput = {
+    noticeAcknowledged: true,
     deviceId,
     connectionId,
     expectedRevision: 1,
@@ -168,6 +169,30 @@ function fixture() {
   };
 }
 describe("shared connection explicit Start and native claim", () => {
+  it("rejects an unacknowledged direct Start replay before returning the existing grant", async () => {
+    const f = fixture();
+    await f.service.start(f.browser, meetingId, f.start);
+    await expect(
+      f.service.start(f.browser, meetingId, {
+        ...f.start,
+        noticeAcknowledged: undefined
+      } as unknown as MeetingCaptureStartInput)
+    ).rejects.toMatchObject({ code: "meeting_capture_invalid_input", httpStatus: 400 });
+    expect(f.connections.create).toHaveBeenCalledOnce();
+  });
+  it.each([undefined, false])(
+    "rejects direct Start without recording notice (%s) before issuing a grant",
+    async (notice) => {
+      const f = fixture();
+      const input = { ...f.start, noticeAcknowledged: notice } as MeetingCaptureStartInput;
+      await expect(f.service.start(f.browser, meetingId, input)).rejects.toMatchObject({
+        code: "meeting_capture_invalid_input",
+        httpStatus: 400
+      });
+      expect(f.connections.create).not.toHaveBeenCalled();
+      expect(f.grant).toBeNull();
+    }
+  );
   it("registers readiness without creating a Start or touching meeting content", async () => {
     const f = fixture();
     await f.service.register(f.headers, "register", {

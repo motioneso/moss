@@ -30,6 +30,7 @@ vi.mock("virtual:moss-module-web", () => {
     }
   });
   return {
+    MODULE_PERSISTENT_CONTROLS: [],
     MODULE_WEB_CONTRIBUTIONS: [
       entry("mod-a", ["brief", "quick-actions"]),
       entry("mod-b", ["brief"])

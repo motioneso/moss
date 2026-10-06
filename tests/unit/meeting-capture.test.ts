@@ -96,6 +96,34 @@ function audio(): MeetingCaptureAudioInput {
   };
 }
 describe("native capture bounded domain", () => {
+  it.each([undefined, false])(
+    "rejects recording without explicit notice acknowledgement (%s)",
+    (notice) => {
+      const value = state();
+      const input = {
+        ...command("record", 0),
+        noticeAcknowledged: notice
+      } as MeetingCaptureControlInput;
+      expect(() => applyCaptureControl(value, input, origin, "route")).toThrow();
+      expect(value.desired).toBe("idle");
+      expect(value.epochs).toEqual([]);
+    }
+  );
+  it("rejects unacknowledged Resume while keeping Pause and Stop available", () => {
+    const value = recording();
+    applyCaptureControl(value, command("pause", 1), at(2000));
+    expect(() =>
+      applyCaptureControl(
+        value,
+        { ...command("record", 2), noticeAcknowledged: undefined },
+        at(3000),
+        "route"
+      )
+    ).toThrow();
+    expect(value.desired).toBe("paused");
+    applyCaptureControl(value, command("stop", 2), at(3000));
+    expect(value.desired).toBe("stopped");
+  });
   it("retains exact gap replay, rejects changed IDs, and pauses visibly at its bounded cap", () => {
     const value = recording();
     const gap = {
@@ -372,6 +400,18 @@ function fixture() {
   };
 }
 describe("capture service authorization and dispatch", () => {
+  it("rejects an unacknowledged record replay before reading its old receipt", async () => {
+    const f = fixture();
+    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    const resume = command("record", 2);
+    await f.service.browserControl(f.browser, meetingId, resume);
+    const receiptReads = vi.mocked(f.repository.receipt).mock.calls.length;
+    await expect(
+      f.service.browserControl(f.browser, meetingId, { ...resume, noticeAcknowledged: undefined })
+    ).rejects.toMatchObject({ code: "meeting_capture_invalid_input", httpStatus: 400 });
+    expect(f.repository.receipt).toHaveBeenCalledTimes(receiptReads);
+    expect(JSON.parse(f.grant.state_json!).generation).toBe(3);
+  });
   it("keeps safe Stop acknowledgements and bounded final flush available after the gap cap", async () => {
     const f = fixture();
     const value = recording();

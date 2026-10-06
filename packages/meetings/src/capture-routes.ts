@@ -134,6 +134,10 @@ const controlProperties = {
   noticeAcknowledged: { const: true }
 };
 const controlRequired = ["grantId", "requestKey", "expectedGeneration", "command"];
+const recordNoticeRequired = {
+  if: { properties: { command: { const: "record" } }, required: ["command"] },
+  then: { required: ["selection", "noticeAcknowledged"] }
+};
 const params = object({ id: uuid });
 /** Before credential resolution, rotating untrusted bearer/cookie bytes must not rotate buckets. */
 function ipRateLimit(max: number) {
@@ -278,6 +282,7 @@ export function registerMeetingCaptureRoutes(
           deviceId: uuid,
           connectionId: uuid,
           expectedRevision: { type: "integer", minimum: 1 },
+          noticeAcknowledged: { const: true },
           requestKey: uuid,
           selection
         })
@@ -454,7 +459,10 @@ export function registerMeetingCaptureRoutes(
     {
       ...options,
       config: ipRateLimit(300),
-      schema: { params, body: object(controlProperties, controlRequired) }
+      schema: {
+        params,
+        body: { ...object(controlProperties, controlRequired), ...recordNoticeRequired }
+      }
     },
     async (request, reply) => {
       try {

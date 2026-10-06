@@ -146,6 +146,12 @@ export function validateCaptureSelection(
       invalid();
   } else invalid();
 }
+/** Standalone capture requires an explicit per-meeting notice until stored policy binding ships. */
+export function assertCaptureNoticeAcknowledged(input: {
+  readonly noticeAcknowledged?: unknown;
+}): void {
+  if (input.noticeAcknowledged !== true) invalid();
+}
 export function applyCaptureControl(
   state: CaptureStoredState,
   input: MeetingCaptureControlInput,
@@ -158,6 +164,7 @@ export function applyCaptureControl(
   const current = state.epochs.at(-1);
   const atMs = elapsed(state, at);
   if (input.command === "record") {
+    assertCaptureNoticeAcknowledged(input);
     if (state.gapLimitReached) throw new MeetingCaptureError("meeting_capture_limit", 413);
     if (!["idle", "paused"].includes(state.desired) || !input.selection || !state.inventory)
       invalid();

@@ -18,6 +18,7 @@ import {
 } from "@moss/shared";
 import {
   applyCaptureControl,
+  assertCaptureNoticeAcknowledged,
   MeetingCaptureError,
   validateCaptureSelection,
   type CaptureStoredState
@@ -218,6 +219,7 @@ export class MeetingCaptureConnectionService {
     return null;
   }
   async start(actor: CaptureBrowserBinding, meetingId: string, input: MeetingCaptureStartInput) {
+    assertCaptureNoticeAcknowledged(input);
     await this.deps.assertBinding({
       actorUserId: actor.actorUserId,
       sessionId: actor.sessionId,
@@ -302,6 +304,7 @@ export class MeetingCaptureConnectionService {
           requestKey: input.requestKey,
           expectedGeneration: 0,
           command: "record",
+          noticeAcknowledged: input.noticeAcknowledged,
           selection: input.selection
         },
         this.now(),

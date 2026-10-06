@@ -144,7 +144,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_capture",
       description:
-        "Connect the Mac companion once, remember exact microphone and app sources, then Start. Change never broadens missing sources. Persistent Pause/Stop work during navigation. Stop visibly finalizes for at most 60 seconds. Windows unavailable.",
+        "Connect Mac once, remember exact sources, acknowledge this meeting’s recording notice, then Start. A new browser acknowledges before Resume. No broader fallback. Persistent Pause/Stop; Stop finalizes within 60 seconds. Windows unavailable.",
       errors: [
         {
           code: "meeting_capture_source_unavailable",

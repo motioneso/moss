@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import type { MeetingOutputArtifact, MeetingOutputEvidence } from "@moss/shared";
-import { transcriptTime } from "./meeting-transcript.js";
+import { transcriptTime } from "./transcript-time.js";
 
 export function OutputEvidence({
   evidence,

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DisclosureToggle, Note } from "@moss/ui";
 import type { MeetingCaptureState } from "@moss/shared";
-import { transcriptTime } from "./meeting-transcript.js";
+import { transcriptTime } from "./transcript-time.js";
 
 const GAP_REASONS = {
   paused: "Paused",

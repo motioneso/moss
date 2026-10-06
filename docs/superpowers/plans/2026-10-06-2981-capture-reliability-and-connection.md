@@ -9,7 +9,10 @@ The [specification](../specs/2026-10-03-meeting-companion.md) version 0.4 govern
 
 Connect the companion once, shared by its connection UI, Backtrack and Meetings. Thereafter:
 New meeting → remembered named device/microphone/source → Start meeting. Change is available,
-but Prepare, per-meeting device approval and the repeated notice checkbox are removed. An optional
+but Prepare and per-meeting device approval are removed. Standalone #3056 retains an explicit
+recording-notice acknowledgement before Start and requires it on record/Resume requests; the
+browser retains it only for this meeting and signed-in session. The earlier checkbox removal
+was premature because server-stored version-bound notice was not implemented. An optional
 title must not delay Start or lose typing. Connection completes in the existing browser tab.
 
 Keep recording through ordinary jitter, unchanged format notifications, brief network gaps and

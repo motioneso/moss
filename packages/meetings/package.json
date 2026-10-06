@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./web": "./src/web/index.tsx"
+    "./web": "./src/web/index.tsx",
+    "./web/persistent-controls": "./src/web/persistent-controls.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

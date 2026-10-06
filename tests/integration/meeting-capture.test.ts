@@ -103,6 +103,7 @@ async function fixture() {
     });
   await register();
   const startInput = {
+    noticeAcknowledged: true as const,
     deviceId,
     connectionId,
     expectedRevision: 1,
@@ -317,6 +318,7 @@ describe("shared meeting recording protocol (isolated gate only)", () => {
       requestKey: randomUUID(),
       expectedGeneration: 2,
       command: "record",
+      noticeAcknowledged: true,
       selection: f.startInput.selection
     });
     const claim = {

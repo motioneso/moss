@@ -34,6 +34,7 @@ interface CaptureOperation {
   readonly retryAt?: number;
 }
 export interface CaptureSession {
+  readonly noticeAcknowledged: boolean;
   readonly grantId: string | null;
   readonly startRequest: MeetingCaptureStartInput | null;
   readonly choiceGeneration: number | null;
@@ -47,6 +48,7 @@ export interface ActiveCapture {
 }
 export function newCaptureSession(): CaptureSession {
   return {
+    noticeAcknowledged: false,
     grantId: null,
     startRequest: null,
     choiceGeneration: null,
@@ -118,6 +120,10 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
     identity === client.getQueryCache().find({ queryKey: key, exact: true }) &&
     !isMeetingAccessDenied(client.getQueryState(meetingKeys.record(id))?.error) &&
     !isMeetingAccessDenied(client.getQueryState(captureKeys.status(id))?.error);
+  const needsNotice =
+    request.kind === "start" || (request.kind === "control" && request.input.command === "record");
+  const noticeAccepted = () =>
+    !needsNotice || client.getQueryData<CaptureSession>(key)?.noticeAcknowledged === true;
   const pending = client.getQueryData<CaptureSession>(key)?.operation;
   const previousGrantId =
     client.getQueryData<MeetingCaptureBrowserStatus>(captureKeys.status(id))?.capture?.grantId ??
@@ -127,6 +133,7 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
     (request.kind === "control" && request.input.command !== "record");
   if (
     !authorized() ||
+    !noticeAccepted() ||
     (pending?.request.kind === request.kind &&
       pending.request.input.requestKey === request.input.requestKey &&
       (pending.retryAt ?? 0) > Date.now()) ||
@@ -149,12 +156,19 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
   if (priority) registry.get(id)?.abort();
   const controller = new AbortController();
   registry.set(id, controller);
-  const current = () => authorized() && registry!.get(id) === controller;
+  let installedRequestKey: string | null = null;
+  const current = () =>
+    authorized() &&
+    registry!.get(id) === controller &&
+    (installedRequestKey === null ||
+      client.getQueryData<CaptureSession>(key)?.operation?.request.input.requestKey ===
+        installedRequestKey);
   const update = (change: Partial<CaptureSession>) => {
-    if (current())
-      client.setQueryData<CaptureSession>(key, (value) =>
-        value ? { ...value, ...change } : undefined
-      );
+    if (!current()) return;
+    client.setQueryData<CaptureSession>(key, (value) =>
+      value ? { ...value, ...change } : undefined
+    );
+    if (change.operation) installedRequestKey = change.operation.request.input.requestKey;
   };
   update({
     operation: { request, phase: "sending" },
@@ -164,6 +178,13 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
   // A control response must never sit behind a long status read.
   await client.cancelQueries({ queryKey: captureKeys.status(id), exact: true });
   for (let attempt = 0; attempt < 3 && current(); attempt += 1) {
+    if (!noticeAccepted()) {
+      update({
+        operation: { request, phase: "retry" },
+        error: "Acknowledge the recording notice before retrying. Stop remains available."
+      });
+      return;
+    }
     try {
       const result =
         request.kind === "start"
@@ -284,8 +305,11 @@ export async function startMeetingCapture(
   title: string,
   input: MeetingCaptureStartInput
 ) {
-  if (!client.getQueryData(captureKeys.session(id)))
-    client.setQueryData(captureKeys.session(id), newCaptureSession());
+  if (input.noticeAcknowledged !== true) return false;
+  client.setQueryData<CaptureSession>(captureKeys.session(id), (current) => ({
+    ...(current ?? newCaptureSession()),
+    noticeAcknowledged: true
+  }));
   client.setQueryData<ActiveCapture>(captureKeys.active, { meetingId: id, title });
   return send(client, id, { kind: "start", input });
 }
@@ -330,6 +354,10 @@ export function useCaptureSession(id: string) {
   }
   return {
     state: query.data,
+    isNoticeAcknowledged: () =>
+      client.getQueryData<CaptureSession>(key)?.noticeAcknowledged === true,
+    acknowledgeNotice: (noticeAcknowledged: boolean) =>
+      update((current) => ({ ...current, noticeAcknowledged })),
     bindCapture: (capture: MeetingCaptureState) => {
       const current = client.getQueryData<CaptureSession>(key);
       if (current?.grantId === capture.grantId && current.choiceGeneration === capture.generation)
