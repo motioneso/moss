@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { taskListTarget, taskTagTarget, taskTagAssignmentTarget } from "./chat-targets.js";
 import { tasksMonitorProvider } from "./monitor-provider.js";
 import {
   addTaskActivityRequestSchema,
@@ -329,15 +330,19 @@ export const tasksModuleManifest = {
     }
   ],
   routes: [
+    // listFiltered rolls recurring series forward before returning the read.
     {
       method: "GET",
       path: "/api/tasks",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: listTasksResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "POST",
       path: "/api/tasks",
+      // Recurring creates reconcile the actor's pg-boss schedule.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: createTaskRequestSchema,
       responseSchema: createTaskResponseSchema,
       permissionId: "tasks.create"
@@ -345,6 +350,8 @@ export const tasksModuleManifest = {
     {
       method: "POST",
       path: "/api/tasks/search/interpret",
+      // Natural-language interpretation calls the actor's model provider.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: interpretTaskSearchRequestSchema,
       responseSchema: interpretTaskSearchResponseSchema,
       permissionId: "tasks.view"
@@ -352,12 +359,14 @@ export const tasksModuleManifest = {
     {
       method: "GET",
       path: "/api/tasks/:id",
+      chat: { access: "read", coveredBy: "tasks.get" },
       responseSchema: getTaskResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "PATCH",
       path: "/api/tasks/:id",
+      chat: { access: "write", title: "Update task", coveredBy: "tasks.update" },
       requestSchema: updateTaskRequestSchema,
       responseSchema: updateTaskResponseSchema,
       permissionId: "tasks.update"
@@ -365,6 +374,12 @@ export const tasksModuleManifest = {
     {
       method: "POST",
       path: "/api/tasks/:id/activity",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Add task activity",
+        coveredBy: "tasks.addActivity"
+      },
       requestSchema: addTaskActivityRequestSchema,
       responseSchema: addTaskActivityResponseSchema,
       permissionId: "tasks.update"
@@ -372,6 +387,7 @@ export const tasksModuleManifest = {
     {
       method: "POST",
       path: "/api/tasks/:id/deferred-status",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: deferredTaskStatusRequestSchema,
       responseSchema: deferredTaskStatusResponseSchema,
       permissionId: "tasks.update"
@@ -379,6 +395,7 @@ export const tasksModuleManifest = {
     {
       method: "POST",
       path: "/api/tasks/:id/tags",
+      chat: { access: "write", title: "Assign task tag", coveredBy: "tasks.assignTag" },
       requestSchema: assignTaskTagRequestSchema,
       responseSchema: assignTaskTagRouteSchema.response[200],
       permissionId: "tasks.update"
@@ -386,18 +403,32 @@ export const tasksModuleManifest = {
     {
       method: "DELETE",
       path: "/api/tasks/:id/tags/:tagId",
+      chat: {
+        access: "destructive",
+        title: "Remove tag from task",
+        coveredBy: "tasks.unassignTag",
+        target: taskTagAssignmentTarget
+      },
       responseSchema: unassignTaskTagRouteSchema.response[200],
       permissionId: "tasks.update"
     },
     {
       method: "GET",
       path: "/api/tasks/lists",
+      // The page-load read repairs recurrence schedules.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: listTaskListsResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "POST",
       path: "/api/tasks/lists",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Create task list",
+        coveredBy: "tasks.createList"
+      },
       requestSchema: createTaskListRequestSchema,
       responseSchema: createTaskListResponseSchema,
       permissionId: "tasks.create"
@@ -405,6 +436,12 @@ export const tasksModuleManifest = {
     {
       method: "PATCH",
       path: "/api/tasks/lists/:listId",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Rename task list",
+        coveredBy: "tasks.renameList"
+      },
       requestSchema: renameTaskListRequestSchema,
       responseSchema: renameTaskListRouteSchema.response[200],
       permissionId: "tasks.update"
@@ -412,6 +449,13 @@ export const tasksModuleManifest = {
     {
       method: "DELETE",
       path: "/api/tasks/lists/:listId",
+      chat: {
+        access: "destructive",
+        content: "user_authored",
+        title: "Delete task list",
+        coveredBy: "tasks.deleteList",
+        target: taskListTarget
+      },
       requestSchema: deleteTaskListRequestSchema,
       responseSchema: deleteTaskListRouteSchema.response[200],
       permissionId: "tasks.update"
@@ -419,12 +463,19 @@ export const tasksModuleManifest = {
     {
       method: "GET",
       path: "/api/tasks/lists/:listId/tags",
+      chat: { access: "read", content: "user_authored", coveredBy: "tasks.listTags" },
       responseSchema: listTaskTagsResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "POST",
       path: "/api/tasks/lists/:listId/tags",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Create task tag",
+        coveredBy: "tasks.createTag"
+      },
       requestSchema: createTaskTagRequestSchema,
       responseSchema: createTaskTagResponseSchema,
       permissionId: "tasks.create"
@@ -432,6 +483,12 @@ export const tasksModuleManifest = {
     {
       method: "PATCH",
       path: "/api/tasks/lists/:listId/tags/:tagId",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Rename task tag",
+        coveredBy: "tasks.renameTag"
+      },
       requestSchema: renameTaskTagRequestSchema,
       responseSchema: renameTaskTagRouteSchema.response[200],
       permissionId: "tasks.update"
@@ -439,12 +496,25 @@ export const tasksModuleManifest = {
     {
       method: "DELETE",
       path: "/api/tasks/lists/:listId/tags/:tagId",
+      chat: {
+        access: "destructive",
+        content: "user_authored",
+        title: "Delete task tag",
+        coveredBy: "tasks.deleteTag",
+        target: taskTagTarget
+      },
       responseSchema: deleteTaskTagRouteSchema.response[200],
       permissionId: "tasks.update"
     },
     {
       method: "POST",
       path: "/api/tasks/:id/breakdown",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Break task into subtasks",
+        coveredBy: "tasks.breakDown"
+      },
       requestSchema: breakdownTaskRequestSchema,
       responseSchema: breakdownTaskResponseSchema,
       permissionId: "tasks.update"
@@ -452,49 +522,61 @@ export const tasksModuleManifest = {
     {
       method: "GET",
       path: "/api/tasks/focus",
+      // All three drift reads roll recurring series forward in the database.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: focusTasksResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "GET",
       path: "/api/tasks/at-risk",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: atRiskTasksResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "GET",
       path: "/api/tasks/overdue",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: overdueTasksResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "GET",
       path: "/api/tasks/preferences",
+      // getOrCreate inserts a default preference row when missing.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       permissionId: "tasks.view"
     },
     {
       method: "PATCH",
       path: "/api/tasks/preferences",
+      chat: { access: "write", content: "user_authored", title: "Set task view preference" },
       permissionId: "tasks.update"
     },
     {
       method: "GET",
       path: "/api/tasks/agency-auto-execute",
+      // Reading the compatibility policy may heal a missing trusted_auto grant.
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "tasks.view"
     },
     {
       method: "PATCH",
       path: "/api/tasks/agency-auto-execute",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "tasks.update"
     },
     {
       method: "GET",
       path: "/api/tasks/:id/subtasks",
+      chat: { access: "read", coveredBy: "tasks.get" },
       permissionId: "tasks.view"
     },
     {
       method: "GET",
       path: "/api/tasks/:id/activity",
+      chat: { access: "read", coveredBy: "tasks.activity" },
       permissionId: "tasks.view"
     }
   ],

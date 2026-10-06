@@ -1,5 +1,8 @@
 import { fileURLToPath } from "node:url";
 
+import { assertDataContextDb } from "@moss/db";
+import { PreferencesRepository } from "@moss/structured-state";
+
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   createCheckinRequestSchema,
@@ -23,6 +26,11 @@ import {
   wellnessInsightsRouteSchema
 } from "@moss/shared";
 
+import {
+  resolveEffectiveWellnessConsent,
+  WELLNESS_AI_CONSENT_PREFERENCE_KEY
+} from "./ai-consent.js";
+import { therapyNoteTarget } from "./chat-targets.js";
 import { collectWellnessExportSection } from "./data-lifecycle.js";
 import { wellnessFocusSignal } from "./focus-signal.js";
 import { WELLNESS_EXPORT_QUEUE } from "./export-job.js";
@@ -115,16 +123,32 @@ export const wellnessModuleManifest = {
       actions: ["delete"]
     }
   ],
+  chatDefaults: { consent: WELLNESS_AI_CONSENT_PREFERENCE_KEY },
+  aiConsent: {
+    key: WELLNESS_AI_CONSENT_PREFERENCE_KEY,
+    async isGranted(scopedDb) {
+      assertDataContextDb(scopedDb);
+      // The normal route guard still requires an active module; active users default to consent.
+      return resolveEffectiveWellnessConsent(
+        scopedDb,
+        new PreferencesRepository(),
+        undefined,
+        true
+      );
+    }
+  },
   routes: [
     {
       method: "GET",
       path: "/api/wellness/ai-consent",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: wellnessAiConsentResponseSchema,
       permissionId: "wellness.view"
     },
     {
       method: "PUT",
       path: "/api/wellness/ai-consent",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       requestSchema: putWellnessAiConsentRequestSchema,
       responseSchema: wellnessAiConsentResponseSchema,
       permissionId: "wellness.update"
@@ -132,6 +156,7 @@ export const wellnessModuleManifest = {
     {
       method: "POST",
       path: "/api/wellness/checkins",
+      chat: { access: "write", title: "Log mood check-in", content: "outside" },
       requestSchema: createCheckinRequestSchema,
       responseSchema: createCheckinResponseSchema,
       permissionId: "wellness.create"
@@ -139,12 +164,14 @@ export const wellnessModuleManifest = {
     {
       method: "GET",
       path: "/api/wellness/checkins",
+      chat: { access: "read", content: "outside" },
       responseSchema: listCheckinsResponseSchema,
       permissionId: "wellness.view"
     },
     {
       method: "PATCH",
       path: "/api/wellness/checkins/:id",
+      chat: { access: "write", title: "Update mood check-in", content: "outside" },
       requestSchema: updateCheckinRouteSchema.body,
       responseSchema: updateCheckinRouteSchema.response[200],
       permissionId: "wellness.update"
@@ -152,12 +179,14 @@ export const wellnessModuleManifest = {
     {
       method: "GET",
       path: "/api/wellness/medications",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listMedicationsResponseSchema,
       permissionId: "wellness.view"
     },
     {
       method: "POST",
       path: "/api/wellness/medications",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       requestSchema: createMedicationRequestSchema,
       responseSchema: medicationResponseSchema,
       permissionId: "wellness.create"
@@ -165,6 +194,7 @@ export const wellnessModuleManifest = {
     {
       method: "PATCH",
       path: "/api/wellness/medications/:id",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       requestSchema: updateMedicationRequestSchema,
       responseSchema: medicationResponseSchema,
       permissionId: "wellness.update"
@@ -172,12 +202,14 @@ export const wellnessModuleManifest = {
     {
       method: "GET",
       path: "/api/wellness/medications/schedule",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: medicationScheduleResponseSchema,
       permissionId: "wellness.view"
     },
     {
       method: "POST",
       path: "/api/wellness/medications/:id/logs",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       requestSchema: createMedicationLogRequestSchema,
       responseSchema: createMedicationLogResponseSchema,
       permissionId: "wellness.create"
@@ -185,18 +217,21 @@ export const wellnessModuleManifest = {
     {
       method: "GET",
       path: "/api/wellness/insights",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: wellnessInsightsRouteSchema.response[200],
       permissionId: "wellness.view"
     },
     {
       method: "GET",
       path: "/api/wellness/therapy-notes",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listTherapyNotesRouteSchema.response[200],
       permissionId: "wellness.view"
     },
     {
       method: "POST",
       path: "/api/wellness/therapy-notes",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       requestSchema: createTherapyNoteRouteSchema.body,
       responseSchema: createTherapyNoteRouteSchema.response[201],
       permissionId: "wellness.create"
@@ -204,18 +239,26 @@ export const wellnessModuleManifest = {
     {
       method: "DELETE",
       path: "/api/wellness/therapy-notes/:id",
+      chat: {
+        access: "destructive",
+        title: "Delete therapy note",
+        content: "user_authored",
+        target: therapyNoteTarget
+      },
       responseSchema: deleteTherapyNoteRouteSchema.response[200],
       permissionId: "wellness.delete"
     },
     {
       method: "GET",
       path: "/api/wellness/medications/logs",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: medicationAdherenceSummaryRouteSchema.response[200],
       permissionId: "wellness.view"
     },
     {
       method: "POST",
       path: "/api/wellness/export",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: wellnessExportRequestSchema,
       permissionId: "wellness.view"
     }

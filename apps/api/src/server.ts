@@ -52,6 +52,7 @@ import {
   registerBuiltInApiRoutes,
   registerRouteEnablementGuard,
   assertRouteCoverage,
+  assertRouteChatClassification,
   buildRouteCatalog,
   createRouteCatalogHolder,
   PLATFORM_UNGUARDED_ROUTES,
@@ -770,6 +771,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       manifests: guardManifestsForCoverage(),
       platformAllowlist: PLATFORM_UNGUARDED_ROUTES
     });
+    // Built-ins and test probes only: external modules cannot register routes. Fail boot
+    // before exposing any route whose chat access has not been explicitly reviewed.
+    assertRouteChatClassification(guardManifestsForCoverage());
   });
 
   server.addHook("onReady", async () => {

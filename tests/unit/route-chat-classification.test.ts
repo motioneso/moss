@@ -1,3 +1,23 @@
+import {
+  PRIVACY_MODULE_IDS,
+  PRIVACY_EXPECTED_ROWS,
+  PRIVACY_NAMED_BLOCKED
+} from "../fixtures/route-chat-content-privacy.js";
+import {
+  SCHEDULING_MODULE_IDS,
+  SCHEDULING_EXPECTED_ROWS,
+  SCHEDULING_NAMED_BLOCKED
+} from "../fixtures/route-chat-content-scheduling.js";
+import {
+  FEEDS_MODULE_IDS,
+  FEEDS_EXPECTED_ROWS,
+  FEEDS_NAMED_BLOCKED
+} from "../fixtures/route-chat-content-feeds.js";
+import {
+  RECORDS_MODULE_IDS,
+  RECORDS_EXPECTED_ROWS,
+  RECORDS_NAMED_BLOCKED
+} from "../fixtures/route-chat-content-records.js";
 import { describe, expect, it } from "vitest";
 
 import { getBuiltInModuleManifests } from "../../packages/module-registry/src/index.js";
@@ -7,12 +27,16 @@ import {
 } from "../../packages/module-registry/src/route-catalog.js";
 
 /**
- * #3065 slice 3: every route in the platform-core modules declares how Moss may call it. The
+ * #3065 slices 3–4: every built-in route declares how Moss may call it. The
  * table pins method, path, access, block category, content class and outbound for each route,
  * so a reclassification shows up as a reviewed diff here.
  */
 
-const SLICE_3_MODULES: ReadonlySet<string> = new Set([
+const CLASSIFIED_MODULES: ReadonlySet<string> = new Set([
+  ...PRIVACY_MODULE_IDS,
+  ...SCHEDULING_MODULE_IDS,
+  ...FEEDS_MODULE_IDS,
+  ...RECORDS_MODULE_IDS,
   "settings",
   "ai",
   "chat",
@@ -26,6 +50,10 @@ const SLICE_3_MODULES: ReadonlySet<string> = new Set([
 ]);
 
 const EXPECTED: readonly string[] = [
+  ...PRIVACY_EXPECTED_ROWS,
+  ...SCHEDULING_EXPECTED_ROWS,
+  ...FEEDS_EXPECTED_ROWS,
+  ...RECORDS_EXPECTED_ROWS,
   "settings GET /api/bootstrap/status read",
   "settings GET /api/me read user_authored",
   "settings PATCH /api/me/profile blocked prompt_shaping",
@@ -232,6 +260,10 @@ const EXPECTED: readonly string[] = [
  * families, plus account exports (they bypass Wellness consent) and GETs with side effects.
  */
 const NAMED_BLOCKED: readonly (readonly [string, string, string])[] = [
+  ...PRIVACY_NAMED_BLOCKED,
+  ...SCHEDULING_NAMED_BLOCKED,
+  ...FEEDS_NAMED_BLOCKED,
+  ...RECORDS_NAMED_BLOCKED,
   ["PATCH", "/api/ai/action-policy/:moduleId/:actionFamilyId", "self_authority"],
   ["GET", "/api/me/persona", "prompt_shaping"],
   ["PUT", "/api/me/persona", "prompt_shaping"],
@@ -258,8 +290,8 @@ const NAMED_BLOCKED: readonly (readonly [string, string, string])[] = [
   ["GET", "/api/notifications/push/config", "secrets"]
 ];
 
-function sliceManifests() {
-  return getBuiltInModuleManifests().filter((manifest) => SLICE_3_MODULES.has(manifest.id));
+function classifiedManifests() {
+  return getBuiltInModuleManifests().filter((manifest) => CLASSIFIED_MODULES.has(manifest.id));
 }
 
 function allToolNames(): ReadonlySet<string> {
@@ -272,19 +304,25 @@ function concrete(path: string): string {
   return path.replace(/:[A-Za-z]+/g, "x1");
 }
 
-describe("platform-core route classification", () => {
-  it("covers all ten modules", () => {
-    expect(new Set(sliceManifests().map((m) => m.id))).toEqual(SLICE_3_MODULES);
+describe("all built-in route classification", () => {
+  it("covers every module with routes", () => {
+    expect(
+      new Set(
+        getBuiltInModuleManifests()
+          .filter((m) => m.routes?.length)
+          .map((m) => m.id)
+      )
+    ).toEqual(CLASSIFIED_MODULES);
   });
 
   it("passes the boot classification check", () => {
     expect(() =>
-      assertRouteChatClassification(sliceManifests(), { toolNames: allToolNames() })
+      assertRouteChatClassification(classifiedManifests(), { toolNames: allToolNames() })
     ).not.toThrow();
   });
 
   it("puts every route in the catalog as recorded", () => {
-    const manifests = sliceManifests();
+    const manifests = classifiedManifests();
     const total = manifests.reduce((sum, m) => sum + (m.routes?.length ?? 0), 0);
     const catalog = buildRouteCatalog(manifests, []);
     expect(catalog.routes).toHaveLength(total);
@@ -307,7 +345,7 @@ describe("platform-core route classification", () => {
   });
 
   it.each(NAMED_BLOCKED)("%s %s is blocked as %s", (method, path, category) => {
-    const catalog = buildRouteCatalog(sliceManifests(), []);
+    const catalog = buildRouteCatalog(classifiedManifests(), []);
     const hit = catalog.resolve(method, concrete(path));
     expect(hit?.route.path).toBe(path);
     expect(hit?.route.policy.access).toBe("blocked");
@@ -315,7 +353,7 @@ describe("platform-core route classification", () => {
   });
 
   it("gives every destructive route with a path parameter a target", () => {
-    const catalog = buildRouteCatalog(sliceManifests(), []);
+    const catalog = buildRouteCatalog(classifiedManifests(), []);
     const missing = catalog.routes.filter(
       (route) =>
         route.policy.access === "destructive" &&

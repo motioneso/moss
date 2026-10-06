@@ -19,6 +19,11 @@ import {
   postMemoryGraphStatusRouteSchema,
   postMemoryGraphSupersedeRouteSchema
 } from "@moss/shared";
+import {
+  memoryEntityTarget,
+  memoryFactTarget,
+  memoryFactResolutionTarget
+} from "./chat-targets.js";
 import { memoryForgetExecute, memoryRecallExecute, memoryRememberExecute } from "./graph-tools.js";
 
 const memoryRememberToolInputSchema = {
@@ -109,107 +114,156 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/memory/graph/recall",
+      chat: { access: "read", content: "outside", coveredBy: "memory.recall" },
       responseSchema: getMemoryGraphRecallRouteSchema.response[200],
       permissionId: "memory.view"
     },
     {
       method: "GET",
       path: "/api/memory/graph/core",
+      chat: { access: "read", content: "outside" },
       responseSchema: getMemoryGraphCoreRouteSchema.response[200],
       permissionId: "memory.view"
     },
     {
       method: "POST",
       path: "/api/memory/graph/entities",
+      chat: { access: "write", title: "Add memory entity", content: "outside" },
       requestSchema: postMemoryGraphEntityRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts",
+      chat: {
+        access: "write",
+        title: "Remember a fact",
+        content: "outside",
+        coveredBy: "memory.remember"
+      },
       requestSchema: postMemoryGraphFactRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/pin",
+      chat: { access: "write", title: "Pin or unpin memory fact", content: "user_authored" },
       requestSchema: postMemoryGraphPinRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/confirm",
+      chat: {
+        access: "destructive",
+        title: "Confirm memory and supersede conflicts",
+        content: "outside",
+        target: memoryFactResolutionTarget
+      },
       requestSchema: postMemoryGraphConfirmRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/correct",
+      chat: {
+        access: "destructive",
+        title: "Replace memory and supersede conflicts",
+        content: "outside",
+        target: memoryFactResolutionTarget
+      },
       requestSchema: postMemoryGraphCorrectRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/status",
+      chat: { access: "write", title: "Change memory fact status", content: "outside" },
       requestSchema: postMemoryGraphStatusRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/mark-stale",
+      chat: { access: "write", title: "Mark memory fact stale", content: "outside" },
       requestSchema: postMemoryGraphMarkStaleRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/supersede",
+      chat: {
+        access: "destructive",
+        title: "Supersede memory fact",
+        content: "user_authored",
+        target: memoryFactTarget
+      },
       requestSchema: postMemoryGraphSupersedeRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "DELETE",
       path: "/api/memory/graph/facts/:id",
+      chat: {
+        access: "destructive",
+        title: "Forget memory fact",
+        content: "user_authored",
+        target: memoryFactTarget,
+        coveredBy: "memory.forget"
+      },
       permissionId: "memory.manage"
     },
     {
       method: "GET",
       path: "/api/memory/dashboard",
+      chat: { access: "read", content: "outside" },
       responseSchema: getMemoryDashboardRouteSchema.response[200],
       permissionId: "memory.view"
     },
     {
       method: "POST",
       path: "/api/memory/candidates/:id/accept",
+      chat: { access: "write", title: "Accept suggested memory", content: "user_authored" },
       requestSchema: postMemoryCandidateAcceptRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/candidates/:id/reject",
+      chat: { access: "write", title: "Reject suggested memory", content: "user_authored" },
       requestSchema: postMemoryCandidateRejectRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/candidates/:id/suppress",
+      chat: { access: "write", title: "Suppress suggested memory", content: "user_authored" },
       requestSchema: postMemoryCandidateSuppressRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "PATCH",
       path: "/api/memory/graph/facts/:id",
+      chat: { access: "write", title: "Update memory fact lifecycle", content: "user_authored" },
       requestSchema: patchMemoryFactDashboardRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "PATCH",
       path: "/api/memory/graph/entities/:id",
+      chat: { access: "write", title: "Update memory entity", content: "user_authored" },
       requestSchema: patchMemoryEntityDashboardRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "DELETE",
       path: "/api/memory/graph/entities/:id",
+      chat: {
+        access: "destructive",
+        title: "Delete memory entity",
+        content: "user_authored",
+        target: memoryEntityTarget
+      },
       permissionId: "memory.manage"
     }
   ],

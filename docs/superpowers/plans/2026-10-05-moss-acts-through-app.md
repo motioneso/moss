@@ -876,7 +876,7 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
 
 ### Slice 4: classify content routes and wire the boot assertion
 
-- **Modules:** tasks (27), sports (24), news (22), meetings (19), memory (18), people (17),
+- **Modules:** tasks (27), sports (24), news (22), meetings (19), memory (18), people (18),
   wellness (16), calendar (13), commitments (7), workshop (7), briefings (6), email (6), goals (5),
   scratchpad (4), notes (1), weather (1).
 - **Files:** each module's `src/manifest.ts` and `src/chat-targets.ts` as in slice 3;
@@ -887,7 +887,8 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
   Wellness routes in 1.6 are `blocked` / `data_scope_consent`.
   `PUT /api/scratchpad` is `blocked` / `module_promise`. Every Wellness route declares
   `consent: "wellness.ai_consent_granted"`. Write routes that only echo the user's own record
-  declare `content: "user_authored"`, People create and update among them; routes whose response
+  declare `content: "user_authored"`; People create/update were planned examples, but the handler
+  audit in 8.7 blocks their ingestion effects. Routes whose response
   carries mail, feed or other outside text stay `"outside"`.
 - **Tests:**
   - The slice 3 snapshot test extends to all modules.
@@ -902,7 +903,8 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
     wiring removed.
   - Wellness list test: the set of Wellness routes not `blocked` equals an explicit list in the
     test. A new Wellness route forces a decision.
-- **Done:** the API boots with the assertion on; all 391 routes classified.
+- **Done:** the API boots with the assertion on; all 393 current routes classified (including
+  the record-only feedback route and the previously host-injected People directory route).
 
 ### Slice 5: the three tools, the card, and screen refresh
 
@@ -1246,3 +1248,66 @@ the PR's verification results.
 Database-backed integration, the full foundation gate and real-UI/live-provider proof have not
 run in this environment. This correction remains code-complete, unverified under the live-path
 gate; it is not evidence that the PR is ready to merge.
+
+### 8.7 Slice 4 handler audit and conservative classifications (2026-10-06)
+
+All 393 built-in HTTP routes now have an explicit effective chat policy: 110 reads, 55 writes,
+19 destructive operations and 209 blocks. The 16 content modules contribute 194 routes. The
+People notes-directory route now belongs to its manifest instead of being appended by the host.
+The all-module snapshot and July-rule walk have no pending module list. The API's real `onReady`
+coverage hook runs the classification assertion. The catalog rules moved to a focused data file
+without changing the existing public exports.
+
+Classifications follow the handlers, not the HTTP verb or a planned happy path:
+
+- Task list/focus/overdue/preferences reads can roll forward or repair schedules; task creation
+  and deferred-status writes can schedule work. These stay blocked. Even the agency-auto-execute
+  GET can grant `trusted_auto`, so both its GET and PATCH are `self_authority` blocks.
+- People create, update and archive enqueue vault ingestion. Merge/split select an additional
+  body-named identity that the current path-only approval-target contract cannot completely bind.
+  They stay blocked rather than pretending a single path target covers both identities.
+- News topic/preference editing invokes AI validation or refresh work; overview/personalization
+  GETs also refresh or reconcile schedules. These blocks mean the planned topic-edit kill-gate
+  example is not yet callable through generic app actions. Sports overview persists runtime
+  health, and serving a headline photo updates retention state; both GETs stay blocked. Source
+  preview/confirmation and persistent host-fetch consent cannot bypass their dedicated paths.
+- Every Briefings route schedules work, triggers work or upserts feedback targets. Calendar
+  day-plan preview/apply/retry/recover and commitment extraction have effects beyond their own
+  record. Calendar/email auto-execution settings change authority. Goals update/evidence can
+  enqueue memory synchronization. These routes stay blocked with explicit exclusion rows.
+- Workshop creation remains behind its dedicated tool's private/incognito guard. Workshop
+  message generation, meeting output generation/export, and meeting candidate approval cannot
+  become ordinary record writes through HTTP aliases.
+- Wellness consent applies to every effective policy. Raw therapy/medication bodies are blocked
+  even with consent on, including medication-log responses that echo dose and PRN reason. The
+  explicit allowed list covers consent status, check-ins, derived insights and therapy-note
+  deletion; the last previews only its timestamp and returns a boolean.
+
+Not every network read or local derived record is an external effect. Sports roster/standings
+and image retrieval return outside data without provider-side mutation or refresh jobs; routes
+that forward model-chosen values are marked outbound. Weather reads a saved location's forecast
+and updates only its in-memory cache. Memory's configured embedding implementations are local
+or deterministic stubs, and its index/fact maintenance remains owner-scoped local data work;
+there is no external embedding-provider call to hide as an ordinary write. Memory/notes/source
+excerpts stay outside content. Destructive memory previews include the subject and all affected
+conflicting facts; owner-scoped target queries never include source excerpts.
+
+The July no-route reasons are explicit: settings credential operations use their renamed paths;
+there is no generic email-send HTTP route, while the settings that enable automatic sending are
+independently blocked. The walk checks all modules per prefix rather than accepting a single
+representative module. A regression rejects stale no-route exemptions once every category of a
+prefix has a route mapping; the old module-queue exemption was removed after the People mapping.
+
+Verification includes explicit route snapshots, named blocks, the exact Wellness allowlist,
+owner-scoped target tests, provenance tests and a real-API boot test with a no-I/O database driver.
+Removing the production `onReady` assertion made that boot test fail, and restoring it passed.
+Additional negative controls failed with forced exclusions, owner predicates, scoped-DB checks
+or outside provenance removed; all mutations were restored. Independent handler reviews covered
+all content modules and the central gate. The review found and corrected a missing TypeScript
+import and subject-ambiguous memory target labels. Final unit/static/hosted CI results are
+recorded in the PR comment.
+
+Local database integration and the foundation gate cannot run here because Docker is unavailable;
+the database-backed route-guard regression is included for hosted CI. No live provider, real
+recording or user credential was used. Slices 5–8 and real-UI/live-path proof remain outstanding;
+these route classifications alone do not complete phase 1 or authorize merging.

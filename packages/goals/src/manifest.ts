@@ -27,11 +27,42 @@ export const goalsModuleManifest: MossModuleManifest = {
   availability: { defaultEnabled: true, required: true },
   compatibility: { jarv1s: ">=0.0.0" },
   routes: [
-    { method: "GET", path: "/api/goals", permissionId: "goals.view" },
-    { method: "POST", path: "/api/goals", permissionId: "goals.create" },
-    { method: "GET", path: "/api/goals/:id", permissionId: "goals.view" },
-    { method: "PATCH", path: "/api/goals/:id", permissionId: "goals.update" },
-    { method: "POST", path: "/api/goals/:id/evidence", permissionId: "goals.update" }
+    {
+      method: "GET",
+      path: "/api/goals",
+      chat: { access: "read", coveredBy: "goals.list" },
+      permissionId: "goals.view"
+    },
+    {
+      method: "POST",
+      path: "/api/goals",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Create goal",
+        coveredBy: "goals.create"
+      },
+      permissionId: "goals.create"
+    },
+    {
+      method: "GET",
+      path: "/api/goals/:id",
+      chat: { access: "read", coveredBy: "goals.get" },
+      permissionId: "goals.view"
+    },
+    {
+      method: "PATCH",
+      path: "/api/goals/:id",
+      // Both updates and evidence additions enqueue memory-sync work.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "goals.update"
+    },
+    {
+      method: "POST",
+      path: "/api/goals/:id/evidence",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "goals.update"
+    }
   ],
   assistantActionFamilies: [
     {

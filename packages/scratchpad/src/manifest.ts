@@ -29,10 +29,35 @@ export const scratchpadModuleManifest = {
     ownedTables: ["app.scratchpads"]
   },
   routes: [
-    { method: "GET", path: "/api/scratchpad", permissionId: "scratchpad.read" },
-    { method: "PUT", path: "/api/scratchpad", permissionId: "scratchpad.write" },
-    { method: "POST", path: "/api/scratchpad/append", permissionId: "scratchpad.write" },
-    { method: "PATCH", path: "/api/scratchpad/settings", permissionId: "scratchpad.write" }
+    {
+      method: "GET",
+      path: "/api/scratchpad",
+      chat: { access: "read", content: "outside", coveredBy: "scratchpad.read" },
+      permissionId: "scratchpad.read"
+    },
+    {
+      method: "PUT",
+      path: "/api/scratchpad",
+      chat: { access: "blocked", blockedBecause: "module_promise" },
+      permissionId: "scratchpad.write"
+    },
+    {
+      method: "POST",
+      path: "/api/scratchpad/append",
+      chat: {
+        access: "write",
+        title: "Append to scratchpad",
+        content: "outside",
+        coveredBy: "scratchpad.append"
+      },
+      permissionId: "scratchpad.write"
+    },
+    {
+      method: "PATCH",
+      path: "/api/scratchpad/settings",
+      chat: { access: "write", title: "Update scratchpad settings", content: "user_authored" },
+      permissionId: "scratchpad.write"
+    }
   ],
   // #2236 slice 1: storage, the API, and the two assistant tools only. No screen yet - the
   // scratchpad UI is a later slice - so `navigation` and `settings` stay absent on purpose,

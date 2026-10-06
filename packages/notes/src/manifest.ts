@@ -91,6 +91,7 @@ export const notesModuleManifest = {
     {
       method: "POST",
       path: "/api/notes/sync",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: postNotesSyncRouteSchema.response[202],
       permissionId: "notes.sync"
     }

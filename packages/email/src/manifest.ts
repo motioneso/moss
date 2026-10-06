@@ -69,6 +69,11 @@ export const emailModuleManifest = {
   ],
   features: [
     {
+      id: "email.chat_app_actions",
+      description:
+        "Chat can read cached mail and its settings. Auto-send and automatic task-creation controls stay in Email settings; chat cannot grant itself those powers."
+    },
+    {
       id: "email.skip-sign-in-code-emails",
       description:
         "An email that clearly hands over a sign-in code is set aside without analysis. An " +
@@ -155,24 +160,28 @@ export const emailModuleManifest = {
     {
       method: "GET",
       path: "/api/email/messages",
+      chat: { access: "read", coveredBy: "email.listVisibleMessages" },
       responseSchema: listEmailMessagesResponseSchema,
       permissionId: "email.view"
     },
     {
       method: "GET",
       path: "/api/email/messages/:id",
+      chat: { access: "read" },
       responseSchema: getEmailMessageResponseSchema,
       permissionId: "email.view"
     },
     {
       method: "GET",
       path: "/api/email/briefing-settings",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: getEmailBriefingSettingsResponseSchema,
       permissionId: "email.manage"
     },
     {
       method: "PATCH",
       path: "/api/email/briefing-settings",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: updateEmailBriefingSettingsRequestSchema,
       responseSchema: getEmailBriefingSettingsResponseSchema,
       permissionId: "email.manage"
@@ -180,12 +189,14 @@ export const emailModuleManifest = {
     {
       method: "GET",
       path: "/api/email/task-creation-mode",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: emailTaskCreationModeResponseSchema,
       permissionId: "email.manage"
     },
     {
       method: "PUT",
       path: "/api/email/task-creation-mode",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: updateEmailTaskCreationModeRequestSchema,
       responseSchema: emailTaskCreationModeResponseSchema,
       permissionId: "email.manage"

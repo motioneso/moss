@@ -1681,14 +1681,6 @@ export function createActionRowRelevancePort(): ActionRowRelevancePort {
   };
 }
 
-const peopleManifest: typeof peopleModuleManifest = {
-  ...peopleModuleManifest,
-  routes: [
-    ...(peopleModuleManifest.routes ?? []),
-    { method: "GET", path: "/api/people/notes-directories" }
-  ]
-};
-
 /**
  * #1263: tasks bypasses the generic canonical-key-only grant here, because it has a legacy
  * `tasks.agency_auto_execute` boolean the generic path doesn't know about — see
@@ -2987,7 +2979,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     }
   },
   {
-    manifest: peopleManifest,
+    manifest: peopleModuleManifest,
     sqlMigrationDirectories: [peopleModuleSqlMigrationDirectory],
     queueDefinitions: [{ name: PERSON_INDEX_QUEUE }, { name: SYNC_PERSON_MEMORY_QUEUE }],
     registerRoutes: (server, deps) =>
