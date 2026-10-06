@@ -8,12 +8,13 @@ import {
   vi,
   type MockInstance
 } from "vitest";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 
 import { AiRepository } from "@moss/ai";
 import { createActAsGrantRegistry } from "@moss/auth";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
+import { ManualMemoryCandidateService } from "@moss/memory";
 import { createRouteCatalogHolder } from "@moss/module-registry";
 import { PreferencesRepository } from "@moss/structured-state";
 import { WellnessRepository } from "@moss/wellness";
@@ -578,5 +579,126 @@ describe("app actions through the real gateway and app routes", () => {
     }
     expect(callSpy).not.toHaveBeenCalled();
     expect(mintSpy).not.toHaveBeenCalled();
+  });
+
+  describe("pending memory suggestions (Ben, 2026-10-06)", () => {
+    const manual = new ManualMemoryCandidateService();
+    let originalEmbedProvider: string | undefined;
+
+    beforeAll(() => {
+      originalEmbedProvider = process.env.JARVIS_EMBED_PROVIDER;
+      process.env.JARVIS_EMBED_PROVIDER = "stub";
+    });
+
+    afterAll(() => {
+      if (originalEmbedProvider === undefined) delete process.env.JARVIS_EMBED_PROVIDER;
+      else process.env.JARVIS_EMBED_PROVIDER = originalEmbedProvider;
+    });
+
+    async function suggest(actorUserId: string, excerpt: string) {
+      const candidate = await runner.withDataContext(
+        { actorUserId, requestId: "memory-suggestion-seed" },
+        (db) =>
+          manual.createPendingManualCandidate(db, actorUserId, {
+            targetKind: "chat_message",
+            targetRef: `seed-${excerpt}`,
+            excerpt
+          })
+      );
+      return candidate.id;
+    }
+
+    async function candidateStatus(actorUserId: string, id: string) {
+      const rows = await runner.withDataContext({ actorUserId }, (db) =>
+        sql<{ status: string }>`
+          SELECT status FROM app.memory_candidates WHERE id = ${id}::uuid
+        `.execute(db.db)
+      );
+      return rows.rows[0]?.status ?? null;
+    }
+
+    async function factCount(actorUserId: string, text: string) {
+      const rows = await runner.withDataContext({ actorUserId }, (db) =>
+        sql<{ count: string }>`
+          SELECT count(*)::text AS count FROM app.memory_facts WHERE object_text = ${text}
+        `.execute(db.db)
+      );
+      return Number(rows.rows[0]?.count ?? 0);
+    }
+
+    it("lists only the actor's own pending suggestions", async () => {
+      const own = await suggest(ids.userA, "MEMSUGG_OWN_3065 cycles to work");
+      const other = await suggest(ids.userB, "MEMSUGG_OTHER_3065 private to user B");
+      const result = await gateway().call({ method: "GET", path: "/api/memory/candidates" });
+      expect(result).toMatchObject({ ok: true });
+      const text = JSON.stringify(result);
+      expect(text).toContain(own);
+      expect(text).toContain("MEMSUGG_OWN_3065 cycles to work");
+      expect(text).not.toContain(other);
+      expect(text).not.toContain("MEMSUGG_OTHER_3065");
+    });
+
+    it("accepts a suggestion once, only through an approval card, even under YOLO", async () => {
+      const excerpt = "MEMSUGG_ACCEPT_3065 takes the early train";
+      const id = await suggest(ids.userA, excerpt);
+      const path = `/api/memory/candidates/${id}/accept`;
+      const h = gateway({ yoloMode: true });
+      expect(await h.call({ method: "POST", path })).toMatchObject({
+        ok: true,
+        structuredData: { status: 200 }
+      });
+      const cards = h.events.filter((event) => event.kind === "action_request");
+      expect(cards).toHaveLength(1);
+      expect(cards[0]).toMatchObject({
+        summary: "Accept suggested memory",
+        details: { target: `${excerpt} [suggestion ${id}]` }
+      });
+      expect(await candidateStatus(ids.userA, id)).toBe("promoted");
+      expect(await factCount(ids.userA, excerpt)).toBe(1);
+
+      // The suggestion is no longer pending, so a repeat is refused before any card or write.
+      callSpy.mockClear();
+      expect(await h.call({ method: "POST", path })).toMatchObject({
+        ok: false,
+        denied: true,
+        reason: expect.stringMatching(/^unknown_route/)
+      });
+      expect(callSpy).not.toHaveBeenCalled();
+      expect(await factCount(ids.userA, excerpt)).toBe(1);
+    });
+
+    it("changes nothing when the accept card is rejected", async () => {
+      const excerpt = "MEMSUGG_REJECTED_3065 likes rain";
+      const id = await suggest(ids.userA, excerpt);
+      callSpy.mockClear();
+      mintSpy.mockClear();
+      const h = gateway({ yoloMode: true, autoApprove: false });
+      const pending = h.call({ method: "POST", path: `/api/memory/candidates/${id}/accept` });
+      await vi.waitFor(
+        () => expect(h.events.some((event) => event.kind === "action_request")).toBe(true),
+        { timeout: 5_000 }
+      );
+      const card = h.events.find((event) => event.kind === "action_request")!;
+      expect(
+        await h.gateway.resolveActionRequest(ids.userA, card.actionRequestId, "rejected")
+      ).toBe("resolved");
+      expect(await pending).toMatchObject({ ok: false, denied: true });
+      expect(callSpy).not.toHaveBeenCalled();
+      expect(mintSpy).not.toHaveBeenCalled();
+      expect(await candidateStatus(ids.userA, id)).toBe("pending");
+      expect(await factCount(ids.userA, excerpt)).toBe(0);
+    });
+
+    it("refuses to accept another user's suggestion before any card", async () => {
+      const id = await suggest(ids.userB, "MEMSUGG_FOREIGN_3065 belongs to user B");
+      callSpy.mockClear();
+      const h = gateway({ yoloMode: true });
+      expect(
+        await h.call({ method: "POST", path: `/api/memory/candidates/${id}/accept` })
+      ).toMatchObject({ ok: false, denied: true, reason: expect.stringMatching(/^unknown_route/) });
+      expect(h.events).toEqual([]);
+      expect(callSpy).not.toHaveBeenCalled();
+      expect(await candidateStatus(ids.userB, id)).toBe("pending");
+    });
   });
 });

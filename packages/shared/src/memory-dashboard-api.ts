@@ -121,6 +121,34 @@ export const getMemoryDashboardRouteSchema = {
   }
 } as const;
 
+const pendingCandidateSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "title", "summary", "provenance", "createdAt"],
+  properties: {
+    id: { type: "string" },
+    title: { type: "string" },
+    summary: { type: "string" },
+    recordKind: { type: "string", enum: recordKindEnum },
+    provenance: { type: "string", enum: ["volunteered", "inferred"] },
+    createdAt: { type: "string" }
+  }
+} as const;
+
+export const getMemoryPendingCandidatesRouteSchema = {
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["items"],
+      properties: {
+        items: { type: "array", items: pendingCandidateSchema }
+      }
+    },
+    401: errorResponseSchema
+  }
+} as const;
+
 export const postMemoryCandidateAcceptRouteSchema = {
   body: {
     type: "object",

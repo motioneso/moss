@@ -6,6 +6,7 @@ import { type Kysely, sql } from "kysely";
 import { createDatabase, DataContextRunner, type AccessContext, type MossDatabase } from "@moss/db";
 import {
   createMemoryCandidateSignature,
+  ManualMemoryCandidateService,
   MemoryCandidatesRepository,
   MemoryGraphRepository,
   registerMemoryDashboardRoutes,
@@ -20,6 +21,7 @@ let server: FastifyInstance;
 let originalEmbedProvider: string | undefined;
 
 const candidatesRepo = new MemoryCandidatesRepository();
+const manualCandidates = new ManualMemoryCandidateService();
 const graphRepo = new MemoryGraphRepository();
 
 beforeAll(async () => {
@@ -155,6 +157,49 @@ describe("GET /api/memory/dashboard", () => {
   });
 });
 
+async function insertManualCandidate(ownerUserId: string, excerpt: string) {
+  return appDataContext.withDataContext(
+    { actorUserId: ownerUserId, requestId: "test-seed" },
+    (db) =>
+      manualCandidates.createPendingManualCandidate(db, ownerUserId, {
+        targetKind: "chat_message",
+        targetRef: randomUUID(),
+        excerpt
+      })
+  );
+}
+
+describe("GET /api/memory/candidates", () => {
+  it("lists only the actor's own pending suggestions, with remember-this text", async () => {
+    const own = await insertManualCandidate(ids.userA, "Owner pending suggestion 3065");
+    const resolved = await insertManualCandidate(ids.userA, "Owner rejected suggestion 3065");
+    await appDataContext.withDataContext({ actorUserId: ids.userA, requestId: "test" }, (db) =>
+      candidatesRepo.markRejected(db, ids.userA, resolved.id, "not relevant")
+    );
+    const foreign = await insertManualCandidate(ids.userB, "Other user's suggestion 3065");
+
+    const res = await server.inject({
+      method: "GET",
+      url: "/api/memory/candidates",
+      headers: authHeaders(ids.userA)
+    });
+    expect(res.statusCode).toBe(200);
+    const items = (JSON.parse(res.body) as { items: { id: string; summary: string }[] }).items;
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        id: own.id,
+        title: "Owner pending suggestion 3065",
+        summary: "Owner pending suggestion 3065",
+        provenance: "volunteered"
+      })
+    );
+    const ids_ = items.map((item) => item.id);
+    expect(ids_).not.toContain(resolved.id);
+    expect(ids_).not.toContain(foreign.id);
+    expect(res.body).not.toContain("Other user's suggestion 3065");
+  });
+});
+
 describe("POST /api/memory/candidates/:id/reject", () => {
   it("rejects a pending candidate", async () => {
     const candidate = await insertPendingCandidate(ids.userA);
@@ -239,6 +284,28 @@ describe("POST /api/memory/candidates/:id/accept", () => {
     );
     expect(Number(factRow.rows[0]?.confidence)).toBeGreaterThanOrEqual(0.9);
     expect(factRow.rows[0]?.provenance).toBe("confirmed");
+  });
+
+  it("accepts a remember-this suggestion as its own text, once", async () => {
+    const excerpt = "Remember-this accept text 3065";
+    const candidate = await insertManualCandidate(ids.userA, excerpt);
+    // No body, as a chat call sends it.
+    const accept = () =>
+      server.inject({
+        method: "POST",
+        url: `/api/memory/candidates/${candidate.id}/accept`,
+        headers: authHeaders(ids.userA)
+      });
+    expect((await accept()).statusCode).toBe(200);
+    expect((await accept()).statusCode).toBe(404);
+    const facts = await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "test-check" },
+      (db) =>
+        sql<{ object_text: string }>`
+          SELECT object_text FROM app.memory_facts WHERE object_text = ${excerpt}
+        `.execute(db.db)
+    );
+    expect(facts.rows).toHaveLength(1);
   });
 
   it("returns 404 for unknown candidate", async () => {

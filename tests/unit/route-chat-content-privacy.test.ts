@@ -175,6 +175,7 @@ describe("private-content route policies", () => {
     ["GET", "/api/memory/graph/recall"],
     ["GET", "/api/memory/graph/core"],
     ["GET", "/api/memory/dashboard"],
+    ["GET", "/api/memory/candidates"],
     ["POST", "/api/memory/graph/entities"],
     ["POST", "/api/memory/graph/facts"],
     ["POST", "/api/wellness/checkins"],
@@ -193,6 +194,9 @@ describe("private-content approval target resolvers", () => {
     ["DELETE", `/api/memory/graph/entities/${TARGET_ID}`],
     ["POST", `/api/memory/graph/facts/${TARGET_ID}/confirm`],
     ["POST", `/api/memory/graph/facts/${TARGET_ID}/correct`],
+    ["POST", `/api/memory/candidates/${TARGET_ID}/accept`],
+    ["POST", `/api/memory/candidates/${TARGET_ID}/reject`],
+    ["POST", `/api/memory/candidates/${TARGET_ID}/suppress`],
     ["DELETE", `/api/wellness/therapy-notes/${TARGET_ID}`]
   ])("requires a scoped handle and validates the id for %s %s", async (method, path) => {
     const target = targetFor(method, path);
@@ -317,6 +321,26 @@ describe("private-content approval target resolvers", () => {
     expect(await target(scoped, { id: TARGET_ID })).toBe(
       `Entity ${SUBJECT_ID}: prefers: Early mornings [fact ${TARGET_ID}]`
     );
+  });
+
+  it.each([
+    [{ manualRequest: true, excerpt: "Water the ferns on Sundays" }, "Water the ferns on Sundays"],
+    [
+      { kind: "fact", fact: { subject: "user", predicate: "prefers", objectText: "tea" } },
+      "user prefers tea"
+    ]
+  ])("labels a pending suggestion with its full text (%#)", async (payload, label) => {
+    const target = targetFor("POST", `/api/memory/candidates/${TARGET_ID}/accept`);
+    const { scoped, queries } = makeRecordingDb({
+      rows: [{ id: TARGET_ID, payload_json: payload }]
+    });
+    expect(await target(scoped, { id: TARGET_ID })).toBe(`${label} [suggestion ${TARGET_ID}]`);
+    expect(queries).toHaveLength(1);
+    expect(queries[0]?.sql).toContain("app.memory_candidates");
+    expect(queries[0]?.sql).toContain("owner_user_id = app.current_actor_user_id()");
+    expect(queries[0]?.sql).toContain("status = 'pending'");
+    expect(queries[0]?.sql).not.toMatch(/insert|update|delete/i);
+    expect(queries[0]?.parameters).toEqual([TARGET_ID]);
   });
 
   it("reads an entity name from the actor-scoped record", async () => {

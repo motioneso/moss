@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   getMemoryDashboardRouteSchema,
+  getMemoryPendingCandidatesRouteSchema,
   getMemoryGraphCoreRouteSchema,
   getMemoryGraphRecallRouteSchema,
   patchMemoryEntityDashboardRouteSchema,
@@ -20,6 +21,7 @@ import {
   postMemoryGraphSupersedeRouteSchema
 } from "@moss/shared";
 import {
+  memoryCandidateTarget,
   memoryEntityTarget,
   memoryFactTarget,
   memoryFactResolutionTarget
@@ -239,23 +241,46 @@ export const memoryModuleManifest: MossModuleManifest = {
       permissionId: "memory.view"
     },
     {
+      method: "GET",
+      path: "/api/memory/candidates",
+      chat: { access: "read", title: "List pending suggested memory", content: "outside" },
+      responseSchema: getMemoryPendingCandidatesRouteSchema.response[200],
+      permissionId: "memory.view"
+    },
+    {
       method: "POST",
       path: "/api/memory/candidates/:id/accept",
-      chat: { access: "write", title: "Accept suggested memory", content: "user_authored" },
+      // Ben, 2026-10-06: accepting a suggestion from chat always shows an approval card.
+      chat: {
+        access: "destructive",
+        title: "Accept suggested memory",
+        content: "user_authored",
+        target: memoryCandidateTarget
+      },
       requestSchema: postMemoryCandidateAcceptRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/candidates/:id/reject",
-      chat: { access: "write", title: "Reject suggested memory", content: "user_authored" },
+      chat: {
+        access: "write",
+        title: "Reject suggested memory",
+        content: "user_authored",
+        target: memoryCandidateTarget
+      },
       requestSchema: postMemoryCandidateRejectRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/candidates/:id/suppress",
-      chat: { access: "write", title: "Suppress suggested memory", content: "user_authored" },
+      chat: {
+        access: "write",
+        title: "Suppress suggested memory",
+        content: "user_authored",
+        target: memoryCandidateTarget
+      },
       requestSchema: postMemoryCandidateSuppressRouteSchema.body,
       permissionId: "memory.manage"
     },
@@ -351,7 +376,7 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.chat_app_actions",
       description:
-        "App actions create facts and entities or make receipt-only changes. Deletes and superseding ask first. Retained-source recall, dashboards and hydrated changes stay blocked pending a consent-aware projection."
+        "App actions create facts and entities, make receipt-only changes, and list or decide your pending suggested memories. Accepting, deleting and superseding ask first. Retained-source recall, dashboards and hydrated changes stay blocked."
     },
     {
       id: "memory.associative_graph",
@@ -363,8 +388,9 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.candidate_review",
       description:
-        "Moss proposes new memories as it learns; in Memory settings you review each candidate and " +
-        "accept, reject, or suppress it before it becomes a kept memory."
+        "Moss proposes new memories as it learns. In Memory settings, or by asking Moss in chat, you " +
+        "accept, reject, or suppress each one before it becomes a kept memory. Accepting from chat " +
+        "always shows an approval card."
     },
     {
       id: "memory.notes_ingest",

@@ -3,6 +3,8 @@ import { sql } from "kysely";
 import { assertDataContextDb, isUuid } from "@moss/db";
 import type { RouteChatTargetResolver } from "@moss/module-sdk";
 
+import { candidateLabel } from "./candidate-labels.js";
+
 interface FactLabelRow {
   readonly id: string;
   readonly subject_entity_id: string;
@@ -83,4 +85,20 @@ export const memoryEntityTarget: RouteChatTargetResolver = async (db, params) =>
     WHERE id = ${id}::uuid AND owner_user_id = app.current_actor_user_id()
   `.execute(db.db);
   return result.rows[0]?.name ?? null;
+};
+
+/** The actor's pending suggestion, labelled with the full text the decision applies to. */
+export const memoryCandidateTarget: RouteChatTargetResolver = async (db, params) => {
+  assertDataContextDb(db);
+  const id = params.id;
+  if (!id || !isUuid(id)) return null;
+  const result = await sql<{ id: string; payload_json: unknown }>`
+    SELECT id, payload_json FROM app.memory_candidates
+    WHERE id = ${id}::uuid
+      AND owner_user_id = app.current_actor_user_id()
+      AND status = 'pending'
+  `.execute(db.db);
+  const row = result.rows[0];
+  if (!row) return null;
+  return `${candidateLabel(row.payload_json as Record<string, unknown> | null)} [suggestion ${row.id}]`;
 };

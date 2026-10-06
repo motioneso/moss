@@ -4,6 +4,7 @@ import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import {
   deleteMemoryEntityDashboardRouteSchema,
   getMemoryDashboardRouteSchema,
+  getMemoryPendingCandidatesRouteSchema,
   patchMemoryEntityDashboardRouteSchema,
   patchMemoryFactDashboardRouteSchema,
   postMemoryCandidateAcceptRouteSchema,
@@ -12,6 +13,8 @@ import {
 } from "@moss/shared";
 import { RuntimeConfigResolver } from "@moss/settings";
 
+import { pendingCandidateItem } from "./candidate-labels.js";
+import { MemoryCandidatesRepository } from "./candidates-repository.js";
 import { MemoryDashboardService } from "./dashboard-service.js";
 import type {
   AcceptMemoryCandidateRequest,
@@ -25,6 +28,8 @@ import {
 } from "./embedding-provider-config.js";
 import { MemoryGraphRepository } from "./graph-repository.js";
 
+const PENDING_CANDIDATE_LIMIT = 50;
+
 export interface MemoryDashboardRouteDependencies {
   readonly dataContext: DataContextRunner;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -35,6 +40,7 @@ export function registerMemoryDashboardRoutes(
   dependencies: MemoryDashboardRouteDependencies
 ): void {
   const graphRepo = new MemoryGraphRepository();
+  const candidatesRepo = new MemoryCandidatesRepository();
 
   server.get(
     "/api/memory/dashboard",
@@ -60,9 +66,36 @@ export function registerMemoryDashboardRoutes(
     }
   );
 
+  server.get(
+    "/api/memory/candidates",
+    { schema: getMemoryPendingCandidatesRouteSchema },
+    async (request, reply) => {
+      try {
+        const access = await dependencies.resolveAccessContext(request);
+        return await dependencies.dataContext.withDataContext(access, async (scopedDb) => {
+          const pending = await candidatesRepo.listPending(
+            scopedDb,
+            access.actorUserId,
+            PENDING_CANDIDATE_LIMIT
+          );
+          return { items: pending.map(pendingCandidateItem) };
+        });
+      } catch (error) {
+        return handleDashboardRouteError(error, reply);
+      }
+    }
+  );
+
   server.post(
     "/api/memory/candidates/:id/accept",
-    { schema: postMemoryCandidateAcceptRouteSchema },
+    {
+      schema: postMemoryCandidateAcceptRouteSchema,
+
+      // A plain accept has nothing to send; treat a missing body as an empty one.
+      preValidation: async (request) => {
+        request.body ??= {};
+      }
+    },
     async (request, reply) => {
       try {
         const access = await dependencies.resolveAccessContext(request);
