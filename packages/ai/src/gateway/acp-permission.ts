@@ -300,6 +300,7 @@ export async function requestAcpBuiltInPermission(
       kind: "action_request",
       actionRequestId: action.id,
       toolName,
+      outsideContentNotice: false,
       summary: acpCardText(builtIn)
     });
     const holdStartedAt = Date.now();

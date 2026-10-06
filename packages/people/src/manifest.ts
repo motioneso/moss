@@ -126,7 +126,7 @@ export const peopleModuleManifest: MossModuleManifest = {
     {
       id: "people.chat_app_actions",
       description:
-        "Built-in People routes have explicit chat access classifications. Generic app-action tools are not wired yet; this metadata does not expose new chat actions."
+        "App actions read People and review matches. Note-backed writes, ingestion, merges and identity splits remain unavailable through this path."
     }
   ],
   sourceBehaviors: [

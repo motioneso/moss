@@ -920,7 +920,7 @@ export function registerAiRoutes(
 
         if (tool.risk !== "read") {
           const pendingTool = tool as AiAssistantToolDto & {
-            readonly risk: "write" | "outbound" | "destructive";
+            readonly risk: "read" | "write" | "outbound" | "destructive";
           };
           const action = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
             repository.createPendingAssistantAction(scopedDb, {

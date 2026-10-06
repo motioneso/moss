@@ -524,6 +524,11 @@ export const calendarModuleManifest = {
   ],
   features: [
     {
+      id: "calendar.chat_app_actions",
+      description:
+        "App actions read calendar data and create or edit day-plan drafts. Provider writes, plan execution and settings that expand automatic authority stay unavailable through generic actions."
+    },
+    {
       id: "calendar.saved_day_plan_read",
       description:
         "Read your saved day plan for a date and timezone, with actor-visible tasks, unavailable " +

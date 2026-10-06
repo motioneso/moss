@@ -895,6 +895,11 @@ export const tasksModuleManifest = {
   ],
   features: [
     {
+      id: "tasks.chat_app_actions",
+      description:
+        "App actions read individual tasks and activity, manage lists and tags, and split tasks. Scheduling, email-triage updates and auto-execution controls remain blocked; dedicated task tools stay separate."
+    },
+    {
       id: "tasks.lists_and_tags",
       description:
         "Organize tasks into lists and tags, and rename, reassign or delete them without losing tasks. Pick a list from the index or the phone picker; it stays across List and Grid. When nothing matches, Clear filters resets them.",

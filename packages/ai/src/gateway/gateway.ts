@@ -4,7 +4,6 @@ import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type {
   ActionRequestPreview,
   MossModuleManifest,
-  ModuleAssistantToolManifest,
   ToolContext,
   ToolResult,
   ToolServices
@@ -22,7 +21,7 @@ import { actionHoldDurationMs, emitActionResultRecord } from "./action-result-re
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import { recordGatewayAudit } from "./gateway-audit.js";
-import { validateToolInput } from "./input-validation.js";
+import { prepareToolCall, servicesForTool } from "./per-call-resolution.js";
 import { liveStreamResult, renderAndCap } from "./output-validation.js";
 import {
   createEffectivePolicyLookup,
@@ -63,6 +62,9 @@ import type {
   GatewayDeclineReason,
   GatewayGateOutcome,
   GatewayToolResponse,
+  PerCallResolver,
+  PerCallExecutor,
+  PerCallServices,
   SessionNotifier
 } from "./types.js";
 
@@ -81,6 +83,11 @@ export interface AssistantToolGatewayDependencies {
   readonly agencyPrefs?: (ctx: ToolContext) => AgencyPrefLookup;
   readonly actionPolicy?: (ctx: ToolContext) => ActionPolicyLookup;
   readonly yoloMode?: (ctx: ToolContext) => Promise<boolean>;
+  readonly perCallResolvers?: Readonly<Record<string, PerCallResolver>>;
+  /** Factories must return capabilities bound to the resolved input/context, never raw services. */
+  readonly perCallServices?: Readonly<Record<string, PerCallServices>>;
+  /** A resolved, bound transport owns its DB scopes; never a module-manifest opt-out. */
+  readonly perCallExecutors?: Readonly<Record<string, PerCallExecutor>>;
   /**
    * Opaque, composition-layer-constructed service registry keyed by service name.
    * Passed verbatim (as a per-tool, declared-keys-only subset) as the 4th argument
@@ -324,21 +331,15 @@ export class AssistantToolGateway {
       };
     }
 
-    let input: Record<string, unknown>;
-    try {
-      input = await validateToolInput(found.tool.inputSchema, rawInput, {
-        // Missing provenance is untrusted: only the registry's explicit false marker gets the
-        // built-in synchronous path.
-        external: found.tool.isExternal !== false,
-        toolName
-      });
-    } catch (error) {
-      return {
-        failure: { ok: false, error: error instanceof Error ? error.message : "Invalid input" },
-        reason: "invalid_input"
-      };
-    }
-    return { found, input, ctx };
+    const prepared = await prepareToolCall(
+      found,
+      rawInput,
+      ctx,
+      this.deps.perCallResolvers?.[toolName],
+      this.deps.perCallServices?.[toolName],
+      this.deps.perCallExecutors?.[toolName]
+    );
+    return "failure" in prepared ? prepared : { ...prepared, ctx };
   }
 
   /** The single approval decision shared by live calls and the gate's dry run. */
@@ -347,6 +348,8 @@ export class AssistantToolGateway {
     input: Record<string, unknown>,
     ctx: ToolContext
   ): Promise<{ kind: "yolo-confirm" | "yolo-run" | "auto-run" | "confirm" }> {
+    if (found.resolution?.forceConfirm) return { kind: "confirm" };
+    const perCallResolved = found.resolution !== undefined;
     const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
     const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
     const effectiveLookup = createEffectivePolicyLookup(
@@ -356,7 +359,12 @@ export class AssistantToolGateway {
     );
     if (found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true) {
       return confirmOverride ||
-        !(await familyAllowsAutoRun(found.tool, found.dto.moduleId, effectiveLookup))
+        !(await familyAllowsAutoRun(
+          found.tool,
+          found.dto.moduleId,
+          effectiveLookup,
+          perCallResolved
+        ))
         ? { kind: "yolo-confirm" }
         : { kind: "yolo-run" };
     }
@@ -365,7 +373,8 @@ export class AssistantToolGateway {
       found.dto.moduleId,
       confirmOverride,
       effectiveLookup,
-      await this.computeSortedSafe(found, ctx)
+      await this.computeSortedSafe(found, ctx),
+      perCallResolved
     )) === "run"
       ? { kind: "auto-run" }
       : { kind: "confirm" };
@@ -419,8 +428,11 @@ export class AssistantToolGateway {
       ...(result.ok
         ? { result: liveStreamResult(found.tool, result) }
         : { reason: gatewayFailureReason(result) }),
-      ...(result.ok && found.tool.affectsQueryKeys
+      ...(result.ok && audit.outcome === "success" && found.tool.affectsQueryKeys
         ? { affectsQueryKeys: found.tool.affectsQueryKeys }
+        : {}),
+      ...(result.ok && audit.outcome === "success" && found.tool.risk !== "read" && found.resolution
+        ? { affectsModules: found.resolution.affectsModules }
         : {})
     });
     void recordGatewayAudit(
@@ -511,6 +523,7 @@ export class AssistantToolGateway {
       kind: "action_request",
       actionRequestId: action.id,
       toolName,
+      outsideContentNotice: false,
       summary: nativeToolSummary(toolName, input)
     });
     const holdStartedAt = Date.now();
@@ -572,43 +585,40 @@ export class AssistantToolGateway {
    * Execute a single read tool on behalf of an actor without a session token.
    * Used by the cross-tool reasoning pre-submit path in ChatSessionManager.
    *
-   * Fail-closed: only tools with risk "read" are permitted; empty services are
-   * passed so the write→confirm floor is structurally un-bypassable; handler
-   * throws are sanitized the same way runHandler sanitizes them.
+   * Fail-closed: only effective reads that need no approval are permitted. Services come
+   * from the read bundle or a composition-owned capability bound to this exact call.
+   * Handler throws are sanitized the same way runHandler sanitizes them.
    */
   async runReadToolForActor(
     actorUserId: string,
     toolName: string,
     rawInput: unknown
   ): Promise<GatewayToolResponse> {
-    const found = (await this.executableTools(actorUserId)).find(
+    const declared = (await this.executableTools(actorUserId)).find(
       (entry) => entry.tool.name === toolName
     );
-    if (!found) {
-      return { ok: false, error: `Tool not available: ${toolName}` };
-    }
-    if (found.tool.risk !== "read") {
-      return { ok: false, error: `Tool ${toolName} is not a read tool` };
-    }
-
-    let input: Record<string, unknown>;
-    try {
-      input = await validateToolInput(found.tool.inputSchema, rawInput, {
-        // Missing provenance is untrusted: only the registry's explicit false marker gets the
-        // built-in synchronous path.
-        external: found.tool.isExternal !== false,
-        toolName
-      });
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };
-    }
-
+    if (!declared) return { ok: false, error: `Tool not available: ${toolName}` };
     const requestId = `cross-tool_${randomUUID()}`;
     const access: AccessContext = { actorUserId, requestId };
     const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
     const ctx: ToolContext = { actorUserId, requestId, chatSessionId: "", localTimezone };
-
-    const readServices = this.deps.readToolServices ?? {};
+    const prepared = await prepareToolCall(
+      declared,
+      rawInput,
+      ctx,
+      this.deps.perCallResolvers?.[toolName],
+      this.deps.perCallServices?.[toolName],
+      this.deps.perCallExecutors?.[toolName]
+    );
+    if ("failure" in prepared) return prepared.failure;
+    const { found, input } = prepared;
+    if (
+      found.tool.risk !== "read" ||
+      (await this.planCall(found, input, ctx)).kind !== "auto-run"
+    ) {
+      return { ok: false, error: `Tool ${toolName} is not a read tool` };
+    }
+    const readServices = this.servicesFor(found);
     try {
       const result = await this.executeTool(found, input, ctx, readServices, access);
       return {
@@ -678,29 +688,8 @@ export class AssistantToolGateway {
     return "resolved";
   }
 
-  /**
-   * The subset of toolServices this tool declared via requiresServices — but ONLY for non-read
-   * tools. A read tool (risk → "run", no confirmation) receives NOTHING,
-   * so no injected (potentially write-capable) service can be invoked without an Approve. This
-   * keeps the write→confirm floor structurally un-bypassable by a mistaken/hostile read-tool
-   * requiresServices declaration, with no service-risk taxonomy (Codex HIGH #5). The per-tool
-   * subset also means a tool can never reach an undeclared (write-capable) service (Codex HIGH #1).
-   */
-  private servicesFor(tool: ModuleAssistantToolManifest): ToolServices {
-    if (tool.risk === "read") {
-      // Read tools bypass confirmAndRun so they never receive write-capable services.
-      // readToolServices carries only informational (read-only) services — safe here.
-      return this.deps.readToolServices ?? {};
-    }
-    const registry = this.deps.toolServices ?? {};
-    const keys = tool.requiresServices ?? [];
-    const subset: Record<string, unknown> = {};
-    for (const key of keys) {
-      // executableTools already guaranteed every declared key is registered (fail-closed),
-      // so this is always present here; guard defensively regardless.
-      if (key in registry) subset[key] = registry[key];
-    }
-    return subset;
+  private servicesFor(found: ExecutableTool): ToolServices {
+    return servicesForTool(found, this.deps.toolServices, this.deps.readToolServices);
   }
 
   /**
@@ -720,7 +709,7 @@ export class AssistantToolGateway {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
     try {
       return await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-        Promise.resolve(hook(scopedDb, input, ctx, this.servicesFor(found.tool)))
+        Promise.resolve(hook(scopedDb, input, ctx, this.servicesFor(found)))
       );
     } catch {
       return true;
@@ -758,7 +747,7 @@ export class AssistantToolGateway {
       ctx,
       this.deps.logger ?? defaultGatewayLogger,
       (services) => this.executeTool(found, input, ctx, services, access),
-      this.servicesFor(found.tool)
+      this.servicesFor(found)
     );
   }
 
@@ -769,6 +758,7 @@ export class AssistantToolGateway {
     services: ToolServices,
     access: AccessContext
   ): Promise<ToolResult> {
+    if (found.executePerCall) return found.executePerCall();
     return this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) => {
       const execute = () => found.execute(scopedDb, input, ctx, services);
       return found.tool.risk === "read" && this.deps.readToolTrustBoundary
@@ -799,7 +789,7 @@ export class AssistantToolGateway {
         toolModuleName: found.dto.moduleName,
         toolName: found.dto.name,
         permissionId: found.dto.permissionId,
-        risk: found.tool.risk as "write" | "outbound" | "destructive",
+        risk: found.tool.risk,
         inputSummary: summarizeAssistantToolInput(input),
         requestId: ctx.requestId
       })
@@ -822,7 +812,7 @@ export class AssistantToolGateway {
     if (previewHook) {
       try {
         preview = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-          previewHook(scopedDb, input, ctx, this.servicesFor(found.tool))
+          previewHook(scopedDb, input, ctx, this.servicesFor(found))
         );
       } catch {
         preview = undefined;
@@ -834,6 +824,8 @@ export class AssistantToolGateway {
       actionRequestId: action.id,
       toolName: found.dto.name,
       summary,
+      outsideContentNotice: false,
+      ...(found.resolution ? { details: found.resolution.details } : {}),
       ...(preview ? { preview } : {})
     });
     const holdStartedAt = Date.now();
@@ -885,8 +877,14 @@ export class AssistantToolGateway {
         ...(result.ok
           ? { result: liveStreamResult(found.tool, result) }
           : { reason: gatewayFailureReason(result) }),
-        ...(result.ok && found.tool.affectsQueryKeys
+        ...(result.ok && audit.outcome === "success" && found.tool.affectsQueryKeys
           ? { affectsQueryKeys: found.tool.affectsQueryKeys }
+          : {}),
+        ...(result.ok &&
+        audit.outcome === "success" &&
+        found.tool.risk !== "read" &&
+        found.resolution
+          ? { affectsModules: found.resolution.affectsModules }
           : {})
       });
       void recordGatewayAudit(this.deps, access, found, {
@@ -925,15 +923,11 @@ export class AssistantToolGateway {
           continue;
         }
         const declaredServices = tool.requiresServices ?? [];
-        // Fail closed #1: a read tool must NOT declare services — a read dispatches without the
-        // confirm gate, so a write-capable service on a read tool would bypass the write→confirm
-        // floor. Such a manifest is a misconfiguration; hide it rather than risk a bypass (HIGH #5).
-        if (declaredServices.length > 0 && tool.risk === "read") {
-          continue;
-        }
-        // Fail closed #2: a tool whose required services we cannot satisfy is hidden — never
-        // listed and never confirmable. Prevents an approve→execute-fail dead-end (HIGH #2).
-        const registry = this.deps.toolServices ?? {};
+        // A read declaration can only be satisfied by the read-only registry. A matching key
+        // in the write registry never makes a read tool available or grants it write services.
+        // Missing declared services hide the tool before it can become an approval dead-end.
+        const registry =
+          (tool.risk === "read" ? this.deps.readToolServices : this.deps.toolServices) ?? {};
         const missing = declaredServices.filter((key) => !(key in registry));
         if (missing.length > 0) {
           continue;

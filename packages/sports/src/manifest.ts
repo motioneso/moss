@@ -128,7 +128,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.chat_app_actions",
       description:
-        "Built-in Sports routes have explicit chat access classifications. Generic app-action tools are not wired yet; this metadata does not expose new chat actions."
+        "App actions read sports data and manage follows, coverage and standings preferences. Removing follows or saved sources asks first. Source discovery, feed authorization and retention-touching reads remain blocked."
     },
     {
       // #2956: the Activity history line title for this module's structured calls.

@@ -64,6 +64,11 @@ export const scratchpadModuleManifest = {
   // matching the notifications module's precedent for a module with no screen yet.
   features: [
     {
+      id: "scratchpad.chat_app_actions",
+      description:
+        "App actions read and append Scratchpad text and change its local settings. Replacing the whole Scratchpad remains blocked; returned note text is outside content."
+    },
+    {
       id: "scratchpad.assistant_read_append",
       description:
         "The assistant can read the user's scratchpad and append a line to it. It can never replace or delete existing text.",

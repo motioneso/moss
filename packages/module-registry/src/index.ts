@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
 import { sql, type Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
+import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 
 import {
   meetingsModuleManifest,
@@ -600,6 +601,7 @@ export interface BuiltInRouteDependencies {
   readonly listModuleManifests: () => readonly MossModuleManifest[];
   /** #3065: filled by the server's onReady once every route is registered; forwarded to chat. */
   readonly routeCatalog?: RouteCatalogHolder;
+  readonly actAsGrants?: ActAsGrantRegistry;
   /**
    * Async, actor-filtered resolver (the enablement SEAM). Used by the tool surfaces
    * (MCP gateway + AI REST tools) and the route guard. Distinct from
@@ -2248,6 +2250,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         adoptCheckTokenMinter: deps.adoptCheckTokenMinter,
         resolveActiveModules: deps.resolveActiveModules,
         routeCatalog: deps.routeCatalog,
+        actAsGrants: deps.actAsGrants,
         mcpServerUrl: deps.mcpServerUrl,
         boss: deps.boss,
         personaPreferences: new PreferencesRepository(),

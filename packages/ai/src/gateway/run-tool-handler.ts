@@ -18,7 +18,7 @@ import {
   safeErrorName
 } from "./dependency-failure.js";
 import { renderAndCap, sanitizeAssistantToolResult } from "./output-validation.js";
-import type { GatewayToolResponse } from "./types.js";
+import type { GatewayToolResponse, PerCallResolution } from "./types.js";
 
 export interface GatewayLogger {
   error(event: string, fields: Record<string, unknown>): void;
@@ -28,6 +28,9 @@ export interface ExecutableTool {
   readonly tool: ModuleAssistantToolManifest;
   readonly execute: ToolExecute;
   readonly dto: AiAssistantToolDto;
+  readonly resolution?: Extract<PerCallResolution, { kind: "proceed" }>;
+  readonly services?: ToolServices;
+  readonly executePerCall?: () => Promise<ToolResult>;
 }
 
 /**

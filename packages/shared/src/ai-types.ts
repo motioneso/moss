@@ -282,7 +282,7 @@ export type AiAssistantToolBlockedReason =
   | "confirmation_required"
   | "non_read_risk"
   | "unsupported_tool";
-export type AiAssistantActionRisk = "write" | "outbound" | "destructive";
+export type AiAssistantActionRisk = "read" | "write" | "outbound" | "destructive";
 export type AiAssistantActionStatus = "pending" | "confirmed" | "rejected" | "cancelled";
 export type ResolveAiAssistantActionStatus = Exclude<AiAssistantActionStatus, "pending">;
 

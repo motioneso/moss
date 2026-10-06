@@ -606,6 +606,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       listConfiguredAuthProviders: authRuntime.listConfiguredProviders,
       listModuleManifests: getBuiltInModuleManifests,
       routeCatalog,
+      actAsGrants,
       resolveActiveModules: resolveActiveModulesWithIntegrations,
       mcpServerUrl: apiServerConfig.mcpServerUrl,
       focusSignals: async (ctx) => {

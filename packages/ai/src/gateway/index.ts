@@ -25,6 +25,11 @@ export {
 } from "./output-validation.js";
 export type {
   ActiveModulesResolver,
+  CallCardDetails,
+  PerCallResolution,
+  PerCallResolver,
+  PerCallExecutor,
+  PerCallServices,
   SessionNotifier,
   GatewaySessionRecord,
   GatewayToolResponse,

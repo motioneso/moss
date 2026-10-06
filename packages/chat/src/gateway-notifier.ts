@@ -32,6 +32,8 @@ function toTranscriptRecord(record: GatewaySessionRecord): TranscriptRecord | nu
       actionRequestId: record.actionRequestId,
       toolName: record.toolName,
       summary: record.summary,
+      outsideContentNotice: record.outsideContentNotice,
+      ...(record.details ? { details: record.details } : {}),
       // Rides the live stream only; never persisted (see TranscriptRecord.preview).
       ...(record.preview ? { preview: record.preview } : {})
     };
@@ -71,7 +73,8 @@ function toTranscriptRecord(record: GatewaySessionRecord): TranscriptRecord | nu
       ...(record.holdDurationMs != null ? { durationMs: record.holdDurationMs } : {}),
       ...(record.reason ? { reason: record.reason } : {}),
       ...(record.result ? { result: record.result } : {}),
-      ...(record.affectsQueryKeys ? { affectsQueryKeys: record.affectsQueryKeys } : {})
+      ...(record.affectsQueryKeys ? { affectsQueryKeys: record.affectsQueryKeys } : {}),
+      ...(record.affectsModules ? { affectsModules: record.affectsModules } : {})
     };
   }
   return null;

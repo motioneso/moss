@@ -5,6 +5,7 @@ import { renderToString } from "react-dom/server";
 
 import { ActionRequestCard } from "../../apps/web/src/chat/action-request-card.js";
 import { parseRecord } from "../../apps/web/src/chat/use-chat-stream.js";
+import { RecordRow } from "../../apps/web/src/chat/message-row.js";
 
 // `ActionRequestCard` reads `useMutation` (#1518), which requires a `QueryClient` in context even
 // for the initial idle render — a fresh client per call keeps these tests isolated from each other.
@@ -137,5 +138,110 @@ describe("parseRecord preview parsing", () => {
       summary: "Approve the seeded workflow action",
       status: "pending"
     });
+  });
+});
+
+describe("app action details", () => {
+  const details = {
+    target: "Weekend theme <script>no()</script>",
+    fields: [
+      { label: "Name", value: "**Evening**" },
+      { label: "Enabled", value: "false" }
+    ]
+  };
+
+  it("parses target, exact field rows and the outside-content flag from live SSE", () => {
+    const record = parseRecord(
+      JSON.stringify({
+        kind: "action_request",
+        text: "Change theme",
+        details,
+        outsideContentNotice: false
+      })
+    );
+    expect(record?.details).toEqual(details);
+    expect(record?.outsideContentNotice).toBe(false);
+  });
+
+  it.each([
+    [],
+    { fields: [] },
+    { target: 1, fields: [] },
+    { target: null, fields: [{ label: "Name", value: 42 }] },
+    { target: null, fields: [null] }
+  ])("drops malformed details without partially showing an approval: %j", (details) => {
+    const record = parseRecord(JSON.stringify({ kind: "action_request", text: "Change", details }));
+    expect(record?.details).toBeUndefined();
+  });
+
+  it("accepts a target-free create and rejects non-boolean notice values", () => {
+    const record = parseRecord(
+      JSON.stringify({
+        kind: "action_request",
+        text: "Create",
+        details: { target: null, fields: [] },
+        outsideContentNotice: "false"
+      })
+    );
+    expect(record?.details).toEqual({ target: null, fields: [] });
+    expect(record?.outsideContentNotice).toBeUndefined();
+  });
+
+  it("wires the parsed stream record through RecordRow into the actual card", () => {
+    const record = parseRecord(
+      JSON.stringify({
+        kind: "action_request",
+        text: "Change theme",
+        actionRequestId: "app-1",
+        toolName: "app.callAction",
+        details,
+        outsideContentNotice: true
+      })
+    );
+    expect(record).not.toBeNull();
+    if (!record) throw new Error("The app-action fixture did not parse");
+    const client = new QueryClient();
+    const html = renderToString(
+      createElement(QueryClientProvider, { client }, createElement(RecordRow, { record }))
+    );
+    expect(html).toContain("<q>Weekend theme &lt;script&gt;no()&lt;/script&gt;</q>");
+    expect(html).toContain("**Evening**");
+    expect(html).toContain("read outside content in this chat");
+    client.clear();
+  });
+
+  it("renders target and fields as text, with no markup interpretation", () => {
+    const html = renderCard({
+      actionRequestId: "app-1",
+      toolName: "app.callAction",
+      summary: "Change theme",
+      details
+    });
+    expect(html).toContain("<q>Weekend theme &lt;script&gt;no()&lt;/script&gt;</q>");
+    expect(html).toContain("**Evening**");
+    expect(html).toContain(">false</dd>");
+    expect(html).not.toContain("<script>");
+    expect(html).not.toContain("read outside content");
+  });
+
+  it("only shows an outside-content notice when the server explicitly supplies true", () => {
+    const html = renderCard({
+      actionRequestId: "app-1",
+      toolName: "app.callAction",
+      summary: "Change",
+      outsideContentNotice: true
+    });
+    expect(html).toContain("read outside content in this chat");
+  });
+
+  it("preserves valid module refresh identifiers and discards malformed lists", () => {
+    const result = { kind: "action_result", text: "Changed", outcome: "executed" };
+    expect(
+      parseRecord(JSON.stringify({ ...result, affectsModules: ["settings", "jarvis.goals"] }))
+        ?.affectsModules
+    ).toEqual(["settings", "jarvis.goals"]);
+    expect(
+      parseRecord(JSON.stringify({ ...result, affectsModules: ["settings", 42] }))?.affectsModules
+    ).toBeUndefined();
   });
 });

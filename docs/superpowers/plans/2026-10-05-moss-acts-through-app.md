@@ -1354,3 +1354,72 @@ After these corrections the 393-route inventory is 102 reads, 52 writes, 17 dest
 and 222 blocks. Catalog tests pin all twelve aggregate exclusions independently of manifest
 labels. Refusal-before-dispatch/grant tests belong to the slice-5 gateway wiring and must cover
 these aliases before that code is published. The PR remains draft, with no live-path proof.
+
+### 8.9 Slice 5 composition and verification adjustments (2026-10-06)
+
+The Settings tools, per-call gateway policy, real API transport, approval card and module refresh
+are wired together in this slice. The gateway snapshots input before asynchronous resolution,
+then validates, resolves/refuses (including consent), plans, confirms or runs, and finally calls
+the handler. Every execution path uses the effective risk; generic destructive calls ask even
+under YOLO, ordinary resolved writes run, and resolved reads do not consume write-rate allowance
+or create write audit rows. Outside-content notices remain false until slices 6–7 add provenance.
+The draft must not be deployed or merged as completed phase 1 at this intermediate point.
+
+A resolved read still needs the in-process transport, which can write on other routes. It never
+receives the general write-service registry. A composition-owned `perCallServices` factory gets
+the immutable input/context/resolution and supplies a single-use call capability bound to that
+exact request. The unrestricted service is not the static fallback: the availability marker
+refuses without the per-call wiring. The static tool is `confirm_always` with a confirm execution
+policy and no promotable family; only successful route resolution supplies a different effective
+policy. Immediately before transport the capability rechecks route,
+module availability, consent and destructive target labels; changed consent/policy/targets need a
+fresh call. It executes the immutable approved snapshot, not an equal mutable object supplied by
+the handler. This is not a database-wide lock against concurrent record updates between the
+preflight lookup and the existing route transaction; the exact approved path/IDs remain bound.
+A trusted `perCallExecutors` closure invokes the Settings transport handler without opening an
+unused outer database transaction. Otherwise its resolver recheck and injected route would need
+a second connection while holding the first, deadlocking a one-connection pool. The resolver and
+route keep their own actor-scoped transactions. Normal tools retain their scoped execution and
+read trust checks; result sanitization, caps and wrapping still run after this transport executor.
+
+Static reads that declare service keys may resolve those keys only from `readToolServices` and
+receive only their declared subset. This makes `app.findAction` discoverable without opening the
+write registry to reads. HTTP error responses retain status/body but carry `ok: false`, so failed
+writes neither audit as successful nor trigger success refresh.
+
+Pending approval storage formerly allowed only write/outbound/destructive. New AI migration
+`0289_ai_read_action_approval.sql` allows a truthful read risk for a forced-confirm read and the
+later tainted outbound-GET rule. It changes only the CHECK constraint; owner policies and the
+write-only audit-log constraint are unchanged. Main and all open PR file inventories were checked
+before reserving 0289: Meetings owns 0284/0287/0288 and the focus-image PR owns 0285/0286.
+
+The card receives details through the real notifier, live record and stream parser. Target names
+are quoted text; fields are exact JSON text, never Markdown/HTML or truncated approval values.
+All fourteen content modules with callable routes now have truthful app-map entries; Notes and
+Briefings have no callable generic routes. Metadata, input-source boundaries, refusals and recovery
+steps are declared alongside the tools.
+
+Refresh coverage has three explicit, source-checked exceptions to the original blanket test:
+Scratchpad and Commitments have no directly cached views, and Workflow approvals already poll
+with a five-second interval. No fabricated tokens were added. Cached modules require their own
+query prefix or real declared tokens; Goals, Notes and Settings declare their nonmatching keys.
+Existing direct-polling Workflow behavior therefore has an intentional delay of up to five seconds.
+
+The named package-local Settings and gateway suites were not discovered by the previous test
+configuration. Both the Vitest include list and the default unit runner now name them. The real
+API integration suite is part of `test:integration:3065`, including read-risk approval persistence
+and refusal of all thirteen retained-content aliases before transport/grant minting.
+
+Local browser execution failed before Chromium launched with a socket EPERM, including the
+permitted retry. Parser-to-real-card SSR proof and three browser wiring cases are included; hosted
+browser CI must run the latter. Docker is absent locally, so database integration remains hosted
+only. No real providers, credentials, device permissions or recording were used. Test counts,
+negative controls and exact-head hosted outcomes are recorded in the PR comment; live-UI proof
+and the provenance/shared-write-gate slices remain outstanding.
+
+The follow-up review of the correction commit required two final tightenings before wiring:
+Memory fact date edits can end or stale recall, so `PATCH /api/memory/graph/facts/:id` is
+destructive with the actor-owned fact preview. `GET /api/ai/activity-lines` retains full user
+turn quotes and is now the thirteenth independent retained-content consent block. The current
+inventory is 101 reads, 51 writes, 18 destructive operations and 223 blocks (393 total). These
+changes do not claim to solve the older UI/automatic-recall revocation gap.

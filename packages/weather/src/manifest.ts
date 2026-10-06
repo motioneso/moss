@@ -35,7 +35,7 @@ export const weatherModuleManifest = {
     {
       id: "weather.chat_app_actions",
       description:
-        "Built-in Weather routes have explicit chat access classifications. Generic app-action tools are not wired yet; this metadata does not expose new chat actions."
+        "App actions read the forecast for the saved location or time-zone fallback. Retrieved weather is outside content; this read does not change saved preferences."
     }
   ],
   routes: [

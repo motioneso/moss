@@ -8,6 +8,7 @@ const catalog = buildRouteCatalog(manifests, []);
 
 describe("slice 4 review corrections", () => {
   it.each([
+    ["ai", "GET", "/api/ai/activity-lines"],
     ["memory", "GET", "/api/memory/graph/recall"],
     ["memory", "GET", "/api/memory/graph/core"],
     ["memory", "GET", "/api/memory/dashboard"],
@@ -56,6 +57,15 @@ describe("slice 4 review corrections", () => {
     ).toMatchObject({ access: "destructive", target: expect.any(Function), content: "outside" });
   });
 
+  it("requires target approval when a memory fact edit can end or stale recall", () => {
+    expect(catalog.resolve("PATCH", `/api/memory/graph/facts/${ID}`)?.route.policy).toMatchObject({
+      access: "destructive",
+      target: expect.any(Function),
+      content: "outside",
+      title: "Change memory dates and recall visibility"
+    });
+  });
+
   it("states the full retained meeting deletion and transcript correction scope", () => {
     expect(catalog.resolve("DELETE", `/api/meetings/records/${ID}`)?.route.policy.title).toBe(
       "Delete meeting, retained records and linked Moss chats"
@@ -74,12 +84,35 @@ describe("slice 4 review corrections", () => {
     expect(catalog.resolve(method, path)?.route.policy.content).toBe("outside");
   });
 
-  it("does not advertise the not-yet-wired generic tools as usable capabilities", () => {
-    const declarations = manifests
-      .flatMap((module) => module.features ?? [])
-      .filter((feature) => feature.id.endsWith(".chat_app_actions"));
-    expect(declarations).toHaveLength(7);
-    for (const feature of declarations)
-      expect(feature.description).toContain("Generic app-action tools are not wired yet");
+  it("declares every newly callable content module truthfully when generic tools are wired", () => {
+    const contentModules = new Set([
+      "tasks",
+      "calendar",
+      "memory",
+      "wellness",
+      "jarvis.goals",
+      "jarvis.commitments",
+      "scratchpad",
+      "email",
+      "meetings",
+      "news",
+      "people",
+      "sports",
+      "weather",
+      "workshop",
+      "briefings",
+      "notes"
+    ]);
+    for (const manifest of manifests.filter((module) => contentModules.has(module.id))) {
+      const callable = catalog.routes.some(
+        (route) => route.moduleId === manifest.id && route.policy.access !== "blocked"
+      );
+      const feature = manifest.features?.find((item) => item.id.endsWith(".chat_app_actions"));
+      expect(Boolean(feature), manifest.id).toBe(callable);
+      if (feature) {
+        expect(feature.description).toContain("App actions");
+        expect(feature.description).not.toContain("not wired yet");
+      }
+    }
   });
 });

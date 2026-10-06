@@ -262,7 +262,12 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       method: "PATCH",
       path: "/api/memory/graph/facts/:id",
-      chat: { access: "write", title: "Update memory fact lifecycle", content: "user_authored" },
+      chat: {
+        access: "destructive",
+        title: "Change memory dates and recall visibility",
+        content: "outside",
+        target: memoryFactTarget
+      },
       requestSchema: patchMemoryFactDashboardRouteSchema.body,
       permissionId: "memory.manage"
     },
@@ -340,6 +345,11 @@ export const memoryModuleManifest: MossModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "memory.chat_app_actions",
+      description:
+        "App actions create facts and entities or make receipt-only changes. Deletes and superseding ask first. Retained-source recall, dashboards and hydrated changes stay blocked pending a consent-aware projection."
+    },
     {
       id: "memory.associative_graph",
       description:

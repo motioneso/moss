@@ -325,6 +325,11 @@ export const wellnessModuleManifest = {
   },
   features: [
     {
+      id: "wellness.chat_app_actions",
+      description:
+        "App actions require effective Wellness AI consent for check-ins and derived insights. Therapy-note deletion asks with a timestamp-only preview. Raw medication details and therapy-note text remain unavailable."
+    },
+    {
       id: "wellness.mood_checkins",
       description:
         "Log a daily mood check-in with emotion, energy and a short note; Wellness keeps the history " +

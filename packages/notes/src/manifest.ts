@@ -22,6 +22,7 @@ export const notesModuleSqlMigrationDirectory = fileURLToPath(new URL("../sql", 
 
 export const notesModuleManifest = {
   id: NOTES_MODULE_ID,
+  chatRefreshTokens: ["settings.notesLastSync", "settings.notesSource"],
   name: "Notes",
   version: "0.0.0",
   publisher: "Moss",

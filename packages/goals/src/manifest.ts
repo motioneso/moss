@@ -17,6 +17,7 @@ export const goalsModuleSqlMigrationDirectory = fileURLToPath(new URL("../sql", 
 
 export const goalsModuleManifest: MossModuleManifest = {
   id: GOALS_MODULE_ID,
+  chatRefreshTokens: ["goals.list"],
   name: "Goals",
   publisher: "Moss",
   version: "1.0.0",
@@ -26,6 +27,13 @@ export const goalsModuleManifest: MossModuleManifest = {
   lifecycle: "required",
   availability: { defaultEnabled: true, required: true },
   compatibility: { jarv1s: ">=0.0.0" },
+  features: [
+    {
+      id: "goals.chat_app_actions",
+      description:
+        "App actions read and create goals. Edits and evidence additions stay unavailable because they enqueue memory synchronization."
+    }
+  ],
   routes: [
     {
       method: "GET",

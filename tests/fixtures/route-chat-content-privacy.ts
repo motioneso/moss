@@ -39,7 +39,7 @@ export const PRIVACY_EXPECTED_ROWS: readonly string[] = [
   "memory POST /api/memory/candidates/:id/accept write user_authored",
   "memory POST /api/memory/candidates/:id/reject write user_authored",
   "memory POST /api/memory/candidates/:id/suppress write user_authored",
-  "memory PATCH /api/memory/graph/facts/:id write user_authored",
+  "memory PATCH /api/memory/graph/facts/:id destructive",
   "memory PATCH /api/memory/graph/entities/:id write user_authored",
   "memory DELETE /api/memory/graph/entities/:id destructive",
   "people GET /api/people/notes-directories read",

@@ -89,6 +89,11 @@ export const commitmentsModuleManifest: MossModuleManifest = {
   ],
   features: [
     {
+      id: "commitments.chat_app_actions",
+      description:
+        "App actions read candidates, change their status or suppress them. Extraction remains unavailable through this path; candidate resolution currently returns unavailable rather than creating tasks or events."
+    },
+    {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.commitments.email-judgement",
       description: "Checked what new email asks of you"

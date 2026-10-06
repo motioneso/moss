@@ -195,6 +195,9 @@ export function isSelfOperationExcluded(
  * to trusted-auto promotion, which was not part of what Ben approved.
  */
 const PLANNED_CONFIRM_ALWAYS_TOOLS: readonly string[] = [
+  // #3065: safe static fallback, with no promotable family. Only a composition-owned
+  // per-call resolver may supply the catalog route's effective policy and bound transport.
+  "app.callAction",
   "memory.forget",
   "people.merge",
   "people.splitIdentity",

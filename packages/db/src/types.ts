@@ -407,7 +407,7 @@ export type AiModelStatus = "active" | "disabled";
 export type AiModelTier = "reasoning" | "interactive" | "economy";
 // #2208: who created a model row. Discovery may prune only its own ('discovered') rows.
 export type AiConfiguredModelOrigin = "discovered" | "manual";
-export type AiAssistantActionRisk = "write" | "outbound" | "destructive";
+export type AiAssistantActionRisk = "read" | "write" | "outbound" | "destructive";
 export type AiAssistantActionStatus = "pending" | "confirmed" | "rejected" | "cancelled";
 export type ChatMessageRole = "user" | "assistant";
 export type ChatMessageStatus = "stored" | "pending" | "blocked" | "no_model" | "working" | "error";

@@ -3,6 +3,17 @@ import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import { customThemeTarget } from "./chat-targets.js";
 import {
+  appCallActionExecute,
+  appCallActionInputSchema,
+  appCallActionOutputSchema,
+  appFindActionExecute,
+  appFindActionInputSchema,
+  appFindActionOutputSchema,
+  appReadSourceExecute,
+  appReadSourceInputSchema,
+  appReadSourceOutputSchema
+} from "./app-action-tools.js";
+import {
   appGetMapSliceExecute,
   appGetMapSliceInputSchema,
   appGetMapSliceOutputSchema
@@ -65,6 +76,14 @@ export const settingsModuleManifest: MossModuleManifest = {
     required: true
   },
   notifications: { supported: true },
+  chatRefreshTokens: [
+    "auth.me",
+    "weather.today",
+    "weather.location",
+    "weather.unit",
+    "modules",
+    "myModules"
+  ],
   permissions: [
     {
       id: "settings.view",
@@ -547,6 +566,112 @@ export const settingsModuleManifest: MossModuleManifest = {
       permissionId: "settings.write"
     }
   ],
+  features: [
+    {
+      id: "app.findAction",
+      description:
+        "Find declared app routes by plain words, including their input schemas, blocked categories and existing dedicated tools.",
+      errors: [
+        {
+          code: "not_ready",
+          class: "transient",
+          description: "The app action catalog or service is not ready."
+        },
+        {
+          code: "invalid_input",
+          class: "validation",
+          description: "An app tool input has an invalid query, method, path or line range."
+        }
+      ],
+      remediations: [
+        {
+          id: "app.retry_action",
+          description: "Open chat from Today and retry after the app has finished starting.",
+          path: "/today"
+        },
+        {
+          id: "app.correct_input",
+          description:
+            "Use the discovered action schema or correct the source path and line range, then retry in chat.",
+          path: "/today"
+        }
+      ]
+    },
+    {
+      id: "app.readSource",
+      description:
+        "Read up to 400 lines of installed public app source under packages/*/src or apps/*/src, limited to .ts, .tsx, .json and .md files.",
+      errors: [
+        {
+          code: "source_path_not_allowed",
+          class: "permission",
+          description:
+            "The source path leaves the permitted roots, resolves through an escaping symlink, or has a disallowed file type."
+        },
+        {
+          code: "source_unavailable",
+          class: "prerequisite",
+          description: "The installed source root or requested source file cannot be read.",
+          remediationRef: "app.source_path"
+        }
+      ],
+      remediations: [
+        {
+          id: "app.source_path",
+          description:
+            "Use an existing relative source file under packages/*/src or apps/*/src with a supported extension, or rely on the action schema.",
+          path: "/today"
+        }
+      ]
+    },
+    {
+      id: "app.callAction",
+      description:
+        "Call a discovered app route as the signed-in user, subject to route policy and module consent. Destructive actions require approval; successful changes refresh the module's screens.",
+      errors: [
+        {
+          code: "unknown_route",
+          class: "validation",
+          description: "No declared app action matches the method and path."
+        },
+        {
+          code: "blocked",
+          class: "permission",
+          description:
+            "The route is outside the assistant's allowed actions, including admin and security-sensitive settings."
+        },
+        {
+          code: "consent_off",
+          class: "permission",
+          description: "The module's AI consent is off, so its route cannot be called from chat."
+        },
+        {
+          code: "approval_changed",
+          class: "validation",
+          description: "The action policy or target changed after review."
+        },
+        {
+          code: "invalid_call_binding",
+          class: "permission",
+          description: "An action execution no longer matches the single reviewed call."
+        }
+      ],
+      remediations: [
+        {
+          id: "app.find_available_action",
+          description:
+            "Find the action again and request a fresh review with its current inputs and target.",
+          path: "/today"
+        },
+        {
+          id: "app.use_settings",
+          description:
+            "Open the relevant module or setting to review consent or perform an action unavailable in chat.",
+          path: "/settings"
+        }
+      ]
+    }
+  ],
   assistantActionFamilies: [
     {
       id: "settings.preference-write",
@@ -557,6 +682,44 @@ export const settingsModuleManifest: MossModuleManifest = {
     }
   ],
   assistantTools: [
+    {
+      name: "app.findAction",
+      description:
+        "Find app actions by plain words. Returns routes, input shapes, blocked reasons and dedicated tools. Prefer a named dedicated tool when coveredBy is present.",
+      permissionId: "settings.view",
+      risk: "read",
+      content: "user_authored",
+      safeErrors: true,
+      requiresServices: ["appCatalog"],
+      inputSchema: appFindActionInputSchema,
+      outputSchema: appFindActionOutputSchema,
+      execute: appFindActionExecute
+    },
+    {
+      name: "app.readSource",
+      description:
+        "Read installed app source when an action's input shape is missing. Use a relative packages/*/src or apps/*/src path ending .ts, .tsx, .json or .md. Returns at most 400 lines; line numbers are inclusive.",
+      permissionId: "settings.view",
+      risk: "read",
+      content: "user_authored",
+      safeErrors: true,
+      inputSchema: appReadSourceInputSchema,
+      outputSchema: appReadSourceOutputSchema,
+      execute: appReadSourceExecute
+    },
+    {
+      name: "app.callAction",
+      description:
+        "Call a discovered app route as the signed-in user. Fill path parameters in path; send query and body separately. Blocked routes are refused, consent is checked, and destructive actions require approval. Returns HTTP status and body.",
+      permissionId: "settings.write",
+      risk: "write",
+      selfOperationGrant: "confirm_always",
+      executionPolicy: "confirm",
+      requiresServices: ["appActions"],
+      inputSchema: appCallActionInputSchema,
+      outputSchema: appCallActionOutputSchema,
+      execute: appCallActionExecute
+    },
     {
       name: "app.getMapSlice",
       description:
@@ -582,6 +745,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       description: "Set the app's color mode (light or dark) for this user.",
       permissionId: "settings.write",
       risk: "write",
+      content: "user_authored",
       selfOperationGrant: "granted_at_install",
       actionFamilyId: "settings.preference-write",
       executionPolicy: "auto",
@@ -595,6 +759,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       description: "Set the user's IANA time zone.",
       permissionId: "settings.write",
       risk: "write",
+      content: "user_authored",
       selfOperationGrant: "granted_at_install",
       actionFamilyId: "settings.preference-write",
       executionPolicy: "auto",
@@ -607,6 +772,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       description: "Set the user's language/region and date format (12h or 24h).",
       permissionId: "settings.write",
       risk: "write",
+      content: "user_authored",
       selfOperationGrant: "granted_at_install",
       actionFamilyId: "settings.preference-write",
       executionPolicy: "auto",
@@ -619,6 +785,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       description: "Set the user's quiet hours (enabled, start/end time, and time zone).",
       permissionId: "settings.write",
       risk: "write",
+      content: "user_authored",
       selfOperationGrant: "granted_at_install",
       actionFamilyId: "settings.preference-write",
       executionPolicy: "auto",
@@ -658,6 +825,7 @@ export const settingsModuleManifest: MossModuleManifest = {
         'Undo the user\'s most recent settings preference change in this conversation (e.g. "change that back"). No-op if nothing tracked, or if the setting changed again since. Only remembers changes made earlier in this same chat session since the app last restarted — it does not track changes made in the settings UI, in a different conversation, or before a restart.',
       permissionId: "settings.write",
       risk: "write",
+      content: "user_authored",
       selfOperationGrant: "granted_at_install",
       actionFamilyId: "settings.preference-write",
       executionPolicy: "auto",

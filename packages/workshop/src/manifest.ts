@@ -87,7 +87,7 @@ export const workshopModuleManifest = {
     {
       id: "workshop.chat_app_actions",
       description:
-        "Built-in Workshop routes have explicit chat access classifications. Generic app-action tools are not wired yet; this metadata does not expose new chat actions."
+        "App actions read, rename and delete owned projects. Deletion asks first. Creation uses the dedicated privacy-checked handoff; generating project replies stays in Workshop."
     },
     {
       // #2956: the Activity history line title for this module's structured calls.

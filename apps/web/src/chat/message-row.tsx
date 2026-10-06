@@ -56,6 +56,8 @@ export function RecordRow(props: {
         summary={props.record.summary ?? text}
         toolName={props.record.toolName ?? kind}
         preview={props.record.preview}
+        details={props.record.details}
+        outsideContentNotice={props.record.outsideContentNotice}
         focusRequested={props.record.actionRequestId === props.focusActionRequestId}
         onFocusComplete={props.onActionRequestFocused}
       />

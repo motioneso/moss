@@ -101,7 +101,9 @@ export const aiModuleManifest = {
       // #2956 — owner lines, owner-only detail with 30-day expiry, purge function.
       "sql/0258_activity_owner_lines.sql",
       // #2956 — turn link on the action audit log for the per-turn step join.
-      "sql/0259_audit_log_turn_id.sql"
+      "sql/0259_audit_log_turn_id.sql",
+      // #3065: a server-resolved read can require confirmation without becoming a write.
+      "sql/0289_ai_read_action_approval.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [
@@ -669,7 +671,8 @@ export const aiModuleManifest = {
       // admins read the same rows through this route instead.
       method: "GET",
       path: "/api/ai/activity-lines",
-      chat: { access: "read" },
+      // Turn details retain the user's full message, including prior consent-gated words.
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listActivityLinesRouteSchema.response[200],
       permissionId: "ai.assistant-actions"
     },

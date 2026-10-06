@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
+import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
+import { createAppActionsService } from "./app-actions.js";
 
 import type { AccessContext, DataContextRunner, MossDatabase, PreferencesPort } from "@moss/db";
 import {
@@ -228,6 +230,7 @@ export interface ChatRoutesDependencies {
   readonly adoptCheckTokenMinter?: (minter: CheckTokenMinter) => void;
   /** #3065: the built-in route catalog; null until the server's onReady fills it. */
   readonly routeCatalog?: RouteCatalogHolder;
+  readonly actAsGrants?: ActAsGrantRegistry;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string
@@ -311,6 +314,15 @@ export function registerChatRoutes(
           const tokens = new SessionTokenRegistry();
           const confirmations = new ConfirmationRegistry();
           const aiRepository = new AiRepository();
+          const appActions =
+            dependencies.routeCatalog && dependencies.actAsGrants
+              ? createAppActionsService({
+                  server,
+                  catalog: dependencies.routeCatalog,
+                  grants: dependencies.actAsGrants,
+                  readTurnId: (session) => tokens.readCurrentTurnId(session) ?? null
+                })
+              : undefined;
 
           const gateway = new AssistantToolGateway(
             buildChatGatewayDependencies({
@@ -320,6 +332,7 @@ export function registerChatRoutes(
               tokens,
               confirmations,
               notifier: notifierProxy,
+              appActions,
               collaborators: {
                 googleConnectionService: dependencies.googleConnectionService,
                 googleApiClient: dependencies.googleApiClient,

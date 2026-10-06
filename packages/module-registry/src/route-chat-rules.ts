@@ -191,6 +191,12 @@ export const CHAT_BLOCKED_PATH_RULES: readonly ChatBlockedPathRule[] = [
 export const JULY_EXCLUDED_ROUTES: readonly JulyExcludedRoute[] = [
   {
     method: "GET",
+    path: "/api/ai/activity-lines",
+    category: "data_scope_consent",
+    julyPrefixes: []
+  },
+  {
+    method: "GET",
     path: "/api/chat/memory/facts",
     category: "data_scope_consent",
     julyPrefixes: []

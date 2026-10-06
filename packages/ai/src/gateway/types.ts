@@ -1,4 +1,58 @@
-import type { ActionRequestPreview, MossModuleManifest, ToolResultMedia } from "@moss/module-sdk";
+import type {
+  ActionRequestPreview,
+  ModuleAssistantToolRisk,
+  MossModuleManifest,
+  SelfOperationExclusionCategory,
+  ToolContext,
+  ToolResult,
+  ToolResultMedia,
+  ToolServices
+} from "@moss/module-sdk";
+
+export interface CallCardDetails {
+  readonly target: string | null;
+  readonly fields: readonly { readonly label: string; readonly value: string }[];
+}
+
+export type PerCallResolution =
+  | {
+      readonly kind: "refuse";
+      readonly reason: "unknown_route" | "blocked" | "consent_off" | "not_ready";
+      readonly category?: SelfOperationExclusionCategory;
+    }
+  | {
+      readonly kind: "proceed";
+      readonly risk: ModuleAssistantToolRisk;
+      readonly externalContent: boolean;
+      readonly forceConfirm: boolean;
+      readonly confirmWhenTainted: boolean;
+      readonly summary: string;
+      readonly details: CallCardDetails;
+      readonly affectsModules: readonly string[];
+    };
+
+export type PerCallResolver = (
+  input: Record<string, unknown>,
+  ctx: ToolContext
+) => Promise<PerCallResolution>;
+
+/** Composition-owned capabilities bound to exactly this resolved input and actor. */
+export type PerCallServices = (
+  input: Record<string, unknown>,
+  ctx: ToolContext,
+  resolution: Extract<PerCallResolution, { kind: "proceed" }>
+) => ToolServices;
+
+/**
+ * Composition-owned transport for a resolved, capability-bound call. It owns its data scopes;
+ * the gateway must not hold an unused transaction while the transport opens its own scopes.
+ */
+export type PerCallExecutor = (
+  input: Record<string, unknown>,
+  ctx: ToolContext,
+  resolution: Extract<PerCallResolution, { kind: "proceed" }>,
+  boundServices: ToolServices
+) => Promise<ToolResult>;
 
 /**
  * Resolves the modules whose tools are exposed for a user. The enablement SEAM
@@ -28,6 +82,9 @@ export type GatewaySessionRecord =
        * or the hook returned undefined / threw (the card still renders from `summary`).
        */
       readonly preview?: ActionRequestPreview;
+      /** Server-derived target and field rows, live only; never persisted. */
+      readonly details?: CallCardDetails;
+      readonly outsideContentNotice: boolean;
     }
   | {
       readonly kind: "action_result";
@@ -48,6 +105,7 @@ export type GatewaySessionRecord =
        * shell invalidate the right cached read generically, without a per-tool switch.
        */
       readonly affectsQueryKeys?: readonly string[];
+      readonly affectsModules?: readonly string[];
     };
 
 export interface SessionNotifier {
@@ -73,7 +131,8 @@ export type GatewayDeclineReason =
   | "not_in_allowlist"
   | "invalid_input"
   | "would_confirm"
-  | "rate_limited";
+  | "rate_limited"
+  | "refused";
 
 /**
  * Result of a gate call. `declined` guarantees no handler ran and no approval card was raised.

@@ -264,7 +264,7 @@ const nullableAiAssistantToolBlockedReasonSchema = {
 
 const aiAssistantActionRiskSchema = {
   type: "string",
-  enum: ["write", "outbound", "destructive"]
+  enum: ["read", "write", "outbound", "destructive"]
 } as const;
 
 const aiAssistantActionStatusSchema = {

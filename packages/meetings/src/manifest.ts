@@ -202,7 +202,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.chat_app_actions",
       description:
-        "Built-in Meetings routes have explicit chat access classifications. Generic app-action tools are not wired yet; this metadata does not expose new chat actions."
+        "App actions read retained meetings and save drafts, notes, transcript corrections and summaries. Generation and export stay in Meetings; deleting a meeting and linked Moss chats asks first."
     },
     {
       id: "meetings.account_export",
