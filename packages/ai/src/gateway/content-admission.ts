@@ -65,6 +65,25 @@ export async function admitToolOutcome(
   }
 }
 
+/** Resolve target text before any pending row/card; a failed admission must not yield a blind card. */
+export async function admitResolvedCard(
+  provenance: ConversationProvenancePort | undefined,
+  found: ExecutableTool,
+  ctx: ToolContext
+): Promise<boolean> {
+  if (!found.resolution?.externalContent) return true;
+  try {
+    await recordContextAdmission(
+      provenance,
+      ctx,
+      found.tool.name === "app.callAction" ? "app_action_outside" : "tool_external_content"
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Missing guards cannot authorize automatic effects. Post-dispatch failures never ask again. */
 export async function runAutomaticAction<T>(
   provenance: ConversationProvenancePort | undefined,

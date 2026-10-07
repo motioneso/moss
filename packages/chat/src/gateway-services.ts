@@ -44,6 +44,7 @@ import { ChatUserMemorySettingsRepository } from "./memory-settings-repository.j
 import { buildCalendarWriteService } from "./calendar-write-impl.js";
 import { buildEmailWriteService } from "./email-write-impl.js";
 import { buildModuleBuildStartService } from "./module-build-start-impl.js";
+import { createMemoryForgetBoundary } from "./memory-forget-impl.js";
 import { NATIVE_CONFIRM_TIMEOUT_MS } from "./live/persistent-claude-permission-hook.js";
 import type { CurrentViewReadService } from "./live/current-view.js";
 import type { ChatAttachmentsService } from "./attachments-service.js";
@@ -163,6 +164,7 @@ export function buildChatGatewayDependencies(args: {
     listModuleManifests?: () => readonly MossModuleManifest[];
   };
 }): AssistantToolGatewayDependencies {
+  const memoryForget = createMemoryForgetBoundary(args);
   const appResolver = args.appActions
     ? createAppActionResolver({
         appActions: args.appActions,
@@ -178,21 +180,30 @@ export function buildChatGatewayDependencies(args: {
     provenance: args.conversationProvenance ?? new ConversationProvenanceStore(args.runner),
     confirmations: args.confirmations,
     notifier: args.notifier,
-    ...(appResolver && args.appActions
-      ? {
-          perCallResolvers: { "app.callAction": appResolver },
-          perCallExecutors: {
+    perCallResolvers: {
+      "memory.forget": memoryForget.resolver,
+      ...(appResolver ? { "app.callAction": appResolver } : {})
+    },
+    perCallExecutors: {
+      "memory.forget": memoryForget.execute,
+      ...(appResolver
+        ? ({
             "app.callAction": (input, ctx, _resolution, services) =>
               appCallActionExecute(undefined, input, ctx, services)
-          },
-          perCallServices: {
+          } satisfies NonNullable<AssistantToolGatewayDependencies["perCallExecutors"]>)
+        : {})
+    },
+    perCallServices: {
+      "memory.forget": memoryForget.bindServices,
+      ...(appResolver && args.appActions
+        ? {
             "app.callAction": createAppActionCallServices({
               appActions: args.appActions,
               resolver: appResolver
             })
           }
-        }
-      : {}),
+        : {})
+    },
     // #1158: MUST stay below the permission hook's internal deadline — see the deadline
     // ordering comment in live/persistent-claude-permission-hook.ts (unit-tested invariant).
     confirmTimeoutMs: NATIVE_CONFIRM_TIMEOUT_MS,
@@ -213,6 +224,7 @@ export function buildChatGatewayDependencies(args: {
       ),
     toolServices: {
       ...buildChatToolServices(args.collaborators),
+      memoryForget: memoryForget.unavailable,
       // Availability marker only. Execution requires the resolver's call-bound capability;
       // absent per-call wiring can never fall back to the unrestricted transport service.
       ...(args.appActions

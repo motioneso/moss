@@ -243,7 +243,7 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/memory/candidates",
-      chat: { access: "read", title: "List pending suggested memory", content: "outside" },
+      chat: { access: "read", title: "List pending memory suggestions", content: "outside" },
       requestSchema: getMemoryPendingCandidatesRouteSchema.querystring,
       responseSchema: getMemoryPendingCandidatesRouteSchema.response[200],
       permissionId: "memory.view"
@@ -254,7 +254,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       // Ben, 2026-10-06: accepting a suggestion from chat always shows an approval card.
       chat: {
         access: "destructive",
-        title: "Accept suggested memory",
+        title: "Accept memory suggestion",
         content: "user_authored",
         target: memoryCandidateTarget
       },
@@ -266,7 +266,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       path: "/api/memory/candidates/:id/reject",
       chat: {
         access: "write",
-        title: "Reject suggested memory",
+        title: "Reject memory suggestion",
         content: "user_authored",
         target: memoryCandidateTarget
       },
@@ -278,7 +278,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       path: "/api/memory/candidates/:id/suppress",
       chat: {
         access: "write",
-        title: "Suppress suggested memory",
+        title: "Suppress memory suggestion",
         content: "user_authored",
         target: memoryCandidateTarget
       },
@@ -357,10 +357,15 @@ export const memoryModuleManifest: MossModuleManifest = {
     },
     {
       name: "memory.forget",
-      description: "Forget a graph memory fact owned by the active actor.",
+      description:
+        "Forget a saved graph memory fact after the user approves its exact text. To reject a pending memory suggestion, find the suggestion action instead.",
       permissionId: "memory.manage",
       risk: "destructive",
+      // Receipt-only result; the per-call target is admitted as outside before its card.
       content: "user_authored",
+      safeErrors: true,
+      requiresServices: ["memoryForget"],
+      requiresPerCallResolution: true,
       selfOperationGrant: "confirm_always",
       inputSchema: {
         type: "object",
@@ -374,6 +379,11 @@ export const memoryModuleManifest: MossModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "memory.forget_approval",
+      description:
+        "Forgetting saved memory asks first and shows its full text. If it changes, ask again. After reload, a request without its details cannot be approved; reject it and ask again. Approval text counts as outside content."
+    },
     {
       id: "memory.chat_app_actions",
       description:

@@ -6,6 +6,7 @@ import { createApiServer } from "../../apps/api/src/server.js";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import { memoryModuleManifest } from "@moss/memory";
+import { buildChatGatewayDependencies } from "../../packages/chat/src/gateway-services.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 
@@ -140,12 +141,16 @@ describe("memory graph assistant tools", () => {
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [memoryModuleManifest],
-      repository,
-      ...conversations.gatewayDependencies,
-      tokens,
-      confirmations,
-      notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
+      ...buildChatGatewayDependencies({
+        resolveActiveModules: async () => [memoryModuleManifest],
+        repository,
+        runner,
+        conversationProvenance: conversations.gatewayDependencies.provenance,
+        tokens,
+        confirmations,
+        notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
+        collaborators: {}
+      }),
       confirmTimeoutMs: 30_000,
       // memory_management promoted to trusted_auto: memory.remember (write, executionPolicy
       // "auto") must auto-run, but memory.forget's destructive risk always confirms regardless

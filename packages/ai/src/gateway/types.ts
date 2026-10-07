@@ -64,6 +64,8 @@ export type PerCallResolution =
       readonly confirmWhenTainted: boolean;
       readonly summary: string;
       readonly details: CallCardDetails;
+      /** Opaque server-side target identity. Never streamed on the card or persisted. */
+      readonly targetVersion?: string;
       readonly affectsModules: readonly string[];
     };
 

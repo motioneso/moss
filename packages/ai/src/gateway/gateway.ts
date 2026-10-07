@@ -24,6 +24,7 @@ import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import { isConversationTainted } from "./conversation-policy.js";
 import {
   admitToolOutcome,
+  admitResolvedCard,
   recordContextAdmission,
   runAutomaticAction,
   toolHasOutsideContent,
@@ -816,6 +817,9 @@ export class AssistantToolGateway {
     // #2956: the approval hold below can outlive the turn, so the turn is
     // captured at arrival and handed to each audit write explicitly.
     const arrivalTurnId = this.deps.tokens.readCurrentTurnId(ctx.chatSessionId);
+
+    if (!(await admitResolvedCard(this.deps.provenance, found, ctx)))
+      return { ok: false, error: CONTEXT_ADMISSION_UNAVAILABLE };
 
     const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       this.deps.repository.createPendingAssistantAction(scopedDb, {

@@ -90,7 +90,7 @@ describe("memory suggestions through app actions", () => {
     const pending = h.call(ACCEPT);
     const card = await waitForCard(h);
     expect(card).toMatchObject({
-      summary: "Accept suggested memory",
+      summary: "Accept memory suggestion",
       details: { target: `I take the 7:40 train on Tuesdays [suggestion ${CANDIDATE_ID}]` }
     });
     expect(h.callSpy).not.toHaveBeenCalled();

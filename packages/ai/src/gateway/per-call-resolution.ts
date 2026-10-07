@@ -49,6 +49,9 @@ export async function prepareToolCall(
       reason: "invalid_input"
     };
   }
+  if (found.tool.requiresPerCallResolution && (!resolver || !bindServices || !executePerCall)) {
+    return notReady();
+  }
   if (!resolver) return executePerCall ? notReady() : { found, input };
 
   try {

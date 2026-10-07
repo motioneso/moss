@@ -650,6 +650,8 @@ export interface ModuleAssistantToolManifest {
    * gateway's toolServices; a build-time/test assertion checks every declared key is present.
    */
   readonly requiresServices?: readonly string[];
+  /** Host-only: refuse before an approval card unless the per-call binding is fully wired. */
+  readonly requiresPerCallResolution?: true;
   /**
    * When true, the tool output contains untrusted external content (e.g. web search snippets,
    * fetched page text) that should be wrapped in a `<tool_result>` trust boundary before

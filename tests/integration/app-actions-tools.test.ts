@@ -650,7 +650,7 @@ describe("app actions through the real gateway and app routes", () => {
       const cards = h.events.filter((event) => event.kind === "action_request");
       expect(cards).toHaveLength(1);
       expect(cards[0]).toMatchObject({
-        summary: "Accept suggested memory",
+        summary: "Accept memory suggestion",
         details: { target: `${excerpt} [suggestion ${id}]` }
       });
       expect(await candidateStatus(ids.userA, id)).toBe("promoted");

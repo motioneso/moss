@@ -15,7 +15,7 @@ interface FactLabelRow {
   readonly object_name: string | null;
 }
 
-function factLabel(row: FactLabelRow): string {
+export function factLabel(row: FactLabelRow): string {
   const subject = row.subject_name?.trim() || `Entity ${row.subject_entity_id}`;
   const object =
     row.object_text ??

@@ -96,6 +96,9 @@ function inputShapeFor(
 }
 
 function normalizeWord(word: string): string {
+  // Keep common memory-review wording equivalent without applying broad stemming rules.
+  if (word === "memories") return "memory";
+  if (word === "suggested") return "suggestion";
   return word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word;
 }
 

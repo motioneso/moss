@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
@@ -75,6 +76,48 @@ describe("ActionRequestCard email preview", () => {
     const html = renderCard(baseProps);
     expect(html).not.toMatch(/always approve/i);
     expect(html.indexOf("Approve")).toBeLessThan(html.indexOf("Reject"));
+  });
+});
+
+describe("memory deletion cards restored without live target details", () => {
+  it.each([undefined, { target: null, fields: [] }, { target: "   ", fields: [] }])(
+    "requires a fresh request when target details are %j",
+    (details) => {
+      const html = renderCard({
+        actionRequestId: "pending-memory",
+        toolName: "memory.forget",
+        summary: "Approve this action?",
+        details
+      });
+      const buttons = [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) =>
+        match[1]!.replace(/<[^>]*>/g, "")
+      );
+      expect(buttons).toEqual(["Reject"]);
+      expect(html).toContain("Memory details are unavailable. Reject this request and ask again.");
+      expect(html).toContain('role="status"');
+    }
+  );
+
+  it("preserves target whitespace and exposes approval only with the memory text", () => {
+    const html = renderCard({
+      actionRequestId: "live-memory",
+      toolName: "memory.forget",
+      summary: "Forget saved memory",
+      details: { target: "First line\n  indented text [fact 123]", fields: [] }
+    });
+    expect(html).toContain(
+      'class="action-request-preview__value action-request-preview__value--multiline"'
+    );
+    expect(html).toContain("First line\n  indented text [fact 123]");
+    const styles = readFileSync(
+      new URL("../../apps/web/src/styles/kit-chat.css", import.meta.url),
+      "utf8"
+    );
+    expect(styles).toMatch(
+      /\.action-request-preview__value--multiline\s*\{[^}]*white-space:\s*pre-wrap;/
+    );
+    expect(html).toContain("Approve");
+    expect(html).not.toContain("Memory details are unavailable");
   });
 });
 

@@ -22,6 +22,8 @@ interface ActionRequestCardProps {
 export function ActionRequestCard(props: ActionRequestCardProps) {
   const admittedRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Pending cards restored after reload have metadata only. Never approve a memory blind.
+  const missingMemoryTarget = props.toolName === "memory.forget" && !props.details?.target?.trim();
 
   const mutation = useMutation<"confirmed" | "rejected", unknown, "confirmed" | "rejected">({
     mutationFn: (next) => resolveActionRequest(props.actionRequestId, next).then(() => next),
@@ -44,6 +46,7 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
   }, [props.focusRequested, props.onFocusComplete]);
 
   function handleResolve(next: "confirmed" | "rejected") {
+    if (next === "confirmed" && missingMemoryTarget) return;
     if (admittedRef.current) return;
     admittedRef.current = true;
     mutation.mutate(next);
@@ -93,7 +96,7 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
           {props.details.target !== null ? (
             <div className="action-request-preview__row">
               <dt className="action-request-preview__label">Target</dt>
-              <dd className="action-request-preview__value">
+              <dd className="action-request-preview__value action-request-preview__value--multiline">
                 <q>{props.details.target}</q>
               </dd>
             </div>
@@ -107,6 +110,12 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
             </div>
           ))}
         </dl>
+      ) : null}
+
+      {missingMemoryTarget && !mutation.isSuccess ? (
+        <p className="muted-text" role="status">
+          Memory details are unavailable. Reject this request and ask again.
+        </p>
       ) : null}
 
       {props.outsideContentNotice ? (
@@ -139,12 +148,14 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
         <p className="form-error">{errorMessage}</p>
       ) : (
         <div className="action-request-actions">
-          <Button
-            icon={<CheckCircle size={16} aria-hidden="true" />}
-            onClick={() => handleResolve("confirmed")}
-          >
-            Approve
-          </Button>
+          {!missingMemoryTarget ? (
+            <Button
+              icon={<CheckCircle size={16} aria-hidden="true" />}
+              onClick={() => handleResolve("confirmed")}
+            >
+              Approve
+            </Button>
+          ) : null}
           <Button
             variant="quiet"
             icon={<XCircle size={16} aria-hidden="true" />}

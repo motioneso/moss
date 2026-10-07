@@ -410,6 +410,36 @@ describe("route catalog holder", () => {
 });
 
 describe("real manifests", () => {
+  it.each(["memory suggestions", "suggested memories"])(
+    "ranks pending memory actions first for '%s' within the default search limit",
+    (query) => {
+      const catalog = buildRouteCatalog(getBuiltInModuleManifests(), []);
+      // app.findAction returns at most eight actions unless the caller supplies a limit.
+      const hits = catalog.search(query, 8);
+      expect(hits.slice(0, 4).map((hit) => `${hit.method} ${hit.path}`)).toEqual([
+        "GET /api/memory/candidates",
+        "POST /api/memory/candidates/:id/accept",
+        "POST /api/memory/candidates/:id/reject",
+        "POST /api/memory/candidates/:id/suppress"
+      ]);
+    }
+  );
+
+  it("ranks the pending memory rejection first for 'reject suggestion'", () => {
+    const catalog = buildRouteCatalog(getBuiltInModuleManifests(), []);
+    expect(catalog.search("reject suggestion", 8)[0]).toMatchObject({
+      method: "POST",
+      path: "/api/memory/candidates/:id/reject"
+    });
+  });
+
+  it("finds the same memory actions with singular or plural wording", () => {
+    const catalog = buildRouteCatalog(getBuiltInModuleManifests(), []);
+    const hits = catalog.search("memory", 8);
+    expect(hits).toHaveLength(8);
+    expect(catalog.search("memories", 8)).toEqual(hits);
+  });
+
   it("builds a catalog from the built-in manifests", () => {
     const manifests = getBuiltInModuleManifests();
     const total = manifests.reduce((sum, m) => sum + (m.routes?.length ?? 0), 0);
