@@ -54,21 +54,21 @@ function Pill() {
     <div
       aria-label="Recording controls"
       style={{
-        width: 250,
-        height: 80,
+        width: 200,
+        height: 64,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 var(--space-6)",
-        border: "1px solid var(--meeting-pill-border)",
+        padding: "0 calc(var(--space-6) * 0.8)",
+        border: "0.8px solid var(--meeting-pill-border)",
         borderRadius: "var(--radius-pill)",
         background: "var(--meeting-pill-surface)",
         boxShadow: "var(--shadow-md)"
       }}
     >
       <svg
-        width="32"
-        height="24"
+        width="25.6"
+        height="19.2"
         viewBox="0 0 32 24"
         role="img"
         aria-label="Three-bar captured audio level meter: static example"
@@ -81,28 +81,28 @@ function Pill() {
         aria-label="Pause recording"
         title="Pause recording"
         style={{
-          width: 54,
-          height: 54,
-          border: "1px solid var(--meeting-pill-pause-ring)",
+          width: 43.2,
+          height: 43.2,
+          border: "0.8px solid var(--meeting-pill-pause-ring)",
           borderRadius: "var(--radius-pill)",
           background: "var(--meeting-pill-surface)",
           color: "var(--meeting-pill-pause-ink)"
         }}
       >
-        <Pause strokeWidth={2} />
+        <Pause style={{ width: 14.4, height: 14.4 }} strokeWidth={2} />
       </IconButton>
       <IconButton
         aria-label="Stop recording"
         title="Stop recording"
         style={{
-          width: 54,
-          height: 54,
+          width: 43.2,
+          height: 43.2,
           borderRadius: "var(--radius-pill)",
           background: "var(--danger)",
           color: "var(--white)"
         }}
       >
-        <Square fill="currentColor" strokeWidth={0} />
+        <Square style={{ width: 14.4, height: 14.4 }} fill="currentColor" strokeWidth={0} />
       </IconButton>
     </div>
   );

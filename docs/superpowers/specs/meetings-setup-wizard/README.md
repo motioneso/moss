@@ -4,7 +4,7 @@ Four states. Open `index.html` locally at **1440px**.
 
 - `01-not-linked.html`: Download app; one line points to Trail Marker’s linking instructions.
 - `02-ready.html`: connected Mac, ready for an explicit Start recording.
-- `03-recording.html`: transcript, notes and the **250 × 80px** recording pill.
+- `03-recording.html`: transcript, notes and the **200 × 64px** recording pill.
 - `04-settings.html`: link status, audio source, automatic-summary switch and Unlink Mac.
 
 Microphone + system audio is the default. Audio source can be changed in Settings.
