@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
 
 import {
   AssistantToolGateway,
@@ -6,6 +8,11 @@ import {
   SessionTokenRegistry,
   type GatewaySessionRecord
 } from "@moss/ai";
+import { RecordRow } from "../../apps/web/src/chat/message-row.js";
+import { parseRecord } from "../../apps/web/src/chat/use-chat-stream.js";
+import { ChatGatewayNotifier } from "../../packages/chat/src/gateway-notifier.js";
+import type { ChatSessionManager } from "../../packages/chat/src/live/chat-session-manager.js";
+import type { TranscriptRecord } from "../../packages/chat/src/live/types.js";
 
 const declined =
   "The user declined this action, so it was not done. Do not try it again; acknowledge the user's decision.";
@@ -16,7 +23,12 @@ const cancelled =
 
 describe.each(["module", "native", "acp"] as const)("%s approval outcomes", (path) => {
   it.each([
-    { outcome: "rejected", reason: declined, decidedBy: "person", eventReason: declined },
+    {
+      outcome: "rejected",
+      reason: declined,
+      decidedBy: "person",
+      eventReason: "You declined this action."
+    },
     {
       outcome: "timeout",
       reason: timedOut,
@@ -116,5 +128,18 @@ describe.each(["module", "native", "acp"] as const)("%s approval outcomes", (pat
       decidedBy: test.decidedBy,
       reason: test.eventReason
     });
+    // Person-facing copy follows the real notifier, stream parser and chat row; model-only
+    // instructions belong solely to the tool reply asserted above.
+    const injectRecord = vi.fn((_actor: string, _record: TranscriptRecord) => {});
+    new ChatGatewayNotifier({ injectRecord } as unknown as ChatSessionManager).emit(
+      "u1",
+      records[1]!
+    );
+    const displayed = parseRecord(JSON.stringify(injectRecord.mock.calls[0]?.[1]));
+    expect(displayed?.text).toBe(`Not changed — ${test.eventReason}`);
+    expect(displayed).not.toBeNull();
+    const html = renderToString(createElement(RecordRow, { record: displayed! }));
+    expect(html).toContain(test.eventReason);
+    expect(html).not.toMatch(/The user declined|Do not try|let the user know|acknowledge/);
   });
 });

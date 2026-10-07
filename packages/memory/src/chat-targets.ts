@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { sql } from "kysely";
 
 import { assertDataContextDb, isUuid } from "@moss/db";
@@ -15,20 +16,14 @@ interface FactLabelRow {
   readonly object_name: string | null;
 }
 
-export function factLabel(row: FactLabelRow, includeIdentity = true): string {
-  const subject =
-    row.subject_name?.trim() ||
-    (includeIdentity ? `Entity ${row.subject_entity_id}` : "Saved subject");
-  const object =
-    row.object_text ??
-    row.object_name ??
-    (row.object_entity_id
-      ? includeIdentity
-        ? `Entity ${row.object_entity_id}`
-        : "saved item"
-      : null);
-  const label = [subject, row.predicate, object].filter(Boolean).join(": ");
-  return includeIdentity ? `${label} [fact ${row.id}]` : label;
+export function factLabel(row: FactLabelRow): string {
+  const subject = row.subject_name?.trim() || "Saved subject";
+  const object = row.object_text ?? row.object_name ?? (row.object_entity_id ? "saved item" : null);
+  return [subject, row.predicate, object].filter(Boolean).join(": ");
+}
+
+function approvalTarget(label: string, identity: unknown) {
+  return { label, version: createHash("sha256").update(JSON.stringify(identity)).digest("hex") };
 }
 
 /** The actor-scoped fact being deleted or superseded, without its source excerpts. */
@@ -48,7 +43,7 @@ export const memoryFactTarget: RouteChatTargetResolver = async (db, params) => {
       AND f.owner_user_id = app.current_actor_user_id()
   `.execute(db.db);
   const row = result.rows[0];
-  return row ? factLabel(row) : null;
+  return row ? approvalTarget(factLabel(row), row) : null;
 };
 
 /** Confirm/correct can supersede every conflicting fact, so the preview names the whole set. */
@@ -75,9 +70,10 @@ export const memoryFactResolutionTarget: RouteChatTargetResolver = async (db, pa
   const selected = result.rows.find((row) => row.id === id);
   if (!selected) return null;
   const others = result.rows.filter((row) => row.id !== id).map((row) => factLabel(row));
-  return (
+  return approvalTarget(
     `Selected memory: ${factLabel(selected)}` +
-    (others.length > 0 ? `; other affected memories: ${others.join("; ")}` : "")
+      (others.length > 0 ? `; other affected memories: ${others.join("; ")}` : ""),
+    result.rows
   );
 };
 
@@ -106,5 +102,5 @@ export const memoryCandidateTarget: RouteChatTargetResolver = async (db, params)
   `.execute(db.db);
   const row = result.rows[0];
   if (!row) return null;
-  return `${candidateLabel(row.payload_json as Record<string, unknown> | null)} [suggestion ${row.id}]`;
+  return approvalTarget(candidateLabel(row.payload_json as Record<string, unknown> | null), row);
 };

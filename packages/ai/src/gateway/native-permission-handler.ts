@@ -154,7 +154,7 @@ export async function requestNativeToolPermission(
             ? "Action timed out."
             : outcome === "cancelled"
               ? "Action cancelled."
-              : approvalRefusalReason(outcome)
+              : "You declined this action."
       });
       return { decision: "deny", reason: approvalRefusalReason(outcome) };
     }

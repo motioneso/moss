@@ -37,7 +37,10 @@ const wellness: MossModuleManifest = wellnessModuleManifest;
 function targetFor(method: string, path: string): RouteChatTargetResolver {
   const target = buildRouteCatalog(manifests, []).resolve(method, path)?.route.policy.target;
   expect(target).toBeTypeOf("function");
-  return target!;
+  return async (db, params) => {
+    const resolved = await target!(db, params);
+    return typeof resolved === "object" && resolved ? resolved.label : resolved;
+  };
 }
 
 function factRow(overrides: Record<string, unknown> = {}) {
@@ -213,9 +216,7 @@ describe("private-content approval target resolvers", () => {
     const { scoped, queries } = makeRecordingDb({
       rows: [factRow()]
     });
-    expect(await target(scoped, { id: TARGET_ID })).toBe(
-      `Alex: prefers: Early mornings [fact ${TARGET_ID}]`
-    );
+    expect(await target(scoped, { id: TARGET_ID })).toBe(`Alex: prefers: Early mornings`);
     expectScopedEntityJoins(queries[0]?.sql);
     expect(queries).toHaveLength(1);
     expect(queries[0]?.sql).toContain("app.memory_facts");
@@ -232,8 +233,8 @@ describe("private-content approval target resolvers", () => {
         rows: [factRow(), factRow({ id: OTHER_FACT_ID, object_text: "Late nights" })]
       });
       expect(await target(scoped, { id: TARGET_ID })).toBe(
-        `Selected memory: Alex: prefers: Early mornings [fact ${TARGET_ID}]; ` +
-          `other affected memories: Alex: prefers: Late nights [fact ${OTHER_FACT_ID}]`
+        `Selected memory: Alex: prefers: Early mornings; ` +
+          `other affected memories: Alex: prefers: Late nights`
       );
       expect(queries).toHaveLength(1);
       expect(queries[0]?.sql).toContain("f.conflict_group_id");
@@ -263,9 +264,7 @@ describe("private-content approval target resolvers", () => {
         })
       ]
     });
-    expect(await target(scoped, { id: TARGET_ID })).toBe(
-      `Alex: works_on: Reading project [fact ${TARGET_ID}]`
-    );
+    expect(await target(scoped, { id: TARGET_ID })).toBe(`Alex: works_on: Reading project`);
   });
 
   it("distinguishes single-fact previews with identical predicates and objects", async () => {
@@ -278,8 +277,8 @@ describe("private-content approval target resolvers", () => {
     });
     const firstLabel = await target(first.scoped, { id: TARGET_ID });
     const secondLabel = await target(second.scoped, { id: OTHER_FACT_ID });
-    expect(firstLabel).toBe(`Alex: prefers: Early mornings [fact ${TARGET_ID}]`);
-    expect(secondLabel).toBe(`Blair: prefers: Early mornings [fact ${OTHER_FACT_ID}]`);
+    expect(firstLabel).toBe(`Alex: prefers: Early mornings`);
+    expect(secondLabel).toBe(`Blair: prefers: Early mornings`);
     expect(firstLabel).not.toBe(secondLabel);
     expectScopedEntityJoins(first.queries[0]?.sql);
     expectScopedEntityJoins(second.queries[0]?.sql);
@@ -296,31 +295,34 @@ describe("private-content approval target resolvers", () => {
         ]
       });
       expect(await target(scoped, { id: TARGET_ID })).toBe(
-        `Selected memory: Alex: prefers: Early mornings [fact ${TARGET_ID}]; ` +
-          `other affected memories: Blair: prefers: Early mornings [fact ${OTHER_FACT_ID}]`
+        `Selected memory: Alex: prefers: Early mornings; ` +
+          `other affected memories: Blair: prefers: Early mornings`
       );
       expectScopedEntityJoins(queries[0]?.sql);
     }
   );
 
-  it("uses stable fact IDs when subject names and fact text are identical", async () => {
-    const target = targetFor("DELETE", `/api/memory/graph/facts/${TARGET_ID}`);
+  it("keeps identical display text while binding distinct fact IDs privately", async () => {
+    const target = buildRouteCatalog(manifests, []).resolve(
+      "DELETE",
+      `/api/memory/graph/facts/${TARGET_ID}`
+    )!.route.policy.target!;
     const first = makeRecordingDb({ rows: [factRow()] });
     const second = makeRecordingDb({ rows: [factRow({ id: OTHER_FACT_ID })] });
-    expect(await target(first.scoped, { id: TARGET_ID })).toBe(
-      `Alex: prefers: Early mornings [fact ${TARGET_ID}]`
-    );
-    expect(await target(second.scoped, { id: OTHER_FACT_ID })).toBe(
-      `Alex: prefers: Early mornings [fact ${OTHER_FACT_ID}]`
-    );
+    const firstTarget = await target(first.scoped, { id: TARGET_ID });
+    const secondTarget = await target(second.scoped, { id: OTHER_FACT_ID });
+    expect(firstTarget).toMatchObject({
+      label: "Alex: prefers: Early mornings",
+      version: expect.stringMatching(/^[a-f0-9]{64}$/)
+    });
+    expect(secondTarget).toMatchObject({ label: "Alex: prefers: Early mornings" });
+    expect(firstTarget).not.toEqual(secondTarget);
   });
 
   it.each([null, ""])("uses a stable subject fallback when its name is %s", async (subjectName) => {
     const target = targetFor("DELETE", `/api/memory/graph/facts/${TARGET_ID}`);
     const { scoped } = makeRecordingDb({ rows: [factRow({ subject_name: subjectName })] });
-    expect(await target(scoped, { id: TARGET_ID })).toBe(
-      `Entity ${SUBJECT_ID}: prefers: Early mornings [fact ${TARGET_ID}]`
-    );
+    expect(await target(scoped, { id: TARGET_ID })).toBe(`Saved subject: prefers: Early mornings`);
   });
 
   it.each([
@@ -334,7 +336,7 @@ describe("private-content approval target resolvers", () => {
     const { scoped, queries } = makeRecordingDb({
       rows: [{ id: TARGET_ID, payload_json: payload }]
     });
-    expect(await target(scoped, { id: TARGET_ID })).toBe(`${label} [suggestion ${TARGET_ID}]`);
+    expect(await target(scoped, { id: TARGET_ID })).toBe(`${label}`);
     expect(queries).toHaveLength(1);
     expect(queries[0]?.sql).toContain("app.memory_candidates");
     expect(queries[0]?.sql).toContain("owner_user_id = app.current_actor_user_id()");

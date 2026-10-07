@@ -387,7 +387,7 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.chat_app_actions",
       description:
-        "App actions create facts and entities, make receipt-only changes, and list or decide your pending suggested memories. Accepting, deleting and superseding ask first. Retained-source recall, dashboards and hydrated changes stay blocked."
+        "App actions create facts and entities and list or decide pending suggestions. Cards show plain memory text without IDs; hidden snapshots bind the target. Accepting, deleting and superseding ask first. Retained-source recall stays blocked."
     },
     {
       id: "memory.associative_graph",

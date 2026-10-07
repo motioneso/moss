@@ -8,7 +8,6 @@ import {
   listMemoryCorrectionsResponseSchema
 } from "@moss/shared";
 
-import { memoryFactTarget } from "./chat-targets.js";
 import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
@@ -112,6 +111,11 @@ export const chatModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "chat.legacy_memory_delete",
+      description:
+        "Chat cannot call the old memory-store delete endpoint. Use saved-memory forgetting, which shows the exact memory for approval. Existing screen actions are unchanged."
+    },
     {
       id: "chat.conversation_write_confirmation",
       description:
@@ -409,9 +413,10 @@ export const chatModuleManifest = {
       method: "DELETE",
       path: "/api/chat/memory/facts/:id",
       chat: {
-        access: "destructive",
-        title: "Forget something Moss remembers about you",
-        target: memoryFactTarget
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
+        title: "Use memory.forget for saved memory",
+        coveredBy: "memory.forget"
       },
       permissionId: "chat.message"
     },

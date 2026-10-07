@@ -315,18 +315,15 @@ describe("legacy memory.forget approval binding", () => {
   });
 
   it("emits and renders an entity-backed memory with both entity names without internal IDs", async () => {
-    const label = factLabel(
-      {
-        id: FACT_ID,
-        subject_entity_id: OWNER,
-        subject_name: "Mira",
-        predicate: "works with",
-        object_entity_id: OTHER_OWNER,
-        object_text: null,
-        object_name: "Jo <Research & Development>"
-      },
-      false
-    );
+    const label = factLabel({
+      id: FACT_ID,
+      subject_entity_id: OWNER,
+      subject_name: "Mira",
+      predicate: "works with",
+      object_entity_id: OTHER_OWNER,
+      object_text: null,
+      object_name: "Jo <Research & Development>"
+    });
     const expected = `Mira: works with: Jo <Research & Development>`;
     const h = build({ label });
     const pending = h.gateway.callTool(h.token, "memory.forget", { factId: FACT_ID });

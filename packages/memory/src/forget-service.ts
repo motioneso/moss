@@ -81,7 +81,7 @@ export class MemoryForgetService {
 
   private toTarget(row: ForgetRow): MemoryForgetTarget {
     return {
-      label: factLabel(row, false),
+      label: factLabel(row),
       version: createHash("sha256").update(JSON.stringify(row)).digest("hex")
     };
   }

@@ -361,7 +361,7 @@ export async function requestAcpBuiltInPermission(
     }
   }
   let humanHoldDurationMs: number | null = null;
-  let humanRefusalReason = APPROVAL_REFUSED_REASON;
+  let modelRefusalReason = APPROVAL_REFUSED_REASON;
   const ask = async (): Promise<"allow" | "deny"> => {
     const toolName = builtIn.toolName ?? "";
     const action = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
@@ -396,7 +396,7 @@ export async function requestAcpBuiltInPermission(
       const resolution = await pendingResolution;
       const outcome =
         resolution === "confirmed" && !(await admitAllowed()) ? "admission_failed" : resolution;
-      if (resolution !== "confirmed") humanRefusalReason = approvalRefusalReason(resolution);
+      if (resolution !== "confirmed") modelRefusalReason = approvalRefusalReason(resolution);
       const holdDurationMs = Math.max(0, Date.now() - holdStartedAt);
       humanHoldDurationMs = holdDurationMs;
       deps.notifier.emit(
@@ -430,7 +430,7 @@ export async function requestAcpBuiltInPermission(
                       ? "Action timed out."
                       : outcome === "cancelled"
                         ? "Action cancelled."
-                        : humanRefusalReason
+                        : "You declined this action."
               }
         )
       );
@@ -527,7 +527,7 @@ export async function requestAcpBuiltInPermission(
       : result.asked
         ? result.decision === "allow"
           ? "Approved by user."
-          : humanRefusalReason
+          : modelRefusalReason
         : result.decision === "allow"
           ? "Allowed by policy."
           : APPROVAL_REFUSED_REASON,

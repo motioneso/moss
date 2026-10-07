@@ -422,6 +422,12 @@ model-written summary lie.
   changed target on a fresh card; displaying it does not make its instructions authoritative.
 - Memory deletion through either `memory.forget` or `app.callAction` shares the exact-version
   snapshot and conditional deletion boundary. Cards show the full memory text, not internal IDs.
+  The legacy `DELETE /api/chat/memory/facts/:id` route is blocked from chat because it deletes
+  a different store; saved-memory deletion uses `memory.forget` instead. Its UI route is unchanged.
+- Other memory approval targets also show plain labels. Their server-only identity snapshots
+  retain the exact resolved row IDs/content for approval rechecks, including conflict sets,
+  without rendering IDs or hashes. Memory cards omit the technical Path row; the full frozen
+  request still binds execution. A structured route target separates `label` from `version`.
 - Approve and Reject, as today. A rejection tells Moss the user declined the action, distinct
   from a policy block, cancellation or timeout.
 

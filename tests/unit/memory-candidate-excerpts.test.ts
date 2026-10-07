@@ -145,9 +145,10 @@ describe("pending memory candidate excerpts", () => {
       rows: [{ id: CANDIDATE_ID, payload_json: payload }]
     });
     try {
-      expect(await memoryCandidateTarget(scoped, { id: CANDIDATE_ID })).toBe(
-        `${label} [suggestion ${CANDIDATE_ID}]`
-      );
+      expect(await memoryCandidateTarget(scoped, { id: CANDIDATE_ID })).toEqual({
+        label,
+        version: expect.stringMatching(/^[a-f0-9]{64}$/)
+      });
       expect(queries).toHaveLength(1);
       expect(queries[0]?.parameters).toEqual([CANDIDATE_ID]);
       expect(queries[0]?.sql).toContain("owner_user_id = app.current_actor_user_id()");

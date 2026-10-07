@@ -165,7 +165,15 @@ export function createAppActionResolver(deps: {
         forceConfirm: risk === "destructive",
         confirmWhenTainted: policy.outbound === true,
         summary: policy.title ?? `Read ${route.moduleId}`,
-        details: { target, fields: callFields(input) },
+        ...(typeof target === "object" && target ? { targetVersion: target.version } : {}),
+        details: {
+          target: typeof target === "object" && target ? target.label : target,
+          // Memory cards identify targets by their resolved text, not routing IDs.
+          // The full frozen input remains bound to the execution capability.
+          fields: callFields(input).filter(
+            (field) => !(route.moduleId === "memory" && target !== null && field.label === "Path")
+          )
+        },
         affectsModules: risk === "read" ? [] : [route.moduleId]
       };
     });

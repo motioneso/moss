@@ -890,7 +890,7 @@ export class AssistantToolGateway {
               ? "Action timed out."
               : outcome === "cancelled"
                 ? "Action cancelled."
-                : approvalRefusalReason(outcome)
+                : "You declined this action."
         });
         const approvalMode =
           outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";

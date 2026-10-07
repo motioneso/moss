@@ -91,7 +91,7 @@ describe("memory suggestions through app actions", () => {
     const card = await waitForCard(h);
     expect(card).toMatchObject({
       summary: "Accept memory suggestion",
-      details: { target: `I take the 7:40 train on Tuesdays [suggestion ${CANDIDATE_ID}]` }
+      details: { target: `I take the 7:40 train on Tuesdays` }
     });
     expect(h.callSpy).not.toHaveBeenCalled();
 
@@ -99,6 +99,21 @@ describe("memory suggestions through app actions", () => {
     expect(await pending).toMatchObject({ ok: true });
     expect(h.callSpy).toHaveBeenCalledOnce();
     expect(h.callSpy).toHaveBeenCalledWith(ACCEPT, expect.anything());
+  });
+
+  it("keeps hidden suggestion identity in the approval binding when display text is unchanged", async () => {
+    const row = { id: CANDIDATE_ID, payload_json: { ...pendingRow.payload_json } };
+    const h = harness({ rows: [row] });
+    const pending = h.call(ACCEPT);
+    const card = await waitForCard(h);
+    expect(JSON.stringify(card)).not.toContain(CANDIDATE_ID);
+    row.id = "77777777-7777-4777-8777-777777777777";
+    h.confirmations.resolve(card.actionRequestId, "confirmed");
+    expect(await pending).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("approval_changed")
+    });
+    expect(h.callSpy).not.toHaveBeenCalled();
   });
 
   it("does nothing when the accept card is rejected", async () => {

@@ -26,13 +26,14 @@ export type RouteChatAccess = "read" | "write" | "destructive" | "blocked";
 export type ChatContentClass = "user_authored" | "outside";
 
 /**
- * Reads the label of a destructive route's target under the actor's data context. `db` is a
+ * Reads the label of a destructive route's target under the actor's data context.
+ * A structured target also carries a server-only identity snapshot, never rendered on the card. `db` is a
  * DataContextDb typed `unknown`, the same convention as ToolExecute.
  */
 export type RouteChatTargetResolver = (
   db: unknown,
   params: Readonly<Record<string, string>>
-) => Promise<string | null>;
+) => Promise<string | { readonly label: string; readonly version: string } | null>;
 
 export interface RouteChatPolicy {
   readonly access: RouteChatAccess;

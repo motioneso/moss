@@ -651,7 +651,7 @@ describe("app actions through the real gateway and app routes", () => {
       expect(cards).toHaveLength(1);
       expect(cards[0]).toMatchObject({
         summary: "Accept memory suggestion",
-        details: { target: `${excerpt} [suggestion ${id}]` }
+        details: { target: `${excerpt}` }
       });
       expect(await candidateStatus(ids.userA, id)).toBe("promoted");
       expect(await factCount(ids.userA, excerpt)).toBe(1);

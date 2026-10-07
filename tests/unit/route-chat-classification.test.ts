@@ -221,7 +221,7 @@ const EXPECTED: readonly string[] = [
   "chat PATCH /api/chat/memory/settings blocked prompt_shaping",
   "chat GET /api/chat/memory/facts blocked data_scope_consent",
   "chat GET /api/chat/memory/corrections blocked data_scope_consent",
-  "chat DELETE /api/chat/memory/facts/:id destructive",
+  "chat DELETE /api/chat/memory/facts/:id blocked data_scope_consent",
   "chat DELETE /api/chat/classifier/shadow-records destructive user_authored",
   "chat GET /api/chat/classifier/shadow-report read user_authored",
   "chat PATCH /api/chat/memory/facts/:id blocked prompt_shaping",

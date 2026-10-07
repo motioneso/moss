@@ -123,6 +123,27 @@ function expectRefusal(result: unknown, reason: string) {
 }
 
 describe("app actions: real gateway/manifest boundary with fake persistence and transport", () => {
+  it("blocks legacy chat-memory deletion before target lookup, approval or dispatch", async () => {
+    const h = harness();
+    const before = h.scopeCount();
+    expectRefusal(
+      await h.call({
+        method: "DELETE",
+        path: "/api/chat/memory/facts/11111111-1111-4111-8111-111111111111"
+      }),
+      "blocked"
+    );
+    expect(h.scopeCount()).toBe(before);
+    expect(h.callSpy).not.toHaveBeenCalled();
+    expect(h.events).toEqual([]);
+    const route = appActionCatalog.resolve(
+      "DELETE",
+      "/api/chat/memory/facts/11111111-1111-4111-8111-111111111111"
+    );
+    expect(route?.route.policy.target).toBeUndefined();
+    expect(route?.route.policy.coveredBy).toBe("memory.forget");
+  });
+
   it("refuses the recording notice acknowledgement before any transport or approval", async () => {
     const meetings = appActionManifests.find((module) => module.id === "meetings")!;
     const catalog = buildRouteCatalog(
@@ -316,13 +337,13 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
         risk: "destructive",
         forceConfirm: true,
         externalContent: true,
-        details: { target: `User: prefers: dark mode [fact ${id}]` }
+        details: { target: `User: prefers: dark mode` }
       });
       expect(await h.call(input)).toMatchObject({ ok: true });
       expect(h.events).toContainEqual(
         expect.objectContaining({
           kind: "action_request",
-          details: expect.objectContaining({ target: `User: prefers: dark mode [fact ${id}]` })
+          details: expect.objectContaining({ target: `User: prefers: dark mode` })
         })
       );
       expect(call).toHaveBeenCalledTimes(1);
