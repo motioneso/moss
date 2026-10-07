@@ -156,7 +156,7 @@ enum MeetingHostError: Error, Equatable {
         case .unavailable: return "That audio source is unavailable. Choose an available source in Moss."
         case .permissionDenied: return "Allow microphone access in System Settings, then press Start in Moss."
         case .sourceChanged: return "An audio source changed. Capture has stopped. Check the source and press Resume in Moss."
-        case .authorizationExpired: return "Meeting approval ended. Reconnect this Mac in Moss before recording again."
+        case .authorizationExpired: return "Meeting access ended. Check the meeting and Mac connection in Moss before recording again."
         case .rejected: return "Moss did not accept the capture request. Check this meeting in Moss."
         case .network: return "Moss is unreachable. Capture is paused. Reconnect and press Resume in Moss."
         case .invalidResponse: return "Moss returned an incompatible meeting response. Update both apps before trying again."

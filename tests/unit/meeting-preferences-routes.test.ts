@@ -53,7 +53,9 @@ describe("meeting capture defaults", () => {
       expect((await app.inject("/api/meetings/preferences")).json()).toEqual({
         defaultCaptureMode: mode
       });
+      expect(preferences.get).toHaveBeenCalledTimes(2);
       expect(preferences.get).toHaveBeenCalledWith(scoped, MEETING_CAPTURE_DEFAULT_KEY);
+      expect(preferences.get).toHaveBeenCalledWith(scoped, "meetings.capture.remembered-source");
     }
   );
   it.each([null, "microphone-only", "selected-app", "computer-audio"])(

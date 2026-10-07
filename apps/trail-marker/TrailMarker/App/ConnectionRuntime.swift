@@ -233,43 +233,31 @@ final class ConnectionRuntime: ObservableObject {
     }
 
     /// Called only after bootstrap itself rejects the saved proof. Do not publish a revision
-    /// that would initiate another approval automatically; the user's next Connect retries it.
+    /// that would retry rejected authority automatically; explicit relinking is required.
     func discardRejectedRecordingProof() {
         if let identity { keychain.deleteRecordingProof(for: identity) }
     }
 
-    /// Existing devices ask for the same one-time connection approval in the user's current
-    /// Moss tab. Persist the independent candidate before requesting, so lost replies/relaunch
-    /// retry the same proof and request key rather than replacing an approved capability.
+    /// Reconcile only a proof already offered by an older build. This read cannot create
+    /// an approval: missing or unapproved authority requires explicit unlink and relink.
     func refreshRecordingCapability() async throws -> String {
         guard let expectedIdentity = identity, let (client, credential) = requestClient() else {
             throw MeetingHostError.authorizationExpired
         }
         if keychain.readRecordingProof(for: expectedIdentity) != nil { return "approved" }
-        let existing = keychain.readPendingRecordingProof(for: expectedIdentity)
-        var pending = existing ??
-            PendingRecordingProof(requestKey: UUID().uuidString.lowercased(), proof: LinkAttempt.makeVerifier())
-        // The attempt's deadline bounds consent, not an approval already made while this
-        // Mac was offline. Reconcile the same proof/key before discarding any candidate.
-        if existing == nil { try keychain.storePendingRecordingProof(pending, for: expectedIdentity) }
-        if pending.attemptId == nil {
-            let reply = try await client.requestRecordingCapability(credential: credential,
-                requestKey: pending.requestKey, proofHash: MeetingCaptureClient.verifierHash(pending.proof))
-            guard identity == expectedIdentity, !Task.isCancelled, requestClient() != nil else { return "cancelled" }
-            pending.attemptId = reply.attemptId
-            pending.expiresAt = reply.expiresAt
-            try keychain.storePendingRecordingProof(pending, for: expectedIdentity)
-        }
-        guard let attemptId = pending.attemptId else { throw MeetingHostError.invalidResponse }
+        guard let pending = keychain.readPendingRecordingProof(for: expectedIdentity),
+              let attemptId = pending.attemptId else { return "relink_required" }
         let reply = try await client.recordingCapabilityStatus(credential: credential, attemptId: attemptId)
         guard identity == expectedIdentity, !Task.isCancelled, requestClient() != nil else { return "cancelled" }
         if reply.status == "approved" {
             guard reply.policyVersion == 1, (reply.revision ?? 0) > 0 else { throw MeetingHostError.invalidResponse }
             try storeRecordingProof(pending.proof, for: expectedIdentity)
-        } else if reply.status == "expired" || reply.status == "denied" {
+            return "approved"
+        }
+        if reply.status == "expired" || reply.status == "denied" {
             keychain.deletePendingRecordingProof(for: expectedIdentity)
         }
-        return reply.status
+        return "relink_required"
     }
 
     // MARK: - Settings-pane actions

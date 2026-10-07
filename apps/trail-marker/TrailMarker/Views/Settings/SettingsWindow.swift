@@ -79,7 +79,7 @@ struct SettingsWindow: View {
             case .meetings:
                 VStack(alignment: .leading, spacing: TrailMarkerTokens.Spacing.group) {
                     Text("Meeting capture").font(.title2.weight(.semibold))
-                    Text("Open a meeting in Moss to prepare this Mac. Every meeting requires its own approval and explicit Record. Pause All, Log Out and Quit end capture; Resume All never restarts it.")
+                    Text("Link this Mac once in Moss, then open a meeting and choose Start. Pause All, Log Out and Quit end capture; Resume All never restarts it.")
                         .font(.callout).fixedSize(horizontal: false, vertical: true)
                     Button("Open meeting controls") { onOpenMeetingControls?() }
                     Text("Microphone-only, selected-app and computer audio are separate choices. System audio requires macOS 14.2 or later. No screen or Backtrack permission enables meeting recording.")

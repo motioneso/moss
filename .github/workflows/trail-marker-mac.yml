@@ -80,3 +80,7 @@ jobs:
       - name: Verify meeting audio negative controls
         working-directory: apps/trail-marker
         run: python3 scripts/check-meeting-negative-controls.py
+
+      - name: Verify single-link recovery negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-single-link-controls.py

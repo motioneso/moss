@@ -193,7 +193,7 @@ final class OnboardingViewModel: ObservableObject {
         if response.recordingCapability?.policyVersion == 1,
            (response.recordingCapability?.revision ?? 0) > 0, let recordingProof {
             do { try onRecordingApproved(identity, recordingProof) }
-            catch { bannerMessage = "Connected. Recording approval could not be saved; reconnect recording in Moss." }
+            catch { bannerMessage = "Connected. To use Meetings, sign this Mac out in Settings → Active sessions, then connect again." }
         }
         self.recordingProof = nil
         deviceName = response.device.displayName

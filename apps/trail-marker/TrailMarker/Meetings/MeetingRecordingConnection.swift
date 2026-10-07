@@ -60,12 +60,11 @@ final class MeetingRecordingConnection {
                 do {
                     guard let auth = self.connection.recordingCredentials() else {
                         let approval = try await self.connection.refreshRecordingCapability()
-                        if ["denied", "expired", "cancelled"].contains(approval) {
-                            self.report("Recording connection was not approved. Reconnect it in Moss when you are ready.")
+                        guard approval == "approved" else {
+                            self.report("To use Meetings, sign this Mac out in Settings → Active sessions, then connect again from Trail Marker.")
                             return
                         }
-                        self.report("Approve the one-time recording connection in Moss. Connecting does not start recording.")
-                        delay = 3000
+                        delay = 0
                         continue
                     }
                     if !registered || Date().timeIntervalSince(inventoryAt) >= 10 {
@@ -140,7 +139,7 @@ final class MeetingRecordingConnection {
                             continue
                         }
                         self.connection.discardRejectedRecordingProof()
-                        self.report("Recording connection needs approval in Moss.")
+                        self.report("To use Meetings, sign this Mac out in Settings → Active sessions, then connect again from Trail Marker.")
                         // A revoked capability must never be automatically re-approved.
                         return
                     }
