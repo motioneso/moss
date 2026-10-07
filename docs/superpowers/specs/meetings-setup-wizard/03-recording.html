@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Recording · Moss mockup</title>
     <link rel="stylesheet" href="moss-ui.css" />
+    <link rel="stylesheet" href="tokens.css" />
     <style>
       * {
         box-sizing: border-box;
@@ -99,9 +100,9 @@
             align-items: center;
             justify-content: space-between;
             padding: 0 var(--space-6);
-            border: 1px solid var(--border);
+            border: 1px solid var(--meeting-pill-border);
             border-radius: var(--radius-pill);
-            background: var(--surface);
+            background: var(--meeting-pill-surface);
             box-shadow: var(--shadow-md);
           "
         >
@@ -110,15 +111,11 @@
             height="24"
             viewBox="0 0 32 24"
             role="img"
-            aria-label="Captured sound level: static example"
+            aria-label="Three-bar captured audio level meter: static example"
           >
-            <path
-              d="M1 12H4L7 8L10 16L14 3L18 21L21 7L24 15L27 12H31"
-              stroke="var(--danger)"
-              stroke-width="2"
-              stroke-linecap="round"
-              fill="none"
-            ></path></svg
+            <rect x="3" y="8" width="6" height="9" rx="3" fill="var(--danger)"></rect>
+            <rect x="13" y="1" width="6" height="22" rx="3" fill="var(--danger)"></rect>
+            <rect x="23" y="5" width="6" height="14" rx="3" fill="var(--danger)"></rect></svg
           ><button
             type="button"
             class="jds-iconbtn"
@@ -127,10 +124,10 @@
             style="
               width: 54px;
               height: 54px;
-              border: 1px solid var(--border-strong);
+              border: 1px solid var(--meeting-pill-pause-ring);
               border-radius: var(--radius-pill);
-              background: var(--surface);
-              color: var(--text-muted);
+              background: var(--meeting-pill-surface);
+              color: var(--meeting-pill-pause-ink);
             "
           >
             <svg
@@ -166,9 +163,9 @@
               width="24"
               height="24"
               viewBox="0 0 24 24"
-              fill="none"
+              fill="currentColor"
               stroke="currentColor"
-              stroke-width="2"
+              stroke-width="0"
               stroke-linecap="round"
               stroke-linejoin="round"
               class="lucide lucide-square"

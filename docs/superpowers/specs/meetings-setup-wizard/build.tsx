@@ -12,7 +12,8 @@ import {
   FormLabel,
   IconButton,
   SectionHead,
-  Select
+  Select,
+  Switch
 } from "@moss/ui";
 import { Pause, Square } from "lucide-react";
 Object.assign(globalThis, { React });
@@ -59,9 +60,9 @@ function Pill() {
         alignItems: "center",
         justifyContent: "space-between",
         padding: "0 var(--space-6)",
-        border: "1px solid var(--border)",
+        border: "1px solid var(--meeting-pill-border)",
         borderRadius: "var(--radius-pill)",
-        background: "var(--surface)",
+        background: "var(--meeting-pill-surface)",
         boxShadow: "var(--shadow-md)"
       }}
     >
@@ -70,15 +71,11 @@ function Pill() {
         height="24"
         viewBox="0 0 32 24"
         role="img"
-        aria-label="Captured sound level: static example"
+        aria-label="Three-bar captured audio level meter: static example"
       >
-        <path
-          d="M1 12H4L7 8L10 16L14 3L18 21L21 7L24 15L27 12H31"
-          stroke="var(--danger)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          fill="none"
-        />
+        <rect x="3" y="8" width="6" height="9" rx="3" fill="var(--danger)" />
+        <rect x="13" y="1" width="6" height="22" rx="3" fill="var(--danger)" />
+        <rect x="23" y="5" width="6" height="14" rx="3" fill="var(--danger)" />
       </svg>
       <IconButton
         aria-label="Pause recording"
@@ -86,10 +83,10 @@ function Pill() {
         style={{
           width: 54,
           height: 54,
-          border: "1px solid var(--border-strong)",
+          border: "1px solid var(--meeting-pill-pause-ring)",
           borderRadius: "var(--radius-pill)",
-          background: "var(--surface)",
-          color: "var(--text-muted)"
+          background: "var(--meeting-pill-surface)",
+          color: "var(--meeting-pill-pause-ink)"
         }}
       >
         <Pause strokeWidth={2} />
@@ -105,7 +102,7 @@ function Pill() {
           color: "var(--white)"
         }}
       >
-        <Square strokeWidth={2} />
+        <Square fill="currentColor" strokeWidth={0} />
       </IconButton>
     </div>
   );
@@ -192,6 +189,17 @@ const pages = [
               </Select>
             </Field>
           </div>
+          <div style={{ ...stack, gap: "var(--space-3)", maxWidth: 580 }}>
+            <Switch
+              ariaLabel="Summarize automatically after Stop"
+              label="Summarize automatically after Stop"
+              checked
+            />
+            <p className="jds-hint">
+              Send the finalized transcript and notes to your configured summary model after Stop.
+              Turn this off to use Rewrite summary only when you choose.
+            </p>
+          </div>
           <div>
             <Button variant="quiet">Unlink Mac</Button>
           </div>
@@ -202,7 +210,7 @@ const pages = [
 ];
 const base = `*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:var(--text-md);line-height:var(--leading-normal)}p,h1,h2,h3{margin:0}button,a,input,select,textarea{font:inherit}.meeting-columns{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:var(--space-7)}@media(max-width:720px){.meeting-columns{grid-template-columns:minmax(0,1fr)}}`;
 function document(title: string, content: ReactNode) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Moss mockup</title><link rel="stylesheet" href="moss-ui.css"><style>${base}</style></head><body>${renderToStaticMarkup(content)}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Moss mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="tokens.css"><style>${base}</style></head><body>${renderToStaticMarkup(content)}</body></html>`;
 }
 for (const p of pages) writeFileSync(resolve(out, p.file + ".html"), document(p.title, p.content));
 writeFileSync(
@@ -213,22 +221,7 @@ writeFileSync(
     2
   ) + "\n"
 );
-writeFileSync(
-  resolve(out, "index.html"),
-  document(
-    "Meetings",
-    <main style={{ ...stack, padding: "var(--space-7)" }}>
-      <SectionHead title="Meetings" titleAs="h1" />
-      <nav aria-label="Mockup states" style={{ ...stack, alignItems: "flex-start" }}>
-        {pages.map((p) => (
-          <ButtonLink key={p.file} variant="link" href={p.file + ".html"}>
-            {p.title}
-          </ButtonLink>
-        ))}
-      </nav>
-    </main>
-  )
-);
+// Keep the existing static index unchanged; this renderer updates only the four screen states.
 // The existing moss-ui.css is the bundled repository tokens, primitives and embedded Archivo fonts.
 // It remains unchanged; opening any HTML file needs no build step or network.
 readFileSync(resolve(out, "moss-ui.css"));
