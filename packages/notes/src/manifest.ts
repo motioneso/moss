@@ -112,6 +112,7 @@ export const notesModuleManifest = {
     },
     {
       name: "notes.create",
+      actionLabel: "Create note",
       description: "Create a Markdown note in the linked notes source.",
       permissionId: "notes.create",
       actionFamilyId: "note_changes",
@@ -136,6 +137,7 @@ export const notesModuleManifest = {
     },
     {
       name: "notes.edit",
+      actionLabel: "Edit note",
       description: "Edit a Markdown note in the linked notes source.",
       permissionId: "notes.edit",
       actionFamilyId: "note_changes",
@@ -152,6 +154,7 @@ export const notesModuleManifest = {
     },
     {
       name: "notes.delete",
+      actionLabel: "Delete note",
       description:
         "Delete a Markdown note from the linked notes source immediately and permanently. There is " +
         "no trash or restore — the file is unlinked on disk.",

@@ -1,4 +1,19 @@
-import type { ModuleAssistantToolManifest } from "@moss/module-sdk";
+import type { ModuleAssistantToolManifest, ToolContext } from "@moss/module-sdk";
+
+import { summarizeToolAction } from "./policy.js";
+
+/** Capture before dispatch; an optional presentation hook must not block unattended execution. */
+export function captureActionOutcomeTitle(
+  tool: ModuleAssistantToolManifest,
+  input: Record<string, unknown>,
+  ctx: ToolContext
+): string | undefined {
+  try {
+    return approvalOutcomeTitle(tool, summarizeToolAction(tool, input, ctx));
+  } catch {
+    return approvalOutcomeTitle(tool, "");
+  }
+}
 
 /**
  * Reuse only explicitly authored, plain card text for a quiet outcome. This is a
@@ -9,14 +24,22 @@ export function approvalOutcomeTitle(
   tool: Pick<ModuleAssistantToolManifest, "name" | "summarize" | "actionLabel">,
   cardSummary: string
 ): string | undefined {
-  if ((!tool.summarize && !tool.actionLabel) || typeof cardSummary !== "string") return undefined;
+  if (!tool.summarize && !tool.actionLabel) return undefined;
+  return (
+    plainOutcomeTitle(tool.name, cardSummary) ??
+    (tool.actionLabel ? plainOutcomeTitle(tool.name, tool.actionLabel) : undefined)
+  );
+}
+
+function plainOutcomeTitle(toolName: string, cardSummary: string): string | undefined {
+  if (typeof cardSummary !== "string") return undefined;
   // Some server card summaries emphasize a quoted target. Unwrap that one balanced form;
   // residual markup still fails the plain-text gate below, without rendering Markdown.
   const title = cardSummary
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
-  if (!title || title === tool.name) return undefined;
+  if (!title || title === toolName) return undefined;
 
   // Paths, URLs, markup, code/config syntax and dotted internal tool names are not titles.
   if (/[/\\<>`*{}[\]|$;=_]/.test(title)) return undefined;

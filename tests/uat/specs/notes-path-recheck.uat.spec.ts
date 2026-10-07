@@ -158,16 +158,22 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const composer = page.getByRole("textbox", { name: "Message Moss" });
   const chatDialog = page.getByRole("dialog", { name: "Chat with Moss" });
-  const replies = chatDialog.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble");
+  const createFailures = chatDialog.getByRole("status").filter({
+    hasText: "Create note didn’t go through · The app reported a problem."
+  });
 
   // --- (a) legitimate in-root create / edit / delete succeed, and create syncs ------------
   const legitPath = `uat/notes-path-recheck-${stamp}.md`;
+  const createdNotes = chatDialog.getByRole("status").filter({ hasText: /^Done: Create note$/ });
+  const createCount = await createdNotes.count();
   const syncNotBefore = Date.now();
   await composer.fill(
     `Use the notes.create tool with path set to exactly "${legitPath}" and content set to exactly: ` +
-      "Path recheck baseline. Do not ask a follow-up question."
+      "Path recheck baseline. Use these exact inputs without further questions."
   );
   await composer.press("Enter");
+  await expect(createdNotes).toHaveCount(createCount + 1, { timeout: 60_000 });
+  await expect(createdNotes.last()).toBeVisible();
   await expectToolOutcome(projectName, "notes.create", syncNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
@@ -197,20 +203,28 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
     throw error;
   }
 
+  const editedNotes = chatDialog.getByRole("status").filter({ hasText: /^Done: Edit note$/ });
+  const editCount = await editedNotes.count();
   const editNotBefore = Date.now();
   await composer.fill(
     `Use the notes.edit tool on path "${legitPath}": replace the exact text "baseline" with ` +
-      '"baseline edited". Do not ask a follow-up question.'
+      '"baseline edited". Use these exact inputs without further questions.'
   );
   await composer.press("Enter");
+  await expect(editedNotes).toHaveCount(editCount + 1, { timeout: 60_000 });
+  await expect(editedNotes.last()).toBeVisible();
   await expectToolOutcome(projectName, "notes.edit", editNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
+  const deletedNotes = chatDialog.getByRole("status").filter({ hasText: /^Done: Delete note$/ });
+  const deleteCount = await deletedNotes.count();
   const deleteNotBefore = Date.now();
   await composer.fill(
-    `Use the notes.delete tool to delete path "${legitPath}". Do not ask a follow-up question.`
+    `Use the notes.delete tool to delete path "${legitPath}". Use these exact inputs without further questions.`
   );
   await composer.press("Enter");
+  await expect(deletedNotes).toHaveCount(deleteCount + 1, { timeout: 60_000 });
+  await expect(deletedNotes.last()).toBeVisible();
   await expectToolOutcome(projectName, "notes.delete", deleteNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
@@ -222,25 +236,36 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
     `mkdir -p /tmp/uat-1512-b-target-${stamp} && ln -sfn /tmp/uat-1512-b-target-${stamp} ${NOTES_ROOT}/D-${stamp}`
   );
 
-  // notes.create opts into the gateway's safe error path: this fixed, path-free guard message is
-  // useful to the user and safe for the assistant to repeat.
-  const ancestorReplyCount = await replies.count();
+  // The screen reports a fixed plain failure; the audit and outside-file check prove refusal.
+  const ancestorFailureCount = await createFailures.count();
   const ancestorAttemptNotBefore = Date.now();
   await composer.fill(
     `Use the notes.create tool with path set to exactly "D-${stamp}/x.md" and content set to ` +
-      "exactly: should not be written. If refused, repeat the exact tool error in your reply. " +
-      "Do not ask a follow-up question."
+      "exactly: should not be written. Use these exact inputs without further questions."
   );
   await composer.press("Enter");
   await expectToolOutcome(projectName, "notes.create", ancestorAttemptNotBefore, "failed");
-  await expect(replies.nth(ancestorReplyCount)).toContainText(
-    "path is not within the linked notes source",
-    { timeout: 60_000 }
-  );
+  await expect(createFailures).toHaveCount(ancestorFailureCount + 1, { timeout: 60_000 });
+  await expect(createFailures.nth(ancestorFailureCount)).toBeVisible();
+  execInVaultAsOwner(projectName, `test ! -e /tmp/uat-1512-b-target-${stamp}/x.md`);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
+  await expect(chatDialog.locator(".action-request-card")).toHaveCount(0);
+  expect(await chatDialog.innerText()).not.toMatch(/\/tmp\/|\/data\/vaults/);
+
+  // The safe tool error taints this conversation, so later writes correctly need approval.
+  // Exercise the second guard independently through the real New chat flow.
+  const cleared = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/chat/clear" &&
+      response.status() === 204
+  );
+  await chatDialog.getByRole("button", { name: "New chat" }).click();
+  await cleared;
+  await expect(createFailures).toHaveCount(0);
 
   // --- (c') the #1512 guard itself: leaf symlink, kernel-vs-lexical ".." divergence -------
-  // The opted-in notes.create tool exposes its fixed, path-free guard message.
+  // The fresh conversation must show its own failed-create outcome.
   execInVaultAsOwner(
     projectName,
     `mkdir -p /tmp/uat-1512-c-outside-${stamp} && ` +
@@ -248,23 +273,23 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
       `ln -sfn "S-${stamp}/../evil-${stamp}.md" ${NOTES_ROOT}/b-${stamp}.md`
   );
 
-  const leafReplyCount = await replies.count();
+  const leafFailureCount = await createFailures.count();
   const leafAttemptNotBefore = Date.now();
   await composer.fill(
     `Use the notes.create tool with path set to exactly "b-${stamp}.md" and content set to ` +
-      "exactly: should not be written. If refused, repeat the exact tool error in your reply. " +
-      "Do not ask a follow-up question."
+      "exactly: should not be written. Use these exact inputs without further questions."
   );
   await composer.press("Enter");
   await expectToolOutcome(projectName, "notes.create", leafAttemptNotBefore, "failed");
-  await expect(replies.nth(leafReplyCount)).toContainText(
-    "path is not within the linked notes source",
-    { timeout: 60_000 }
-  );
+  await expect(createFailures).toHaveCount(leafFailureCount + 1, { timeout: 60_000 });
+  await expect(createFailures.nth(leafFailureCount)).toBeVisible();
+  execInVaultAsOwner(projectName, `test ! -e /tmp/evil-${stamp}.md`);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
-  // No host filesystem path (the vault volume path, or the /tmp escape target) is ever surfaced
-  // to the browser — the HttpError message is a fixed, path-free string.
+  // The visible thread must not expose host filesystem paths or the raw technical error.
   const threadText = await chatDialog.innerText();
   expect(threadText).not.toMatch(/\/tmp\/|\/data\/vaults/);
+  const outcomeText = (await chatDialog.getByRole("status").allTextContents()).join("\n");
+  expect(outcomeText).not.toContain("path is not within the linked notes source");
+  await expect(chatDialog.locator(".action-request-card")).toHaveCount(0);
 });

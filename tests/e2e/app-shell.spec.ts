@@ -764,8 +764,10 @@ test.describe("Chat drawer — Approve/Reject card", () => {
       kind: "action_result",
       text: "Executed: settings.themeMode.set",
       toolName: "settings.themeMode.set",
+      summary: "Switch to dark mode",
       decidedBy: "policy",
-      outcome: "executed"
+      outcome: "executed",
+      actionRequestId: "ar_theme_auto"
     });
     let streamServed = false;
     await page.route("**/api/chat/stream*", async (route) => {
@@ -790,10 +792,10 @@ test.describe("Chat drawer — Approve/Reject card", () => {
     await page.goto("/");
     await page.getByRole("button", { name: "Chat with Moss" }).click();
 
-    // The reply proves the stream was consumed; policy execution adds no redundant status.
+    // Auto-run completion stays visible as a quiet result without requiring approval.
     const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
     await expect(drawer.locator(".chatd-bubble")).toHaveText("Switched to dark mode.");
-    await expect(drawer.getByRole("status")).toHaveCount(0);
+    await expect(drawer.getByRole("status")).toHaveText("Done: Switch to dark mode");
     await expect(drawer.getByText("Executed: settings.themeMode.set")).toHaveCount(0);
 
     await expect(page.locator(".action-request-card")).toHaveCount(0);
@@ -840,6 +842,7 @@ test.describe("Chat drawer — Approve/Reject card", () => {
       kind: "action_result",
       text: "Executed: settings.themeMode.set",
       toolName: "settings.themeMode.set",
+      summary: "Switch to dark mode",
       decidedBy: "policy",
       outcome: "executed",
       actionRequestId: "ar_theme_1",
@@ -868,7 +871,7 @@ test.describe("Chat drawer — Approve/Reject card", () => {
 
     const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
     await expect(drawer.locator(".chatd-bubble")).toHaveText("Switched to dark mode.");
-    await expect(drawer.getByRole("status")).toHaveCount(0);
+    await expect(drawer.getByRole("status")).toHaveText("Done: Switch to dark mode");
     await expect(drawer.getByText("Executed: settings.themeMode.set")).toHaveCount(0);
 
     // No page.reload() anywhere above — the attribute flips purely from the generic

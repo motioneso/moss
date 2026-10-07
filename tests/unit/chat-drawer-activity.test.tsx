@@ -387,7 +387,7 @@ describe("chat drawer activity outcomes", () => {
     );
   });
 
-  it("does not invent an approval decision from legacy execution-only metadata", () => {
+  it("shows plain permission and failure outcomes without inventing approval or success", () => {
     // #1784: the standalone line used to collapse four outcomes into a Changed/Not-changed guess,
     // wrongly calling "allowed" a change it never observed and calling "error" unchanged.
     const html = renderToString(
@@ -398,6 +398,9 @@ describe("chat drawer activity outcomes", () => {
         ]
       })
     );
+    expect(html).toContain(">Allowed</p>");
+    expect(html).toContain("The action didn’t go through");
+    expect(html).toContain("The app reported a problem.");
     expect(html).not.toContain("Granted:");
     expect(html).not.toContain("Broke:");
     expect(html).not.toContain("Approved");
@@ -431,6 +434,12 @@ describe("chat drawer activity outcomes", () => {
     expect(recordsFromMessages([message])).toEqual([
       { kind: "thinking", text: "Checking" },
       {
+        kind: "action_result",
+        text: "LinkedIn monitoring enabled",
+        toolName: "job-search.portal.set-enabled",
+        outcome: "executed"
+      },
+      {
         kind: "reply",
         text: "I changed that.",
         messageId: "m1",
@@ -438,12 +447,6 @@ describe("chat drawer activity outcomes", () => {
         answerProvenance: undefined,
         answerProvenanceCitedIds: undefined,
         sourceFreshness: undefined
-      },
-      {
-        kind: "action_result",
-        text: "LinkedIn monitoring enabled",
-        toolName: "job-search.portal.set-enabled",
-        outcome: "executed"
       }
     ]);
   });

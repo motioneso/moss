@@ -1,6 +1,6 @@
 import {
   actionApprovalOutcome,
-  actionApprovalText,
+  actionOutcomeText,
   type ActionRequestDetails,
   type TranscriptRecord
 } from "@moss/shared";
@@ -86,7 +86,7 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
     return (
       <div ref={rootRef} tabIndex={-1} data-action-request-id={props.actionRequestId}>
         <p className="chatd-status" role="status">
-          {actionApprovalText({ ...props, summary: props.outcomeTitle }) ??
+          {actionOutcomeText({ ...props, summary: props.outcomeTitle }) ??
             `${outcome}${props.outcomeTitle ? ` · ${props.outcomeTitle}` : ""}`}
         </p>
       </div>

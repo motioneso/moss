@@ -242,7 +242,7 @@ describe("quiet resolved approvals", () => {
       "Approved, but it didn’t go through",
       2,
       "Delete custom theme",
-      "The item changed while you were deciding."
+      "The item changed before the action could finish."
     );
   });
 
@@ -271,7 +271,7 @@ describe("quiet resolved approvals", () => {
       "Approved, but it didn’t go through",
       2,
       "Delete custom theme",
-      "The item changed while you were deciding."
+      "The item changed before the action could finish."
     );
     expect(host.querySelector('[role="status"]')?.textContent).not.toMatch(
       /https|private|body|secret|approval_changed/
@@ -392,5 +392,69 @@ describe("quiet resolved approvals", () => {
     ]);
     expectQuiet("Approved", 2, null);
     expect(host.textContent).not.toContain("Bash");
+  });
+
+  it.each([
+    ["executed", "Done: Rename your meeting"],
+    ["error", "Rename your meeting didn’t go through · The app reported a problem."]
+  ] as const)(
+    "shows a visible plain unattended %s result without an approval card",
+    (outcome, text) => {
+      mount([
+        {
+          kind: "action_result",
+          text: "Executed: app.callAction",
+          outcome,
+          decidedBy: "policy",
+          summary: "Rename your meeting",
+          reason: "raw /api/private {body: secret}"
+        }
+      ]);
+      expect(host.querySelector('[role="status"]')?.textContent).toBe(text);
+      expect(host.querySelector(".action-request-card")).toBeNull();
+      expect(host.querySelectorAll("button")).toHaveLength(0);
+      expect(host.textContent).not.toMatch(/Approved|app\.callAction|\/api\/|secret|body/);
+    }
+  );
+
+  it.each([
+    ["person", "executed"],
+    ["person", "denied"],
+    ["person", "error"],
+    ["timeout", "denied"],
+    ["cancelled", "denied"],
+    ["policy", "executed"],
+    ["policy", "error"]
+  ] as const)("keeps the %s/%s outcome before Moss’s reply after reload", (decidedBy, outcome) => {
+    const result: TranscriptRecord = {
+      kind: "action_result",
+      text: "Technical result",
+      actionRequestId: "request-1",
+      summary: "Delete custom theme",
+      outcome,
+      decidedBy
+    };
+    const reply: TranscriptRecord = { kind: "reply", text: "Moss’s final reply." };
+    mount([...steps, ...(decidedBy === "policy" ? [] : [pending]), result, reply]);
+    const before = host.querySelector('[role="status"]')!.textContent!;
+    expect(host.textContent!.indexOf(before)).toBeLessThan(host.textContent!.indexOf(reply.text));
+    const history: ChatMessageDto = {
+      id: "saved",
+      threadId: "thread",
+      ownerUserId: "owner",
+      role: "assistant",
+      status: "stored",
+      body: reply.text,
+      modelRoute: null,
+      tools: [],
+      activity: [...steps, result],
+      createdAt: "2026-10-07T00:00:00Z",
+      updatedAt: "2026-10-07T00:00:00Z"
+    };
+    mount(recordsFromMessages([history]));
+    expect(host.querySelector('[role="status"]')?.textContent).toBe(before);
+    expect(host.textContent!.indexOf(before)).toBeLessThan(host.textContent!.indexOf(reply.text));
+    expect(host.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(host.textContent).toContain("Thinking2 steps");
   });
 });

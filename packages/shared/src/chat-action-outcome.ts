@@ -15,11 +15,11 @@ export function actionApprovalOutcome(
 /** Only fixed plain explanations reach the quiet row; never echo a tool's error payload. */
 function approvalFailureReason(reason: string | undefined): string {
   const reasons: readonly (readonly [string, string])[] = [
-    ["approval_changed:", "The item changed while you were deciding."],
+    ["approval_changed:", "The item changed before the action could finish."],
     ["unknown_route:", "The action or item is no longer available."],
     ["consent_off:", "Access to this information is turned off."],
     ["not_ready:", "The app is not ready yet."],
-    ["invalid_call_binding:", "This approval no longer matches the request."],
+    ["invalid_call_binding:", "The action no longer matches the original request."],
     ["blocked:", "This action is not available through chat."]
   ];
   return (
@@ -27,11 +27,22 @@ function approvalFailureReason(reason: string | undefined): string {
   );
 }
 
-export function actionApprovalText(
+export function actionOutcomeText(
   record: Pick<TranscriptRecord, "outcome" | "decidedBy" | "summary" | "reason">
 ): string | null {
   const outcome = actionApprovalOutcome(record);
-  if (!outcome) return null;
+  if (!outcome) {
+    if (record.outcome === "executed") return record.summary ? `Done: ${record.summary}` : "Done";
+    if (record.outcome === "error") {
+      return `${record.summary ?? "The action"} didn’t go through · ${approvalFailureReason(record.reason)}`;
+    }
+    // Permission and policy refusal are not observed execution or the user's decision.
+    if (record.outcome === "allowed")
+      return record.summary ? `Allowed: ${record.summary}` : "Allowed";
+    if (record.outcome === "denied")
+      return record.summary ? `Not allowed: ${record.summary}` : "Not allowed";
+    return null;
+  }
   return [
     outcome,
     record.summary,

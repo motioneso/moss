@@ -134,6 +134,22 @@ describe("ordinary module approval titles", () => {
     expect(h.records[1]).toMatchObject({ summary: "Rename your meeting", outcome: "denied" });
   });
 
+  it("uses an explicit plain label when the summary contains technical disclosure", async () => {
+    const tool = admissionTool("notes.edit", {
+      risk: "destructive",
+      actionLabel: "Edit note",
+      summarize: () => "Edit note projects/plans.md."
+    });
+    const h = admissionFixture([tool]);
+    const pending = h.gateway.callTool(h.token, tool.name, {});
+    await rejectAdmissionCard(h, pending);
+    expect(h.records[0]).toMatchObject({
+      summary: "Edit note projects/plans.md.",
+      outcomeTitle: "Edit note"
+    });
+    expect(h.records[1]).toMatchObject({ summary: "Edit note", outcome: "denied" });
+  });
+
   it.each([
     undefined,
     "calendar.renameMeeting",
@@ -172,6 +188,9 @@ describe("plain approval title projection", () => {
     expect(approvalOutcomeTitle(tool, "  Rename\n your meeting  ")).toBe("Rename your meeting");
     expect(approvalOutcomeTitle(tool, `Rename ${"your meeting ".repeat(30)}`)).toHaveLength(200);
     expect(approvalOutcomeTitle({ name: "example.change" }, "Rename your meeting")).toBeUndefined();
+    expect(
+      approvalOutcomeTitle({ ...tool, actionLabel: "example.change" }, "Edit /private/file")
+    ).toBeUndefined();
   });
 
   it("removes only balanced bold delimiters before applying the technical-text gate", () => {

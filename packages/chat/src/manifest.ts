@@ -126,8 +126,15 @@ export const chatModuleManifest = {
     {
       id: "chat.approval_outcomes",
       description:
-        "Decisions replace approval cards with one quiet outcome line, also after reload. " +
-        "Details and the execution row disappear; Thinking stays unchanged. Failures after approval are explicit. Pending cards keep exact disclosure.",
+        "Approval decisions replace cards with one quiet outcome before the reply, including after reload. " +
+        "Details and execution rows disappear; Thinking stays unchanged. Failures are explicit. Pending cards keep exact disclosure.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.automatic_action_outcomes",
+      description:
+        "Automatic changes show Done with a plain server title, or a short failure line. No approval is implied. " +
+        "Permission grants are not completion. Outcome lines remain before the reply after reload.",
       featureFlagId: "chat.module"
     },
     {

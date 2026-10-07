@@ -314,8 +314,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
         }
       ];
     }
-    const activity = message.activity.filter((event) => event.kind !== "action_result");
-    const actionResults = message.activity.filter((event) => event.kind === "action_result");
+    const activity = message.activity;
     return [
       ...activity.map(activityRecord),
       ...(activity.some((event) => event.kind === "tool")
@@ -334,8 +333,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
         answerProvenanceCitedIds: message.answerProvenanceCitedIds,
         ...(message.elapsedMs !== undefined ? { elapsedMs: message.elapsedMs } : {}),
         ...(message.usage !== undefined ? { usage: message.usage } : {})
-      },
-      ...actionResults.map(activityRecord)
+      }
     ];
   });
 }

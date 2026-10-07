@@ -20,7 +20,7 @@ import type {
   UsefulnessFeedbackDto,
   UsefulnessFeedbackKind
 } from "@moss/shared";
-import { actionApprovalText } from "@moss/shared";
+import { actionOutcomeText } from "@moss/shared";
 import { BrandMark, ChatFreshnessFooter, Menu } from "@moss/ui";
 
 import { queryKeys } from "../api/query-keys";
@@ -114,7 +114,7 @@ export function RecordRow(props: {
     }
 
     if (props.approvalOutcomeShown) return null;
-    const outcome = actionApprovalText(props.record);
+    const outcome = actionOutcomeText(props.record);
     return outcome ? (
       <p className="chatd-status" role="status">
         {outcome}

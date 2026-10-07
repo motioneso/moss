@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { BrandMark } from "./brand-mark.js";
-import { actionApprovalOutcome, actionApprovalText } from "@moss/shared";
+import { actionApprovalOutcome, actionOutcomeText } from "@moss/shared";
 
 import type {
   ChatRecordKind,
@@ -301,7 +301,7 @@ function defaultRenderRecord(
   }
   if (record.kind === "action_result" || record.kind === "action_request") {
     if (context.approvalOutcomeShown) return null;
-    const outcome = actionApprovalText(record);
+    const outcome = actionOutcomeText(record);
     return outcome ? (
       <p className="chatd-status" role="status">
         {outcome}

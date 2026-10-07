@@ -191,11 +191,17 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const dialog = page.getByRole("dialog", { name: "Chat with Moss" });
   await expect(dialog).toBeVisible();
+  // The server summary differs only by whether the tool selects by type or definition id.
+  const rerunOutcome = dialog.getByRole("status").filter({
+    hasText: /^Done: Re-run (?:your evening|a) briefing\.$/
+  });
 
   const hold = await holdRunInserts();
   try {
     // b. First ask: the tool runs with no approval card and Moss says it queued.
     const first = await ask(dialog, RERUN_ASK);
+    await expect(rerunOutcome).toHaveCount(1);
+    await expect(rerunOutcome).toBeVisible();
     await expect(
       dialog.getByRole("status").filter({ hasText: "Executed: briefings.rerun" })
     ).toHaveCount(0);
@@ -211,6 +217,8 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
     // from memory and has to call the tool: already running, and still exactly one open job.
     await newChat(page, dialog);
     const second = await ask(dialog, RERUN_ASK);
+    await expect(rerunOutcome).toHaveCount(1);
+    await expect(rerunOutcome).toBeVisible();
     await expect(
       dialog.getByRole("status").filter({ hasText: "Executed: briefings.rerun" })
     ).toHaveCount(0);

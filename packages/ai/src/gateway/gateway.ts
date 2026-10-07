@@ -19,7 +19,7 @@ import {
   type AcpBuiltInPermissionResponse
 } from "./acp-permission.js";
 import { actionHoldDurationMs, emitActionResultRecord } from "./action-result-record.js";
-import { approvalOutcomeTitle } from "./approval-outcome-title.js";
+import { approvalOutcomeTitle, captureActionOutcomeTitle } from "./approval-outcome-title.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import { isConversationTainted } from "./conversation-policy.js";
@@ -58,6 +58,7 @@ import {
 } from "./run-tool-handler.js";
 export type { GatewayLogger };
 import { isSelfOperationExcluded } from "./self-operation.js";
+import { recordUnattendedRun } from "./unattended-run-record.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type {
   ActiveModulesResolver,
@@ -231,8 +232,8 @@ export class AssistantToolGateway {
       }
       const dispatched = await this.runAutomatically(found, input, ctx);
       if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
-      const { response: result, audit } = dispatched.value;
-      this.recordUnattendedRun(found, ctx, "yolo", result, audit);
+      const { response: result } = dispatched.value;
+      recordUnattendedRun(this.deps, found, ctx, "yolo", dispatched.value, dispatched.outcomeTitle);
       return result;
     }
     if (route.kind === "auto-run") {
@@ -261,9 +262,16 @@ export class AssistantToolGateway {
       }
       const dispatched = await this.runAutomatically(found, input, ctx);
       if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
-      const { response: result, audit } = dispatched.value;
+      const { response: result } = dispatched.value;
       if (found.tool.risk !== "read") {
-        this.recordUnattendedRun(found, ctx, "auto", result, audit);
+        recordUnattendedRun(
+          this.deps,
+          found,
+          ctx,
+          "auto",
+          dispatched.value,
+          dispatched.outcomeTitle
+        );
       }
       return result;
     }
@@ -327,7 +335,15 @@ export class AssistantToolGateway {
     const dispatched = await this.runAutomatically(found, input, ctx);
     if (dispatched.kind === "confirm") return { kind: "declined", reason: "would_confirm" };
     const { response, audit } = dispatched.value;
-    if (limited) this.recordUnattendedRun(found, ctx, approvalMode, response, audit);
+    if (limited)
+      recordUnattendedRun(
+        this.deps,
+        found,
+        ctx,
+        approvalMode,
+        dispatched.value,
+        dispatched.outcomeTitle
+      );
     return {
       kind: "executed",
       response,
@@ -518,41 +534,6 @@ export class AssistantToolGateway {
       denied: true,
       reason: "Rate limit exceeded for unattended runs of this tool. Try again shortly."
     };
-  }
-
-  private recordUnattendedRun(
-    found: ExecutableTool,
-    ctx: ToolContext,
-    approvalMode: "yolo" | "auto",
-    result: GatewayToolResponse,
-    audit: RunHandlerOutcome["audit"]
-  ): void {
-    emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
-      actionRequestId: ctx.requestId,
-      toolName: found.dto.name,
-      outcome: audit.errorClass === null ? "executed" : "error",
-      decidedBy: "policy",
-      holdDurationMs: null,
-      ...(result.ok
-        ? { result: liveStreamResult(found.tool, result) }
-        : { reason: gatewayFailureReason(result) }),
-      ...(result.ok && audit.outcome === "success" && found.tool.affectsQueryKeys
-        ? { affectsQueryKeys: found.tool.affectsQueryKeys }
-        : {}),
-      ...(result.ok && audit.outcome === "success" && found.tool.risk !== "read" && found.resolution
-        ? { affectsModules: found.resolution.affectsModules }
-        : {})
-    });
-    void recordGatewayAudit(
-      this.deps,
-      { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
-      found,
-      {
-        approvalMode,
-        ...audit,
-        chatSessionId: ctx.chatSessionId
-      }
-    );
   }
 
   async requestNativeToolPermission(
@@ -750,6 +731,7 @@ export class AssistantToolGateway {
     input: Record<string, unknown>,
     ctx: ToolContext
   ) {
+    const outcomeTitle = captureActionOutcomeTitle(found.tool, input, ctx);
     const result =
       found.tool.risk === "read" && !found.resolution?.confirmWhenTainted
         ? { kind: "ran" as const, value: await this.dispatchHandler(found, input, ctx) }
@@ -760,6 +742,7 @@ export class AssistantToolGateway {
     if (result.kind === "failed")
       return {
         kind: "ran" as const,
+        outcomeTitle,
         value: {
           response: { ok: false as const, error: CONTEXT_ADMISSION_UNAVAILABLE },
           audit: { outcome: "failed" as const, durationMs: 0, errorClass: "automatic_guard" }
@@ -767,6 +750,7 @@ export class AssistantToolGateway {
       };
     return {
       kind: "ran" as const,
+      outcomeTitle,
       value: await admitToolOutcome(this.deps.provenance, found, ctx, result.value)
     };
   }

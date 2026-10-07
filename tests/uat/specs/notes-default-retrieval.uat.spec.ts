@@ -97,11 +97,18 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
 
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const composer = page.getByRole("textbox", { name: "Message Moss" });
+  const createdNotes = page
+    .getByRole("dialog", { name: "Chat with Moss" })
+    .getByRole("status")
+    .filter({ hasText: /^Done: Create note$/ });
+  const createCount = await createdNotes.count();
   const path = `uat/notes-default-retrieval-${Date.now()}.md`;
   const syncNotBefore = Date.now();
+  // Neutral setup content avoids incidental retrieval before this unattended write.
+  // The later decision question intentionally exercises retrieval in a fresh conversation.
   await composer.fill(
-    `Use notes.create to create ${path} containing exactly: Launch snack decision: ${FACT}. ` +
-      "Do not ask a follow-up question."
+    `Use notes.create to create ${path} containing exactly: Snack choice: ${FACT}. ` +
+      "Use these exact inputs without further questions."
   );
   await composer.press("Enter");
 
@@ -117,7 +124,9 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
     })
   });
 
-  // Policy execution has no technical status row; verify the real gateway audit instead.
+  // Verify both the user-visible auto-run outcome and the real gateway execution.
+  await expect(createdNotes).toHaveCount(createCount + 1, { timeout: 60_000 });
+  await expect(createdNotes.last()).toBeVisible();
   await expect
     .poll(
       () => {
@@ -170,7 +179,7 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
     type: RETRIEVAL_TURN_ANNOTATION_TYPE,
     description: JSON.stringify({ retrievalTurnStartIso: new Date().toISOString() })
   });
-  await composer.fill("What snack did we choose for the launch?");
+  await composer.fill("What was our snack decision?");
   await composer.press("Enter");
 
   await expect(page.getByText(new RegExp(FACT, "i"))).toBeVisible({ timeout: 60_000 });
