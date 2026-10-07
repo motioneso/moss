@@ -72,11 +72,12 @@ export function registerCompanionRecordingRoutes(
     async (request, reply) => {
       reply.header("Cache-Control", "no-store");
       try {
-        const actor = await auth.companionDevices.resolve({
+        await auth.companionDevices.resolve({
           headers: request.headers,
           requestId: request.id
         });
-        return await service.createAttempt(actor, request.body);
+        // A linked device cannot open a second recording-consent flow.
+        return reply.code(410).send({ code: "recording_relink_required" });
       } catch (error) {
         return failure(error, reply);
       }
@@ -131,8 +132,9 @@ export function registerCompanionRecordingRoutes(
     async (request, reply) => {
       reply.header("Cache-Control", "no-store");
       try {
-        const actor = await browser(request, true);
-        return await service.decide(actor, request.body);
+        await browser(request, true);
+        // Only versioned initial pairing may create new recording authority.
+        return reply.code(410).send({ code: "recording_relink_required" });
       } catch (error) {
         return failure(error, reply);
       }

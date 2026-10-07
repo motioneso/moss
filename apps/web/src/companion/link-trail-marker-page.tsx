@@ -7,7 +7,6 @@ import { Button, Card } from "@moss/ui";
 import { COMPANION_PRODUCT_NAME, type PairAttemptSummaryResponse } from "@moss/shared";
 
 import { decideCompanionPairAttempt, getCompanionPairAttempt } from "../api/client";
-import { RECORDING_CAPABILITY_DISCLOSURE } from "./recording-capabilities.js";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name.js";
 
@@ -126,13 +125,16 @@ export function LinkTrailMarkerPage() {
                   {APPROVAL_CAPABILITIES.map((capability) => (
                     <li key={capability}>{capability}</li>
                   ))}
+                  {attemptQuery.data?.recordingPolicyVersion === 1 ? (
+                    <li>
+                      record your selected microphone and app or computer audio for your configured
+                      transcription service when you choose Start
+                    </li>
+                  ) : null}
                 </ul>
                 <span>It never gets your password or your browser session.</span>
               </div>
             </div>
-            {attemptQuery.data?.recordingPolicyVersion === 1 ? (
-              <p>{RECORDING_CAPABILITY_DISCLOSURE} Connecting never starts recording.</p>
-            ) : null}
             <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
               <Button
                 variant="primary"

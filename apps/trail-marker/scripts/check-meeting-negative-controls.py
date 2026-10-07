@@ -95,7 +95,7 @@ def verify_result(result, exit_code, control, negative):
 def validate_sources():
     original = SOURCE.read_bytes()
     text = original.decode("utf-8")
-    tests = (APP / "TrailMarkerTests/MeetingAudioBufferTests.swift").read_text()
+    tests = (APP / f"TrailMarkerTests/{TEST_CLASS}.swift").read_text()
     host = (APP / "TrailMarker/App/AppDelegate.swift").read_text()
     startup_guard = 'if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }'
     if startup_guard not in host:

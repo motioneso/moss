@@ -72,7 +72,7 @@ export const meetingsModuleManifest = {
       icon: "mic",
       order: 36,
       description:
-        "Create meetings, edit personal notes, and review transcripts. Explicit recording needs a connected Mac recorder with one-time recording approval and configured transcription.",
+        "Create meetings, edit personal notes, and review transcripts. Explicit recording needs a connected Mac recorder authorized by initial linking and configured transcription.",
       permissionId: "meetings.read"
     }
   ],
@@ -285,7 +285,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_capture",
       description:
-        "Connect your Mac and grant audio permissions, then explicitly Start. New recordings use the default microphone and system audio. Exact choices remain; ambiguous sources fail closed. Persistent Pause/Stop; bounded finalization. Mac only.",
+        "Link your Mac once and grant OS audio permissions, then choose Start. New recordings use the default mic and system audio. Saved exact sources remain; ambiguous sources fail closed. Persistent Pause/Stop and bounded finalization. Mac only.",
       errors: [
         {
           code: "meeting_capture_source_unavailable",
@@ -311,7 +311,7 @@ export const meetingsModuleManifest = {
           class: "prerequisite",
           remediationRef: "meetings.connect_recorder",
           description:
-            "The recording connection is unavailable, expired or revoked. Check the companion connection in Settings and complete its one-time recording upgrade if requested."
+            "The recording connection is unavailable, expired or revoked. Check the companion connection. For missing or revoked recording access, sign the Mac out under Settings → Active sessions and reconnect through Trail Marker."
         },
         {
           code: "meeting_capture_processing_unavailable",
@@ -350,13 +350,13 @@ export const meetingsModuleManifest = {
           id: "meetings.connect_recorder",
           path: "/meetings",
           description:
-            "Connect Trail Marker in Settings and approve its recording capability. Check macOS audio permissions and the default microphone. Create or open a meeting, then choose Start recording."
+            "Connect Trail Marker through its existing browser-link approval. For missing or revoked recording access, sign the Mac out under Settings → Active sessions and relink. Check OS audio permissions, then choose Start recording."
         },
         {
           id: "meetings.configure_transcription",
           path: "/settings?section=aiproviders",
           description:
-            "An admin configures the transcription endpoint and model in AI providers. The selected route must return clip timestamps; unsupported responses stop processing without provider fallback."
+            "An admin configures an OpenAI-compatible transcription endpoint and model in AI providers. The selected route must return clip timestamps; unsupported responses stop processing without provider fallback."
         }
       ]
     },
@@ -368,7 +368,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.history",
       description:
-        "Search current titles, notes and transcripts; filter review and export receipts. Open Review or Ask Moss. Capture needs a connected Mac with one-time recording capability approval. Receipts do not verify current Tasks or vault files.",
+        "Search current titles, notes and transcripts; filter review and export receipts. Open Review or Ask Moss. Capture needs a connected Mac authorized by the initial linking approval. Receipts do not verify current Tasks or vault files.",
       errors: [
         {
           code: "meeting_history_access_denied",
@@ -640,7 +640,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.draft_records",
       description:
-        "Review Summary and actions, Transcript and My notes. Search titles, notes and transcripts in History. Accept reviewed Tasks and save private copies. Native Mac recording needs device approval and an explicit Start.",
+        "Review Summary and actions, Transcript and My notes. Search titles, notes and transcripts in History. Accept reviewed Tasks and save private copies. Native Mac recording needs a linked Mac and an explicit Start.",
       errors: [
         {
           code: "meeting_request_conflict",

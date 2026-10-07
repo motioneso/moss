@@ -57,18 +57,28 @@ describe("Trail Marker approval page copy", () => {
 });
 
 it("includes recording in supported pairing and keeps legacy pairing unapproved", () => {
-  expect(renderApproval(1)).toContain("Use this Mac for Meetings when you choose Start");
-  expect(renderApproval(1)).toContain("Connecting never starts recording");
-  expect(renderApproval()).not.toContain("Use this Mac for Meetings when you choose Start");
+  const html = renderApproval(1);
+  expect(html).toContain(
+    "record your selected microphone and app or computer audio for your configured transcription service when you choose Start"
+  );
+  expect(html.match(/<li>/g)).toHaveLength(5);
+  expect(html.match(/>Approve<\/button>/g)).toHaveLength(1);
+  expect(html).not.toContain("Connecting never starts recording");
+  expect(html).not.toContain("Enable meeting recording");
+  expect(renderApproval()).not.toContain("configured transcription service");
 });
 
 describe("Trail Marker Settings group", () => {
-  it("says how to connect, using the address the person is on", () => {
+  it("says how to connect without showing a Moss address or another approval", () => {
     const html = renderToStaticMarkup(
       createElement(QueryClientProvider, { client: new QueryClient() }, createElement(MacCompanion))
     );
     expect(html).toContain("How to connect");
-    expect(html).toContain(window.location.origin);
+    expect(html).not.toContain(window.location.origin);
+    expect(html).not.toContain("enter ");
+    expect(html).not.toContain("Enable meeting recording");
+    expect(html).not.toContain("Recording access needs an update");
+    expect(html).not.toContain("one-time recording");
     expect(html).toContain("Connect in Browser");
     expect(html).toContain("nothing to download yet");
   });

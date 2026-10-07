@@ -1,6 +1,6 @@
 import Foundation
 
-/// Native-only contracts. A caller still needs separate meeting/device approval before upload.
+/// Native-only contracts. A caller still needs a scoped per-meeting device grant before upload.
 enum MeetingAudioFailure: Error, Equatable {
     case invalidSelection
     case invalidFormat

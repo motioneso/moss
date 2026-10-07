@@ -67,7 +67,11 @@ Do not overstate these findings:
 
 Auth owns a versioned owner/device `meeting-recording` capability with consent time, expiry and
 revocation. Fresh supported pairing presents that capability as part of the single connection
-approval. Already paired devices start unapproved and receive a clear one-time connection upgrade.
+approval. Already paired devices without authoritative recording consent must explicitly sign out
+under Settings → Active sessions and relink through Trail Marker; already-approved Macs remain
+linked. Do not show a second recording approval or a separate recording disclosure paragraph.
+Legacy attempt/decide routes return 410. Read-only recovery can restore only an exact previously
+approved candidate whose live capability, proof and revision still match.
 No background migration grants recording access; Backtrack's existing consent and buffer policy
 remain unchanged. Keep independent native-held recording-capability proof in the Keychain, granted
 inside that same approval, so a stolen legacy connection credential alone cannot impersonate a new
@@ -93,9 +97,10 @@ Use new migrations only; 0284 has been used in owner testing. Auth exposes a pub
 port; Meetings owns readiness, command/session state and transcript processing through that port.
 Do not query another module's private tables or extend `AccessContext`.
 
-Capability approval/upgrade uses cookie-only authentication, rejects Authorization headers, checks
+Initial linking approval uses cookie-only authentication, rejects Authorization headers, checks
 trusted Origin and fresh owner/session, and binds the server-known device and displayed policy
-revision. Re-approval advances the capability revision; old meeting grants never revive. Serialize
+revision. Restoring missing or revoked authority requires explicit relinking; old meeting grants
+never revive. Serialize
 Start per device connection, not only per meeting, so two tabs cannot start two hardware sessions.
 
 Stop during an uncertain Start atomically cancels that original request identity, even if Start
@@ -163,7 +168,7 @@ typing, not only test-renderer callbacks with an `act` flush between every keyst
 3. Native lane: shared connection claim loop, generation fences and one-time permissions; robust
    audio admission/timestamps and fair queues; independent processing outcomes, local lifecycle
    barriers, no automatic browser launch, and safe diagnostics outside realtime callbacks.
-4. Web lane: connection upgrade integrated with existing connect UI, remembered sources and single
+4. Web lane: recording authority integrated with initial linking, remembered sources and single
    Start, persistent controls, synchronous title/notes edits, acknowledged duration and bounded
    query/retry behavior. Keep the app map truthful in the same change.
 5. Integrate and independently review the full path. Publish new commits without overwriting the
@@ -179,7 +184,7 @@ typing, not only test-renderer callbacks with an `act` flush between every keyst
 - Slow status alongside slow ASR; a single 429/5xx/parser/persistence failure; backoff; pending vs
   processed receipts; recovery within memory bounds; explicit gaps/paused state after exhaustion.
 - Start retries/lost claim, wrong device/owner/admin, old connection generation, revoked capability,
-  legacy device without consent, expired session, and one-time upgrade. No auto-start on connect.
+  legacy device without consent, expired session, and explicit relinking. No auto-start on connect.
 - Stop → finalized → New → Start, plus new meeting while prior bounded processing is finishing,
   if supported. No hidden active grant or permanently disabled Stop.
 - Real DOM rapid typing, transient failures, repeated clicks, tab/list navigation, browser stayed
