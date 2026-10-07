@@ -17,7 +17,8 @@ export function renderCurrentTimeContext(instant: Date, timezone: string | null)
   }).format(instant);
   const lines = [
     "<current_time_context>",
-    `Current UTC time: ${instant.toISOString()} (${utcWeekday}).`
+    `Current UTC time: ${instant.toISOString()} (${utcWeekday}).`,
+    "Tool-result timestamps such as createdAt and updatedAt describe the record's own event time, not the current time. ISO 8601 timestamps ending in Z are UTC; a numeric offset belongs to the source timestamp. Read ISO clock hours as 24-hour time and preserve the original instant. If a timestamp has no time zone, do not infer one."
   ];
   if (timezone && isValidTimeZone(timezone)) {
     const localDate = localDayKey(instant, timezone);
@@ -34,12 +35,14 @@ export function renderCurrentTimeContext(instant: Date, timezone: string | null)
     const offsetMinutes = timeZoneOffsetMinutes(instant, timezone);
     lines.push(
       `User's local time: ${localDate} (${localWeekday}) ${localTime} (${timezone}, UTC offset ${offsetMinutes} minutes).`,
-      "Keep this local date, weekday, time and time zone in mind for accuracy, but do not volunteer them: mention the date, time, weekday or time zone only when the user asks about them or they are directly relevant to the answer. When you do mention them, state them as fact. Do not hedge about them, re-derive them, or offer other time zones unless the user asks."
+      "Keep this local date, weekday, time and time zone in mind for accuracy, but do not volunteer them: mention the date, time, weekday or time zone only when the user asks about them or they are directly relevant to the answer. When you do mention them, state them as fact. Do not hedge about them, re-derive them, or offer other time zones unless the user asks.",
+      `When presenting a tool-result timestamp, convert that instant to the user's time zone (${timezone}) unless another zone was requested. Apply the offset in effect at that timestamp (including daylight saving), not necessarily the current offset above, and carry any date change across midnight. Never relabel the raw UTC clock as local or change only AM/PM. If you cannot reliably convert, show the original timestamp with its explicit zone instead of guessing.`
     );
   } else {
     lines.push(
       "The user's local time zone is not known this turn.",
-      "If you mention the time, say plainly — once, the first time you mention it — that you do not know their local time zone, then answer from the UTC time above. Never guess the user's time zone, region or location, never name a time zone or offset you were not given, and do not show time zone arithmetic unless the user asks for it."
+      "If you mention the current time, say plainly — once, the first time you mention it — that you do not know their local time zone, then use the UTC instant above, converted only if the user requests a specific time zone. Never guess the user's time zone, region or location, never name a time zone or offset you were not given, and do not show time zone arithmetic unless the user asks for it.",
+      "With no known local time zone, preserve tool timestamps in their explicit source zone unless the user requests a specific target time zone; do not label them as the user's local time. For a requested target zone, apply its offset at the timestamp (including daylight saving) and carry any date change across midnight. If conversion is uncertain, retain the explicit source zone."
     );
   }
   lines.push(

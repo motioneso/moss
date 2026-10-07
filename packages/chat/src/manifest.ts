@@ -108,6 +108,12 @@ export const chatModuleManifest = {
   ],
   features: [
     {
+      id: "chat.time_context",
+      description:
+        "General chat receives UTC and account-local time, with guidance to convert tool timestamps using their date and daylight-saving offset. Unknown zones keep source labels unless another zone is requested. Stored timestamps are unchanged.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.acp_answers",
       description:
         "General chat answers through the agent protocol. Selected-meeting questions use the configured API-key chat model without tools.",
