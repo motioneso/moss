@@ -154,6 +154,7 @@ export type ChatEngineFactory = (
     /** B4: set only by a structured caller (`CliStructuredAdapter`). See
      *  `ChatEngineSelectionOpts.needsStructuredOutput` in structured-engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
+    readonly constrainedStructured?: boolean;
     readonly acpPermissionDecider?: AcpPermissionDecider;
     readonly nextSequence?: () => number;
   }
@@ -246,6 +247,7 @@ export function createRealEngineFactory(
       homeBase,
       executionMode: engineOpts?.executionMode,
       needsStructuredOutput: engineOpts?.needsStructuredOutput,
+      constrainedStructured: engineOpts?.constrainedStructured,
       // #1557 Phase 1: read from `chat.persistent_runtime.enabled` by the caller
       // (`chat-multiplexer.ts`'s `resolveChatEngineFactory`, the host-dev boot path). The
       // cli-runner RPC root (`engine-host.ts`) never reaches this factory — it calls
@@ -314,7 +316,8 @@ function createRpcEngineFactory(opts: {
       engineOpts?.executionMode,
       opts.readPersistentRuntimeConfig,
       engineOpts?.needsStructuredOutput,
-      engineOpts?.userId
+      engineOpts?.userId,
+      engineOpts?.constrainedStructured
     );
   };
   return { factory, connection };

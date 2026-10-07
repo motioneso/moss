@@ -861,7 +861,8 @@ export class ChatEngineRpcClient implements CliChatEngine {
     /** B4: forwarded to `RpcLaunchParams.needsStructuredOutput`. See its doc comment. */
     private readonly needsStructuredOutput = false,
     /** #2674: forwarded to `RpcLaunchParams.userId`, which picks the runner's UID slot. */
-    private readonly userId?: string
+    private readonly userId?: string,
+    private readonly constrainedStructured = false
   ) {
     this.startsToolClientPerTurn = executionMode === "non_interactive";
   }
@@ -914,6 +915,7 @@ export class ChatEngineRpcClient implements CliChatEngine {
       provider: this.provider,
       executionMode: this.executionMode,
       needsStructuredOutput: this.needsStructuredOutput,
+      ...(this.constrainedStructured ? { constrainedStructured: true } : {}),
       ...(this.userId !== undefined ? { userId: this.userId } : {}),
       personaText: opts.personaText ?? "",
       ...(opts.mcpToken !== undefined ? { mcpToken: opts.mcpToken } : {}),

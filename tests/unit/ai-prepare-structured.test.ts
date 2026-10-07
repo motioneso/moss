@@ -4,6 +4,7 @@ import {
   createAiSecretCipher,
   generateStructured,
   prepareStructuredApiGeneration,
+  prepareStructuredGeneration,
   type AiProviderWithSealedCredential
 } from "@moss/ai";
 import { HttpApiAdapter } from "../../packages/ai/src/adapters/http-api.js";
@@ -52,7 +53,7 @@ it("prepares without dispatch, then runs once outside the closed DataContext wit
     );
   });
   vi.stubGlobal("fetch", fetch);
-  const run = await prepareStructuredApiGeneration(db, request, {
+  const run = await prepareStructuredGeneration(db, request, {
     cipher,
     repository: { selectProviderWithCredential: lookup }
   });
@@ -90,7 +91,7 @@ it("captures the prepared API activity owner from the actor context without reus
   });
   vi.stubGlobal("fetch", fetch);
   const untrustedExtraOptions = { ...request, actorUserId: "another-owner" };
-  const run = await prepareStructuredApiGeneration(scoped, untrustedExtraOptions, {
+  const run = await prepareStructuredGeneration(scoped, untrustedExtraOptions, {
     cipher,
     repository: { selectProviderWithCredential: async () => provider }
   });
@@ -119,7 +120,7 @@ it("does not carry extra search, sorting, CLI or retry options into the prepared
     singleAttempt: false,
     replySchema: {}
   };
-  const run = await prepareStructuredApiGeneration({} as DataContextDb, untrustedExtraOptions, {
+  const run = await prepareStructuredGeneration({} as DataContextDb, untrustedExtraOptions, {
     cipher,
     repository: {
       selectProviderWithCredential: async () => provider

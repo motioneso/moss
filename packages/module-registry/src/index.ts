@@ -157,6 +157,7 @@ import {
   isCurrentClassifierReviewed,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
+  createConstrainedCliStructuredAdapterFactory,
   createAcpOneShotEngineFactory,
   registerChatJobWorkers,
   registerChatRoutes,
@@ -738,6 +739,9 @@ export interface BuiltInRouteDependencies {
   readonly hostDiagnostics?: HostDiagnosticsProvider;
   readonly personaPreview?: (input: PersonaPreviewInput) => Promise<string>;
   readonly createCliStructuredAdapter?: ReturnType<typeof createCliStructuredAdapterFactory>;
+  readonly createConstrainedCliStructuredAdapter?: ReturnType<
+    typeof createConstrainedCliStructuredAdapterFactory
+  >;
   /**
    * Bounded, live onboarding probes (Phase 2). Built inside registerBuiltInApiRoutes (sync,
    * no boot-time probing) and forwarded to the settings module so it keeps no @moss/ai /
@@ -870,7 +874,8 @@ export function createStructuredChatEngineFactory(options: {
       engineOptions?.executionMode,
       undefined,
       engineOptions?.needsStructuredOutput,
-      engineOptions?.userId
+      engineOptions?.userId,
+      engineOptions?.constrainedStructured
     );
   };
 }
@@ -3674,6 +3679,9 @@ export function registerBuiltInApiRoutes(
     platformDiagnostics,
     chatEngineFactory,
     createCliStructuredAdapter: createCliStructuredAdapterFactory(structuredChatEngineFactory),
+    createConstrainedCliStructuredAdapter: createConstrainedCliStructuredAdapterFactory(
+      structuredChatEngineFactory
+    ),
     personaPreview:
       dependencies.personaPreview ??
       createDefaultPersonaPreview(dependencies.dataContext, {

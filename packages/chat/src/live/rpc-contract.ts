@@ -294,6 +294,8 @@ export interface RpcLaunchParams {
    *  cli-runner root can't drift from the in-process root on which calls keep the bounded print
    *  engine regardless of the persistent-runtime flag. */
   readonly needsStructuredOutput?: boolean;
+  /** Fresh bounded no-tools profile; never inferred from ordinary structured use. */
+  readonly constrainedStructured?: boolean;
   /** #2228: enable the CLI's own web search tool for this launch. See EngineLaunchOpts.nativeSearch. */
   readonly nativeSearch?: boolean;
   /**

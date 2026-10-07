@@ -157,6 +157,14 @@ export type GenerateStructuredExplicitModel = {
 
 export type StructuredServedBy = "sorting" | "main";
 
+/** A selected transport cannot provide the requested constrained execution profile. */
+export class StructuredTransportUnavailableError extends Error {
+  constructor() {
+    super("Structured transport is unavailable");
+    this.name = "StructuredTransportUnavailableError";
+  }
+}
+
 type StructuredFailure = "needs_config" | "validation_failed" | "provider_error" | "aborted";
 
 export type GenerateStructuredResult =
@@ -168,7 +176,11 @@ export type GenerateStructuredResult =
       /** Always set by generateStructured. Optional so hand-built results in tests compile. */
       readonly servedBy?: StructuredServedBy;
     }
-  | { readonly ok: false; readonly error: StructuredFailure };
+  | {
+      readonly ok: false;
+      readonly error: StructuredFailure;
+      readonly reason?: "unsupported_transport";
+    };
 
 type SortingFailure = Exclude<StructuredFailure, "aborted">;
 
@@ -176,8 +188,8 @@ type RunOptions = {
   readonly maxAttempts: number;
   readonly signal: AbortSignal | undefined;
   readonly servedBy: StructuredServedBy;
-  /** Prepared API calls capture their activity owner before the actor transaction closes. */
-  readonly actorUserId?: string;
+  /** Prepared calls capture their activity owner before the actor transaction closes; null means absent. */
+  readonly actorUserId?: string | null;
 };
 
 export async function generateStructured(
@@ -245,12 +257,12 @@ export async function generateStructured(
 }
 
 /**
- * Prepare one API-key structured attempt while a short actor transaction is open. The
+ * Prepare one structured attempt while a short actor transaction is open. The
  * returned one-shot closure owns transport state, but performs no database work and may
  * only be invoked after that transaction completes. Caller owns route authorization and
  * must use a freshly checked explicit model plus a guarded credential lookup.
  */
-export async function prepareStructuredApiGeneration(
+export async function prepareStructuredGeneration(
   scopedDb: DataContextDb,
   input: Pick<
     GenerateStructuredInput,
@@ -258,17 +270,18 @@ export async function prepareStructuredApiGeneration(
   > & {
     readonly explicitModel: GenerateStructuredExplicitModel;
   },
-  deps: Pick<GenerateStructuredDeps, "cipher"> & {
+  deps: Pick<GenerateStructuredDeps, "cipher" | "createAdapter" | "createCliStructuredAdapter"> & {
     readonly repository: Pick<AiRepository, "selectProviderWithCredential">;
   }
 ): Promise<() => Promise<GenerateStructuredResult>> {
+  const explicitModel = { ...input.explicitModel };
   const request: GenerateStructuredInput = {
     service: input.service,
-    schema: input.schema,
+    schema: structuredClone(input.schema),
     prompt: input.prompt,
     maxOutputTokens: input.maxOutputTokens,
     signal: input.signal,
-    explicitModel: input.explicitModel,
+    explicitModel,
     singleAttempt: true
   };
   assertBoundedStructuredSchema(request.schema);
@@ -278,22 +291,23 @@ export async function prepareStructuredApiGeneration(
     request,
     {
       cipher: deps.cipher,
+      createAdapter: deps.createAdapter,
+      createCliStructuredAdapter: deps.createCliStructuredAdapter,
       repository: {
         async resolveModelForService() {
           throw new Error("Prepared generation cannot resolve another route");
         },
         async selectProviderWithCredential(db, id) {
-          const provider = await deps.repository.selectProviderWithCredential(db, id);
-          return provider?.auth_method === "api_key" ? provider : undefined;
+          return deps.repository.selectProviderWithCredential(db, id);
         }
       }
     },
-    input.explicitModel,
+    explicitModel,
     {
       maxAttempts: 1,
       signal: input.signal,
       servedBy: "main",
-      actorUserId: await readScopedActorUserId(scopedDb)
+      actorUserId: (await readScopedActorUserId(scopedDb)) ?? null
     }
   );
   let consumed = false;
@@ -303,6 +317,25 @@ export async function prepareStructuredApiGeneration(
     const result = await run();
     return result.ok ? { ...result, servedBy: "main" } : result;
   };
+}
+
+/** Compatibility entry point for callers that deliberately allow API-key providers only. */
+export async function prepareStructuredApiGeneration(
+  scopedDb: DataContextDb,
+  input: Parameters<typeof prepareStructuredGeneration>[1],
+  deps: Pick<GenerateStructuredDeps, "cipher"> & {
+    readonly repository: Pick<AiRepository, "selectProviderWithCredential">;
+  }
+): Promise<() => Promise<GenerateStructuredResult>> {
+  return prepareStructuredGeneration(scopedDb, input, {
+    cipher: deps.cipher,
+    repository: {
+      async selectProviderWithCredential(db, id) {
+        const provider = await deps.repository.selectProviderWithCredential(db, id);
+        return provider?.auth_method === "api_key" ? provider : undefined;
+      }
+    }
+  });
 }
 
 async function runOnModel(
@@ -341,14 +374,14 @@ async function prepareRunOnModel(
   }
   const providerKind = model.provider_kind as ProviderKind;
   let adapter: StructuredProviderAdapter;
-  let actorUserId = options.actorUserId;
+  let actorUserId = options.actorUserId ?? undefined;
   if (provider.auth_method === "cli") {
     // #982/#869/#981 D3: CLI credentials are sealed markers, not API keys. Route before decrypt so
     // AES-GCM can never see `{ cli: true }`; composition root supplies chat's CLI implementation.
     if (!deps.createCliStructuredAdapter) return async () => ({ ok: false, error: "needs_config" });
     adapter = deps.createCliStructuredAdapter(providerKind);
     // #2674: the CLI runs in this user's per-user slot.
-    actorUserId = await readScopedActorUserId(scopedDb);
+    if (options.actorUserId === undefined) actorUserId = await readScopedActorUserId(scopedDb);
   } else {
     let credential;
     try {
@@ -428,6 +461,10 @@ async function runPreparedModel(
       );
       if (signal?.aborted) return { ok: false, error: "aborted" };
       if ("rawText" in generated) {
+        // Bound the original reply before unfencing or parsing, including whitespace/fence bytes.
+        if (Buffer.byteLength(generated.rawText, "utf8") > STRUCTURED_RESULT_MAX_BYTES) {
+          return { ok: false, error: "validation_failed" };
+        }
         try {
           result = {
             rawObject: JSON.parse(unfence(generated.rawText)),
@@ -449,6 +486,9 @@ async function runPreparedModel(
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
         return { ok: false, error: "aborted" };
+      }
+      if (error instanceof StructuredTransportUnavailableError) {
+        return { ok: false, error: "provider_error", reason: "unsupported_transport" };
       }
       if (error instanceof StructuredOutputParseError) {
         input.telemetry?.emit({ kind: "parse" });
