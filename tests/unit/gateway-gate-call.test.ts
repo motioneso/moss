@@ -48,6 +48,8 @@ const build = (initial: Setup) => {
     permissionId: "mock.tool",
     ...(setup.familyId === undefined ? { actionFamilyId: "fam" } : {}),
     risk: setup.risk,
+    content: "user_authored",
+    isExternal: false,
     executionPolicy: "auto" as const,
     inputSchema: {
       type: "object",
@@ -72,6 +74,12 @@ const build = (initial: Setup) => {
   const created: unknown[] = [];
   const tokens = new SessionTokenRegistry();
   const gateway = new AssistantToolGateway({
+    // This fixture exercises ordinary policy on an explicitly clean conversation.
+    provenance: {
+      isTainted: async () => false,
+      recordAdmission: async () => {},
+      runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+    },
     resolveActiveModules: async () => [module],
     repository: {
       createPendingAssistantAction: async (_db: unknown, input: unknown) => {
@@ -95,6 +103,7 @@ const build = (initial: Setup) => {
     })
   });
   const token = tokens.mint({
+    threadId: "clean-thread",
     actorUserId: "u1",
     chatSessionId: "s1",
     allowedToolNames: setup.allowlist === undefined ? null : new Set(setup.allowlist ?? [])

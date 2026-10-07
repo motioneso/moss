@@ -1,3 +1,5 @@
+import type { ActionRequestDetails } from "@moss/shared";
+import { Button } from "@moss/ui";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle, LoaderCircle, XCircle } from "lucide-react";
 import { useEffect, useRef } from "react";
@@ -11,6 +13,8 @@ interface ActionRequestCardProps {
   readonly summary: string;
   /** Rich server-derived preview (email reply recipient/subject/body); live-stream only. */
   readonly preview?: ActionRequestPreview;
+  readonly details?: ActionRequestDetails;
+  readonly outsideContentNotice?: boolean;
   readonly focusRequested?: boolean;
   readonly onFocusComplete?: () => void;
 }
@@ -18,6 +22,8 @@ interface ActionRequestCardProps {
 export function ActionRequestCard(props: ActionRequestCardProps) {
   const admittedRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Pending cards restored after reload have metadata only. Never approve a memory blind.
+  const missingMemoryTarget = props.toolName === "memory.forget" && !props.details?.target?.trim();
 
   const mutation = useMutation<"confirmed" | "rejected", unknown, "confirmed" | "rejected">({
     mutationFn: (next) => resolveActionRequest(props.actionRequestId, next).then(() => next),
@@ -40,6 +46,7 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
   }, [props.focusRequested, props.onFocusComplete]);
 
   function handleResolve(next: "confirmed" | "rejected") {
+    if (next === "confirmed" && missingMemoryTarget) return;
     if (admittedRef.current) return;
     admittedRef.current = true;
     mutation.mutate(next);
@@ -64,6 +71,7 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
       data-action-request-id={props.actionRequestId}
       ref={rootRef}
       tabIndex={-1}
+      style={{ display: "grid", gap: "var(--space-3)" }}
     >
       {/* The eyebrow used to be the tool's own name with the dots stripped, which put "SET" and
           "SET-ENABLED" above the card — a verb with its object thrown away, and an internal
@@ -82,6 +90,39 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
           : "Needs your approval"}
       </div>
       <p className="action-request-summary">{props.summary}</p>
+
+      {props.details && (props.details.target !== null || props.details.fields.length > 0) ? (
+        <dl className="action-request-preview__meta">
+          {props.details.target !== null ? (
+            <div className="action-request-preview__row">
+              <dt className="action-request-preview__label">Target</dt>
+              <dd className="action-request-preview__value action-request-preview__value--multiline">
+                <q>{props.details.target}</q>
+              </dd>
+            </div>
+          ) : null}
+          {props.details.fields.map((field, index) => (
+            <div className="action-request-preview__row" key={index}>
+              <dt className="action-request-preview__label">{field.label}</dt>
+              <dd className="action-request-preview__value" style={{ whiteSpace: "pre-wrap" }}>
+                {field.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
+      {missingMemoryTarget && !mutation.isSuccess ? (
+        <p className="muted-text" role="status">
+          Memory details are unavailable. Reject this request and ask again.
+        </p>
+      ) : null}
+
+      {props.outsideContentNotice ? (
+        <p className="muted-text">
+          This chat has outside or unverified context, so changes need your approval.
+        </p>
+      ) : null}
 
       {props.preview ? (
         <div className="action-request-preview">
@@ -107,18 +148,21 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
         <p className="form-error">{errorMessage}</p>
       ) : (
         <div className="action-request-actions">
-          <button
-            className="primary-button"
-            type="button"
-            onClick={() => handleResolve("confirmed")}
+          {!missingMemoryTarget ? (
+            <Button
+              icon={<CheckCircle size={16} aria-hidden="true" />}
+              onClick={() => handleResolve("confirmed")}
+            >
+              Approve
+            </Button>
+          ) : null}
+          <Button
+            variant="quiet"
+            icon={<XCircle size={16} aria-hidden="true" />}
+            onClick={() => handleResolve("rejected")}
           >
-            <CheckCircle size={16} aria-hidden="true" />
-            Approve
-          </button>
-          <button className="ghost-button" type="button" onClick={() => handleResolve("rejected")}>
-            <XCircle size={16} aria-hidden="true" />
             Reject
-          </button>
+          </Button>
           {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
         </div>
       )}

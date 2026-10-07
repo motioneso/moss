@@ -4,6 +4,8 @@ import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 
+import type { MemoryCandidateCursor } from "./candidate-cursor.js";
+
 export type MemoryCandidateKind = "entity" | "fact" | "alias" | "supersession" | "conflict";
 export type MemoryCandidateAction = "create" | "update" | "link" | "supersede" | "reject";
 export type MemoryCandidateStatus = "pending" | "promoted" | "rejected" | "merged" | "suppressed";
@@ -118,6 +120,28 @@ export class MemoryCandidatesRepository {
     return this.#mark(scopedDb, ownerUserId, id, "promoted", reason);
   }
 
+  /** Claim before creating memory, in the same actor-scoped transaction. */
+  async claimPendingForPromotion(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    id: string,
+    reason: string
+  ): Promise<MemoryCandidateRecord | undefined> {
+    assertDataContextDb(scopedDb);
+    const result = await sql<CandidateRow>`
+      UPDATE app.memory_candidates
+      SET status = 'promoted',
+          promotion_reason = ${reason},
+          resolved_at = now(),
+          updated_at = now()
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND id = ${id}::uuid
+        AND status = 'pending'
+      RETURNING *
+    `.execute(scopedDb.db);
+    return result.rows[0] ? mapCandidate(result.rows[0]) : undefined;
+  }
+
   async markRejected(
     scopedDb: DataContextDb,
     ownerUserId: string,
@@ -127,21 +151,59 @@ export class MemoryCandidatesRepository {
     return this.#mark(scopedDb, ownerUserId, id, "rejected", reason);
   }
 
-  async listPending(
+  async listPendingWithCount(
     scopedDb: DataContextDb,
     ownerUserId: string,
-    limit: number
-  ): Promise<MemoryCandidateRecord[]> {
+    limit: number,
+    cursor?: MemoryCandidateCursor
+  ): Promise<{
+    items: MemoryCandidateRecord[];
+    total: number;
+    remainingCount: number;
+    nextCursor: string | null;
+  }> {
     assertDataContextDb(scopedDb);
-    const result = await sql<CandidateRow>`
-      SELECT *
-      FROM app.memory_candidates
-      WHERE owner_user_id = ${ownerUserId}::uuid
-        AND status = 'pending'
-      ORDER BY created_at DESC, id
-      LIMIT ${Math.max(0, Math.min(100, Math.trunc(limit)))}
+    const afterCursor = cursor
+      ? sql`created_at < ${cursor.createdAt}::timestamptz
+          OR (created_at = ${cursor.createdAt}::timestamptz AND id > ${cursor.id}::uuid)`
+      : sql`true`;
+    // Each page counts one owner-scoped snapshot. Older rows keep their place after decisions.
+    const result = await sql<
+      Omit<CandidateRow, "id"> & {
+        id: string | null;
+        pending_count: string;
+        eligible_count: string;
+        page_cursor: string | null;
+      }
+    >`
+      WITH pending AS (
+        SELECT * FROM app.memory_candidates
+        WHERE owner_user_id = ${ownerUserId}::uuid AND status = 'pending'
+      ), eligible AS (SELECT * FROM pending WHERE ${afterCursor})
+      SELECT page.*, totals.pending_count, totals.eligible_count
+      FROM (
+        SELECT (SELECT count(*) FROM pending) AS pending_count,
+               (SELECT count(*) FROM eligible) AS eligible_count
+      ) totals
+      LEFT JOIN (
+        SELECT *, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+          || '_' || id::text AS page_cursor
+        FROM eligible
+        ORDER BY created_at DESC, id
+        LIMIT ${Math.max(1, Math.min(100, Math.trunc(limit)))}
+      ) page ON true
+      ORDER BY page.created_at DESC, page.id
     `.execute(scopedDb.db);
-    return result.rows.map(mapCandidate);
+    const items = result.rows.flatMap((row) =>
+      row.id === null ? [] : [mapCandidate({ ...row, id: row.id })]
+    );
+    const remainingCount = Math.max(0, Number(result.rows[0]?.eligible_count ?? 0) - items.length);
+    return {
+      items,
+      total: Number(result.rows[0]?.pending_count ?? 0),
+      remainingCount,
+      nextCursor: remainingCount > 0 ? (result.rows.at(-1)?.page_cursor ?? null) : null
+    };
   }
 
   async markSuppressed(
@@ -233,6 +295,7 @@ export class MemoryCandidatesRepository {
           updated_at = now()
       WHERE owner_user_id = ${ownerUserId}::uuid
         AND id = ${id}::uuid
+        AND status = 'pending'
       RETURNING id
     `.execute(scopedDb.db);
     return result.rows.length > 0;

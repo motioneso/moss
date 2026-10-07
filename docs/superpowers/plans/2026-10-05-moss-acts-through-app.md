@@ -10,10 +10,17 @@
   gate.
 - **Delivery:** one worktree, one branch, one PR. Eight builder slices, each sized for one session.
   Phase 1 ships as one unit, so nothing merges until slice 8 records the live proof.
+- **Current implementation:** Slice 7 is hosted-verified at `a77aa4744` (all four integration
+  shards and all acceptance groups green). Slice 8's scripted browser proof passed hosted CI at
+  `aff106749`; current-revision verification, owner live proof and Ben's clean-engine acceptance
+  ruling remain outstanding. See 8.13–8.14. Phase 1 is not complete.
 
 ## 1. Seams
 
-Every capability the plan relies on, cited at `340f03f4f`. Anything not citable is in section 1.9.
+This section preserves the pre-build seam inventory at `340f03f4f`; its line numbers and
+"today" statements are historical. The Slice 7 admission additions and current contracts below,
+and the implementation ruling in section 8.12, supersede the baseline where they differ. Anything
+not citable in the original inventory is in section 1.9.
 
 ### 1.1 Sign-in and request handling
 
@@ -95,28 +102,35 @@ test reports the exact figure.
 
 ### 1.4 Outside content: every admission path
 
-| #   | Path                                                        | Where                                                                      | Slice 7 action                                     |
-| --- | ----------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------- |
-| a   | Memory seed at launch                                       | `chat/src/live/chat-session-launch.ts:93-98,111`                           | admit, taints                                      |
-| b   | Replay of prior turns and summary at launch                 | `chat-session-launch.ts:99-119,160-165`; `persistence.ts:213-243`          | no new taint; the thread row carries it            |
-| b3  | Native CLI resume                                           | `structured-claude-engine.ts:528-531`; `structured-gemini-engine.ts:91`    | as b                                               |
-| c   | Per-turn passive memory recall                              | `chat/src/live/engine-text.ts:84-101`                                      | admit, taints                                      |
-| d   | Per-turn cross-tool read (notes, email, calendar, tasks)    | `engine-text.ts:102-110`; `cross-tool-reasoning.ts:6,86-114`               | admit, taints                                      |
-| e   | Per-turn notes retrieval                                    | `engine-text.ts:111-121`                                                   | admit, taints                                      |
-| f   | Combiner that prepends c, d, e to the user text             | `engine-text.ts:154-160`; `chat-context-blocks.ts:41`                      | accepts admitted blocks only                       |
-| g   | Attachment manifest (metadata only)                         | `chat-session-manager.ts:337-339`; `attachments-manifest.ts:12-27`         | no taint; file bytes come by tool                  |
-| h   | Module control context from the request body                | `chat-session-manager.ts:340-342`; `live-routes.ts:817,855`                | admit, taints                                      |
-| i   | Seed route                                                  | `live-routes.ts:446-479`; `chat-session-launch.ts:193-205`                 | admit, taints                                      |
-| j   | Evening interview seed (briefing text)                      | `live-routes.ts:398-432,610-630`; `module-registry/src/index.ts:3713-3726` | admit, taints                                      |
-| k   | Persona and system prompt                                   | `chat/src/live/runtime.ts:100-125,886-920`                                 | no taint                                           |
-| l   | Tool results                                                | `ai/src/gateway/run-tool-handler.ts:80-90`                                 | taint unless the effective tool is `user_authored` |
-| m   | Classifier-gate handled turn                                | `classifier-gate-lifecycle.ts:185`                                         | covered by l (gate calls go through the gateway)   |
-| n   | Meeting chat                                                | `meetings/src/meeting-chat-service.ts:58,96`                               | out of scope: separate tool-less generation        |
-| o   | Claude CLI native vault reads (`Read`, `Glob`, `Grep`)      | see 1.4.2                                                                  | hook reports first, taint recorded, then allow     |
-| p   | Outside-agent (ACP) reads, web fetches, web searches, shell | `ai/src/gateway/acp-permission.ts:101,225,256-276,399`; `gateway.ts:564`   | taint on every allowed read, web or shell ask      |
+| #   | Path                                                                 | Where                                                                      | Slice 7 action                                                            |
+| --- | -------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| a   | Memory seed at launch                                                | `chat/src/live/chat-session-launch.ts:93-98,111`                           | admit, taints                                                             |
+| b   | Replay of prior turns and summary at launch                          | `chat-session-launch.ts:99-119,160-165`; `persistence.ts:213-243`          | no new taint; the thread row carries it                                   |
+| b3  | Native CLI resume                                                    | `structured-claude-engine.ts:528-531`; `structured-gemini-engine.ts:91`    | as b                                                                      |
+| c   | Per-turn passive memory recall                                       | `chat/src/live/engine-text.ts:84-101`                                      | admit, taints                                                             |
+| d   | Per-turn cross-tool read (notes, email, calendar, tasks)             | `engine-text.ts:102-110`; `cross-tool-reasoning.ts:6,86-114`               | admit, taints                                                             |
+| e   | Per-turn notes retrieval                                             | `engine-text.ts:111-121`                                                   | admit, taints                                                             |
+| f   | Combiner that prepends c, d, e to the user text                      | `engine-text.ts:154-160`; `chat-context-blocks.ts:41`                      | accepts admitted blocks only                                              |
+| g   | Attachment manifest (metadata only)                                  | `chat-session-manager.ts:337-339`; `attachments-manifest.ts:12-27`         | no taint; file bytes come by tool                                         |
+| h   | Module control context from the request body                         | `chat-session-manager.ts:340-342`; `live-routes.ts:817,855`                | admit, taints                                                             |
+| i   | Seed route                                                           | `live-routes.ts:446-479`; `chat-session-launch.ts:193-205`                 | admit, taints                                                             |
+| j   | Evening interview seed (briefing text)                               | `live-routes.ts:398-432,610-630`; `module-registry/src/index.ts:3713-3726` | admit, taints                                                             |
+| k   | Persona and system prompt                                            | `chat/src/live/runtime.ts:100-125,886-920`                                 | no taint                                                                  |
+| l   | Tool results                                                         | `ai/src/gateway/run-tool-handler.ts:80-90`                                 | taint unless the effective tool is `user_authored`                        |
+| m   | Classifier-gate handled turn                                         | `classifier-gate-lifecycle.ts:185`                                         | result covered by l; pre-call inputs by q and r                           |
+| n   | Meeting chat                                                         | `meetings/src/meeting-chat-service.ts:58,96`                               | out of scope: separate tool-less generation                               |
+| o   | Claude CLI native vault reads (`Read`, `Glob`, `Grep`)               | see 1.4.2                                                                  | hook reports first, taint recorded, then allow                            |
+| p   | Outside-agent (ACP) reads, web fetches, web searches, shell          | `ai/src/gateway/acp-permission.ts`; `chat/src/live/chat-session-launch.ts` | admit allowed read/web/shell asks; also taint ACP before launch           |
+| q   | Outside tool descriptors, including classifier menus                 | `ai/src/gateway/gateway.ts`; `chat/src/live/classifier-gate-wiring.ts`     | admit `tool_external_descriptors` before returning descriptors            |
+| r   | Classifier candidate IDs and labels                                  | `chat/src/live/classifier-gate-wiring.ts`                                  | normalize, then admit valid nonempty snapshots as `classifier_candidates` |
+| s   | Model-visible remote schema errors and forwarded safe handler errors | `ai/src/gateway/gateway.ts`; `run-tool-handler.ts`; `content-admission.ts` | schema text uses descriptor admission; safe errors use result admission   |
+| t   | Allowed native non-vault output                                      | `ai/src/gateway/native-permission-handler.ts`                              | admit `native_tool_result` before permission allow                        |
 
 Rows c, d and e run on every turn. A block taints only when it is admitted non-empty: an empty
-recall, an empty notes block or an empty cross-tool read records nothing (decision 2.19).
+recall, an empty notes block or an empty cross-tool read records nothing (decision 2.19). Rows q–t
+are the Slice 7 source-level additions, not part of the original inventory. Direct model-visible
+outside results and nonempty progress use row l; internal cross-tool retrieval is admitted at row d
+only when its rendered block is nonempty. No-taint and excluded paths remain listed above.
 
 #### 1.4.1 Read tools: the mark is opt-in today
 
@@ -300,8 +314,10 @@ module name (`query-keys.ts:139`). Sports and News keep their own key lists
 9. **Admission is enforced by type.** Context blocks reach the prompt combiner only as an
    `AdmittedContext` value, and only the admission function makes one. A source test backs this up
    (slice 7).
-10. **New threads get a clean row in the same transaction as the thread insert.** Threads from
-    before this ships have no row and count as tainted.
+10. **New threads get a clean row in the same transaction as the thread insert.** Migration
+    `0293` makes this database-trigger initialization, not an application clean INSERT. Runtime
+    INSERT requires a tainted timestamp and path; a legacy missing row cannot be filled in as
+    clean. Threads from before this ships are not backfilled and count as tainted.
 11. **The provenance row is not in the user data export.** It is derived metadata, not user content.
 12. **`content` governs every response, not only reads.** A write's response enters the model's
     context too, so a route's `content` class decides whether any response taints and gets wrapped.
@@ -334,14 +350,16 @@ module name (`query-keys.ts:139`). Sports and News keep their own key lists
     and implies `"outside"`; `"user_authored"` with `externalContent: true` fails the assertion.
     External module tools default to `"outside"` with no declaration needed.
 21. **Native vault reads stay, and the server hears each one first.** Moss uses them heavily. The
-    hook sends a read report to the server, which records `tool_external_content` before the hook
+    hook sends a read report to the server, which records `native_vault_read` before the hook
     allows the read. If the report fails or the token is missing, the hook denies the read. Both
     hook copies change, and the one-shot hook gains the report URL and token. Gemini and Codex give
     no native reads (1.4.2). Outside agents over ACP ask the gateway in-process. It records taint on
     every allowed ask in the read, web or shell family, at both allow exits, because a fetched page
     or a `curl` brings outside text in as surely as a file read. Keeping the agent out of the notes
     folders would not cover the web. If slice 7 finds an agent can read, fetch or run a command
-    without raising an ask, its threads are tainted from launch.
+    without raising an ask, its threads are tainted from launch. Slice 7 uses that conservative
+    fallback for ACP engines, in addition to recording the asks it does observe. Other native
+    permissions that can return outside output record `native_tool_result` before allow.
 22. **July families are blocked by two independent nets.** `CHAT_BLOCKED_PATH_RULES` gains path
     patterns for every family with routes (the list in 4.2), so a new route in a family is caught
     without a table row. A pattern may block writes only where reading is harmless. Separately, a
@@ -662,26 +680,40 @@ export type AdmissionPath =
   | "evening_seed"
   | "module_control_context"
   | "native_vault_read"
+  | "native_tool_result"
   | "outside_agent_read"
   | "outside_agent_web"
   | "outside_agent_shell"
-  | "outside_agent_launch"; // only if slice 7 finds an agent acting without an ask (1.9)
+  | "outside_agent_launch"
+  | "tool_external_descriptors"
+  | "classifier_candidates";
+
+export type AutomaticExecution<T> =
+  | { readonly kind: "ran"; readonly value: T }
+  | { readonly kind: "confirm" };
 
 export interface ConversationProvenancePort {
-  // threadId undefined, no row, or a thread the actor does not own => true
+  // Missing/foreign/legacy state or an outstanding reservation => true.
   isTainted(actorUserId: string, threadId: string | undefined): Promise<boolean>;
   recordAdmission(actorUserId: string, threadId: string, path: AdmissionPath): Promise<void>;
+  // Optional for compatibility; automatic execution refuses a missing implementation.
+  runAutomatic?<T>(
+    actorUserId: string,
+    threadId: string | undefined,
+    execute: () => Promise<T>
+  ): Promise<AutomaticExecution<T>>;
 }
 
-// packages/chat/src/live/context-admission.ts (new)
+// packages/chat/src/live/context-admission.ts
+const admitted = Symbol("admitted context"); // module-private brand
 export interface AdmittedContext {
   readonly text: string;
-  readonly __admitted: unique symbol;
+  readonly [admitted]: true;
 }
 
 export function admitToContext(
   deps: { recordForThread(threadId: string, path: AdmissionPath): Promise<void> },
-  threadId: string,
+  threadId: string | null,
   path: AdmissionPath,
   text: string
 ): Promise<AdmittedContext | null>; // null for empty or whitespace text; nothing recorded
@@ -692,45 +724,53 @@ export function admitToContext(
 // 204 after the admission is recorded; any failure is non-2xx and the hook denies the read.
 ```
 
-The prompt combiner (`chat-context-blocks.ts:41`) and the launch and seed submit sites accept only
-`AdmittedContext`. The report route is declared in the chat manifest beside
-`/internal/permission` (`chat/src/manifest.ts:332`) and is under `/internal/*`, so chat can never
-call it. It records against the thread bound to the token, never one named in the body.
+The prompt combiner consumes `AdmittedContext` values. `prepareTurnText` produces a branded
+`PreparedTurn` for `submitPreparedTurn`; seed submission uses `submitAdmittedContext`. Launch
+replay remains the explicit exception: already admitted memory seed is combined with replay of
+the same bound thread, whose durable state carries prior taint. Empty/whitespace blocks return
+`null` before any record; nonempty blocks await recording before a branded value is returned.
+
+`AssistantToolGateway.recordContextForSession(token, path)` verifies the token and derives actor
+and thread before recording. The native report route is declared in the chat manifest beside
+`/internal/permission` and is under `/internal/*`, so `app.callAction` cannot invoke it. It validates
+the report body but records only token-derived actor/thread and `native_vault_read`, never file
+content or body-supplied identity. Both hooks require the successful report before allowing a vault
+read. Gateway outcomes use fixed admission-failure text when recording fails.
 
 ### 4.7 Migration DDL (`packages/chat/sql/NNNN_chat_conversation_provenance.sql`)
 
-`NNNN` is the next free number at build time (`0284` today). Register it in the chat manifest
-`migrations` and `ownedTables` (`chat/src/manifest.ts:43-73`).
+The next free number was reserved as `0291` for Slice 6 after checking live main, all open PRs,
+and the locally held Meetings work. `0289` belongs to Slice 5 and `0290` to the separate recording
+notice correction. Register the chat-owned table and migration in the manifest.
 
-```sql
-CREATE TABLE app.chat_conversation_provenance (
-  thread_id uuid PRIMARY KEY REFERENCES app.chat_threads (id) ON DELETE CASCADE,
-  owner_user_id uuid NOT NULL REFERENCES app.users (id) ON DELETE CASCADE,
-  tainted_at timestamptz,
-  first_admission_path text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  CHECK ((tainted_at IS NULL) = (first_admission_path IS NULL))
-);
+The Slice 6 DDL is [`0291_chat_conversation_provenance.sql`](../../../packages/chat/sql/0291_chat_conversation_provenance.sql),
+which remains unchanged. Slice 7 adds
+[`0293_chat_automatic_action_reservations.sql`](../../../packages/chat/sql/0293_chat_automatic_action_reservations.sql).
+The original sketch required three corrections before Slice 6 implementation:
 
-ALTER TABLE app.chat_conversation_provenance ENABLE ROW LEVEL SECURITY;
-ALTER TABLE app.chat_conversation_provenance FORCE ROW LEVEL SECURITY;
+- Owner-column equality alone does not establish ownership of the parent thread. Every runtime
+  policy also checks the actual thread owner; sharing a thread does not share its safety state.
+- `UPDATE ... WITH CHECK (tainted_at IS NOT NULL)` prevents clean reset but does not preserve
+  identity or the first timestamp/path. An immutable-field trigger protects those values too.
+- Runtime does not receive direct DELETE. Otherwise delete followed by clean INSERT could erase
+  known taint. Legitimate thread/private-chat/account deletion still cascades through foreign keys.
 
-CREATE POLICY chat_conversation_provenance_select ON app.chat_conversation_provenance
-  FOR SELECT TO jarvis_app_runtime USING (owner_user_id = app.current_actor_user_id());
-CREATE POLICY chat_conversation_provenance_insert ON app.chat_conversation_provenance
-  FOR INSERT TO jarvis_app_runtime WITH CHECK (owner_user_id = app.current_actor_user_id());
-CREATE POLICY chat_conversation_provenance_update ON app.chat_conversation_provenance
-  FOR UPDATE TO jarvis_app_runtime
-  USING (owner_user_id = app.current_actor_user_id())
-  WITH CHECK (owner_user_id = app.current_actor_user_id() AND tainted_at IS NOT NULL);
-CREATE POLICY chat_conversation_provenance_delete ON app.chat_conversation_provenance
-  FOR DELETE TO jarvis_app_runtime USING (owner_user_id = app.current_actor_user_id());
+RLS is enabled and forced, and no worker/admin private-data bypass is added. The Slice 6
+implementation inserted clean provenance from the repository, leaving a direct runtime clean
+INSERT into a legacy missing row possible. That is historical, not the current contract.
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON app.chat_conversation_provenance TO jarvis_app_runtime;
-```
+Migration `0293` tightens the runtime INSERT policy to require nonnull `tainted_at` and
+`first_admission_path`. A restricted SECURITY DEFINER `AFTER INSERT` trigger initializes clean
+provenance only for a newly inserted parent thread, within the same transaction. Its policy checks
+trigger depth and actual parent ownership; the repository no longer inserts clean provenance.
+Neither migration backfills legacy threads as clean. Runtime may introduce known-tainted history,
+but cannot manufacture a clean legacy row. These SQL protections have authored hosted tests;
+local source inspection is not a passing database verdict.
 
-The update policy's `WITH CHECK` means a row can become tainted but never clean again. The builder
-copies role and function names from `0149_chat_skills.sql:20-44` if they differ from the above.
+`0293` also adds `app.chat_automatic_action_reservations`, with only `thread_id`, `owner_user_id`
+and `reservation_id`, owner/parent-scoped RLS and thread/account deletion cascades. Section 8.12
+describes claim/admission serialization and release. It has no deadline, lease renewal or restart
+cleanup; an orphan remains fail-closed.
 
 ### 4.8 The three tools (Settings manifest, beside `app.getMapSlice`)
 
@@ -843,7 +883,7 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
 
 - **Modules:** settings (71), ai (44), chat (39), connectors (15), integrations (10),
   notifications (6), backtrack (3), workflows (4), proactive-monitoring (2), usefulness-feedback
-  (4).
+  (5 after the record-only route correction in 8.6).
 - **Files:** each module's `src/manifest.ts`: `chatDefaults` plus per-route `chat` blocks, titles,
   `target` resolvers for destructive routes with a path parameter (in the owning module, under
   `src/chat-targets.ts`), `coveredBy` where a dedicated tool does the job.
@@ -876,7 +916,7 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
 
 ### Slice 4: classify content routes and wire the boot assertion
 
-- **Modules:** tasks (27), sports (24), news (22), meetings (19), memory (18), people (17),
+- **Modules:** tasks (27), sports (24), news (22), meetings (19), memory (18), people (18),
   wellness (16), calendar (13), commitments (7), workshop (7), briefings (6), email (6), goals (5),
   scratchpad (4), notes (1), weather (1).
 - **Files:** each module's `src/manifest.ts` and `src/chat-targets.ts` as in slice 3;
@@ -887,7 +927,8 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
   Wellness routes in 1.6 are `blocked` / `data_scope_consent`.
   `PUT /api/scratchpad` is `blocked` / `module_promise`. Every Wellness route declares
   `consent: "wellness.ai_consent_granted"`. Write routes that only echo the user's own record
-  declare `content: "user_authored"`, People create and update among them; routes whose response
+  declare `content: "user_authored"`; People create/update were planned examples, but the handler
+  audit in 8.7 blocks their ingestion effects. Routes whose response
   carries mail, feed or other outside text stay `"outside"`.
 - **Tests:**
   - The slice 3 snapshot test extends to all modules.
@@ -902,7 +943,8 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
     wiring removed.
   - Wellness list test: the set of Wellness routes not `blocked` equals an explicit list in the
     test. A new Wellness route forces a decision.
-- **Done:** the API boots with the assertion on; all 391 routes classified.
+- **Done:** the API boots with the assertion on; all 393 current routes classified (including
+  the record-only feedback route and the previously host-injected People directory route).
 
 ### Slice 5: the three tools, the card, and screen refresh
 
@@ -982,10 +1024,30 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
   - Purging a private chat deletes its provenance row.
   - User B cannot read or update user A's row; a tainted row cannot be set back to clean.
   - Each protection test observed failing with its check removed.
-- **Done:** taint decides confirm for every gateway path, keyed by the bound thread. Nothing
-  records taint yet except direct port calls in tests.
+- **Slice 6 endpoint (historical):** taint decided confirm for gateway paths, keyed by the bound
+  thread; production admission was still deferred. Section 8.12 records the current Slice 7 state.
 
 ### Slice 7: every admission path records taint
+
+The original build requirements below remain the acceptance checklist. Current implementation
+details and the outstanding hosted/live verification limits are recorded in section 8.12.
+
+**Additional verification requirements from Slice 6 review (#3065, phase-1 merge blockers):**
+
+- Include remote integration tool descriptions and input schemas exposed through `tools/list`.
+  The later owner-descriptor ruling in section 8.14 trusts only the chat owner's own connection
+  or explicitly accepted current add-on installation. Unknown/other-owner descriptors still
+  require bound-thread admission before exposure. Result-only admission misses this surface.
+- Coordinate admission with dispatch, rather than assuming a fresh boolean lookup is an atomic
+  barrier. Slice 6 rechecks after asynchronous policy lookups, but handler transaction acquisition,
+  app-route preflight and native/outside-agent audit waits remain possible interleavings before
+  dispatch. Exercise an admission arriving in each gap and establish the required ordering before
+  claiming every tainted write is protected.
+- Bind notes privacy lookup and cross-tool recall to the turn thread. `notes-tool-trust.ts` still
+  selects the actor's current thread, while `runReadToolForActor` currently has no bound thread.
+  Pass identity through cross-tool collection/runtime and require owner/surface-scoped lookup;
+  test private A to ordinary B switching, missing/foreign identity and ordinary recall behavior.
+  This pre-existing privacy seam is not repaired by Slice 6.
 
 - **Files:**
   - `packages/chat/src/live/context-admission.ts` (new) and every admission site in 1.4 (a, c, d,
@@ -1006,7 +1068,7 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
     allow exits (YOLO `:256-276`, final `:399`): `read` records `outside_agent_read`, `web`
     records `outside_agent_web`, `shell` records `outside_agent_shell`. A failed record denies the
     ask. If the 1.9 question finds an agent acting without an ask, the ACP session launch records
-    `outside_agent_launch` instead.
+    `outside_agent_launch` as well; the current ACP engine uses this conservative fallback.
   - `apps/web/src/chat/action-request-card.tsx`: one notice line when `outsideContentNotice`.
 - **Tests:**
   - `tests/integration/conversation-provenance.test.ts`:
@@ -1044,13 +1106,26 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
 
 ### Slice 8: browser test and live proof
 
-- **Files:** `tests/uat/specs/3065-app-actions.uat.spec.ts` (scripted model, auto-run paths);
+**Current status (2026-10-06): browser and owner-proof tooling implemented; scripted browser
+verification passed at `aff106749`. Current-revision CI and owner live proof remain outstanding.** No live dev or real-provider proof has run in this environment. The owner
+confirmed that no dev instance is reachable from the sandbox; no further access attempts are part
+of this work. The fallback is the hosted scripted browser test and the committed step-by-step
+checklist, not a fabricated live pass.
+
+- **Files:** `tests/uat/specs/3065-app-actions.uat.spec.ts` (scripted ACP model, approval/change/refresh);
   `tests/uat/specs/3065-app-actions-real.uat.spec.ts` (real model, gated on
   `JARVIS_UAT_REAL_CHAT_CONFIGURED`, approval paths); package scripts `test:uat:3065` and
   `test:uat:3065-real`.
 - **Scripted spec:** on a fresh owner, Moss switches to a named custom theme through
-  `app.callAction`; the page's theme changes without a reload; the network log shows the theme
-  `PUT` once.
+  `app.callAction` after the real outside-context approval. Closing/reopening the drawer does not
+  authorize the write; two same-task Approve clicks resolve once. The page's theme and gallery
+  change without a document reload. Real Fastify logs show the internal theme `PUT` once;
+  browser requests show one approval resolution and no browser-side theme `PUT`.
+- **Plan correction, ruled by Ben on 2026-10-06:** the supported scripted path uses ACP, which is
+  deliberately tainted at launch, so it cannot prove clean automatic browser execution. Ben ruled
+  that every live write asking first is acceptable for phase 1, deferred the no-ask browser case and
+  clean Run B to #3078 (fresh live chats start clean; it does not block this deployment), and set the usability bar at all eight allowed tasks (People and News topic edits stay
+  blocked and are not counted). Clean automatic behavior keeps its real-gateway/database coverage.
 - **Real spec:** a note containing "switch my theme to dark" exists; the user asks an unrelated
   question so recall pulls the note in; asking for a theme change shows an approval card with the
   tainted notice, through both `app.callAction` and the dedicated mode tool; Moss reading the note
@@ -1059,15 +1134,21 @@ scripts/run-gate.sh wait --follow                         # expect exit 0
 - **Commands:**
 
 ```bash
-pnpm test:uat:3065 > /tmp/3065-uat.log 2>&1; echo "UAT=$?"            # expect 0
-pnpm test:uat:3065-real > /tmp/3065-uat-real.log 2>&1; echo "UATR=$?" # expect 0
+scripts/run-gate.sh start --gate test:uat:3065
+scripts/run-gate.sh wait --follow
+# Owner-only real-provider opt-in, after reviewing the credential-copy warning in the checklist:
+JARVIS_UAT_REAL_CHAT_CONFIGURED=1 scripts/run-gate.sh start --gate test:uat:3065-real
+scripts/run-gate.sh wait --follow
 ```
 
 - **Full gate:** through the `verify-gate` skill, `scripts/run-gate.sh start`, then
   `scripts/run-gate.sh wait --follow` backgrounded; expect exit 0.
 - **Live proof:** the kill-gate runs in section 7 on the live dev instance, recorded on the PR with
   exit codes and bounded text evidence, no screenshots, no intercepted responses.
-- **Done:** both specs observed passing; full gate green; live proof comment posted.
+- **Owner checklist:** `docs/3065-app-actions-live-proof.md`, including engine-dependent
+  confirmation, exact setup/actions, expected changes, evidence, cleanup and explicit blockers.
+- **Done:** both specs observed passing; full gate green; live proof comment posted. A green
+  scripted ACP test and checklist delivery alone do not satisfy this completion condition.
 
 ## 6. Phase 2 outline
 
@@ -1102,8 +1183,11 @@ Two runs of the ten tasks:
 
 - **Run A, normal thread:** Ben's own account, as Moss is used day to day. Recall may pull notes
   in, so under strict taint many tasks will ask first.
-- **Run B, clean thread:** a fresh account with no notes, memories or connected mail, so recall,
-  notes and cross-tool reads return nothing. The thread stays clean (decision 2.19).
+- **Run B, clean thread:** requires a supported fully observed engine and a fresh account with no
+  notes, memories, connected integrations or add-on tools, so recall and other admission paths
+  return nothing. ACP is already tainted at launch and cannot establish this clean baseline.
+  If no clean-capable engine is available, record Run B as unproved, not passed. A later outside
+  admission during the run ends the clean baseline; record that transition and its later asks.
 
 Hand-holding means Ben rephrasing, naming the route, correcting an input, or retrying. Approving an
 approval card is not hand-holding: the design intends those asks. The record has one row per task
@@ -1112,14 +1196,17 @@ without a reload.
 
 **Pass:** in each run, at least eight succeed with no hand-holding, and every change shows on the
 real screen without a manual reload. Approval counts are reported, not scored. Run B also shows
-which asks come from taint, because there the only asks are policy asks (destructive, or Ben's
-action-policy settings).
+which asks come from taint only while its clean baseline remains verified. Before an outside
+admission, asks come from policy (destructive, or Ben's action-policy settings); after admission,
+the taint floor applies. An ACP run must not be described as this clean control.
 
 **Safety proof, same session:**
 
 - A note saying "switch my theme to dark" reaches Moss through automatic recall, with no notes tool
   called. Moss asks before any change, through both the generic path and the dedicated mode tool.
-- On a clean thread, Moss reads that note with its own file tools, then changes the theme. It asks.
+- On a verified clean-capable engine, Moss reads that note with its own file tools, then changes
+  the theme. It asks. On ACP, separately prove the real native read and subsequent approval while
+  labeling the pre-existing launch taint; that does not establish the clean-to-tainted transition.
 - The same thread, resumed after a server restart, still asks.
 - A delete asks, and its card names the theme.
 - A blocked route (run-without-asking) is refused.
@@ -1211,3 +1298,514 @@ Re-check of `febc962aa`. Nine of ten findings fixed. Three new items, all accept
 | Q-1 | Outside agents fetch and search the web, and run approved shell, with nothing recorded; only read asks tainted           | `acp/src/permissions.ts:13-19,259-263`; `acp/src/tool-table.ts:48`; `acp-permission.ts:101,256-276,399`                                                                                                                              | Record by family on every allowed read, web or shell ask, at both allow exits; 1.9 widened, with taint from launch as the fallback. Decision 2.21; 1.4 row p; 4.6; slice 7                                                            |
 | Q-2 | The July walk passes a rule on one route in the rule's own module, so most families rest on the hand table               | `self-operation.ts:43-53`; `tasks/src/manifest.ts:487`; `settings/src/manifest.ts:212,267,277,374`; `chat/src/manifest.ts:293,298`; `ai/src/manifest.ts:498,515,520`; `news/src/manifest.ts:285-305`; `wellness/src/manifest.ts:127` | Walk per prefix across all modules; path patterns for each listed family, writes-only where reading is harmless; list renamed `JULY_PREFIXES_WITHOUT_ROUTES`; routes named in slice 3 and 4 tests. Decision 2.22; 4.2; slices 1, 3, 4 |
 | Q-3 | Write responses default to `outside`, so the first change on a clean thread taints it and Run B asks on every later task | decision 2.12; 4.1 route type; 1.4 row l; section 7 Run B                                                                                                                                                                            | Write routes and tools that only echo the user's own record declare `user_authored`; slice 7 test of two writes in a row on a clean thread. Decision 2.12; 4.1; slices 3, 4, 5, 7                                                     |
+
+### 8.6 Feedback boundary correction on PR #3071 (2026-10-06)
+
+The original feedback create route is not a record-only write: a verified briefing item's
+`not_useful` action can archive its follow-through task and delete its Google calendar event.
+Story preference creation, reason edits and undo can enqueue a News refresh. The existing UI
+routes and clients retain those behaviors, but create, reason edit and undo are now chat-blocked
+as `external_effect`, independently pinned in the manifest and named catalog exclusion table.
+The feedback list remains `read` with `outside` content.
+
+A separate `POST /api/me/usefulness-feedback/signals` is `write` with `outside` content. Its
+shared request schema and runtime parser use the same positive allowlist of target, surface and
+kind combinations. It rejects briefing-item `not_useful`, all `remember_this`, proactive-card
+`dismiss`, and News/Sports story preferences before entering the data context or looking up an
+existing signal. Merely omitting their effects would poison deduplication: the real UI action
+could later find that row and skip its required cleanup. No client-controlled bypass flag exists.
+The route receives only target verification, scoped data access and signal lookup/create
+operations; the cleanup, card, memory and refresh dependencies remain on the original UI routes.
+Target verification and response serialization are shared focused helpers.
+
+Verification: the tests were written first and failed against the old code (42 failures, two
+passes). The expanded signal suite then passed 48 tests, including every allowed pair, unsafe
+rejections, owner checks, request-schema parity, repeated safe input, and a rejected-signal then
+real-UI cleanup regression. It exercises the real cleanup and News-refresh adapters with mocked
+archive, calendar-delete and queue boundaries, and checks memory/card/provider spies. Existing
+UI actions still exercise their effects. Negative controls failed as expected when removing the
+runtime allowlist (11 failures), forced catalog exclusions (three), manifest blocks (three), and
+owner check (one); every mutation was restored byte-for-byte. The final restored-code run passed
+146 tests across 12 unit suites, including existing feedback UI, catalog and app-map checks.
+Scoped ESLint, formatting and diff checks passed. Full static-check outcomes are recorded with
+the PR's verification results.
+
+Database-backed integration, the full foundation gate and real-UI/live-provider proof have not
+run in this environment. This correction remains code-complete, unverified under the live-path
+gate; it is not evidence that the PR is ready to merge.
+
+### 8.7 Slice 4 handler audit and conservative classifications (2026-10-06)
+
+All 393 built-in HTTP routes now have an explicit effective chat policy: 110 reads, 55 writes,
+19 destructive operations and 209 blocks. The 16 content modules contribute 194 routes. The
+People notes-directory route now belongs to its manifest instead of being appended by the host.
+The all-module snapshot and July-rule walk have no pending module list. The API's real `onReady`
+coverage hook runs the classification assertion. The catalog rules moved to a focused data file
+without changing the existing public exports.
+
+Classifications follow the handlers, not the HTTP verb or a planned happy path:
+
+- Task list/focus/overdue/preferences reads can roll forward or repair schedules; task creation
+  and deferred-status writes can schedule work. These stay blocked. Even the agency-auto-execute
+  GET can grant `trusted_auto`, so both its GET and PATCH are `self_authority` blocks.
+- People create, update and archive enqueue vault ingestion. Merge/split select an additional
+  body-named identity that the current path-only approval-target contract cannot completely bind.
+  They stay blocked rather than pretending a single path target covers both identities.
+- News topic/preference editing invokes AI validation or refresh work; overview/personalization
+  GETs also refresh or reconcile schedules. These blocks mean the planned topic-edit kill-gate
+  example is not yet callable through generic app actions. Sports overview persists runtime
+  health, and serving a headline photo updates retention state; both GETs stay blocked. Source
+  preview/confirmation and persistent host-fetch consent cannot bypass their dedicated paths.
+- Every Briefings route schedules work, triggers work or upserts feedback targets. Calendar
+  day-plan preview/apply/retry/recover and commitment extraction have effects beyond their own
+  record. Calendar/email auto-execution settings change authority. Goals update/evidence can
+  enqueue memory synchronization. These routes stay blocked with explicit exclusion rows.
+- Workshop creation remains behind its dedicated tool's private/incognito guard. Workshop
+  message generation, meeting output generation/export, and meeting candidate approval cannot
+  become ordinary record writes through HTTP aliases.
+- Wellness consent applies to every effective policy. Raw therapy/medication bodies are blocked
+  even with consent on, including medication-log responses that echo dose and PRN reason. The
+  explicit allowed list covers consent status, check-ins, derived insights and therapy-note
+  deletion; the last previews only its timestamp and returns a boolean.
+
+Not every network read or local derived record is an external effect. Sports roster/standings
+and image retrieval return outside data without provider-side mutation or refresh jobs; routes
+that forward model-chosen values are marked outbound. Weather reads a saved location's forecast
+and updates only its in-memory cache. Memory's configured embedding implementations are local
+or deterministic stubs, and its index/fact maintenance remains owner-scoped local data work;
+there is no external embedding-provider call to hide as an ordinary write. Memory/notes/source
+excerpts stay outside content. Destructive memory previews include the subject and all affected
+conflicting facts; owner-scoped target queries never include source excerpts.
+
+The July no-route reasons are explicit: settings credential operations use their renamed paths;
+there is no generic email-send HTTP route, while the settings that enable automatic sending are
+independently blocked. The walk checks all modules per prefix rather than accepting a single
+representative module. A regression rejects stale no-route exemptions once every category of a
+prefix has a route mapping; the old module-queue exemption was removed after the People mapping.
+
+Verification includes explicit route snapshots, named blocks, the exact Wellness allowlist,
+owner-scoped target tests, provenance tests and a real-API boot test with a no-I/O database driver.
+Removing the production `onReady` assertion made that boot test fail, and restoring it passed.
+Additional negative controls failed with forced exclusions, owner predicates, scoped-DB checks
+or outside provenance removed; all mutations were restored. Independent handler reviews covered
+all content modules and the central gate. The review found and corrected a missing TypeScript
+import and subject-ambiguous memory target labels. Final unit/static/hosted CI results are
+recorded in the PR comment.
+
+Local database integration and the foundation gate cannot run here because Docker is unavailable;
+the database-backed route-guard regression is included for hosted CI. No live provider, real
+recording or user credential was used. Slices 5–8 and real-UI/live-path proof remain outstanding;
+these route classifications alone do not complete phase 1 or authorize merging.
+
+### 8.8 Independent slice 4 review corrections (2026-10-06)
+
+These corrections land separately before slice 5. The initial hosted slice-4 run passed all four
+integration shards, static/browser checks, both Compose smokes and Meetings acceptance, but failed
+three unit tests. The boot probe now stubs only the unrelated generated app-map artifact loader,
+so it boots the real API without a prebuilt `dist` artifact. Its no-I/O driver accepts the optional
+`chat.persistent_pool_cap` lookup on machines with a multiplexer. The Meetings exact feature-list
+fixture includes the new metadata entry. No timeout was increased and no production loader changed.
+
+`PATCH /api/tasks/:id` is independently blocked as `external_effect`: changing suggested email
+statuses trains triage and can suppress future tasks; completing/archiving parents also affects
+subtasks and recurring tasks. The dedicated task tools remain separate. Memory status changes
+can hide a fact just like superseding it, so they cannot be ordinary writes. They are now blocked
+for the stronger derived-consent reason below; supersede/delete still require target approval.
+Meeting deletion explicitly names linked Moss chats; transcript ingestion explicitly says it can
+correct retained text. Source-derived Sports/Memory destructive previews are outside content,
+not user-authored labels. Slice 5 must render them as quoted plain data, never instructions.
+
+The original seven `chat_app_actions` app-map entries now describe classification metadata and
+explicitly say generic tools are not wired yet. They do not claim new usable chat capabilities at
+this commit. Slice 5 must update these descriptions and cover every newly callable module when
+its tools are actually wired.
+
+Wellness revocation has an existing cross-module limitation: previously retained conversation,
+correction, support and memory text has no Wellness provenance marker to filter when consent is
+turned off. The correction does not migrate history or claim the existing UI/automatic-recall
+behavior is fixed. It prevents another generic entry point: both saved thread reads, legacy
+memory facts/corrections and message provenance are blocked, as are Memory graph recall/core,
+dashboard and confirm/correct/status/mark-stale responses. These twelve exact routes have
+independent `data_scope_consent` exclusions until an approved provenance-aware projection exists.
+This deliberately reduces generic capability even with Wellness consent on.
+
+Precision: graph recall/core and the four hydrated fact-write responses contain source excerpts;
+the Memory dashboard projects derived fact/candidate summaries and source labels rather than
+serializing those raw excerpts. Both are unfiltered retained-content surfaces, but they are not
+the same payload. Receipt-only memory mutations remain classified separately. No private source
+content was read or exported during this audit.
+
+After these corrections the 393-route inventory is 102 reads, 52 writes, 17 destructive operations
+and 222 blocks. Catalog tests pin all twelve aggregate exclusions independently of manifest
+labels. Refusal-before-dispatch/grant tests belong to the slice-5 gateway wiring and must cover
+these aliases before that code is published. The PR remains draft, with no live-path proof.
+
+### 8.9 Slice 5 composition and verification adjustments (2026-10-06)
+
+The Settings tools, per-call gateway policy, real API transport, approval card and module refresh
+are wired together in this slice. The gateway snapshots input before asynchronous resolution,
+then validates, resolves/refuses (including consent), plans, confirms or runs, and finally calls
+the handler. Every execution path uses the effective risk; generic destructive calls ask even
+under YOLO, ordinary resolved writes run, and resolved reads do not consume write-rate allowance
+or create write audit rows. Outside-content notices remain false until slices 6–7 add provenance.
+The draft must not be deployed or merged as completed phase 1 at this intermediate point.
+
+A resolved read still needs the in-process transport, which can write on other routes. It never
+receives the general write-service registry. A composition-owned `perCallServices` factory gets
+the immutable input/context/resolution and supplies a single-use call capability bound to that
+exact request. The unrestricted service is not the static fallback: the availability marker
+refuses without the per-call wiring. The static tool is `confirm_always` with a confirm execution
+policy and no promotable family; only successful route resolution supplies a different effective
+policy. Immediately before transport the capability rechecks route,
+module availability, consent and destructive target labels; changed consent/policy/targets need a
+fresh call. It executes the immutable approved snapshot, not an equal mutable object supplied by
+the handler. This is not a database-wide lock against concurrent record updates between the
+preflight lookup and the existing route transaction; the exact approved path/IDs remain bound.
+A trusted `perCallExecutors` closure invokes the Settings transport handler without opening an
+unused outer database transaction. Otherwise its resolver recheck and injected route would need
+a second connection while holding the first, deadlocking a one-connection pool. The resolver and
+route keep their own actor-scoped transactions. Normal tools retain their scoped execution and
+read trust checks; result sanitization, caps and wrapping still run after this transport executor.
+
+Static reads that declare service keys may resolve those keys only from `readToolServices` and
+receive only their declared subset. This makes `app.findAction` discoverable without opening the
+write registry to reads. HTTP error responses retain status/body but carry `ok: false`, so failed
+writes neither audit as successful nor trigger success refresh.
+
+Pending approval storage formerly allowed only write/outbound/destructive. New AI migration
+`0289_ai_read_action_approval.sql` allows a truthful read risk for a forced-confirm read and the
+later tainted outbound-GET rule. It changes only the CHECK constraint; owner policies and the
+write-only audit-log constraint are unchanged. Main and all open PR file inventories were checked
+before reserving 0289: Meetings owns 0284/0287/0288 and the focus-image PR owns 0285/0286.
+
+The card receives details through the real notifier, live record and stream parser. Target names
+are quoted text; fields are exact JSON text, never Markdown/HTML or truncated approval values.
+All fourteen content modules with callable routes now have truthful app-map entries; Notes and
+Briefings have no callable generic routes. Metadata, input-source boundaries, refusals and recovery
+steps are declared alongside the tools.
+
+Refresh coverage has three explicit, source-checked exceptions to the original blanket test:
+Scratchpad and Commitments have no directly cached views, and Workflow approvals already poll
+with a five-second interval. No fabricated tokens were added. Cached modules require their own
+query prefix or real declared tokens; Goals, Notes and Settings declare their nonmatching keys.
+Existing direct-polling Workflow behavior therefore has an intentional delay of up to five seconds.
+
+The named package-local Settings and gateway suites were not discovered by the previous test
+configuration. Both the Vitest include list and the default unit runner now name them. The real
+API integration suite is part of `test:integration:3065`, including read-risk approval persistence
+and refusal of all thirteen retained-content aliases before transport/grant minting.
+
+Local browser execution failed before Chromium launched with a socket EPERM, including the
+permitted retry. Parser-to-real-card SSR proof and three browser wiring cases are included; hosted
+browser CI must run the latter. Docker is absent locally, so database integration remains hosted
+only. No real providers, credentials, device permissions or recording were used. Test counts,
+negative controls and exact-head hosted outcomes are recorded in the PR comment; live-UI proof
+and the provenance/shared-write-gate slices remain outstanding.
+
+The follow-up review of the correction commit required two final tightenings before wiring:
+Memory fact date edits can end or stale recall, so `PATCH /api/memory/graph/facts/:id` is
+destructive with the actor-owned fact preview. `GET /api/ai/activity-lines` retains full user
+turn quotes and is now the thirteenth independent retained-content consent block. The current
+inventory is 101 reads, 51 writes, 18 destructive operations and 223 blocks (393 total). These
+changes do not claim to solve the older UI/automatic-recall revocation gap.
+
+### 8.10 Slice 5 review and first hosted verification (2026-10-06)
+
+The first hosted run passed 12,332 unit tests but the new app-action integration file never ran its
+38 cases: its setup tried the existing Wellness check-in POST on a one-connection pool. That
+handler starts a scoped write then resolves module availability through another root transaction,
+so setup returned 500. The nearby Unauthorized log belongs to a separate data-export negative
+test, not this request. The fixture now proves its authenticated actor before seeding, creates
+only the check-in through the actor-scoped repository, and verifies it through a real authenticated
+read. Medication/therapy fixtures still use the real routes. The pool stays at one, and the actual
+gateway, route, consent, target, concurrent-read and approval-storage assertions are unchanged.
+This fixes test setup, not the older Wellness handler's nested-transaction behavior. Hosted DB
+execution must pass before claiming those cases verified.
+
+Two other stale fixtures are corrected: the integration confirmation-tool list includes the new
+static fail-closed transport declaration, and the same-task double-Approve browser test locates
+the shared button by accessible role/name while preserving two synchronous clicks and the exact
+one-request assertion.
+
+Post-approval refusals now use the shared HTTP error class with fixed, bounded reason/recovery
+messages, and the app-action tool allows those safe messages. The consent regression was first
+seen failing when it demanded `consent_off` instead of accepting generic failure. Target changes
+and invalid/replayed bindings likewise retain their explicit codes. Unexpected resolver errors
+become fixed `not_ready`; arbitrary transport errors remain generic, with a sentinel regression
+proving dependency HttpError text is not exposed. No request, row, target or provider text is
+interpolated into these refusal messages.
+
+### 8.11 Slice 6 provenance and binding verification (2026-10-06)
+
+**Historical checkpoint:** this section records the Slice 6 state before Slice 7. The current
+implementation ruling in section 8.12 supersedes its deferred-admission and concurrency statements.
+
+Slice 5 correction `8dd0046c58002f9fe061d2ff94785cbbcfc2aee6` passed every exact-head hosted
+workflow, including all 38 app-action database cases with zero skips and the real browser card
+suite. The final pre-run exception wrapper now has its own sentinel regression: removing it
+exposes the private sentinel and fails the required `not_ready` assertion. The action-run app-map
+entry also names that failure and recovery, rather than listing it only on search.
+
+The durable store is owner-only, missing/foreign/legacy state is tainted, and first admission
+cannot be overwritten or deleted through the runtime role. New conversations receive a clean row
+atomically. The token captures a thread at launch; normal, live-gate and shadow-gate contexts use
+that capture instead of looking up the currently selected conversation. Token identity primitives
+are snapshotted and frozen; the gate's narrowly growing tool allowlist remains intentionally shared.
+
+Binding alone was insufficient: replay and completion previously selected the current thread
+after awaits. They now take an explicit owner/surface-checked thread, refuse missing/foreign
+bindings rather than falling back, and keep the manager's original turn identity through initial
+launch and retry. Both replay and save paths have removal controls. Conversation selection and
+activity ordering are checked so a late A completion cannot undo a later switch to B.
+
+The common policy floor covers normal tools, classifier dry-run/execute, native writes and
+outside-agent writes/shell/web calls. Plain reads remain reads; model-chosen outbound app GETs
+require confirmation when tainted. Missing bindings, unavailable storage and absent composition
+ports fail closed. Policy checks are repeated after asynchronous policy/YOLO lookups. No production
+admission site records state yet: that is Slice 7, and the concurrency requirements above remain
+open. The notice line/card admission behavior also remains Slice 7.
+
+The independent recording-notice acknowledgement route on the held capture branch is explicitly
+blocked by central path policy, even under permissive metadata. This is compatibility coverage
+with a synthetic route declaration, not a claim that the two branches have been combined/tested.
+The older Wellness check-in nested-connection problem and retained-data consent-revocation gap
+remain outside this change.
+
+Existing trusted-auto/YOLO database fixtures use real new owner threads and the production
+provenance store, so unknown-history fallback cannot mask the policy assertions. New DB cases cover
+row ownership/admin isolation, parent forgery, monotonic taint, private/account cascades, restart,
+bound-token decisions, resume races and SQL rollback-only negative controls. Local pure checks and
+removal controls are recorded in the PR. The isolated gate cannot start here because Docker is
+absent; no bare database test, provider call, credentials, device permission or real recording is
+used. Exact-head hosted DB/browser outcomes must be recorded after the push. Live product proof
+and the remaining Phase 1 slices still block completion/merge.
+
+### 8.12 Current Slice 7 implementation ruling (2026-10-06)
+
+This is the source-level implementation record for Slice 7, superseding the historical Slice 6
+checkpoint above. It does not certify the database behavior or a live product run. Applied migration
+`0291` is unchanged; the new `0293` migration and the code using it must ship together.
+
+#### Durable clean authority and automatic execution
+
+- New-thread clean provenance is initialized by the database trigger in `0293`, in the parent
+  insert transaction. Direct runtime clean INSERT is forbidden, including into a legacy missing
+  row. Old threads are not backfilled as clean. Existing monotonic-taint and owner/parent checks
+  remain in force.
+- `ConversationProvenanceStore.runAutomatic` uses a short actor-scoped claim transaction: lock the
+  owned provenance row, require an existing clean row and no reservation, and insert a fresh opaque
+  reservation ID. The transaction commits and returns its connection before the protected callback
+  starts. Handler transaction acquisition and composition-owned app-route preflight therefore run
+  under a committed reservation without holding the claim transaction's connection.
+- `recordAdmission` takes the same provenance-row lock. After that lock resolves, a separate SQL
+  statement checks for a reservation using a fresh READ COMMITTED snapshot. A reservation rejects
+  admission; content is withheld rather than exposed while an automatic callback is active. If
+  admission wins first, the subsequent automatic claim sees taint and returns `confirm` without
+  dispatching. This is the implemented ordering mechanism; a repeated boolean lookup alone is not
+  described as an atomic barrier.
+- The callback runs only after a successful claim. Its actual promise must settle before cleanup;
+  release matches thread, owner and that exact reservation ID. Callback/release failures do not
+  turn into a second automatic execution or a second approval attempt. Acquisition failure can
+  fall back to confirmation; an uncertain committed reservation is deliberately retained.
+- Reservations have no timeout, expiry, cancellation release or restart cleanup. An orphaned
+  reservation makes `isTainted` true, prevents another automatic claim, and rejects new content
+  admission. Wait for a still-running action or start a new chat; if an action may have run, inspect
+  the app before retrying. Opening a new chat does not clear the old row. Normal thread/account
+  deletion still cascades. There is no automatic orphan recovery that guesses an action ended.
+- Gateway automatic dispatch uses this port for non-read calls and outbound-read overrides; a
+  missing `runAutomatic` port cannot authorize execution. Dry-run does not acquire a reservation
+  or admit a result. The automatic callback's result is admitted after release.
+- **Native/ACP boundary:** Moss serializes outside-content admission with automatic permission
+  decisions. It does not serialize or observe the outside engine's eventual operation. A bound
+  in-flight request can linearize permission decision → admission even if its allow response is
+  delivered later. This does not claim that every physically executed native write after taint
+  asks. Terminal native/ACP grant success is deferred until required admission succeeds; failed
+  admission produces denial rather than a false successful grant. The server records permission,
+  not the external operation's completion.
+
+Source: `packages/chat/src/conversation-provenance.ts`, `packages/chat/sql/0293_chat_automatic_action_reservations.sql`,
+`packages/ai/src/gateway/content-admission.ts` and `gateway.ts`.
+
+#### Admission coverage and no-content cases
+
+- Default-engine pre-turn passive memory, cross-tool reads and notes retrieval use
+  `recall_memory_turn`, `recall_cross_tool` and `recall_notes`. Launch memory uses
+  `launch_memory_seed`; ordinary/evening seeds use `seed_route`/`evening_seed`; request-supplied
+  module-control text uses `module_control_context`. Nonempty blocks await admission before prompt
+  assembly/submission; whitespace-only blocks record nothing. Retrieval may return no context,
+  but a failed admission cannot be treated as successful exposure. The live classifier can handle
+  a turn before default-engine retrieval; it admits its own inputs as described below.
+- Notes privacy lookup and internal cross-tool reads carry the captured thread and session/surface
+  binding. Notes uses owner/surface-checked `getThreadById`, not the currently selected thread;
+  missing, foreign or private bindings yield no notes. An internal read that contributes no rendered
+  cross-tool block does not create a separate result admission.
+- Gateway successful outside results record `tool_external_content`, with `app_action_outside`
+  for `app.callAction` and `attachment_read` for `chat.readAttachment`. This covers ordinary,
+  confirmed and classifier execution, including structured data and media. Nonempty outside
+  progress is recorded before delivery; progress during a held automatic reservation may be
+  withheld. Only explicitly trusted `user_authored` outcomes without external markers are exempt.
+- Model-visible schema-validation errors from an external or unstamped tool can quote remote
+  schema field names. The normal `callTool` path records `tool_external_descriptors` before returning
+  that text, including when the token never listed tools. `callToolForGate` does not expose the
+  validation text: it returns the fixed `invalid_input` decline and makes no admission for that
+  failure. Other classifier inputs may already have tainted its thread.
+- A genuine `HttpError` message forwarded by a `safeErrors` tool is an admission-bearing handler outcome,
+  even for a tool whose successful content is `user_authored`. It uses the applicable result path
+  above. Fixed generic handler failures do not expose that error text and do not create an error
+  admission. A failed admission replaces the outcome with fixed `context_admission_unavailable`
+  recovery text, never the withheld result, schema text, media or safe-error message.
+- MCP `tools/list` uses token-bound `listToolsForSession` and admits `tool_external_descriptors`
+  before returning any outside tool descriptors. The classifier factory makes the same decision
+  before projecting away `isExternal`: any classifier-capable tool not stamped `false` requires
+  admission before the menu returns. This covers module labels, classifier descriptions and
+  schemas, in both live and shadow attempts; unavailable recording prevents classifier exposure.
+- Classifier candidate hooks finish their actor-scoped database work first. The factory then uses
+  `normalizeClassifierCandidates`, rejects malformed/oversize lists and admits only valid nonempty
+  snapshots under `classifier_candidates`. It returns ID/label-only copies after admission, so no
+  second connection is acquired while the hook holds the first. Empty/malformed candidates stay
+  candidate-clean and never reach argument choice/extraction. Admission metadata carries only the
+  token-derived identity and fixed path, never labels or candidate IDs.
+- Both persistent and one-shot Claude vault-read hooks await
+  `POST /internal/vault-read-report` before allowing `Read`/`Glob`/`Grep`. Missing tokens, failed
+  reports or unavailable recording deny the read. The route records `native_vault_read` from the
+  verified token. Other nontrivial native permission allows record `native_tool_result` before
+  grant because the server does not observe the resulting output; local read-only metadata tools
+  and first-party Moss MCP transport retain their explicit exceptions.
+- Every observed ACP allowed read/web/shell permission records `outside_agent_read`,
+  `outside_agent_web` or `outside_agent_shell`, including YOLO, folder-policy and confirmed paths.
+  The ACP engine declares `admitsOutsideContentWithoutPermission`; launch records
+  `outside_agent_launch` before starting it. This conservative fallback is active, not an unresolved
+  assumption that every outside-agent operation raises an ask. Admission failure prevents launch
+  or permission allow.
+- Typed user text, trusted persona/system/time metadata, attachment manifests without bytes and
+  explicitly trusted app/source readouts remain no-taint paths. Bound-thread replay/resume retains
+  existing durable state instead of manufacturing clean history. Meeting chat remains the
+  separately scoped tool-less generation path. Every built-in read tool declares its content class,
+  checked by the API's `onReady` assertion. Approval notices use the token-bound safety lookup;
+  the lookup also treats an outstanding reservation as unsafe authority.
+
+Sources: the admission sites in section 1.4, `context-admission.ts`, `engine-text.ts`,
+`chat-session-launch.ts`, `notes-tool-trust.ts`, `runtime.ts`, `classifier-gate-wiring.ts`,
+`packages/chat/src/mcp-transport.ts`, and the gateway's `run-tool-handler.ts`,
+`native-permission-handler.ts` and `acp-permission.ts`.
+
+#### Verification boundary
+
+Focused pure/unit suites and isolated guard-removal checks cover admission-before-exposure,
+fail-closed results, classifier choices/extraction, empty-block negatives and dispatch ordering.
+They do not establish PostgreSQL lock, policy, trigger or crash-recovery behavior. The authored
+hosted suites include `conversation-provenance-binding.test.ts`, `conversation-provenance.test.ts`,
+`conversation-automatic-reservation.test.ts`, `classifier-context-admission.test.ts` and
+`native-vault-read-admission.test.ts`, plus schema-catalog assertions and rollback-only SQL
+negative controls. The supported isolated DB gate cannot start in this environment because Docker
+is absent; those database suites await exact-head hosted CI. Final local test/typecheck receipts
+and counts will be recorded on the PR; no passing full local suite, local DB pass or live product
+proof is claimed here. Slice 8 is unbuilt, and phase 1 remains unverified for completion/merge.
+
+### 8.13 Slice 8 verification boundary and supported-engine correction (2026-10-06)
+
+The owner authorized continuing with a hosted browser test plus an exact owner-run checklist when
+live dev is unreachable, and subsequently confirmed the sandbox has no dev access. Never use port
+1533 or production, intercept responses, or present synthetic responses as live proof. The scripted
+provider is an explicitly disclosed decision stand-in: Moss's UI, ACP/MCP transport, gateway,
+approval, act-as auth, real theme handler and screen refresh remain unchanged.
+
+The original scripted auto-run expectation conflicts with Slice 7's supported ACP launch rule.
+Replacing it is a proposed plan correction awaiting Ben, not an approved scope reduction. Ben
+approved where proof could run; he has not waived the no-ask browser case or clean Run B. All
+current live engines use ACP, so the kill gate is awaiting his ruling, not failed or passed.
+The authored case proves a real approved change, visible pending/complete states, drawer
+interruption, repeated Approve protection, exactly one internal theme PUT and immediate refresh
+without reload. It emits bounded `APP_ACTIONS_EVIDENCE` text retained by the hosted workflow; it
+never logs the raw server log or a token. The phase-1 clean automatic path is database-tested, not
+claimed browser-proved. Likewise, real Codex/ACP approval after a native read or recall does not
+prove a clean-to-tainted transition: ACP was already tainted before the read. The owner must record
+the engine and first-admission reason, and mark an unavailable clean-capable Run B as unproved.
+
+The wrapper always blocks host-login discovery in scripted mode using an absent file in its own
+private temporary directory and clears inherited readiness. Real mode requires explicit owner
+opt-in before the common provisioner can inspect/copy a login, then requires actual readiness in
+the real spec; a skip or missing login is not a successful real proof. Only the owner runs that
+mode. The common provisioner's existing Codex credential-copy behavior is disclosed in the
+checklist; no credentials or real providers are used by this build task.
+
+The two original kill-gate tasks for People creation and news-topic editing are deliberately blocked
+by current route policy. They stay in the ten-task record and count as unsuccessful; do not relax
+policy or substitute a different task to reach the eight-success bar. Other refusals and unsupported
+engine cases likewise remain visible. Live completion, real-provider results and the owner's
+keep-or-fall-back decision remain outstanding until the checklist is actually run.
+
+Slice 7 prerequisite evidence is complete at `a77aa4744`: all four integration shards passed
+(3,104 passed, two unrelated skips), all 25 tracked target suites ran 344/344 with zero skips, and all
+four Meetings acceptance groups passed. See the PR's CI links and bounded counts. This evidence
+unblocked Slice 8 implementation; it is not evidence of the new browser spec or live kill gate.
+
+### 8.14 Owner-connected and owner-approved descriptors (2026-10-06)
+
+Ben's later ruling narrows descriptor admission only. MCP listing and live/shadow classifier menus
+may expose descriptions/input schemas without taint when the host proves that this chat owner
+personally connected the integration or approved the current add-on installation. Both consumers
+use token-bound actor verification before deciding; mixed/unknown ownership still taints. A public
+DTO or external JSON cannot supply the host-only ownership stamp.
+
+Integration ownership comes from the RLS-scoped connection's immutable owner. The current
+`discovered_tools` snapshot is replaced on discovery. Classifier fingerprints serve review/sort
+freshness, not a separately retained connect-time descriptor-acceptance baseline. As instructed,
+this change does not build that new baseline system. An owner's refreshed integration
+descriptions retain owner trust.
+
+In plain terms, **pressing Refresh on your own integration counts as approving its new tool
+descriptions**. Ben confirmed this on 2026-10-06, so no descriptor-acceptance baseline or
+change-detection follow-up is planned. This question is separate from ACP's launch rule.
+
+Add-ons already have accepted manifest/package hashes. Migration 0294 adds current-approval actor
+attribution without backfilling legacy `enabled_by`, which could name an earlier installer after
+an upgrade. Trust is established by instance-admin enable/reapprove of the current discovered
+hashes, explicit draft ship, or acceptance of an install/upgrade staged by that actor. A personal
+module toggle never establishes it. Reconcile must match both accepted hashes and the synthesized
+snapshot; descriptor mutation, drift, a different approver, or missing attribution remains outside.
+An admin-installed add-on is thus untrusted for a non-admin chat owner. Historical installations
+need a fresh current-installation approval (for example disable/re-enable in Instance modules);
+that action affects instance availability and is not silently performed for the user.
+
+This exception is listing-only. Tool results, progress, candidates, forwarded safe errors and
+model-visible schema validation diagnostics retain admission. Existing conversations remain
+fail-closed; taint never clears. ACP `admitsOutsideContentWithoutPermission` and launch admission
+are unchanged, so every currently supported live engine still starts tainted. This ruling does
+not settle section 8.13's clean-engine/browser acceptance questions.
+
+Verification covers exact-owner/foreign/unknown listings, authentic integration and accepted
+add-on adapters, classifier token mismatch, public DTO non-disclosure, current-hash rescan/mutation,
+legacy and upgrade attribution, and listing followed by each outside output path. Guard-removal
+controls must fail for the relevant rule. New DB cases run in hosted CI, not an unisolated local DB.
+
+### 8.15 Pending memory suggestions from chat (2026-10-06)
+
+Live kill-gate task 6 failed: the dashboard (the only list of pending suggestions) is a
+retained-content consent block, and accept was a `write` that runs unasked on a clean conversation.
+Ben ruled that Moss may list the actor's own pending suggestions and accept one, with an approval
+card on every accept. He dropped outside-content and taint work from this change.
+
+- New `GET /api/memory/candidates` (`read`, `memory.view`): owner-scoped `listPending`, limit 50,
+  projected by `pendingCandidateItem` to ID, title, summary, record kind, provenance and creation
+  time. No episode or source references.
+- Accept is `destructive` with `memoryCandidateTarget`, which selects the actor's own pending row
+  under the data context and labels the card with its full text. Unknown, foreign or resolved IDs
+  return `unknown_route` before any card. Reject and suppress stay `write` with the same target.
+- Accept treats a missing body as `{}` in `preValidation`. A bodyless chat call otherwise failed
+  schema validation after the card was approved, so a retry would show a second card.
+- `candidate-labels.ts` replaces the dashboard's private label helpers and reads the manual
+  `excerpt`, so a "Remember this" suggestion is listed, labelled and accepted as its own text.
+- The memory manifest's `memory.chat_app_actions` and `memory.candidate_review` features describe
+  the new ability for the app map.
+- The inventory is now 102 reads, 50 writes, 19 destructive operations and 224 blocks (395 total).
+
+Verification: unit tests run the real catalog, manifest, target resolver and confirmation flow
+under YOLO (list runs without a card; accept waits for approval, calls once after confirmation,
+and does nothing after rejection; a non-pending or foreign ID is refused before a card).
+Reclassing accept as `write` turns three of them red. Integration tests cover the owner-only list,
+exactly-once acceptance through the app-action path, rejection with no grant minted, a foreign
+suggestion refused before a card, and a manual suggestion accepted as its excerpt.
+
+The dashboard accept service reads, remembers, then marks promoted without a pending-status check
+on the update, so two concurrent accepts could each create a fact. Sequential repeats are refused.

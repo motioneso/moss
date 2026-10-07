@@ -35,6 +35,9 @@ import {
 import type { TranscriptRecord } from "../../packages/chat/src/live/types.js";
 import { makeMinimalDeps } from "../unit/chat-session-manager.test.js";
 
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
+import { parseToolOutputText } from "./fixtures/tool-output.js";
+import { ConversationProvenanceStore } from "../../packages/chat/src/conversation-provenance.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const RETRY_SOURCE_ID = "22222222-2222-4222-8222-222222222222";
@@ -87,6 +90,7 @@ describe("sports.retrySource action card (#2159)", () => {
   let appDb: Kysely<MossDatabase>;
   let app: FastifyInstance;
   let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let repository: AiRepository;
   let tokens: SessionTokenRegistry;
   let gateway: AssistantToolGateway;
@@ -125,6 +129,7 @@ describe("sports.retrySource action card (#2159)", () => {
       }),
       repository,
       runner,
+      provenance: new ConversationProvenanceStore(runner),
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -143,14 +148,15 @@ describe("sports.retrySource action card (#2159)", () => {
     resetSportsChatToolsForTests();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA]);
     emitted.length = 0;
   });
 
   // Branch 1 of the split: if this fails, tool availability/selection is the broken boundary.
   it("tools/list includes sports.retrySource with an inputSchema requiring sourceId", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: randomUUID(),
       allowedToolNames: null
     });
@@ -176,7 +182,7 @@ describe("sports.retrySource action card (#2159)", () => {
   // confirmAndRun/notifier/stream delivery, not tool selection.
   it("tools/call for sports.retrySource emits action_request, creates a pending row, and confirming it executes and emits action_result", async () => {
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: randomUUID(),
       allowedToolNames: null
     });
@@ -217,7 +223,9 @@ describe("sports.retrySource action card (#2159)", () => {
     expect(callRes.statusCode).toBe(200);
     const callBody = callRes.json<{ result: { isError: boolean; content: { text: string }[] } }>();
     expect(callBody.result.isError).toBe(false);
-    const data = JSON.parse(callBody.result.content[0]!.text) as { source: SportsCustomSourceDto };
+    const text = callBody.result.content[0]!.text;
+    expect(text).toMatch(/^<tool_result source="sports.retrySource">/);
+    const data = parseToolOutputText(text) as { source: SportsCustomSourceDto };
     expect(data.source.id).toBe(RETRY_SOURCE_ID);
 
     expect(emitted).toHaveLength(2);
@@ -253,6 +261,7 @@ describe("sports.retrySource action card (#2159)", () => {
       }),
       repository,
       runner,
+      provenance: new ConversationProvenanceStore(runner),
       tokens: realTokens,
       confirmations: new ConfirmationRegistry(),
       notifier: realGatewayNotifier,
@@ -268,7 +277,7 @@ describe("sports.retrySource action card (#2159)", () => {
       // (chat-session-manager.ts:163).
       const chatSessionId = surfaceSessionKey(ids.userA, DEFAULT_CHAT_SURFACE);
       const token = realTokens.mint({
-        actorUserId: ids.userA,
+        ...conversations.bindingFor(ids.userA),
         chatSessionId,
         allowedToolNames: null
       });

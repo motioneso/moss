@@ -1,3 +1,4 @@
+import { HttpError } from "@moss/module-sdk";
 import type { FeedbackSurface, FeedbackTargetKind, UsefulnessFeedbackKind } from "@moss/shared";
 
 import type { DataContextDb } from "@moss/db";
@@ -77,4 +78,17 @@ export function isAllowedFeedbackPair(
   kind: UsefulnessFeedbackKind
 ): boolean {
   return KINDS_BY_TARGET[targetKind].has(kind) && SURFACES_BY_TARGET[targetKind].has(surface);
+}
+
+/** Verify using the scoped module reader, and never accept another owner's target. */
+export async function verifyFeedbackTarget(
+  registry: FeedbackTargetVerifierRegistry,
+  scopedDb: DataContextDb,
+  input: Parameters<FeedbackTargetVerifier>[1]
+): Promise<FeedbackTargetVerification> {
+  const verification = await registry.get(input.targetKind)?.(scopedDb, input);
+  if (!verification || verification.ownerUserId !== input.actorUserId) {
+    throw new HttpError(404, "Feedback target not found");
+  }
+  return verification;
 }

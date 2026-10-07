@@ -332,7 +332,7 @@ describe("MemoryCandidatesRepository", () => {
 
         expect(second.id).toBe(first.id);
         expect(second.status).toBe("rejected");
-        expect(await repo.listPending(db, ids.userA, 10)).toEqual([]);
+        expect((await repo.listPendingWithCount(db, ids.userA, 10)).items).toEqual([]);
       }
     );
   });

@@ -17,6 +17,7 @@ describe("check token minter", () => {
     const identity = tokens.verify(token);
     expect(mcpServerUrl).toBe("http://mcp.test/api/mcp");
     expect(identity.actorUserId).toBe("user-1");
+    expect(identity.threadId).toBeNull();
     expect([...(identity.allowedToolNames ?? [])]).toEqual(["app.getMapSlice"]);
   });
 

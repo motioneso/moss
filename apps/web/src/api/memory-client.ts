@@ -91,8 +91,6 @@ export interface AcceptMemoryCandidateBody {
     readonly entityName?: string;
     readonly entitySummary?: string | null;
   };
-  readonly resolveConflictWithFactId?: string | null;
-  readonly supersedeFactIds?: readonly string[];
 }
 
 export interface PatchMemoryFactBody {

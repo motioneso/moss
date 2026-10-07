@@ -1,3 +1,4 @@
+import { ChatRepository } from "../../packages/chat/src/repository.js";
 import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -225,9 +226,13 @@ describe("chat action policy self-heal (getFamilyTier, real DB via buildChatGate
     });
     const gateway = new AssistantToolGateway(deps);
 
+    const thread = await runner.withDataContext({ actorUserId: dispatchedActorId }, (db) =>
+      new ChatRepository().openNewThread(db, { title: "Clean self-heal conversation" })
+    );
     const chatSessionId = randomUUID();
     const token = tokens.mint({
       actorUserId: dispatchedActorId,
+      threadId: thread.id,
       chatSessionId,
       allowedToolNames: null
     });

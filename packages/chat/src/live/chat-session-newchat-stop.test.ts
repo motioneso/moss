@@ -499,6 +499,7 @@ describe("#2934 new chat must stop a running turn", () => {
 
     const outcome = await gate.evaluate({
       actorUserId: "user-1",
+      threadId: "private-thread",
       message: "private text",
       hasAttachment: false,
       incognito: true,

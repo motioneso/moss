@@ -1,0 +1,92 @@
+name: App actions browser acceptance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/app-actions-uat.yml"
+      - "packages/chat/**"
+      - "packages/ai/**"
+      - "packages/auth/**"
+      - "packages/module-registry/**"
+      - "packages/module-sdk/**"
+      - "packages/db/**"
+      - "packages/ui/**"
+      - "packages/settings/**"
+      - "packages/shared/**"
+      - "apps/api/**"
+      - "apps/web/**"
+      - "tests/uat/*.ts"
+      - "tests/uat/specs/3065-*"
+      - "tests/uat/specs/app-actions-*.ts"
+      - "tests/uat/fixtures/**"
+      - "tests/uat/seed/**"
+      - "tests/uat/playwright.uat.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "infra/docker-compose.prod.yml"
+      - "scripts/run-gate.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-actions-uat-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scripted-app-actions:
+    name: Verify app action approval and screen refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      JARVIS_IMAGE_TAG: app-actions-uat-${{ github.run_id }}
+      JARVIS_UAT_BUILD: "0"
+      MOSS_UAT_CAPTURE_OFF: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install browser
+        timeout-minutes: 5
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build the isolated UAT image
+        timeout-minutes: 10
+        run: docker build -t "ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG}" -f Dockerfile .
+      - name: Run credential-free browser proof through the supported gate
+        timeout-minutes: 20
+        run: |
+          scripts/run-gate.sh start --gate test:uat:3065
+          scripts/run-gate.sh wait --follow
+      - name: Record bounded evidence
+        if: always()
+        run: |
+          python - <<'PYCODE'
+          from pathlib import Path
+          import re
+          for path in Path("/tmp/jarv1s-gate").glob("*.log"):
+              lines = re.sub(r"\x1b\[[0-9;]*m", "", path.read_text(errors="replace")).splitlines()
+              matched = [line for line in lines if re.search(r"^### |\[app-actions-uat\]|APP_ACTIONS|\[uat\] running|[0-9]+ passed|[0-9]+ failed|[0-9]+ skipped|Error:|TimeoutError|Locator:|Expected:|Received:|3065-.*\.uat\.spec\.ts:[0-9]+", line)]
+              print(f"Bounded app-actions outcomes from {path.name}")
+              for line in matched[-120:]:
+                  print(line[:1000])
+          print("Scripted ACP approval/refresh proof only. Real-model/live-dev and clean-engine browser automatic proof are not run here.")
+          PYCODE
+      - name: Stop the isolated gate
+        if: always()
+        timeout-minutes: 3
+        run: scripts/run-gate.sh stop || true

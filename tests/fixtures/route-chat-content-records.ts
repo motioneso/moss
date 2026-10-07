@@ -1,0 +1,52 @@
+export const RECORDS_MODULE_IDS: ReadonlySet<string> = new Set([
+  "meetings",
+  "workshop",
+  "email",
+  "weather"
+]);
+
+export const RECORDS_EXPECTED_ROWS = [
+  "meetings POST /api/meetings/history/search read",
+  "meetings GET /api/meetings/history/:id read",
+  "meetings GET /api/meetings/records/:id/exports read",
+  "meetings POST /api/meetings/records/:id/exports blocked external_effect",
+  "meetings GET /api/meetings/records/:id/outputs read",
+  "meetings GET /api/meetings/records/:id/outputs/:version read",
+  "meetings POST /api/meetings/records/:id/outputs blocked external_effect",
+  "meetings PUT /api/meetings/records/:id/outputs write",
+  "meetings POST /api/meetings/records/:id/actions/:candidateId/review blocked self_authority",
+  "meetings POST /api/meetings/records/:id/transcript write user_authored",
+  "meetings GET /api/meetings/records/:id/transcript read",
+  "meetings GET /api/meetings/records/:id/transcript/evidence read",
+  "meetings GET /api/meetings/preferences read user_authored",
+  "meetings PUT /api/meetings/preferences write user_authored",
+  "meetings DELETE /api/meetings/records/:id destructive user_authored",
+  "meetings GET /api/meetings/records read",
+  "meetings GET /api/meetings/records/:id read",
+  "meetings POST /api/meetings/records write user_authored",
+  "meetings PUT /api/meetings/records/:id/notes write",
+  "workshop POST /api/workshop/projects blocked module_promise",
+  "workshop GET /api/workshop/projects read",
+  "workshop GET /api/workshop/projects/:projectId read",
+  "workshop PATCH /api/workshop/projects/:projectId write",
+  "workshop DELETE /api/workshop/projects/:projectId destructive user_authored",
+  "workshop GET /api/workshop/projects/:projectId/messages read",
+  "workshop POST /api/workshop/projects/:projectId/messages blocked external_effect",
+  "email GET /api/email/messages read",
+  "email GET /api/email/messages/:id read",
+  "email GET /api/email/briefing-settings read user_authored",
+  "email PATCH /api/email/briefing-settings blocked self_authority",
+  "email GET /api/email/task-creation-mode read user_authored",
+  "email PUT /api/email/task-creation-mode blocked self_authority",
+  "weather GET /api/weather/today read"
+] as const;
+
+export const RECORDS_NAMED_BLOCKED = [
+  ["POST", "/api/meetings/records/:id/exports", "external_effect"],
+  ["POST", "/api/meetings/records/:id/outputs", "external_effect"],
+  ["POST", "/api/meetings/records/:id/actions/:candidateId/review", "self_authority"],
+  ["POST", "/api/workshop/projects", "module_promise"],
+  ["POST", "/api/workshop/projects/:projectId/messages", "external_effect"],
+  ["PATCH", "/api/email/briefing-settings", "self_authority"],
+  ["PUT", "/api/email/task-creation-mode", "self_authority"]
+] as const;

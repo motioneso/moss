@@ -18,6 +18,8 @@ const DEFAULT_VITEST_ARGS: readonly string[] = [
   "tests/unit",
   "packages/scratchpad/src/__tests__",
   "packages/acp/src",
+  "packages/settings/src/app-action-tools.test.ts",
+  "packages/ai/src/gateway/per-call-resolver.test.ts",
   // Pure harness regressions live beside UAT code but do not provision Docker or providers.
   "tests/uat/fixtures/meeting-chat-fixture-server.test.ts",
   "tests/uat/provisioner.test.ts"

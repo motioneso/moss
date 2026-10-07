@@ -1,4 +1,4 @@
-import type { ProviderKind } from "@moss/ai"; // "anthropic" | "openai-compatible" | "google"
+import type { CallCardDetails, ProviderKind } from "@moss/ai"; // "anthropic" | "openai-compatible" | "google"
 import type { ActionRequestPreview } from "@moss/module-sdk";
 import type { ChatTurnOriginV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
@@ -50,6 +50,7 @@ export interface TranscriptRecord {
   readonly result?: Record<string, unknown>;
   /** #1310: dot-path tokens into the frontend `queryKeys` object, for `action_result` records whose tool executed. */
   readonly affectsQueryKeys?: readonly string[];
+  readonly affectsModules?: readonly string[];
   readonly sourceFreshness?: SourceFreshnessV1 | null;
   /**
    * Optional rich, server-derived Approve/Deny card preview (email reply recipient/subject/body).
@@ -57,6 +58,9 @@ export interface TranscriptRecord {
    * persisted. Present only on `action_request` records whose tool declared a `preview` hook.
    */
   readonly preview?: ActionRequestPreview;
+  /** App action target and field values, live only like the email preview. */
+  readonly details?: CallCardDetails;
+  readonly outsideContentNotice?: boolean;
   /** Elapsed time in milliseconds for the prompt turn (from submit to stop reason). */
   readonly elapsedMs?: number;
   /** Token usage block for the prompt turn. */
@@ -129,6 +133,8 @@ export interface EngineLaunchOpts {
 /** A persistent per-user CLI session. One instance per live session. */
 export interface CliChatEngine {
   readonly provider: ProviderKind;
+  /** This engine can read outside data without a permission callback; taint before launch. */
+  readonly admitsOutsideContentWithoutPermission?: boolean;
   /** True only when submit() starts a fresh MCP client for each turn. */
   readonly startsToolClientPerTurn?: boolean;
   /**

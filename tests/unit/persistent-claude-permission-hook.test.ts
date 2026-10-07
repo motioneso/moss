@@ -16,10 +16,12 @@ import {
   HOOK_TIMEOUT_SECONDS,
   NATIVE_CONFIRM_TIMEOUT_MS,
   deriveClaudePermissionUrl,
+  deriveClaudeVaultReadReportUrl,
   writeClaudeOneShotPermissionHook,
   writeClaudePermissionHook
 } from "../../packages/chat/src/live/persistent-claude-permission-hook.js";
 import type { TmuxIo } from "@moss/ai";
+import { serveHookGateway } from "./fixtures/claude-hook-gateway.js";
 
 function fakeIo(): TmuxIo & {
   writes: Map<string, string>;
@@ -127,6 +129,12 @@ describe("Claude PreToolUse permission hook", () => {
     expect(deriveClaudePermissionUrl("http://api:3000/api/mcp")).toBe(
       "http://api:3000/internal/permission"
     );
+  });
+
+  it("derives the report endpoint without carrying query or fragment data", () => {
+    expect(
+      deriveClaudeVaultReadReportUrl("https://api.example.test:443/api/mcp?ignored=1#fragment")
+    ).toBe("https://api.example.test/internal/vault-read-report");
   });
 
   it("writes settings, hook, and a separate 0600 bearer token file without putting the bearer in command text", async () => {
@@ -238,7 +246,9 @@ describe("Claude PreToolUse permission hook", () => {
     const io = fakeIo();
 
     const settingsPath = await writeClaudeOneShotPermissionHook(io, {
-      neutralDir: "/tmp/session"
+      neutralDir: "/tmp/session",
+      mcpToken: "jst_synthetic",
+      mcpServerUrl: "http://api:3000/api/mcp"
     });
 
     const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
@@ -254,7 +264,9 @@ describe("Claude PreToolUse permission hook", () => {
     const io = fakeIo();
 
     const settingsPath = await writeClaudeOneShotPermissionHook(io, {
-      neutralDir: "/tmp/session"
+      neutralDir: "/tmp/session",
+      mcpToken: "jst_synthetic",
+      mcpServerUrl: "http://api:3000/api/mcp"
     });
 
     const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
@@ -268,7 +280,9 @@ describe("Claude PreToolUse permission hook", () => {
     const io = fakeIo();
 
     const settingsPath = await writeClaudeOneShotPermissionHook(io, {
-      neutralDir: "/tmp/session"
+      neutralDir: "/tmp/session",
+      mcpToken: "jst_synthetic",
+      mcpServerUrl: "http://api:3000/api/mcp"
     });
 
     const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
@@ -284,6 +298,7 @@ describe("Claude PreToolUse permission hook", () => {
     const dir = await mkdtemp(join(tmpdir(), "jarvis-hook-e2e-"));
     const vaultDir = await mkdtemp(join(tmpdir(), "jarvis-vault-e2e-"));
     process.env.JARVIS_NOTES_ROOTS = vaultDir;
+    const gateway = await serveHookGateway();
     try {
       const targetFile = join(vaultDir, "a.md");
       await writeFile(targetFile, "hello");
@@ -291,7 +306,7 @@ describe("Claude PreToolUse permission hook", () => {
       const settingsPath = await writeClaudePermissionHook(io, {
         neutralDir: dir,
         mcpToken: "jst_secret",
-        mcpServerUrl: "http://api:3000/api/mcp"
+        mcpServerUrl: gateway.mcpServerUrl
       });
       for (const [path, content] of io.writes) {
         await writeFile(path, content);
@@ -317,7 +332,10 @@ describe("Claude PreToolUse permission hook", () => {
       const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
       expect(code).toBe(0);
       expect(JSON.parse(stdout).hookSpecificOutput.permissionDecision).toBe("allow");
+      expect(gateway.requests).toHaveLength(1);
+      expect(gateway.requests[0]?.path).toBe("/internal/vault-read-report");
     } finally {
+      await gateway.close();
       await rm(dir, { recursive: true, force: true });
       await rm(vaultDir, { recursive: true, force: true });
     }
@@ -327,12 +345,15 @@ describe("Claude PreToolUse permission hook", () => {
     const dir = await mkdtemp(join(tmpdir(), "jarvis-hook-e2e-"));
     const vaultDir = await mkdtemp(join(tmpdir(), "jarvis-vault-e2e-"));
     process.env.JARVIS_NOTES_ROOTS = vaultDir;
+    const gateway = await serveHookGateway();
     try {
       const targetFile = join(vaultDir, "a.md");
       await writeFile(targetFile, "hello");
       const io = fakeIo();
       const settingsPath = await writeClaudeOneShotPermissionHook(io, {
-        neutralDir: dir
+        neutralDir: dir,
+        mcpToken: "jst_synthetic",
+        mcpServerUrl: gateway.mcpServerUrl
       });
       for (const [path, content] of io.writes) {
         await writeFile(path, content);
@@ -355,13 +376,16 @@ describe("Claude PreToolUse permission hook", () => {
       const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
       expect(code).toBe(0);
       expect(JSON.parse(stdout).hookSpecificOutput.permissionDecision).toBe("allow");
+      expect(gateway.requests).toHaveLength(1);
+      expect(gateway.requests[0]?.path).toBe("/internal/vault-read-report");
     } finally {
+      await gateway.close();
       await rm(dir, { recursive: true, force: true });
       await rm(vaultDir, { recursive: true, force: true });
     }
   });
 
-  it("allows configured vault reads without calling the gateway", async () => {
+  it("denies configured vault reads when the report token is missing", async () => {
     const vaultDir = await mkdtemp(join(tmpdir(), "jarvis-vault-"));
     try {
       const targetFile = join(vaultDir, "a.md");
@@ -372,7 +396,7 @@ describe("Claude PreToolUse permission hook", () => {
       );
 
       expect(result.code).toBe(0);
-      expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe("allow");
+      expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
     } finally {
       await rm(vaultDir, { recursive: true, force: true });
     }
@@ -385,6 +409,7 @@ describe("Claude PreToolUse permission hook", () => {
   it("fails closed when a vault-root symlink escapes to an outside secret-bearing HOME (#1467 QA)", async () => {
     const vaultDir = await mkdtemp(join(tmpdir(), "jarvis-vault-"));
     const fakeHome = await mkdtemp(join(tmpdir(), "jarvis-fake-home-"));
+    const gateway = await serveHookGateway("deny");
     try {
       await mkdir(join(fakeHome, ".ssh"), { recursive: true });
       await writeFile(join(fakeHome, ".ssh", "id_rsa"), "-----BEGIN OPENSSH PRIVATE KEY-----");
@@ -392,22 +417,23 @@ describe("Claude PreToolUse permission hook", () => {
       await symlink(fakeHome, escapeLink, "dir");
       const candidate = join(escapeLink, ".ssh", "id_rsa");
 
-      // No allow-by-symlink means the hook falls through past safeVaultRead to the token check.
-      // If the escape were instant-allowed, this would exit "allow" without ever reaching it.
+      // A valid reporting token makes this sensitive to containment: an incorrect safe-vault
+      // classification would reach the 204 report route and allow instead of the denying gateway.
       const result = await runHook(
         { tool_name: "Read", tool_input: { file_path: candidate } },
         {
           JARVIS_NOTES_ROOTS: vaultDir,
-          JARVIS_PERM_URL: "http://127.0.0.1:1/internal/permission",
-          JARVIS_PERM_TOKEN_FILE: "/no/such/token"
+          ...gateway.env
         }
       );
 
       expect(result.code).toBe(0);
       const decision = JSON.parse(result.stdout).hookSpecificOutput;
       expect(decision.permissionDecision).toBe("deny");
-      expect(decision.permissionDecisionReason).toBe("missing session token");
+      expect(decision.permissionDecisionReason).toBe("Synthetic decision");
+      expect(gateway.requests[0]?.path).toBe("/internal/permission");
     } finally {
+      await gateway.close();
       await rm(vaultDir, { recursive: true, force: true });
       await rm(fakeHome, { recursive: true, force: true });
     }
@@ -416,6 +442,7 @@ describe("Claude PreToolUse permission hook", () => {
   it("fails closed when the escaping symlink's leaf target doesn't exist yet (ancestor-climb path) (#1467 QA)", async () => {
     const vaultDir = await mkdtemp(join(tmpdir(), "jarvis-vault-"));
     const outsideDir = await mkdtemp(join(tmpdir(), "jarvis-outside-"));
+    const gateway = await serveHookGateway("deny");
     try {
       const escapeLink = join(vaultDir, "escape");
       await symlink(outsideDir, escapeLink, "dir");
@@ -425,31 +452,37 @@ describe("Claude PreToolUse permission hook", () => {
         { tool_name: "Read", tool_input: { file_path: candidate } },
         {
           JARVIS_NOTES_ROOTS: vaultDir,
-          JARVIS_PERM_URL: "http://127.0.0.1:1/internal/permission",
-          JARVIS_PERM_TOKEN_FILE: "/no/such/token"
+          ...gateway.env
         }
       );
 
       expect(result.code).toBe(0);
       expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
+      expect(gateway.requests[0]?.path).toBe("/internal/permission");
     } finally {
+      await gateway.close();
       await rm(vaultDir, { recursive: true, force: true });
       await rm(outsideDir, { recursive: true, force: true });
     }
   });
 
   it("fails closed when the configured vault root itself doesn't exist on disk (#1467 QA)", async () => {
-    const result = await runHook(
-      { tool_name: "Read", tool_input: { file_path: "/jarvis-nonexistent-vault/a.md" } },
-      {
-        JARVIS_NOTES_ROOTS: "/jarvis-nonexistent-vault",
-        JARVIS_PERM_URL: "http://127.0.0.1:1/internal/permission",
-        JARVIS_PERM_TOKEN_FILE: "/no/such/token"
-      }
-    );
+    const gateway = await serveHookGateway("deny");
+    try {
+      const result = await runHook(
+        { tool_name: "Read", tool_input: { file_path: "/jarvis-nonexistent-vault/a.md" } },
+        {
+          JARVIS_NOTES_ROOTS: "/jarvis-nonexistent-vault",
+          ...gateway.env
+        }
+      );
 
-    expect(result.code).toBe(0);
-    expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
+      expect(result.code).toBe(0);
+      expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
+      expect(gateway.requests[0]?.path).toBe("/internal/permission");
+    } finally {
+      await gateway.close();
+    }
   });
 
   // #1467 QA round 2 (RED): fs.realpathSync collapses ".." LEXICALLY before resolving symlinks,
@@ -461,6 +494,7 @@ describe("Claude PreToolUse permission hook", () => {
   it("fails closed against a dotdot-over-symlink read escape (#1467 QA2)", async () => {
     const vaultDir = await mkdtemp(join(tmpdir(), "jarvis-vault-"));
     const outsideDir = await mkdtemp(join(tmpdir(), "jarvis-outside-"));
+    const gateway = await serveHookGateway("deny");
     try {
       await mkdir(join(outsideDir, "targetdir"), { recursive: true });
       await mkdir(join(outsideDir, "secrets"), { recursive: true });
@@ -475,16 +509,17 @@ describe("Claude PreToolUse permission hook", () => {
         { tool_name: "Read", tool_input: { file_path: candidate } },
         {
           JARVIS_NOTES_ROOTS: vaultDir,
-          JARVIS_PERM_URL: "http://127.0.0.1:1/internal/permission",
-          JARVIS_PERM_TOKEN_FILE: "/no/such/token"
+          ...gateway.env
         }
       );
 
       expect(result.code).toBe(0);
       const decision = JSON.parse(result.stdout).hookSpecificOutput;
       expect(decision.permissionDecision).toBe("deny");
-      expect(decision.permissionDecisionReason).toBe("missing session token");
+      expect(decision.permissionDecisionReason).toBe("Synthetic decision");
+      expect(gateway.requests[0]?.path).toBe("/internal/permission");
     } finally {
+      await gateway.close();
       await rm(vaultDir, { recursive: true, force: true });
       await rm(outsideDir, { recursive: true, force: true });
     }
@@ -506,6 +541,9 @@ describe("Claude PreToolUse permission hook", () => {
 
       expect(result.code).toBe(0);
       expect(result.decision).toBe("deny");
+      expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecisionReason).toBe(
+        "tool not allowed for one-shot turns"
+      );
     } finally {
       await rm(sessionDir, { recursive: true, force: true });
       await rm(outsideDir, { recursive: true, force: true });
@@ -534,6 +572,9 @@ describe("Claude PreToolUse permission hook", () => {
 
       expect(result.code).toBe(0);
       expect(result.decision).toBe("deny");
+      expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecisionReason).toBe(
+        "tool not allowed for one-shot turns"
+      );
     } finally {
       await rm(sessionDir, { recursive: true, force: true });
       await rm(outsideDir, { recursive: true, force: true });
@@ -559,6 +600,9 @@ describe("Claude PreToolUse permission hook", () => {
 
       expect(result.code).toBe(0);
       expect(result.decision).toBe("deny");
+      expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecisionReason).toBe(
+        "tool not allowed for one-shot turns"
+      );
     } finally {
       await rm(sessionDir, { recursive: true, force: true });
       await rm(outsideDir, { recursive: true, force: true });
@@ -567,17 +611,19 @@ describe("Claude PreToolUse permission hook", () => {
 
   it("still pre-approves a deep not-yet-created path under a real vault root (#1467 QA3 no-regression)", async () => {
     const sessionDir = await mkdtemp(join(tmpdir(), "jarvis-session-"));
+    const gateway = await serveHookGateway();
     try {
       const candidate = join(sessionDir, "sub", "deeper", "brand-new-note.md");
 
       const result = await runOneShotHook(
         { tool_name: "Write", tool_input: { file_path: candidate } },
-        { JARVIS_SESSION_ROOT: sessionDir }
+        { ...gateway.env, JARVIS_SESSION_ROOT: sessionDir }
       );
 
       expect(result.code).toBe(0);
       expect(result.decision).toBe("allow");
     } finally {
+      await gateway.close();
       await rm(sessionDir, { recursive: true, force: true });
     }
   });
@@ -648,15 +694,17 @@ describe("Claude PreToolUse permission hook", () => {
   ])("one-shot allows %s under JARVIS_NOTES_ROOTS", async (tool_name, buildInput) => {
     const vaultDir = await mkdtemp(join(tmpdir(), "jarvis-vault-"));
     const sessionDir = await mkdtemp(join(tmpdir(), "jarvis-session-"));
+    const gateway = await serveHookGateway();
     try {
       await writeFile(join(vaultDir, "a.md"), "hello");
       const result = await runOneShotHook(
         { tool_name, tool_input: buildInput(vaultDir) },
-        { JARVIS_SESSION_ROOT: sessionDir, JARVIS_NOTES_ROOTS: vaultDir }
+        { ...gateway.env, JARVIS_SESSION_ROOT: sessionDir, JARVIS_NOTES_ROOTS: vaultDir }
       );
       expect(result.code).toBe(0);
       expect(result.decision).toBe("allow");
     } finally {
+      await gateway.close();
       await rm(vaultDir, { recursive: true, force: true });
       await rm(sessionDir, { recursive: true, force: true });
     }
@@ -666,14 +714,16 @@ describe("Claude PreToolUse permission hook", () => {
     "one-shot allows %s inside the session root",
     async (tool_name) => {
       const sessionDir = await mkdtemp(join(tmpdir(), "jarvis-session-"));
+      const gateway = await serveHookGateway();
       try {
         const result = await runOneShotHook(
           { tool_name, tool_input: { file_path: join(sessionDir, "output.md") } },
-          { JARVIS_SESSION_ROOT: sessionDir }
+          { ...gateway.env, JARVIS_SESSION_ROOT: sessionDir }
         );
         expect(result.code).toBe(0);
         expect(result.decision).toBe("allow");
       } finally {
+        await gateway.close();
         await rm(sessionDir, { recursive: true, force: true });
       }
     }
@@ -729,24 +779,59 @@ describe("Claude PreToolUse permission hook", () => {
     expect(result.decision).toBe("deny");
   });
 
-  it("writes one-shot settings without gateway/deadline plumbing", async () => {
+  it("removes the one-shot token and hook files when lockdown fails", async () => {
+    const io = fakeIo();
+    io.run = async (command, args) => {
+      io.runs.push([command, args]);
+      return { code: command === "chmod" ? 1 : 0, stdout: "", stderr: "synthetic failure" };
+    };
+    await expect(
+      writeClaudeOneShotPermissionHook(io, {
+        neutralDir: "/tmp/session",
+        mcpToken: "jst_synthetic",
+        mcpServerUrl: "http://api:3000/api/mcp"
+      })
+    ).rejects.toThrow("Could not lock down Claude one-shot permission hook file");
+    expect(io.runs).toContainEqual([
+      "rm",
+      [
+        "-f",
+        "/tmp/session/" + CLAUDE_PERMISSION_TOKEN_FILENAME,
+        "/tmp/session/" + CLAUDE_PERMISSION_HOOK_FILENAME,
+        "/tmp/session/" + CLAUDE_PERMISSION_SETTINGS_FILENAME
+      ]
+    ]);
+  });
+
+  it("writes one-shot report and permission plumbing with a separate token file", async () => {
     const io = fakeIo();
 
     const settingsPath = await writeClaudeOneShotPermissionHook(io, {
-      neutralDir: "/tmp/session"
+      neutralDir: "/tmp/session",
+      mcpToken: "jst_synthetic",
+      mcpServerUrl: "http://api:3000/api/mcp"
     });
 
     expect(settingsPath).toBe("/tmp/session/" + CLAUDE_PERMISSION_SETTINGS_FILENAME);
-    expect(io.writes.get(settingsPath)).not.toContain("JARVIS_PERM");
+    expect(io.writes.get(settingsPath)).toContain("JARVIS_PERM_TOKEN_FILE");
+    expect(io.writes.get(settingsPath)).toContain("/internal/vault-read-report");
+    expect(io.writes.get(settingsPath)).not.toContain("jst_synthetic");
+    expect(io.writes.get("/tmp/session/" + CLAUDE_PERMISSION_TOKEN_FILENAME)).toBe(
+      "jst_synthetic\n"
+    );
     expect(io.writes.get("/tmp/session/" + CLAUDE_PERMISSION_HOOK_FILENAME)).toBe(
       CLAUDE_ONE_SHOT_PERMISSION_HOOK_SOURCE
     );
-    expect(io.writes.get("/tmp/session/" + CLAUDE_PERMISSION_HOOK_FILENAME)).not.toContain(
+    expect(io.writes.get("/tmp/session/" + CLAUDE_PERMISSION_HOOK_FILENAME)).toContain(
       "postPermission"
     );
     expect(io.runs).toContainEqual([
       "chmod",
       ["600", "/tmp/session/" + CLAUDE_PERMISSION_HOOK_FILENAME]
+    ]);
+    expect(io.runs).toContainEqual([
+      "chmod",
+      ["600", "/tmp/session/" + CLAUDE_PERMISSION_TOKEN_FILENAME]
     ]);
   });
 });

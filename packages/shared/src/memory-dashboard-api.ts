@@ -121,9 +121,79 @@ export const getMemoryDashboardRouteSchema = {
   }
 } as const;
 
+const pendingCandidateSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "id",
+    "title",
+    "summary",
+    "titleTruncated",
+    "summaryTruncated",
+    "provenance",
+    "createdAt"
+  ],
+  properties: {
+    id: { type: "string" },
+    title: { type: "string", maxLength: 120 },
+    summary: { type: "string", maxLength: 200 },
+    titleTruncated: { type: "boolean" },
+    summaryTruncated: { type: "boolean" },
+    recordKind: { type: "string", enum: recordKindEnum },
+    provenance: { type: "string", enum: ["volunteered", "inferred"] },
+    createdAt: { type: "string" }
+  }
+} as const;
+
+export const memoryPendingCandidateCursorPattern =
+  "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+
+export const getMemoryPendingCandidatesRouteSchema = {
+  querystring: {
+    type: "object",
+    description:
+      "List five pending suggestions at a time. Omit cursor to start, then pass nextCursor unchanged. Decisions do not shift pages. Total counts all current pending suggestions; remainingCount counts only those after this page. Restart without cursor for newer arrivals.",
+    additionalProperties: false,
+    properties: {
+      cursor: {
+        type: "string",
+        minLength: 64,
+        maxLength: 64,
+        pattern: memoryPendingCandidateCursorPattern
+      }
+    }
+  },
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["total", "hasMore", "remainingCount", "nextCursor", "items"],
+      properties: {
+        total: {
+          type: "integer",
+          minimum: 0,
+          description:
+            "All of your currently pending suggestions, including ones before this cursor."
+        },
+        hasMore: { type: "boolean" },
+        remainingCount: {
+          type: "integer",
+          minimum: 0,
+          description: "Currently pending suggestions after this page in creation-time/ID order."
+        },
+        nextCursor: { type: ["string", "null"], maxLength: 64 },
+        items: { type: "array", items: pendingCandidateSchema }
+      }
+    },
+    400: errorResponseSchema,
+    401: errorResponseSchema
+  }
+} as const;
+
 export const postMemoryCandidateAcceptRouteSchema = {
   body: {
     type: "object",
+    description: "Add the accepted suggestion as a new memory. Existing memories are kept.",
     additionalProperties: false,
     properties: {
       edited: {
@@ -139,9 +209,7 @@ export const postMemoryCandidateAcceptRouteSchema = {
           entityName: { type: "string" },
           entitySummary: { type: ["string", "null"] }
         }
-      },
-      resolveConflictWithFactId: { type: ["string", "null"] },
-      supersedeFactIds: { type: "array", items: { type: "string" } }
+      }
     }
   },
   response: {

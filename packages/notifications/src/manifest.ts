@@ -10,6 +10,7 @@ import {
   registerPushSubscriptionResponseSchema
 } from "@moss/shared";
 
+import { pushDeviceTarget } from "./chat-targets.js";
 import { notificationsListVisibleExecute } from "./tools.js";
 
 /**
@@ -227,36 +228,47 @@ export const notificationsModuleManifest = {
     {
       method: "GET",
       path: "/api/notifications",
+      chat: { access: "read" },
       responseSchema: listNotificationsResponseSchema,
       permissionId: "notifications.view"
     },
     {
       method: "PATCH",
       path: "/api/notifications/:id/read",
+      chat: { access: "write", title: "Mark a notification as read", content: "outside" },
       responseSchema: markNotificationReadResponseSchema,
       permissionId: "notifications.update"
     },
     {
       method: "PATCH",
       path: "/api/notifications/read-all",
+      chat: { access: "write", title: "Mark every notification as read", content: "user_authored" },
       responseSchema: markAllNotificationsReadResponseSchema,
       permissionId: "notifications.update"
     },
     {
       method: "GET",
       path: "/api/notifications/push/config",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       responseSchema: pushConfigResponseSchema,
       permissionId: "notifications.view"
     },
     {
       method: "POST",
       path: "/api/notifications/push/subscriptions",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       responseSchema: registerPushSubscriptionResponseSchema,
       permissionId: "notifications.update"
     },
     {
       method: "DELETE",
       path: "/api/notifications/push/subscriptions/:id",
+      chat: {
+        access: "destructive",
+        title: "Stop push notifications on a device",
+        content: "user_authored",
+        target: pushDeviceTarget
+      },
       responseSchema: deletePushSubscriptionResponseSchema,
       permissionId: "notifications.update"
     }
@@ -267,6 +279,7 @@ export const notificationsModuleManifest = {
       description: "List notifications delivered to the active actor.",
       permissionId: "notifications.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {}

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type {
   ToolExecute,
   ToolServices,
@@ -21,6 +21,8 @@ import {
   createConnectorSecretCipher
 } from "@moss/connectors";
 import type { Kysely } from "kysely";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
+import { parseToolOutputText } from "./fixtures/tool-output.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { captureFetch, okText } from "./focus-time-helpers.js";
 
@@ -62,11 +64,16 @@ describe("Group A — tool-service injection seam (module-sdk types)", () => {
 describe("Group A — gateway passes toolServices as the 4th execute argument", () => {
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
 
   beforeAll(async () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     dataContext = new DataContextRunner(appDb);
+  });
+
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(dataContext, [ids.userA, ids.userB]);
   });
   afterAll(async () => {
     await appDb.destroy();
@@ -83,7 +90,7 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => modules,
       repository: new AiRepository(),
-      runner: dataContext,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations: new ConfirmationRegistry(),
       notifier,
@@ -143,7 +150,7 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
     };
     const { gateway, tokens, emitted } = gatewayWith([module], { demo: { ping: () => "pong" } });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -173,7 +180,7 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
     };
     const { gateway, tokens } = gatewayWith([module], {});
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -210,15 +217,14 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
       secret: { createEvent: () => "WOULD-WRITE" }
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
     const res = await callAndApprove(gateway, emitted, token, "iso.write", {});
     expect(res.ok).toBe(true);
-    // renderToolResult pretty-prints scalar `data` JSON (key: value with a space).
-    expect(okText(res)).toContain('"sawAllowed": true');
-    expect(okText(res)).toContain('"sawSecret": false');
+    // Assert the exact service-visibility result inside the outside-content envelope.
+    expect(parseToolOutputText(okText(res))).toEqual({ sawAllowed: true, sawSecret: false });
   });
 
   it("a READ tool NEVER receives an injected service, even if it declares one (HIGH #5)", async () => {
@@ -253,7 +259,7 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
     const listed = await gateway.listToolsForActor(ids.userA);
     expect(listed.find((t) => t.name === "sneaky.read")).toBeUndefined();
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -285,7 +291,7 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
     const listed = await gateway.listToolsForActor(ids.userA);
     expect(listed.find((t) => t.name === "needs.tool")).toBeUndefined();
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });

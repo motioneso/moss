@@ -10,7 +10,8 @@ import {
   type ActiveModulesResolver,
   type AssistantToolGatewayDependencies,
   type PlatformDiagnosticsService,
-  type SessionNotifier
+  type SessionNotifier,
+  type ConversationProvenancePort
 } from "@moss/ai";
 import { createBriefingRunJobReadService, createBriefingRunQueueService } from "@moss/briefings";
 import { CalendarRepository, sendCalendarCacheEvictJob } from "@moss/calendar";
@@ -30,6 +31,7 @@ import { TasksCompatibilityHelper } from "@moss/tasks";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   SettingsRepository,
+  appCallActionExecute,
   setNotificationPreferenceEnabled,
   type AppMapReadService,
   type NotificationPreferenceWriteService
@@ -37,14 +39,22 @@ import {
 
 import { resolveEffectiveTimezone } from "./locale-utils.js";
 import { ChatRepository } from "./repository.js";
+import { ConversationProvenanceStore } from "./conversation-provenance.js";
 import { ChatUserMemorySettingsRepository } from "./memory-settings-repository.js";
 import { buildCalendarWriteService } from "./calendar-write-impl.js";
 import { buildEmailWriteService } from "./email-write-impl.js";
 import { buildModuleBuildStartService } from "./module-build-start-impl.js";
+import { createMemoryForgetBoundary } from "./memory-forget-impl.js";
 import { NATIVE_CONFIRM_TIMEOUT_MS } from "./live/persistent-claude-permission-hook.js";
 import type { CurrentViewReadService } from "./live/current-view.js";
 import type { ChatAttachmentsService } from "./attachments-service.js";
 import { createNotesReadToolTrustBoundary } from "./live/notes-tool-trust.js";
+import {
+  AppActionRefusedError,
+  createAppActionResolver,
+  createAppActionCallServices,
+  type AppActionsService
+} from "./app-actions.js";
 
 const YOLO_INSTANCE_SETTING_KEY = "yolo.instance_enabled";
 const YOLO_ALLOWED_PREF_KEY = "yolo.allowed";
@@ -138,6 +148,8 @@ export function buildChatGatewayDependencies(args: {
   /** #2228: which web search engine is active for an actor; hides web.search when "none". */
   webSearchEngineForActor?: (actorUserId: string) => Promise<"brave" | "model-native" | "none">;
   appMapService?: AppMapReadService;
+  appActions?: AppActionsService;
+  conversationProvenance?: ConversationProvenancePort;
   platformDiagnostics?: PlatformDiagnosticsService;
   collaborators: {
     googleConnectionService?: GoogleConnectionService;
@@ -152,13 +164,48 @@ export function buildChatGatewayDependencies(args: {
     listModuleManifests?: () => readonly MossModuleManifest[];
   };
 }): AssistantToolGatewayDependencies {
+  const memoryForget = createMemoryForgetBoundary(args);
+  const appResolver = args.appActions
+    ? createAppActionResolver({
+        appActions: args.appActions,
+        runner: args.runner,
+        resolveActiveModules: args.resolveActiveModules,
+        memoryForgetResolver: memoryForget.resolver
+      })
+    : undefined;
   return {
     resolveActiveModules: args.resolveActiveModules,
     repository: args.repository,
     runner: args.runner,
     tokens: args.tokens,
+    provenance: args.conversationProvenance ?? new ConversationProvenanceStore(args.runner),
     confirmations: args.confirmations,
     notifier: args.notifier,
+    perCallResolvers: {
+      "memory.forget": memoryForget.resolver,
+      ...(appResolver ? { "app.callAction": appResolver } : {})
+    },
+    perCallExecutors: {
+      "memory.forget": memoryForget.execute,
+      ...(appResolver
+        ? ({
+            "app.callAction": (input, ctx, _resolution, services) =>
+              appCallActionExecute(undefined, input, ctx, services)
+          } satisfies NonNullable<AssistantToolGatewayDependencies["perCallExecutors"]>)
+        : {})
+    },
+    perCallServices: {
+      "memory.forget": memoryForget.bindServices,
+      ...(appResolver && args.appActions
+        ? {
+            "app.callAction": createAppActionCallServices({
+              appActions: args.appActions,
+              resolver: appResolver,
+              memoryForgetServices: memoryForget.bindServices
+            })
+          }
+        : {})
+    },
     // #1158: MUST stay below the permission hook's internal deadline — see the deadline
     // ordering comment in live/persistent-claude-permission-hook.ts (unit-tested invariant).
     confirmTimeoutMs: NATIVE_CONFIRM_TIMEOUT_MS,
@@ -179,6 +226,18 @@ export function buildChatGatewayDependencies(args: {
       ),
     toolServices: {
       ...buildChatToolServices(args.collaborators),
+      memoryForget: memoryForget.unavailable,
+      // Availability marker only. Execution requires the resolver's call-bound capability;
+      // absent per-call wiring can never fall back to the unrestricted transport service.
+      ...(args.appActions
+        ? {
+            appActions: {
+              call: async () => {
+                throw new AppActionRefusedError("not_ready");
+              }
+            }
+          }
+        : {}),
       moduleBuildStart: buildModuleBuildStartService()
     },
     readToolTrustBoundary: createNotesReadToolTrustBoundary({
@@ -192,6 +251,7 @@ export function buildChatGatewayDependencies(args: {
       args.collaborators.attachmentsService ||
       args.collaborators.boss ||
       args.appMapService ||
+      args.appActions ||
       args.platformDiagnostics
         ? {
             ...(args.collaborators.featureGrantService
@@ -213,6 +273,9 @@ export function buildChatGatewayDependencies(args: {
               ? { briefingRunJobs: createBriefingRunJobReadService(args.collaborators.boss) }
               : {}),
             ...(args.appMapService ? { appMap: args.appMapService } : {}),
+            ...(args.appActions
+              ? { appCatalog: { catalog: () => args.appActions!.catalog() } }
+              : {}),
             ...(args.platformDiagnostics ? { platformDiagnostics: args.platformDiagnostics } : {})
           }
         : undefined,

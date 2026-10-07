@@ -1,3 +1,4 @@
+import { workshopProjectTarget } from "./chat-targets.js";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   workshopBuildModuleInputSchema,
@@ -83,6 +84,11 @@ export const workshopModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "workshop.chat_app_actions",
+      description:
+        "App actions read, rename and delete owned projects. Deletion asks first. Creation uses the dedicated privacy-checked handoff; generating project replies stays in Workshop."
+    },
     {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.workshop",
@@ -194,6 +200,11 @@ export const workshopModuleManifest = {
     {
       method: "POST",
       path: "/api/workshop/projects",
+      chat: {
+        access: "blocked",
+        blockedBecause: "module_promise",
+        coveredBy: "workshop.buildModule"
+      },
       permissionId: "workshop.view",
       requestSchema: createWorkshopProjectInputSchema,
       responseSchema: createWorkshopProjectResponseSchema
@@ -201,18 +212,21 @@ export const workshopModuleManifest = {
     {
       method: "GET",
       path: "/api/workshop/projects",
+      chat: { access: "read" },
       permissionId: "workshop.view",
       responseSchema: listWorkshopProjectsResponseSchema
     },
     {
       method: "GET",
       path: "/api/workshop/projects/:projectId",
+      chat: { access: "read" },
       permissionId: "workshop.view",
       responseSchema: getWorkshopProjectResponseSchema
     },
     {
       method: "PATCH",
       path: "/api/workshop/projects/:projectId",
+      chat: { access: "write", title: "Rename a Workshop project" },
       permissionId: "workshop.view",
       requestSchema: renameWorkshopProjectInputSchema,
       responseSchema: renameWorkshopProjectResponseSchema
@@ -220,18 +234,26 @@ export const workshopModuleManifest = {
     {
       method: "DELETE",
       path: "/api/workshop/projects/:projectId",
+      chat: {
+        access: "destructive",
+        title: "Delete a Workshop project and its messages",
+        content: "user_authored",
+        target: workshopProjectTarget
+      },
       permissionId: "workshop.view",
       responseSchema: deleteWorkshopProjectResponseSchema
     },
     {
       method: "GET",
       path: "/api/workshop/projects/:projectId/messages",
+      chat: { access: "read" },
       permissionId: "workshop.view",
       responseSchema: listWorkshopMessagesResponseSchema
     },
     {
       method: "POST",
       path: "/api/workshop/projects/:projectId/messages",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       permissionId: "workshop.view",
       requestSchema: createWorkshopMessageInputSchema,
       responseSchema: createWorkshopMessageResponseSchema

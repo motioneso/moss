@@ -8,6 +8,7 @@ import {
 const identity: SessionIdentity = {
   actorUserId: "user-1",
   chatSessionId: "session-1",
+  threadId: null,
   allowedToolNames: null
 };
 

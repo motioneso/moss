@@ -707,6 +707,7 @@ describe("Data export", () => {
     expect(settingsManifest?.routes).toContainEqual({
       method: "GET",
       path: "/api/settings/me/data-export",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       permissionId: "settings.view"
     });
   });
