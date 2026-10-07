@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Ready meeting · Moss mockup</title
+  ><link rel="stylesheet" href="moss-ui.css" /><style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: var(--text-md);
+      line-height: var(--leading-normal);
+    }
+    p {
+      margin: 0;
+    }
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+    }
+    button,
+    a,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+  </style>
+  <body>
+    <div
+      style="
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-6);
+      "
+    >
+      <strong>moss</strong><button type="button" class="jds-btn jds-btn--quiet">Meetings</button
+      ><span style="margin-left: auto"
+        ><button type="button" class="jds-btn jds-btn--secondary">Chat</button></span
+      >
+    </div>
+    <main
+      style="display: flex; flex-direction: column; gap: var(--space-7); padding: var(--space-6)"
+    >
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3)">
+        <div class="jds-section-head"><h1 class="jds-section-head__title">New meeting</h1></div>
+        <span style="margin-left: auto"><span class="jds-badge jds-badge--forest">Ready</span></span
+        ><button type="button" class="jds-btn jds-btn--primary">Start</button>
+      </div>
+      <div style="display: grid; grid-template-columns: 1.35fr 1fr; gap: var(--space-7)">
+        <section style="display: flex; flex-direction: column; gap: var(--space-5)">
+          <div class="jds-section-head jds-section-head--rule">
+            <h2 class="jds-section-head__title">Transcript</h2>
+          </div>
+          <p>Press Start when you’re ready.</p>
+          <p class="jds-hint" style="margin: 0">MacBook Air · Microphone and computer audio</p>
+          <p class="jds-hint" style="margin: 0">Nothing is recording yet.</p>
+        </section>
+        <section style="display: flex; flex-direction: column; gap: var(--space-5)">
+          <div class="jds-section-head jds-section-head--rule">
+            <h2 class="jds-section-head__title">Notes</h2>
+          </div>
+          <textarea
+            class="jds-input"
+            aria-label="Notes"
+            placeholder="Jot down an idea…"
+            style="height: 300px; resize: none"
+          ></textarea>
+          <p class="jds-hint" style="margin: 0">Saved</p>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Settings before and after · Moss mockup</title
+  ><link rel="stylesheet" href="moss-ui.css" /><style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: var(--text-md);
+      line-height: var(--leading-normal);
+    }
+    p {
+      margin: 0;
+    }
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+    }
+    button,
+    a,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+  </style>
+  <body>
+    <main
+      style="display: flex; flex-direction: column; gap: var(--space-7); padding: var(--space-6)"
+    >
+      <header class="jds-masthead">
+        <div class="jds-masthead__row">
+          <div class="jds-masthead__main">
+            <p class="jds-masthead__eyebrow">Design comparison</p>
+            <h1 class="jds-masthead__title"><span>Fewer settings in your way</span></h1>
+          </div>
+        </div>
+      </header>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-8)">
+        <div style="display: flex; flex-direction: column; gap: var(--space-5)">
+          <span class="jds-eyebrow jds-eyebrow--strong jds-eyebrow--muted"
+            >Current · source-based snapshot</span
+          >
+          <div style="display: flex; flex-direction: column; gap: var(--space-5)">
+            <div class="jds-section-head"><h2 class="jds-section-head__title">Meetings</h2></div>
+            <p class="jds-hint" style="margin: 0">Used when you press Start or Resume.</p>
+            <section style="display: flex; flex-direction: column; gap: var(--space-5)">
+              <div class="jds-section-head jds-section-head--rule">
+                <span class="jds-section-head__number">01</span>
+                <h2 class="jds-section-head__title">Your Mac</h2>
+              </div>
+              <p class="jds-hint" style="margin: 0">
+                Moss listens through Trail Marker on your Mac. Linking never starts recording.
+              </p>
+              <div class="meeting-settings-macs">
+                <div class="jds-index jds-index--compact">
+                  <div class="jds-index__row">
+                    <div class="jds-index__title">MacBook Air</div>
+                    <div class="jds-index__excerpt">
+                      <div style="display: flex; flex-direction: column; gap: var(--space-2)">
+                        <span>Trail Marker</span><span>Last contact just now</span
+                        ><span>Meeting recording enabled</span><span>Connected</span>
+                      </div>
+                    </div>
+                    <div class="jds-index__meta">
+                      <div style="display: flex; flex-direction: column; gap: var(--space-5)">
+                        <span class="jds-badge jds-badge--forest">Linked</span
+                        ><label class="jds-switch"
+                          ><input
+                            type="checkbox"
+                            aria-label="Current meeting recording"
+                            checked=""
+                          /><span class="jds-switch__track"
+                            ><span class="jds-switch__thumb"></span></span
+                          ><span class="jds-switch__label">Meeting recording</span></label
+                        ><button type="button" class="jds-btn jds-btn--secondary">Unlink</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="jds-field">
+                <label class="jds-label">Recording Mac</label
+                ><span class="jds-selectwrap"
+                  ><select class="jds-select">
+                    <option selected="">MacBook Air</option></select
+                  ><span class="jds-selectwrap__chev"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-chevron-down"
+                      aria-hidden="true"
+                    >
+                      <path d="m6 9 6 6 6-6"></path></svg></span
+                ></span>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3)">
+                <button type="button" class="jds-btn jds-btn--link">
+                  Link a Mac or enable recording access</button
+                ><button type="button" class="jds-btn jds-btn--secondary">Run setup again</button>
+              </div>
+              <p class="jds-hint" style="margin: 0">
+                Turning off meeting recording keeps the Mac linked. To enable it again, request a
+                connection update in Trail Marker and approve it in Profile settings. Recording
+                permission stays on until you turn it off, unlink the Mac, or its device access
+                expires.
+              </p>
+            </section>
+            <section style="display: flex; flex-direction: column; gap: var(--space-5)">
+              <div class="jds-section-head jds-section-head--rule">
+                <span class="jds-section-head__number">02</span>
+                <h2 class="jds-section-head__title">Recording</h2>
+              </div>
+              <label class="jds-label">Listen to</label>
+              <div class="jds-radio-cards" role="radiogroup" aria-label="Current Listen to">
+                <label class="jds-radio-card"
+                  ><input type="radio" name="current-mode" checked="" value="computer-audio" /><span
+                    class="jds-radio-card__label"
+                    >Microphone and computer audio</span
+                  ><span class="jds-radio-card__description"
+                    >Other apps and notifications may be included.</span
+                  ></label
+                ><label class="jds-radio-card"
+                  ><input type="radio" name="current-mode" value="selected-app" /><span
+                    class="jds-radio-card__label"
+                    >Microphone and selected app</span
+                  ><span class="jds-radio-card__description"
+                    >Only the selected app’s output.</span
+                  ></label
+                ><label class="jds-radio-card"
+                  ><input type="radio" name="current-mode" value="microphone-only" /><span
+                    class="jds-radio-card__label"
+                    >Microphone only</span
+                  ><span class="jds-radio-card__description">Your voice or the room.</span></label
+                >
+              </div>
+              <div class="jds-field">
+                <label class="jds-label">Microphone</label
+                ><span class="jds-selectwrap"
+                  ><select class="jds-select">
+                    <option selected="">MacBook Air Microphone</option></select
+                  ><span class="jds-selectwrap__chev"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-chevron-down"
+                      aria-hidden="true"
+                    >
+                      <path d="m6 9 6 6 6-6"></path></svg></span
+                ></span>
+              </div>
+              <div class="jds-note jds-note--practical">
+                Other apps, media and notifications may be recorded.
+              </div>
+              <p class="jds-hint" style="margin: 0">Recording notice acknowledged on October 7.</p>
+              <button type="button" class="jds-btn jds-btn--link">Review recording notice</button>
+              <div class="jds-index jds-index--compact">
+                <div class="jds-index__row">
+                  <div class="jds-index__title">Microphone</div>
+                  <div class="jds-index__meta">
+                    <span class="jds-badge jds-badge--forest">Allowed</span>
+                  </div>
+                </div>
+                <div class="jds-index__row">
+                  <div class="jds-index__title">Computer audio</div>
+                  <div class="jds-index__excerpt">Other people on the call</div>
+                  <div class="jds-index__meta">Allowed</div>
+                </div>
+                <div class="jds-index__row">
+                  <div class="jds-index__title">Transcripts</div>
+                  <div class="jds-index__meta">Ready</div>
+                </div>
+                <div class="jds-index__row">
+                  <div class="jds-index__title">Summaries</div>
+                  <div class="jds-index__meta">Ready</div>
+                </div>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3)">
+                <button type="button" class="jds-btn jds-btn--secondary">Check again</button
+                ><button type="button" class="jds-btn jds-btn--link">AI providers</button>
+              </div>
+              <p class="jds-hint" style="margin: 0">
+                Transcripts use your configured transcription route. Summaries need an API-key
+                model; CLI models cannot write meeting summaries today.
+              </p>
+            </section>
+            <section style="display: flex; flex-direction: column; gap: var(--space-5)">
+              <div class="jds-section-head jds-section-head--rule">
+                <span class="jds-section-head__number">03</span>
+                <h2 class="jds-section-head__title">After a meeting</h2>
+              </div>
+              <label class="jds-switch"
+                ><input type="checkbox" aria-label="Current summary preference" checked="" /><span
+                  class="jds-switch__track"
+                  ><span class="jds-switch__thumb"></span></span
+                ><span class="jds-switch__label">Write a summary when I stop</span></label
+              >
+              <p class="jds-hint" style="margin: 0">
+                A summary and suggested tasks appear next to your notes after the transcript
+                finishes.
+              </p>
+              <div class="jds-field">
+                <label class="jds-label">Summary style</label
+                ><span class="jds-selectwrap"
+                  ><select class="jds-select">
+                    <option selected="">General meeting</option></select
+                  ><span class="jds-selectwrap__chev"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-chevron-down"
+                      aria-hidden="true"
+                    >
+                      <path d="m6 9 6 6 6-6"></path></svg></span
+                ></span>
+              </div>
+            </section>
+            <button type="button" class="jds-btn jds-btn--primary">Save settings</button>
+          </div>
+        </div>
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-5);
+            border-left: 1px solid var(--border);
+            padding-left: var(--space-7);
+          "
+        >
+          <span class="jds-eyebrow jds-eyebrow--strong jds-eyebrow--accent"
+            >Proposed · everyday choices first</span
+          >
+          <div style="display: flex; flex-direction: column; gap: var(--space-5)">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3)">
+              <div class="jds-section-head"><h2 class="jds-section-head__title">Meetings</h2></div>
+              <span style="margin-left: auto"
+                ><button type="button" class="jds-btn jds-btn--secondary">
+                  Run setup again
+                </button></span
+              >
+            </div>
+            <div class="jds-index jds-index--compact">
+              <div class="jds-index__row">
+                <div class="jds-index__title">MacBook Air</div>
+                <div class="jds-index__excerpt">Ready to record</div>
+                <div class="jds-index__meta">
+                  <span class="jds-badge jds-badge--forest"
+                    ><span class="jds-badge__dot"></span>Connected</span
+                  >
+                </div>
+              </div>
+            </div>
+            <section style="display: flex; flex-direction: column; gap: var(--space-5)">
+              <div class="jds-section-head jds-section-head--rule">
+                <h2 class="jds-section-head__title">Recording</h2>
+              </div>
+              <div class="jds-field">
+                <label class="jds-label">Listen to</label
+                ><span class="jds-selectwrap"
+                  ><select class="jds-select">
+                    <option selected="">Microphone and computer audio</option>
+                    <option>Microphone only</option>
+                    <option>Microphone and one app</option></select
+                  ><span class="jds-selectwrap__chev"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-chevron-down"
+                      aria-hidden="true"
+                    >
+                      <path d="m6 9 6 6 6-6"></path></svg></span
+                ></span>
+              </div>
+              <div class="jds-field">
+                <label class="jds-label">Microphone</label
+                ><span class="jds-selectwrap"
+                  ><select class="jds-select">
+                    <option selected="">MacBook Air Microphone</option></select
+                  ><span class="jds-selectwrap__chev"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-chevron-down"
+                      aria-hidden="true"
+                    >
+                      <path d="m6 9 6 6 6-6"></path></svg></span
+                ></span>
+              </div>
+              <p class="jds-hint" style="margin: 0">
+                Other apps, media and notifications may be recorded.
+              </p>
+            </section>
+            <section style="display: flex; flex-direction: column; gap: var(--space-5)">
+              <div class="jds-section-head jds-section-head--rule">
+                <h2 class="jds-section-head__title">After a meeting</h2>
+              </div>
+              <label class="jds-switch"
+                ><input type="checkbox" aria-label="Proposed summary preference" checked="" /><span
+                  class="jds-switch__track"
+                  ><span class="jds-switch__thumb"></span></span
+                ><span class="jds-switch__label">Write a summary when I stop</span></label
+              >
+            </section>
+            <hr class="jds-divider" />
+            <details>
+              <summary
+                style="
+                  padding: var(--space-3) 0;
+                  font-weight: var(--weight-semibold);
+                  cursor: pointer;
+                "
+              >
+                Advanced
+              </summary>
+              <div
+                style="
+                  display: flex;
+                  flex-direction: column;
+                  gap: var(--space-5);
+                  padding-top: var(--space-5);
+                "
+              >
+                <div class="jds-field">
+                  <label class="jds-label">Recording Mac</label
+                  ><span class="jds-selectwrap"
+                    ><select class="jds-select">
+                      <option selected="">MacBook Air</option></select
+                    ><span class="jds-selectwrap__chev"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-chevron-down"
+                        aria-hidden="true"
+                      >
+                        <path d="m6 9 6 6 6-6"></path></svg></span
+                  ></span>
+                </div>
+                <div class="jds-field">
+                  <label class="jds-label">Summary style</label
+                  ><span class="jds-selectwrap"
+                    ><select class="jds-select">
+                      <option selected="">General meeting</option></select
+                    ><span class="jds-selectwrap__chev"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-chevron-down"
+                        aria-hidden="true"
+                      >
+                        <path d="m6 9 6 6 6-6"></path></svg></span
+                  ></span>
+                </div>
+                <div class="jds-section-head">
+                  <h2 class="jds-section-head__title">Mac access</h2>
+                </div>
+                <div class="jds-index jds-index--compact">
+                  <div class="jds-index__row">
+                    <div class="jds-index__title">Microphone</div>
+                    <div class="jds-index__meta">
+                      <span class="jds-badge jds-badge--forest">Allowed</span>
+                    </div>
+                  </div>
+                  <div class="jds-index__row">
+                    <div class="jds-index__title">Computer audio</div>
+                    <div class="jds-index__meta">
+                      <span class="jds-badge jds-badge--forest">Allowed</span>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style="display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3)"
+                >
+                  <button type="button" class="jds-btn jds-btn--secondary">
+                    Open System Settings</button
+                  ><button type="button" class="jds-btn jds-btn--secondary">Check again</button>
+                </div>
+                <label class="jds-switch"
+                  ><input
+                    type="checkbox"
+                    aria-label="Allow meeting recording on MacBook Air"
+                    checked=""
+                  /><span class="jds-switch__track"><span class="jds-switch__thumb"></span></span
+                  ><span class="jds-switch__label">Allow meeting recording on this Mac</span></label
+                >
+                <p class="jds-hint" style="margin: 0">
+                  Turning this off stops meeting recording. Your Mac stays linked.
+                </p>
+                <button type="button" class="jds-btn jds-btn--secondary">Unlink MacBook Air</button>
+                <hr class="jds-divider" />
+                <div
+                  style="display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3)"
+                >
+                  <span class="jds-hint">Recording notice acknowledged October 7</span
+                  ><button type="button" class="jds-btn jds-btn--link">Review notice</button>
+                </div>
+              </div>
+            </details>
+            <button type="button" class="jds-btn jds-btn--primary">Save settings</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>
