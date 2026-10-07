@@ -88,10 +88,12 @@ At `/settings?section=modules&module=meetings`, show only:
 
 1. Linked Mac name and link status
 2. Audio source: Microphone + system audio, or Microphone only
-3. Unlink Mac
+3. Summarize automatically after Stop (on by default)
+4. Unlink Mac
 
 Audio changes save directly with explicit pending/error feedback. No Finish setup, Run setup again,
-source wizard, microphone picker, application picker or summary configuration appears here.
+source wizard, microphone picker or application picker appears here. The summary switch saves
+immediately with pending/error feedback; turning it off leaves manual Rewrite summary available.
 
 Existing saved selected-app choices are compatibility data. Preserve their exact device,
 microphone and app scope until the owner explicitly changes Audio source. Display a truthful
@@ -114,8 +116,11 @@ The four states do not delete existing history or post-meeting features.
 - Rare actions stay in the meeting menu: transcript search, rewrite summary, earlier versions,
   Save to vault, Copy as Markdown and Delete meeting.
 - Capture gaps remain inline transcript markers; delayed transcription is distinct from recording.
-- Existing automatic-summary preferences remain honored. The reduced Settings screen does not
-  expose new summary choices or reset stored values.
+- This feature introduces automatic-summary preferences; they were not present on the base branch.
+  Automatic summaries default to on and send finalized transcript and notes to the configured
+  summary model after Stop. Settings → Meetings exposes Summarize automatically after Stop;
+  switching it off saves `summarizeOnStop=false` without resetting other preferences.
+  Only the automatic path renames an untouched Untitled meeting; manual Rewrite preserves its title.
 - The ordinary chat drawer can use the open meeting's transcript and notes, including notes-only
   meetings. Its context chip is removable; timestamp citations scroll to the transcript.
 - Preserve useful persistent recording navigation and recovery controls away from the meeting.
@@ -225,7 +230,8 @@ and permission boundaries even when adjacent explanatory copy becomes shorter.
    or copy field appears. Existing meetings remain readable.
 3. Creating/opening/linking does not record. One explicit Start does. Repeated clicks, interrupted
    navigation, late replies, account changes and denied access preserve existing fences.
-4. Settings matches its three approved elements. Mode auto-save handles failure and stale replies.
+4. Settings includes its four controls. Audio and automatic-summary saves handle failure, retry,
+   navigation, stale replies and account-reset fencing.
    Legacy selected-app scope is preserved until an explicit change.
 5. Pause/Resume/Stop, cancellation, superseded generations, missing sources and permissions are
    covered independently. UI simplification does not bypass a server guard.

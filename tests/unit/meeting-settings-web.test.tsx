@@ -94,6 +94,15 @@ async function select(id: string, value: string) {
   });
   await settle();
 }
+function summarySwitch() {
+  return host.querySelector<HTMLInputElement>(
+    'input[aria-label="Summarize automatically after Stop"]'
+  )!;
+}
+async function toggleSummary() {
+  await act(async () => summarySwitch().click());
+  await settle();
+}
 const writes = () => calls.filter((call) => call.path === preferencesPath && call.method === "PUT");
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -199,7 +208,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("minimal Meetings settings (synthetic transport, not live Mac proof)", () => {
-  it("shows only linked status, the default audio dropdown and Unlink Mac", async () => {
+  it("shows linked status, audio source, automatic summary switch and Unlink Mac", async () => {
     await mount();
     expect(host.textContent).toContain("Studio Mac");
     expect(host.textContent).toContain("Linked");
@@ -213,13 +222,175 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
       "Unlink Mac"
     ]);
     expect(host.querySelectorAll("select")).toHaveLength(1);
-    expect(host.querySelectorAll('input[type="checkbox"], input[type="radio"]')).toHaveLength(0);
+    expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
+    expect(host.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+    expect(summarySwitch().checked).toBe(true);
     expect(host.textContent).not.toMatch(
       /notice|acknowledge|Finish setup|summary style|Moss address|Choose a microphone|Run setup/i
     );
     expect(calls.every((call) => call.method === "GET")).toBe(true);
     expect(calls.some((call) => /notice|output-availability/.test(call.path))).toBe(false);
   });
+  it("saves only automatic summary OFF and ON, preserves audio and template, and reloads the saved value", async () => {
+    preferences = { ...savedPreferences(), summaryTemplateId: "project-review" };
+    const originalSource = structuredClone(preferences.rememberedSource);
+    await mount();
+    await toggleSummary();
+    expect(writes().map((call) => call.body)).toEqual([{ summarizeOnStop: false }]);
+    expect(summarySwitch().checked).toBe(false);
+    expect(preferences.summarizeOnStop).toBe(false);
+    expect(preferences.rememberedSource).toEqual(originalSource);
+    expect(preferences.summaryTemplateId).toBe("project-review");
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await mount();
+    expect(summarySwitch().checked).toBe(false);
+    await toggleSummary();
+    expect(writes().at(-1)?.body).toEqual({ summarizeOnStop: true });
+    expect(preferences.summarizeOnStop).toBe(true);
+    expect(calls.some((call) => /capture\/(start|control)$|\/records$/.test(call.path))).toBe(
+      false
+    );
+  });
+  it("keeps failed summary OFF visible, disables concurrent writes and retries only the pending choice", async () => {
+    let finish!: (value: Response) => void;
+    const normal = transport.getMockImplementation()!;
+    transport.mockImplementation((path, options) =>
+      path === preferencesPath && options?.method === "PUT"
+        ? new Promise<Response>((resolve) => {
+            calls.push({ path, method: "PUT", body: JSON.parse(String(options.body)) });
+            finish = resolve;
+          })
+        : normal(path, options)
+    );
+    await mount();
+    await act(async () => {
+      summarySwitch().click();
+      summarySwitch().click();
+    });
+    await settle();
+    expect(writes()).toHaveLength(1);
+    expect(summarySwitch().disabled).toBe(true);
+    expect(host.querySelector<HTMLSelectElement>("select")?.disabled).toBe(true);
+    expect(button("Unlink Mac").disabled).toBe(true);
+    await act(async () => finish(json({ message: "Unavailable" }, 503)));
+    await settle();
+    expect(summarySwitch().checked).toBe(false);
+    expect(preferences.summarizeOnStop).toBe(true);
+    expect(host.textContent).toContain("the saved setting still applies");
+    await act(async () => client.refetchQueries({ queryKey: meetingKeys.preferences }));
+    await settle();
+    expect(summarySwitch().checked).toBe(false);
+    transport.mockImplementation(normal);
+    await click("Retry");
+    expect(writes().map((call) => call.body)).toEqual([
+      { summarizeOnStop: false },
+      { summarizeOnStop: false }
+    ]);
+    expect(preferences.summarizeOnStop).toBe(false);
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+  it.each([true, false])(
+    "ignores late summary saves after an account reset (success=%s)",
+    async (success) => {
+      let finish!: (value: Response) => void;
+      const normal = transport.getMockImplementation()!;
+      transport.mockImplementation((path, options) =>
+        path === preferencesPath && options?.method === "PUT"
+          ? new Promise<Response>((resolve) => {
+              finish = resolve;
+            })
+          : normal(path, options)
+      );
+      await mount();
+      await toggleSummary();
+      await act(async () => client.resetQueries());
+      await settle();
+      const newer = client.getQueryData(meetingSettingsKeys.draft);
+      await act(async () =>
+        finish(
+          success
+            ? json({ ...newPreferences(), summarizeOnStop: false })
+            : json({ message: "Old failure" }, 503)
+        )
+      );
+      await settle();
+      expect(client.getQueryData(meetingSettingsKeys.draft)).toEqual(newer);
+      expect(summarySwitch().checked).toBe(true);
+      expect(host.textContent).not.toContain("Couldn’t save automatic summary");
+    }
+  );
+  it("retains a confirmed summary choice across ordinary unmount and prevents an old read replacing it", async () => {
+    await mount();
+    let finish!: (value: Response) => void;
+    const normal = transport.getMockImplementation()!;
+    transport.mockImplementation((path, options) =>
+      path === preferencesPath && options?.method !== "PUT"
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : normal(path, options)
+    );
+    act(() => {
+      void client.refetchQueries({ queryKey: meetingKeys.preferences });
+    });
+    await settle();
+    await toggleSummary();
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await act(async () => finish(json(newPreferences())));
+    transport.mockImplementation(normal);
+    await mount();
+    expect(summarySwitch().checked).toBe(false);
+    expect(
+      client.getQueryData<MeetingCapturePreferences>(meetingKeys.preferences)?.summarizeOnStop
+    ).toBe(false);
+  });
+  it.each([true, false])(
+    "keeps a pending summary write across ordinary navigation (success=%s)",
+    async (success) => {
+      let finish!: (value: Response) => void;
+      const normal = transport.getMockImplementation()!;
+      transport.mockImplementation((path, options) =>
+        path === preferencesPath && options?.method === "PUT"
+          ? new Promise<Response>((resolve) => {
+              calls.push({ path, method: "PUT", body: JSON.parse(String(options.body)) });
+              finish = resolve;
+            })
+          : normal(path, options)
+      );
+      await mount();
+      await toggleSummary();
+      await act(async () => root.unmount());
+      root = createRoot(host);
+      await mount();
+      expect(summarySwitch().disabled).toBe(true);
+      expect(summarySwitch().checked).toBe(false);
+      await act(async () =>
+        finish(
+          success
+            ? json({ ...newPreferences(), summarizeOnStop: false })
+            : json({ message: "Unavailable" }, 503)
+        )
+      );
+      await settle();
+      expect(summarySwitch().disabled).toBe(false);
+      expect(summarySwitch().checked).toBe(false);
+      expect(writes()).toHaveLength(1);
+      if (success) {
+        expect(
+          client.getQueryData<MeetingCapturePreferences>(meetingKeys.preferences)?.summarizeOnStop
+        ).toBe(false);
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+      } else {
+        expect(host.textContent).toContain("the saved setting still applies");
+        transport.mockImplementation(normal);
+        await click("Retry");
+        expect(writes().at(-1)?.body).toEqual({ summarizeOnStop: false });
+        expect(preferences.summarizeOnStop).toBe(false);
+      }
+    }
+  );
   it("saves only the chosen mode immediately, preserving exact legacy microphone and unrelated preferences", async () => {
     preferences = savedPreferences();
     await mount();
@@ -276,7 +447,8 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
     await mount();
     expect(host.textContent).toContain("No Mac linked");
     expect(button("Unlink Mac")).toBeUndefined();
-    expect(host.querySelectorAll("a, input")).toHaveLength(0);
+    expect(host.querySelectorAll("a, input:not([type=checkbox])")).toHaveLength(0);
+    expect(summarySwitch().checked).toBe(true);
   });
   it("keeps a failed audio choice and retries without concurrent duplicate writes", async () => {
     let finish!: (value: Response) => void;

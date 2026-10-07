@@ -85,7 +85,7 @@ export const meetingsModuleManifest = {
       id: "meetings.module-settings",
       label: "Meetings",
       description:
-        "See your Mac link status, choose microphone plus system audio or microphone only, and unlink the Mac.",
+        "See your Mac link status, choose microphone plus system audio or microphone only, switch automatic summaries after Stop on or off, and unlink the Mac.",
       path: "/settings?section=modules&module=meetings",
       scope: "user",
       permissionId: "meetings.write",
@@ -314,7 +314,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.mac_link_controls",
       description:
-        "Settings → Meetings shows link status, audio source and confirmed Unlink for the exact Mac. Pending and failed changes are explicit. Existing recording-capability revocation remains enforced; Unlink does not delete retained meetings.",
+        "Settings → Meetings shows link status, audio source, automatic summary and confirmed Unlink for the exact Mac. Pending and failed changes are explicit. Recording-capability revocation stays enforced; Unlink keeps retained meetings.",
       remediations: [
         {
           id: "meetings.restore_mac_link",
@@ -327,7 +327,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.automatic_summary",
       description:
-        "After Stop finalizes text, a summary runs by default, honoring saved preferences. Its first sentence renames a still-Untitled meeting. Failures stay visible; Rewrite summary retries with the configured model."
+        "Automatic summaries default on. Turn off Summarize automatically after Stop in Settings → Meetings (summarizeOnStop=false). Only this automatic path renames Untitled meeting. Rewrite summary remains available."
     },
     {
       id: "transcribe.meeting",
@@ -640,8 +640,25 @@ export const meetingsModuleManifest = {
     },
     {
       id: "meetings.questions",
+      remediations: [
+        {
+          id: "meetings.remove_chat_context",
+          path: "/meetings",
+          description:
+            "Remove the About this meeting chip in the chat drawer to continue ordinary subscription chat, or choose an API-key chat model for meeting questions."
+        }
+      ],
+      errors: [
+        {
+          code: "meeting_chat_unsupported",
+          class: "prerequisite",
+          remediationRef: "meetings.remove_chat_context",
+          description:
+            "Selected-meeting questions need an API-key chat model. Remove the About this meeting chip to continue ordinary chat with your subscription model."
+        }
+      ],
       description:
-        "The open meeting attaches to normal chat automatically with saved notes and transcript citations. Remove meeting context to use general chat. API-key only, no actions; admin pins and locked defaults apply. Unavailable overrides fail closed."
+        "Chat attaches the open meeting’s notes and transcript; its chip announces the title. API-key only, no actions. Remove About this meeting for ordinary subscription chat. Admin pins and locked defaults apply."
     },
     {
       id: "meetings.transcript_storage",

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Badge, Button, Divider, Field, FormLabel, SectionHead, Select } from "@moss/ui";
+import { Badge, Button, Divider, Field, FormLabel, SectionHead, Select, Switch } from "@moss/ui";
 import { useMeetingSettings } from "./meeting-settings-state.js";
 import { MeetingUnlinkDialog } from "./meeting-unlink-dialog.js";
 import "./meeting-settings.css";
@@ -84,6 +84,17 @@ export function MeetingSettingsForm() {
               <option value="microphone-only">Microphone only</option>
             </Select>
           </Field>
+          <Switch
+            ariaLabel="Summarize automatically after Stop"
+            label="Summarize automatically after Stop"
+            checked={state.data.summarizeOnStop}
+            disabled={state.saving}
+            onChange={(enabled) => void state.saveSummary(enabled)}
+          />
+          <p className="jds-hint">
+            Send the finalized transcript and notes to your configured summary model after Stop.
+            Turn this off to use Rewrite summary only when you choose.
+          </p>
           {state.data.requestKey ? (
             <p role="status" className="jds-hint">
               Saving…

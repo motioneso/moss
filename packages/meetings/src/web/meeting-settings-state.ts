@@ -1,7 +1,11 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { randomUuid } from "@moss/module-web-sdk";
-import type { MeetingCaptureMode, MeetingCapturePreferences } from "@moss/shared";
+import type {
+  MeetingCaptureMode,
+  MeetingCapturePreferences,
+  UpdateMeetingCapturePreferences
+} from "@moss/shared";
 import {
   getMeetingPreferences,
   isMeetingAccessDenied,
@@ -20,12 +24,16 @@ export const meetingSettingsKeys = {
 };
 interface SettingsDraft {
   readonly mode: MeetingCaptureMode;
+  readonly summarizeOnStop: boolean;
+  readonly changes: UpdateMeetingCapturePreferences;
   readonly dirty: boolean;
   readonly requestKey: string | null;
   readonly error: string | null;
 }
 const emptyDraft = (): SettingsDraft => ({
   mode: "computer-audio",
+  summarizeOnStop: true,
+  changes: {},
   dirty: false,
   requestKey: null,
   error: null
@@ -49,10 +57,14 @@ export function useMeetingSettings() {
     draft.update((current) =>
       current.dirty || current.requestKey
         ? current
-        : { ...emptyDraft(), mode: savedMode(preferences.data!) }
+        : {
+            ...emptyDraft(),
+            mode: savedMode(preferences.data!),
+            summarizeOnStop: preferences.data!.summarizeOnStop
+          }
     );
   }, [preferences.data, draft.update]);
-  async function save(mode: "computer-audio" | "microphone-only") {
+  async function save(changes: UpdateMeetingCapturePreferences) {
     const current = client.getQueryData<SettingsDraft>(meetingSettingsKeys.draft);
     if (
       !current ||
@@ -66,23 +78,39 @@ export function useMeetingSettings() {
     )
       return;
     const requestKey = randomUuid();
-    draft.update(() => ({ mode, dirty: true, requestKey, error: null }));
+    const pending = { ...current.changes, ...changes };
+    draft.update(() => ({
+      ...current,
+      mode: pending.defaultCaptureMode ?? current.mode,
+      summarizeOnStop: pending.summarizeOnStop ?? current.summarizeOnStop,
+      changes: pending,
+      dirty: true,
+      requestKey,
+      error: null
+    }));
     const owns = () =>
       draft.currentSession() &&
       client.getQueryData<SettingsDraft>(meetingSettingsKeys.draft)?.requestKey === requestKey;
     try {
-      const saved = await putMeetingPreferences({ defaultCaptureMode: mode });
+      const saved = await putMeetingPreferences(pending);
       if (!owns()) return;
       await client.cancelQueries({ queryKey: meetingKeys.preferences, exact: true });
       if (!owns()) return;
       client.setQueryData(meetingKeys.preferences, saved);
-      draft.update(() => ({ ...emptyDraft(), mode: savedMode(saved) }));
+      draft.update(() => ({
+        ...emptyDraft(),
+        mode: savedMode(saved),
+        summarizeOnStop: saved.summarizeOnStop
+      }));
     } catch {
       if (owns())
         draft.update((value) => ({
           ...value,
           requestKey: null,
-          error: "Couldn’t save your audio source. Your choice is kept here."
+          error:
+            pending.summarizeOnStop !== undefined
+              ? "Couldn’t save automatic summary. Your choice is kept here; the saved setting still applies."
+              : "Couldn’t save your audio source. Your choice is kept here."
         }));
     }
   }
@@ -92,10 +120,9 @@ export function useMeetingSettings() {
     links,
     data: draft.data,
     saving: !!draft.data.requestKey || links.pending,
-    save,
-    retry: () => {
-      if (draft.data.mode !== "selected-app") void save(draft.data.mode);
-    },
+    save: (mode: "computer-audio" | "microphone-only") => save({ defaultCaptureMode: mode }),
+    saveSummary: (summarizeOnStop: boolean) => save({ summarizeOnStop }),
+    retry: () => void save(draft.data.changes),
     refresh: () => {
       connection.refresh();
       void preferences.refetch();

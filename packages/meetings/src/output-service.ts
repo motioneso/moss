@@ -47,7 +47,7 @@ export class MeetingOutputService {
     const reservation = await this.dataContext.withDataContext(actor, (db) =>
       this.reserve(db, meetingId, input)
     );
-    return this.complete(actor, meetingId, input, reservation);
+    return this.complete(actor, meetingId, input, reservation, "manual");
   }
 
   async generateOnStop(
@@ -72,7 +72,9 @@ export class MeetingOutputService {
       if (!input) return null;
       return { input, reservation: await this.reserve(db, meetingId, input) };
     });
-    return admitted ? this.complete(actor, meetingId, admitted.input, admitted.reservation) : null;
+    return admitted
+      ? this.complete(actor, meetingId, admitted.input, admitted.reservation, "automatic-stop")
+      : null;
   }
 
   private async reserve(db: DataContextDb, meetingId: string, input: GenerateMeetingOutputInput) {
@@ -109,7 +111,8 @@ export class MeetingOutputService {
     actor: AccessContext,
     meetingId: string,
     input: GenerateMeetingOutputInput,
-    reservation: Awaited<ReturnType<MeetingOutputService["reserve"]>>
+    reservation: Awaited<ReturnType<MeetingOutputService["reserve"]>>,
+    trigger: "manual" | "automatic-stop"
   ): Promise<MeetingOutputResult> {
     const template = getMeetingOutputTemplate(input.templateId, input.templateVersion)!;
     const encoded = JSON.stringify({ kind: "generate", ...input });
@@ -169,7 +172,12 @@ export class MeetingOutputService {
           origin: "generated",
           stale
         });
-        if (!stale && currentMeeting.title === "Untitled meeting" && validated.overview.trim()) {
+        if (
+          trigger === "automatic-stop" &&
+          !stale &&
+          currentMeeting.title === "Untitled meeting" &&
+          validated.overview.trim()
+        ) {
           let title = projectMeetingOverview(
             validated.overview.trim().split(/\n|(?<=[.!?])\s/u)[0]!
           );
