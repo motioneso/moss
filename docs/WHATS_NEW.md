@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-06
+
+#### Changed
+
+- **Moss can do much more of the app from chat.** Moss can now find and use many more of the app's own actions from chat, such as reviewing memory suggestions, and it shows you a card to approve before deleting anything. Existing chats ask before every change, even in YOLO, until you start a new chat. New chats still ask before every change when they use an outside agent or tools someone else installed, and ask after reading outside content; tools from integrations and add-ons you connected yourself no longer make them ask. Memory suggestions now have clear labels instead of raw labels. [PR #3071](https://github.com/motioneso/moss/pull/3071)
+
 ### 2026-10-05
 
 #### Added
