@@ -507,8 +507,9 @@ The resolved-state cleanup implements the four quiet outcomes in the merged appr
 artifacts: Approved, You declined, Timed out and Cancelled. The outcome replaces the whole
 pending card, including its target, field rows, controls and outside-context notice. There is no
 separate execution row. Approved records the decision, not successful completion of the action.
-The Thinking summary, step count and expansion behavior remain; technical activity entries use
-fixed human-readable text instead of tool identifiers or payloads. New terminal records retain
+The Thinking summary, step count, expansion behavior and expanded list remain unchanged. An
+action that fails after approval says "Approved, but it didn’t go through" with a fixed plain
+explanation; raw error payloads are not printed in the outcome. New terminal records retain
 server-owned action titles and decision identity through streaming and history reload. Older
 execution-only history without a decision does not invent an approval outcome.
 

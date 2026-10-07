@@ -62,11 +62,9 @@ describe("chat drawer activity outcomes", () => {
     expect(html).toContain("Tool");
     expect(html).toContain("Result");
     expect(html).toContain("Approved");
-    expect(html.indexOf("Plan more")).toBeLessThan(html.indexOf("Working on your request."));
-    expect(html.indexOf("Working on your request.")).toBeLessThan(html.indexOf("Step finished."));
-    expect(html.indexOf("Step finished.")).toBeLessThan(html.indexOf("Approved."));
-    expect(html).not.toContain("calendar.list");
-    expect(html).toContain("4 steps");
+    expect(html.indexOf("Plan more")).toBeLessThan(html.indexOf("calendar.list"));
+    expect(html.indexOf("calendar.list")).toBeLessThan(html.indexOf("2 events"));
+    expect(html.indexOf("2 events")).toBeLessThan(html.indexOf("Approved by you"));
   });
 
   it("keeps per-turn sequence resets in their originating live turn", () => {

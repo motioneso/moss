@@ -198,7 +198,7 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
     const first = await ask(dialog, RERUN_ASK);
     await expect(
       dialog.getByRole("status").filter({ hasText: "Executed: briefings.rerun" })
-    ).toHaveCount(1);
+    ).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: "Approve" })).toHaveCount(0);
     expect(first.visible).toMatch(/queued|started|kicked off|re-?running|being written|underway/i);
     expect(rerunAuditRows()).toEqual([{ approvalMode: "auto", outcome: "success" }]);
@@ -213,7 +213,7 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
     const second = await ask(dialog, RERUN_ASK);
     await expect(
       dialog.getByRole("status").filter({ hasText: "Executed: briefings.rerun" })
-    ).toHaveCount(1);
+    ).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: "Approve" })).toHaveCount(0);
     expect(second.visible).toMatch(/already/i);
     const audit = rerunAuditRows();

@@ -112,6 +112,8 @@ export type GatewaySessionRecord =
       readonly actionRequestId: string;
       readonly toolName: string;
       readonly summary: string;
+      /** Optional plain title frozen with the card; raw native descriptions never supply it. */
+      readonly outcomeTitle?: string;
       /**
        * Optional rich, server-derived card preview (e.g. email reply recipient/subject/body).
        * Rides the live stream ONLY — it is never written to the persisted action_request row,
@@ -129,7 +131,7 @@ export type GatewaySessionRecord =
       readonly actionRequestId: string;
       readonly toolName: string;
       readonly outcome: "executed" | "denied" | "error" | "allowed";
-      /** Server-resolved action title, independent of handler output and live card details. */
+      /** Plain server-authored card title frozen before approval, independent of handler output. */
       readonly summary?: string;
       /** Decision provenance; execution outcome is intentionally separate. */
       readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";

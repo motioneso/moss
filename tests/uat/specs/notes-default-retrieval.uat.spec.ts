@@ -1,11 +1,17 @@
+import { execFileSync } from "node:child_process";
+
 import { expect, test, type Page } from "@playwright/test";
 
-import { attachNotesFailureEvidence } from "./notes-failure-evidence.js";
+import {
+  attachNotesFailureEvidence,
+  captureActionAuditEvidence
+} from "./notes-failure-evidence.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import {
   bringUpRealChatProvider,
   discoverCheapestChatModel,
   readUatJson,
+  requireUatProjectName,
   signInUatAdmin
 } from "./real-chat-signin.js";
 
@@ -111,9 +117,27 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
     })
   });
 
-  await expect(page.getByRole("status").filter({ hasText: "Executed: notes.create" })).toBeVisible({
-    timeout: 60_000
-  });
+  // Policy execution has no technical status row; verify the real gateway audit instead.
+  await expect
+    .poll(
+      () => {
+        const evidence = captureActionAuditEvidence(
+          execFileSync,
+          requireUatProjectName(),
+          UAT_ADMIN_ID,
+          new Date(syncNotBefore).toISOString(),
+          new Date().toISOString()
+        );
+        return (
+          evidence.error === null &&
+          evidence.entries.some(
+            (entry) => entry.toolName === "notes.create" && entry.outcome === "success"
+          )
+        );
+      },
+      { timeout: 60_000, message: "notes.create did not record a successful execution" }
+    )
+    .toBe(true);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   await expect

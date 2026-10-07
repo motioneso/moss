@@ -38,7 +38,8 @@ describe("ChatGatewayNotifier", () => {
       outsideContentNotice: false,
       actionRequestId: "ar_1",
       toolName: "example.write",
-      summary: "Write the value 'hello'"
+      summary: "Write the value 'hello'",
+      outcomeTitle: "Write your note"
     });
 
     expect(manager.injectRecord).toHaveBeenCalledOnce();
@@ -52,6 +53,7 @@ describe("ChatGatewayNotifier", () => {
     expect(record.actionRequestId).toBe("ar_1");
     expect(record.toolName).toBe("example.write");
     expect(record.summary).toBe("Write the value 'hello'");
+    expect(record.outcomeTitle).toBe("Write your note");
   });
 
   it("threads an optional preview through to the transcript record", () => {

@@ -15,11 +15,10 @@ import { createMockConnectorProviders, mockApi } from "./mock-api.js";
 // without an action card"). What remained unproven was the frontend half: given those exact
 // record kinds, does the UI actually withhold the card?
 //
-// Mutation-tight by construction: an action_result (self-operation) and an action_request
-// (needs confirmation) ride the SAME transcript. A frontend regression that stopped
-// discriminating them — always rendering a card, or dropping action_result handling so nothing
-// renders at all — fails this test on ONE of the two assertions below either way; a test that
-// only asserted "no card" would pass vacuously if the stream silently rendered nothing.
+// An action_result (self-operation), the assistant reply and an action_request (needs
+// confirmation) ride the SAME transcript. The reply and pending card prove the stream was
+// consumed; only the pending request gets a card, and policy execution adds no technical row.
+// The separate #1310 test in app-shell.spec.ts proves action_result still invalidates queries.
 //
 // See tests/uat/specs/self-operation-content-commands.uat.spec.ts for the harness-side fixmes
 // that cite this file as their real proof, matching the tests/e2e/chat-drawer.spec.ts precedent
@@ -38,10 +37,12 @@ test("self-operation tool executes with no confirmation card; a tool needing con
 
   const selfOpResult = JSON.stringify({
     kind: "action_result",
-    text: "Followed the Yankees",
+    text: "Executed: sports.followTeam",
     toolName: "sports.followTeam",
-    outcome: "executed"
+    outcome: "executed",
+    decidedBy: "policy"
   });
+  const reply = JSON.stringify({ kind: "reply", text: "You are now following the Yankees." });
   const needsConfirm = JSON.stringify({
     kind: "action_request",
     text: "Delete this event?",
@@ -51,7 +52,7 @@ test("self-operation tool executes with no confirmation card; a tool needing con
   });
 
   // Same one-shot-then-hold pattern as chat-drawer.spec.ts: EventSource replays a closed
-  // stream on reconnect, so serve the two records once and hold the reconnect open.
+  // stream on reconnect, so serve the records once and hold the reconnect open.
   let streamServed = false;
   await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) return;
@@ -60,7 +61,7 @@ test("self-operation tool executes with no confirmation card; a tool needing con
       status: 200,
       contentType: "text/event-stream",
       headers: { "cache-control": "no-cache" },
-      body: `data: ${selfOpResult}\n\ndata: ${needsConfirm}\n\n`
+      body: `data: ${selfOpResult}\n\ndata: ${reply}\n\ndata: ${needsConfirm}\n\n`
     });
   });
   await page.route("**/api/chat/turn", (route) =>
@@ -81,9 +82,7 @@ test("self-operation tool executes with no confirmation card; a tool needing con
   await expect(drawer.locator(".action-request-card")).toHaveCount(1);
   await expect(drawer.locator(".action-request-card")).toContainText("Delete this event?");
 
-  // The granted self-operation tool's result never becomes a card; it remains visible as a
-  // durable outcome instead.
-  const result = drawer.getByRole("status");
-  await expect(result).toContainText("Executed");
-  await expect(result).toContainText("Followed the Yankees");
+  await expect(drawer.locator(".chatd-bubble")).toHaveText("You are now following the Yankees.");
+  await expect(drawer.getByRole("status")).toHaveCount(0);
+  await expect(drawer.getByText("Executed: sports.followTeam")).toHaveCount(0);
 });

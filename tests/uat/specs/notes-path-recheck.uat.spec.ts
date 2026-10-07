@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
+import { captureActionAuditEvidence } from "./notes-failure-evidence.js";
 import {
   bringUpRealChatProvider,
   discoverCheapestChatModel,
@@ -87,6 +88,33 @@ function execInVaultAsOwner(projectName: string, script: string): void {
   );
 }
 
+async function expectToolOutcome(
+  projectName: string,
+  toolName: string,
+  startedAt: number,
+  outcome: "success" | "failed"
+): Promise<void> {
+  await expect
+    .poll(
+      () => {
+        const evidence = captureActionAuditEvidence(
+          execFileSync,
+          projectName,
+          UAT_ADMIN_ID,
+          new Date(startedAt).toISOString(),
+          new Date().toISOString()
+        );
+        return evidence.error === null
+          ? evidence.entries
+              .filter((entry) => entry.toolName === toolName)
+              .map((entry) => entry.outcome)
+          : [];
+      },
+      { timeout: 60_000, message: `${toolName} did not record ${outcome}` }
+    )
+    .toContain(outcome);
+}
+
 // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured fixtures arg
 test.afterEach(async ({}, testInfo) => {
   const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
@@ -130,6 +158,7 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const composer = page.getByRole("textbox", { name: "Message Moss" });
   const chatDialog = page.getByRole("dialog", { name: "Chat with Moss" });
+  const replies = chatDialog.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble");
 
   // --- (a) legitimate in-root create / edit / delete succeed, and create syncs ------------
   const legitPath = `uat/notes-path-recheck-${stamp}.md`;
@@ -139,9 +168,7 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
       "Path recheck baseline. Do not ask a follow-up question."
   );
   await composer.press("Enter");
-  await expect(page.getByRole("status").filter({ hasText: "Executed: notes.create" })).toBeVisible({
-    timeout: 60_000
-  });
+  await expectToolOutcome(projectName, "notes.create", syncNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   let lastSyncBody: unknown;
@@ -170,23 +197,21 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
     throw error;
   }
 
+  const editNotBefore = Date.now();
   await composer.fill(
     `Use the notes.edit tool on path "${legitPath}": replace the exact text "baseline" with ` +
       '"baseline edited". Do not ask a follow-up question.'
   );
   await composer.press("Enter");
-  await expect(page.getByRole("status").filter({ hasText: "Executed: notes.edit" })).toBeVisible({
-    timeout: 60_000
-  });
+  await expectToolOutcome(projectName, "notes.edit", editNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
+  const deleteNotBefore = Date.now();
   await composer.fill(
     `Use the notes.delete tool to delete path "${legitPath}". Do not ask a follow-up question.`
   );
   await composer.press("Enter");
-  await expect(page.getByRole("status").filter({ hasText: "Executed: notes.delete" })).toBeVisible({
-    timeout: 60_000
-  });
+  await expectToolOutcome(projectName, "notes.delete", deleteNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   // --- (b) rejectSymlinkParent: an ANCESTOR directory of the target is a symlink ----------
@@ -199,14 +224,19 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
 
   // notes.create opts into the gateway's safe error path: this fixed, path-free guard message is
   // useful to the user and safe for the assistant to repeat.
+  const ancestorReplyCount = await replies.count();
+  const ancestorAttemptNotBefore = Date.now();
   await composer.fill(
     `Use the notes.create tool with path set to exactly "D-${stamp}/x.md" and content set to ` +
-      "exactly: should not be written. Do not ask a follow-up question."
+      "exactly: should not be written. If refused, repeat the exact tool error in your reply. " +
+      "Do not ask a follow-up question."
   );
   await composer.press("Enter");
-  await expect(
-    page.getByRole("status").filter({ hasText: "path is not within the linked notes source" })
-  ).toBeVisible({ timeout: 60_000 });
+  await expectToolOutcome(projectName, "notes.create", ancestorAttemptNotBefore, "failed");
+  await expect(replies.nth(ancestorReplyCount)).toContainText(
+    "path is not within the linked notes source",
+    { timeout: 60_000 }
+  );
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   // --- (c') the #1512 guard itself: leaf symlink, kernel-vs-lexical ".." divergence -------
@@ -218,14 +248,19 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
       `ln -sfn "S-${stamp}/../evil-${stamp}.md" ${NOTES_ROOT}/b-${stamp}.md`
   );
 
+  const leafReplyCount = await replies.count();
+  const leafAttemptNotBefore = Date.now();
   await composer.fill(
     `Use the notes.create tool with path set to exactly "b-${stamp}.md" and content set to ` +
-      "exactly: should not be written. Do not ask a follow-up question."
+      "exactly: should not be written. If refused, repeat the exact tool error in your reply. " +
+      "Do not ask a follow-up question."
   );
   await composer.press("Enter");
-  await expect(
-    page.getByRole("status").filter({ hasText: "path is not within the linked notes source" })
-  ).toBeVisible({ timeout: 60_000 });
+  await expectToolOutcome(projectName, "notes.create", leafAttemptNotBefore, "failed");
+  await expect(replies.nth(leafReplyCount)).toContainText(
+    "path is not within the linked notes source",
+    { timeout: 60_000 }
+  );
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   // No host filesystem path (the vault volume path, or the /tmp escape target) is ever surfaced

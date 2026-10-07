@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { BrandMark } from "./brand-mark.js";
-import { actionApprovalOutcome } from "@moss/shared";
+import { actionApprovalOutcome, actionApprovalText } from "@moss/shared";
 
 import type {
   ChatRecordKind,
@@ -150,7 +150,8 @@ export function groupRecords(
               ...record,
               summary: decision.summary,
               outcome: decision.outcome,
-              decidedBy: decision.decidedBy
+              decidedBy: decision.decidedBy,
+              reason: decision.reason
             }
           : record
       });
@@ -191,33 +192,12 @@ export function ActivityPeek(props: {
         {props.records.map((record, index) => (
           <div className="chatd-peek__line" key={index}>
             <span className="chatd-peek__kind">{activityVerb(record)}</span>
-            {activityText(record)}
+            {record.text}
           </div>
         ))}
       </div>
     </details>
   );
-}
-
-/** Keep the same steps and fold without exposing implementation payloads in chat. */
-function activityText(record: TranscriptRecord): string {
-  switch (record.kind) {
-    case "tool":
-      return "Working on your request.";
-    case "result":
-      return record.outcome === "error" ? "This step did not finish." : "Step finished.";
-    case "approval":
-      return "Waiting for your decision.";
-    case "approved":
-      return "Approved.";
-    case "not_approved":
-      return actionApprovalOutcome(record) ?? "Not approved.";
-    case "refusal":
-    case "refused":
-      return "This step was not allowed.";
-    default:
-      return record.text;
-  }
 }
 
 export function activityVerb(record: TranscriptRecord): string {
@@ -321,11 +301,10 @@ function defaultRenderRecord(
   }
   if (record.kind === "action_result" || record.kind === "action_request") {
     if (context.approvalOutcomeShown) return null;
-    const outcome = actionApprovalOutcome(record);
+    const outcome = actionApprovalText(record);
     return outcome ? (
       <p className="chatd-status" role="status">
         {outcome}
-        {record.summary ? ` · ${record.summary}` : ""}
       </p>
     ) : null;
   }

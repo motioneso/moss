@@ -41,6 +41,8 @@ export interface TranscriptRecord {
   /** #2228: pages the CLI's own web search tool reported for this call (title + url). */
   readonly sources?: readonly { readonly title: string; readonly url: string }[];
   readonly summary?: string;
+  /** Plain server-authored title frozen with a pending card; never native command text. */
+  readonly outcomeTitle?: string;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
   /** Who made an action decision; absent on records from older producers. */
   readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";

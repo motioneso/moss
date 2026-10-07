@@ -287,6 +287,7 @@ describe("legacy memory.forget approval binding", () => {
       actionRequestId: "memory-action-1",
       toolName: "memory.forget",
       summary: "Forget saved memory",
+      outcomeTitle: "Forget saved memory",
       details: { target: label, fields: [] },
       outsideContentNotice: true
     });

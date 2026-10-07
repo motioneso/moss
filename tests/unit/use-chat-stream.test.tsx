@@ -108,13 +108,15 @@ describe("parseRecord", () => {
       text: "Approve or deny: Write 'x'",
       actionRequestId: "ar_42",
       toolName: "example.write",
-      summary: "Write 'x'"
+      summary: "Write 'x'",
+      outcomeTitle: "Write your note"
     });
     const record = parseRecord(data);
     expect(record?.kind).toBe("action_request");
     expect(record?.actionRequestId).toBe("ar_42");
     expect(record?.toolName).toBe("example.write");
     expect(record?.summary).toBe("Write 'x'");
+    expect(record?.outcomeTitle).toBe("Write your note");
   });
 
   it("parses an action_result record with outcome", () => {

@@ -193,6 +193,8 @@ export interface TranscriptRecord {
   readonly toolName?: string;
   readonly toolCallId?: string;
   readonly summary?: string;
+  /** Plain title frozen with a pending server card; absent for native command descriptions. */
+  readonly outcomeTitle?: string;
   readonly status?: WorkflowApprovalStatusDto;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
   readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";

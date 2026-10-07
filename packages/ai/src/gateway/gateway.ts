@@ -19,6 +19,7 @@ import {
   type AcpBuiltInPermissionResponse
 } from "./acp-permission.js";
 import { actionHoldDurationMs, emitActionResultRecord } from "./action-result-record.js";
+import { approvalOutcomeTitle } from "./approval-outcome-title.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import { isConversationTainted } from "./conversation-policy.js";
@@ -838,7 +839,9 @@ export class AssistantToolGateway {
       this.deps.confirmTimeoutMs
     );
 
-    const summary = [notice, summarizeToolAction(found.tool, input, ctx)].filter(Boolean).join(" ");
+    const actionSummary = summarizeToolAction(found.tool, input, ctx);
+    const summary = [notice, actionSummary].filter(Boolean).join(" ");
+    const outcomeTitle = approvalOutcomeTitle(found.tool, actionSummary);
 
     // Optional rich, server-derived card preview (e.g. email reply recipient/subject/body),
     // computed under the actor's DataContextDb. It rides the live stream ONLY — the persisted
@@ -862,6 +865,7 @@ export class AssistantToolGateway {
       actionRequestId: action.id,
       toolName: found.dto.name,
       summary,
+      ...(outcomeTitle ? { outcomeTitle } : {}),
       outsideContentNotice: await isConversationTainted(this.deps.provenance, ctx),
       ...(found.resolution ? { details: found.resolution.details } : {}),
       ...(preview ? { preview } : {})
@@ -882,7 +886,7 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName: found.dto.name,
           outcome: "denied",
-          ...(found.resolution ? { summary: found.resolution.summary } : {}),
+          ...(outcomeTitle ? { summary: outcomeTitle } : {}),
           decidedBy:
             outcome === "timeout" ? "timeout" : outcome === "cancelled" ? "cancelled" : "person",
           holdDurationMs: actionHoldDurationMs(holdStartedAt),
@@ -911,7 +915,7 @@ export class AssistantToolGateway {
         actionRequestId: action.id,
         toolName: found.dto.name,
         outcome: audit.errorClass === null ? "executed" : "error",
-        ...(found.resolution ? { summary: found.resolution.summary } : {}),
+        ...(outcomeTitle ? { summary: outcomeTitle } : {}),
         decidedBy: "person",
         holdDurationMs: actionHoldDurationMs(holdStartedAt),
         ...(result.ok

@@ -20,7 +20,7 @@ import type {
   UsefulnessFeedbackDto,
   UsefulnessFeedbackKind
 } from "@moss/shared";
-import { actionApprovalOutcome } from "@moss/shared";
+import { actionApprovalText } from "@moss/shared";
 import { BrandMark, ChatFreshnessFooter, Menu } from "@moss/ui";
 
 import { queryKeys } from "../api/query-keys";
@@ -62,7 +62,8 @@ export function RecordRow(props: {
         outsideContentNotice={props.record.outsideContentNotice}
         outcome={props.record.outcome}
         decidedBy={props.record.decidedBy}
-        outcomeTitle={props.record.outcome ? props.record.summary : undefined}
+        outcomeTitle={props.record.outcome ? props.record.summary : props.record.outcomeTitle}
+        reason={props.record.reason}
         focusRequested={props.record.actionRequestId === props.focusActionRequestId}
         onFocusComplete={props.onActionRequestFocused}
       />
@@ -113,11 +114,10 @@ export function RecordRow(props: {
     }
 
     if (props.approvalOutcomeShown) return null;
-    const outcome = actionApprovalOutcome(props.record);
+    const outcome = actionApprovalText(props.record);
     return outcome ? (
       <p className="chatd-status" role="status">
         {outcome}
-        {props.record.summary ? ` · ${props.record.summary}` : ""}
       </p>
     ) : null;
   }

@@ -1,5 +1,6 @@
 import {
   actionApprovalOutcome,
+  actionApprovalText,
   type ActionRequestDetails,
   type TranscriptRecord
 } from "@moss/shared";
@@ -23,6 +24,7 @@ interface ActionRequestCardProps {
   readonly decidedBy?: TranscriptRecord["decidedBy"];
   /** Terminal server-owned title; pending summaries may contain technical request details. */
   readonly outcomeTitle?: string;
+  readonly reason?: string;
   readonly focusRequested?: boolean;
   readonly onFocusComplete?: () => void;
 }
@@ -84,8 +86,8 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
     return (
       <div ref={rootRef} tabIndex={-1} data-action-request-id={props.actionRequestId}>
         <p className="chatd-status" role="status">
-          {outcome}
-          {props.outcomeTitle ? ` · ${props.outcomeTitle}` : ""}
+          {actionApprovalText({ ...props, summary: props.outcomeTitle }) ??
+            `${outcome}${props.outcomeTitle ? ` · ${props.outcomeTitle}` : ""}`}
         </p>
       </div>
     );

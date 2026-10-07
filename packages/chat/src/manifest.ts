@@ -127,7 +127,7 @@ export const chatModuleManifest = {
       id: "chat.approval_outcomes",
       description:
         "Decisions replace approval cards with one quiet outcome line, also after reload. " +
-        "Details and the execution row disappear; Thinking keeps its steps. Approved means permission, not success. Pending cards keep exact disclosure.",
+        "Details and the execution row disappear; Thinking stays unchanged. Failures after approval are explicit. Pending cards keep exact disclosure.",
       featureFlagId: "chat.module"
     },
     {

@@ -70,14 +70,21 @@ afterEach(() => {
   root = undefined;
   vi.resetAllMocks();
 });
-function expectQuiet(label: string, count = 2, title: string | null = "Delete custom theme") {
+function expectQuiet(
+  label: string,
+  count = 2,
+  title: string | null = "Delete custom theme",
+  reason?: string
+) {
   expect(host.querySelector('[role="status"]')?.textContent).toBe(
-    title ? `${label} · ${title}` : label
+    [label, title, reason].filter(Boolean).join(" · ")
   );
   expect(host.querySelectorAll('[role="status"]')).toHaveLength(1);
   expect(host.querySelectorAll("button")).toHaveLength(0);
   expect(host.querySelector("dl")).toBeNull();
-  expect(host.textContent).not.toMatch(
+  const standalone = host.cloneNode(true) as HTMLElement;
+  standalone.querySelectorAll("details").forEach((fold) => fold.remove());
+  expect(standalone.textContent).not.toMatch(
     /Method|DELETE|Path|Body|raw-id|app\.callAction|Executed|outside or unverified|Full theme/
   );
   expect(host.textContent).toContain(`Thinking${count} steps`);
@@ -123,7 +130,7 @@ describe("quiet resolved approvals", () => {
     ["person", "denied", "You declined"],
     ["timeout", "denied", "Timed out"],
     ["cancelled", "denied", "Cancelled"],
-    ["person", "error", "Approved"]
+    ["person", "error", "Approved, but it didn’t go through"]
   ] as const)(
     "collapses from a streamed %s/%s decision without claiming execution success",
     (decidedBy, outcome, label) => {
@@ -143,7 +150,12 @@ describe("quiet resolved approvals", () => {
         })
       )!;
       mount([...steps, pending, result]);
-      expectQuiet(label);
+      expectQuiet(
+        label,
+        2,
+        "Delete custom theme",
+        outcome === "error" ? "The app reported a problem." : undefined
+      );
       expect(host.querySelector("details")).toBe(fold);
       expect(fold.open).toBe(true);
       // Execution metadata is retained for refresh and audit; only its chat presentation changes.
@@ -198,6 +210,72 @@ describe("quiet resolved approvals", () => {
     };
     mount(recordsFromMessages([message]).filter((record) => record.kind !== "reply"));
     expectQuiet("Cancelled");
+  });
+
+  it("restores an approved action failure with a plain reason and no technical payload", () => {
+    const message: ChatMessageDto = {
+      id: "failed-message",
+      threadId: "thread",
+      ownerUserId: "owner",
+      role: "assistant",
+      status: "stored",
+      body: "",
+      modelRoute: null,
+      tools: [],
+      activity: [
+        ...steps,
+        {
+          kind: "action_result",
+          text: "Failed: app.callAction",
+          actionRequestId: "request-1",
+          summary: "Delete custom theme",
+          outcome: "error",
+          decidedBy: "person",
+          reason: "approval_changed: /api/themes/raw-id {body: secret}"
+        }
+      ],
+      createdAt: "2026-10-07T00:00:00Z",
+      updatedAt: "2026-10-07T00:00:00Z"
+    };
+    mount(recordsFromMessages([message]).filter((record) => record.kind !== "reply"));
+    expectQuiet(
+      "Approved, but it didn’t go through",
+      2,
+      "Delete custom theme",
+      "The item changed while you were deciding."
+    );
+  });
+
+  it("retains a plain server outcome title when local confirmation finishes", async () => {
+    vi.mocked(resolveActionRequest).mockResolvedValue(undefined);
+    mount([...steps, { ...pending, outcomeTitle: "Delete custom theme" }]);
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() => expectQuiet("Approved"));
+  });
+
+  it("updates the live card with a fixed reason when execution fails after approval", () => {
+    mount([
+      ...steps,
+      { ...pending, outcomeTitle: "Delete custom theme" },
+      {
+        kind: "action_result",
+        text: "Failed: app.callAction",
+        actionRequestId: "request-1",
+        summary: "Delete custom theme",
+        outcome: "error",
+        decidedBy: "person",
+        reason: "approval_changed: https://private.test/api/raw-id {body: secret}"
+      }
+    ]);
+    expectQuiet(
+      "Approved, but it didn’t go through",
+      2,
+      "Delete custom theme",
+      "The item changed while you were deciding."
+    );
+    expect(host.querySelector('[role="status"]')?.textContent).not.toMatch(
+      /https|private|body|secret|approval_changed/
+    );
   });
 
   it("correlates exact requests even when the terminal event precedes a stale pending card", () => {

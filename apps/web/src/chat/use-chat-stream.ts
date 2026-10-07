@@ -386,6 +386,7 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       toolName: typeof parsed.toolName === "string" ? parsed.toolName : undefined,
       toolCallId: typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined,
       summary: typeof parsed.summary === "string" ? parsed.summary : undefined,
+      outcomeTitle: typeof parsed.outcomeTitle === "string" ? parsed.outcomeTitle : undefined,
       status:
         parsed.status === "pending" ||
         parsed.status === "approved" ||

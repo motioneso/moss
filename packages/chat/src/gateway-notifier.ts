@@ -32,6 +32,7 @@ function toTranscriptRecord(record: GatewaySessionRecord): TranscriptRecord | nu
       actionRequestId: record.actionRequestId,
       toolName: record.toolName,
       summary: record.summary,
+      ...(record.outcomeTitle ? { outcomeTitle: record.outcomeTitle } : {}),
       outsideContentNotice: record.outsideContentNotice,
       ...(record.details ? { details: record.details } : {}),
       // Rides the live stream only; never persisted (see TranscriptRecord.preview).
