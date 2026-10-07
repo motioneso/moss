@@ -1,0 +1,30 @@
+[
+  {
+    "file": "01-delete-memory",
+    "title": "Delete memory"
+  },
+  {
+    "file": "02-change-settings",
+    "title": "Change settings"
+  },
+  {
+    "file": "03-outside-content",
+    "title": "Outside content"
+  },
+  {
+    "file": "04-approved",
+    "title": "Approved"
+  },
+  {
+    "file": "05-declined",
+    "title": "You declined"
+  },
+  {
+    "file": "06-timed-out",
+    "title": "Timed out"
+  },
+  {
+    "file": "07-cancelled",
+    "title": "Cancelled"
+  }
+]
