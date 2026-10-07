@@ -14,6 +14,7 @@ body {
 p,
 h1,
 h2,
+h3,
 dl,
 dd {
   margin: 0;
@@ -69,8 +70,10 @@ textarea {
 .approval-field dt {
   color: var(--text-muted);
 }
+.approval-field dt,
 .approval-field dd {
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .approval-actions {
   display: flex;
@@ -106,7 +109,18 @@ textarea {
   gap: var(--space-3);
   max-width: 100%;
 }
-.mock-review-pair h2 {
+.mock-review-state > h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+.mock-review-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-block: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+.mock-review-pair h3 {
   font-family: var(--font-display);
   font-size: var(--text-md);
 }

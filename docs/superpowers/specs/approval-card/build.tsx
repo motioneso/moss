@@ -39,7 +39,14 @@ const theme: ApprovalRecord = {
   fields: [],
   outsideContent: true
 };
-function Approval({ record }: { record: ApprovalRecord }) {
+// Presentation-only comparison; never inferred from server text or an action title.
+function Approval({
+  record,
+  deleteComparison = false
+}: {
+  record: ApprovalRecord;
+  deleteComparison?: boolean;
+}) {
   return (
     <Card padding="sm" aria-label={record.title}>
       <div className="approval-stack">
@@ -61,9 +68,7 @@ function Approval({ record }: { record: ApprovalRecord }) {
           </p>
         )}
         <div className="approval-actions">
-          <Button variant={record.title.startsWith("Delete") ? "danger" : "primary"}>
-            Approve
-          </Button>
+          <Button variant={deleteComparison ? "danger" : "primary"}>Approve</Button>
           <Button variant="secondary">Reject</Button>
         </div>
       </div>
@@ -173,10 +178,19 @@ const screens = [
         </p>
       </Drawer>
     )
-  }))
+  })),
+  {
+    file: "08-delete-memory-comparison",
+    title: "Delete memory · red comparison",
+    content: (
+      <Drawer prompt="Forget my meeting preference.">
+        <Approval record={memory} deleteComparison />
+      </Drawer>
+    )
+  }
 ];
 function document(title: string, content: ReactNode) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Moss mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="mockup.css"></head><body>${renderToStaticMarkup(content).replaceAll('<p class="approval-target">', '<!-- prettier-ignore --><p class="approval-target">')}</body></html>\n`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Moss mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="mockup.css"></head><body>${renderToStaticMarkup(content).replace(/<(h2 class="approval-title"|p class="approval-target"|dt|dd)>/g, "<!-- prettier-ignore --><$1>")}</body></html>\n`;
 }
 for (const p of screens)
   writeFileSync(resolve(out, p.file + ".html"), document(p.title, p.content));
@@ -194,7 +208,10 @@ writeFileSync(
     "Approval cards",
     <main className="mock-index">
       <SectionHead title="Approval cards" titleAs="h1" />
-      <p className="jds-hint">Static design review · open a state at desktop or phone width.</p>
+      <p className="jds-hint">Calm default · normal Approve button, quiet Reject.</p>
+      <p className="jds-hint">
+        Design review only. Please review this style before the product build.
+      </p>
       <nav aria-label="Mockup states">
         {screens.map((p) => (
           <ButtonLink key={p.file} variant="quiet" href={p.file + ".html"}>
@@ -202,20 +219,31 @@ writeFileSync(
           </ButtonLink>
         ))}
       </nav>
-      <div className="mock-review-pair">
-        <section>
-          <h2>Desktop · 404px drawer</h2>
-          <iframe title="Delete memory at desktop width" src="01-delete-memory.html" />
+      {screens.map((p) => (
+        <section className="mock-review-state" key={p.file}>
+          <h2>{p.title}</h2>
+          {p.file === "08-delete-memory-comparison" && (
+            <p className="jds-hint">
+              Optional comparison for a true delete. The default above stays calm.
+            </p>
+          )}
+          <div className="mock-review-pair">
+            <section>
+              <h3>Desktop · 404px drawer</h3>
+              <iframe title={`${p.title} at desktop width`} src={p.file + ".html"} loading="lazy" />
+            </section>
+            <section>
+              <h3>Phone · 390px</h3>
+              <iframe
+                className="mock-phone"
+                title={`${p.title} at phone width`}
+                src={p.file + ".html"}
+                loading="lazy"
+              />
+            </section>
+          </div>
         </section>
-        <section>
-          <h2>Phone · 390px</h2>
-          <iframe
-            className="mock-phone"
-            title="Delete memory at phone width"
-            src="01-delete-memory.html"
-          />
-        </section>
-      </div>
+      ))}
     </main>
   )
 );
