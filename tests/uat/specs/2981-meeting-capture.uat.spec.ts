@@ -367,8 +367,8 @@ test("shared connection, single Start, recording controls, transcript and Stop�
     await expect(page.getByRole("region", { name: "Transcript", exact: true })).toHaveCount(0);
     await expect(strip).toHaveCount(0);
     await expect(page.locator(".meetings-recording-indicator")).toHaveCount(0);
-    // The compact Settings UI edits only audio source. Keep legacy summary-off worker
-    // coverage through the real preferences API, without inventing a removed UI control.
+    // Set summary-off through the real preferences API for the next worker receipt.
+    // The link-controls helper separately exercises the Settings summary switch.
     const settingsResult = await page.request.put("/api/meetings/preferences", {
       data: { summarizeOnStop: false }
     });
@@ -468,7 +468,7 @@ test("shared connection, single Start, recording controls, transcript and Stop�
     expect(observations).toHaveLength(3);
     expect(observations.every((item) => item.generatedPcm && item.timestampsRequested)).toBe(true);
     console.log(
-      "MEETINGS_CAPTURE_UAT real UI/API: shared one-time connection approval in the existing tab; fresh mic-and-system default without setup; New opens the meeting workspace without capture; rapid inline title entry; notes retained through explicit source-free Start; timer-only return link during list navigation; native acknowledgments; generated PCM through disclosed HTTP ASR; retained transcript; duplicate audio idempotent; Pause rejects dispatch; immutable Stop cutoff and bounded final flush; finalization retires authority; Stop → New → Start recording succeeds without a setup dialog; summary route failure reported and API-configured legacy summary-off yields skipped worker receipt; immediate audio-source dropdown writes only its default and leaves active capture unchanged; recording-only API revoke preserves the link, real attempt/decide restores permission, and Settings Unlink rejects old credentials and audio while notes/transcripts remain visible. Synthetic transport only, not live Mac capture proof."
+      "MEETINGS_CAPTURE_UAT real UI/API: shared one-time connection approval in the existing tab; fresh mic-and-system default without setup; New opens the meeting workspace without capture; rapid inline title entry; notes retained through explicit source-free Start; timer-only return link during list navigation; native acknowledgments; generated PCM through disclosed HTTP ASR; retained transcript; duplicate audio idempotent; Pause rejects dispatch; immutable Stop cutoff and bounded final flush; finalization retires authority; Stop → New → Start recording succeeds without a setup dialog; summary route failure reported and API-configured legacy summary-off yields skipped worker receipt; immediate audio-source dropdown writes only its default and leaves active capture unchanged; recording-only API revoke preserves the link; Settings Unlink followed by initial browser approval relinks a new device, which records again; Settings Unlink then rejects its credentials and audio while notes/transcripts remain visible. Synthetic transport only, not live Mac capture proof."
     );
   } finally {
     try {

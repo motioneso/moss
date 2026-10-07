@@ -26,7 +26,10 @@ fixed-length/chunked generated uploads and temporary-file negative controls; it 
 an operator's deployed proxy.
 
 Connect Trail Marker once through the native app's existing connect-in-browser flow. Linking
-retains recording-capability approval but never starts capture. New meeting opens a ready
+grants recording capability in the single initial linking approval but never starts capture.
+Missing or revoked recording authority requires signing the Mac out under Settings → Active
+sessions and explicitly relinking through Trail Marker. There is no separate recording approval;
+already-approved Macs remain linked. New meeting opens a ready
 transcript-and-notes workspace; press **Start recording** explicitly. Microphone + system audio
 is the default, using the Mac's advertised OS-default microphone. Change audio mode only in
 Settings → Meetings, alongside link status and Unlink Mac. No source-selection setup is required.
@@ -79,7 +82,10 @@ provider errors, audio, transcript text and credentials.
 Recording authority is separate from Trail Marker's legacy identity credential. The shared
 connection requires an independently stored recording-capability proof, current owner/device
 capability revision and an ephemeral native connection verifier. Existing paired devices receive
-no recording capability from migration. Browser approval is cookie-only and origin checked.
+no recording capability from migration and must explicitly relink. Initial browser approval is
+cookie-only and origin checked. The legacy recording-attempt and recording-decision mutation
+routes return 410; read-only status can recover only the exact already-approved candidate with
+its still-live owner/device capability and revision. Status reads never issue new authority.
 An explicit Start binds the current browser session, meeting, exact device/connection and sources;
 only that native connection can claim the short-lived grant. Native creates the per-meeting secret
 in memory and the server stores only its hash. Lost-response retries preserve identity. Revocation,

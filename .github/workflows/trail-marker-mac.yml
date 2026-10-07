@@ -85,6 +85,10 @@ jobs:
         working-directory: apps/trail-marker
         run: python3 scripts/check-meeting-link-negative-controls.py
 
+      - name: Verify single-link recovery negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-single-link-controls.py
+
       - name: Preserve native negative-control evidence
         if: always()
         uses: actions/upload-artifact@v4

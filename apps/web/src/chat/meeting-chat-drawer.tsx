@@ -2,7 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Button, Chip } from "@moss/ui";
 import { ApiError as ModuleApiError, requestJson } from "@moss/module-web-sdk";
-import { meetingChatSurface, type MeetingChatSelection, type MeetingRecord } from "@moss/shared";
+import {
+  MEETING_CHAT_TITLE_QUERY_KEY,
+  meetingChatSurface,
+  type MeetingChatSelection,
+  type MeetingRecord
+} from "@moss/shared";
 import { ApiError, listChatThreads, listChatThreadMessages } from "../api/client";
 import { ChatDrawer } from "./chat-drawer";
 import { recordsFromMessages } from "./use-chat-stream";
@@ -39,7 +44,7 @@ export function MeetingChatDrawer(props: {
     refetchOnWindowFocus: "always"
   });
   const title = useQuery({
-    queryKey: ["meeting-chat-title", selection.meetingId, selection.selectionId],
+    queryKey: [MEETING_CHAT_TITLE_QUERY_KEY, selection.meetingId, selection.selectionId],
     queryFn: async ({ signal }) => {
       // Keep only the title in this selection-bound cache. The record also contains notes,
       // so read it less often than the lightweight access check; title saves invalidate it.

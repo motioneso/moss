@@ -303,14 +303,6 @@ struct CompanionClient {
         _ = try await sendChecked(request, okStatuses: [204])
     }
 
-    func requestRecordingCapability(credential: String, requestKey: String,
-                                    proofHash: String) async throws -> RecordingCapabilityAttempt {
-        struct Body: Encodable { let requestKey: String; let proofHash: String; let policyVersion = 1 }
-        let request = try jsonRequest(path: "/api/companion/recording-capability/attempt", method: "POST",
-            body: Body(requestKey: requestKey, proofHash: proofHash), credential: credential)
-        return try await recordingReply(RecordingCapabilityAttempt.self, request: request)
-    }
-
     func recordingCapabilityStatus(credential: String, attemptId: String) async throws -> RecordingCapabilityStatus {
         struct Body: Encodable { let attemptId: String }
         let request = try jsonRequest(path: "/api/companion/recording-capability/status", method: "POST",
@@ -318,7 +310,7 @@ struct CompanionClient {
         return try await recordingReply(RecordingCapabilityStatus.self, request: request)
     }
 
-    /// Recording approval retries preserve this endpoint's Retry-After. Legacy companion
+    /// Read-only recording recovery preserves this endpoint's Retry-After. Legacy companion
     /// consumers retain their established error mapping and heartbeat/backtrack behavior.
     private func recordingReply<Reply: Decodable>(_ type: Reply.Type, request: URLRequest) async throws -> Reply {
         let (data, response) = try await send(request)
@@ -496,11 +488,6 @@ struct CompanionClient {
     }
 }
 
-struct RecordingCapabilityAttempt: Decodable {
-    let attemptId: String
-    let expiresAt: String
-    let status: String
-}
 struct RecordingCapabilityStatus: Decodable {
     let status: String
     let policyVersion: Int
