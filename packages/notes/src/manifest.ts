@@ -212,10 +212,15 @@ export const notesModuleManifest = {
         "wording still matches."
     },
     {
+      id: "notes.approval_prerequisites",
+      description:
+        "Before approval, an unlinked or unavailable notes folder returns its safe configuration reason to Moss, without exposing filesystem paths. Link or fix the folder in Settings, then Connections."
+    },
+    {
       id: "notes.assistant_authoring",
       description:
         "Ask the assistant to create, edit, or delete Markdown notes in your linked notes folder. " +
-        "Overwriting is named explicitly in approval. Deleting is immediate and permanent; there is no trash."
+        "Overwrite is named in approval. Delete approval uses red Approve and states permanent deletion with no trash or undo."
     }
   ],
   proactiveMonitor: notesMonitorProvider

@@ -207,7 +207,10 @@ test.describe("Chat drawer — Approve/Reject card", () => {
     await expect
       .poll(() => approve.evaluate((button) => button.matches(":focus-visible")))
       .toBe(true);
-    await expect(approve).not.toHaveCSS("box-shadow", "none");
+    await expect(approve).toHaveCSS("outline-style", "solid");
+    await expect(approve).toHaveCSS("outline-width", "2px");
+    await expect(approve).toHaveCSS("outline-offset", "2px");
+    await expect(approve).toHaveCSS("box-shadow", "none");
     await approve.press("Enter");
 
     await expect(

@@ -118,10 +118,9 @@ describe("gateway action_request preview threading", () => {
       cacheMessageId: "m1",
       body: "hello"
     });
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       ok: false,
-      denied: true,
-      reason: expect.stringContaining("approval_unavailable")
+      error: "The app could not prepare this action. Try again or use its app screen."
     });
     expect(JSON.stringify(result)).not.toContain("SECRET");
     expect(capture.emitted).toEqual([]);
@@ -137,7 +136,11 @@ describe("gateway action_request preview threading", () => {
       cacheMessageId: "m1",
       body: "hello"
     });
-    expect(result).toMatchObject({ ok: false, denied: true });
+    expect(result).toMatchObject({
+      ok: false,
+      denied: true,
+      reason: expect.stringContaining("approval_unavailable")
+    });
     expect(capture.emitted).toEqual([]);
     expect(capture.created).toEqual([]);
     expect(confirmations.isAwaiting("action-1")).toBe(false);

@@ -48,7 +48,7 @@ export interface ConversationProvenancePort {
 export interface CallCardDetails {
   readonly presentation?: "human";
   /** Host-owned semantic identity; never derived from title text. */
-  readonly approvalKind?: "memory_delete";
+  readonly approvalKind?: "memory_delete" | "note_delete";
   readonly target: string | null;
   readonly fields: readonly { readonly label: string; readonly value: string }[];
 }

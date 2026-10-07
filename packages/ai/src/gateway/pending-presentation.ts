@@ -1,4 +1,4 @@
-import { ApprovalInputError } from "@moss/module-sdk";
+import { ApprovalInputError, ApprovalPrerequisiteError } from "@moss/module-sdk";
 import { inputValidationFailure } from "./validation-failure.js";
 import { isDeepStrictEqual } from "node:util";
 import type { AiRepository } from "../repository.js";
@@ -20,6 +20,7 @@ import type {
 
 interface PendingPresentation {
   readonly validationError?: string;
+  readonly preparationError?: string;
   readonly title?: string;
   readonly disclosureExternalContent?: boolean;
   readonly externalTool?: true;
@@ -114,7 +115,17 @@ export async function preparePendingPresentation(
         return {};
       return structuredClone({
         ...(result.title !== undefined ? { title: result.title } : {}),
-        details: { presentation: "human" as const, target: result.target, fields: result.fields },
+        details: {
+          presentation: "human" as const,
+          ...(result.approvalKind === "note_delete" &&
+          found.tool.isExternal === false &&
+          found.dto.moduleId === "notes" &&
+          found.dto.name === "notes.delete"
+            ? { approvalKind: "note_delete" as const }
+            : {}),
+          target: result.target,
+          fields: result.fields
+        },
         disclosureExternalContent:
           (result.content ?? found.tool.approvalContent) !== "user_authored",
         ...(result.version ? { version: result.version } : {})
@@ -128,7 +139,14 @@ export async function preparePendingPresentation(
     }
   } catch (error) {
     if (error instanceof ApprovalInputError) return { validationError: error.message };
-    /* Module errors can contain private text; incomplete disclosure is sufficient. */
+    if (found.tool.isExternal === false && error instanceof ApprovalPrerequisiteError)
+      return { preparationError: error.message };
+    // A failed lookup is not a missing description. Keep unexpected dependency details private.
+    if (found.tool.isExternal !== true)
+      return {
+        preparationError: "The app could not prepare this action. Try again or use its app screen."
+      };
+    // Connected tools retain their complete exact-argument fallback when no summary is available.
   }
   const exactArguments = found.tool.isExternal === true ? exactArgumentText(input) : null;
   return exactArguments === null ? {} : { externalTool: true, exactArguments };
@@ -254,8 +272,12 @@ export async function prepareApprovalCard(
       }
     );
   };
-  const presentation: PendingPresentation = await readPresentation().catch(() => ({}));
+  const presentation: PendingPresentation = await readPresentation().catch(() => ({
+    preparationError: "The app could not prepare this action. Try again or use its app screen."
+  }));
   if (presentation.title !== undefined) outcomeTitle = presentation.title;
+  if (presentation.preparationError)
+    return { failure: { ok: false, error: presentation.preparationError } };
   if (presentation.validationError)
     return inputValidationFailure(outcomeTitle ?? "Perform action", presentation.validationError);
   if (!completeActionPresentation({ summary, outcomeTitle, ...presentation })) return unavailable;

@@ -15,7 +15,7 @@ export const aiActionPresentationSchema = {
       required: ["target", "fields"],
       properties: {
         presentation: { type: "string", enum: ["human"] },
-        approvalKind: { type: "string", enum: ["memory_delete"] },
+        approvalKind: { type: "string", enum: ["memory_delete", "note_delete"] },
         target: { type: ["string", "null"] },
         fields: {
           type: "array",

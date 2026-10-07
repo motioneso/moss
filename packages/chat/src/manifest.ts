@@ -118,7 +118,7 @@ export const chatModuleManifest = {
     {
       id: "chat.pending_action_disclosure",
       description:
-        "App cards show exact server targets and human-readable changes. Only memory deletion has red Approve. " +
+        "App cards show exact server targets and human-readable changes. Memory and note deletion use red Approve. " +
         "Native permissions keep exact commands or paths. Missing details keep Reject only. Outside content adds one notice.",
       errors: [
         {
@@ -126,6 +126,12 @@ export const chatModuleManifest = {
           class: "validation",
           description:
             "Invalid fields or impossible target changes return a correction before approval; nothing executes. The quiet row says details need correcting. Extra-field errors identify safe field names, never values. Correct the fields and ask again."
+        },
+        {
+          code: "approval_preparation_failed",
+          class: "transient",
+          description:
+            "The app could not prepare the action. Safe prerequisite reasons reach Moss; unexpected dependency details stay private. Retry or use the app screen."
         },
         {
           code: "approval_unavailable",

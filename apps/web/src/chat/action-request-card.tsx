@@ -225,7 +225,8 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
                 variant={
                   !nativeDisclosure &&
                   !externalDisclosure &&
-                  humanDetails?.approvalKind === "memory_delete"
+                  (humanDetails?.approvalKind === "memory_delete" ||
+                    humanDetails?.approvalKind === "note_delete")
                     ? "danger"
                     : "primary"
                 }

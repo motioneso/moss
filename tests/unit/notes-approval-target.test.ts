@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
+import { notesCreatePresentation } from "../../packages/notes/src/approval-presentation.js";
+import { gatewayResponseToMcp } from "../../packages/chat/src/mcp-transport.js";
+import { admissionFixture, admissionTool } from "./helpers/gateway-admission-fixture.js";
 import { mkdtemp, mkdir, rm, symlink, writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -33,6 +37,58 @@ afterEach(async () => {
 });
 
 describe("note approval target resolution", () => {
+  it.each([
+    ["unlinked", 409, "Notes source is not configured"],
+    ["unavailable", 400, "Notes source path does not exist or cannot be resolved"],
+    ["roots", 503, "Notes roots not configured on this server"],
+    ["outside", 400, "Notes source path is not within an allowed notes root"]
+  ] as const)(
+    "returns the safe %s prerequisite to the model before a card or write",
+    async (condition, statusCode, message) => {
+      if (condition === "unlinked") state.source = "";
+      if (condition === "unavailable") state.source = join(base, "PRIVATE_MISSING_SOURCE");
+      if (condition === "roots") state.roots = [];
+      if (condition === "outside") state.source = base;
+      await expect(
+        resolveNoteApprovalTarget(db, "PRIVATE_NOTE_NAME.md", true)
+      ).rejects.toMatchObject({ statusCode, message });
+      const tool = admissionTool("notes.create", {
+        risk: "write",
+        executionPolicy: "confirm",
+        actionLabel: "Create note",
+        approvalPresentation: notesCreatePresentation,
+        inputSchema: {
+          type: "object",
+          properties: { path: { type: "string" }, content: { type: "string" } },
+          required: ["path", "content"]
+        }
+      });
+      const h = admissionFixture([tool], {
+        deps: {
+          yoloMode: async () => false,
+          runner: {
+            withDataContext: async (_access: unknown, callback: (value: unknown) => unknown) =>
+              callback(db)
+          } as never
+        }
+      });
+      const response = await h.gateway.callTool(h.token, "notes.create", {
+        path: "PRIVATE_NOTE_NAME.md",
+        content: "PRIVATE_PROPOSED_CONTENT"
+      });
+      const parsed = CallToolResultSchema.parse(gatewayResponseToMcp(response));
+      expect(parsed).toEqual({
+        isError: true,
+        content: [{ type: "text", text: message }]
+      });
+      expect(JSON.stringify(parsed)).not.toContain("PRIVATE");
+      expect(JSON.stringify(parsed)).not.toContain(base);
+      expect(h.createPending).not.toHaveBeenCalled();
+      expect(tool.execute).not.toHaveBeenCalled();
+      expect(h.records).toEqual([]);
+    }
+  );
+
   it("resolves a linked source absolute path to an exact relative destination", async () => {
     await mkdir(join(root, "Plans"));
     await writeFile(join(root, "Plans", "Friday.md"), "Original");

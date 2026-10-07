@@ -1,8 +1,11 @@
+import { HttpError } from "./route-errors.js";
 import type { ChatContentClass } from "./route-chat.js";
 import type { ToolContext, ToolInput, ToolServices } from "./index.js";
 
 /** Human disclosure authored by a module, never inferred from input keys or model prose. */
 export interface HumanActionDetails {
+  /** Authored permanent-note-delete disclosure; the host verifies the owning tool identity. */
+  readonly approvalKind?: "note_delete";
   /** Per-call module-authored title, frozen with the exact disclosure (never caller prose). */
   readonly title?: string;
   /** Actual disclosed text provenance; absent defaults to the owning hook declaration. */
@@ -108,5 +111,13 @@ export class ApprovalInputError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ApprovalInputError";
+  }
+}
+
+/** An authored, safe prerequisite message; never include paths, submitted values or dependency text. */
+export class ApprovalPrerequisiteError extends HttpError {
+  constructor(statusCode: 400 | 409 | 503, message: string) {
+    super(statusCode, message);
+    this.name = "ApprovalPrerequisiteError";
   }
 }

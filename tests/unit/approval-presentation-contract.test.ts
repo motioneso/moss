@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  ApprovalPrerequisiteError,
+  HttpError,
   approvalBoolean,
   approvalChoice,
   approvalText,
@@ -238,5 +240,92 @@ describe("connected-tool exact argument fallback", () => {
       )
     ).toEqual({});
     expect(completeActionPresentation({ summary: "Tool", exactArguments: "{}" })).toBe(false);
+  });
+});
+
+describe("host-owned note deletion and prerequisite disclosure", () => {
+  const ctx = { actorUserId: "owner", requestId: "request", chatSessionId: "session" };
+  const runner = {
+    withDataContext: async <T>(_access: unknown, work: (db: never) => Promise<T>) =>
+      work({} as never)
+  };
+  it.each([
+    ["notes", "notes.delete", false, "note_delete"],
+    ["notes", "notes.create", false, undefined],
+    ["other", "notes.delete", false, undefined],
+    ["notes", "notes.delete", true, undefined]
+  ] as const)(
+    "binds the note-delete marker to %s/%s external=%s",
+    async (moduleId, name, isExternal, expected) => {
+      const found = {
+        dto: { moduleId, name },
+        tool: {
+          isExternal,
+          approvalPresentation: async () => ({
+            target: "note.md",
+            fields: [{ label: "Deletion", value: "Permanent" }],
+            approvalKind: "note_delete",
+            version: "hidden-file-version"
+          })
+        }
+      } as unknown as ExecutableTool;
+      const result = await preparePendingPresentation(
+        runner,
+        { actorUserId: "owner" },
+        found,
+        {},
+        ctx,
+        {}
+      );
+      expect(result.details?.approvalKind).toBe(expected);
+      expect(result.version).toBe("hidden-file-version");
+      expect(result.details).not.toHaveProperty("version");
+    }
+  );
+  it.each([new Error("PRIVATE_FAILURE"), new HttpError(409, "PRIVATE_FAILURE")])(
+    "does not expose arbitrary dependency or HTTP errors: %s",
+    async (error) => {
+      const found = {
+        tool: {
+          isExternal: false,
+          approvalPresentation: async () => {
+            throw error;
+          }
+        }
+      } as unknown as ExecutableTool;
+      expect(
+        await preparePendingPresentation(runner, { actorUserId: "owner" }, found, {}, ctx, {})
+      ).toEqual({
+        preparationError: "The app could not prepare this action. Try again or use its app screen."
+      });
+    }
+  );
+  it("allows only explicitly safe first-party prerequisite errors", async () => {
+    const tool = {
+      isExternal: false,
+      approvalPresentation: async () => {
+        throw new ApprovalPrerequisiteError(409, "Notes source is not configured");
+      }
+    };
+    expect(
+      await preparePendingPresentation(
+        runner,
+        { actorUserId: "owner" },
+        { tool } as unknown as ExecutableTool,
+        {},
+        ctx,
+        {}
+      )
+    ).toEqual({ preparationError: "Notes source is not configured" });
+    const outside = await preparePendingPresentation(
+      runner,
+      { actorUserId: "owner" },
+      { tool: { ...tool, isExternal: true } } as unknown as ExecutableTool,
+      {},
+      ctx,
+      {}
+    );
+    expect(outside).not.toHaveProperty("preparationError");
+    expect(JSON.stringify(outside)).not.toContain("Notes source");
   });
 });

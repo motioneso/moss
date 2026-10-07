@@ -92,11 +92,14 @@ describe("server-owned note approval presentations", () => {
     expect(resolveTarget).toHaveBeenLastCalledWith(db, "Next week.md", false);
   });
 
-  it("adds no invented submitted fields to a top-level deletion", async () => {
+  it("discloses permanent deletion with its server-authored danger identity", async () => {
     resolveTarget.mockResolvedValue({ relative: "Next week.md", version: "v1" });
     expect(await notesDeletePresentation(db, { path: "Next week.md" }, ctx)).toEqual({
+      approvalKind: "note_delete",
       target: "Next week.md",
-      fields: [],
+      fields: [
+        { label: "Deletion", value: "Permanently delete this note. There is no trash or undo." }
+      ],
       version: "v1"
     });
   });
@@ -109,6 +112,13 @@ describe("server-owned note approval presentations", () => {
     { content: "text" }
   ])("refuses incomplete or unmapped submitted values before target lookup: %j", async (input) => {
     expect(await notesCreatePresentation(db, input, ctx)).toBeNull();
+    expect(resolveTarget).not.toHaveBeenCalled();
+  });
+
+  it("rejects a caller-supplied danger marker rather than treating it as authority", async () => {
+    expect(
+      await notesDeletePresentation(db, { path: "note.md", approvalKind: "note_delete" }, ctx)
+    ).toBeNull();
     expect(resolveTarget).not.toHaveBeenCalled();
   });
 

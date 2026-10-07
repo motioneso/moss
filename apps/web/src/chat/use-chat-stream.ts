@@ -48,15 +48,18 @@ function parseDetails(value: unknown): ActionRequestDetails | undefined {
     fields.push({ label: field.label, value: field.value });
   }
   if (candidate.presentation !== undefined && candidate.presentation !== "human") return undefined;
-  if (candidate.approvalKind !== undefined && candidate.approvalKind !== "memory_delete")
+  const approvalKind = candidate.approvalKind;
+  if (
+    approvalKind !== undefined &&
+    approvalKind !== "memory_delete" &&
+    approvalKind !== "note_delete"
+  )
     return undefined;
   return {
     target: candidate.target,
     fields,
     ...(candidate.presentation === "human" ? { presentation: "human" as const } : {}),
-    ...(candidate.approvalKind === "memory_delete"
-      ? { approvalKind: "memory_delete" as const }
-      : {})
+    ...(approvalKind ? { approvalKind } : {})
   };
 }
 

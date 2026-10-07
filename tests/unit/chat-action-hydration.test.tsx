@@ -262,6 +262,42 @@ describe("thread-scoped pending card hydration", () => {
       expect.objectContaining({ actionRequestId: "missing-presentation", approvalAvailable: false })
     ]);
   });
+  it("preserves the server note-delete marker and permanent-delete disclosure after reload", async () => {
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [thread("thread-a")] });
+    const presentation = {
+      summary: "Delete note",
+      outcomeTitle: "Delete note",
+      outsideContentNotice: true,
+      details: {
+        presentation: "human" as const,
+        approvalKind: "note_delete" as const,
+        target: "Quarterly plan",
+        fields: [
+          { label: "Deletion", value: "Permanently delete this note. There is no trash or undo." }
+        ]
+      }
+    };
+    vi.mocked(listPendingActionRequests).mockResolvedValue({
+      actions: [
+        {
+          ...action("delete-note"),
+          toolName: "notes.delete",
+          approvalAvailable: true,
+          presentation
+        }
+      ]
+    });
+    await mount();
+    const records = JSON.parse(renderer!.root.findByType("button").props["data-records"]);
+    expect(records).toEqual([
+      expect.objectContaining({
+        actionRequestId: "delete-note",
+        approvalAvailable: true,
+        details: presentation.details
+      })
+    ]);
+  });
+
   it("restores the explicit native permission discriminator and exact command line", async () => {
     vi.mocked(listChatThreads).mockResolvedValue({ threads: [thread("thread-a")] });
     const presentation = {

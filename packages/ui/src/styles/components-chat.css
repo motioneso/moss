@@ -561,6 +561,14 @@
   font-size: var(--text-2xs);
 }
 
+/* A single opaque ring makes both approval choices clear during keyboard review.
+   Keep this local to the decision controls rather than changing every shared button. */
+.action-request-actions > .jds-btn:focus-visible {
+  outline: var(--space-0-5) solid var(--text);
+  outline-offset: var(--space-0-5);
+  box-shadow: none;
+}
+
 /* Only the noninteractive outcome receives this programmatic focus treatment.
    Shared buttons retain their focus-visible ring. */
 .action-request-outcome[tabindex="-1"]:focus {

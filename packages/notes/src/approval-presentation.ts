@@ -53,4 +53,22 @@ export const notesEditPresentation = notePresentation(
   false
 );
 
-export const notesDeletePresentation = notePresentation({}, [], false);
+const deleteNoteTarget = notePresentation({}, [], false);
+export const notesDeletePresentation: ToolApprovalPresentation = async (
+  db,
+  input,
+  ctx,
+  services
+) => {
+  const details = await deleteNoteTarget(db, input, ctx, services);
+  return details
+    ? {
+        ...details,
+        approvalKind: "note_delete",
+        fields: [
+          ...details.fields,
+          { label: "Deletion", value: "Permanently delete this note. There is no trash or undo." }
+        ]
+      }
+    : null;
+};

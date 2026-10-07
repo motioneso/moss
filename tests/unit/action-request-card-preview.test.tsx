@@ -9,6 +9,7 @@ import { renderToString } from "react-dom/server";
 import { ActionRequestCard } from "../../apps/web/src/chat/action-request-card.js";
 import { parseRecord } from "../../apps/web/src/chat/use-chat-stream.js";
 import { RecordRow } from "../../apps/web/src/chat/message-row.js";
+import { aiActionPresentationSchema } from "../../packages/shared/src/ai-action-presentation-schema.js";
 
 const NOTICE = "Moss read something from outside your account before asking this.";
 const UNAVAILABLE = "Details for this request aren’t available. Reject it and ask Moss again.";
@@ -113,7 +114,7 @@ describe("approved pending card", () => {
     expect(buttons(host)).toEqual(["Approve", "Reject"]);
   });
 
-  it.each(["Delete memory", "Delete custom theme", "Forget saved memory"])(
+  it.each(["Delete memory", "Delete note", "Delete custom theme", "Forget saved memory"])(
     "does not infer destructive styling from the title %s",
     (outcomeTitle) => {
       const host = renderCard({ ...baseProps, outcomeTitle });
@@ -132,6 +133,60 @@ describe("approved pending card", () => {
       });
       expect(host.querySelector(".jds-btn--danger")?.textContent).toBe("Approve");
       expect(host.querySelector(".jds-btn--secondary")?.textContent).toBe("Reject");
+    }
+  );
+
+  it("preserves permanent note deletion through schema, SSE and the actual card", () => {
+    expect(aiActionPresentationSchema.properties.details.properties.approvalKind.enum).toContain(
+      "note_delete"
+    );
+    const noteDetails = {
+      presentation: "human",
+      approvalKind: "note_delete",
+      target: "Full note title\nincluding detail",
+      fields: [
+        { label: "Deletion", value: "Permanently delete this note. There is no trash or undo." }
+      ]
+    };
+    const record = parseRecord(
+      JSON.stringify({
+        kind: "action_request",
+        text: "Technical metadata",
+        summary: "Model summary must not appear",
+        actionRequestId: "note-delete",
+        toolName: "notes.delete",
+        outcomeTitle: "Delete note",
+        details: noteDetails
+      })
+    );
+    expect(record?.details).toEqual(noteDetails);
+    if (!record) throw new Error("Expected note deletion record");
+    const client = new QueryClient();
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(
+      createElement(QueryClientProvider, { client }, createElement(RecordRow, { record }))
+    );
+    expect(host.querySelector(".jds-btn--danger")?.textContent).toBe("Approve");
+    expect(host.querySelector(".jds-btn--secondary")?.textContent).toBe("Reject");
+    expect(host.querySelector(".action-request-target")?.textContent).toBe(noteDetails.target);
+    expect(host.querySelector("dd")?.textContent).toBe(noteDetails.fields[0]!.value);
+    expect(host.textContent).not.toContain("Model summary");
+    client.clear();
+  });
+
+  it.each(["notes.delete", "app.callAction"])(
+    "restores red Approve only from explicit note-delete identity for %s",
+    (toolName) => {
+      const host = renderCard({
+        ...baseProps,
+        toolName,
+        outcomeTitle: "Delete note",
+        approvalAvailable: true,
+        details: { ...details, approvalKind: "note_delete" }
+      });
+      expect(host.querySelector(".jds-btn--danger")?.textContent).toBe("Approve");
+      const unmarked = renderCard({ ...baseProps, toolName, outcomeTitle: "Delete note" });
+      expect(unmarked.querySelector(".jds-btn--danger")).toBeNull();
     }
   );
 

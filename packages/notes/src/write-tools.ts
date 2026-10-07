@@ -13,7 +13,13 @@ import { dirname, isAbsolute, join, normalize } from "node:path";
 import { createHash } from "node:crypto";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
-import { HttpError, type ToolExecute, type ToolResult, type ToolServices } from "@moss/module-sdk";
+import {
+  ApprovalPrerequisiteError,
+  HttpError,
+  type ToolExecute,
+  type ToolResult,
+  type ToolServices
+} from "@moss/module-sdk";
 import { NOTES_SOURCE_PREFERENCE_KEY, resolveNotesRoots } from "@moss/settings";
 import { PreferencesRepository } from "@moss/structured-state";
 
@@ -53,7 +59,8 @@ function coerceToRelativePath(input: unknown, root: string): unknown {
 
 async function resolveAllowedRoots(): Promise<string[]> {
   const roots = resolveNotesRoots();
-  if (roots.length === 0) throw new HttpError(503, "Notes roots not configured on this server");
+  if (roots.length === 0)
+    throw new ApprovalPrerequisiteError(503, "Notes roots not configured on this server");
   const resolved: string[] = [];
   for (const root of roots) {
     try {
@@ -62,25 +69,32 @@ async function resolveAllowedRoots(): Promise<string[]> {
       // Ignore stale configured roots; the linked source check below still fails closed.
     }
   }
-  if (resolved.length === 0) throw new HttpError(503, "Notes roots not configured on this server");
+  if (resolved.length === 0)
+    throw new ApprovalPrerequisiteError(503, "Notes roots not configured on this server");
   return resolved;
 }
 
 export async function resolveSource(scopedDb: DataContextDb): Promise<string> {
   const source = await preferences.get(scopedDb, NOTES_SOURCE_PREFERENCE_KEY);
   if (typeof source !== "string" || source.length === 0) {
-    throw new HttpError(409, "Notes source is not configured");
+    throw new ApprovalPrerequisiteError(409, "Notes source is not configured");
   }
 
   let resolvedSource: string;
   try {
     resolvedSource = await realpath(source);
   } catch {
-    throw new HttpError(400, "Notes source path does not exist or cannot be resolved");
+    throw new ApprovalPrerequisiteError(
+      400,
+      "Notes source path does not exist or cannot be resolved"
+    );
   }
   const allowedRoots = await resolveAllowedRoots();
   if (!allowedRoots.some((root) => contains(root, resolvedSource))) {
-    throw new HttpError(400, "Notes source path is not within an allowed notes root");
+    throw new ApprovalPrerequisiteError(
+      400,
+      "Notes source path is not within an allowed notes root"
+    );
   }
   return resolvedSource;
 }
