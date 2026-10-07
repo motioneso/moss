@@ -163,13 +163,16 @@ cannot operate on that reserved surface. `GET /api/chat/meeting-context?surface=
 ## Summary, Task review and private export checkpoint
 
 Review offers explicit template selection and Generate; merely opening a meeting does not run a
-model. Generate stays disabled while the configured summary route is unavailable or its
+model. Generate stays disabled while your default model is unavailable or its
 availability cannot be checked. Refresh summaries rechecks safe configuration metadata without
 reading credentials or contacting a provider; existing saved summaries remain readable.
-Generation resolves the configured active API-key model with both `summarization` and
-`json` capabilities, respecting the routing/pin contract. It makes one structured HTTP attempt,
-without executable tools, native search, CLI engines or repair/fallback attempts. The model's
+Generation resolves the same effective default model as chat, honoring administrator locks and
+user overrides, and requires `summarization` and `json` capabilities. An unavailable enabled
+override fails closed. API-key and supported constrained Claude subscription providers make one bounded
+structured attempt, without native search or repair/fallback attempts. Entire JSON-fenced CLI
+replies are accepted; surrounding prose, multiple JSON values and malformed replies are rejected. The model's
 claims must bind to the retained input's exact meeting, revision and UTF-16 evidence ranges.
+Codex subscriptions currently fail before dispatch with an unsupported message; no API-key or other-model fallback is used.
 A proposal never authorizes an action.
 
 The escaped structured prompt is limited to **65,536 UTF-8 bytes**, including guidance and JSON

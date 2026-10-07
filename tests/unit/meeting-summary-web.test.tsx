@@ -9,6 +9,7 @@ import type {
   MeetingOutputArtifact,
   MeetingRecord
 } from "@moss/shared";
+import { summaryGenerationFailure } from "../../packages/meetings/src/web/summary-generation-error.js";
 import { MeetingSummary } from "../../packages/meetings/src/web/meeting-summary.js";
 import { exportStatus } from "../../packages/meetings/src/web/meeting-vault-export.js";
 import { invalidateOutputAccess } from "../../packages/meetings/src/web/output-access.js";
@@ -175,6 +176,27 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("meeting summary owner review", () => {
+  it("shows unsupported subscription status without allowing generation or provider fallback", async () => {
+    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+      artifacts: [artifact],
+      candidates: [],
+      headVersion: 1,
+      generationAvailability: "subscription-unsupported",
+      templates: [{ id: "general", version: 1, name: "General meeting" }]
+    });
+    await mount();
+    await chooseTemplate();
+    expect(JSON.stringify(renderer.toJSON())).toContain(
+      "Summaries on this subscription aren’t supported yet. No other model was used."
+    );
+    expect(
+      renderer.root
+        .findAllByType("button")
+        .find((node) => node.children.includes("Generate new version"))?.props.disabled
+    ).toBe(true);
+    expect(api.generateMeetingOutput).not.toHaveBeenCalled();
+  });
+
   it.each([true, false])(
     "blocks generation with no supported model and offers role-aware recovery: admin=%s",
     async (admin) => {
@@ -198,8 +220,10 @@ describe("meeting summary owner review", () => {
       await click("Generate summary");
       expect(api.generateMeetingOutput).not.toHaveBeenCalled();
       const rendered = JSON.stringify(renderer.toJSON());
-      expect(rendered).toContain("No supported summary model is available.");
-      expect(rendered).toContain("API-key model with summarization and structured-output support");
+      expect(rendered).toContain(
+        "Your default model is unavailable or cannot produce structured summaries."
+      );
+      expect(rendered).toContain("No other model will be used.");
       expect(rendered).toContain(admin ? "Settings → AI providers" : "Contact an instance admin");
     }
   );
@@ -229,7 +253,7 @@ describe("meeting summary owner review", () => {
     await click("Refresh summaries");
     expect(button("Generate summary").props.disabled).toBe(false);
     expect(JSON.stringify(renderer.toJSON())).not.toContain(
-      "No supported summary model is available."
+      "Your default model is unavailable or cannot produce structured summaries."
     );
     await click("Generate summary");
     expect(api.generateMeetingOutput).toHaveBeenCalledWith(
@@ -319,8 +343,8 @@ describe("meeting summary owner review", () => {
       await click("Generate new version");
       await flush();
       const rendered = JSON.stringify(renderer.toJSON());
-      expect(rendered).toContain("API-key model with summarization and structured-output support");
-      expect(rendered).toContain("CLI models aren’t supported for summaries");
+      expect(rendered).toContain("No other model will be used.");
+      expect(rendered).toContain("Check its connection and try again.");
       expect(rendered).toContain("Contact an instance admin");
       expect(rendered).not.toContain("Private provider credential error");
       expect(rendered).not.toContain("Choose Generate to start a new request");
@@ -949,5 +973,12 @@ describe("meeting summary owner review", () => {
       "not been overwritten"
     );
     expect(exportStatus(receipt)).not.toMatch(/indexed/i);
+  });
+});
+
+it("names an unsupported Claude subscription without suggesting a silent replacement", () => {
+  expect(summaryGenerationFailure("meeting_output_claude_subscription_unsupported")).toEqual({
+    status: "failed",
+    message: "Summaries on this Claude subscription aren’t supported yet. No other model was used."
   });
 });

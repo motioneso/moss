@@ -274,9 +274,11 @@ export function MeetingSummary({
             <p role="status" className="jds-hint">
               {generationAvailability === "checking"
                 ? "Checking summary model availability…"
-                : generationAvailability === "model-unavailable"
-                  ? summaryGenerationFailure("meeting_output_route_unavailable").message
-                  : "Couldn’t check summary model availability. Refresh summaries to try again."}
+                : generationAvailability === "subscription-unsupported"
+                  ? summaryGenerationFailure("meeting_output_subscription_unsupported").message
+                  : generationAvailability === "model-unavailable"
+                    ? summaryGenerationFailure("meeting_output_route_unavailable").message
+                    : "Couldn’t check summary model availability. Refresh summaries to try again."}
             </p>
           ) : null}
           {unsavedNotes ? (

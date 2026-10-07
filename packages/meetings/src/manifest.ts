@@ -309,7 +309,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.grounded_outputs",
       description:
-        "Generate evidence-checked summaries, decisions and actions with four templates. Compare versions and review exact sources. Generate requires a supported API-key route; CLI unavailable. Refresh summaries rechecks model configuration.",
+        "Generate evidence-checked summaries, decisions and actions using your default model, including the constrained Claude subscription runner. No model fallback. Compare versions and exact sources; refresh summaries to recheck availability.",
       errors: [
         {
           code: "meeting_output_unavailable",
@@ -318,10 +318,22 @@ export const meetingsModuleManifest = {
             "This output version is unavailable to the owner. Refresh the meeting and review another retained version."
         },
         {
+          code: "meeting_output_subscription_unsupported",
+          class: "validation",
+          description:
+            "Codex and other unconstrained subscription profiles do not support summaries yet. No replacement model is used. API-key and supported Claude profiles remain available."
+        },
+        {
+          code: "meeting_output_claude_subscription_unsupported",
+          class: "validation",
+          description:
+            "Summaries on this Claude subscription are not supported by the installed constrained runner yet. No other model is used. Ask an admin to check the installed CLI version."
+        },
+        {
           code: "meeting_output_route_unavailable",
           class: "validation",
           description:
-            "Summaries need an API-key model with summarization and structured-output support; CLI is unsupported. Admins check Settings → AI providers; other owners contact an admin. Refresh summaries after updating configuration, then generate."
+            "Your default model is unavailable or cannot produce structured summaries. No replacement is used. Check Settings → AI providers or ask an admin, then refresh summaries and try again."
         },
         {
           code: "meeting_output_route_changed",

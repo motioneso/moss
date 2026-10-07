@@ -3,10 +3,11 @@ import { type AccessContext, type DataContextDb, type DataContextRunner } from "
 import {
   AiRepository,
   createAiSecretCipher,
-  prepareStructuredApiGeneration,
+  prepareStructuredGeneration,
   STRUCTURED_PROMPT_MAX_BYTES,
   type AiConfiguredModelSafeRow,
   type AiProviderConfigSafeRow,
+  type GenerateStructuredDeps,
   type ActiveModulesResolver
 } from "@moss/ai";
 import {
@@ -70,7 +71,6 @@ export const MEETING_OUTPUT_SCHEMA = object({
   warnings: array(string(2000))
 });
 
-const HTTP_KINDS = new Set(["anthropic", "openai-compatible", "google"]);
 const unavailableRoute = (changed = false) =>
   new MeetingOutputError(
     changed ? "meeting_output_route_changed" : "meeting_output_route_unavailable"
@@ -83,16 +83,18 @@ const usableProvider = (
   provider.id === model.provider_config_id &&
   provider.provider_kind === model.provider_kind &&
   provider.status === "active" &&
-  provider.auth_method === "api_key" &&
+  provider.auth_method === model.provider_auth_method &&
+  (provider.auth_method === "api_key" || provider.auth_method === "cli") &&
   provider.purpose === "assistant" &&
   !provider.revoked_at &&
   provider.has_credential;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
-/** Composition only. No CLI adapter, sorting route, search or executable tools are supplied. */
+/** Composition only. Uses bounded structured transports, without sorting or native search. */
 export function createMeetingOutputRuntime(deps: {
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   readonly resolveActiveModules: ActiveModulesResolver;
+  readonly createConstrainedCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
 }) {
   const ai = new AiRepository();
   const tasks = new TasksRepository();
@@ -103,33 +105,27 @@ export function createMeetingOutputRuntime(deps: {
     if (includeTasks && !active.some((module) => module.id === "tasks"))
       throw new MeetingOutputError("meeting_action_tasks_unavailable");
   };
-  const resolveModel = async (db: DataContextDb, changed = false, logNeedsConfig?: false) => {
-    // Honor admin pins, then Meetings / generic-worker settings using the existing resolver.
-    // Broken fixed bindings and unavailable hard-pinned models must not send meeting
-    // evidence to a replacement model. Provider-only pins retain capability selection.
-    // explicitModel below must only use this checked route.
-    const route = await ai.resolveModelForService(db, "module.meetings", {
-      capability: "summarization",
-      rejectUnavailableFixedBinding: true,
-      rejectUnavailablePinnedModel: true,
-      logNeedsConfig
-    });
-    const model = route.model;
+  const resolveModel = async (db: DataContextDb, changed = false) => {
+    // Use the same effective default as chat, including admin locks and user overrides.
+    // An unavailable enabled override must not disclose meeting evidence to a substitute.
+    const model = await ai.selectChatModelForUser(db, { rejectUnavailableOverride: true });
+    if (model?.provider_auth_method === "cli" && model.provider_kind !== "anthropic")
+      throw new MeetingOutputError("meeting_output_subscription_unsupported");
     if (
       !model ||
       model.status !== "active" ||
       model.provider_status !== "active" ||
-      model.provider_auth_method !== "api_key" ||
+      (model.provider_auth_method !== "api_key" && model.provider_auth_method !== "cli") ||
+      (model.provider_auth_method === "cli" && !deps.createConstrainedCliStructuredAdapter) ||
       model.provider_purpose !== "assistant" ||
       !model.capabilities.includes("summarization") ||
-      !model.capabilities.includes("json") ||
-      !HTTP_KINDS.has(model.provider_kind)
+      !model.capabilities.includes("json")
     )
       throw unavailableRoute(changed);
-    return { model, reason: route.reason };
+    return model;
   };
   const resolve = async (db: DataContextDb, changed = false) => {
-    const { model, reason } = await resolveModel(db, changed);
+    const model = await resolveModel(db, changed);
     const provider = await ai.selectProviderWithCredential(db, model.provider_config_id);
     if (!provider || !usableProvider(model, provider) || !provider.encrypted_credential)
       throw unavailableRoute(changed);
@@ -141,7 +137,8 @@ export function createMeetingOutputRuntime(deps: {
       model.provider_model_id,
       model.provider_kind,
       model.updated_at,
-      reason,
+      provider.auth_method,
+      provider.acp_agent_id,
       provider.updated_at,
       provider.base_url,
       provider.encrypted_credential
@@ -161,7 +158,7 @@ export function createMeetingOutputRuntime(deps: {
   ): Promise<MeetingOutputGenerationAvailability> => {
     try {
       return await deps.dataContext.withDataContext(actor, async (db) => {
-        const { model } = await resolveModel(db, false, false);
+        const model = await resolveModel(db);
         // Safe metadata only: this advisory read never loads or decrypts credentials.
         const provider = (await ai.listProviders(db)).find(
           (item) => item.id === model.provider_config_id
@@ -170,6 +167,11 @@ export function createMeetingOutputRuntime(deps: {
       });
     } catch (error) {
       // Keep retained summaries readable when configuration checks are temporarily unavailable.
+      if (
+        error instanceof MeetingOutputError &&
+        error.code === "meeting_output_subscription_unsupported"
+      )
+        return "subscription-unsupported";
       return error instanceof MeetingOutputError &&
         error.code === "meeting_output_route_unavailable"
         ? "model-unavailable"
@@ -197,7 +199,7 @@ export function createMeetingOutputRuntime(deps: {
         throw new MeetingOutputError("meeting_output_input_too_large", 400);
       const selected = await deps.dataContext.withDataContext(actor, (db) => resolve(db));
       const run = await deps.dataContext.withDataContext(actor, (db) =>
-        prepareStructuredApiGeneration(
+        prepareStructuredGeneration(
           db,
           {
             service: "module.meetings",
@@ -219,7 +221,8 @@ export function createMeetingOutputRuntime(deps: {
                 return current.provider;
               }
             },
-            cipher: createAiSecretCipher()
+            cipher: createAiSecretCipher(),
+            createCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter
           }
         )
       );
@@ -234,7 +237,10 @@ export function createMeetingOutputRuntime(deps: {
         throw new MeetingOutputError(
           result.error === "aborted"
             ? "meeting_output_interrupted"
-            : "meeting_output_generation_failed"
+            : result.reason === "unsupported_transport" &&
+                selected.model.provider_kind === "anthropic"
+              ? "meeting_output_claude_subscription_unsupported"
+              : "meeting_output_generation_failed"
         );
       return {
         content: validateMeetingOutput(result.object, input.inputs),
