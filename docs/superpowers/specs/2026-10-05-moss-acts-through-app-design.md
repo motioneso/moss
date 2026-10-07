@@ -501,6 +501,42 @@ Nothing reaches live user data until every item above lands. Phase 1 ships as on
 
 - New approval card per the agreed mockup.
 
+### Phase 2 cleanup, 2026-10-07
+
+The resolved-state cleanup implements the four quiet outcomes in the merged approval-card
+artifacts: Approved, You declined, Timed out and Cancelled. The outcome replaces the whole
+pending card, including its target, field rows, controls and outside-context notice. There is no
+separate execution row. Approved records the decision, not successful completion of the action.
+The Thinking summary, step count, expansion behavior and expanded list remain unchanged. An
+action that fails after approval says "Approved, but it didn’t go through" with a fixed plain
+explanation; raw error payloads are not printed in the outcome. New terminal records retain
+server-owned action titles and decision identity through streaming and history reload. Older
+execution-only history without a decision does not invent an approval outcome.
+
+Automatic writes keep one visible plain outcome too: "Done: <title>" on completion, or
+"<title> didn’t go through" with a fixed plain reason on failure. The server captures the title
+before dispatch and carries it through unattended result records. An authored action label can
+supply a safe fallback when the detailed pending summary contains paths; notes use Create note,
+Edit note and Delete note without changing their pending disclosure. Permission grants are never
+called Done, and these automatic outcomes never imply the user approved a card. Live and restored
+outcomes retain their place before Moss's reply.
+
+Owner-reported live proof on `cf55a711c` preceded the unattended visibility and history-order
+follow-up. That earlier proof is not claimed as coverage of these new behaviors.
+
+The outside-content rule already applies to every write through the shared gateway policy on
+main. This cleanup adds manifest-driven coverage across shipped built-in and installable writes,
+connected-tool origins, ordinary and classifier calls, and clean/tainted controls; it does not
+expand the policy. No allow-for-this-chat permission is added.
+
+Pending-card styling and human-field presentation are **not implemented by this cleanup**. The
+existing server-read title, full target and exact field disclosure remain. Generic calls still
+show technical Method/Path/Query/Body rows while pending: removing these safely needs server-owned
+field labels and ID resolution, not filtering or guessing from model text. The mockup fixtures
+are not a runtime contract. The pending redesign remains subject to Ben's separate review in
+#3090. This cleanup does not claim completion of the earlier before-approval presentation request
+or the live-path gate.
+
 ### Kill gate after phase 1
 
 Owner: Ben.

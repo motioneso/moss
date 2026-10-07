@@ -64,7 +64,8 @@ export async function tryGatedTurn(
         readonly parentId?: string;
       }
     | undefined,
-  controller: AbortController
+  controller: AbortController,
+  flushActions?: () => Promise<Pick<HandledTurnOptions, "activityRecords" | "actionResults">>
 ): Promise<{
   result: GateTurnResult | undefined;
   requestIncognito: boolean;
@@ -127,6 +128,9 @@ export async function tryGatedTurn(
     return { result: undefined, requestIncognito, requestThreadId };
   if (outcome.kind === "cancelled")
     return { result: cancelledTurn(host, actorUserId, surface), requestIncognito, requestThreadId };
+  const actionOptions = await flushActions?.();
+  if (controller.signal.aborted)
+    return { result: cancelledTurn(host, actorUserId, surface), requestIncognito, requestThreadId };
   return {
     result: await persistGateOutcome(
       host,
@@ -135,7 +139,8 @@ export async function tryGatedTurn(
       requestThreadId,
       text,
       opts,
-      outcome
+      outcome,
+      actionOptions
     ),
     requestIncognito,
     requestThreadId
@@ -164,7 +169,8 @@ async function persistGateOutcome(
   threadId: string | null,
   text: string,
   opts: { readonly attachments?: readonly StoredAttachmentMeta[] } | undefined,
-  outcome: Extract<GateOutcome, { kind: "handled" | "terminal_failure" }>
+  outcome: Extract<GateOutcome, { kind: "handled" | "terminal_failure" }>,
+  actionOptions?: Pick<HandledTurnOptions, "activityRecords" | "actionResults">
 ): Promise<GateTurnResult | undefined> {
   const handled = outcome.kind === "handled";
   const reply = handled ? outcome.reply : outcome.message;
@@ -180,6 +186,7 @@ async function persistGateOutcome(
   };
   const handledOpts: HandledTurnOptions = {
     threadId,
+    ...actionOptions,
     attachments:
       attachments.length > 0
         ? attachments.map((meta) => ({

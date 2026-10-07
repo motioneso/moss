@@ -107,10 +107,17 @@ function holdResume(h: ReturnType<typeof harness>) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("chat conversation identity binding", () => {
-  it("binds launch to its original thread when resume changes current during persona await", async () => {
+  it("preserves the old launch binding but returns a fresh session after resume during persona await", async () => {
     const persona = deferred<string>();
     const render = vi.fn(() => persona.promise);
     const h = harness({ persona: render });
+    const mintedOrigins: Array<string | null | undefined> = [];
+    const mint = h.tokens.mint.bind(h.tokens);
+    vi.spyOn(h.tokens, "mint").mockImplementation((context, options) => {
+      const token = mint(context, options);
+      mintedOrigins.push(h.tokens.verify(token).threadId);
+      return token;
+    });
     const releaseResume = holdResume(h);
     const launch = h.manager.ensureSession("user-1", "Ben");
     await vi.waitFor(() => expect(render).toHaveBeenCalledOnce());
@@ -118,8 +125,10 @@ describe("chat conversation identity binding", () => {
     persona.resolve("Moss");
     const session = await launch;
 
-    expect(session.threadId).toBe("thread-A");
-    expect(h.tokens.verify(session.mcpToken!).threadId).toBe("thread-A");
+    expect(mintedOrigins).toEqual(["thread-A", "thread-B"]);
+    expect(session.threadId).toBe("thread-B");
+    expect(h.tokens.verify(session.mcpToken!).threadId).toBe("thread-B");
+    expect(h.engine.kill).toHaveBeenCalledOnce();
     expect(h.mintMcpToken).toHaveBeenCalledWith("user-1", "user-1:drawer", "thread-A");
     expect(h.engineFactory).toHaveBeenCalledWith(
       "anthropic",

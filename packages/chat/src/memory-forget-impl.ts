@@ -64,6 +64,7 @@ export function createMemoryForgetBoundary(deps: {
           forceConfirm: true,
           confirmWhenTainted: false,
           summary: "Forget saved memory",
+          requiresTarget: true,
           targetVersion: target.version,
           details: { target: target.label, fields: [] },
           affectsModules: ["memory"]

@@ -64,6 +64,8 @@ export type PerCallResolution =
       readonly confirmWhenTainted: boolean;
       readonly summary: string;
       readonly details: CallCardDetails;
+      /** Host-owned disclosure requirement, frozen with this exact resolved target. */
+      readonly requiresTarget?: true;
       /** Opaque server-side target identity. Never streamed on the card or persisted. */
       readonly targetVersion?: string;
       readonly affectsModules: readonly string[];
@@ -109,9 +111,21 @@ export type ActiveModulesResolver = (actorUserId: string) => Promise<readonly Mo
 export type GatewaySessionRecord =
   | {
       readonly kind: "action_request";
+      /** Server-only completeness rule declared by the host's per-call resolver. */
+      readonly requiresTarget?: true;
+      /** Server-only proof copied from the owned persisted request, never provider/model input. */
+      readonly liveOrigin?: {
+        readonly actorUserId: string;
+        readonly chatSessionId: string;
+        readonly threadId: string;
+      };
+      /** Server token's frozen conversation binding; never supplied by model tool input. */
+      readonly originThreadId?: string;
       readonly actionRequestId: string;
       readonly toolName: string;
       readonly summary: string;
+      /** Optional plain title frozen with the card; raw native descriptions never supply it. */
+      readonly outcomeTitle?: string;
       /**
        * Optional rich, server-derived card preview (e.g. email reply recipient/subject/body).
        * Rides the live stream ONLY — it is never written to the persisted action_request row,
@@ -126,9 +140,15 @@ export type GatewaySessionRecord =
     }
   | {
       readonly kind: "action_result";
+      /** Recovery replay persists the original thread without broadcasting an old live outcome. */
+      readonly historyOnly?: boolean;
+      /** Server token's frozen conversation binding, for results with no pending request row. */
+      readonly originThreadId?: string;
       readonly actionRequestId: string;
       readonly toolName: string;
       readonly outcome: "executed" | "denied" | "error" | "allowed";
+      /** Plain server-authored card title frozen before approval, independent of handler output. */
+      readonly summary?: string;
       /** Decision provenance; execution outcome is intentionally separate. */
       readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
       /** Time from the approval card becoming visible to its answer. */
@@ -148,6 +168,8 @@ export type GatewaySessionRecord =
 
 export interface SessionNotifier {
   emit(chatSessionId: string, record: GatewaySessionRecord): void;
+  /** Wait only for this server session's queued notification persistence. */
+  flush?(chatSessionId: string): Promise<void>;
 }
 
 export type GatewayToolResponse =

@@ -23,8 +23,8 @@ describe("app-map integrity and truthfulness", () => {
     );
     expect(provider?.description).not.toContain("the exact field values");
     const outcome = CORE_APP_ERRORS.find((error) => error.code === "core.ai.action_not_approved");
-    for (const text of ["You declined this action.", "Action timed out.", "Action cancelled."]) {
-      expect(outcome?.description).toContain(text);
+    for (const text of ["You declined", "Timed out", "Cancelled"]) {
+      expect(outcome?.description).toContain(`"${text}"`);
     }
     expect(outcome?.description).toContain("separate from the visible message");
   });

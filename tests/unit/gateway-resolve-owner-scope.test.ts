@@ -30,7 +30,11 @@ function createGateway(row: FixtureRow) {
   const confirmations = new ConfirmationRegistry();
   const gateway = new AssistantToolGateway({
     resolveActiveModules: async () => [],
-    repository: { getAssistantAction, resolveAssistantAction } as never,
+    repository: {
+      getAssistantAction,
+      resolveAssistantAction,
+      expireAssistantAction: async () => undefined
+    } as never,
     runner: {
       withDataContext: async (
         access: { actorUserId: string },
@@ -85,15 +89,22 @@ describe("resolveActionRequest owner scope (#1591)", () => {
       status: "pending"
     });
 
-    // No live waiter: falls through to the fail-closed timeout guard, row stays pending.
+    // No live waiter and no elapsed deadline: unavailable, not a fabricated timeout.
     await expect(gateway.resolveActionRequest("owner-1", row.id, "confirmed")).resolves.toBe(
-      "expired"
+      "unavailable"
     );
     expect(row.status).toBe("pending");
     expect(resolveAssistantAction).not.toHaveBeenCalled();
 
     // Live waiter: resolves for real, row transitions, resolveAssistantAction runs once.
     const pending = confirmations.awaitResolution(row.id, 10_000);
+    confirmations.storePresentation("owner-1", {
+      kind: "action_request",
+      actionRequestId: row.id,
+      toolName: "example.write",
+      summary: "Change setting",
+      outsideContentNotice: false
+    });
     const resolution = gateway.resolveActionRequest("owner-1", row.id, "confirmed");
     await expect(pending).resolves.toBe("confirmed");
     confirmations.markDone(row.id);

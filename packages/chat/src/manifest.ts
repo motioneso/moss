@@ -62,7 +62,8 @@ export const chatModuleManifest = {
       "sql/0276_meeting_chat_cleanup.sql",
       "sql/0277_chat_surface_immutable.sql",
       "sql/0291_chat_conversation_provenance.sql",
-      "sql/0293_chat_automatic_action_reservations.sql"
+      "sql/0293_chat_automatic_action_reservations.sql",
+      "sql/0297_chat_action_history_permissions.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -119,9 +120,36 @@ export const chatModuleManifest = {
     {
       id: "chat.conversation_write_confirmation",
       description:
-        "Writes ask when the bound conversation has outside or unknown history, even in YOLO. " +
-        "Outside content is recorded before admission and stored state survives restart. " +
-        "Native vault reads stop if their bound conversation cannot be recorded.",
+        "Every write, including installed and connected tools, asks on outside or unknown history, even in YOLO. " +
+        "Admission is recorded before exposure and survives restart. Native vault reads stop if their conversation cannot be recorded.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.approval_outcomes",
+      description:
+        "Decided cards become quiet outcomes in their original conversation, also after reload. " +
+        "Details disappear; Thinking stays unchanged. Failures are explicit. Pending cards keep exact disclosure. Unknown origins stay out of chat.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.restored_action_details",
+      description:
+        "Restored requests use full server details when available. Without them, approval is hidden and decline remains available. " +
+        "Expired requests become timed out; outcomes stay with their original conversation.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.action_outcome_delivery",
+      description:
+        "Live results refresh the originating chat while Moss is answering; history saves separately. " +
+        "Opening chat resumes expiry recovery in bounded batches without replaying already saved outcomes.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.automatic_action_outcomes",
+      description:
+        "Automatic writes show Done or a short failure with a safe action title. Refusals name the action. " +
+        "No approval is implied; grants are not completion. Lines stay before the reply after reload.",
       featureFlagId: "chat.module"
     },
     {
@@ -261,6 +289,13 @@ export const chatModuleManifest = {
         "Private shadow records compare the gate's guess with the main model's first tool call " +
         "and keep message text. A first tool outside the classifier stays unnamed; later calls " +
         "never replace it. Private chats never sent. Ask Moss to delete them.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.message_order",
+      description:
+        "Saved messages keep your question before Moss's reply when they share a timestamp, " +
+        "including reloaded history, conversation archives and account exports.",
       featureFlagId: "chat.module"
     },
     {

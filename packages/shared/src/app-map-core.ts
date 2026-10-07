@@ -411,7 +411,7 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "permission",
     remediationRef: "core.ai.ask_user",
     description:
-      'An action that was not approved is not done. Chat distinguishes "You declined this action.", "Action timed out." and "Action cancelled."; guidance for Moss is separate from the visible message.'
+      'An action that was not approved is not done. Chat distinguishes "You declined", "Timed out" and "Cancelled"; guidance for Moss is separate from the visible message.'
   },
   {
     code: "core.ai.tool_added_after_chat_started",

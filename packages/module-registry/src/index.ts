@@ -693,6 +693,13 @@ export interface BuiltInRouteDependencies {
   readonly getResolveActionRequestFn?: () =>
     | AssistantToolGateway["resolveActionRequest"]
     | undefined;
+  /** Per-server live waiter lookup for origin-scoped chat-card hydration. */
+  readonly getActionRequestPresentationFn?: () =>
+    | AssistantToolGateway["getActionRequestPresentation"]
+    | undefined;
+  readonly getRecoverActionRequestsFn?: () =>
+    | AssistantToolGateway["recoverActionRequests"]
+    | undefined;
   /**
    * #1554 task #6 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
    * same late-bound "adopt" seam as {@link adoptChatRpcConnection}/
@@ -2168,6 +2175,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           const fn = deps.getResolveActionRequestFn?.() ?? unwiredActionResolver;
           return fn(actorUserId, id, status);
         },
+        getActionRequestPresentation: (actorUserId, id) =>
+          deps.getActionRequestPresentationFn?.()?.(actorUserId, id),
+        recoverActionRequests: async (actorUserId) => {
+          await deps.getRecoverActionRequestsFn?.()?.(actorUserId);
+        },
         // #1888 — the "Build it" button. packages/ai owns the ownership check and the status
         // transition; the queue lives out here, so the composition root supplies the send.
         // No queue means the field stays undefined and the route answers 503.
@@ -3487,6 +3499,10 @@ export function registerBuiltInApiRoutes(
   let resolveActionRequestFn: AssistantToolGateway["resolveActionRequest"] | undefined;
   const getResolveActionRequestFn = (): AssistantToolGateway["resolveActionRequest"] | undefined =>
     resolveActionRequestFn;
+  let actionRequestPresentationFn: AssistantToolGateway["getActionRequestPresentation"] | undefined;
+  const getActionRequestPresentationFn = () => actionRequestPresentationFn;
+  let recoverActionRequestsFn: AssistantToolGateway["recoverActionRequests"] | undefined;
+  const getRecoverActionRequestsFn = () => recoverActionRequestsFn;
   // #1554 task #6: the persistent-runtime pool's onPersistentReap needs
   // SessionTokenRegistry.revokeBySessionId, which is likewise built INSIDE registerChatRoutes's
   // `wiring` closure — same late-bound "adopt" seam as dropSessionsForProvider above. Populated
@@ -3719,8 +3735,12 @@ export function registerBuiltInApiRoutes(
     // resolveActionRequest closure reads back out through getResolveActionRequestFn below.
     adoptChatGateway: (gateway: AssistantToolGateway) => {
       resolveActionRequestFn = gateway.resolveActionRequest.bind(gateway);
+      actionRequestPresentationFn = gateway.getActionRequestPresentation.bind(gateway);
+      recoverActionRequestsFn = gateway.recoverActionRequests.bind(gateway);
     },
     getResolveActionRequestFn,
+    getActionRequestPresentationFn,
+    getRecoverActionRequestsFn,
     // #1554 task #6: mirrors adoptDropSessionsForProvider immediately above — publishes the chat
     // wiring closure's SessionTokenRegistry.revokeBySessionId into this per-server binding, which
     // the onReady hook below reads through onPersistentReap when it resolves the real engine

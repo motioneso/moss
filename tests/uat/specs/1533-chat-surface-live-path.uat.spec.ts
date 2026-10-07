@@ -284,7 +284,12 @@ test("chat surface routing: action request renders and settles without reload (#
   await test.step("Phase 5: reject the card; the turn POST settles; no reload was used", async () => {
     const card = page.locator('[role="region"][aria-label="Action request"]');
     await card.getByRole("button", { name: "Reject" }).click();
-    await expect(card.getByText("Not approved")).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByRole("status").filter({ hasText: /^You declined(?: · |$)/ })
+    ).toBeVisible({
+      timeout: 10_000
+    });
+    await expect(card).toHaveCount(0);
 
     if (!turnResponsePromise) throw new Error("Phase 2 did not arm the turn-response wait");
     const turnResponse = await turnResponsePromise;

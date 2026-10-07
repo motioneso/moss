@@ -68,3 +68,4 @@ export {
   type SelfOperationExclusionCategory,
   type SelfOperationManifestInput
 } from "./self-operation.js";
+export { reportActionRecordFailure } from "./action-record-diagnostics.js";

@@ -469,9 +469,11 @@ test.describe("Chat drawer — Approve/Reject card", () => {
     // Approve
     await page.locator(".action-request-card").getByRole("button", { name: "Approve" }).click();
 
-    await expect(page.locator('.action-request-card [data-state="confirmed"]')).toHaveText(
-      "Approved"
-    );
+    await expect(
+      page.getByRole("dialog", { name: "Chat with Moss" }).getByRole("status")
+    ).toHaveText("Approved");
+    await expect(page.locator(".action-request-card")).toHaveCount(0);
+    await expect(page.getByText("Write the value 'test'", { exact: true })).toHaveCount(0);
 
     // Assert the approval decision and the path's action-request id actually went over the wire.
     expect(resolveBody).toEqual({ status: "confirmed" });
@@ -522,9 +524,11 @@ test.describe("Chat drawer — Approve/Reject card", () => {
 
     await expect(page.locator(".action-request-card")).toBeVisible({ timeout: 3000 });
     await page.locator(".action-request-card").getByRole("button", { name: "Reject" }).click();
-    await expect(page.locator('.action-request-card [data-state="rejected"]')).toHaveText(
-      "Not approved"
-    );
+    await expect(
+      page.getByRole("dialog", { name: "Chat with Moss" }).getByRole("status")
+    ).toHaveText("You declined");
+    await expect(page.locator(".action-request-card")).toHaveCount(0);
+    await expect(page.getByText("Write 'y'", { exact: true })).toHaveCount(0);
 
     // Assert the rejection decision and the path's action-request id actually went over the wire.
     expect(resolveBody).toEqual({ status: "rejected" });
@@ -595,13 +599,16 @@ test.describe("Chat drawer — Approve/Reject card", () => {
 
     await expect(page.locator(".action-request-actions")).toHaveCount(0);
     await expect(page.getByText("Resolving…")).toBeVisible();
-    await expect(page.locator('.action-request-card [data-state="confirmed"]')).toHaveCount(0);
+    await expect(
+      page.getByRole("dialog", { name: "Chat with Moss" }).getByRole("status")
+    ).toHaveCount(0);
 
     gate.resolve?.();
 
-    await expect(page.locator('.action-request-card [data-state="confirmed"]')).toHaveText(
-      "Approved"
-    );
+    await expect(
+      page.getByRole("dialog", { name: "Chat with Moss" }).getByRole("status")
+    ).toHaveText("Approved");
+    await expect(page.locator(".action-request-card")).toHaveCount(0);
     expect(resolveCallCount).toBe(1);
   });
 
@@ -679,9 +686,8 @@ test.describe("Chat drawer — Approve/Reject card", () => {
     expect(pageErrors).toEqual([]);
   });
 
-  // #1518/1139-A: new regression coverage for the existing expired-request copy/state, now
-  // derived from the mutation's ApiError status instead of a message string-match.
-  test("an expired (409) resolution shows the expiry message and no retry controls", async ({
+  // #1518/1139-A: a 409 is a terminal timeout, derived from the mutation's ApiError status.
+  test("an expired (409) resolution shows a quiet timeout and no retry controls", async ({
     page
   }) => {
     await mockApi(page, {
@@ -727,13 +733,11 @@ test.describe("Chat drawer — Approve/Reject card", () => {
     await expect(page.locator(".action-request-card")).toBeVisible({ timeout: 3000 });
     await page.locator(".action-request-card").getByRole("button", { name: "Approve" }).click();
 
-    await expect(page.getByText("This request expired — ask again.")).toBeVisible();
-    await expect(
-      page.locator(".action-request-card").getByRole("button", { name: "Approve" })
-    ).toHaveCount(0);
-    await expect(
-      page.locator(".action-request-card").getByRole("button", { name: "Reject" })
-    ).toHaveCount(0);
+    const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+    await expect(drawer.getByRole("status")).toHaveText("Timed out");
+    await expect(drawer.locator(".action-request-card")).toHaveCount(0);
+    await expect(drawer.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    await expect(drawer.getByRole("button", { name: "Reject" })).toHaveCount(0);
   });
 
   // #1264: mutation-tight frontend counterpart to
@@ -758,9 +762,12 @@ test.describe("Chat drawer — Approve/Reject card", () => {
 
     const actionResultEvent = JSON.stringify({
       kind: "action_result",
-      text: "Switched to dark mode.",
+      text: "Executed: settings.themeMode.set",
       toolName: "settings.themeMode.set",
-      outcome: "executed"
+      summary: "Switch to dark mode",
+      decidedBy: "policy",
+      outcome: "executed",
+      actionRequestId: "ar_theme_auto"
     });
     let streamServed = false;
     await page.route("**/api/chat/stream*", async (route) => {
@@ -772,7 +779,7 @@ test.describe("Chat drawer — Approve/Reject card", () => {
         status: 200,
         contentType: "text/event-stream",
         headers: { "cache-control": "no-cache" },
-        body: `data: ${actionResultEvent}\n\n`
+        body: `data: ${actionResultEvent}\n\ndata: ${JSON.stringify({ kind: "reply", text: "Switched to dark mode." })}\n\n`
       });
     });
 
@@ -785,10 +792,11 @@ test.describe("Chat drawer — Approve/Reject card", () => {
     await page.goto("/");
     await page.getByRole("button", { name: "Chat with Moss" }).click();
 
-    // action_result records render as durable outcomes, never Approve/Reject cards.
-    const result = page.getByRole("dialog", { name: "Chat with Moss" }).getByRole("status");
-    await expect(result).toContainText("Executed", { timeout: 3000 });
-    await expect(result).toContainText("Switched to dark mode.");
+    // Auto-run completion stays visible as a quiet result without requiring approval.
+    const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+    await expect(drawer.locator(".chatd-bubble")).toHaveText("Switched to dark mode.");
+    await expect(drawer.getByRole("status")).toHaveText("Done: Switch to dark mode");
+    await expect(drawer.getByText("Executed: settings.themeMode.set")).toHaveCount(0);
 
     await expect(page.locator(".action-request-card")).toHaveCount(0);
     expect(resolveCallCount).toBe(0);
@@ -832,8 +840,10 @@ test.describe("Chat drawer — Approve/Reject card", () => {
 
     const actionResultEvent = JSON.stringify({
       kind: "action_result",
-      text: "Switched to dark mode.",
+      text: "Executed: settings.themeMode.set",
       toolName: "settings.themeMode.set",
+      summary: "Switch to dark mode",
+      decidedBy: "policy",
       outcome: "executed",
       actionRequestId: "ar_theme_1",
       affectsQueryKeys: ["settings.themes"]
@@ -848,7 +858,7 @@ test.describe("Chat drawer — Approve/Reject card", () => {
         status: 200,
         contentType: "text/event-stream",
         headers: { "cache-control": "no-cache" },
-        body: `data: ${actionResultEvent}\n\n`
+        body: `data: ${actionResultEvent}\n\ndata: ${JSON.stringify({ kind: "reply", text: "Switched to dark mode." })}\n\n`
       });
     });
 
@@ -859,9 +869,10 @@ test.describe("Chat drawer — Approve/Reject card", () => {
 
     await page.getByRole("button", { name: "Chat with Moss" }).click();
 
-    const result = page.getByRole("dialog", { name: "Chat with Moss" }).getByRole("status");
-    await expect(result).toContainText("Executed", { timeout: 3000 });
-    await expect(result).toContainText("Switched to dark mode.");
+    const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+    await expect(drawer.locator(".chatd-bubble")).toHaveText("Switched to dark mode.");
+    await expect(drawer.getByRole("status")).toHaveText("Done: Switch to dark mode");
+    await expect(drawer.getByText("Executed: settings.themeMode.set")).toHaveCount(0);
 
     // No page.reload() anywhere above — the attribute flips purely from the generic
     // invalidation effect resolving "settings.themes" and refetching. The refetch round-trip is
