@@ -47,6 +47,8 @@ connect-in-browser flow owns linking. Its one initial linking approval also gran
 capability for that exact Mac. There is no separate Approve recording / Deny recording card,
 acknowledgement, recording disclosure paragraph or reminder after linking. Authentication and
 operating-system permissions remain required, and each recording still needs an explicit Start.
+Remove the former `noticeAcknowledged` Start check in `packages/meetings/src/lifecycle.ts`
+along with the other setup prerequisites; it must not survive as a hidden recording gate.
 
 ## Four states
 
@@ -98,7 +100,8 @@ previous proposal’s width. It contains:
 - A microphone/chevron menu for the current recording’s sources
 - A 24-point circular Pause control with a grey ring, changing to play while paused
 - A 24-point solid semantic-red Stop control with a filled white square
-- A separate, always-visible X and divider in a compact 24-point close group
+- A separate, always-visible X and divider in a compact 24-point close group, never revealed only
+  on hover
 
 There is no visible status text, meeting name or elapsed timer. Accessible names and tooltips
 remain. The three bars reflect actual captured audio, flattening on silence, stale/absent samples,
@@ -122,12 +125,15 @@ not silently broaden it to all computer audio.
 Microphone + computer audio, microphone only and computer-audio-only are supported. Selecting
 both None and No computer audio is rejected before disturbing current capture or sending a control,
 with “Select a microphone or turn on computer audio.” Never substitute a default device silently.
+The server independently rejects Start, Resume and source-change requests whose resolved selection
+has neither a microphone nor computer audio; client validation alone is insufficient.
 System-only capture must not open a microphone unit or request microphone permission.
 
 The menu changes only the current recording. It does not silently rewrite the Settings defaults
 for future Starts. Every choice is an explicit source-change command with the current grant,
-generation, epoch, request identity and full exact selection. The server revalidates the current
-Mac inventory and authorized recording binding, then creates a new generation/source epoch at an
+generation, epoch, request identity and full exact selection. On every source change, the server
+re-checks the recording grant, including revocation, expiry and capability revision, together with
+the current Mac inventory and authorized recording binding, then creates a new generation/source epoch at an
 authoritative boundary. A change while paused stays paused; it never resumes by itself.
 
 Old devices and callbacks are closed/fenced before replacements open. Pending source changes block
@@ -205,6 +211,9 @@ recording capability and processing availability under the existing locks.
 `defaultCaptureMode` defaults to `computer-audio`. `rememberedSource` retains exact saved identities
 for compatibility. Settings may update the mode without requiring a source-selection form.
 Neither a setup timestamp nor a setup-completion write is required.
+The saved `MeetingCaptureSelection` contract gains a computer-audio-only form: `mode: "computer-audio"`
+with an explicit `microphone: null` and a valid output identity/scope. Microphone-only and selected-app
+forms still require a microphone; an omitted microphone is not an implicit default.
 
 The optional inventory `defaultMicrophoneId` is the UID of the OS default input in the advertised
 microphone set. Unknown, duplicate or excluded identities are not eligible. Read this property
@@ -215,9 +224,10 @@ Saved exact sources are never broadened implicitly. A missing saved microphone o
 fails with a source-unavailable error. Resume stays bound to the grant's Mac, its current generation
 and current inventory; it cannot silently move to another Mac.
 
-Source choices change only in Meetings Settings. A failed permission or unavailable system-audio
-source does not silently fall back to microphone-only capture. The user can explicitly choose
-that mode in Settings.
+Meetings Settings sets source defaults for future recordings; the pill menu changes only the current
+recording. A failed permission or unavailable system-audio source does not silently fall back to
+microphone-only capture. Recovery can explicitly choose a usable source in the pill for the current
+recording, or change Settings for the next Start. Neither path silently broadens saved scope.
 
 ## Authentication and safety controls
 
@@ -340,7 +350,8 @@ and permission boundaries even when adjacent explanatory copy becomes shorter.
 ## Release note
 
 Design PR: Category N/A. Implementation PRs: Category Changed, title “Simpler meetings”. Suggested
-plain-English description: “Start a meeting with one click and change recording audio in Settings.”
+plain-English description: “Start a meeting with one click, change its audio from the pill, and set
+future recording defaults in Settings.”
 
 ## Out of scope
 
