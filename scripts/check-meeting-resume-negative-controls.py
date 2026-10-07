@@ -16,7 +16,9 @@ SUITE = "tests/unit/meeting-native-resume.test.ts"
 SERVICE = "packages/meetings/src/capture-service.ts"
 CONTROLS = [
     RUNNER.control("resume-active-grant-only", "denies finalizing without creating or renewing native recording authority", [
-        RUNNER.mutation(SERVICE, '(grant.status !== "active" ||', '(false ||')
+        RUNNER.mutation(SERVICE,
+                        '          proof &&\n          input.command === "record" &&\n          (grant.status !== "active" ||',
+                        '          proof &&\n          input.command === "record" &&\n          (false ||')
     ], SUITE),
     RUNNER.control("resume-paused-only", "denies native initial Start even with an active claimed credential", [
         RUNNER.mutation(SERVICE, '            state.desired !== "paused" ||', '            false ||')
@@ -25,8 +27,9 @@ CONTROLS = [
         RUNNER.mutation(SERVICE, '            state.desired !== "paused" ||', '            false ||')
     ], SUITE),
     RUNNER.control("resume-no-selection-replay", "rejects explicit selection at native record ingress", [
-        RUNNER.mutation(SERVICE, 'if (!["pause", "stop", "record"].includes(input.command) || input.selection !== undefined)',
-                        'if (!["pause", "stop", "record"].includes(input.command))')
+        RUNNER.mutation(SERVICE,
+                        '      !["pause", "stop", "record"].includes(input.command) ||\n      input.selection !== undefined ||\n      input.expectedEpoch !== undefined',
+                        '      !["pause", "stop", "record"].includes(input.command) ||\n      false ||\n      input.expectedEpoch !== undefined')
     ], SUITE),
     RUNNER.control("resume-native-command-scope", "rejects native revoke even with a committed receipt", [
         RUNNER.mutation(SERVICE, '!["pause", "stop", "record"].includes(input.command)', 'false')
