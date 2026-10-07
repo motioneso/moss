@@ -409,7 +409,8 @@ describe("origin-bound action delivery", () => {
     expect(actionRefreshQueryKeys(completed, [])).toContainEqual(["settings", "themes"]);
     expect(h.history.size).toBe(0);
     expect(warn).toHaveBeenCalledExactlyOnceWith("action_record_delivery_failed", {
-      actionRequestId: completed.actionRequestId
+      actionRequestId: completed.actionRequestId,
+      errorClass: "Error"
     });
   });
 

@@ -149,7 +149,8 @@ describe("notification diagnostics", () => {
       await notifier.flush();
       expect(warning).toHaveBeenCalledOnce();
       expect(warning).toHaveBeenCalledWith("action_record_delivery_failed", {
-        actionRequestId: record.actionRequestId
+        actionRequestId: record.actionRequestId,
+        errorClass: "Error"
       });
       expect(JSON.stringify(warning.mock.calls)).not.toMatch(
         /private body|credentials|private-actor|private\.tool/
@@ -258,4 +259,59 @@ it("does not cast unattended correlation tokens as request UUIDs or adopt unknow
   });
   await notifier.flush();
   expect(deliver).toHaveBeenCalledTimes(1);
+});
+
+it("bounds orphaned live proofs and routes an evicted result through its stored origin", async () => {
+  const live = vi.fn(() => true);
+  const saved = vi.fn(async () => ({ historyPersisted: true }));
+  const lookup = vi.fn(async () => ({ found: true, threadId: "thread-A" }));
+  const manager = {
+    injectLiveOriginRecord: live,
+    injectOriginRecord: saved
+  } as unknown as ChatSessionManager;
+  const notifier = new ChatGatewayNotifier(manager, lookup);
+  const session = surfaceSessionKey("owner");
+  for (let index = 0; index < 1001; index += 1) {
+    notifier.emit(session, {
+      kind: "action_request",
+      actionRequestId: `bounded-${index}`,
+      toolName: "app.callAction",
+      summary: "Change theme",
+      outsideContentNotice: false,
+      liveOrigin: { actorUserId: "owner", chatSessionId: session, threadId: "thread-A" }
+    });
+  }
+  live.mockClear();
+  notifier.emit(session, {
+    kind: "action_result",
+    actionRequestId: "bounded-0",
+    toolName: "app.callAction",
+    outcome: "executed",
+    decidedBy: "person"
+  });
+  expect(live).not.toHaveBeenCalled();
+  await notifier.flush();
+  expect(lookup).toHaveBeenCalledExactlyOnceWith("owner", "bounded-0", session);
+  expect(saved).toHaveBeenCalledWith(
+    "owner",
+    "thread-A",
+    expect.objectContaining({ actionRequestId: "bounded-0" }),
+    DEFAULT_CHAT_SURFACE
+  );
+  notifier.emit(session, {
+    kind: "action_result",
+    actionRequestId: "bounded-1000",
+    toolName: "app.callAction",
+    outcome: "executed",
+    decidedBy: "person",
+    affectsModules: ["theme"]
+  });
+  expect(live).toHaveBeenCalledWith(
+    "owner",
+    "thread-A",
+    expect.objectContaining({ affectsModules: ["theme"] }),
+    DEFAULT_CHAT_SURFACE
+  );
+  await notifier.flush();
+  expect(lookup).toHaveBeenCalledTimes(1);
 });

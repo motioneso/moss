@@ -64,6 +64,8 @@ export type PerCallResolution =
       readonly confirmWhenTainted: boolean;
       readonly summary: string;
       readonly details: CallCardDetails;
+      /** Host-owned disclosure requirement, frozen with this exact resolved target. */
+      readonly requiresTarget?: true;
       /** Opaque server-side target identity. Never streamed on the card or persisted. */
       readonly targetVersion?: string;
       readonly affectsModules: readonly string[];
@@ -109,7 +111,7 @@ export type ActiveModulesResolver = (actorUserId: string) => Promise<readonly Mo
 export type GatewaySessionRecord =
   | {
       readonly kind: "action_request";
-      /** Server-only completeness rule declared by the owning tool manifest. */
+      /** Server-only completeness rule declared by the host's per-call resolver. */
       readonly requiresTarget?: true;
       /** Server-only proof copied from the owned persisted request, never provider/model input. */
       readonly liveOrigin?: {

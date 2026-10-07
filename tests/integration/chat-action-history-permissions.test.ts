@@ -89,6 +89,16 @@ function read(threadId: string, actorUserId: string = ids.userA) {
   return runner.withDataContext({ actorUserId }, (db) => repository.listMessages(db, threadId));
 }
 
+function readById(messageId: string) {
+  return runner.withDataContext(owner, (db) => repository.getMessageById(db, messageId));
+}
+
+function readRaw(threadId: string) {
+  return runner.withDataContext(owner, (db) =>
+    db.db.selectFrom("app.chat_messages").selectAll().where("thread_id", "=", threadId).execute()
+  );
+}
+
 function update(
   messageId: string,
   values: MessageUpdate,
@@ -159,7 +169,7 @@ describe("chat action-history runtime permissions (0297)", () => {
     expect((await read(origin.id))[0]).toEqual(recorded!.userMessage);
   });
 
-  it("lets the repository insert and absorb only its synthetic action-only history row", async () => {
+  it("absorbs a synthetic outcome into one visible reply while retaining the original row", async () => {
     const origin = await thread();
     await runner.withDataContext(owner, (db) =>
       repository.persistActionRecord(db, ids.userA, origin.id, terminal)
@@ -173,6 +183,8 @@ describe("chat action-history runtime permissions (0297)", () => {
       model_metadata: {},
       tool_metadata: metadata()
     });
+    const syntheticId = synthetic[0]!.id;
+    expect(await readById(syntheticId)).toEqual(synthetic[0]);
     await runner.withDataContext(owner, (db) =>
       repository.recordCompletedTurn(
         db,
@@ -194,17 +206,40 @@ describe("chat action-history runtime permissions (0297)", () => {
       activity: [pending, terminal],
       actionResults: [terminal]
     });
+    expect(await readById(syntheticId)).toBeUndefined();
+    expect(await readById(completed[1]!.id)).toEqual(completed[1]);
+    const raw = await readRaw(origin.id);
+    expect(raw).toHaveLength(3);
+    expect(raw).toEqual(
+      expect.arrayContaining([
+        ...completed,
+        {
+          ...synthetic[0],
+          updated_at: expect.any(Date),
+          tool_metadata: { ...metadata(), actionOutcomeHidden: true }
+        }
+      ])
+    );
+    await expect(remove(syntheticId)).rejects.toMatchObject({ code: "42501" });
+    expect(await readRaw(origin.id)).toEqual(raw);
   });
 
   it.each(["executed", "denied", "error", "allowed"] as const)(
-    "accepts and permits owner cleanup of a valid %s synthetic row",
+    "accepts a valid %s synthetic row and hides it through UPDATE without permitting deletion",
     async (outcome) => {
       const origin = await thread();
       const message = await insert(origin.id, {
         tool_metadata: metadata({ ...terminal, outcome })
       });
-      expect((await remove(message.id)).numDeletedRows).toBe(1n);
+      expect(await read(origin.id)).toEqual([message]);
+      expect(await readById(message.id)).toEqual(message);
+      await expect(remove(message.id)).rejects.toMatchObject({ code: "42501" });
+      const hidden = { ...metadata({ ...terminal, outcome }), actionOutcomeHidden: true };
+      expect((await update(message.id, { tool_metadata: hidden })).numUpdatedRows).toBe(1n);
       expect(await read(origin.id)).toEqual([]);
+      expect(await readById(message.id)).toBeUndefined();
+      expect(await readRaw(origin.id)).toEqual([{ ...message, tool_metadata: hidden }]);
+      await expect(remove(message.id)).rejects.toMatchObject({ code: "42501" });
     }
   );
 
@@ -266,8 +301,23 @@ describe("chat action-history runtime permissions (0297)", () => {
       const message = await insert(origin.id, { body: "Keep this real reply", tool_metadata: {} });
       const marked = { ...metadata(), actionOutcomeOnly: marker };
       expect((await update(message.id, { tool_metadata: marked })).numUpdatedRows).toBe(1n);
-      expect((await remove(message.id)).numDeletedRows).toBe(0n);
+      await expect(remove(message.id)).rejects.toMatchObject({ code: "42501" });
       expect(await read(origin.id)).toEqual([{ ...message, tool_metadata: marked }]);
+      expect(await readById(message.id)).toEqual({ ...message, tool_metadata: marked });
+    }
+  );
+
+  it.each([true, "true", false, null])(
+    "cannot hide a real reply by setting actionOutcomeHidden to %s",
+    async (actionOutcomeHidden) => {
+      const origin = await thread();
+      const message = await insert(origin.id, { body: "Keep this real reply", tool_metadata: {} });
+      await expect(
+        update(message.id, { tool_metadata: { ...metadata(), actionOutcomeHidden } })
+      ).rejects.toMatchObject({ code: "23514" });
+      expect(await read(origin.id)).toEqual([message]);
+      expect(await readById(message.id)).toEqual(message);
+      expect(await readRaw(origin.id)).toEqual([message]);
     }
   );
 
@@ -289,7 +339,7 @@ describe("chat action-history runtime permissions (0297)", () => {
     expect(
       (await update(message.id, { tool_metadata: metadata(), updated_at: now })).numUpdatedRows
     ).toBe(0n);
-    expect((await remove(message.id)).numDeletedRows).toBe(0n);
+    await expect(remove(message.id)).rejects.toMatchObject({ code: "42501" });
     expect(await read(origin.id)).toEqual([message]);
   });
 
@@ -308,7 +358,7 @@ describe("chat action-history runtime permissions (0297)", () => {
           )
         ).numUpdatedRows
       ).toBe(0n);
-      expect((await remove(message.id, actorUserId)).numDeletedRows).toBe(0n);
+      await expect(remove(message.id, actorUserId)).rejects.toMatchObject({ code: "42501" });
       // Make the parent visible so the forged insert reaches RLS instead of failing its context trigger.
       await runner.withDataContext(owner, (db) =>
         new SharesRepository().grant(db, {
@@ -331,7 +381,7 @@ describe("chat action-history runtime permissions (0297)", () => {
           )
         ).numUpdatedRows
       ).toBe(0n);
-      expect((await remove(message.id, actorUserId)).numDeletedRows).toBe(0n);
+      await expect(remove(message.id, actorUserId)).rejects.toMatchObject({ code: "42501" });
       expect(await read(origin.id)).toEqual([message]);
     }
   );
@@ -357,7 +407,7 @@ describe("chat action-history runtime permissions (0297)", () => {
         )
       ).numUpdatedRows
     ).toBe(0n);
-    expect((await remove(message.id, ids.userB)).numDeletedRows).toBe(0n);
+    await expect(remove(message.id, ids.userB)).rejects.toMatchObject({ code: "42501" });
     expect(await read(origin.id, ids.userB)).toEqual([message]);
   });
 
@@ -371,7 +421,7 @@ describe("chat action-history runtime permissions (0297)", () => {
         (await update(message.id, { tool_metadata: metadata({ ...terminal, outcome: "denied" }) }))
           .numUpdatedRows
       ).toBe(0n);
-      expect((await remove(message.id)).numDeletedRows).toBe(0n);
+      await expect(remove(message.id)).rejects.toMatchObject({ code: "42501" });
     }
     expect(await read(origin.id)).toEqual(expect.arrayContaining([synthetic, ordinary]));
   });
@@ -430,7 +480,13 @@ const malformedMetadata: Array<[string, Record<string, unknown>]> = [
   ],
   ["unknown top-level key", { ...metadata(), extra: true }],
   ["top-level raw result", { ...metadata(), result: { private: "payload" } }],
-  ["top-level preview", { ...metadata(), preview: "private preview" }]
+  ["top-level preview", { ...metadata(), preview: "private preview" }],
+  ["string hidden marker", { ...metadata(), actionOutcomeHidden: "true" }],
+  ["false hidden marker", { ...metadata(), actionOutcomeHidden: false }],
+  ["null hidden marker", { ...metadata(), actionOutcomeHidden: null }],
+  ["numeric hidden marker", { ...metadata(), actionOutcomeHidden: 1 }],
+  ["object hidden marker", { ...metadata(), actionOutcomeHidden: {} }],
+  ["array hidden marker", { ...metadata(), actionOutcomeHidden: [] }]
 ];
 
 const malformedRecords: Array<[string, unknown]> = [
@@ -505,6 +561,61 @@ describe("chat action-only empty-body CHECK (0297)", () => {
       const origin = await thread();
       await expect(insert(origin.id, values)).rejects.toMatchObject({ code: "23514" });
       expect(await read(origin.id)).toEqual([]);
+    }
+  );
+
+  it.each([
+    ["ordinary assistant", { body: "Real assistant reply" }],
+    ["ordinary user", { role: "user", body: "Real user message" }],
+    ["empty user", { role: "user" }],
+    ["pending assistant", { status: "pending" }],
+    ["working assistant", { status: "working" }],
+    ["blocked assistant", { status: "blocked" }],
+    ["no-model assistant", { status: "no_model" }],
+    ["error assistant", { status: "error" }],
+    ["whitespace body", { body: "   " }],
+    ["nonempty model metadata", { model_metadata: { existing: true } }],
+    [
+      "missing synthetic marker",
+      { tool_metadata: { ...without(metadata(), "actionOutcomeOnly"), actionOutcomeHidden: true } }
+    ],
+    [
+      "non-synthetic marker",
+      { tool_metadata: { ...metadata(), actionOutcomeOnly: false, actionOutcomeHidden: true } }
+    ],
+    ["missing terminal metadata", { tool_metadata: { actionOutcomeHidden: true } }]
+  ] satisfies Array<[string, Partial<MessageInsert>]>)(
+    "rejects a hidden marker on %s",
+    async (_name, values) => {
+      const origin = await thread();
+      await expect(
+        insert(origin.id, {
+          tool_metadata: { ...metadata(), actionOutcomeHidden: true },
+          ...values
+        })
+      ).rejects.toMatchObject({ code: "23514" });
+      expect(await readRaw(origin.id)).toEqual([]);
+    }
+  );
+
+  it.each([
+    ["string", "true"],
+    ["false", false],
+    ["null", null],
+    ["number", 1],
+    ["object", {}],
+    ["array", []]
+  ])(
+    "rejects a %s hidden marker on UPDATE without hiding or changing history",
+    async (_name, actionOutcomeHidden) => {
+      const origin = await thread();
+      const message = await insert(origin.id);
+      await expect(
+        update(message.id, { tool_metadata: { ...metadata(), actionOutcomeHidden } })
+      ).rejects.toMatchObject({ code: "23514" });
+      expect(await read(origin.id)).toEqual([message]);
+      expect(await readById(message.id)).toEqual(message);
+      expect(await readRaw(origin.id)).toEqual([message]);
     }
   );
 

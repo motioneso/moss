@@ -33,7 +33,7 @@ WITH CHECK (
 -- shape written by ChatRepository may have no prose. COALESCE is deliberate: CHECK(NULL) passes.
 ALTER TABLE app.chat_messages DROP CONSTRAINT chat_messages_body_check;
 ALTER TABLE app.chat_messages ADD CONSTRAINT chat_messages_body_check CHECK (
-  length(btrim(body)) > 0
+  (length(btrim(body)) > 0 AND NOT (tool_metadata ? 'actionOutcomeHidden'))
   OR COALESCE((
     body = ''
     AND role = 'assistant'
@@ -41,7 +41,8 @@ ALTER TABLE app.chat_messages ADD CONSTRAINT chat_messages_body_check CHECK (
     AND model_metadata = '{}'::jsonb
     AND tool_metadata->'actionOutcomeOnly' = 'true'::jsonb
     AND tool_metadata->'selectedTools' = '[]'::jsonb
-    AND (tool_metadata - ARRAY['actionOutcomeOnly', 'selectedTools', 'activity', 'actionResults']) = '{}'::jsonb
+    AND (NOT (tool_metadata ? 'actionOutcomeHidden') OR tool_metadata->'actionOutcomeHidden' = 'true'::jsonb)
+    AND (tool_metadata - ARRAY['actionOutcomeOnly', 'actionOutcomeHidden', 'selectedTools', 'activity', 'actionResults']) = '{}'::jsonb
     AND tool_metadata->'actionResults' = tool_metadata->'activity'
     AND CASE WHEN jsonb_typeof(tool_metadata->'activity') = 'array' THEN
       jsonb_array_length(tool_metadata->'activity') = 1
@@ -82,23 +83,5 @@ ALTER TABLE app.chat_messages ADD CONSTRAINT chat_messages_body_check CHECK (
   ), false)
 );
 
--- Absorption into the originating assistant message deletes only a synthetic empty-body row.
--- App runtime cannot change body/role/status, so flagging a real message cannot make it deletable.
-GRANT DELETE ON app.chat_messages TO jarvis_app_runtime;
-CREATE POLICY chat_messages_action_history_delete
-ON app.chat_messages
-FOR DELETE
-TO jarvis_app_runtime
-USING (
-  owner_user_id = app.current_actor_user_id()
-  AND role = 'assistant'
-  AND status = 'stored'
-  AND body = ''
-  AND tool_metadata->'actionOutcomeOnly' = 'true'::jsonb
-  AND EXISTS (
-    SELECT 1 FROM app.chat_threads thread
-    WHERE thread.id = chat_messages.thread_id
-      AND thread.owner_user_id = app.current_actor_user_id()
-      AND NOT thread.incognito
-  )
-);
+-- Absorbed synthetic rows remain stored and are hidden using the existing metadata-only UPDATE.
+-- App runtime never receives DELETE on chat_messages.

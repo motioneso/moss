@@ -72,11 +72,12 @@ export class ConfirmationRegistry {
       let writing = false;
       let cancelling = false;
       let attempts = 0;
+      let persistenceError: unknown;
       let settledOutcome: AwaitOutcome | undefined;
       const fallBack = () => {
         if (this.waiters.get(actionRequestId) !== waiter) return;
-        // Only identifiers: storage errors can contain SQL, inputs or private content.
-        reportActionRecordFailure(actionRequestId);
+        // The diagnostic projects fixed classes/codes; raw storage errors may contain content.
+        reportActionRecordFailure(actionRequestId, persistenceError);
         waiter.settle(cancelling ? "cancelled" : "timeout");
       };
       const persist = (outcome: "timeout" | "cancelled") => {
@@ -101,9 +102,10 @@ export class ConfirmationRegistry {
               writing = false;
               if (this.waiters.get(actionRequestId) === waiter) waiter.settle(terminal);
             },
-            () => {
+            (error: unknown) => {
               writing = false;
               if (this.waiters.get(actionRequestId) !== waiter) return;
+              persistenceError = error;
               if (attempts >= TERMINAL_WRITE_ATTEMPTS) {
                 fallBack();
                 return;

@@ -371,6 +371,41 @@ describe("origin-bound action history with the real database", () => {
     expect(completed.some((message) => message.tool_metadata.actionOutcomeOnly)).toBe(false);
     expect(serializeMessage(completed[1]!).activity).toEqual([pending, timeout]);
     expect(completed[1]?.tool_metadata.actionResults).toEqual([timeout]);
+    const retained = await runner.withDataContext(owner, (db) =>
+      db.db
+        .selectFrom("app.chat_messages")
+        .selectAll()
+        .where("id", "=", orphan[0]!.id)
+        .executeTakeFirstOrThrow()
+    );
+    expect(retained).toEqual({
+      ...orphan[0],
+      tool_metadata: { ...orphan[0]!.tool_metadata, actionOutcomeHidden: true },
+      updated_at: expect.any(Date)
+    });
+    expect(
+      await runner.withDataContext(owner, (db) => repository.getMessageById(db, retained.id))
+    ).toBeUndefined();
+    const replay = await store.listPriorTurns(ids.userA, { threadId: origin.id });
+    expect(replay.recent).toEqual([
+      { role: "user", content: "origin question" },
+      { role: "assistant", content: "origin answer" }
+    ]);
+    const threads = await runner.withDataContext(owner, (db) => repository.listThreads(db));
+    expect(threads.find((thread) => thread.id === origin.id)?.lastMessageBody).toBe(
+      "origin answer"
+    );
+    const archived = await runner.withDataContext(owner, (db) =>
+      repository.listStoredMessagesInRange(
+        db,
+        ids.userA,
+        "2000-01-01T00:00:00Z",
+        "2100-01-01T00:00:00Z"
+      )
+    );
+    expect(
+      archived.filter((message) => message.threadId === origin.id).map((message) => message.body)
+    ).toEqual(["origin question", "origin answer"]);
   });
 
   it("keeps a duplicate from a later turn on the original ordinary assistant message", async () => {

@@ -19,7 +19,11 @@ interface RecoveryDeps {
   readonly notifier: SessionNotifier;
 }
 
-/** Recovery starts when the owner opens chat, with one bounded batch/timer per owner. */
+/**
+ * Recovery starts when the owner opens chat, with one bounded batch/timer per owner.
+ * Permanently failing unacknowledged rows keep rearming after each cycle, backing off
+ * to 60 seconds for the process lifetime; disposal stops those retries.
+ */
 export class ActionRequestRecovery {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly running = new Map<string, Promise<void>>();
@@ -39,7 +43,7 @@ export class ActionRequestRecovery {
     this.timers.delete(actorUserId);
     const work = this.sweep(actorUserId)
       .catch((error: unknown) => {
-        this.logFailure(actorUserId);
+        this.logFailure(actorUserId, undefined, error);
         this.schedule(actorUserId, this.backoff(actorUserId));
         throw error;
       })
@@ -114,8 +118,8 @@ export class ActionRequestRecovery {
           });
           await this.deps.notifier.flush?.(action.chat_session_id);
         }
-      } catch {
-        this.logFailure(actorUserId, row.id);
+      } catch (error) {
+        this.logFailure(actorUserId, row.id, error);
       }
     }
     if (Number.isFinite(nextDeadline)) this.schedule(actorUserId, nextDeadline - Date.now());
@@ -127,15 +131,19 @@ export class ActionRequestRecovery {
     return delay;
   }
 
-  private logFailure(actorUserId: string, actionRequestId?: string): void {
+  private logFailure(
+    actorUserId: string,
+    actionRequestId: string | undefined,
+    error: unknown
+  ): void {
     if (actionRequestId) {
-      reportActionRecordFailure(actionRequestId);
+      reportActionRecordFailure(actionRequestId, error);
       return;
     }
     if (this.loggedFailures.has(actorUserId)) return;
     this.loggedFailures.add(actorUserId);
     // Never log the error object: database and transport failures can contain private content.
-    reportActionRecordFailure(`action-recovery_${randomUUID()}`);
+    reportActionRecordFailure(`action-recovery_${randomUUID()}`, error);
   }
 
   private schedule(actorUserId: string, delayMs: number): void {

@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { BrandMark } from "./brand-mark.js";
-import { actionApprovalOutcome, actionOutcomeText } from "@moss/shared";
+import { actionApprovalOutcome, actionOutcomeText } from "@moss/shared/chat-action-outcome";
 
 import type {
   ChatRecordKind,

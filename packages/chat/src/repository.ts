@@ -28,6 +28,19 @@ import {
   type TerminalActionRecord
 } from "./action-record-history.js";
 
+/** Absorbed synthetic rows remain stored; only their visible replacement participates in history. */
+function visibleChatMessage(table: "app.chat_messages" | "m" = "app.chat_messages") {
+  const metadata = sql.ref(`${table}.tool_metadata`);
+  return sql<boolean>`NOT COALESCE(
+    ${sql.ref(`${table}.body`)} = ''
+    AND ${sql.ref(`${table}.role`)} = 'assistant'
+    AND ${sql.ref(`${table}.status`)} = 'stored'
+    AND ${metadata}->'actionOutcomeOnly' = 'true'::jsonb
+    AND ${metadata}->'actionOutcomeHidden' = 'true'::jsonb,
+    false
+  )`;
+}
+
 export interface CreateChatThreadInput {
   readonly title: string;
   readonly incognito?: boolean;
@@ -67,6 +80,7 @@ export class ChatRepository {
       .select((eb) =>
         eb
           .selectFrom("app.chat_messages")
+          .where(visibleChatMessage())
           .select("body")
           .whereRef("app.chat_messages.thread_id", "=", "app.chat_threads.id")
           // A saved turn stores the person's message and the reply at the same
@@ -160,6 +174,7 @@ export class ChatRepository {
     const matching = JSON.stringify([{ actionRequestId: record.actionRequestId }]);
     const message = await scopedDb.db
       .selectFrom("app.chat_messages")
+      .where(visibleChatMessage())
       .selectAll()
       .where("thread_id", "=", thread.id)
       .where("owner_user_id", "=", actorUserId)
@@ -239,6 +254,7 @@ export class ChatRepository {
 
     return scopedDb.db
       .selectFrom("app.chat_messages")
+      .where(visibleChatMessage())
       .selectAll()
       .where("thread_id", "=", threadId)
       .orderBy("created_at")
@@ -255,6 +271,7 @@ export class ChatRepository {
 
     return scopedDb.db
       .selectFrom("app.chat_messages")
+      .where(visibleChatMessage())
       .selectAll()
       .where("id", "=", messageId)
       .executeTakeFirst();
@@ -433,6 +450,7 @@ export class ChatRepository {
     if (actionIds.size > 0) {
       const existing = await scopedDb.db
         .selectFrom("app.chat_messages")
+        .where(visibleChatMessage())
         .selectAll()
         .where("thread_id", "=", threadId)
         .where("owner_user_id", "=", thread.owner_user_id)
@@ -480,7 +498,11 @@ export class ChatRepository {
           }
         }
         await scopedDb.db
-          .deleteFrom("app.chat_messages")
+          .updateTable("app.chat_messages")
+          .set({
+            tool_metadata: { ...message.tool_metadata, actionOutcomeHidden: true },
+            updated_at: new Date()
+          })
           .where("id", "=", message.id)
           .where("thread_id", "=", threadId)
           .where("owner_user_id", "=", thread.owner_user_id)
@@ -640,6 +662,7 @@ export class ChatRepository {
 
     const rows = await scopedDb.db
       .selectFrom("app.chat_messages as m")
+      .where(visibleChatMessage("m"))
       .innerJoin("app.chat_threads as t", "t.id", "m.thread_id")
       .select([
         "m.thread_id as threadId",

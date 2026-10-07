@@ -779,6 +779,27 @@ describe("chat_messages UPDATE grant revoked + policy narrowed (#134)", () => {
     }
   });
 
+  it("never grants app DELETE or a synthetic-row deletion policy on chat messages", async () => {
+    const client = new Client({ connectionString: connectionStrings.app });
+    await client.connect();
+    try {
+      const privilege = await client.query<{ role: string; has_privilege: boolean }>(
+        `SELECT current_user AS role,
+                has_table_privilege(current_user, 'app.chat_messages', 'DELETE') AS has_privilege`
+      );
+      expect(privilege.rows).toEqual([{ role: "jarvis_app_runtime", has_privilege: false }]);
+      const policy = await client.query<{ policyname: string }>(
+        `SELECT policyname FROM pg_policies
+         WHERE schemaname = 'app'
+           AND tablename = 'chat_messages'
+           AND policyname = 'chat_messages_action_history_delete'`
+      );
+      expect(policy.rows).toEqual([]);
+    } finally {
+      await client.end();
+    }
+  });
+
   it("limits app UPDATE to action metadata columns without restoring the former table grant", async () => {
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();

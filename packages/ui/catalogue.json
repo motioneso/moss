@@ -170,7 +170,13 @@
       "name": "chat-thread",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/chat-thread.tsx", "type": "registry:ui" }],
-      "dependencies": ["@moss/shared", "lucide-react", "react-markdown", "remark-gfm"],
+      "dependencies": [
+        "@moss/shared",
+        "@moss/shared/chat-action-outcome",
+        "lucide-react",
+        "react-markdown",
+        "remark-gfm"
+      ],
       "exports": ["ActivityPeek", "ChatFreshnessFooter", "Thread", "activityVerb", "groupRecords"],
       "options": [],
       "flags": []

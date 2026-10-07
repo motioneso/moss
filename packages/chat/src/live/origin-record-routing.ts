@@ -136,10 +136,10 @@ export async function routeOriginRecord(
           ...record,
           ...(recordSequence === undefined ? {} : { sequence: recordSequence })
         })) === true;
-    } catch {
+    } catch (error) {
       // A history write failure must not hide a known live outcome or its refresh hints.
       // The exact owned/current/session/transition checks still apply below.
-      reportActionRecordFailure(record.actionRequestId);
+      reportActionRecordFailure(record.actionRequestId, error);
     }
   }
   if (input.historyOnly) return receipt;

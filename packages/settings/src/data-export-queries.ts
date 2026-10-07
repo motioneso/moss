@@ -335,6 +335,12 @@ export function chatMessagesQuery(userId: string) {
       updated_at AS "updatedAt"
     FROM app.chat_messages
     WHERE owner_user_id = ${userId}::uuid
+      AND NOT COALESCE(
+        body = '' AND role = 'assistant' AND status = 'stored'
+        AND tool_metadata->'actionOutcomeOnly' = 'true'::jsonb
+        AND tool_metadata->'actionOutcomeHidden' = 'true'::jsonb,
+        false
+      )
     ORDER BY created_at, id
   `;
 }

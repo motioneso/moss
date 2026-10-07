@@ -250,7 +250,7 @@ describe("registry persistence failure races", () => {
         // A later notifier/history failure for the same record must not multiply diagnostics.
         reportActionRecordFailure(actionId);
         expect(warn.mock.calls).toEqual([
-          ["action_record_delivery_failed", { actionRequestId: actionId }]
+          ["action_record_delivery_failed", { actionRequestId: actionId, errorClass: "Error" }]
         ]);
       } finally {
         warn.mockRestore();
@@ -445,7 +445,7 @@ describe("owner-scoped restart recovery", () => {
     recovery.dispose();
   });
 
-  it("logs a failed record once using identifiers only and retries the unacknowledged outcome", async () => {
+  it("logs a failed record once with a fixed class and retries the unacknowledged outcome", async () => {
     const h = fixture();
     h.row.id = "recovery-error-1";
     h.row.expires_at = new Date(Date.now() - 1);
@@ -457,7 +457,10 @@ describe("owner-scoped restart recovery", () => {
     await vi.advanceTimersByTimeAsync(119_000);
     expect(h.repository.expireAssistantAction).toHaveBeenCalledTimes(7);
     expect(warn.mock.calls).toEqual([
-      ["action_record_delivery_failed", { actionRequestId: "recovery-error-1" }]
+      [
+        "action_record_delivery_failed",
+        { actionRequestId: "recovery-error-1", errorClass: "Error" }
+      ]
     ]);
     warn.mockRestore();
     expect(h.row.status).toBe("pending");

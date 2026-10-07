@@ -19,6 +19,8 @@ type LiveOrigin = NonNullable<
   Extract<GatewaySessionRecord, { kind: "action_request" }>["liveOrigin"]
 >;
 
+const MAX_LIVE_ORIGINS = 1000;
+
 /** Live origin proof comes from the persisted request at creation; history remains owner-scoped. */
 export class ChatGatewayNotifier implements SessionNotifier {
   private readonly pending = new Map<string, Promise<void>>();
@@ -53,6 +55,11 @@ export class ChatGatewayNotifier implements SessionNotifier {
         proof.threadId
       ) {
         this.liveOrigins.set(key, Object.freeze({ ...proof }));
+        // Orphaned requests must not retain proof forever. Eviction only removes the
+        // synchronous shortcut; a later result still uses the owner-bound stored origin.
+        if (this.liveOrigins.size > MAX_LIVE_ORIGINS) {
+          this.liveOrigins.delete(this.liveOrigins.keys().next().value!);
+        }
       }
     }
     const proof = this.liveOrigins.get(key);
@@ -65,8 +72,8 @@ export class ChatGatewayNotifier implements SessionNotifier {
           transcriptRecord,
           surface ?? DEFAULT_CHAT_SURFACE
         );
-      } catch {
-        reportActionRecordFailure(record.actionRequestId);
+      } catch (error) {
+        reportActionRecordFailure(record.actionRequestId, error);
       }
     }
     if (record.kind === "action_request" && delivered) return;
@@ -100,7 +107,7 @@ export class ChatGatewayNotifier implements SessionNotifier {
             await this.acknowledgeHistory?.(actorUserId, record.actionRequestId, "ignored");
         }
       })
-      .catch(() => reportActionRecordFailure(record.actionRequestId));
+      .catch((error: unknown) => reportActionRecordFailure(record.actionRequestId, error));
     this.pending.set(chatSessionId, queued);
     void queued.then(() => {
       if (this.pending.get(chatSessionId) === queued) this.pending.delete(chatSessionId);
