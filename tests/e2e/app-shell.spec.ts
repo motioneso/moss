@@ -344,6 +344,76 @@ test("serves PWA metadata", async ({ page }) => {
   expect(manifest.name).toBe("Moss");
 });
 
+// Component wiring only: deterministic SSE fixtures exercise parser → transcript → real card.
+// This is not the Slice 8 live-data/provider proof.
+for (const appearance of [
+  { name: "desktop light", width: 1440, theme: "forest", mode: "light" },
+  { name: "phone dark", width: 390, theme: "forest", mode: "dark" },
+  { name: "desktop canyon", width: 1440, theme: "canyon", mode: "light" }
+]) {
+  test(`app action SSE target and field rows reach the card (${appearance.name}; component wiring)`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: appearance.width, height: 900 });
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: createMockConnectorProviders(),
+      notifications: [],
+      tasks: []
+    });
+    let served = false;
+    await page.route("**/api/chat/stream*", (route) => {
+      const event = {
+        kind: "action_request",
+        text: "Change custom theme",
+        summary: "Change custom theme",
+        actionRequestId: "app-card-wiring",
+        toolName: "app.callAction",
+        outsideContentNotice: false,
+        details: {
+          target: "Weekend <b>theme</b>",
+          fields: [
+            { label: "Name", value: "**Evening**" },
+            { label: "Enabled", value: "false" }
+          ]
+        }
+      };
+      const body = served ? "" : `data: ${JSON.stringify(event)}\n\n`;
+      served = true;
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body });
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Chat with Moss" }).click();
+    await page.evaluate(({ theme, mode }) => {
+      document.documentElement.setAttribute("data-theme", theme);
+      document.documentElement.setAttribute("data-color-mode", mode);
+    }, appearance);
+    const card = page.getByRole("region", { name: "Action request", exact: true });
+    await expect(card).toBeVisible();
+    await expect(card.locator("dt")).toHaveText(["Target", "Name", "Enabled"]);
+    await expect(card.locator("dd")).toHaveText(["Weekend <b>theme</b>", "**Evening**", "false"]);
+    await expect(card.locator("dd b, dd strong")).toHaveCount(0);
+    await expect(card.getByText(/read outside content/)).toHaveCount(0);
+    const approve = card.getByRole("button", { name: "Approve", exact: true });
+    const reject = card.getByRole("button", { name: "Reject", exact: true });
+    await expect(approve).toBeVisible();
+    await expect(reject).toBeVisible();
+    const first = await approve.boundingBox();
+    const second = await reject.boundingBox();
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    if (first && second) {
+      const gap =
+        Math.abs(first.y - second.y) < 1
+          ? second.x - first.x - first.width
+          : second.y - first.y - first.height;
+      expect(gap).toBeGreaterThanOrEqual(8);
+    }
+    expect(await card.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  });
+}
+
 test.describe("Chat drawer — Approve/Reject card", () => {
   test("renders Approve/Reject card and resolves on Approve", async ({ page }) => {
     await mockApi(page, {
@@ -514,13 +584,14 @@ test.describe("Chat drawer — Approve/Reject card", () => {
 
     // Two synchronous clicks in the same JS task — no await between them — so both handler
     // invocations race the same pre-mutate tick.
-    await page.evaluate(() => {
-      const button = document.querySelector(
-        ".action-request-card .primary-button"
-      ) as HTMLButtonElement;
-      button.click();
-      button.click();
-    });
+    await page
+      .locator(".action-request-card")
+      .getByRole("button", { name: "Approve", exact: true })
+      .evaluate((element) => {
+        const button = element as HTMLButtonElement;
+        button.click();
+        button.click();
+      });
 
     await expect(page.locator(".action-request-actions")).toHaveCount(0);
     await expect(page.getByText("Resolving…")).toBeVisible();

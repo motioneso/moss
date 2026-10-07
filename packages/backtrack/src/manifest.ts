@@ -120,9 +120,28 @@ export const backtrackModuleManifest: MossModuleManifest = {
     }
   ],
   routes: [
-    { method: "GET", path: "/api/backtrack/status", permissionId: "backtrack.manage" },
-    { method: "PUT", path: "/api/backtrack/preferences", permissionId: "backtrack.manage" },
-    { method: "DELETE", path: "/api/backtrack/segments", permissionId: "backtrack.manage" }
+    {
+      method: "GET",
+      path: "/api/backtrack/status",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "backtrack.manage"
+    },
+    {
+      method: "PUT",
+      path: "/api/backtrack/preferences",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
+      permissionId: "backtrack.manage"
+    },
+    {
+      method: "DELETE",
+      path: "/api/backtrack/segments",
+      chat: {
+        access: "destructive",
+        title: "Delete part of your Backtrack history",
+        content: "user_authored"
+      },
+      permissionId: "backtrack.manage"
+    }
   ],
   jobs: [
     { queueName: BACKTRACK_INDEX_QUEUE, metadataOnly: true },

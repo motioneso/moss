@@ -10,7 +10,54 @@ import type {
   ToolResult
 } from "@moss/module-sdk";
 
-import type { ExternalModuleDiscovery } from "./types.js";
+import type { ExternalModuleDiscovery, ReconciledExternalModule } from "./types.js";
+import { hashCanonicalManifest } from "./hash.js";
+
+// These bindings come only from host synthesis, never from installed JSON. They tie a
+// concurrently resolved tool manifest to the accepted package snapshot that produced it.
+const synthesizedSnapshots = new WeakMap<
+  MossModuleManifest,
+  { readonly manifestHash: string; readonly packageHash: string; readonly descriptorHash: string }
+>();
+
+/** A per-actor copy: shared registry manifests must never acquire an owner's trust stamp. */
+export function withExternalDescriptorApproval(
+  manifest: MossModuleManifest,
+  active: Pick<
+    ReconciledExternalModule,
+    "id" | "manifestHash" | "packageHash" | "descriptorApprovedByUserId"
+  >,
+  actorUserId: string
+): MossModuleManifest {
+  const snapshot = synthesizedSnapshots.get(manifest);
+  const approved =
+    active.descriptorApprovedByUserId === actorUserId &&
+    snapshot !== undefined &&
+    snapshot.manifestHash === active.manifestHash &&
+    snapshot.packageHash === active.packageHash &&
+    snapshot.descriptorHash === hashCanonicalManifest(manifest);
+  return {
+    ...manifest,
+    ...(manifest.assistantTools
+      ? {
+          assistantTools: manifest.assistantTools.map((tool) => ({
+            ...tool,
+            inputSchema: tool.inputSchema ? structuredClone(tool.inputSchema) : undefined,
+            outputSchema: tool.outputSchema ? structuredClone(tool.outputSchema) : undefined,
+            classifier: tool.classifier
+              ? {
+                  ...tool.classifier,
+                  arguments: tool.classifier.arguments
+                    ? structuredClone(tool.classifier.arguments)
+                    : undefined
+                }
+              : undefined,
+            descriptorOwnerUserId: approved ? actorUserId : undefined
+          }))
+        }
+      : {})
+  };
+}
 
 export type ExternalToolInvoker = (
   module: ExternalModuleDiscovery,
@@ -82,47 +129,59 @@ export function createExternalToolManifests(
 ): MossModuleManifest[] {
   return discoveries
     .filter((module) => module.manifest.runtime && module.manifest.assistantTools?.length)
-    .map((module) => ({
-      id: module.id,
-      name: module.manifest.name,
-      version: module.manifest.version,
-      publisher: module.manifest.publisher,
-      lifecycle: module.manifest.lifecycle,
-      compatibility: module.manifest.compatibility,
-      assistantOnboarding: module.manifest.assistantOnboarding,
-      assistantActionFamilies: module.manifest.assistantActionFamilies,
-      // #1725: carried through so the settings list can offer a "Configure" link without
-      // asking every installed module for its preferences one at a time.
-      preferences: module.manifest.preferences,
-      availability: {
-        defaultEnabled: false,
-        supportsUserDisable: module.manifest.lifecycle === "user-toggleable"
-      },
-      assistantTools: module.manifest.assistantTools?.map((tool) => {
-        const requiresConfirmation = synthesizeRequiresConfirmation(tool);
-        // #2152: `safeErrors` is deliberately NOT copied here. It opts a tool into echoing its
-        // own thrown HttpError text to the user and the model (#1679/#2148), and the gateway
-        // repeats that text verbatim — a first-party trust decision, not something an installed
-        // module's manifest gets to select. The copy is field-by-field, so the key is absent by
-        // construction; `external-module-tool-manifest-policy.test.ts` pins that (a hostile
-        // declaration carrying `safeErrors: true` still yields a tool without it), so swapping
-        // this map for a copy-everything spread cannot start forwarding it by accident.
-        return {
-          name: tool.name,
-          description: tool.description,
-          actionLabel: tool.actionLabel,
-          permissionId: tool.permissionId,
-          risk: tool.risk,
-          actionFamilyId: tool.actionFamilyId,
-          executionPolicy: tool.executionPolicy,
-          selfOperationGrant: tool.selfOperationGrant,
-          requiresConfirmation,
-          inputSchema: tool.inputSchema,
-          isExternal: true,
-          outputSchema: tool.outputSchema,
-          classifier: synthesizeClassifier(module, tool, invokeCandidates),
-          execute: (_scopedDb, input, context) => invoke(module, tool, input, context)
-        };
-      })
-    }));
+    .map((module) => {
+      const manifest: MossModuleManifest = {
+        id: module.id,
+        name: module.manifest.name,
+        version: module.manifest.version,
+        publisher: module.manifest.publisher,
+        lifecycle: module.manifest.lifecycle,
+        compatibility: module.manifest.compatibility,
+        assistantOnboarding: module.manifest.assistantOnboarding,
+        assistantActionFamilies: module.manifest.assistantActionFamilies,
+        // #1725: carried through so the settings list can offer a "Configure" link without
+        // asking every installed module for its preferences one at a time.
+        preferences: module.manifest.preferences,
+        availability: {
+          defaultEnabled: false,
+          supportsUserDisable: module.manifest.lifecycle === "user-toggleable"
+        },
+        assistantTools: module.manifest.assistantTools?.map((tool) => {
+          const requiresConfirmation = synthesizeRequiresConfirmation(tool);
+          // #2152: `safeErrors` is deliberately NOT copied here. It opts a tool into echoing its
+          // own thrown HttpError text to the user and the model (#1679/#2148), and the gateway
+          // repeats that text verbatim — a first-party trust decision, not something an installed
+          // module's manifest gets to select. The copy is field-by-field, so the key is absent by
+          // construction; `external-module-tool-manifest-policy.test.ts` pins that (a hostile
+          // declaration carrying `safeErrors: true` still yields a tool without it), so swapping
+          // this map for a copy-everything spread cannot start forwarding it by accident.
+          return {
+            name: tool.name,
+            description: tool.description,
+            actionLabel: tool.actionLabel,
+            permissionId: tool.permissionId,
+            risk: tool.risk,
+            actionFamilyId: tool.actionFamilyId,
+            executionPolicy: tool.executionPolicy,
+            selfOperationGrant: tool.selfOperationGrant,
+            requiresConfirmation,
+            inputSchema: tool.inputSchema,
+            isExternal: true,
+            outputSchema: tool.outputSchema,
+            classifier: synthesizeClassifier(module, tool, invokeCandidates),
+            execute: (_scopedDb, input, context) => invoke(module, tool, input, context)
+          };
+        })
+      };
+      // Recompute the validated manifest hash before binding: mutation of even nested schema
+      // or classifier text after discovery cannot inherit the accepted manifest's approval.
+      if (hashCanonicalManifest(module.manifest) === module.manifestHash) {
+        synthesizedSnapshots.set(manifest, {
+          manifestHash: module.manifestHash,
+          packageHash: module.packageHash,
+          descriptorHash: hashCanonicalManifest(manifest)
+        });
+      }
+      return manifest;
+    });
 }

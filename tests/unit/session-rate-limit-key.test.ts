@@ -1,9 +1,19 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import type { FastifyRequest } from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import { describe, expect, it } from "vitest";
 
-import { mcpSessionRateLimitKey, sessionRateLimitKey } from "@moss/module-sdk/server";
+import {
+  createActAsGrantRegistry,
+  withActAsGrantsAndRequestCache,
+  type MossAuthRuntime
+} from "@moss/auth";
+import {
+  ACT_AS_GRANT_HEADER,
+  installActAsActorLookup,
+  mcpSessionRateLimitKey,
+  sessionRateLimitKey
+} from "@moss/module-sdk/server";
 
 // Build a minimal FastifyRequest stand-in carrying only the fields the helpers read.
 function req(opts: { authorization?: string; cookie?: string; ip?: string }): FastifyRequest {
@@ -154,5 +164,59 @@ describe("mcpSessionRateLimitKey (jst_<uuid> MCP token policy)", () => {
     expect(b).toBe("ip:198.51.100.50");
     expect(a).toBe(b);
     expect(a.startsWith("mcp:")).toBe(false);
+  });
+});
+
+describe("act-as grant requests (#3065)", () => {
+  const actorUserId = "00000000-0000-4000-8000-000000000001";
+
+  function grantSetup() {
+    const grants = createActAsGrantRegistry();
+    const noSession = {
+      resolveAccessContext: () => Promise.reject(new Error("Session is missing or expired"))
+    } as unknown as MossAuthRuntime;
+    const { authRuntime, actAsActor } = withActAsGrantsAndRequestCache(noSession, grants);
+    const server = Fastify({ logger: false });
+    installActAsActorLookup(server, actAsActor);
+    const grantRequest = (value: string) =>
+      ({
+        headers: { [ACT_AS_GRANT_HEADER]: value },
+        ip: "127.0.0.1",
+        server
+      }) as unknown as FastifyRequest;
+    return { grants, authRuntime, grantRequest };
+  }
+
+  it("keys both helpers on the grant's actor and leaves the grant consumable", () => {
+    const { grants, grantRequest } = grantSetup();
+    const value = grants.mint({ actorUserId, chatSessionId: "chat-a", turnId: null });
+
+    expect(sessionRateLimitKey(grantRequest(value))).toBe(`act:${actorUserId}`);
+    expect(mcpSessionRateLimitKey(grantRequest(value))).toBe(`act:${actorUserId}`);
+    expect(grants.consume(value)?.actorUserId).toBe(actorUserId);
+  });
+
+  it("keeps the actor key on the request that consumed the grant", async () => {
+    // The route guard (an app-level onRequest hook) consumes the grant before a route-level
+    // rate-limit hook computes its key.
+    const { grants, authRuntime, grantRequest } = grantSetup();
+    const value = grants.mint({ actorUserId, chatSessionId: "chat-a", turnId: null });
+    const request = grantRequest(value);
+
+    await authRuntime.resolveAccessContext(request);
+
+    expect(grants.peekActor(value)).toBeNull();
+    expect(sessionRateLimitKey(request)).toBe(`act:${actorUserId}`);
+    expect(mcpSessionRateLimitKey(request)).toBe(`act:${actorUserId}`);
+    expect(sessionRateLimitKey(grantRequest(value))).toBe("ip:127.0.0.1");
+  });
+
+  it("falls back to the peer IP for a made-up or used grant value", () => {
+    const { grants, grantRequest } = grantSetup();
+    const value = grants.mint({ actorUserId, chatSessionId: "chat-a", turnId: null });
+    grants.consume(value);
+
+    expect(sessionRateLimitKey(grantRequest(value))).toBe("ip:127.0.0.1");
+    expect(sessionRateLimitKey(grantRequest("made-up"))).toBe("ip:127.0.0.1");
   });
 });

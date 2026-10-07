@@ -165,28 +165,34 @@ export const newsModuleManifest = {
       actions: ["create", "update", "delete"]
     }
   ],
+  // #3065: preference/source/topic writes also refresh feeds and reconcile schedules;
+  // overview and personalization can do so on GET. Credentials remain blocked on every method.
   routes: [
     {
       method: "GET",
       path: "/api/news/catalog",
+      chat: { access: "read", content: "outside" },
       responseSchema: newsCatalogResponseSchema,
       permissionId: "news.view"
     },
     {
       method: "GET",
       path: "/api/news/overview",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: newsOverviewResponseSchema,
       permissionId: "news.view"
     },
     {
       method: "GET",
       path: "/api/news/prefs",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: newsPrefsResponseSchema,
       permissionId: "news.view"
     },
     {
       method: "POST",
       path: "/api/news/prefs",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: createNewsPrefRequestSchema,
       responseSchema: createNewsPrefResponseSchema,
       permissionId: "news.prefs"
@@ -194,6 +200,7 @@ export const newsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/news/prefs/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: deleteNewsPrefResponseSchema,
       permissionId: "news.prefs"
     },
@@ -201,12 +208,14 @@ export const newsModuleManifest = {
     {
       method: "GET",
       path: "/api/news/personalization",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: getNewsPersonalizationSchema,
       permissionId: "news.view"
     },
     {
       method: "POST",
       path: "/api/news/source-exclusions",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: createNewsSourceExclusionSchema.body,
       responseSchema: createNewsSourceExclusionSchema,
       permissionId: "news.prefs"
@@ -214,12 +223,14 @@ export const newsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/news/source-exclusions/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: deleteNewsSourceExclusionSchema,
       permissionId: "news.prefs"
     },
     {
       method: "POST",
       path: "/api/news/sources/preview",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: previewNewsSourceSchema.body,
       responseSchema: previewNewsSourceSchema,
       permissionId: "news.prefs"
@@ -227,6 +238,7 @@ export const newsModuleManifest = {
     {
       method: "POST",
       path: "/api/news/sources",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: confirmNewsSourceSchema.body,
       responseSchema: confirmNewsSourceSchema,
       permissionId: "news.prefs"
@@ -234,12 +246,14 @@ export const newsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/news/sources/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: deleteNewsCustomSourceSchema,
       permissionId: "news.prefs"
     },
     {
       method: "POST",
       path: "/api/news/topics",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: createNewsTopicSchema.body,
       responseSchema: createNewsTopicSchema,
       permissionId: "news.prefs"
@@ -247,6 +261,7 @@ export const newsModuleManifest = {
     {
       method: "PATCH",
       path: "/api/news/topics/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: updateNewsTopicSchema.body,
       responseSchema: updateNewsTopicSchema,
       permissionId: "news.prefs"
@@ -254,35 +269,41 @@ export const newsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/news/topics/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: deleteNewsTopicSchema,
       permissionId: "news.prefs"
     },
     {
       method: "POST",
       path: "/api/news/refresh",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: triggerNewsRefreshSchema,
       permissionId: "news.prefs"
     },
     {
       method: "POST",
       path: "/api/news/revalidation",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: triggerNewsRevalidationSchema,
       permissionId: "news.prefs"
     },
     {
       method: "GET",
       path: "/api/news/images/:articleId",
+      chat: { access: "read", content: "outside", outbound: true },
       permissionId: "news.view"
     },
     {
       method: "GET",
       path: "/api/news/favicon/:domain",
+      chat: { access: "read", content: "outside", outbound: true },
       permissionId: "news.view"
     },
     // #2005 publisher credentials. news.credentials, never news.prefs.
     {
       method: "POST",
       path: "/api/news/sources/credentialed",
+      chat: { access: "blocked", blockedBecause: "secrets", content: "outside" },
       requestSchema: connectNewsCredentialedSourceSchema.body,
       responseSchema: connectNewsCredentialedSourceSchema,
       permissionId: "news.credentials"
@@ -290,6 +311,7 @@ export const newsModuleManifest = {
     {
       method: "POST",
       path: "/api/news/sources/:id/credential",
+      chat: { access: "blocked", blockedBecause: "secrets", content: "outside" },
       requestSchema: replaceNewsSourceCredentialSchema.body,
       responseSchema: replaceNewsSourceCredentialSchema,
       permissionId: "news.credentials"
@@ -297,12 +319,14 @@ export const newsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/news/sources/:id/credential",
+      chat: { access: "blocked", blockedBecause: "secrets", content: "outside" },
       responseSchema: revokeNewsSourceCredentialSchema,
       permissionId: "news.credentials"
     },
     {
       method: "GET",
       path: "/api/news/credentials",
+      chat: { access: "blocked", blockedBecause: "secrets", content: "outside" },
       responseSchema: listNewsSourceCredentialsSchema,
       permissionId: "news.credentials"
     }
@@ -323,6 +347,7 @@ export const newsModuleManifest = {
         "List the actor's top news headlines right now (one short 'Title — Source' line, max 5), composed from their enabled sources and topics. Read-only; briefing-oriented, not a full article browser.",
       permissionId: "news.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: newsTopHeadlinesTodayExecute
     },
@@ -332,6 +357,7 @@ export const newsModuleManifest = {
         "Show the actor's News source health and credential status. Read-only; if access failed, directs the actor to replace the key in News settings.",
       permissionId: "news.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: newsCredentialedSourceStatusExecute
     },
@@ -342,6 +368,7 @@ export const newsModuleManifest = {
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
@@ -365,6 +392,7 @@ export const newsModuleManifest = {
         "Verify a news publisher (URL or name) the actor wants to follow. Returns a confirmationId plus verified candidates (label + domain) for news.confirmSource. Read-only: verifies and caches candidates server-side, writes nothing.",
       permissionId: "news.prefs",
       risk: "read",
+      content: "outside",
       // Candidate labels are derived from fetched publisher pages/feeds — untrusted
       // external text, so the gateway wraps output in the trust envelope.
       externalContent: true,
@@ -415,6 +443,7 @@ export const newsModuleManifest = {
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -434,6 +463,7 @@ export const newsModuleManifest = {
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -456,6 +486,7 @@ export const newsModuleManifest = {
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -475,6 +506,7 @@ export const newsModuleManifest = {
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -492,6 +524,11 @@ export const newsModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "news.chat_app_actions",
+      description:
+        "App actions read the News catalog and saved preferences. Credentials, source previews, feed refreshes and scheduling changes remain unavailable through generic actions."
+    },
     {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.news",

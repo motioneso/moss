@@ -1,6 +1,9 @@
 # Moss acts through its own app
 
-- **Status:** approved by Ben, 2026-10-05
+- **Status:** design approved by Ben, 2026-10-05. Slice 7 passed hosted verification at
+  `a77aa4744`; Slice 8 scripted browser proof passed hosted verification at `aff106749`.
+  Owner-run live proof and Ben's ruling on clean Run B/no-ask browser acceptance remain outstanding.
+  The later owner-descriptor trust ruling below supersedes blanket descriptor admission.
 - **Issue:** #3065
 - **Related:** #2998 (self-knowledge by construction), #3023 (custom themes), #3022, #3024, #3025,
   #3026, July self-operation specs (`2026-07-26-module-self-operation-settings-commands.md`,
@@ -19,7 +22,8 @@ Ben's rulings, 2026-10-05:
 
 ## Where things stand
 
-Measured at commit 60505036c.
+Historical pre-build baseline, measured at commit 60505036c. These counts and absence statements
+are not claims about the current implementation; the Slice 7 ruling below records the later state.
 
 | Measure                                                                                   | Count |
 | ----------------------------------------------------------------------------------------- | ----- |
@@ -92,7 +96,7 @@ chat?: {
   access: "read" | "write" | "destructive" | "blocked";
   blockedBecause?: SelfOperationExclusionCategory; // required when access is "blocked"
   title?: string; // plain label shown on the approval card; required unless access is "read" or "blocked"
-  content?: "user_authored" | "outside"; // what a read returns; default "outside"
+  content?: "user_authored" | "outside"; // every response, including writes; default "outside"
   consent?: string; // AI-consent key; required on every route of a consent-gated module
 };
 ```
@@ -140,8 +144,9 @@ Steps, all inside the gateway:
 5. `fastify.inject` the request with the grant in a dedicated header. The request then passes the
    same route guard, module-enablement check, row-level security and validation as a browser
    request.
-6. Return status and body to Moss, capped at 32 KB with a truncation note. A read whose route is
-   `content: "outside"` returns inside the existing external-content wrapper.
+6. Return status and body to Moss through the existing 16,000-character rendered-result cap
+   (the build plan tightens the original 32 KB sketch). Any response whose route is
+   `content: "outside"` uses the outside-content wrapper and admission rule, including a write.
 
 The grant never leaves the process and never reaches a prompt, log, job payload or response. The
 plan must name the auth seam that reads it and a test observed failing when the check is removed.
@@ -209,22 +214,32 @@ general.
 pulls content in without any tool call. Passive memory recall, the cross-tool read and notes
 retrieval run on each turn and are prepended to the user's text (`engine-text.ts:83-121`,
 `154-160`), and launch seeds memory into a new engine (`chat-session-launch.ts:92-119`). So every
-path that adds content to a prompt goes through one function that records its provenance:
+path that adds outside content to a prompt goes through an admission boundary that records
+metadata before exposure. Prompt blocks use `admitToContext`; gateway surfaces use the shared
+content-admission helpers:
 
-| Admission path                                                 | Taints                   |
-| -------------------------------------------------------------- | ------------------------ |
-| Tool result marked `externalContent`                           | yes                      |
-| `app.callAction` read of an `outside` route                    | yes                      |
-| Connected-service tool result                                  | yes                      |
-| Attachment read                                                | yes                      |
-| Automatic recall: cross-tool email or calendar read            | yes                      |
-| Automatic recall: notes and memory, per turn or at launch      | yes (Ben's ruling below) |
-| The user's own typed message                                   | no                       |
-| `app.findAction`, `app.readSource`, app map, settings readouts | no                       |
+| Admission path                                                                  | Taints             |
+| ------------------------------------------------------------------------------- | ------------------ |
+| Outside/unmarked tool result or `externalContent` result                        | yes                |
+| `app.callAction` response from an `outside` route                               | yes                |
+| Connected-service tool result                                                   | yes                |
+| Attachment read                                                                 | yes                |
+| Automatic recall: cross-tool email or calendar read                             | yes                |
+| Automatic recall: notes and memory, per turn or at launch                       | yes, when nonempty |
+| Unknown/other-owner tool descriptors or exposed remote schema errors            | yes                |
+| Listed descriptors from the chat owner's own connection/current approved add-on | no                 |
+| Valid, nonempty classifier candidate IDs/labels                                 | yes                |
+| Forwarded safe handler errors and nonempty outside progress                     | yes                |
+| Module-control text and ordinary/evening seeds                                  | yes, when nonempty |
+| Native vault-read reports and nontrivial native permissions                     | yes, before allow  |
+| Outside-agent launch and observed allowed read/web/shell asks                   | yes                |
+| The user's own typed message                                                    | no                 |
+| `app.findAction`, `app.readSource`, app map, settings readouts                  | no                 |
 
 The plan's seams step lists every current admission path with `file:line`. A path that is not
-routed through the recording function is a blocker. A test confirms this by grepping for prompt
-assembly outside that function.
+routed through its recording boundary or explicitly classified as no-taint is a blocker. Source
+checks cover prompt assembly and named admission sites; they complement behavioral tests rather
+than proving the full boundary by themselves.
 
 **Taint belongs to the durable conversation, stored in the database.** Session keys today are actor
 plus surface (`chat-surface.ts:18-23`), and the token registry is process memory that a resume
@@ -235,6 +250,8 @@ throws away (`session-runtime-helpers.ts:458-496`). Neither can hold this state.
 - Resume, restart and relaunch read the row before the first turn, so a tainted thread stays
   tainted.
 - A conversation with no provenance record (every thread from before this ships) counts as tainted.
+  Migration `0293` forbids runtime clean INSERT; only the new-thread database trigger initializes
+  clean provenance, in the parent insert transaction. Applied migration `0291` remains unchanged.
 - Switching threads switches the flag. A clean thread opened after a tainted one stays clean.
 - The row is deleted with its conversation. A private chat's row goes with the private purge, so
   this adds nothing that outlives the chat.
@@ -242,13 +259,17 @@ throws away (`session-runtime-helpers.ts:458-496`). Neither can hold this state.
 Taint lasts for the life of the conversation. A fresh user message does not clean it, because
 injected text stays in the model's context across turns. The model cannot clear it.
 
-While tainted, every write asks. That includes tools that normally run automatically (for example
+At the policy decision boundary, a tainted conversation requires approval for writes. That includes
+Moss tools that normally run automatically (for example
 `settings.themeMode.set`, `settings/manifest.ts:480-490`) and the classifier gate's
-send-without-asking path.
+send-without-asking path. Native/ACP permission decisions have the explicitly qualified boundary
+in the current implementation ruling below.
 
-**Unmarked tools.** Five tools carry outside content but lack the mark: `email.listVisibleMessages`,
-`calendar.listVisibleEvents`, `chat.readAttachment`, `memory.recall` and `people.getContext`. They
-gain `externalContent: true`.
+**Content declarations.** The five originally identified tools were not the complete boundary.
+Every built-in read tool now declares `content: "user_authored" | "outside"`, enforced at API boot.
+Successful outcomes default to outside unless explicitly trusted; external flags retain outside
+handling. Only user-authored responses without those flags are exempt, including write responses
+that merely echo the user's own change. Notes and memory remain outside content.
 
 **Scope ruling (Ben, 2026-10-05): strict.** The user's own notes and memory taint like mail,
 because a note can hold clipped or forwarded text the user did not write. Automatic recall runs on
@@ -257,6 +278,133 @@ most turns, so most changes in a chat will ask. Ben chose this as the starting p
 
 Cost: "read my mail and make a task for each" asks once per task. That is accepted for now. Batching
 approvals is a later change if it proves noisy.
+
+### Current Slice 7 implementation ruling (2026-10-06)
+
+This section records the implementation of the approved safety rule, not new database or live
+verification. The [build plan, section 8.12](../plans/2026-10-05-moss-acts-through-app.md#812-current-slice-7-implementation-ruling-2026-10-06)
+contains the complete admission-path inventory, source references and verification limits.
+
+**A clean lookup alone cannot authorize asynchronous dispatch.**
+`ConversationProvenancePort.runAutomatic` is implemented by the durable store. In a short
+actor-scoped transaction it locks the owned provenance row, requires known-clean state and no
+reservation, and inserts a fresh reservation ID. The callback starts only after that transaction
+commits and releases its connection. Handler transactions and app-route preflight do not run
+inside the claim transaction, so a one-connection pool need not deadlock on nested acquisition.
+
+Content admission locks the same provenance row, then checks reservations in a separate statement
+with a fresh READ COMMITTED snapshot. An outstanding reservation rejects admission and withholds
+content. Admission that commits first makes a later automatic claim return `confirm` without
+running the callback. This is the ordering mechanism; repeated boolean reads are not an atomic
+barrier. Automatic result admission occurs after reservation release.
+
+**Native/ACP boundary:** Moss serializes outside-content admission with automatic permission
+decisions. It does not serialize or observe the outside engine's eventual operation. A bound
+in-flight request can linearize permission decision → admission even if its allow response is
+delivered later. This does not claim that every physically executed native write after taint asks.
+Terminal native/ACP grant success is deferred until required admission succeeds, so a denied grant
+is not reported as successful. These records describe permission, not external-operation completion.
+
+The callback's actual promise must settle before release, which matches the exact thread, owner
+and reservation ID. Callback/release failure never becomes a second execution. There is no expiry,
+timeout release, cancellation deletion or startup cleanup. An orphan is deliberately fail-closed:
+new content is withheld and automatic changes cannot claim clean authority. Wait for an active
+action or start a new chat, and check the app before retrying an action that may already have run.
+A new chat does not reset the old thread. Ordinary thread/account deletion still cascades.
+
+`0293_chat_automatic_action_reservations.sql` also replaces the old application clean-INSERT
+convention with restricted database-trigger initialization on new parent threads. Runtime can
+insert known-tainted history, not a clean row for a legacy conversation. No migration backfills
+legacy state as clean, and applied `0291_chat_conversation_provenance.sql` is not edited. Both
+provenance and reservation tables contain bounded identity/state metadata, not prompts, schema
+text, candidate labels, native paths or result content.
+
+**Admission covers inputs before a tool runs as well as its outputs.**
+
+- MCP tool listing and live/shadow classifier menus verify the token's actor before exposing
+  descriptors. Only host-stamped, exact-owner connected integrations/current approved add-ons
+  bypass descriptor admission; unknown or other-owner tools await `tool_external_descriptors`.
+  Remote module labels, classifier descriptions and schemas are covered. Public projections omit
+  the ownership stamp; external JSON cannot grant it. Outside results and forwarded errors still require admission.
+- Candidate hooks first release their actor-scoped connection. SDK normalization rejects malformed
+  or oversize data; valid nonempty ID/label snapshots await `classifier_candidates` admission before
+  choice/extraction sees them. Empty/malformed lists create no candidate admission and are not sent
+  to argument choice/extraction. Failed admission withholds the snapshot.
+- Normal tool schema failures may quote remote field names, so the normal call path admits their
+  descriptor text before returning it. A classifier gateway validation failure returns only fixed
+  `invalid_input`, without admitting that discarded error text. Other classifier inputs can already
+  have tainted the thread. Genuine `HttpError` messages forwarded by `safeErrors` tools use result admission
+  even if the tool's successful content is user-authored; fixed generic errors do not expose them.
+- Launch memory, default-engine pre-turn recall, notes, cross-tool blocks, module-control text and
+  ordinary/evening seeds await admission only when nonempty. Notes and cross-tool privacy checks
+  use the captured owner/surface/thread binding. User text, trusted metadata, attachment manifests
+  without bytes and bound-thread replay do not create new admissions. The live classifier can
+  finish before default-engine retrieval and separately admits its own input surfaces.
+- Both Claude vault-read hook variants report before allow; missing tokens or failed reports deny
+  the read. The server derives identity from the token and records `native_vault_read`, not file
+  contents or body-supplied identity. Other nontrivial native permission allows record
+  `native_tool_result` before returning because later output is outside server observation.
+- ACP read/web/shell allows record their family paths at every observed allow exit. The ACP engine
+  also records `outside_agent_launch` before launch because operations can arrive without a
+  permission ask. This conservative fallback is active. Server-side native/ACP reservations cover
+  the observed permission/audit callback, not unobservable external-process completion.
+
+**Later owner-descriptor ruling (2026-10-06).** Integration trust uses the immutable connection
+owner under owner-only RLS. There is no separately accepted connect-time descriptor baseline:
+discovery replaces the current tool snapshot; classifier fingerprints serve review/sort freshness,
+not connect-time descriptor acceptance. A baseline/change-detection system is an
+explicit follow-up, not part of this change. An owner's refreshed integration descriptors remain
+trusted until that follow-up.
+
+Add-ons reuse existing accepted manifest/package hashes and add current approval attribution in 0294. Explicit instance-admin current-hash approval, draft ship or accepted staged installation
+establishes the actor; personal enablement, unknown history and an old `enabled_by` do not. The
+runtime checks the accepted snapshot and current synthesized descriptors for that exact chat owner.
+An add-on approved by an admin remains outside for another user's chat. Legacy installations need
+fresh approval; no inferred ownership or historical backfill grants trust. No result, progress,
+candidate, forwarded-error or schema-error admission is exempted. ACP launch fallback is unchanged.
+See plan section 8.14 for implementation and verification details.
+
+These behaviors have focused unit and guard-removal coverage. At `a77aa4744`, all four integration
+shards and all acceptance groups passed; all 25 tracked target suites ran 344/344 with zero skips.
+The two unrelated integration skips and existing acceptance fixmes are not passing proof. Docker
+is absent locally, so no local database pass is claimed.
+
+Slice 8 uses the supported scripted ACP path with its real outside-context approval, then checks
+exactly-once theme change and immediate screen refresh. ACP starts tainted, so this browser case
+does not establish clean automatic execution, and a real Codex/ACP read followed by approval does
+not establish a clean-to-tainted transition. Those boundaries are explicit in plan section 8.13 and
+`docs/3065-app-actions-live-proof.md`. The owner confirmed no sandbox dev access; the
+fallback is hosted browser verification plus that checklist, never fabricated live proof. Replacing
+the original no-ask browser case is proposed and awaiting Ben; the current ACP-only live runtime
+cannot establish clean Run B. The kill gate awaits his ruling, rather than being failed or passed. Real
+provider/live-dev results are still outstanding, and Phase 1 remains unverified for completion or
+merge.
+
+### Pending memory suggestions (Ben, 2026-10-06)
+
+Kill-gate task 6 ("Accept a suggested memory") failed live. Moss could not find the pending
+suggestion, because the only list of suggestions was the memory dashboard, which stays blocked
+for retained-content consent. The accept route was a plain `write`, so it would have run without a
+card on a clean conversation. Moss saved a duplicate memory instead.
+
+Ben ruled: **Moss in chat may see the user's own pending memory suggestions and accept one, with an
+approval card every time it accepts.** No outside-content or taint change is part of this ruling.
+
+- `GET /api/memory/candidates` is a new `read` route. It returns the actor's own pending
+  suggestions (owner-only under RLS, newest 50) as display text only: ID, title, summary, record
+  kind, provenance and creation time. It never returns episode or source references.
+- `POST /api/memory/candidates/:id/accept` is `destructive`, so it always asks, including under
+  YOLO. Its target resolver reads the actor's own pending suggestion and puts its full text on
+  the card. A suggestion that is not the actor's, or is no longer pending, is refused before any
+  card.
+- Accept treats a missing request body as empty, so a plain chat call succeeds on its first
+  approved card.
+- Reject and suppress stay `write` and gain the same target resolver, so their cards name the
+  suggestion when they ask.
+- A "Remember this" suggestion stores its text as `excerpt`. Titles, summaries and the accepted
+  fact now use that excerpt; before, they fell back to "Memory candidate".
+- Retained-source recall and the dashboard stay blocked. The new list carries suggestion text
+  without a Wellness provenance marker, which the ruling accepts for the user's own suggestions.
 
 ### Approval card
 
@@ -269,7 +417,19 @@ model-written summary lie.
 - The exact fields being sent, as label and value rows.
 - When the conversation is tainted, one line saying Moss read outside content in this chat, so
   changes need approval.
-- Approve and Reject, as today.
+- Approval targets can quote text imported from email, tools or other sources. Displaying a
+  resolved card admits that text as outside content before the card is emitted, including a
+  changed target on a fresh card; displaying it does not make its instructions authoritative.
+- Memory deletion through either `memory.forget` or `app.callAction` shares the exact-version
+  snapshot and conditional deletion boundary. Cards show the full memory text, not internal IDs.
+  The legacy `DELETE /api/chat/memory/facts/:id` route is blocked from chat because it deletes
+  a different store; saved-memory deletion uses `memory.forget` instead. Its UI route is unchanged.
+- Other memory approval targets also show plain labels. Their server-only identity snapshots
+  retain the exact resolved row IDs/content for approval rechecks, including conflict sets,
+  without rendering IDs or hashes. Memory cards omit the technical Path row; the full frozen
+  request still binds execution. A structured route target separates `label` from `version`.
+- Approve and Reject, as today. A rejection tells Moss the user declined the action, distinct
+  from a policy block, cancellation or timeout.
 
 Phase 1 puts the target and fields into the existing card as plain text rows. Two different theme
 deletions never show the same card. The redesigned card needs an agreed mockup before phase 2

@@ -32,10 +32,8 @@ test("Meetings optional-title draft setup, notes, history and deletion use the r
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
     await expect(page.getByRole("heading", { name: "New meeting" })).toBeVisible();
     await expect(page.getByRole("main")).toHaveCount(1);
-    await expect(page.getByRole("button", { name: "Start meeting", exact: true })).toBeDisabled();
-    await expect(
-      page.getByText("Connect Trail Marker once for Meetings and Backtrack", { exact: false })
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "New meeting", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Start recording", exact: true })).toHaveCount(0);
     await page
       .getByLabel("Meeting title (optional)", { exact: true })
       .pressSequentially(title, { delay: 0 });
@@ -44,12 +42,16 @@ test("Meetings optional-title draft setup, notes, history and deletion use the r
       (response) =>
         response.url().endsWith("/api/meetings/records") && response.request().method() === "POST"
     );
-    await page.getByRole("button", { name: "Create draft", exact: true }).click();
+    await page.getByRole("button", { name: "New meeting", exact: true }).click();
     const created = await createResponse;
     expect(created.status()).toBe(201);
     const { meeting } = (await created.json()) as { meeting: MeetingRecord };
     fixtureId = meeting.id;
     await expect(page).toHaveURL(new RegExp(`id=${fixtureId}`));
+    const captureResponse = await page.request.get(`/api/meetings/records/${fixtureId}/capture`);
+    expect(captureResponse.status()).toBe(200);
+    expect((await captureResponse.json()).capture).toBeNull();
+    await expect(page.getByRole("button", { name: "Start recording", exact: true })).toBeDisabled();
     await expect(page.getByRole("main")).toHaveCount(1);
     await assertMeetingReviewLayout(page);
     await expect(page.getByRole("button", { name: "Ask Moss", exact: true })).toBeDisabled();

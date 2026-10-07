@@ -23,6 +23,12 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
   const tokens = new SessionTokenRegistry();
   const confirmations = new ConfirmationRegistry();
   const gateway = new AssistantToolGateway({
+    // Exercise the existing permission rules with a verified clean conversation.
+    provenance: {
+      isTainted: async () => false,
+      recordAdmission: async () => {},
+      runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+    },
     resolveActiveModules: async () => [],
     repository: {
       // Rows are numbered in creation order so two asks can be told apart.
@@ -65,7 +71,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("raises the same card row and event as native asks, owned by the token actor", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const pending = gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
@@ -114,7 +125,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("saves the agent session and folder on the row for later readers", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const pending = gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
@@ -162,7 +178,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("asks about a read outside the folder as outbound, with the path on the card and the row", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const pending = gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
@@ -193,7 +214,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("keeps two agents in one conversation apart: two rows, each naming its own session", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
     const ask = (sessionId: string, cwd: string) =>
       gateway.requestAcpBuiltInPermission(token, {
         cwd,
@@ -232,7 +258,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("refuses a subagent titled like a read, with no card and no row", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
@@ -266,7 +297,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("refuses a read-mimicking title with no real name and no row", async () => {
     const store = freshStore();
     const { gateway, tokens, confirmations } = buildGateway(store);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
     const awaitResolution = vi.spyOn(confirmations, "awaitResolution");
 
     await expect(
@@ -299,10 +335,15 @@ describe("agent built-in permission through the shared approval card", () => {
     });
   });
 
-  it("denies with the shared refusal wording when the hold expires", async () => {
+  it("denies with explicit timeout wording when the hold expires", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store, 20);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
@@ -317,7 +358,8 @@ describe("agent built-in permission through the shared approval card", () => {
       })
     ).resolves.toMatchObject({
       decision: "deny",
-      reason: APPROVAL_REFUSED_REASON,
+      reason:
+        "Approval timed out, so this action was not done. Do not try it again; let the user know.",
       asked: true
     });
     expect(store.emitted.at(-1)).toMatchObject({
@@ -331,7 +373,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("answers a pending ask as cancelled and records the cancellation", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store, 30_000);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const pending = gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
@@ -350,7 +397,8 @@ describe("agent built-in permission through the shared approval card", () => {
     );
     await expect(pending).resolves.toMatchObject({
       decision: "deny",
-      reason: APPROVAL_REFUSED_REASON,
+      reason:
+        "The approval request was cancelled, so this action was not done. Do not try it again; let the user know.",
       asked: true
     });
     expect((await pending).holdDurationMs).toBeGreaterThan(0);
@@ -366,7 +414,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("allows reads and in-folder writes with no card row", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
@@ -399,7 +452,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("refuses the unrecognised with no card row and no retry wording", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
@@ -427,7 +485,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("still allows when the person answers slowly, with no shorter clock firing", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store, 30_000);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const pending = gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
@@ -457,7 +520,12 @@ describe("agent built-in permission through the shared approval card", () => {
   it("keeps a stopped turn cancelled after the next turn starts", async () => {
     const store = freshStore();
     const { gateway, tokens, confirmations } = buildGateway(store, 30_000);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     let releaseCreate!: () => void;
     store.createGate = new Promise<void>((resolve) => {
@@ -483,7 +551,8 @@ describe("agent built-in permission through the shared approval card", () => {
     expect(confirmations.isAwaiting("acp-action-1")).toBe(false);
     await expect(pending).resolves.toMatchObject({
       decision: "deny",
-      reason: APPROVAL_REFUSED_REASON,
+      reason:
+        "The approval request was cancelled, so this action was not done. Do not try it again; let the user know.",
       asked: true
     });
     await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
@@ -517,6 +586,7 @@ describe("agent built-in permission through the shared approval card", () => {
       const store = freshStore();
       const { gateway, tokens } = buildGateway(store, timeoutMs);
       const token = tokens.mint({
+        threadId: "clean-thread",
         actorUserId: "u1",
         chatSessionId: "s1",
         allowedToolNames: null
@@ -558,7 +628,12 @@ describe("agent built-in permission through the shared approval card", () => {
 
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store, 20);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
     await gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
       home: "/home/agent",
@@ -575,6 +650,7 @@ describe("agent built-in permission through the shared approval card", () => {
     const silent = freshStore();
     const silentGateway = buildGateway(silent);
     const silentToken = silentGateway.tokens.mint({
+      threadId: "clean-thread",
       actorUserId: "u1",
       chatSessionId: "s1",
       allowedToolNames: null
@@ -612,6 +688,7 @@ describe("agent built-in permission through the shared approval card", () => {
       const store = freshStore();
       const { gateway, tokens } = buildGateway(store);
       const token = tokens.mint({
+        threadId: "clean-thread",
         actorUserId: "u1",
         chatSessionId: "s1",
         allowedToolNames: null

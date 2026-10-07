@@ -9,7 +9,7 @@ export interface MeetingRememberedSource {
 }
 export interface MeetingCapturePreferences {
   readonly rememberedSource?: MeetingRememberedSource | null;
-  /** null means the person has never explicitly selected a default, or cleared it. */
+  /** null resets to the default microphone and system audio mode. */
   readonly defaultCaptureMode: MeetingCaptureMode | null;
 }
 

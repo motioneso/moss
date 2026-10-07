@@ -1,4 +1,3 @@
-import { registerMeetingRecordingNoticeRoutes } from "./recording-notice-routes.js";
 import { captureAudioDiagnostic } from "./capture-diagnostics.js";
 import { captureAuthorizationError } from "./capture-authorization.js";
 import { Ajv } from "ajv";
@@ -79,27 +78,31 @@ const selection = {
 };
 
 const permission = { enum: ["granted", "denied", "unknown"] };
-const inventory = object({
-  microphones: {
-    type: "array",
-    maxItems: 64,
-    items: object({ deviceId: text, sourceId: text, label: text })
+const inventory = object(
+  {
+    defaultMicrophoneId: { ...text, nullable: true },
+    microphones: {
+      type: "array",
+      maxItems: 64,
+      items: object({ deviceId: text, sourceId: text, label: text })
+    },
+    applications: {
+      type: "array",
+      maxItems: 128,
+      items: object({ appProcessTreeId: text, applicationId: text, label: text }, [
+        "appProcessTreeId",
+        "label"
+      ])
+    },
+    computerAudio: object({
+      available: { type: "boolean" },
+      excludedProcessTreeIds: { type: "array", maxItems: 64, uniqueItems: true, items: text }
+    }),
+    microphonePermission: permission,
+    systemAudioPermission: permission
   },
-  applications: {
-    type: "array",
-    maxItems: 128,
-    items: object({ appProcessTreeId: text, applicationId: text, label: text }, [
-      "appProcessTreeId",
-      "label"
-    ])
-  },
-  computerAudio: object({
-    available: { type: "boolean" },
-    excludedProcessTreeIds: { type: "array", maxItems: 64, uniqueItems: true, items: text }
-  }),
-  microphonePermission: permission,
-  systemAudioPermission: permission
-});
+  ["microphones", "applications", "computerAudio", "microphonePermission", "systemAudioPermission"]
+);
 const observed = object(
   {
     generation: counter,
@@ -131,14 +134,9 @@ const controlProperties = {
   requestKey: uuid,
   expectedGeneration: counter,
   command: { enum: ["record", "pause", "stop", "revoke"] },
-  selection,
-  noticeAcknowledged: { const: true }
+  selection
 };
 const controlRequired = ["grantId", "requestKey", "expectedGeneration", "command"];
-const recordNoticeRequired = {
-  if: { properties: { command: { const: "record" } }, required: ["command"] },
-  then: { required: ["selection"] }
-};
 const params = object({ id: uuid });
 /** Before credential resolution, rotating untrusted bearer/cookie bytes must not rotate buckets. */
 function ipRateLimit(max: number) {
@@ -165,11 +163,6 @@ export function registerMeetingCaptureRoutes(
 ): void {
   const service = new MeetingCaptureService(deps);
   const connections = new MeetingCaptureConnectionService(deps);
-  registerMeetingRecordingNoticeRoutes(server, {
-    dataContext: deps.dataContext,
-    resolveAccessContext: (request) =>
-      service.browser(request.headers, request.id, request.method !== "GET")
-  });
   const waiters = new CaptureWaiters();
   const noStore = async (_request: FastifyRequest, reply: FastifyReply) => {
     reply.header("Cache-Control", "no-store");
@@ -289,11 +282,10 @@ export function registerMeetingCaptureRoutes(
             deviceId: uuid,
             connectionId: uuid,
             expectedRevision: { type: "integer", minimum: 1 },
-            noticeAcknowledged: { const: true },
             requestKey: uuid,
             selection
           },
-          ["deviceId", "connectionId", "expectedRevision", "requestKey", "selection"]
+          ["deviceId", "connectionId", "expectedRevision", "requestKey"]
         )
       }
     },
@@ -470,7 +462,7 @@ export function registerMeetingCaptureRoutes(
       config: ipRateLimit(300),
       schema: {
         params,
-        body: { ...object(controlProperties, controlRequired), ...recordNoticeRequired }
+        body: { ...object(controlProperties, controlRequired) }
       }
     },
     async (request, reply) => {

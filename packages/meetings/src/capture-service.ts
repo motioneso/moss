@@ -1,4 +1,8 @@
-import { MeetingRecordingNoticeRepository } from "./recording-notice.js";
+import {
+  readMeetingCapturePreferences,
+  resolveCaptureSource,
+  savedCaptureSelection
+} from "./capture-defaults.js";
 import { captureAuthorizationError } from "./capture-authorization.js";
 import { captureMetadataJson } from "./capture-metadata.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
@@ -119,8 +123,7 @@ export class MeetingCaptureService {
     private readonly deps: MeetingCaptureDependencies,
     private readonly repository = new MeetingCaptureRepository(),
     private readonly transcript = new MeetingTranscriptRepository(),
-    private readonly connections = new MeetingCaptureConnectionRepository(),
-    private readonly notices = new MeetingRecordingNoticeRepository()
+    private readonly connections = new MeetingCaptureConnectionRepository()
   ) {
     this.now = deps.now ?? (() => new Date());
   }
@@ -370,8 +373,6 @@ export class MeetingCaptureService {
     meetingId: string,
     input: MeetingCaptureControlInput
   ) {
-    if (input.command === "record")
-      await this.deps.dataContext.withDataContext(actor, (db) => this.notices.requireCurrent(db));
     const grant = await this.deps.dataContext.withDataContext(actor, (db) =>
       this.repository.grant(db, input.grantId)
     );
@@ -412,7 +413,6 @@ export class MeetingCaptureService {
       this.valid(grant, meetingId);
       await this.liveBinding(grant, actor);
     }
-    if (input.command === "record") await this.notices.requireCurrent(db);
     return grant;
   }
   private async control(
@@ -453,21 +453,36 @@ export class MeetingCaptureService {
       const state = captureState(grant);
       await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
       if (grant.status !== "approved") expireCaptureLease(state, this.now(), grant.expires_at);
-      if (grant.status === "approved" && input.command === "record") {
+      let command = input;
+      if (input.command === "record" && (grant.status === "approved" || !input.selection)) {
         const connection = await this.connections.connection(db, grant.device_id);
-        if (!connection || connection.connection_id !== grant.connection_id)
-          throw new MeetingCaptureError();
-        state.inventory = JSON.parse(connection.inventory_json) as typeof state.inventory;
-        state.lastSeenAt = connection.last_seen_at.toISOString();
+        if (
+          !connection ||
+          connection.connection_id !== grant.connection_id ||
+          connection.capability_revision !== grant.capability_revision ||
+          connection.expires_at <= this.now() ||
+          this.now().getTime() - connection.last_seen_at.getTime() > 30000
+        )
+          throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
+        const inventory = JSON.parse(connection.inventory_json) as NonNullable<
+          typeof state.inventory
+        >;
+        state.inventory = inventory;
+        if (grant.status === "approved") state.lastSeenAt = connection.last_seen_at.toISOString();
+        if (!input.selection)
+          command = {
+            ...input,
+            selection: savedCaptureSelection(
+              resolveCaptureSource(
+                await readMeetingCapturePreferences(db),
+                grant.device_id,
+                inventory
+              ),
+              inventory
+            )
+          };
       }
-      if (input.command === "record")
-        await this.repository.bindNotice(db, grant, await this.notices.requireCurrent(db));
-      applyCaptureControl(
-        state,
-        input.command === "record" ? { ...input, noticeAcknowledged: true } : input,
-        this.now(),
-        processing?.modelRoute ?? ""
-      );
+      applyCaptureControl(state, command, this.now(), processing?.modelRoute ?? "");
       if (grant.status === "approved" && input.command === "record")
         await this.repository.renewClaim(
           db,

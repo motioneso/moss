@@ -121,6 +121,7 @@ export const briefingsModuleManifest = {
       permissionId: "briefings.run",
       actionFamilyId: "briefing_runs",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       // Re-running only writes a new dated report; earlier reports stay. Not destructive, so
       // installing the module grants normal use (Ben's ruling on Food, 2026-08-19).
@@ -171,6 +172,7 @@ export const briefingsModuleManifest = {
         "failed, or not_found. Check again later while pending; never re-run to check.",
       permissionId: "briefings.view",
       risk: "read",
+      content: "outside",
       externalContent: true,
       inputSchema: {
         type: "object",
@@ -213,12 +215,15 @@ export const briefingsModuleManifest = {
     {
       method: "GET",
       path: "/api/briefings/definitions",
+      // Listing definitions schedules/unschedules the actor's jobs as a self-heal.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: listBriefingDefinitionsResponseSchema,
       permissionId: "briefings.view"
     },
     {
       method: "POST",
       path: "/api/briefings/definitions",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: createBriefingDefinitionRequestSchema,
       responseSchema: createBriefingDefinitionResponseSchema,
       permissionId: "briefings.create"
@@ -226,6 +231,7 @@ export const briefingsModuleManifest = {
     {
       method: "PATCH",
       path: "/api/briefings/definitions/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: updateBriefingDefinitionRequestSchema,
       responseSchema: updateBriefingDefinitionResponseSchema,
       permissionId: "briefings.update"
@@ -233,6 +239,7 @@ export const briefingsModuleManifest = {
     {
       method: "POST",
       path: "/api/briefings/definitions/:id/run",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: runBriefingDefinitionRequestSchema,
       responseSchema: runBriefingDefinitionResponseSchema,
       permissionId: "briefings.run"
@@ -240,12 +247,15 @@ export const briefingsModuleManifest = {
     {
       method: "GET",
       path: "/api/briefings/definitions/:id/runs",
+      // Both run reads upsert feedback/catch-up targets; neither is read-only.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: listBriefingRunsResponseSchema,
       permissionId: "briefings.view"
     },
     {
       method: "GET",
       path: "/api/briefings/definitions/:id/runs/:runId",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: getBriefingRunResponseSchema,
       permissionId: "briefings.view"
     }

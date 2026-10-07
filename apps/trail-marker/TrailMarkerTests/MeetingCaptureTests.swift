@@ -3,7 +3,7 @@ import XCTest
 
 final class MeetingCaptureTests: XCTestCase {
     private let ready = MeetingNativeReadiness(permissionsGranted: true, processingReady: true,
-                                              noticeAcknowledged: true, meetingDeviceAuthorized: true)
+                                              meetingDeviceAuthorized: true)
     private let mic = MeetingNativeSelection(microphoneDeviceID: 42, output: nil)
     private final class Device: MeetingAudioCapturing {
         var receiver: MeetingAudioReceiving?
@@ -163,9 +163,9 @@ final class MeetingCaptureTests: XCTestCase {
     func testReadinessScopeAndDeadlineFailuresDoNotOpenDevices() throws {
         var calls = 0
         let runtime = MeetingCaptureRuntime { _ in calls += 1; return [:] }
-        let denied = MeetingNativeReadiness(permissionsGranted: false, processingReady: true,
-                                           noticeAcknowledged: true, meetingDeviceAuthorized: true)
-        XCTAssertThrowsError(try runtime.prepare(selection: mic, readiness: denied, at: 0))
+        for denied in deniedReadiness {
+            XCTAssertThrowsError(try runtime.prepare(selection: mic, readiness: denied, at: 0))
+        }
         XCTAssertThrowsError(try runtime.prepare(selection: MeetingNativeSelection(microphoneDeviceID: 0, output: nil), readiness: ready, at: 0))
         XCTAssertThrowsError(try runtime.prepare(selection: MeetingNativeSelection(microphoneDeviceID: 1, output: .selectedProcesses([])), readiness: ready, at: 0))
         XCTAssertEqual(calls, 0)
@@ -174,6 +174,32 @@ final class MeetingCaptureTests: XCTestCase {
         try machine.start(readiness: ready, at: 0)
         XCTAssertThrowsError(try machine.stop(at: 1, finalizationNanoseconds: 60_000_000_001))
         XCTAssertThrowsError(try machine.stop(at: UInt64.max, finalizationNanoseconds: 1))
+    }
+
+    private var deniedReadiness: [MeetingNativeReadiness] {
+        [
+            .init(permissionsGranted: false, processingReady: true, meetingDeviceAuthorized: true),
+            .init(permissionsGranted: true, processingReady: false, meetingDeviceAuthorized: true),
+            .init(permissionsGranted: true, processingReady: true, meetingDeviceAuthorized: false)
+        ]
+    }
+
+    func testStartAndResumeRecheckEveryRemainingReadinessRequirement() throws {
+        for denied in deniedReadiness {
+            let device = Device()
+            var factories = 0
+            let runtime = MeetingCaptureRuntime { _ in factories += 1; return [.microphone: device] }
+            try runtime.prepare(selection: mic, readiness: ready, at: 0)
+            XCTAssertThrowsError(try runtime.start(readiness: denied, at: 1))
+            XCTAssertEqual(factories, 0)
+            try runtime.start(readiness: ready, at: 2)
+            try runtime.pause(at: 3)
+            XCTAssertThrowsError(try runtime.resume(selection: mic, readiness: denied, permitRetainedAudio: true, at: 4))
+            XCTAssertEqual(factories, 1, "A denied Resume must not create another input")
+            XCTAssertEqual(device.starts, 1)
+            XCTAssertEqual(runtime.snapshot.state, .paused)
+            try runtime.terminate(at: 5)
+        }
     }
     func testDefaultDeadlineCannotTurnExpiredUnsentAudioIntoSuccessfulDrain() throws {
         let device = Device()

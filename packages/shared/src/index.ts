@@ -84,5 +84,3 @@ export * from "./meeting-export-api.js";
 export * from "./meeting-history-api.js";
 
 export * from "./meeting-capture-api.js";
-
-export * from "./meeting-recording-notice-api.js";

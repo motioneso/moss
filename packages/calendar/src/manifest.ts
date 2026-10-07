@@ -193,12 +193,14 @@ export const calendarModuleManifest = {
     {
       method: "GET",
       path: "/api/calendar/day-plan",
+      chat: { access: "read" },
       responseSchema: getDayPlanResponseSchema,
       permissionId: "calendar.view"
     },
     {
       method: "POST",
       path: "/api/calendar/day-plans",
+      chat: { access: "write", title: "Create day-plan draft" },
       requestSchema: createDayPlanRequestSchema,
       responseSchema: createDayPlanResponseSchema,
       permissionId: "calendar.manage"
@@ -206,6 +208,7 @@ export const calendarModuleManifest = {
     {
       method: "PATCH",
       path: "/api/calendar/day-plans/:id/draft",
+      chat: { access: "write", title: "Save day-plan draft" },
       requestSchema: saveDayPlanRequestSchema,
       responseSchema: saveDayPlanResponseSchema,
       permissionId: "calendar.manage"
@@ -213,6 +216,8 @@ export const calendarModuleManifest = {
     {
       method: "POST",
       path: "/api/calendar/day-plans/:id/preview",
+      // Preview consults live connector-backed calendar context.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: previewDayPlanRequestSchema,
       responseSchema: previewDayPlanResponseSchema,
       permissionId: "calendar.view"
@@ -220,6 +225,7 @@ export const calendarModuleManifest = {
     {
       method: "POST",
       path: "/api/calendar/day-plans/:id/apply",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: applyDayPlanRequestSchema,
       responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
@@ -227,12 +233,14 @@ export const calendarModuleManifest = {
     {
       method: "GET",
       path: "/api/calendar/day-plans/:id/operations/:operationId",
+      chat: { access: "read" },
       responseSchema: dayPlanApplyStatusResponseSchema,
       permissionId: "calendar.view"
     },
     {
       method: "POST",
       path: "/api/calendar/day-plans/:id/operations/:operationId/retry",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: retryDayPlanApplyRequestSchema,
       responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
@@ -240,6 +248,7 @@ export const calendarModuleManifest = {
     {
       method: "POST",
       path: "/api/calendar/day-plans/:id/operations/:operationId/recover",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: recoverDayPlanApplyRequestSchema,
       responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
@@ -247,6 +256,8 @@ export const calendarModuleManifest = {
     {
       method: "POST",
       path: "/api/calendar/day-plans/:id/operations/:operationId/confirm",
+      // This resolves a pending assistant approval before executing calendar changes.
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: confirmDayPlanApplyRequestSchema,
       responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
@@ -254,24 +265,29 @@ export const calendarModuleManifest = {
     {
       method: "GET",
       path: "/api/calendar/events",
+      chat: { access: "read", coveredBy: "calendar.listVisibleEvents" },
       responseSchema: listCalendarEventsResponseSchema,
       permissionId: "calendar.view"
     },
     {
       method: "GET",
       path: "/api/calendar/events/:id",
+      chat: { access: "read" },
       responseSchema: getCalendarEventResponseSchema,
       permissionId: "calendar.view"
     },
     {
       method: "GET",
       path: "/api/calendar/briefing-settings",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: getCalendarBriefingSettingsResponseSchema,
       permissionId: "calendar.manage"
     },
     {
       method: "PATCH",
       path: "/api/calendar/briefing-settings",
+      // timeBlockMode can promote calendar_writeback to trusted_auto.
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: updateCalendarBriefingSettingsRequestSchema,
       responseSchema: getCalendarBriefingSettingsResponseSchema,
       permissionId: "calendar.manage"
@@ -311,6 +327,7 @@ export const calendarModuleManifest = {
         "cache only on transient provider failures, with source and gap metadata.",
       permissionId: "calendar.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {
@@ -507,6 +524,11 @@ export const calendarModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "calendar.chat_app_actions",
+      description:
+        "App actions read calendar data and create or edit day-plan drafts. Provider writes, plan execution and settings that expand automatic authority stay unavailable through generic actions."
+    },
     {
       id: "calendar.saved_day_plan_read",
       description:

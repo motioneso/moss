@@ -65,7 +65,8 @@ describe("manifest routes[] reconciliation", () => {
       { method: "GET", path: "/api/chat/memory/corrections" },
       { method: "POST", path: "/api/chat/action-requests/:id/resolve" },
       { method: "POST", path: "/api/mcp" },
-      { method: "POST", path: "/internal/permission" }
+      { method: "POST", path: "/internal/permission" },
+      { method: "POST", path: "/internal/vault-read-report" }
     ]) {
       expect(paths).toContainEqual(expected);
     }

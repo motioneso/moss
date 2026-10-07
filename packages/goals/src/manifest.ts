@@ -17,6 +17,7 @@ export const goalsModuleSqlMigrationDirectory = fileURLToPath(new URL("../sql", 
 
 export const goalsModuleManifest: MossModuleManifest = {
   id: GOALS_MODULE_ID,
+  chatRefreshTokens: ["goals.list"],
   name: "Goals",
   publisher: "Moss",
   version: "1.0.0",
@@ -26,12 +27,50 @@ export const goalsModuleManifest: MossModuleManifest = {
   lifecycle: "required",
   availability: { defaultEnabled: true, required: true },
   compatibility: { jarv1s: ">=0.0.0" },
+  features: [
+    {
+      id: "goals.chat_app_actions",
+      description:
+        "App actions read and create goals. Edits and evidence additions stay unavailable because they enqueue memory synchronization."
+    }
+  ],
   routes: [
-    { method: "GET", path: "/api/goals", permissionId: "goals.view" },
-    { method: "POST", path: "/api/goals", permissionId: "goals.create" },
-    { method: "GET", path: "/api/goals/:id", permissionId: "goals.view" },
-    { method: "PATCH", path: "/api/goals/:id", permissionId: "goals.update" },
-    { method: "POST", path: "/api/goals/:id/evidence", permissionId: "goals.update" }
+    {
+      method: "GET",
+      path: "/api/goals",
+      chat: { access: "read", coveredBy: "goals.list" },
+      permissionId: "goals.view"
+    },
+    {
+      method: "POST",
+      path: "/api/goals",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Create goal",
+        coveredBy: "goals.create"
+      },
+      permissionId: "goals.create"
+    },
+    {
+      method: "GET",
+      path: "/api/goals/:id",
+      chat: { access: "read", coveredBy: "goals.get" },
+      permissionId: "goals.view"
+    },
+    {
+      method: "PATCH",
+      path: "/api/goals/:id",
+      // Both updates and evidence additions enqueue memory-sync work.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "goals.update"
+    },
+    {
+      method: "POST",
+      path: "/api/goals/:id/evidence",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "goals.update"
+    }
   ],
   assistantActionFamilies: [
     {
@@ -48,6 +87,7 @@ export const goalsModuleManifest: MossModuleManifest = {
       description: "List all active goals for the user.",
       permissionId: "goals.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       outputSchema: { type: "object", additionalProperties: true },
       execute: goalListExecute
@@ -57,6 +97,7 @@ export const goalsModuleManifest: MossModuleManifest = {
       description: "Get a specific goal by ID, including its evidence.",
       permissionId: "goals.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["goalId"],
@@ -72,6 +113,7 @@ export const goalsModuleManifest: MossModuleManifest = {
       description: "Create a new long-running goal.",
       permissionId: "goals.create",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "goals_management",
       selfOperationGrant: "granted_at_install",

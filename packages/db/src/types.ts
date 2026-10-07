@@ -163,6 +163,8 @@ export interface ExternalModulesTable {
   package_hash: string;
   disabled_reason: string | null;
   enabled_by: string | null;
+  // Approval of the current accepted hashes; legacy rows deliberately remain unattributed.
+  descriptor_approved_by: string | null;
   enabled_at: NullableTimestampColumn;
   // #1753: NULL for every enabled/disabled row, NOT NULL for every draft row (DB CHECK
   // enforces the pairing). The one admin-author a draft runs for alone.
@@ -407,7 +409,7 @@ export type AiModelStatus = "active" | "disabled";
 export type AiModelTier = "reasoning" | "interactive" | "economy";
 // #2208: who created a model row. Discovery may prune only its own ('discovered') rows.
 export type AiConfiguredModelOrigin = "discovered" | "manual";
-export type AiAssistantActionRisk = "write" | "outbound" | "destructive";
+export type AiAssistantActionRisk = "read" | "write" | "outbound" | "destructive";
 export type AiAssistantActionStatus = "pending" | "confirmed" | "rejected" | "cancelled";
 export type ChatMessageRole = "user" | "assistant";
 export type ChatMessageStatus = "stored" | "pending" | "blocked" | "no_model" | "working" | "error";
@@ -930,6 +932,20 @@ export interface ChatThreadsTable {
   updated_at: TimestampColumn;
   last_active_at: TimestampColumn;
   conversation_summary: string | null;
+}
+
+export interface ChatConversationProvenanceTable {
+  thread_id: string;
+  owner_user_id: string;
+  tainted_at: NullableTimestampColumn;
+  first_admission_path: ColumnType<string | null, string | null | undefined, string | null>;
+  created_at: TimestampColumn;
+}
+
+export interface ChatAutomaticActionReservationsTable {
+  thread_id: string;
+  owner_user_id: string;
+  reservation_id: string;
 }
 
 export interface ChatClassifierShadowRecordsTable {
@@ -1928,6 +1944,8 @@ export interface MossDatabase {
   "app.moss_model_activity_log": MossModelActivityLogTable;
   "app.moss_activity_detail": MossActivityDetailTable;
   "app.chat_threads": ChatThreadsTable;
+  "app.chat_conversation_provenance": ChatConversationProvenanceTable;
+  "app.chat_automatic_action_reservations": ChatAutomaticActionReservationsTable;
   "app.chat_messages": ChatMessagesTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_classifier_release_eligibility": ChatClassifierReleaseEligibilityTable;

@@ -1,3 +1,5 @@
+> Historical critique of the earlier interface. The approved four-state design in #3087 supersedes these proposed controls.
+
 # Meetings screens: critique (#2981)
 
 - Date: 2026-10-05
@@ -168,7 +170,6 @@ later in Settings, Meetings; **On demand** shown only when it applies; **Remove*
 | Device name, capture scope labels | Settings | Your Mac; one source line before Start |
 | Prepare this meeting, Approve this device (per meeting) | Setup | One-time Mac link; decision for Ben and a security review |
 | Repeated mode cards, Microphone and Selected app pickers | Settings | Listen to, Microphone, Meeting app |
-| Consent switch gating Record | Setup | One-time recording notice; decision for Ben |
 | Permission hints, transcription unavailable | Setup | Setup checks; one inline message if it breaks |
 | Gap warnings and list | On demand | Inline gap markers in the transcript |
 | Retry capture command, Refresh capture status | On demand | One message, one fix |

@@ -57,7 +57,6 @@ export interface MeetingReadiness {
   readonly output: MeetingSourceHealth;
   readonly permissionsGranted: boolean;
   readonly processingReady: boolean;
-  readonly noticeAcknowledged: boolean;
 }
 
 export interface MeetingSourceBoundary {

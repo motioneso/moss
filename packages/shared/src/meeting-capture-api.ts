@@ -9,6 +9,7 @@ export const MEETING_CAPTURE_LEASE_MS = 30000;
 export const MEETING_CAPTURE_CLAIM_MS = 60000;
 export type MeetingCapturePermission = "granted" | "denied" | "unknown";
 export interface MeetingCaptureInventory {
+  readonly defaultMicrophoneId?: string | null;
   readonly microphones: readonly { deviceId: string; sourceId: string; label: string }[];
   readonly applications: readonly {
     appProcessTreeId: string;
@@ -110,7 +111,6 @@ export interface MeetingCaptureControlInput {
   readonly expectedGeneration: number;
   readonly command: "record" | "pause" | "stop" | "revoke";
   readonly selection?: MeetingCaptureSelection;
-  readonly noticeAcknowledged?: true;
 }
 export interface MeetingCaptureAudioInput {
   readonly meetingId: string;
@@ -199,13 +199,11 @@ export interface MeetingCaptureDevicesResult {
   readonly processingReady: boolean;
 }
 export interface MeetingCaptureStartInput {
-  /** Legacy input accepted during rollout; only the stored account acknowledgement authorizes capture. */
-  readonly noticeAcknowledged?: true;
   readonly deviceId: string;
   readonly connectionId: string;
   readonly expectedRevision: number;
   readonly requestKey: string;
-  readonly selection: MeetingCaptureSelection;
+  readonly selection?: MeetingCaptureSelection;
 }
 export interface MeetingCaptureCommandsInput {
   readonly connectionId: string;

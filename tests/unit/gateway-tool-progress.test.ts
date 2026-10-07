@@ -43,6 +43,8 @@ function progressTool(seen: ToolContext[]) {
         description: "A read tool that streams partial output.",
         permissionId: "test.view",
         risk: "read" as const,
+        content: "user_authored",
+        isExternal: false,
         inputSchema: { type: "object", properties: {} },
         execute: async (_scopedDb: unknown, _input: unknown, ctx: ToolContext) => {
           seen.push(ctx);

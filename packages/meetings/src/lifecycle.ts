@@ -92,7 +92,6 @@ function checkReadiness(selection: MeetingCaptureSelection, readiness: MeetingRe
   if (
     !readiness.permissionsGranted ||
     !readiness.processingReady ||
-    !readiness.noticeAcknowledged ||
     !usable.includes(readiness.microphone) ||
     (selection.mode === "microphone-only"
       ? readiness.output !== "not-captured"

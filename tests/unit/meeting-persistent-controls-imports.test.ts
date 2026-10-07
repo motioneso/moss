@@ -27,7 +27,6 @@ describe("Meetings persistent controls entry", () => {
       imports.filter((file) => file.endsWith(".tsx") && !file.startsWith("packages/ui/"))
     ).toEqual([
       "packages/meetings/src/web/capture-controls.tsx",
-      "packages/meetings/src/web/capture-notice.tsx",
       "packages/meetings/src/web/capture-strip.tsx",
       "packages/meetings/src/web/persistent-controls.tsx"
     ]);

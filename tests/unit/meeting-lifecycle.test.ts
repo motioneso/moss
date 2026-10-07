@@ -19,8 +19,7 @@ const readiness: MeetingReadiness = {
   microphone: "silence",
   output: "not-captured",
   permissionsGranted: true,
-  processingReady: true,
-  noticeAcknowledged: true
+  processingReady: true
 };
 const processing: MeetingProcessingCapabilities = {
   transcription: {
@@ -112,18 +111,15 @@ describe("meeting lifecycle foundation", () => {
       ).toBe("recording");
     }
   );
-  it.each(["permissionsGranted", "processingReady", "noticeAcknowledged"] as const)(
-    "requires %s",
-    (key) => {
-      expect(() =>
-        transitionMeeting(ready(), {
-          type: "start",
-          atMs: 0,
-          readiness: { ...readiness, [key]: false }
-        })
-      ).toThrow();
-    }
-  );
+  it.each(["permissionsGranted", "processingReady"] as const)("requires %s", (key) => {
+    expect(() =>
+      transitionMeeting(ready(), {
+        type: "start",
+        atMs: 0,
+        readiness: { ...readiness, [key]: false }
+      })
+    ).toThrow();
+  });
   it("keeps microphone-only output off and processing capability snapshots independent", () => {
     expect(() =>
       transitionMeeting(ready(), {

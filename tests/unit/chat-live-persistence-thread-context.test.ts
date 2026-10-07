@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AccessContext, ChatThread, DataContextDb, DataContextRunner } from "@moss/db";
+import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
 import { DataContextChatPersistence } from "@moss/chat";
 import type { AiRepository } from "@moss/ai";
 import type { ChatRepository } from "../../packages/chat/src/repository.js";
@@ -89,5 +90,59 @@ describe("DataContextChatPersistence.resolveActiveProvider", () => {
     await expect(persistence.resolveActiveProvider("user-1")).rejects.toBeInstanceOf(
       UnsupportedLegacyCliProviderError
     );
+  });
+});
+
+describe("bound thread context retrieval", () => {
+  it("reads private A instead of a newly selected ordinary B", async () => {
+    const getCurrentThread = vi.fn(async () => ({
+      ...BASE_THREAD,
+      id: "thread-b",
+      surface: DEFAULT_CHAT_SURFACE,
+      incognito: false
+    }));
+    const getThreadById = vi.fn(async () => ({
+      ...BASE_THREAD,
+      surface: DEFAULT_CHAT_SURFACE,
+      incognito: true
+    }));
+    const persistence = new DataContextChatPersistence({
+      dataContext: dataContext(),
+      chatRepository: { getCurrentThread, getThreadById } as unknown as ChatRepository,
+      aiRepository: {} as AiRepository
+    });
+    expect(
+      (await persistence.getThreadContext("user-1", DEFAULT_CHAT_SURFACE, "thread-1")).incognito
+    ).toBe(true);
+    expect(getThreadById).toHaveBeenCalledWith(expect.anything(), "thread-1", DEFAULT_CHAT_SURFACE);
+    expect(getCurrentThread).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["foreign", { ...BASE_THREAD, owner_user_id: "someone-else", surface: DEFAULT_CHAT_SURFACE }],
+    ["wrong surface", { ...BASE_THREAD, surface: "workshop" }]
+  ] as const)("refuses a %s bound thread", async (_label, thread) => {
+    const persistence = new DataContextChatPersistence({
+      dataContext: dataContext(),
+      chatRepository: { getThreadById: async () => thread } as unknown as ChatRepository,
+      aiRepository: {} as AiRepository
+    });
+    await expect(
+      persistence.getThreadContext("user-1", DEFAULT_CHAT_SURFACE, "thread-1")
+    ).rejects.toThrow("unavailable");
+  });
+
+  it("explicit missing binding never falls back to the actor's selected thread", async () => {
+    const getCurrentThread = vi.fn(async () => BASE_THREAD);
+    const persistence = new DataContextChatPersistence({
+      dataContext: dataContext(),
+      chatRepository: { getCurrentThread } as unknown as ChatRepository,
+      aiRepository: {} as AiRepository
+    });
+    await expect(
+      persistence.getThreadContext("user-1", DEFAULT_CHAT_SURFACE, null)
+    ).rejects.toThrow("unavailable");
+    expect(getCurrentThread).not.toHaveBeenCalled();
   });
 });

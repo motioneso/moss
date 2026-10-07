@@ -49,6 +49,7 @@ export const structuredStateModuleManifest: MossModuleManifest = {
       description: "List commitments owned by or shared with the active actor.",
       permissionId: "commitments.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: commitmentsListVisibleExecute
     }
