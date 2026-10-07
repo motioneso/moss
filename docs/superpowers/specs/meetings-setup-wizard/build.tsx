@@ -172,6 +172,7 @@ function Pill({
       </IconButton>
       <span
         aria-hidden
+        data-close-divider
         style={{ width: 1, height: 16, background: "var(--meeting-pill-border)" }}
       />
       <IconButton
