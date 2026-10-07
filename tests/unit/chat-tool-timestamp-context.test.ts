@@ -1,82 +1,77 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { buildEngineText } from "../../packages/chat/src/live/engine-text.js";
-import { renderCurrentTimeContext } from "../../packages/chat/src/live/time-context.js";
 
-// This verifies the context supplied to the model, not whether a model follows it.
-describe("tool timestamp guidance in the per-turn time context", () => {
-  it("pairs the reported UTC instant with the previous Pacific evening", async () => {
-    const instant = new Date("2026-10-07T01:15:00.000Z");
-    const getThreadContext = vi.fn(async () => ({
+function persistence(localTimezone: string | null) {
+  return {
+    getThreadContext: vi.fn(async () => ({
       threadTitle: null,
-      localTimezone: "America/Los_Angeles",
+      localTimezone,
       incognito: false
-    }));
+    })),
+    listPriorTurns: vi.fn()
+  };
+}
+
+describe("current account-local time supplied to chat", () => {
+  it.each([
+    ["America/Los_Angeles", "2026-10-06 (Tuesday) 18:15", -420],
+    ["Asia/Tokyo", "2026-10-07 (Wednesday) 10:15", 540]
+  ])("carries the UTC instant and correct local date in %s", async (zone, local, offset) => {
+    const store = persistence(zone);
     const result = await buildEngineText(
-      {
-        persistence: { getThreadContext, listPriorTurns: vi.fn() },
-        now: () => instant
-      },
+      { persistence: store, now: () => new Date("2026-10-07T01:15:00.000Z") },
       "owner-1",
       "List my pending suggestions."
     );
 
-    expect(getThreadContext).toHaveBeenCalledWith("owner-1", undefined);
+    expect(store.getThreadContext).toHaveBeenCalledWith("owner-1", undefined);
     expect(result.text).toContain("Current UTC time: 2026-10-07T01:15:00.000Z (Wednesday)");
     expect(result.text).toContain(
-      "User's local time: 2026-10-06 (Tuesday) 18:15 (America/Los_Angeles, UTC offset -420 minutes)"
+      `User's local time: ${local} (${zone}, UTC offset ${offset} minutes)`
     );
-    expect(result.text).toContain("ISO 8601 timestamps ending in Z are UTC");
-    expect(result.text).toContain("Read ISO clock hours as 24-hour time");
-    expect(result.text).toContain("Never relabel the raw UTC clock as local or change only AM/PM");
-    expect(result.text).toContain("carry any date change across midnight");
-    expect(instant.toISOString()).toBe("2026-10-07T01:15:00.000Z");
-  });
-
-  it("keeps record event times distinct from the fresh current-time reference", () => {
-    const context = renderCurrentTimeContext(
-      new Date("2026-10-07T02:00:00.000Z"),
-      "America/Los_Angeles"
-    );
-
-    expect(context).toContain("createdAt and updatedAt describe the record's own event time");
-    expect(context).toContain("not the current time");
-    expect(context).toContain("preserve the original instant");
-    expect(context).toContain(
-      "show the original timestamp with its explicit zone instead of guessing"
-    );
+    expect(result.text.endsWith("\n\nList my pending suggestions.")).toBe(true);
   });
 
   it.each([
-    ["2026-11-01T08:30:00.000Z", "2026-11-01 (Sunday) 01:30", -420],
-    ["2026-11-01T09:30:00.000Z", "2026-11-01 (Sunday) 01:30", -480]
-  ])("anchors %s across the daylight-saving transition", (utc, local, offset) => {
-    const context = renderCurrentTimeContext(new Date(utc), "America/Los_Angeles");
+    ["2026-11-01T08:30:00.000Z", -420],
+    ["2026-11-01T09:30:00.000Z", -480]
+  ])("preserves the correct current-time offset for %s at the DST overlap", async (utc, offset) => {
+    const result = await buildEngineText(
+      { persistence: persistence("America/Los_Angeles"), now: () => new Date(utc) },
+      "owner-1",
+      "What time is it?"
+    );
 
-    expect(context).toContain(`Current UTC time: ${utc}`);
-    expect(context).toContain(`${local} (America/Los_Angeles, UTC offset ${offset} minutes)`);
-    expect(context).toContain("offset in effect at that timestamp (including daylight saving)");
-    expect(context).toContain("not necessarily the current offset above");
+    expect(result.text).toContain(`Current UTC time: ${utc}`);
+    expect(result.text).toContain(
+      `User's local time: 2026-11-01 (Sunday) 01:30 (America/Los_Angeles, UTC offset ${offset} minutes)`
+    );
   });
 
-  it("uses the supplied account zone rather than assuming Pacific", () => {
-    const context = renderCurrentTimeContext(new Date("2026-10-07T01:15:00.000Z"), "Asia/Tokyo");
+  it("refreshes the current time for every turn", async () => {
+    const now = vi
+      .fn()
+      .mockReturnValueOnce(new Date("2026-10-07T01:15:00.000Z"))
+      .mockReturnValueOnce(new Date("2026-10-07T02:15:00.000Z"));
+    const deps = { persistence: persistence("America/Los_Angeles"), now };
+    const first = await buildEngineText(deps, "owner-1", "What time is it?");
+    const second = await buildEngineText(deps, "owner-1", "And now?");
 
-    expect(context).toContain("2026-10-07 (Wednesday) 10:15 (Asia/Tokyo, UTC offset 540 minutes)");
-    expect(context).toContain("user's time zone (Asia/Tokyo)");
-    expect(context).not.toContain("America/Los_Angeles");
+    expect(first.text).toContain("2026-10-06 (Tuesday) 18:15");
+    expect(second.text).toContain("Current UTC time: 2026-10-07T02:15:00.000Z");
+    expect(second.text).toContain("2026-10-06 (Tuesday) 19:15");
+    expect(second.text).not.toContain("18:15");
   });
 
-  it.each([null, "Not/AZone"])("does not invent a local label for unknown zone %s", (zone) => {
-    const context = renderCurrentTimeContext(new Date("2026-10-07T01:15:00.000Z"), zone);
+  it.each([null, "Not/AZone"])("does not invent local clock context for %s", async (zone) => {
+    const result = await buildEngineText(
+      { persistence: persistence(zone), now: () => new Date("2026-10-07T01:15:00.000Z") },
+      "owner-1",
+      "What time is it?"
+    );
 
-    expect(context).toContain("ISO 8601 timestamps ending in Z are UTC");
-    expect(context).toContain("preserve tool timestamps in their explicit source zone");
-    expect(context).toContain("unless the user requests a specific target time zone");
-    expect(context).toContain("For a requested target zone, apply its offset at the timestamp");
-    expect(context).toContain("If you mention the current time");
-    expect(context).toContain("do not label them as the user's local time");
-    expect(context).not.toContain("User's local time:");
-    expect(context).not.toContain("convert that instant to the user's time zone");
+    expect(result.text).toContain("Current UTC time: 2026-10-07T01:15:00.000Z");
+    expect(result.text).not.toContain("User's local time:");
   });
 });

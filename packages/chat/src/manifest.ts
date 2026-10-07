@@ -110,7 +110,7 @@ export const chatModuleManifest = {
     {
       id: "chat.time_context",
       description:
-        "General chat receives UTC and account-local time, with guidance to convert tool timestamps using their date and daylight-saving offset. Unknown zones keep source labels unless another zone is requested. Stored timestamps are unchanged.",
+        "Chat tool results can include deterministic account-local timestamp references alongside unchanged original values. References use each instant's date and daylight-saving offset; large results may have limited references.",
       featureFlagId: "chat.module"
     },
     {

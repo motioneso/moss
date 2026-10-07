@@ -616,7 +616,8 @@ export class AssistantToolGateway {
         data: renderAndCap(
           found.tool.outputSchema,
           result,
-          found.tool.externalContent ? found.tool.name : undefined
+          found.tool.externalContent ? found.tool.name : undefined,
+          ctx.localTimezone
         )
       };
     } catch {
