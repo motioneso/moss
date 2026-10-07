@@ -341,7 +341,7 @@ const pages = [
               checked
             />
             <p className="jds-hint">
-              Send the finalized transcript and notes to your configured summary model after Stop.
+              Send the finalized transcript and notes to your default model after Stop.
               Turn this off to use Rewrite summary only when you choose.
             </p>
           </div>
