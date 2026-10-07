@@ -92,8 +92,8 @@ export function MeetingSettingsForm() {
             onChange={(enabled) => void state.saveSummary(enabled)}
           />
           <p className="jds-hint">
-            Send the finalized transcript and notes to your default model after Stop.
-            Turn this off to use Rewrite summary only when you choose.
+            Send the finalized transcript and notes to your default model after Stop. Turn this off
+            to use Rewrite summary only when you choose.
           </p>
           {state.data.requestKey ? (
             <p role="status" className="jds-hint">

@@ -541,7 +541,10 @@ describe("meeting summary owner review", () => {
     vi.mocked(api.getMeetingExports).mockResolvedValue({ receipts: [receipt] });
     await mount();
     expect(api.exportMeetingOutput).not.toHaveBeenCalled();
-    expect(JSON.stringify(renderer.toJSON())).toContain("Search indexing queued");
+    await vi.waitFor(async () => {
+      await flush();
+      expect(JSON.stringify(renderer.toJSON())).toContain("Search indexing queued");
+    });
     expect(
       renderer.root
         .findAllByType("a")
