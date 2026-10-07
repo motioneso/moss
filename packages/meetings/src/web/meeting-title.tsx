@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, requestJson, randomUuid, setSessionUnsavedChanges } from "@moss/module-web-sdk";
-import { Button, RowButton } from "@moss/ui";
+import { Button, RowButton, SectionHead } from "@moss/ui";
 import type { MeetingRecord } from "@moss/shared";
 import { getMeeting, isMeetingAccessDenied, meetingKeys } from "./client.js";
 import { useSessionDraft } from "./session-draft.js";
@@ -162,11 +162,14 @@ export function MeetingTitle({ meeting }: { readonly meeting: MeetingRecord }) {
           }}
         />
       ) : (
-        <h1>
-          <RowButton aria-label="Edit meeting title" onClick={() => setEditing(true)}>
-            {draft.data.text}
-          </RowButton>
-        </h1>
+        <SectionHead
+          titleAs="h1"
+          title={
+            <RowButton aria-label="Edit meeting title" onClick={() => setEditing(true)}>
+              {draft.data.text === "Untitled meeting" ? "New meeting" : draft.data.text}
+            </RowButton>
+          }
+        />
       )}
       {draft.data.saving ? <span className="jds-hint">Saving…</span> : null}
       {draft.data.error ? (

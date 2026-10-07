@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type {
   ActionRequestPreview,
-  MossModuleManifest,
   ModuleAssistantToolManifest,
+  MossModuleManifest,
   ToolContext,
   ToolResult,
   ToolServices
@@ -21,8 +21,18 @@ import {
 import { actionHoldDurationMs, emitActionResultRecord } from "./action-result-record.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
+import { isConversationTainted } from "./conversation-policy.js";
+import {
+  admitToolOutcome,
+  admitResolvedCard,
+  recordContextAdmission,
+  runAutomaticAction,
+  toolHasOutsideContent,
+  toolHasOutsideDescriptors,
+  CONTEXT_ADMISSION_UNAVAILABLE
+} from "./content-admission.js";
 import { recordGatewayAudit } from "./gateway-audit.js";
-import { validateToolInput } from "./input-validation.js";
+import { prepareToolCall, servicesForTool } from "./per-call-resolution.js";
 import { liveStreamResult, renderAndCap } from "./output-validation.js";
 import {
   createEffectivePolicyLookup,
@@ -32,23 +42,13 @@ import {
   summarizeToolAction
 } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
+import { approvalRefusalReason, gatewayFailureReason } from "./native-tool-guard.js";
 import {
-  APPROVAL_REFUSED_REASON,
-  gatewayFailureReason,
-  nativeToolRisk,
-  nativeToolSummary,
-  nativeYoloCanAutoAllow,
-  safeNativeToolName
-} from "./native-tool-guard.js";
-import {
-  emitNativePermissionResult,
-  NATIVE_READONLY_AUTO_ALLOW,
-  NATIVE_TOOL_MODULE_ID,
-  NATIVE_TOOL_MODULE_NAME,
   type NativeToolPermissionRequest,
   type NativeToolPermissionResponse
 } from "./native-tool-permission.js";
 export type { NativeToolPermissionRequest, NativeToolPermissionResponse };
+import { requestNativeToolPermission as resolveNativeToolPermission } from "./native-permission-handler.js";
 import {
   runToolHandler,
   type ExecutableTool,
@@ -60,9 +60,14 @@ import { isSelfOperationExcluded } from "./self-operation.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type {
   ActiveModulesResolver,
+  AdmissionPath,
+  ConversationProvenancePort,
   GatewayDeclineReason,
   GatewayGateOutcome,
   GatewayToolResponse,
+  PerCallResolver,
+  PerCallExecutor,
+  PerCallServices,
   SessionNotifier
 } from "./types.js";
 
@@ -81,6 +86,12 @@ export interface AssistantToolGatewayDependencies {
   readonly agencyPrefs?: (ctx: ToolContext) => AgencyPrefLookup;
   readonly actionPolicy?: (ctx: ToolContext) => ActionPolicyLookup;
   readonly yoloMode?: (ctx: ToolContext) => Promise<boolean>;
+  readonly provenance?: ConversationProvenancePort;
+  readonly perCallResolvers?: Readonly<Record<string, PerCallResolver>>;
+  /** Factories must return capabilities bound to the resolved input/context, never raw services. */
+  readonly perCallServices?: Readonly<Record<string, PerCallServices>>;
+  /** A resolved, bound transport owns its DB scopes; never a module-manifest opt-out. */
+  readonly perCallExecutors?: Readonly<Record<string, PerCallExecutor>>;
   /**
    * Opaque, composition-layer-constructed service registry keyed by service name.
    * Passed verbatim (as a per-tool, declared-keys-only subset) as the 4th argument
@@ -147,13 +158,59 @@ export class AssistantToolGateway {
     return (await this.executableTools(actorUserId)).map((entry) => entry.dto);
   }
 
+  async listToolsForSession(token: string): Promise<AiAssistantToolDto[]> {
+    const identity = this.deps.tokens.verify(token);
+    const tools = await this.executableTools(identity.actorUserId);
+    await this.admitToolDescriptorsForSession(
+      token,
+      identity.actorUserId,
+      tools.map(({ tool }) => tool)
+    );
+    return tools.map(({ dto }) => dto);
+  }
+
+  async admitToolDescriptorsForSession(
+    token: string,
+    expectedActorUserId: string,
+    tools: readonly ModuleAssistantToolManifest[]
+  ): Promise<void> {
+    // Reverify after descriptor resolution; a classifier's actor argument cannot bless a
+    // different token owner's descriptors, even when no provenance write would be needed.
+    const identity = this.deps.tokens.verify(token);
+    if (identity.actorUserId !== expectedActorUserId)
+      throw new Error(CONTEXT_ADMISSION_UNAVAILABLE);
+    if (tools.some((tool) => toolHasOutsideDescriptors(tool, identity.actorUserId))) {
+      await recordContextAdmission(
+        this.deps.provenance,
+        {
+          actorUserId: identity.actorUserId,
+          threadId: identity.threadId ?? undefined
+        },
+        "tool_external_descriptors"
+      );
+    }
+  }
+
+  async recordContextForSession(token: string, path: AdmissionPath): Promise<void> {
+    const { actorUserId, threadId } = this.deps.tokens.verify(token);
+    await recordContextAdmission(
+      this.deps.provenance,
+      { actorUserId, threadId: threadId ?? undefined },
+      path
+    );
+  }
+
+  recordNativeVaultReadForSession(token: string): Promise<void> {
+    return this.recordContextForSession(token, "native_vault_read");
+  }
+
   async callTool(
     token: string,
     toolName: string,
     rawInput: unknown,
     options: { onProgress?: (message: string) => void } = {}
   ): Promise<GatewayToolResponse> {
-    const prepared = await this.prepareCall(token, toolName, rawInput, options.onProgress);
+    const prepared = await this.prepareCall(token, toolName, rawInput, options.onProgress, true);
     if ("failure" in prepared) return prepared.failure;
     const { found, input, ctx } = prepared;
 
@@ -171,7 +228,9 @@ export class AssistantToolGateway {
       if (!this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
         return this.denyRateLimited(found, ctx, "yolo");
       }
-      const { response: result, audit } = await this.runHandler(found, input, ctx);
+      const dispatched = await this.runAutomatically(found, input, ctx);
+      if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
+      const { response: result, audit } = dispatched.value;
       this.recordUnattendedRun(found, ctx, "yolo", result, audit);
       return result;
     }
@@ -199,7 +258,9 @@ export class AssistantToolGateway {
           "Automatic execution hit its rate limit — please confirm this action."
         );
       }
-      const { response: result, audit } = await this.runHandler(found, input, ctx);
+      const dispatched = await this.runAutomatically(found, input, ctx);
+      if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
+      const { response: result, audit } = dispatched.value;
       if (found.tool.risk !== "read") {
         this.recordUnattendedRun(found, ctx, "auto", result, audit);
       }
@@ -226,7 +287,7 @@ export class AssistantToolGateway {
     rawInput: unknown,
     mode: "execute" | "dry-run"
   ): Promise<GatewayGateOutcome> {
-    const prepared = await this.prepareCall(token, toolName, rawInput, undefined);
+    const prepared = await this.prepareCall(token, toolName, rawInput, undefined, false);
     if ("failure" in prepared) {
       return { kind: "declined", reason: prepared.reason };
     }
@@ -262,7 +323,9 @@ export class AssistantToolGateway {
       }
       return { kind: "declined", reason: "rate_limited" };
     }
-    const { response, audit } = await this.runHandler(found, input, ctx);
+    const dispatched = await this.runAutomatically(found, input, ctx);
+    if (dispatched.kind === "confirm") return { kind: "declined", reason: "would_confirm" };
+    const { response, audit } = dispatched.value;
     if (limited) this.recordUnattendedRun(found, ctx, approvalMode, response, audit);
     return {
       kind: "executed",
@@ -280,20 +343,43 @@ export class AssistantToolGateway {
     token: string,
     toolName: string,
     rawInput: unknown,
-    onProgress: ((message: string) => void) | undefined
+    onProgress: ((message: string) => void) | undefined,
+    exposeValidationError: boolean
   ): Promise<
     | { found: ExecutableTool; input: Record<string, unknown>; ctx: ToolContext }
     | { failure: GatewayToolResponse; reason: GatewayDeclineReason }
   > {
-    const { actorUserId, chatSessionId, allowedToolNames } = this.deps.tokens.verify(token);
+    const { actorUserId, chatSessionId, threadId, allowedToolNames } =
+      this.deps.tokens.verify(token);
     const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
+    let progressTool: ExecutableTool | undefined;
+    let progressAdmission: Promise<void> | undefined;
     const ctx: ToolContext = {
       actorUserId,
       requestId: `mcp_${randomUUID()}`,
       chatSessionId,
+      ...(threadId ? { threadId } : {}),
       localTimezone,
       // Only the MCP transport passes a sink; every other caller sends nowhere.
-      ...(onProgress ? { reportProgress: onProgress } : {})
+      ...(onProgress
+        ? {
+            reportProgress: (message: string) => {
+              if (!message.trim() || !progressTool) return;
+              if (!toolHasOutsideContent(progressTool.tool)) {
+                onProgress(message);
+                return;
+              }
+              progressAdmission ??= recordContextAdmission(
+                this.deps.provenance,
+                ctx,
+                "tool_external_content"
+              );
+              // Never leak outside progress ahead of durable admission. In-flight automatic effects
+              // can suppress progress; their final result is admitted after releasing the reservation.
+              void progressAdmission.then(() => onProgress(message)).catch(() => undefined);
+            }
+          }
+        : {})
     };
 
     const found = (await this.executableTools(actorUserId)).find(
@@ -324,21 +410,33 @@ export class AssistantToolGateway {
       };
     }
 
-    let input: Record<string, unknown>;
-    try {
-      input = await validateToolInput(found.tool.inputSchema, rawInput, {
-        // Missing provenance is untrusted: only the registry's explicit false marker gets the
-        // built-in synchronous path.
-        external: found.tool.isExternal !== false,
-        toolName
-      });
-    } catch (error) {
-      return {
-        failure: { ok: false, error: error instanceof Error ? error.message : "Invalid input" },
-        reason: "invalid_input"
-      };
+    const prepared = await prepareToolCall(
+      found,
+      rawInput,
+      ctx,
+      this.deps.perCallResolvers?.[toolName],
+      this.deps.perCallServices?.[toolName],
+      this.deps.perCallExecutors?.[toolName]
+    );
+    // Schema failures can quote remote field names even when this token never listed tools.
+    // The classifier gate discards this text and returns only its fixed decline reason.
+    if (
+      exposeValidationError &&
+      "failure" in prepared &&
+      prepared.reason === "invalid_input" &&
+      found.tool.isExternal !== false
+    ) {
+      try {
+        await recordContextAdmission(this.deps.provenance, ctx, "tool_external_descriptors");
+      } catch {
+        return {
+          failure: { ok: false, error: CONTEXT_ADMISSION_UNAVAILABLE },
+          reason: "invalid_input"
+        };
+      }
     }
-    return { found, input, ctx };
+    if (!("failure" in prepared)) progressTool = prepared.found;
+    return "failure" in prepared ? prepared : { ...prepared, ctx };
   }
 
   /** The single approval decision shared by live calls and the gate's dry run. */
@@ -347,6 +445,14 @@ export class AssistantToolGateway {
     input: Record<string, unknown>,
     ctx: ToolContext
   ): Promise<{ kind: "yolo-confirm" | "yolo-run" | "auto-run" | "confirm" }> {
+    if (found.resolution?.forceConfirm) return { kind: "confirm" };
+    const confirmWhenTainted = found.resolution?.confirmWhenTainted ?? false;
+    if (found.tool.risk === "read" && !confirmWhenTainted) return { kind: "auto-run" };
+    const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
+    if (conversationTainted && (found.tool.risk !== "read" || confirmWhenTainted)) {
+      return { kind: "confirm" };
+    }
+    const perCallResolved = found.resolution !== undefined;
     const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
     const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
     const effectiveLookup = createEffectivePolicyLookup(
@@ -356,17 +462,27 @@ export class AssistantToolGateway {
     );
     if (found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true) {
       return confirmOverride ||
-        !(await familyAllowsAutoRun(found.tool, found.dto.moduleId, effectiveLookup))
+        !(await familyAllowsAutoRun(
+          found.tool,
+          found.dto.moduleId,
+          effectiveLookup,
+          perCallResolved
+        ))
         ? { kind: "yolo-confirm" }
-        : { kind: "yolo-run" };
+        : (await isConversationTainted(this.deps.provenance, ctx))
+          ? { kind: "confirm" }
+          : { kind: "yolo-run" };
     }
     return (await resolvePolicy(
       found.tool,
       found.dto.moduleId,
       confirmOverride,
       effectiveLookup,
-      await this.computeSortedSafe(found, ctx)
-    )) === "run"
+      await this.computeSortedSafe(found, ctx),
+      perCallResolved,
+      conversationTainted,
+      confirmWhenTainted
+    )) === "run" && !(await isConversationTainted(this.deps.provenance, ctx))
       ? { kind: "auto-run" }
       : { kind: "confirm" };
   }
@@ -419,8 +535,11 @@ export class AssistantToolGateway {
       ...(result.ok
         ? { result: liveStreamResult(found.tool, result) }
         : { reason: gatewayFailureReason(result) }),
-      ...(result.ok && found.tool.affectsQueryKeys
+      ...(result.ok && audit.outcome === "success" && found.tool.affectsQueryKeys
         ? { affectsQueryKeys: found.tool.affectsQueryKeys }
+        : {}),
+      ...(result.ok && audit.outcome === "success" && found.tool.risk !== "read" && found.resolution
+        ? { affectsModules: found.resolution.affectsModules }
         : {})
     });
     void recordGatewayAudit(
@@ -439,125 +558,7 @@ export class AssistantToolGateway {
     token: string,
     request: NativeToolPermissionRequest
   ): Promise<NativeToolPermissionResponse> {
-    const { actorUserId, chatSessionId } = this.deps.tokens.verify(token);
-    const toolName = safeNativeToolName(request.toolName);
-    if (toolName.startsWith("mcp__jarvis__") && toolName.length > "mcp__jarvis__".length) {
-      return { decision: "allow", reason: "First-party Moss MCP transport." };
-    }
-    // #1158: read-only meta-tools return before any DB/timezone work — this is the hot path
-    // (every conversation's first jarvis tool use goes through ToolSearch).
-    if (NATIVE_READONLY_AUTO_ALLOW.has(toolName)) {
-      return { decision: "allow", reason: "Read-only native tool." };
-    }
-    const input = request.toolInput;
-    const requestId = `native_${randomUUID()}`;
-    const access: AccessContext = { actorUserId, requestId };
-    const ctx: ToolContext = {
-      actorUserId,
-      requestId,
-      chatSessionId,
-      localTimezone: (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined
-    };
-
-    const yoloGranted =
-      (await nativeYoloCanAutoAllow(toolName, input, request.workingDirectory)) &&
-      (await (async () => {
-        try {
-          return (await this.deps.yoloMode?.(ctx)) === true;
-        } catch {
-          return false;
-        }
-      })());
-
-    if (yoloGranted) {
-      // #1085 F4: Jarvis observes the permission grant, not the native tool's completion. Persist
-      // that grant before allowing it instead of fire-and-forget auditing a fictional "success".
-      await this.deps.runner.withDataContext(access, async (scopedDb: DataContextDb) => {
-        const pending = await this.deps.repository.createPendingAssistantAction(scopedDb, {
-          toolModuleId: NATIVE_TOOL_MODULE_ID,
-          toolModuleName: NATIVE_TOOL_MODULE_NAME,
-          toolName,
-          permissionId: `${NATIVE_TOOL_MODULE_ID}.${toolName}`,
-          risk: nativeToolRisk(toolName),
-          inputSummary: summarizeAssistantToolInput(input),
-          requestId
-        });
-        const confirmed = await this.deps.repository.resolveAssistantAction(scopedDb, pending.id, {
-          status: "confirmed"
-        });
-        if (!confirmed) throw new Error("Could not persist native YOLO permission grant");
-        return confirmed;
-      });
-      return { decision: "allow", reason: "Allowed by YOLO." };
-    }
-
-    const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-      this.deps.repository.createPendingAssistantAction(scopedDb, {
-        toolModuleId: NATIVE_TOOL_MODULE_ID,
-        toolModuleName: NATIVE_TOOL_MODULE_NAME,
-        toolName,
-        permissionId: `${NATIVE_TOOL_MODULE_ID}.${toolName}`,
-        risk: nativeToolRisk(toolName),
-        inputSummary: summarizeAssistantToolInput(input),
-        requestId
-      })
-    );
-    const pendingResolution = this.deps.confirmations.awaitResolution(
-      action.id,
-      this.deps.confirmTimeoutMs
-    );
-
-    this.deps.notifier.emit(chatSessionId, {
-      kind: "action_request",
-      actionRequestId: action.id,
-      toolName,
-      summary: nativeToolSummary(toolName, input)
-    });
-    const holdStartedAt = Date.now();
-
-    // #2149: markDone (in the finally below) unblocks resolveAndAwaitCompletion, which the
-    // Approve/Deny HTTP route awaits before responding. This path has no handler to run — it
-    // only grants a permission decision — but it still shares the wake-up mechanism with
-    // confirmAndRun, so it must report back the same way or an Approve of a native tool would
-    // hang waiting for a markDone that never comes.
-    try {
-      const outcome = await pendingResolution;
-      const holdDurationMs = actionHoldDurationMs(holdStartedAt);
-      if (outcome !== "confirmed") {
-        emitNativePermissionResult(this.deps.notifier, chatSessionId, {
-          actionRequestId: action.id,
-          toolName,
-          outcome: "denied",
-          decidedBy:
-            outcome === "timeout" ? "timeout" : outcome === "cancelled" ? "cancelled" : "person",
-          holdDurationMs,
-          reason:
-            outcome === "timeout"
-              ? "Action timed out."
-              : outcome === "cancelled"
-                ? "Action cancelled."
-                : APPROVAL_REFUSED_REASON
-        });
-        return { decision: "deny", reason: APPROVAL_REFUSED_REASON };
-      }
-
-      // #1661: "allowed", not "executed". This method decides a native tool's PERMISSION and returns
-      // `decision: "allow"` — the tool then runs outside the gateway's sight, so nothing here ever
-      // learns whether it worked. Saying "executed" told the user the action completed on the
-      // strength of their own click. The YOLO branch above already got this right and says why
-      // (#1085 F4: observe the grant, never fire-and-forget a fictional success); this sibling
-      // branch, forty lines down and doing the identical thing, was missed.
-      emitNativePermissionResult(this.deps.notifier, chatSessionId, {
-        actionRequestId: action.id,
-        toolName,
-        outcome: "allowed",
-        decidedBy: "person",
-        holdDurationMs
-      });
-      return { decision: "allow", reason: "Approved by user." };
-    } finally {
-      this.deps.confirmations.markDone(action.id);
-    }
+    return resolveNativeToolPermission(this.deps, token, request);
   }
 
   /** Outside-agent built-in ask; orchestration lives in ./acp-permission.js. */
@@ -572,43 +573,48 @@ export class AssistantToolGateway {
    * Execute a single read tool on behalf of an actor without a session token.
    * Used by the cross-tool reasoning pre-submit path in ChatSessionManager.
    *
-   * Fail-closed: only tools with risk "read" are permitted; empty services are
-   * passed so the write→confirm floor is structurally un-bypassable; handler
-   * throws are sanitized the same way runHandler sanitizes them.
+   * Fail-closed: only effective reads that need no approval are permitted. Services come
+   * from the read bundle or a composition-owned capability bound to this exact call.
+   * Handler throws are sanitized the same way runHandler sanitizes them.
    */
   async runReadToolForActor(
     actorUserId: string,
     toolName: string,
-    rawInput: unknown
+    rawInput: unknown,
+    binding?: { readonly threadId: string | null; readonly chatSessionId: string }
   ): Promise<GatewayToolResponse> {
-    const found = (await this.executableTools(actorUserId)).find(
+    const bound = binding ? { ...binding } : undefined;
+    const declared = (await this.executableTools(actorUserId)).find(
       (entry) => entry.tool.name === toolName
     );
-    if (!found) {
-      return { ok: false, error: `Tool not available: ${toolName}` };
-    }
-    if (found.tool.risk !== "read") {
-      return { ok: false, error: `Tool ${toolName} is not a read tool` };
-    }
-
-    let input: Record<string, unknown>;
-    try {
-      input = await validateToolInput(found.tool.inputSchema, rawInput, {
-        // Missing provenance is untrusted: only the registry's explicit false marker gets the
-        // built-in synchronous path.
-        external: found.tool.isExternal !== false,
-        toolName
-      });
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };
-    }
-
+    if (!declared) return { ok: false, error: `Tool not available: ${toolName}` };
     const requestId = `cross-tool_${randomUUID()}`;
     const access: AccessContext = { actorUserId, requestId };
     const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
-    const ctx: ToolContext = { actorUserId, requestId, chatSessionId: "", localTimezone };
-
-    const readServices = this.deps.readToolServices ?? {};
+    const ctx: ToolContext = {
+      actorUserId,
+      requestId,
+      chatSessionId: bound?.chatSessionId ?? "",
+      localTimezone,
+      ...(bound?.threadId ? { threadId: bound.threadId } : {})
+    };
+    const prepared = await prepareToolCall(
+      declared,
+      rawInput,
+      ctx,
+      this.deps.perCallResolvers?.[toolName],
+      this.deps.perCallServices?.[toolName],
+      this.deps.perCallExecutors?.[toolName]
+    );
+    if ("failure" in prepared) return prepared.failure;
+    const { found, input } = prepared;
+    if (
+      found.tool.risk !== "read" ||
+      (await this.planCall(found, input, ctx)).kind !== "auto-run"
+    ) {
+      return { ok: false, error: `Tool ${toolName} is not a read tool` };
+    }
+    const readServices = this.servicesFor(found);
     try {
       const result = await this.executeTool(found, input, ctx, readServices, access);
       return {
@@ -616,7 +622,7 @@ export class AssistantToolGateway {
         data: renderAndCap(
           found.tool.outputSchema,
           result,
-          found.tool.externalContent ? found.tool.name : undefined
+          toolHasOutsideContent(found.tool) ? found.tool.name : undefined
         )
       };
     } catch {
@@ -678,29 +684,8 @@ export class AssistantToolGateway {
     return "resolved";
   }
 
-  /**
-   * The subset of toolServices this tool declared via requiresServices — but ONLY for non-read
-   * tools. A read tool (risk → "run", no confirmation) receives NOTHING,
-   * so no injected (potentially write-capable) service can be invoked without an Approve. This
-   * keeps the write→confirm floor structurally un-bypassable by a mistaken/hostile read-tool
-   * requiresServices declaration, with no service-risk taxonomy (Codex HIGH #5). The per-tool
-   * subset also means a tool can never reach an undeclared (write-capable) service (Codex HIGH #1).
-   */
-  private servicesFor(tool: ModuleAssistantToolManifest): ToolServices {
-    if (tool.risk === "read") {
-      // Read tools bypass confirmAndRun so they never receive write-capable services.
-      // readToolServices carries only informational (read-only) services — safe here.
-      return this.deps.readToolServices ?? {};
-    }
-    const registry = this.deps.toolServices ?? {};
-    const keys = tool.requiresServices ?? [];
-    const subset: Record<string, unknown> = {};
-    for (const key of keys) {
-      // executableTools already guaranteed every declared key is registered (fail-closed),
-      // so this is always present here; guard defensively regardless.
-      if (key in registry) subset[key] = registry[key];
-    }
-    return subset;
+  private servicesFor(found: ExecutableTool): ToolServices {
+    return servicesForTool(found, this.deps.toolServices, this.deps.readToolServices);
   }
 
   /**
@@ -720,7 +705,7 @@ export class AssistantToolGateway {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
     try {
       return await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-        Promise.resolve(hook(scopedDb, input, ctx, this.servicesFor(found.tool)))
+        Promise.resolve(hook(scopedDb, input, ctx, this.servicesFor(found)))
       );
     } catch {
       return true;
@@ -746,7 +731,46 @@ export class AssistantToolGateway {
     }
   }
 
-  private runHandler(
+  private async runHandler(
+    found: ExecutableTool,
+    input: Record<string, unknown>,
+    ctx: ToolContext
+  ): Promise<RunHandlerOutcome> {
+    return admitToolOutcome(
+      this.deps.provenance,
+      found,
+      ctx,
+      await this.dispatchHandler(found, input, ctx)
+    );
+  }
+
+  private async runAutomatically(
+    found: ExecutableTool,
+    input: Record<string, unknown>,
+    ctx: ToolContext
+  ) {
+    const result =
+      found.tool.risk === "read" && !found.resolution?.confirmWhenTainted
+        ? { kind: "ran" as const, value: await this.dispatchHandler(found, input, ctx) }
+        : await runAutomaticAction(this.deps.provenance, ctx, () =>
+            this.dispatchHandler(found, input, ctx)
+          );
+    if (result.kind === "confirm") return result;
+    if (result.kind === "failed")
+      return {
+        kind: "ran" as const,
+        value: {
+          response: { ok: false as const, error: CONTEXT_ADMISSION_UNAVAILABLE },
+          audit: { outcome: "failed" as const, durationMs: 0, errorClass: "automatic_guard" }
+        }
+      };
+    return {
+      kind: "ran" as const,
+      value: await admitToolOutcome(this.deps.provenance, found, ctx, result.value)
+    };
+  }
+
+  private dispatchHandler(
     found: ExecutableTool,
     input: Record<string, unknown>,
     ctx: ToolContext
@@ -758,7 +782,7 @@ export class AssistantToolGateway {
       ctx,
       this.deps.logger ?? defaultGatewayLogger,
       (services) => this.executeTool(found, input, ctx, services, access),
-      this.servicesFor(found.tool)
+      this.servicesFor(found)
     );
   }
 
@@ -769,6 +793,7 @@ export class AssistantToolGateway {
     services: ToolServices,
     access: AccessContext
   ): Promise<ToolResult> {
+    if (found.executePerCall) return found.executePerCall();
     return this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) => {
       const execute = () => found.execute(scopedDb, input, ctx, services);
       return found.tool.risk === "read" && this.deps.readToolTrustBoundary
@@ -793,13 +818,16 @@ export class AssistantToolGateway {
     // captured at arrival and handed to each audit write explicitly.
     const arrivalTurnId = this.deps.tokens.readCurrentTurnId(ctx.chatSessionId);
 
+    if (!(await admitResolvedCard(this.deps.provenance, found, ctx)))
+      return { ok: false, error: CONTEXT_ADMISSION_UNAVAILABLE };
+
     const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       this.deps.repository.createPendingAssistantAction(scopedDb, {
         toolModuleId: found.dto.moduleId,
         toolModuleName: found.dto.moduleName,
         toolName: found.dto.name,
         permissionId: found.dto.permissionId,
-        risk: found.tool.risk as "write" | "outbound" | "destructive",
+        risk: found.tool.risk,
         inputSummary: summarizeAssistantToolInput(input),
         requestId: ctx.requestId
       })
@@ -822,7 +850,7 @@ export class AssistantToolGateway {
     if (previewHook) {
       try {
         preview = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-          previewHook(scopedDb, input, ctx, this.servicesFor(found.tool))
+          previewHook(scopedDb, input, ctx, this.servicesFor(found))
         );
       } catch {
         preview = undefined;
@@ -834,6 +862,8 @@ export class AssistantToolGateway {
       actionRequestId: action.id,
       toolName: found.dto.name,
       summary,
+      outsideContentNotice: await isConversationTainted(this.deps.provenance, ctx),
+      ...(found.resolution ? { details: found.resolution.details } : {}),
       ...(preview ? { preview } : {})
     });
     const holdStartedAt = Date.now();
@@ -860,7 +890,7 @@ export class AssistantToolGateway {
               ? "Action timed out."
               : outcome === "cancelled"
                 ? "Action cancelled."
-                : APPROVAL_REFUSED_REASON
+                : "You declined this action."
         });
         const approvalMode =
           outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";
@@ -871,7 +901,7 @@ export class AssistantToolGateway {
           chatSessionId: ctx.chatSessionId,
           ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
         });
-        const reason = APPROVAL_REFUSED_REASON;
+        const reason = approvalRefusalReason(outcome);
         return { ok: false, denied: true, reason };
       }
 
@@ -885,8 +915,14 @@ export class AssistantToolGateway {
         ...(result.ok
           ? { result: liveStreamResult(found.tool, result) }
           : { reason: gatewayFailureReason(result) }),
-        ...(result.ok && found.tool.affectsQueryKeys
+        ...(result.ok && audit.outcome === "success" && found.tool.affectsQueryKeys
           ? { affectsQueryKeys: found.tool.affectsQueryKeys }
+          : {}),
+        ...(result.ok &&
+        audit.outcome === "success" &&
+        found.tool.risk !== "read" &&
+        found.resolution
+          ? { affectsModules: found.resolution.affectsModules }
           : {})
       });
       void recordGatewayAudit(this.deps, access, found, {
@@ -925,15 +961,11 @@ export class AssistantToolGateway {
           continue;
         }
         const declaredServices = tool.requiresServices ?? [];
-        // Fail closed #1: a read tool must NOT declare services — a read dispatches without the
-        // confirm gate, so a write-capable service on a read tool would bypass the write→confirm
-        // floor. Such a manifest is a misconfiguration; hide it rather than risk a bypass (HIGH #5).
-        if (declaredServices.length > 0 && tool.risk === "read") {
-          continue;
-        }
-        // Fail closed #2: a tool whose required services we cannot satisfy is hidden — never
-        // listed and never confirmable. Prevents an approve→execute-fail dead-end (HIGH #2).
-        const registry = this.deps.toolServices ?? {};
+        // A read declaration can only be satisfied by the read-only registry. A matching key
+        // in the write registry never makes a read tool available or grants it write services.
+        // Missing declared services hide the tool before it can become an approval dead-end.
+        const registry =
+          (tool.risk === "read" ? this.deps.readToolServices : this.deps.toolServices) ?? {};
         const missing = declaredServices.filter((key) => !(key in registry));
         if (missing.length > 0) {
           continue;

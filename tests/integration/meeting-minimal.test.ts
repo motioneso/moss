@@ -3,10 +3,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql, type Kysely } from "kysely";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { createPgBossClient, scopedJobDatabase, sendJob, type PgBoss } from "@moss/jobs";
-import { MEETING_RECORDING_NOTICE, type MeetingOutputContent } from "@moss/shared";
+import type { MeetingOutputContent } from "@moss/shared";
 import { MeetingRecordsRepository } from "../../packages/meetings/src/repository.js";
 import { MeetingTranscriptRepository } from "../../packages/meetings/src/transcript-repository.js";
-import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
 import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import {
   MeetingOutputService,
@@ -150,36 +149,30 @@ function generator() {
   });
 }
 describe("minimal meeting lifecycle (real isolated storage, synthetic provider)", () => {
-  it("stores durable default-on preferences and requires current notice before setup completes", async () => {
+  it("stores owner-scoped preferences with computer audio and automatic summaries on by default", async () => {
     const actor = { actorUserId: ids.userD };
     const preferences = new MeetingPreferencesRepository();
-    expect(await context.withDataContext(actor, (db) => preferences.get(db))).toMatchObject({
+    const defaults = {
+      defaultCaptureMode: "computer-audio",
+      rememberedSource: null,
       summarizeOnStop: true,
-      summaryTemplateId: "general",
-      setupCompletedAt: null
-    });
+      summaryTemplateId: "general"
+    };
+    expect(await context.withDataContext(actor, (db) => preferences.get(db))).toEqual(defaults);
     const selection = {
       defaultCaptureMode: "microphone-only" as const,
       rememberedSource: {
         deviceId: randomUUID(),
         microphoneId: "exact-microphone",
         mode: "microphone-only" as const
-      },
-      completeSetup: true as const
+      }
     };
-    await expect(
-      context.withDataContext(actor, (db) => preferences.update(db, selection))
-    ).rejects.toMatchObject({ code: "meeting_capture_notice_required" });
-    await context.withDataContext(actor, (db) =>
-      new MeetingRecordingNoticeRepository().acknowledge(db, MEETING_RECORDING_NOTICE.policyVersion)
-    );
     const saved = await context.withDataContext(actor, (db) => preferences.update(db, selection));
-    expect(saved.setupCompletedAt).not.toBeNull();
+    expect(saved).toEqual({ ...defaults, ...selection });
     expect(await context.withDataContext(actor, (db) => preferences.get(db))).toEqual(saved);
     expect(
-      (await context.withDataContext({ actorUserId: ids.userB }, (db) => preferences.get(db)))
-        .rememberedSource
-    ).toBeNull();
+      await context.withDataContext({ actorUserId: ids.userB }, (db) => preferences.get(db))
+    ).toEqual(defaults);
   });
   it("uses compare-and-swap titles without changing creation replay or notes", async () => {
     const f = await fixture();

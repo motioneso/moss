@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useSearchParams } from "react-router";
 import { ApiError } from "@moss/module-web-sdk";
-import { Button, Divider, Field, FormLabel, Note, Highlight } from "@moss/ui";
+import { Button, SectionHead, Field, FormLabel, Note, Highlight } from "@moss/ui";
 import type { MeetingCaptureState, MeetingTranscriptSegment } from "@moss/shared";
 import {
   getMeetingTranscript,
@@ -11,6 +11,8 @@ import {
   type MeetingTranscriptView
 } from "./client.js";
 import { captureKeys } from "./capture-client.js";
+import { useCaptureClock } from "./capture-clock.js";
+import { captureAcknowledged } from "./capture-presentation.js";
 import { evidenceQueryOptions, parseTranscriptEvidence } from "./transcript-evidence.js";
 import { transcriptTime } from "./transcript-time.js";
 
@@ -156,6 +158,17 @@ export function MeetingTranscript({
     queryKey: captureKeys.status(meetingId),
     enabled: false
   });
+  const { connected } = useCaptureClock(
+    capture.data?.capture,
+    capture.dataUpdatedAt,
+    capture.isError
+  );
+  const emptyText =
+    capture.data?.capture?.desired === "recording" &&
+    connected &&
+    captureAcknowledged(capture.data.capture)
+      ? "Listening…"
+      : "Start when you’re ready.";
   const snapshot = isMeetingAccessDenied(transcript.error) ? undefined : transcript.data?.snapshot;
   const exact = evidence.isError ? undefined : evidence.data?.evidence.segment;
   const selected =
@@ -184,10 +197,7 @@ export function MeetingTranscript({
     !(transcript.error instanceof ApiError && transcript.error.status === 404);
   return (
     <section className="meetings-section meetings-transcript-pane" aria-label="Transcript">
-      <div className="meetings-pane-heading">
-        <h2>Transcript</h2>
-      </div>
-      <Divider />
+      <SectionHead title="Transcript" rule />
       {search !== null ? (
         <Field>
           <FormLabel htmlFor="meeting-transcript-search">Search transcript</FormLabel>
@@ -225,12 +235,19 @@ export function MeetingTranscript({
           Transcript access is unavailable. Return to Meetings or sign in again.
         </p>
       ) : snapshot ? (
-        <TranscriptTimeline
-          {...transcript.data!}
-          gaps={capture.data?.capture?.gaps}
-          selectedId={selected?.segmentId}
-          search={search ?? ""}
-        />
+        <>
+          <TranscriptTimeline
+            {...transcript.data!}
+            gaps={capture.data?.capture?.gaps}
+            selectedId={selected?.segmentId}
+            search={search ?? ""}
+          />
+          {!snapshot.segments.length && search === null ? (
+            <p className="jds-hint" role="status">
+              {emptyText}
+            </p>
+          ) : null}
+        </>
       ) : transcript.isFetching ? (
         <p className="jds-hint">Loading transcript…</p>
       ) : transcript.isError &&
@@ -242,7 +259,9 @@ export function MeetingTranscript({
           </Button>
         </p>
       ) : (
-        <p className="jds-hint">Nothing recorded yet. Press Start when the meeting begins.</p>
+        <p className="jds-hint" role="status">
+          {emptyText}
+        </p>
       )}
       <p className="jds-sr-only" aria-live="polite" aria-atomic="true">
         {snapshot?.segments.length

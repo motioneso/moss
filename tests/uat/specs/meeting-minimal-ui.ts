@@ -40,9 +40,13 @@ export async function assertMinimalMeetingWorkspace(page: Page): Promise<void> {
     "Write summary",
     "Save notes",
     "Create draft",
-    "Ask Moss"
+    "Ask Moss",
+    "Change",
+    "Finish setup",
+    "Continue with notes"
   ])
     await expect(workspace.getByRole("button", { name, exact: true })).toHaveCount(0);
+  await expect(workspace.getByRole("link", { name: "Change", exact: true })).toHaveCount(0);
   await workspace.getByRole("button", { name: "Meeting actions", exact: true }).click();
   const menu = workspace.getByRole("menu");
   await expect(menu.getByRole("menuitem")).toHaveCount(6);

@@ -25,20 +25,21 @@ stream audio without request-body spooling or body logging. The proxy workflow e
 fixed-length/chunked generated uploads and temporary-file negative controls; it does not validate
 an operator's deployed proxy.
 
-Connect Trail Marker once through the existing connection flow. New clients disclose meeting
-recording in that approval; already paired clients require one clear capability upgrade. This
-authorizes future explicit Starts, and does not start capture. In Meetings, choose the named
-recorder and microphone with microphone-only, microphone + selected app, or microphone + computer
-audio. Sources are remembered by device/microphone/app identity. Use Change when needed, then
-acknowledge the recording notice once, then Start meeting. There is no per-meeting Prepare or
-device approval. The server stores the account’s acknowledgement against the notice text-policy
-version and requires the current version before Start or Resume, including a retried command.
-Each grant binds that version. Another meeting or browser does not ask again; only a changed
-notice version does. Pause, Stop and cancellation never need notice acknowledgement. First use
-may prompt for the relevant OS permission. Granting permission alone cannot start a cancelled or
-expired command. The browser stays where the person started; Trail Marker does not choose their
-default browser for each meeting.
+Connect Trail Marker once through the native app's existing connect-in-browser flow. Linking
+retains recording-capability approval but never starts capture. New meeting opens a ready
+transcript-and-notes workspace; press **Start recording** explicitly. Microphone + system audio
+is the default, using the Mac's advertised OS-default microphone. Change audio mode only in
+Settings → Meetings, alongside link status and Unlink Mac. No source-selection setup is required.
+Existing exact saved microphone/app choices remain scoped until an explicit Settings change.
+Download app has no link until a supported signed release exists; no Moss-address copy control
+is added. The [approved four states](../../docs/superpowers/specs/2026-10-06-meetings-minimal-design.md)
+are the current design authority.
 
+The native floating recording pill is 250 × 80 points with an actual captured-audio waveform,
+Pause and Stop. It has no visible text, timer, name or close button. Silent or stale audio makes
+the waveform flat. Existing credentials, OS permissions, revocation and capture limits remain.
+The first explicit Start may request an OS permission; permission approval alone cannot start a
+cancelled or expired command.
 A second browser signed in as the same owner may explicitly control the named recorder. Opening
 a meeting never changes the recording computer. Missing or ambiguous remembered sources require
 selection; a missing selected app never widens to computer audio. Provider configuration stays in

@@ -330,7 +330,7 @@ final class MeetingCaptureHost: ObservableObject {
         guard now < leaseDeadlineNanoseconds else { throw MeetingHostError.network }
         let resolved = try ports.readInventory().resolve(selection)
         let readiness = MeetingNativeReadiness(permissionsGranted: true, processingReady: true,
-            noticeAcknowledged: true, meetingDeviceAuthorized: true)
+            meetingDeviceAuthorized: true)
         if runtime.snapshot.state == .paused {
             try runtime.resume(selection: resolved.selection, readiness: readiness, permitRetainedAudio: true, at: now)
         } else {

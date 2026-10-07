@@ -1,3 +1,5 @@
+> Current design authority: #3087 at `5bca8dfb88cc6f436f599345fdf66e0150b89fac` and the updated minimal Meetings spec. Historical R/T identifiers below remain traceability labels.
+
 # Meetings Mac link: Part B (#2981)
 
 Status: approved implementation, draft pull request only. No merge or deployment.
@@ -17,15 +19,9 @@ The source's historical baseline is context, not a claim about this build's curr
 
 Use the existing pairing, capability-attempt/decide, companion logout, browser session and
 capture-grant flows. Every Start remains a deliberate browser action. Creating, opening, linking,
-reconnecting and acknowledging the notice must never start recording.
+and reconnecting must never start recording.
 
-The owner's latest ruling requires a draggable small floating pill above other windows on every
-Space, showing recording/paused/no-audio/reconnecting state, elapsed time and a waveform driven
-only by the audio actually captured. Silence or missing audio must make it flat; no decorative
-animation. Close hides the pill until the next Start and does not stop recording. Keep the menu
-bar red dot from Start until Stop and clear both surfaces on every stop path. Do not post system
-notifications. Include a simple design mockup image in the Part B PR, labeled as a mockup rather
-than live proof.
+The latest approved #3087 design requires a draggable native 250 × 80 pill above windows on every Space: real captured waveform, circular Pause and semantic-red Stop. No visible text, elapsed timer, meeting name or close button. Silence or stale input makes the waveform flat. Keep the menu-bar red dot through Pause until every terminal path clears it. No system notification or browser waveform transport is added.
 
 The recording capability has no independent expiry; it ends on Unlink, revoke or device expiry.
 Device expiry remains 90 days of inactivity and a 365-day absolute bound. Hardware-bound
@@ -34,21 +30,20 @@ new secret or authentication flow.
 
 ## Control mapping
 
-| Control | Required implementation and review scope                                                                                                                                                 | Proof                                |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| R1      | Settings Unlink uses the canonical owner device deletion transaction; subsequent native credentials fail and post-commit audio is refused                                                | T1                                   |
-| R2      | Mac Unlink confirms logout before deleting both Keychain items; failed logout retains credentials and visible retry state                                                                | T2, T13                              |
-| R3      | Meetings settles invalid bindings as revoked, discards unsent native audio, and exposes the unlink/revoke reason within one lease                                                        | T1–T3                                |
-| R4      | Preserve claim, lease, hard-cap and session/device/connection bounds on every live capture operation                                                                                     | T5                                   |
-| R5      | Preserve the starting browser session binding through local and everywhere-else sign-out                                                                                                 | T4                                   |
-| R6      | Each accepted Start shows the floating pill and menu-bar red dot; actual captured levels drive the waveform, close only hides the pill, and every stop path clears both; no notification | T12, T14                             |
-| R7      | No additional Mac confirmation and no record-on-link behavior                                                                                                                            | T12, T14                             |
-| R8      | Preserve the canonical account notice service and grant-bound current version                                                                                                            | T8                                   |
-| R9      | Capability remains valid without a Start for more than 90 days when the device remains valid; Unlink, revoke and device expiry still end it                                              | T9                                   |
-| R10     | Preserve per-IP limits; add shared per-account Start limits of 10/minute and 60/hour with Retry-After                                                                                    | T10                                  |
-| R11     | Trace bearer/proof/verifier/grant secrets through logger, queues, export, AI and response consumers; add authorization-header redaction                                                  | T11                                  |
-| R12     | Settings offers device Unlink and recording-only revoke; Mac offers truthful Unlink                                                                                                      | T1–T3, T13                           |
-| R13     | Preserve exact saved-source selection, current inventory validation and refusal of unavailable sources                                                                                   | T6, T7 plus saved-source regressions |
+| Control | Required implementation and review scope                                                                                                                                | Proof                                |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| R1      | Settings Unlink uses the canonical owner device deletion transaction; subsequent native credentials fail and post-commit audio is refused                               | T1                                   |
+| R2      | Mac Unlink confirms logout before deleting both Keychain items; failed logout retains credentials and visible retry state                                               | T2, T13                              |
+| R3      | Meetings settles invalid bindings as revoked, discards unsent native audio, and exposes the unlink/revoke reason within one lease                                       | T1–T3                                |
+| R4      | Preserve claim, lease, hard-cap and session/device/connection bounds on every live capture operation                                                                    | T5                                   |
+| R5      | Preserve the starting browser session binding through local and everywhere-else sign-out                                                                                | T4                                   |
+| R6      | Each accepted Start shows the floating pill and menu-bar red dot; actual captured levels drive the text-free waveform, and every stop path clears both; no notification | T12, T14                             |
+| R7      | No additional Mac confirmation and no record-on-link behavior                                                                                                           | T12, T14                             |
+| R9      | Capability remains valid without a Start for more than 90 days when the device remains valid; Unlink, revoke and device expiry still end it                             | T9                                   |
+| R10     | Preserve per-IP limits; add shared per-account Start limits of 10/minute and 60/hour with Retry-After                                                                   | T10                                  |
+| R11     | Trace bearer/proof/verifier/grant secrets through logger, queues, export, AI and response consumers; add authorization-header redaction                                 | T11                                  |
+| R12     | Settings offers device Unlink; existing recording-capability revoke stays enforced; Mac offers truthful Unlink                                                          | T1–T3, T13                           |
+| R13     | Preserve exact saved-source selection, current inventory validation and refusal of unavailable sources                                                                  | T6, T7 plus saved-source regressions |
 
 Every T1–T13 guard-removal check needs an observed failing execution, then a restored passing
 execution. Author the real-service integration cases without substituting the old reapprove fake.
@@ -98,9 +93,10 @@ device valid. T6 additionally removes owner RLS inside a rollback-only transacti
 owner denial after restoration. T11 temporarily grants forbidden export columns, then verifies
 denial after rollback. These are authored database proofs, not local execution claims.
 
-The [recording-pill concept](../mockups/meetings-mac-link/recording-pill-concept.png) is a design
-mockup, not an installed-app screenshot or evidence of real capture. Hardware binding remains
-deferred at the credential storage/server verifier boundary.
+The earlier recording-pill concept is superseded. Use the approved #3087 recording state linked
+from the updated minimal Meetings spec: 250 × 80, text-free waveform, Pause and Stop. Neither
+mockup is installed-app or live-capture proof. Hardware binding remains deferred at the
+credential storage/server verifier boundary.
 
 ## Work and integration lanes
 

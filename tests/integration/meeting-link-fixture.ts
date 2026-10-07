@@ -15,8 +15,7 @@ import {
   type MossDatabase
 } from "@moss/db";
 import type { Kysely } from "kysely";
-import { MEETING_RECORDING_NOTICE, type MeetingCaptureAudioInput } from "@moss/shared";
-import { PreferencesRepository } from "@moss/structured-state";
+import type { MeetingCaptureAudioInput } from "@moss/shared";
 import {
   MeetingCaptureService,
   type MeetingCaptureDependencies
@@ -24,11 +23,7 @@ import {
 import { MeetingCaptureConnectionService } from "../../packages/meetings/src/capture-connection-service.js";
 import { MeetingRecordsRepository } from "../../packages/meetings/src/repository.js";
 import { MeetingCaptureRepository } from "../../packages/meetings/src/capture-repository.js";
-import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
-import {
-  MeetingPreferencesRepository,
-  MEETING_SETUP_KEY
-} from "../../packages/meetings/src/preferences.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { registerMeetingCaptureRoutes } from "../../packages/meetings/src/capture-routes.js";
 import { recordingLoggerOptions } from "../../apps/api/src/recording-logger-options.js";
 import {
@@ -163,15 +158,10 @@ export async function linkFixture() {
     ).meeting;
   const meeting = await createMeeting();
   await context.withDataContext(browser, async (db) => {
-    await new MeetingRecordingNoticeRepository().acknowledge(
-      db,
-      MEETING_RECORDING_NOTICE.policyVersion
-    );
     await new MeetingPreferencesRepository().update(db, {
       defaultCaptureMode: "microphone-only",
       rememberedSource: { deviceId, microphoneId: "fixture-mic", mode: "microphone-only" }
     });
-    await new PreferencesRepository().upsert(db, MEETING_SETUP_KEY, clock.toISOString());
   });
   const register = (id = connectionId) =>
     connections.register(native, "register", {

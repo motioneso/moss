@@ -2,9 +2,21 @@ import { expect, it, vi } from "vitest";
 
 import type { DataContextRunner } from "@moss/db";
 
-import { buildEngineText } from "../../packages/chat/src/live/engine-text.js";
+import {
+  buildEngineText as buildAdmittedEngineText,
+  type EngineTextDeps
+} from "../../packages/chat/src/live/engine-text.js";
 import { renderCurrentTimeContext } from "../../packages/chat/src/live/time-context.js";
 import { NotesContextRetriever } from "../../packages/chat/src/live/notes-retrieval.js";
+
+const buildEngineText = (deps: EngineTextDeps, actorUserId: string, text: string) =>
+  buildAdmittedEngineText(
+    { ...deps, conversationProvenance: { recordAdmission: async () => undefined } },
+    actorUserId,
+    text,
+    undefined,
+    { threadId: "thread-a", chatSessionId: "chat:u1:drawer" }
+  );
 
 const dataContext: Pick<DataContextRunner, "withDataContext"> = {
   withDataContext: async (_ctx, cb) => cb({} as never)
@@ -355,7 +367,7 @@ it("keeps automatic notes retrieval within the approved 500ms budget", async () 
 
     await vi.advanceTimersByTimeAsync(501);
 
-    await expect(pending).resolves.toEqual({
+    await expect(pending).resolves.toMatchObject({
       text: `${renderCurrentTimeContext(now, "UTC")}\n\nwhat is the status of Remodel?`,
       pendingItems: []
     });

@@ -5,7 +5,6 @@ import type {
   MeetingCaptureBrowserStatus,
   MeetingCapturePreferences,
   MeetingCaptureState,
-  MeetingRecordingNoticeStatus,
   RecordingCapabilityAttempt,
   RedeemPairAttemptResponse
 } from "@moss/shared";
@@ -36,9 +35,6 @@ export async function assertMeetingLinkControls({
   const saved = (await (
     await page.request.get("/api/meetings/preferences")
   ).json()) as MeetingCapturePreferences;
-  const notice = (await (
-    await page.request.get("/api/meetings/recording-notice")
-  ).json()) as MeetingRecordingNoticeStatus;
   let proof = paired.recordingProof;
   for (const action of ["revoke", "unlink"] as const) {
     if (action === "unlink") {
@@ -98,7 +94,7 @@ export async function assertMeetingLinkControls({
         (response) =>
           response.url().endsWith(`${path}/capture/start`) && response.request().method() === "POST"
       );
-      await page.getByRole("button", { name: "Start", exact: true }).click();
+      await page.getByRole("button", { name: "Start recording", exact: true }).click();
       const start = await started;
       expect(start.status()).toBe(200);
       const capture = ((await start.json()) as { capture: MeetingCaptureState }).capture;
@@ -107,13 +103,36 @@ export async function assertMeetingLinkControls({
       native.acknowledge(capture, "recording");
       const panel = page.getByRole("region", { name: "Meeting recording", exact: true });
       await expect(panel.getByLabel("Recording", { exact: true })).toBeVisible();
-      await page.getByRole("link", { name: "Meetings settings", exact: true }).click();
+      await page
+        .locator(".meetings-record-tools")
+        .getByRole("link", { name: "Settings", exact: true })
+        .click();
       await expect(page).toHaveURL(/module=meetings/);
-      const recording = page.getByRole("checkbox", {
-        name: `Meeting recording on ${CAPTURE_DEVICE_NAME}`,
-        exact: true
-      });
-      await expect(recording).toBeChecked();
+      const settings = page.locator(".meeting-settings");
+      const unlinkButton = settings.getByRole("button", { name: "Unlink Mac", exact: true });
+      const audioSource = settings.getByLabel("Audio source", { exact: true });
+      await expect(settings.getByRole("checkbox")).toHaveCount(0);
+      await expect(settings.getByText("Linked", { exact: true })).toBeVisible();
+      if (action === "revoke") {
+        expect(saved.defaultCaptureMode).toBe("computer-audio");
+        for (const mode of ["microphone-only", "computer-audio"] as const) {
+          const saving = page.waitForResponse(
+            (response) =>
+              response.url().endsWith("/api/meetings/preferences") &&
+              response.request().method() === "PUT"
+          );
+          await audioSource.selectOption(mode);
+          const savedSource = await saving;
+          expect(savedSource.status()).toBe(200);
+          expect(savedSource.request().postDataJSON()).toEqual({ defaultCaptureMode: mode });
+          await expect(audioSource).toBeEnabled();
+          const current = (await (
+            await page.request.get(`${path}/capture`)
+          ).json()) as MeetingCaptureBrowserStatus;
+          expect(current.capture?.selection).toEqual(capture.selection);
+        }
+        expect(await (await page.request.get("/api/meetings/preferences")).json()).toEqual(saved);
+      }
       const originalViewport = page.viewportSize();
       for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: 900 });
@@ -121,62 +140,49 @@ export async function assertMeetingLinkControls({
           await page.evaluate((mode) => {
             document.documentElement.dataset.colorMode = mode;
           }, mode);
-          const controls = page.locator(".meeting-settings-macs");
-          const unlinkButton = controls.getByRole("button", { name: "Unlink", exact: true });
-          const recordingSwitch = controls.locator("label.jds-switch", { has: recording });
-          await expect(unlinkButton).toBeVisible();
-          await expect(recordingSwitch).toBeVisible();
-          for (const control of [unlinkButton, recordingSwitch]) {
+          for (const control of [unlinkButton, audioSource]) {
+            await expect(control).toBeVisible();
             const bounds = await control.boundingBox();
             expect(bounds).not.toBeNull();
             expect(bounds!.x).toBeGreaterThanOrEqual(0);
             expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
           }
-          const switchBounds = await recordingSwitch.boundingBox();
-          const buttonBounds = await unlinkButton.boundingBox();
-          expect(buttonBounds!.y - switchBounds!.y - switchBounds!.height).toBeGreaterThanOrEqual(
-            8
-          );
         }
       }
       await page.evaluate(() => {
         delete document.documentElement.dataset.colorMode;
       });
       if (originalViewport) await page.setViewportSize(originalViewport);
-      const changed = page.waitForResponse((response) =>
-        action === "unlink"
-          ? response.url().endsWith(`/api/me/sessions/${paired.device.id}`) &&
-            response.request().method() === "DELETE"
-          : response.url().endsWith("/api/companion/recording-capability/revoke") &&
-            response.request().method() === "POST"
-      );
       if (action === "unlink") {
-        await page.getByRole("button", { name: "Unlink", exact: true }).click();
+        await unlinkButton.click();
         const dialog = page.getByRole("dialog", {
           name: `Unlink ${CAPTURE_DEVICE_NAME}?`,
           exact: true
         });
         await expect(dialog).toContainText("Your saved notes and transcripts stay available");
         await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-        await expect(recording).toBeChecked();
-        await page.getByRole("button", { name: "Unlink", exact: true }).click();
+        await expect(settings.getByText("Linked", { exact: true })).toBeVisible();
+        await unlinkButton.click();
+        const changed = page.waitForResponse(
+          (response) =>
+            response.url().endsWith(`/api/me/sessions/${paired.device.id}`) &&
+            response.request().method() === "DELETE"
+        );
         await dialog.getByRole("button", { name: "Unlink Mac", exact: true }).click();
+        expect((await changed).status()).toBe(200);
+        await expect(
+          page.getByText(`${CAPTURE_DEVICE_NAME} unlinked.`, { exact: false })
+        ).toBeVisible();
       } else {
-        await page.locator("label.jds-switch", { has: recording }).click();
+        // Recording-only revocation is exercised through the real owner API. The compact
+        // Meetings settings intentionally has no recording-permission toggle.
+        const revoked = await page.request.post("/api/companion/recording-capability/revoke", {
+          headers: { Origin: new URL(baseURL).origin },
+          data: { deviceId: paired.device.id }
+        });
+        expect(revoked.status()).toBe(204);
       }
-      const response = await changed;
-      expect(response.status()).toBe(action === "unlink" ? 200 : 204);
       const stoppedBy = Date.now() + 30_000;
-      if (action === "revoke")
-        expect(response.request().postDataJSON()).toEqual({ deviceId: paired.device.id });
-      await expect(
-        page.getByText(
-          action === "unlink"
-            ? `${CAPTURE_DEVICE_NAME} unlinked.`
-            : `Recording permission revoked for ${CAPTURE_DEVICE_NAME}.`,
-          { exact: false }
-        )
-      ).toBeVisible();
       const heartbeat = await nativePost(baseURL, "/api/companion/heartbeat", paired.credential, {
         appVersion: "uat",
         osVersion: "synthetic"
@@ -226,9 +232,6 @@ export async function assertMeetingLinkControls({
           action === "unlink" ? "device-unavailable" : "recording-permission-revoked"
       });
       expect(await (await page.request.get("/api/meetings/preferences")).json()).toEqual(saved);
-      expect(await (await page.request.get("/api/meetings/recording-notice")).json()).toEqual(
-        notice
-      );
     } finally {
       await native?.close();
       if (meetingId)

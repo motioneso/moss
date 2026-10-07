@@ -292,22 +292,6 @@ describe("Mac link real-auth security matrix (isolated gate only)", () => {
       })
     ).rejects.toThrow();
   });
-  it.each(["missing", "stale"] as const)(
-    "T8 a %s stored account notice refuses Start",
-    async (kind) => {
-      const f = await fixture();
-      await bootstrap.query(
-        kind === "missing"
-          ? "DELETE FROM app.meeting_recording_notices WHERE owner_user_id=$1"
-          : "UPDATE app.meeting_recording_notices SET policy_version='old-text' WHERE owner_user_id=$1",
-        [f.browser.actorUserId]
-      );
-      await expect(f.start()).rejects.toMatchObject({
-        code: "meeting_capture_notice_required",
-        httpStatus: 409
-      });
-    }
-  );
   it("T9 a proof approved over 90 days ago remains valid without any Start while its device is valid", async () => {
     const f = await fixture();
     // Age only consent through the real stored row; the device was contacted and remains valid.

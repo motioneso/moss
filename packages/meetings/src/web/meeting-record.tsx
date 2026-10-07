@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, useMeetingChat } from "@moss/module-web-sdk";
 import { Button, EmptyState, Menu, Tabs } from "@moss/ui";
@@ -157,20 +158,16 @@ export function MeetingNotes({
   ];
   return (
     <section className="meetings-section" aria-label="Meeting workspace">
-      {onBack ? (
-        <div>
-          <Button variant="link" onClick={onBack}>
-            Meetings
-          </Button>
-        </div>
-      ) : null}
       <header className="meetings-record-heading">
         <div>
-          <MeetingTitle meeting={meeting} />
-          <p className="jds-hint">{date(meeting.createdAt)}</p>
+          {onBack ? (
+            <Button variant="link" onClick={onBack}>
+              Meetings
+            </Button>
+          ) : null}
         </div>
         <div className="meetings-actions meetings-record-tools">
-          <CapturePanel meeting={meeting} onLiveChange={setCaptureActive} />
+          <Link to="/settings?section=modules&module=meetings">Settings</Link>
           <Menu
             triggerIcon={<span aria-hidden="true">•••</span>}
             triggerLabel="Meeting actions"
@@ -199,6 +196,18 @@ export function MeetingNotes({
           />
         </div>
       </header>
+      <CapturePanel
+        meeting={meeting}
+        onLiveChange={setCaptureActive}
+        heading={
+          <>
+            <MeetingTitle meeting={meeting} />
+            {meeting.title !== "Untitled meeting" ? (
+              <p className="jds-hint">{date(meeting.createdAt)}</p>
+            ) : null}
+          </>
+        }
+      />
       <div className="meetings-workspace">
         {!narrow ? transcriptPane : null}
         <Tabs

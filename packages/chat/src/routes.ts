@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
+import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
+import { createAppActionsService } from "./app-actions.js";
 
 import type { AccessContext, DataContextRunner, MossDatabase, PreferencesPort } from "@moss/db";
 import {
@@ -46,7 +48,8 @@ import {
 } from "@moss/memory";
 import {
   handleRouteError as handleModuleRouteError,
-  type MossModuleManifest
+  type MossModuleManifest,
+  type RouteCatalogHolder
 } from "@moss/module-sdk";
 import { ChatGatewayNotifier } from "./gateway-notifier.js";
 import { ClassifierShadowRepository } from "./classifier-shadow-repository.js";
@@ -74,12 +77,17 @@ import {
   serializeSettings
 } from "./memory-serializers.js";
 import { readStoredProvenance, provenanceCards } from "./live/answer-provenance.js";
-import { registerMcpTransportRoute, registerNativePermissionRoute } from "./mcp-transport.js";
+import {
+  registerMcpTransportRoute,
+  registerNativePermissionRoute,
+  registerVaultReadReportRoute
+} from "./mcp-transport.js";
 import { VaultContextRunner, getVaultBaseDir } from "@moss/vault";
 
 import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
+import { ConversationProvenanceStore } from "./conversation-provenance.js";
 import {
   registerMeetingChatBoundary,
   dereferenceMeetingCitation,
@@ -225,6 +233,9 @@ export interface ChatRoutesDependencies {
    * The version check uses it so its throwaway session is refused any call to another tool.
    */
   readonly adoptCheckTokenMinter?: (minter: CheckTokenMinter) => void;
+  /** #3065: the built-in route catalog; null until the server's onReady fills it. */
+  readonly routeCatalog?: RouteCatalogHolder;
+  readonly actAsGrants?: ActAsGrantRegistry;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string
@@ -291,8 +302,7 @@ export function registerChatRoutes(
   const classifierShadowRepository =
     dependencies.classifierShadowRepository ?? new ClassifierShadowRepository();
 
-  // Phase 2: proxy notifier — created before gateway so the gateway has a notifier
-  // reference; real target is set after the manager is created.
+  // The proxy is wired before the manager supplies its live notifier.
   const notifierProxy: SessionNotifier = {
     emit(chatSessionId: string, record: GatewaySessionRecord) {
       realNotifier?.emit(chatSessionId, record);
@@ -301,6 +311,7 @@ export function registerChatRoutes(
   let realNotifier: ChatGatewayNotifier | null = null;
 
   const resolveActiveModules = dependencies.resolveActiveModules;
+  const conversationProvenance = new ConversationProvenanceStore(dependencies.dataContext);
   const mcpServerUrl = dependencies.mcpServerUrl;
   const wiring =
     resolveActiveModules && mcpServerUrl
@@ -308,6 +319,15 @@ export function registerChatRoutes(
           const tokens = new SessionTokenRegistry();
           const confirmations = new ConfirmationRegistry();
           const aiRepository = new AiRepository();
+          const appActions =
+            dependencies.routeCatalog && dependencies.actAsGrants
+              ? createAppActionsService({
+                  server,
+                  catalog: dependencies.routeCatalog,
+                  grants: dependencies.actAsGrants,
+                  readTurnId: (session) => tokens.readCurrentTurnId(session) ?? null
+                })
+              : undefined;
 
           const gateway = new AssistantToolGateway(
             buildChatGatewayDependencies({
@@ -317,6 +337,8 @@ export function registerChatRoutes(
               tokens,
               confirmations,
               notifier: notifierProxy,
+              appActions,
+              conversationProvenance,
               collaborators: {
                 googleConnectionService: dependencies.googleConnectionService,
                 googleApiClient: dependencies.googleApiClient,
@@ -409,13 +431,14 @@ export function registerChatRoutes(
           repository: classifierShadowRepository,
           dataContext: dependencies.dataContext,
           tokens: {
-            mint: (actorUserId, correlationId, allowedToolNames) => {
+            mint: (actorUserId, correlationId, threadId, allowedToolNames) => {
               // #2956: the shadow passes its turn id as the correlation id, so the
               // gate session files its tool rows under the chat turn. Revoke clears it.
               wiring.tokens.setCurrentTurnId(`classifier-gate:${correlationId}`, correlationId);
               return wiring.tokens.mint(
                 {
                   actorUserId,
+                  threadId,
                   chatSessionId: `classifier-gate:${correlationId}`,
                   allowedToolNames
                 },
@@ -436,11 +459,11 @@ export function registerChatRoutes(
         })
       : undefined;
   const runtime = createChatSessionRuntime({
+    conversationProvenance,
     rootDb: dependencies.rootDb,
     dataContext: dependencies.dataContext,
     engineFactory: dependencies.chatEngineFactory,
-    // #342 (§3.5): only select the ACP engine ourselves when no explicit factory was injected. An
-    // explicit chatEngineFactory always wins for tests and embedders.
+    // An explicitly injected engine factory wins for tests and embedders.
     engineSelection: dependencies.chatEngineFactory ? undefined : dependencies.engineSelection,
     boss: dependencies.boss,
     connectorSyncAt: dependencies.connectorsRepository
@@ -461,7 +484,7 @@ export function registerChatRoutes(
     classifierGateShadow,
     mcpTokenLifecycle: wiring
       ? {
-          mint: async (actorUserId: string, chatSessionId: string) => {
+          mint: async (actorUserId: string, chatSessionId: string, threadId: string | null) => {
             // Capture the actor's current executable tool set as the per-session allowlist.
             // Bare tool names (e.g. "example.read") — same format as tools/list and tools/call params.name.
             // The mcp__jarvis__<name> prefix is a client-side CLI convention that never reaches the server.
@@ -472,6 +495,7 @@ export function registerChatRoutes(
               token: wiring.tokens.mint({
                 actorUserId,
                 chatSessionId,
+                threadId,
                 allowedToolNames
               }),
               mcpServerUrl: wiring.mcpServerUrl
@@ -584,6 +608,7 @@ export function registerChatRoutes(
   if (wiring) {
     registerMcpTransportRoute(server, { gateway: wiring.gateway, tokens: wiring.tokens });
     registerNativePermissionRoute(server, { gateway: wiring.gateway, tokens: wiring.tokens });
+    registerVaultReadReportRoute(server, { gateway: wiring.gateway, tokens: wiring.tokens });
 
     server.post<{ Params: { id: string }; Body: { status: string } }>(
       "/api/chat/action-requests/:id/resolve",

@@ -83,7 +83,11 @@ describe("forceReplay vs purge do not converge", () => {
     await manager.ensureSession("user-1", "User");
     await manager.switchProvider("user-1", "User");
 
-    expect(listPriorTurns).toHaveBeenLastCalledWith("user-1", { forceReplay: true }, "drawer");
+    expect(listPriorTurns).toHaveBeenLastCalledWith(
+      "user-1",
+      { forceReplay: true, threadId: "t1" },
+      "drawer"
+    );
     const relaunchCall = engine.launch.mock.calls.at(-1)?.[0];
     expect(relaunchCall.replayBatch).toContain("q1");
     expect(relaunchCall.replayBatch).toContain("a1");
@@ -103,7 +107,11 @@ describe("forceReplay vs purge do not converge", () => {
 
     await manager.ensureSession("user-1", "User", { forceReplay: true });
 
-    expect(listPriorTurns).toHaveBeenCalledWith("user-1", { forceReplay: true }, "drawer");
+    expect(listPriorTurns).toHaveBeenCalledWith(
+      "user-1",
+      { forceReplay: true, threadId: "t-priv" },
+      "drawer"
+    );
     const launchCall = engine.launch.mock.calls.at(-1)?.[0];
     expect(launchCall.replayBatch).toBeUndefined();
     expect(engine.submit).not.toHaveBeenCalled();

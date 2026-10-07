@@ -2,7 +2,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MEETING_RECORDING_NOTICE, type MeetingRecord } from "@moss/shared";
+import type { MeetingRecord } from "@moss/shared";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import * as historyApi from "../../packages/meetings/src/web/history-client.js";
 import { historyItem } from "./fixtures/meeting-history.js";
@@ -146,18 +146,28 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
         );
-      if (path === "/api/meetings/recording-notice")
+      if (path === "/api/me/sessions")
         return new Response(
-          JSON.stringify({ currentNotice: MEETING_RECORDING_NOTICE, acknowledgement: null })
+          JSON.stringify({
+            sessions: [
+              {
+                id: "linked-mac",
+                source: "companion",
+                deviceLabel: "Studio Mac",
+                lastSeenAt: record.createdAt
+              }
+            ]
+          })
         );
+      if (path === "/api/companion/recording-capabilities")
+        return new Response(JSON.stringify({ devices: [] }));
       if (path === "/api/meetings/preferences")
         return new Response(
           JSON.stringify({
             defaultCaptureMode: null,
             rememberedSource: null,
             summarizeOnStop: true,
-            summaryTemplateId: "general",
-            setupCompletedAt: record.createdAt
+            summaryTemplateId: "general"
           })
         );
       if (path === "/api/meetings/capture/devices")

@@ -88,6 +88,7 @@ export interface DataContextChatPersistenceDeps {
  * a gate-handled turn supplies a precomputed sourceFreshness and its action/activity records.
  */
 interface PersistTurnOptions {
+  readonly threadId?: string | null;
   readonly invokedToolNames?: ReadonlySet<string>;
   readonly answerProvenance?: AnswerProvenanceMetadataV1;
   readonly attachments?: readonly ChatAttachmentDto[];
@@ -212,16 +213,25 @@ export class DataContextChatPersistence implements ChatPersistencePort {
 
   async listPriorTurns(
     actorUserId: string,
-    opts?: { readonly forceReplay?: boolean },
+    opts?: { readonly forceReplay?: boolean; readonly threadId?: string | null },
     surface?: ChatSurface
   ): Promise<{
     recent: readonly ReplayMessage[];
     oldSummary: string | null;
   }> {
+    const threadId = opts?.threadId;
+    if (threadId === null) return { recent: [], oldSummary: null };
     const chatSurface = normalizeChatSurface(surface);
     return this.run(actorUserId, "list-prior-turns", async (scopedDb) => {
-      const thread = await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface);
-      if (!thread) return { recent: [], oldSummary: null };
+      // Launch replay follows the captured token binding even if another conversation
+      // becomes current during earlier awaits. Explicitly missing bindings replay nothing.
+      const thread =
+        threadId === undefined
+          ? await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)
+          : await this.chat.getThreadById(scopedDb, threadId, chatSurface);
+      if (!thread || thread.owner_user_id !== actorUserId || thread.surface !== chatSurface) {
+        return { recent: [], oldSummary: null };
+      }
 
       // D4: incognito replays nothing, enforced here regardless of caller. No
       // further window/summary work runs for an incognito thread.
@@ -268,6 +278,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     assistantReply: string,
     executed: { provider: ProviderKind; model: string },
     opts?: {
+      readonly threadId?: string | null;
       readonly invokedToolNames?: ReadonlySet<string>;
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
       readonly attachments?: readonly ChatAttachmentDto[];
@@ -344,14 +355,29 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       }
     | undefined
   > {
+    const threadId = opts?.threadId;
+    if (threadId === null) return undefined;
     const chatSurface = normalizeChatSurface(surface);
     return this.run(actorUserId, operation, async (scopedDb) => {
       const thread =
-        (await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)) ??
-        (await this.chat.openNewThread(scopedDb, {
-          title: DEFAULT_CONVERSATION_TITLE,
-          surface: chatSurface
-        }));
+        threadId === undefined
+          ? ((await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)) ??
+            (await this.chat.openNewThread(scopedDb, {
+              title: DEFAULT_CONVERSATION_TITLE,
+              surface: chatSurface
+            })))
+          : await this.chat.getThreadById(scopedDb, threadId, chatSurface);
+      if (!thread || thread.owner_user_id !== actorUserId || thread.surface !== chatSurface) {
+        return undefined;
+      }
+
+      // Hold the owner/surface selection lock before message or summary writes. A late
+      // bound completion saves its original thread without selecting it over a resume.
+      if (threadId === undefined) {
+        await this.chat.touchThread(scopedDb, thread.id, chatSurface);
+      } else {
+        await this.chat.touchCurrentThread(scopedDb, thread.id, chatSurface);
+      }
 
       const capturedAt = new Date();
       const sourceFreshness = opts?.invokedToolNames
@@ -390,7 +416,6 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               completedOpts,
               chatSurface
             );
-      await this.chat.touchThread(scopedDb, thread.id);
 
       if (thread.incognito) {
         return undefined;
@@ -527,14 +552,25 @@ export class DataContextChatPersistence implements ChatPersistencePort {
 
   async getThreadContext(
     actorUserId: string,
-    surface?: ChatSurface
+    surface?: ChatSurface,
+    threadId?: string | null
   ): Promise<{ threadTitle: string | null; localTimezone: string | null; incognito: boolean }> {
     const chatSurface = normalizeChatSurface(surface);
     return this.run(actorUserId, "get-thread-context", async (scopedDb) => {
       const [thread, localeRaw] = await Promise.all([
-        this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface),
+        threadId === undefined
+          ? this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)
+          : threadId
+            ? this.chat.getThreadById(scopedDb, threadId, chatSurface)
+            : undefined,
         this.localePreferences?.get(scopedDb, "locale") ?? null
       ]);
+      if (
+        threadId !== undefined &&
+        (!thread || thread.owner_user_id !== actorUserId || thread.surface !== chatSurface)
+      ) {
+        throw new Error("Conversation is unavailable for context retrieval");
+      }
       const title = thread?.title ?? null;
       // #2157: the prompt's time block must agree with the clock tool and Settings.
       const localTimezone = resolveEffectiveTimezone(localeRaw);

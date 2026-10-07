@@ -17,7 +17,14 @@ import {
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
-import { createMossAuthRuntime, type MossAuthRuntime } from "@moss/auth";
+import {
+  ACT_AS_GRANT_HEADER,
+  createActAsGrantRegistry,
+  createMossAuthRuntime,
+  withActAsGrantsAndRequestCache,
+  type ActAsGrantRegistry,
+  type MossAuthRuntime
+} from "@moss/auth";
 import { createCliStructuredAdapterFactory } from "@moss/chat";
 import {
   ConnectorsRepository,
@@ -33,7 +40,6 @@ import {
   getMossDatabaseUrls,
   resolveMossEnv,
   resolveTrustProxy,
-  type AccessContext,
   type MossDatabase
 } from "@moss/db";
 import { createPgBossClient, sendModuleControl } from "@moss/jobs";
@@ -47,18 +53,18 @@ import {
   registerBuiltInApiRoutes,
   registerRouteEnablementGuard,
   assertRouteCoverage,
+  assertRouteChatClassification,
+  assertReadToolContentDeclared,
+  buildRouteCatalog,
+  createRouteCatalogHolder,
   PLATFORM_UNGUARDED_ROUTES,
+  type CapturedRouteSchema,
   type ChatEngineFactory,
-  type MossModuleManifest,
-  type ReconciledExternalModule
+  type MossModuleManifest
 } from "@moss/module-registry";
-import {
-  listModulesRouteSchema,
-  isValidTimeZone,
-  parsePositiveIntEnv,
-  type HostDiagnosticsInfo
-} from "@moss/shared";
+import { isValidTimeZone, parsePositiveIntEnv, type HostDiagnosticsInfo } from "@moss/shared";
 import { createModuleLogger, CORE_VERSION } from "@moss/module-sdk";
+import { actAsRateLimitKey, installActAsActorLookup } from "@moss/module-sdk/server";
 // #917: /api/modules reads enablement through the public settings API; this is legitimate
 // composition-root wiring, not a module cross-import.
 import { INTEGRATIONS_FAMILY, SettingsRepository, loadFamilyKeyring } from "@moss/settings";
@@ -90,7 +96,7 @@ import {
   createExternalActiveModulesResolver,
   createExternalModuleTools
 } from "./external-module-tools.js";
-import { serializeExternalModule, serializeModule } from "./module-dto.js";
+import { registerPlatformRoutes } from "./platform-module-routes.js";
 import { handleBetterAuthRequest } from "./better-auth-adapter.js";
 import { registerModulePreferenceRoutes } from "./module-preferences.js";
 
@@ -107,6 +113,8 @@ export interface CreateApiServerOptions {
   readonly workerDb?: Kysely<MossDatabase>;
   readonly boss?: PgBoss;
   readonly authRuntime?: MossAuthRuntime;
+  /** #3065: tests inject a registry with a fake clock. */
+  readonly actAsGrants?: ActAsGrantRegistry;
   /**
    * `boolean` is the common case (silence in tests, real pino otherwise). A test that must
    * assert on captured log content (companion-backtrack-routes.test.ts, secrets-never-escape)
@@ -172,7 +180,8 @@ export function hasAuthMaterial(request: FastifyRequest): boolean {
   const cookie = request.headers.cookie;
   return (
     (typeof authorization === "string" && authorization.trim().length > 0) ||
-    (typeof cookie === "string" && cookie.trim().length > 0)
+    (typeof cookie === "string" && cookie.trim().length > 0) ||
+    request.headers[ACT_AS_GRANT_HEADER] !== undefined
   );
 }
 
@@ -254,14 +263,19 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // front. Without this, XFF is attacker-controlled and must not key the rate limiter.
     trustProxy
   });
-  const authRuntime =
+  // #3065: wrap before any caller captures resolveAccessContext (several below do).
+  const actAsGrants = options.actAsGrants ?? createActAsGrantRegistry();
+  const { authRuntime, actAsActor } = withActAsGrantsAndRequestCache(
     options.authRuntime ??
-    createMossAuthRuntime({
-      appDb,
-      runner: dataContext,
-      // Surfaces the legacy session-bearer observability event (#113) into the API logs.
-      logger: server.log
-    });
+      createMossAuthRuntime({
+        appDb,
+        runner: dataContext,
+        // Surfaces the legacy session-bearer observability event (#113) into the API logs.
+        logger: server.log
+      }),
+    actAsGrants
+  );
+  installActAsActorLookup(server, actAsActor);
   const ownsAuthRuntime = options.authRuntime === undefined;
   const captureMaintenance = createMeetingCaptureMaintenanceRuntime({
     producer: boss,
@@ -351,6 +365,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   // can read the final route tree. printRoutes parsing is brittle; an onRoute hook is
   // exact. Add it BEFORE after() so it observes routes registered inside after().
   const registeredRoutes: { method: string; url: string }[] = [];
+  // #3065: request schemas for the chat route catalog, which onReady builds into the holder.
+  const capturedRouteSchemas: CapturedRouteSchema[] = [];
+  const routeCatalog = createRouteCatalogHolder();
   server.addHook("onRoute", (routeOptions) => {
     const methods = Array.isArray(routeOptions.method)
       ? routeOptions.method
@@ -361,6 +378,14 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       // "HEAD ..." key the index never holds. OPTIONS (CORS/preflight) is not module-gated.
       if (method === "HEAD" || method === "OPTIONS") continue;
       registeredRoutes.push({ method, url: routeOptions.url });
+      const schema = routeOptions.schema;
+      capturedRouteSchemas.push({
+        method,
+        url: routeOptions.url,
+        body: schema?.body,
+        querystring: schema?.querystring,
+        params: schema?.params
+      });
     }
   });
 
@@ -594,6 +619,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       resolveAccessContext: authRuntime.resolveAccessContext,
       listConfiguredAuthProviders: authRuntime.listConfiguredProviders,
       listModuleManifests: getBuiltInModuleManifests,
+      routeCatalog,
+      actAsGrants,
       resolveActiveModules: resolveActiveModulesWithIntegrations,
       mcpServerUrl: apiServerConfig.mcpServerUrl,
       focusSignals: async (ctx) => {
@@ -759,6 +786,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       manifests: guardManifestsForCoverage(),
       platformAllowlist: PLATFORM_UNGUARDED_ROUTES
     });
+    // Built-ins and test probes only: external modules cannot register routes. Fail boot
+    // before exposing any route whose chat access has not been explicitly reviewed.
+    assertRouteChatClassification(guardManifestsForCoverage());
   });
 
   server.addHook("onReady", async () => {
@@ -767,6 +797,13 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // packages/ai/src/gateway/policy.ts:40 confirms every external write unconditionally.
     // Never pass external manifests here.
     assertBuiltInSelfOperationManifests(getBuiltInModuleManifests());
+    // #3065: read results default to outside content; every built-in exemption is explicit.
+    assertReadToolContentDeclared(getBuiltInModuleManifests());
+  });
+
+  server.addHook("onReady", async () => {
+    // #3065: built-in manifests only; external modules cannot declare routes.
+    routeCatalog.set(buildRouteCatalog(getBuiltInModuleManifests(), capturedRouteSchemas));
   });
 
   server.addHook("onReady", async () => {
@@ -868,6 +905,10 @@ const SESSION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 // it out of the limiter's in-memory store and any error/header output. Namespaced prefixes
 // prevent a bearer hash from ever colliding with a cookie hash or an IP literal.
 function authPrincipalRateLimitKey(request: FastifyRequest): string {
+  // #3065: in-process act-as calls come from loopback; key them on the grant's actor.
+  const actAs = actAsRateLimitKey(request);
+  if (actAs) return actAs;
+
   const authorization = request.headers.authorization ?? "";
   if (authorization.toLowerCase().startsWith("bearer ")) {
     const token = authorization.slice(authorization.indexOf(" ") + 1).trim();
@@ -928,38 +969,5 @@ function registerBetterAuthRoutes(
       }
     },
     handler: (request, reply) => handleBetterAuthRequest(request, reply, authRuntime)
-  });
-}
-
-function registerPlatformRoutes(
-  server: FastifyInstance,
-  authRuntime: MossAuthRuntime,
-  // #996/#860: always-on provider of the ACTIVE external modules for the actor.
-  getActiveExternalModules: (
-    accessContext: AccessContext
-  ) => Promise<readonly ReconciledExternalModule[]>
-): void {
-  server.get("/api/modules", { schema: listModulesRouteSchema }, async (request, reply) => {
-    try {
-      const accessContext = await authRuntime.resolveAccessContext(request);
-
-      const builtIns = getBuiltInModuleManifests().map(serializeModule);
-      // #996/#860: append ACTIVE external modules (reconcile already filtered to active === true).
-      // Runs in the actor's own data context, so /api/modules reflects only what is active.
-      const external = (await getActiveExternalModules(accessContext)).map(serializeExternalModule);
-      return {
-        modules: [...builtIns, ...external]
-      };
-    } catch (error) {
-      const code =
-        (error instanceof Error && (error as Error & { code?: string }).code) || undefined;
-      if (code === "account_pending_approval") {
-        return reply.code(403).send({ error: "Account is pending approval", code });
-      }
-      if (code === "account_deactivated") {
-        return reply.code(403).send({ error: "Account has been deactivated", code });
-      }
-      return reply.code(401).send({ error: "Session is missing or expired" });
-    }
   });
 }

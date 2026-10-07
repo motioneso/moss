@@ -122,9 +122,6 @@ HOSTED_CONTROLS = [
     control("T7-connection-verifier", "T7 fences changed Start bodies", [
         mutation(CONNECTION, '(verifier !== undefined && !proofMatches(verifier, connection.verifier_hash))', '(verifier !== undefined && false)')
     ], INTEGRATION),
-    control("T8-stored-notice", "T8 a stale stored account notice", [
-        mutation("packages/meetings/src/recording-notice.ts", 'if (status.acknowledgement?.policyVersion !== MEETING_RECORDING_NOTICE.policyVersion)', 'if (false)')
-    ], INTEGRATION),
     control("T9-revoke-persistent-proof", "T9 a proof approved over 90 days", [
         mutation(CAPABILITY, 'AND c.revoked_at IS NULL AND c.policy_version=1', 'AND c.policy_version=1')
     ], INTEGRATION),
@@ -153,7 +150,7 @@ FAILURE_PATTERNS = {
     **{name: r"^Error: promise resolved .* instead of rejecting" for name in [
         "T1-T2-missing-device-fence", "T3-missing-capability-fence", "T4-missing-session-fence",
         "T5-post-fence-deadline", "T5-claim-deadline", "T5-capture-lease", "T5-hard-cap", "T6-auth-device-owner",
-        "T7-start-fingerprint", "T7-connection-verifier", "T8-stored-notice", "T9-revoke-persistent-proof"]},
+        "T7-start-fingerprint", "T7-connection-verifier", "T9-revoke-persistent-proof"]},
     **{name: r"expected 200 to be 401" for name in ["T1-settings-unlink-delete", "T2-native-logout-delete", "T3-capability-revoke", "T4-session-binding"]},
     "T10-minute-budget": r"expected function to throw an error, but it didn't",
     "T10-hour-budget": r"expected function to throw an error, but it didn't",

@@ -64,7 +64,7 @@ final class MeetingRecordingPresentationTests: XCTestCase {
         }
         let microphone = Device(), output = Device()
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone, .output: output] })
-        let ready = MeetingNativeReadiness(permissionsGranted: true, processingReady: true, noticeAcknowledged: true, meetingDeviceAuthorized: true)
+        let ready = MeetingNativeReadiness(permissionsGranted: true, processingReady: true, meetingDeviceAuthorized: true)
         try runtime.prepare(selection: .init(microphoneDeviceID: 1, output: .selectedProcesses([2])), readiness: ready, at: 1_000_000_000)
         try runtime.start(readiness: ready, at: 1_000_000_000)
         defer { try? runtime.terminate(at: 2_000_000_000) }
@@ -89,6 +89,9 @@ final class MeetingRecordingPresentationTests: XCTestCase {
             return [:]
         })
         let controller = MeetingRecordingPillController(host: host)
+        XCTAssertEqual(controller.panel.frame.size, NSSize(width: 250, height: 80))
+        XCTAssertEqual(controller.panel.contentView?.frame.size, NSSize(width: 250, height: 80))
+        XCTAssertEqual(TrailMarkerTokens.Layout.recordingControlDiameter, 54)
         XCTAssertEqual(controller.panel.level, .floating)
         XCTAssertTrue(controller.panel.collectionBehavior.contains(.canJoinAllSpaces))
         XCTAssertTrue(controller.panel.collectionBehavior.contains(.fullScreenAuxiliary))

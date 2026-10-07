@@ -1,4 +1,5 @@
 import type {
+  ActionRequestDetails,
   ChatActivityEventDto,
   ChatMessageDto,
   ChatSurface,
@@ -32,6 +33,26 @@ function parsePreview(value: unknown): ActionRequestPreview | undefined {
     return undefined;
   }
   return { to: candidate.to, subject: candidate.subject, body: candidate.body };
+}
+
+function parseDetails(value: unknown): ActionRequestDetails | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.target !== null && typeof candidate.target !== "string") return undefined;
+  if (!Array.isArray(candidate.fields)) return undefined;
+  const fields: { label: string; value: string }[] = [];
+  for (const field of candidate.fields) {
+    if (!field || typeof field !== "object" || Array.isArray(field)) return undefined;
+    if (typeof field.label !== "string" || typeof field.value !== "string") return undefined;
+    fields.push({ label: field.label, value: field.value });
+  }
+  return { target: candidate.target, fields };
+}
+
+function parseStringList(value: unknown): readonly string[] | undefined {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? value
+    : undefined;
 }
 
 function isChatRecordKind(value: string): value is ChatRecordKind {
@@ -371,16 +392,16 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
         parsed.result && typeof parsed.result === "object" && !Array.isArray(parsed.result)
           ? (parsed.result as Record<string, unknown>)
           : undefined,
-      affectsQueryKeys:
-        Array.isArray(parsed.affectsQueryKeys) &&
-        parsed.affectsQueryKeys.every((token) => typeof token === "string")
-          ? (parsed.affectsQueryKeys as readonly string[])
-          : undefined,
+      affectsQueryKeys: parseStringList(parsed.affectsQueryKeys),
+      affectsModules: parseStringList(parsed.affectsModules),
       sourceFreshness:
         parsed.sourceFreshness && typeof parsed.sourceFreshness === "object"
           ? (parsed.sourceFreshness as SourceFreshnessV1)
           : undefined,
       preview: parsePreview(parsed.preview),
+      details: parseDetails(parsed.details),
+      outsideContentNotice:
+        typeof parsed.outsideContentNotice === "boolean" ? parsed.outsideContentNotice : undefined,
       decidedBy:
         parsed.decidedBy === "person" ||
         parsed.decidedBy === "policy" ||

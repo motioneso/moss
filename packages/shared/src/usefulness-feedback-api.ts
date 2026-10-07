@@ -34,6 +34,38 @@ export interface CreateUsefulnessFeedbackRequest {
   readonly reason?: string;
 }
 
+/** Only these pairs record a signal without invoking the UI action's effects. */
+export const RECORD_ONLY_FEEDBACK_OPTIONS = {
+  chat_message: { surfaces: ["chat"], kinds: ["more_like_this", "not_useful"] },
+  briefing_run: {
+    surfaces: ["briefing"],
+    kinds: ["more_like_this", "too_much", "not_useful", "dismiss"]
+  },
+  briefing_item: {
+    surfaces: ["briefing", "today"],
+    kinds: ["more_like_this", "too_much", "wrong_priority", "dismiss"]
+  },
+  proactive_card: {
+    surfaces: ["proactive", "today"],
+    kinds: ["more_like_this", "too_much", "wrong_priority", "not_useful"]
+  }
+} as const satisfies Partial<
+  Record<
+    FeedbackTargetKind,
+    { surfaces: readonly FeedbackSurface[]; kinds: readonly UsefulnessFeedbackKind[] }
+  >
+>;
+
+type RecordOnlyFeedbackOptions = typeof RECORD_ONLY_FEEDBACK_OPTIONS;
+export type CreateUsefulnessFeedbackSignalRequest = {
+  [Target in keyof RecordOnlyFeedbackOptions]: {
+    readonly targetKind: Target;
+    readonly targetRef: string;
+    readonly surface: RecordOnlyFeedbackOptions[Target]["surfaces"][number];
+    readonly kind: RecordOnlyFeedbackOptions[Target]["kinds"][number];
+  };
+}[keyof RecordOnlyFeedbackOptions];
+
 export interface UpdateUsefulnessFeedbackReasonRequest {
   readonly reason: string;
 }
@@ -126,6 +158,26 @@ export const createUsefulnessFeedbackRequestSchema = {
   }
 } as const;
 
+export const createUsefulnessFeedbackSignalRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["targetKind", "targetRef", "surface", "kind"],
+  properties: {
+    targetKind: { type: "string", enum: Object.keys(RECORD_ONLY_FEEDBACK_OPTIONS) },
+    targetRef: { type: "string", minLength: 1, maxLength: 1024 },
+    surface: feedbackSurfaceSchema,
+    kind: usefulnessFeedbackKindSchema
+  },
+  // Keep discovery's schema and the route's runtime allowlist on the same explicit pairs.
+  anyOf: Object.entries(RECORD_ONLY_FEEDBACK_OPTIONS).map(([targetKind, options]) => ({
+    properties: {
+      targetKind: { const: targetKind },
+      surface: { enum: options.surfaces },
+      kind: { enum: options.kinds }
+    }
+  }))
+} as const;
+
 export const updateUsefulnessFeedbackReasonRequestSchema = {
   type: "object",
   additionalProperties: false,
@@ -214,6 +266,11 @@ export const createUsefulnessFeedbackRouteSchema = {
     401: errorResponseSchema,
     404: errorResponseSchema
   }
+} as const;
+
+export const createUsefulnessFeedbackSignalRouteSchema = {
+  body: createUsefulnessFeedbackSignalRequestSchema,
+  response: createUsefulnessFeedbackRouteSchema.response
 } as const;
 
 export const listUsefulnessFeedbackRouteSchema = {

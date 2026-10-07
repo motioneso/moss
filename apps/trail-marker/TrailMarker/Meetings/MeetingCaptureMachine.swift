@@ -5,12 +5,11 @@ struct MeetingNativeReadiness {
     /// macOS has no public read-only system-audio preflight; output Start must still succeed.
     let permissionsGranted: Bool
     let processingReady: Bool
-    let noticeAcknowledged: Bool
     /// A snapshot from the separately scoped authorization path, never inferred from tm1_.
     let meetingDeviceAuthorized: Bool
 
     func validate() throws {
-        guard permissionsGranted, processingReady, noticeAcknowledged, meetingDeviceAuthorized else {
+        guard permissionsGranted, processingReady, meetingDeviceAuthorized else {
             throw MeetingAudioFailure.invalidTransition
         }
     }

@@ -1,3 +1,5 @@
+> Current direction: use the approved four states and capture rules in `../specs/2026-10-06-meetings-minimal-design.md`. Earlier implementation checkpoints below are historical.
+
 # Minimal Meetings: Part A build plan (#2981)
 
 Status: approved scoped implementation; draft pull request only, no merge or deployment.
@@ -7,14 +9,11 @@ Status: approved scoped implementation; draft pull request only, no merge or dep
 Build from PR #3056 at `588f2d5ed779b39eb549679f06a547fb90f0f898`.
 The approved design source is PR #3077 at `4d893f5c3bf7581f067cf412f9db1e6ef74cbe14`:
 `docs/superpowers/specs/2026-10-06-meetings-minimal-design.md` and its seven frozen mockups.
-Those source documents are copied unchanged here for reproducibility; their original draft
-status describes the design PR, while this plan records the subsequently approved Part A scope.
-The mockup markup, styles, seven screens and critique were inspected before implementation.
+The historical Part A source was the seven-screen mockup. The current four approved #3087
+states and updated design brief supersede its setup, Settings and recording-control direction.
 
 Part A keeps the existing one-time recording capability and explicit browser Start authority.
 It does not restore per-meeting Prepare/Approve. Creating, linking, and opening never record.
-The base already enforces the server-stored once-per-account current recording notice and
-binds it to each grant; retain that service, browser race fencing and migration 0290. Pause/Stop remain notice-independent.
 Existing denial, cancellation, cutoff, auth-reset and export safeguards remain in force.
 
 Part B remains separate and cannot start before Part A is published. Its link controls,
@@ -25,10 +24,10 @@ status may be displayed, without changing the link authorization model.
 ## Work lanes
 
 1. Server and contracts: new module migration 0292 (recheck open inventory before publication),
-   durable preferences, existing account-notice integration, saved-source Start validation,
+   durable preferences, OS-default source resolution, saved-source Start validation,
    title updates, and bounded/idempotent summary dispatch after finalized meaningful transcript.
-2. Setup and settings: one-time setup and Settings → Meetings, existing device/capability status,
-   source defaults and current notice, summary-on-Stop default on, shared input CSS correction.
+2. Linking and Settings: native app linking, the ready workspace, and Settings → Meetings with
+   link status, audio mode and Unlink only. Fresh accounts use microphone + system audio.
 3. Meeting workspace: plain inline title, autosaved notes and conflicts, full-width transcript and
    notes, mobile tabs and bottom controls, summary/version/overflow actions, simpler list and copy.
 4. Normal chat and shell: route-derived removable meeting context including notes before transcript,
@@ -39,7 +38,7 @@ status may be displayed, without changing the link authorization model.
 
 - Focused unit/component tests for setup, preferences, auth reset, controls, autosave/conflict,
   routing/chat, list, summary finalization and idempotency, preserving current capture denial tests.
-- Real isolated integration coverage for preferences and stored notice, source validation and
+- Real isolated integration coverage for preferences, source defaults/validation and
   summary dispatch. Run only through the repository verify-gate procedure in hosted CI.
 - ESLint, Prettier, file-size, design tokens, UI classes, catalogue, migration numbers, all relevant
   TypeScript configurations, app-map build and applicable offline tests.
@@ -53,26 +52,25 @@ status may be displayed, without changing the link authorization model.
 ## Published base and publication boundary
 
 The owner published the #3056 corrections and its narrow acceptance-fixture fixes. This build
-starts from the verified published `588f2d5ed` head; preserve its account notice, title feedback
-correction, schema/cascade fixtures, visible notice label click and new-meeting timing assertions.
-No additional #3056 publication is authorized. PR #3071 separately owns migrations 0289, 0291,
-0293 and 0294; this Part A reserves 0292, checked against the live inventory before publication.
+starts from the verified published `588f2d5ed` head; preserve title feedback, schema/cascade
+fixtures and new-meeting timing assertions while removing obsolete setup requirements.
+The owner now authorizes the coordinated rebuild across #3056/#3079/#3082 and the #3077 spec.
+Merge main a92148a01 into the implementation branches; preserve history and push fast-forward only.
+Main owns migrations 0289, 0291, 0293 and 0294; Part A owns 0292. Recheck the live catalog before publication.
 Add 0292 to the foundation schema catalog and all affected lifecycle/export fixtures.
 
 ## Publication
 
 Make explicit-path local commits. Coordinate remote publication with the parent before pushing.
-Open a new draft PR targeting `feat/2981-native-meeting-capture`; do not modify or merge #3077.
+Update the existing draft #3079 targeting `feat/2981-native-meeting-capture`; update #3077 as the design source. No PR merge or deployment is authorized.
 The release note is Category Changed, Title Simpler meetings, with a plain-English description.
 
 ## Implementation and offline verification (2026-10-06)
 
-Implemented Part A on the published base above. The live recording capability and account notice
-remain the base services. A person can continue first-use setup with notes when no recorder is
-available; this does not mark recording setup complete. Capture requires an explicit Start.
-Sources are exact named microphone/app choices because the current native inventory does not
-identify a system-default microphone. Settings changes apply to the next Start or Resume; the
-paused page displays the sources Resume will use. A stopped meeting remains ended.
+The original Part A implementation introduced the transcript-and-notes workspace and durable
+summary behavior. The 7 October rebuild removes its first-use setup and source pickers, adds
+OS-default microphone resolution and reduces Settings to link status, audio choice and Unlink.
+Explicit Start remains required, and a stopped meeting remains ended.
 
 Stop persists summary intent and metadata-only queue work transactionally through the existing
 job adapter. An enqueue savepoint prevents an optional queue failure from undoing Stop. The
@@ -179,23 +177,16 @@ of the corrected control is still required.
 
 ## Automatic-summary UAT Origin correction (2026-10-06)
 
-Hosted UAT job `112411341867` reached the recording-notice read, then received 401 for its
-acknowledgement PUT. The fixture used Playwright's cookie-sharing `page.request` API context,
-which does not supply a browser request's Origin automatically. The registered capture mutation
-guard correctly rejected the missing Origin before resolving the session. Pairing uses an actual
-browser Approve click and does not have this omission.
+The automatic-summary fixture uses Playwright’s cookie-sharing request context, which does not add Origin automatically. Capture mutations must supply the configured browser Origin; the server still rejects missing or untrusted values before resolving the session.
 
 The automatic-summary fixture now uses a small request helper that supplies the configured base
-URL's origin for both notice acknowledgement and the later Stop replay POST. Both generated
-requests are exercised through registered Fastify routes: each returned 401 before the helper
-fix and 200 after it, while missing and untrusted Origins still return 401 before session or
-store access. Setup/cleanup preferences, transcript, record deletion, AI configuration and device
+URL's origin for the Stop replay POST. The registered Fastify routes retain negative coverage for missing and untrusted Origins before session or store access. Setup/cleanup preferences, transcript, record deletion, AI configuration and device
 session revocation use their existing authenticated routes; no other capture-browser mutation
 in this spec was missing the header. Production authentication and CSRF checks are unchanged.
 The helper is included in the Meetings workflow paths and maps to the automatic-summary spec
 in the canonical UAT trigger map, so helper-only changes retain that acceptance coverage.
 
-Five focused offline fixture/notice/capture/preferences/UAT-environment suites passed all 57 tests, and scoped
+Five focused offline fixture/capture/preferences/UAT-environment suites passed all 57 tests, and scoped
 ESLint, Prettier, file-size and root/tests TypeScript checks passed (compilers ran sequentially
 with a 4 GB heap). No database or browser UAT ran locally. Hosted execution remains required
 to verify the rest of the automatic-summary scenario.

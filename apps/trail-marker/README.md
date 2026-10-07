@@ -135,31 +135,41 @@ capability in that approval; existing paired clients show a one-time upgrade in 
 recording proof is stored in this Mac's Keychain; the server holds its hash. Connecting or approving
 does not record. Backtrack keeps its separate existing consent and retention behavior.
 
-In Settings, Meetings, link this named Mac and save a microphone and one of microphone-only,
-microphone + selected app, or microphone + computer audio. Each meeting then starts with **Start**.
-Moss remembers the stable source identities; changing them happens in Settings. Missing or
-ambiguous sources require explicit selection and never widen capture. First use may request an OS microphone/system-audio permission. If Stop,
+Link this Mac through Trail Marker, then explicitly press **Start recording** in Moss. A fresh
+source choice uses the Mac's exact OS-default microphone with computer audio. Settings → Meetings
+can change the audio source. The native inventory reports the default microphone's stable UID,
+independently of display-name ordering; a missing or ambiguous default is never guessed among
+multiple microphones. Moss remembers the stable source identities; later OS-default changes do
+not retarget a saved choice. Missing or ambiguous sources require explicit selection and never
+widen capture. First use may request an OS microphone/system-audio permission. If Stop,
 revocation or expiry occurs while permission is pending, granting permission cannot start audio.
-There is no per-meeting Prepare, approval, notice checkbox or second Record button. Trail Marker
+There is no per-meeting Prepare, approval or second Record button. Trail Marker
 keeps the current browser in place rather than launching the default browser for each meeting.
+
+This native build always sends `defaultMicrophoneId`: the exact UID or explicit `null` when
+the default cannot be resolved. Only omission by older clients permits the server's legacy
+single-microphone fallback. A matching Moss server must accept the nullable field; older strict
+inventory schemas reject it. Screen Recording status is not a system-audio permission
+preflight: meeting computer audio may still ask for access when Start opens the selected tap.
 
 Viewing Moss from another computer controls the explicitly named recorder; it never switches to
 that browser's hardware or the server's hardware. Browser-only capture is not implemented.
 Transcription is configured only through AI providers in Moss.
 
 Each accepted Start shows a small draggable pill above ordinary windows on every Space, including
-alongside full-screen apps. It shows Recording, Paused, No audio or Reconnecting, elapsed captured
-time and the peak levels of actual captured audio. Each 250 ms display tick draws silence as a
-flat line and treats a peak at least 500 ms old as missing input; Pause clears it immediately.
+alongside full-screen apps. The 250 × 80-point warm-surface capsule shows a small red waveform,
+a round Pause button and a solid red Stop button, without visible status text, elapsed time,
+meeting title or close button. Its accessibility value still describes Recording, Paused,
+No audio or Reconnecting. Each 250 ms display tick draws silence as a flat line and treats a
+peak at least 500 ms old as missing input; Pause clears it immediately.
 The display reads a bounded local atomic scalar per source; it does not retain extra samples, send levels or put them in logs. When both
 sources are selected, it shows the maximum current source peak. Reconnecting can still display
-real input during a valid capture lease. The pill’s close button hides it until the next accepted
-Start, without stopping capture. Its paused play button opens the existing Resume action in Moss.
+real input during a valid capture lease. Its paused play button opens the existing Resume action in Moss.
 No system notification or additional on-Mac recording confirmation is added.
 
 The Trail Marker menu-bar mark shows a red dot from accepted Start until Stop, including Pause.
-The existing meeting menu retains local Pause/Stop controls after the pill is hidden and across
-browser navigation. Stop or a terminal authorization, expiry, identity or cleanup path clears both
+The existing meeting menu retains local Pause/Stop controls across browser navigation.
+Stop or a terminal authorization, expiry, identity or cleanup path clears both
 recording surfaces. Moss also keeps controls available while visiting History or other modules.
 Pause closes inputs and starts no new audio uploads. Stop fixes the cutoff and drains only retained
 pre-cutoff audio for up to 60 seconds; a new native recording waits for this bounded finalization.

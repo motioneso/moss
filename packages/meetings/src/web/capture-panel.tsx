@@ -1,84 +1,53 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useEffect, type ReactNode } from "react";
+import { Link } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, randomUuid } from "@moss/module-web-sdk";
-import { Button, Dialog } from "@moss/ui";
+import { Badge, Button } from "@moss/ui";
 import type { MeetingRecord } from "@moss/shared";
 import { captureKeys } from "./capture-client.js";
-import { CAPTURE_MODES } from "./capture-modes.js";
-import { captureRevocationLabel, captureStopped } from "./capture-presentation.js";
+import {
+  captureSelection,
+  captureRevocationLabel,
+  captureStopped,
+  captureStatusLabel
+} from "./capture-presentation.js";
 import { useCaptureSession, startMeetingCapture, type ActiveCapture } from "./capture-session.js";
 import { getMeetingPreferences, isMeetingAccessDenied, meetingKeys } from "./client.js";
 import { useCaptureStatus } from "./capture-status.js";
+import { useCaptureClock } from "./capture-clock.js";
 import { CaptureControls } from "./capture-controls.js";
-import { CaptureNotice } from "./capture-notice.js";
-import { useRecordingNotice, isRecordingNoticeAcknowledged } from "./recording-notice.js";
-import { useSessionDraft } from "./session-draft.js";
+import { useMeetingConnection } from "./meeting-connection.js";
 export { captureQueryOptions } from "./capture-status.js";
 const settingsPath = "/settings?section=modules&module=meetings";
+
 export function CapturePanel({
   meeting,
-  onLiveChange
+  onLiveChange,
+  heading
 }: {
   readonly meeting: MeetingRecord;
+  readonly heading?: ReactNode;
   readonly onLiveChange: (active: boolean) => void;
 }) {
-  const navigate = useNavigate();
-  const query = useCaptureStatus(meeting.id),
-    session = useCaptureSession(meeting.id),
-    client = useQueryClient();
+  const query = useCaptureStatus(meeting.id);
+  const session = useCaptureSession(meeting.id);
+  const client = useQueryClient();
   const preferences = useQuery({
     queryKey: meetingKeys.preferences,
     queryFn: getMeetingPreferences,
     retry: false
   });
-  const notice = useRecordingNotice();
-  const pending = useSessionDraft<{ action: "start" | "resume" | null }>(
-    ["meetings", "notice-action", meeting.id],
-    () => ({ action: null })
-  );
-  const [noticeOpen, setNoticeOpen] = useState(false);
-  const cancelNotice = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!noticeOpen || typeof document === "undefined") return;
-    const previous = document.activeElement;
-    cancelNotice.current?.focus();
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        pending.update(() => ({ action: null }));
-        setNoticeOpen(false);
-      }
-      if (event.key !== "Tab") return;
-      const choices = cancelNotice.current
-        ?.closest('[role="dialog"]')
-        ?.querySelectorAll<HTMLElement>(
-          "button:not(:disabled), input:not(:disabled), a[href], textarea:not(:disabled)"
-        );
-      const first = choices?.[0],
-        last = choices?.[choices.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    document.addEventListener("keydown", keydown);
-    return () => {
-      document.removeEventListener("keydown", keydown);
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
-    };
-  }, [noticeOpen, pending.update]);
+  const connection = useMeetingConnection(preferences.data?.rememberedSource?.deviceId);
   const denied =
-    isMeetingAccessDenied(query.error) &&
-    !(query.error instanceof ApiError && query.error.status === 404);
+    connection.denied ||
+    (isMeetingAccessDenied(query.error) &&
+      !(query.error instanceof ApiError && query.error.status === 404));
   const capture = denied ? undefined : query.data?.capture;
-  const stopped = captureStopped(capture),
-    revoked = capture?.desired === "revoked";
+  const stopped = captureStopped(capture);
+  const revoked = capture?.desired === "revoked";
   const live =
     !!session.state.operation || (!!capture && capture.desired !== "idle" && !stopped && !revoked);
+  const { connected } = useCaptureClock(capture, query.dataUpdatedAt, query.isError);
   useEffect(() => onLiveChange(live), [live, onLiveChange]);
   useEffect(() => {
     if (live && !denied)
@@ -87,41 +56,37 @@ export function CapturePanel({
         title: meeting.title
       });
   }, [client, meeting.id, meeting.title, live, denied]);
-  const request = (action: "start" | "resume") => {
-    if (!pending.currentSession() || denied) return;
-    if (!isRecordingNoticeAcknowledged(client)) {
-      pending.update(() => ({ action }));
-      setNoticeOpen(true);
-      return;
-    }
-    pending.update(() => ({ action: null }));
-    setNoticeOpen(false);
-    if (action === "start")
-      void startMeetingCapture(client, meeting.id, meeting.title, { requestKey: randomUuid() });
-    else if (capture?.desired === "paused")
-      void session.control({
-        grantId: capture.grantId,
-        command: "record",
-        expectedGeneration: capture.generation
-      });
-  };
-  const source = preferences.data?.rememberedSource;
-  const paused = capture?.desired === "paused";
-  const savedMicrophone = capture?.inventory?.microphones.find(
-    (item) => item.deviceId === source?.microphoneId
-  )?.label;
-  const savedApp = capture?.inventory?.applications.find(
-    (item) => item.applicationId === source?.applicationId
-  )?.label;
-  const sourceSummary = source
-    ? [
-        CAPTURE_MODES.find((mode) => mode.value === source.mode)?.label,
-        ...(paused && savedMicrophone ? [savedMicrophone] : []),
-        ...(paused && source.mode === "selected-app" && savedApp ? [savedApp] : [])
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : "Complete your meeting setup";
+  const inventory = connection.device?.inventory;
+  const saved = preferences.data?.rememberedSource;
+  const reportedDefault =
+    inventory && "defaultMicrophoneId" in inventory ? inventory.defaultMicrophoneId : undefined;
+  const defaultMicrophone =
+    typeof reportedDefault === "string"
+      ? reportedDefault
+      : reportedDefault === undefined && inventory?.microphones.length === 1
+        ? inventory.microphones[0]!.deviceId
+        : "";
+  const sourceReady =
+    captureSelection(
+      {
+        mode: preferences.data?.defaultCaptureMode ?? saved?.mode ?? "computer-audio",
+        microphoneId: saved?.microphoneId ?? defaultMicrophone,
+        applicationId: saved?.applicationId ?? ""
+      },
+      inventory ?? null
+    ) !== null;
+  const ready =
+    !denied &&
+    !preferences.isPending &&
+    !preferences.isError &&
+    !query.isPending &&
+    !query.isError &&
+    !connection.loading &&
+    !connection.unavailable &&
+    !!connection.device &&
+    sourceReady &&
+    !connection.device.busy &&
+    connection.devices.data?.processingReady === true;
   const status = denied
     ? "Recording access is unavailable. Use Trail Marker’s local Stop, then sign in again."
     : query.error instanceof ApiError && query.error.status === 404
@@ -129,49 +94,88 @@ export function CapturePanel({
       : query.isError
         ? "Couldn’t confirm the recorder connection."
         : revoked && capture
-          ? `${captureRevocationLabel(capture)}. Recording stopped. Review setup before starting a new meeting.`
+          ? `${captureRevocationLabel(capture)}. Recording stopped.`
           : (session.state.error ??
             (capture?.observed?.phase === "error"
-              ? "Recording was interrupted. Check your Mac and sources."
-              : query.data?.processingReady === false
+              ? "Recording was interrupted. Check Trail Marker on your Mac."
+              : query.data?.processingReady === false ||
+                  connection.devices.data?.processingReady === false
                 ? "Transcription isn’t available. Check AI providers."
                 : capture?.processing?.status === "delayed"
                   ? "Transcription is delayed. Recording continues."
                   : capture?.finalization === "pending"
                     ? "Still being finalised"
-                    : null));
+                    : !capture && !connection.loading && !ready
+                      ? connection.unavailable
+                        ? "Couldn’t confirm the latest Mac connection."
+                        : connection.ambiguous
+                          ? "More than one Mac is connected. Disconnect the extra Mac in Trail Marker."
+                          : connection.device?.busy
+                            ? "This Mac is recording or finishing another meeting."
+                            : connection.device && !sourceReady
+                              ? "The audio source is unavailable. Check microphone and system audio access in Trail Marker, or change Audio source in Settings."
+                              : connection.linked.length
+                                ? "Open Trail Marker on your Mac to reconnect."
+                                : "Open Trail Marker and follow its linking instructions."
+                      : null));
+  const requestResume = () => {
+    if (session.currentSession() && !denied && capture?.desired === "paused")
+      void session.control({
+        grantId: capture.grantId,
+        command: "record",
+        expectedGeneration: capture.generation
+      });
+  };
   return (
     <section className="meetings-capture" aria-label="Meeting recording">
-      {!capture && !session.state.operation ? (
-        <Button
-          disabled={
-            denied ||
-            query.isPending ||
-            query.isError ||
-            preferences.isPending ||
-            preferences.isError ||
-            notice.query.isPending
-          }
-          onClick={() =>
-            source && preferences.data?.setupCompletedAt ? request("start") : navigate(settingsPath)
-          }
-        >
-          Start
-        </Button>
-      ) : (
-        <CaptureControls
-          id={meeting.id}
-          capture={capture}
-          unavailable={query.isError}
-          updatedAt={query.dataUpdatedAt}
-          processingReady={query.data?.processingReady}
-          onResume={() => request("resume")}
-        />
-      )}
-      {(!live && !stopped && !revoked) || paused ? (
+      <div className="meetings-actions meetings-capture-heading">
+        {heading ? <div className="meetings-capture-title">{heading}</div> : null}
+        {capture && !revoked ? (
+          <Badge tone={capture.desired === "recording" && connected ? "red" : "neutral"}>
+            {captureStatusLabel(capture, connected)}
+          </Badge>
+        ) : !capture && ready ? (
+          <Badge tone="forest">Ready</Badge>
+        ) : null}
+        {!capture && !session.state.operation ? (
+          <Button
+            disabled={
+              !ready ||
+              query.isPending ||
+              query.isError ||
+              preferences.isPending ||
+              preferences.isError
+            }
+            onClick={() => {
+              if (session.currentSession() && ready && !denied)
+                void startMeetingCapture(
+                  client,
+                  meeting.id,
+                  meeting.title,
+                  {
+                    requestKey: randomUuid()
+                  },
+                  session.currentSession
+                );
+            }}
+          >
+            Start recording
+          </Button>
+        ) : (
+          <CaptureControls
+            id={meeting.id}
+            capture={capture}
+            unavailable={query.isError || denied}
+            updatedAt={query.dataUpdatedAt}
+            processingReady={query.data?.processingReady}
+            onResume={requestResume}
+          />
+        )}
+      </div>
+      {!denied && (capture || connection.device) ? (
         <p className="jds-hint">
-          {paused ? "Resume will use: " : ""}
-          {sourceSummary}. <Link to={settingsPath}>Change</Link>
+          {capture?.deviceName ?? connection.device?.deviceName} ·{" "}
+          {(capture ? connected : !connection.unavailable) ? "Connected" : "Disconnected"}
         </p>
       ) : null}
       {status ? (
@@ -180,70 +184,36 @@ export function CapturePanel({
           {session.state.operation?.phase === "retry" ? (
             <Button
               variant="link"
-              disabled={
-                (session.state.operation.retryAt ?? 0) > Date.now() ||
-                ((session.state.operation.request.kind === "start" ||
-                  (session.state.operation.request.kind === "control" &&
-                    session.state.operation.request.input.command === "record")) &&
-                  !notice.acknowledged)
-              }
+              disabled={(session.state.operation.retryAt ?? 0) > Date.now()}
               onClick={session.retry}
             >
               Try again
             </Button>
-          ) : query.isError ? (
-            <Button variant="link" onClick={query.refresh}>
+          ) : query.isError || connection.unavailable ? (
+            <Button
+              variant="link"
+              onClick={() => {
+                query.refresh();
+                connection.refresh();
+              }}
+            >
               Check again
             </Button>
-          ) : !stopped ? (
+          ) : !stopped && !revoked ? (
             <Link
               to={
-                query.data?.processingReady === false
+                query.data?.processingReady === false ||
+                connection.devices.data?.processingReady === false
                   ? "/settings?section=aiproviders"
                   : settingsPath
               }
             >
-              Review setup
+              Settings
             </Link>
           ) : null}
         </p>
       ) : null}
       {stopped || revoked ? <Link to="/meetings">New meeting</Link> : null}
-      {noticeOpen ? (
-        <Dialog
-          title={<span id="meeting-recording-notice-title">Recording notice</span>}
-          aria-labelledby="meeting-recording-notice-title"
-          onClose={() => {
-            pending.update(() => ({ action: null }));
-            setNoticeOpen(false);
-          }}
-          footer={
-            <>
-              <Button
-                ref={cancelNotice}
-                variant="secondary"
-                onClick={() => {
-                  pending.update(() => ({ action: null }));
-                  setNoticeOpen(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                disabled={!notice.acknowledged || !pending.data.action}
-                onClick={() => {
-                  const action = pending.data.action;
-                  if (action) request(action);
-                }}
-              >
-                Continue
-              </Button>
-            </>
-          }
-        >
-          <CaptureNotice />
-        </Dialog>
-      ) : null}
     </section>
   );
 }

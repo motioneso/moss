@@ -1,4 +1,4 @@
-import { Button, Field, FormLabel } from "@moss/ui";
+import { Button, Field, FormLabel, SectionHead } from "@moss/ui";
 import type { useMeetingNotesEditor } from "./use-meeting-notes.js";
 export function MeetingNotesPane({
   editor
@@ -8,18 +8,21 @@ export function MeetingNotesPane({
   const { state, dirty, notesValid } = editor;
   return (
     <section className="meetings-section" aria-label="Personal notes">
-      <Field>
-        <FormLabel htmlFor="meeting-personal-notes">Notes</FormLabel>
-        <textarea
-          id="meeting-personal-notes"
-          className="jds-textarea meetings-input meetings-notes"
-          placeholder="A thought, a decision, something to follow up…"
-          maxLength={64000}
-          value={state.text}
-          onChange={(event) => editor.change(event.target.value)}
-        />
-      </Field>
-      <p className="jds-hint" role="status">
+      <SectionHead title="Notes" rule />
+      <textarea
+        aria-label="Notes"
+        id="meeting-personal-notes"
+        className="jds-textarea meetings-input meetings-notes"
+        placeholder="Add a note…"
+        maxLength={64000}
+        value={state.text}
+        onChange={(event) => editor.change(event.target.value)}
+      />
+      <p
+        className="jds-hint"
+        role="status"
+        hidden={!dirty && state.phase === "idle" && !state.text}
+      >
         {state.phase === "saving"
           ? "Saving…"
           : state.phase === "failed"

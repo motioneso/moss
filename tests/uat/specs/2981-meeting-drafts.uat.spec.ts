@@ -13,8 +13,8 @@ import { requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 test.use({ trace: "off", screenshot: "off", video: "off" });
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
-// First-use notes remain available with no linked Mac. Completing recording setup and
-// New meeting → explicit Start are exercised separately by the synthetic capture spec.
+// First-use notes remain available with no linked Mac. New meeting → explicit Start recording
+// is exercised separately by the synthetic capture spec.
 test("Minimal meeting workspace edits titles, autosaves notes, resolves conflicts and deletes through real routes (#2981)", async ({
   page
 }) => {
@@ -28,30 +28,33 @@ test("Minimal meeting workspace edits titles, autosaves notes, resolves conflict
   try {
     const originalPreferences = await page.request.get("/api/meetings/preferences");
     expect(originalPreferences.status()).toBe(200);
-    expect((await originalPreferences.json()).setupCompletedAt).toBeNull();
+    const savedPreferences = await originalPreferences.json();
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Meetings", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "New meeting", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Set up Meetings", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Finish setup", exact: true })).toBeDisabled();
-    const created = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/meetings/records") && response.request().method() === "POST"
-    );
-    await page.getByRole("button", { name: "Continue with notes", exact: true }).click();
-    const response = await created;
+    await expect(page.getByText("Link your Mac", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Open Trail Marker and follow its linking instructions.", { exact: true })
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "New meeting", exact: true })).toHaveCount(0);
+    // Existing notes remain editable after unlinking. Seed through the real record API,
+    // then open the record through the preserved history list.
+    const response = await page.request.post("/api/meetings/records", {
+      data: { requestKey: randomUUID(), title: "Untitled meeting" }
+    });
     expect(response.status()).toBe(201);
     fixtureId = (await response.json()).meeting.id as string;
     const afterNotes = await page.request.get("/api/meetings/preferences");
-    expect((await afterNotes.json()).setupCompletedAt).toBeNull();
+    expect(await afterNotes.json()).toEqual(savedPreferences);
     const capture = await page.request.get(`/api/meetings/records/${fixtureId}/capture`);
     expect(capture.status()).toBe(200);
     expect((await capture.json()).capture).toBeNull();
+    await page.reload();
+    await meetingRow(page, "Untitled meeting").click();
     await expect(page).toHaveURL(new RegExp(`id=${fixtureId}`));
     await assertMinimalMeetingWorkspace(page);
-    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start recording", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Edit meeting title", exact: true })).toHaveText(
-      "Untitled meeting"
+      "New meeting"
     );
     await page.getByRole("button", { name: "Edit meeting title", exact: true }).click();
     const titleInput = page.getByLabel("Meeting title", { exact: true });

@@ -33,6 +33,7 @@ export function serializeModule(
       scope: surface.scope,
       order: surface.order ?? null
     })),
+    ...(module.chatRefreshTokens ? { chatRefreshTokens: module.chatRefreshTokens } : {}),
     // #917: built-ins are never external. Emitted explicitly so the field survives the
     // fast-json-stringify schema (undeclared/absent fields are dropped) and the shell can
     // rely on it being present for built-ins.

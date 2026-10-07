@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
 import { sql, type Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
+import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 
 import {
   meetingsModuleManifest,
@@ -259,7 +260,8 @@ import type {
   JsonMossModuleManifest,
   RegisteredFocusSignal,
   RegisteredModuleDiagnosticProvider,
-  RegisteredProactiveMonitorProvider
+  RegisteredProactiveMonitorProvider,
+  RouteCatalogHolder
 } from "@moss/module-sdk";
 import {
   NotificationsRepository,
@@ -557,6 +559,28 @@ export {
   type RouteKey,
   type RouteModuleIndex
 } from "./route-guard.js";
+export {
+  CHAT_BLOCKED_PATH_RULES,
+  DESTRUCTIVE_WORD_POST_ALLOWLIST,
+  JULY_EXCLUDED_ROUTES,
+  JULY_PREFIXES_WITHOUT_ROUTES,
+  assertReadToolContentDeclared,
+  assertRouteChatClassification,
+  buildRouteCatalog,
+  createRouteCatalogHolder,
+  findUnmappedJulyPrefixes,
+  matchChatBlockedPathRule,
+  type CapturedRouteSchema,
+  type CatalogRoute,
+  type ChatBlockedPathRule,
+  type DestructiveWordPostAllowed,
+  type JulyExcludedRoute,
+  type JulyPrefixWithoutRoutes,
+  type JulyRuleForWalk,
+  type RouteCatalog,
+  type RouteChatAssertionOptions,
+  type RouteChatRuleTables
+} from "./route-catalog.js";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -586,6 +610,9 @@ export interface BuiltInRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly listConfiguredAuthProviders: () => readonly AuthProviderStatusDto[];
   readonly listModuleManifests: () => readonly MossModuleManifest[];
+  /** #3065: filled by the server's onReady once every route is registered; forwarded to chat. */
+  readonly routeCatalog?: RouteCatalogHolder;
+  readonly actAsGrants?: ActAsGrantRegistry;
   /**
    * Async, actor-filtered resolver (the enablement SEAM). Used by the tool surfaces
    * (MCP gateway + AI REST tools) and the route guard. Distinct from
@@ -1667,14 +1694,6 @@ export function createActionRowRelevancePort(): ActionRowRelevancePort {
   };
 }
 
-const peopleManifest: typeof peopleModuleManifest = {
-  ...peopleModuleManifest,
-  routes: [
-    ...(peopleModuleManifest.routes ?? []),
-    { method: "GET", path: "/api/people/notes-directories" }
-  ]
-};
-
 /**
  * #1263: tasks bypasses the generic canonical-key-only grant here, because it has a legacy
  * `tasks.agency_auto_execute` boolean the generic path doesn't know about — see
@@ -2241,6 +2260,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         adoptMcpTokenRevoke: deps.adoptMcpTokenRevoke,
         adoptCheckTokenMinter: deps.adoptCheckTokenMinter,
         resolveActiveModules: deps.resolveActiveModules,
+        routeCatalog: deps.routeCatalog,
+        actAsGrants: deps.actAsGrants,
         mcpServerUrl: deps.mcpServerUrl,
         boss: deps.boss,
         personaPreferences: new PreferencesRepository(),
@@ -2988,7 +3009,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     }
   },
   {
-    manifest: peopleManifest,
+    manifest: peopleModuleManifest,
     sqlMigrationDirectories: [peopleModuleSqlMigrationDirectory],
     queueDefinitions: [{ name: PERSON_INDEX_QUEUE }, { name: SYNC_PERSON_MEMORY_QUEUE }],
     registerRoutes: (server, deps) =>

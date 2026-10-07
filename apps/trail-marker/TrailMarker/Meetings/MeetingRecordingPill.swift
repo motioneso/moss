@@ -5,46 +5,49 @@ import SwiftUI
 struct MeetingRecordingPill: View {
     @ObservedObject var host: MeetingCaptureHost
 
-    private var statusColor: Color {
-        switch host.recordingPresentation.state {
-        case .recording: return Color(nsColor: .systemRed)
-        case .reconnecting: return Color(nsColor: .systemOrange)
-        case .paused, .noAudio: return Color(nsColor: .secondaryLabelColor)
-        }
-    }
-
     var body: some View {
-        HStack(spacing: TrailMarkerTokens.Spacing.related) {
-            Circle().fill(statusColor).frame(width: 6, height: 6).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: TrailMarkerTokens.Spacing.compact) {
-                Text(host.recordingPresentation.state.rawValue).font(.system(size: 12, weight: .semibold))
-                Text(host.recordingPresentation.elapsedText).font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary)
-            }
-            .frame(width: 92, alignment: .leading)
+        HStack(spacing: 0) {
             CapturedWaveform(levels: host.recordingPresentation.waveform)
-                .frame(width: 88, height: 24)
+                .frame(width: 32, height: 24)
                 .accessibilityLabel("Captured audio level")
                 .accessibilityValue(host.recordingPresentation.waveform.allSatisfy { $0 == 0 } ? "Silent" : "Audio arriving")
-            Spacer(minLength: 0)
+            Spacer(minLength: TrailMarkerTokens.Spacing.related)
             Button {
                 if host.phase == .paused { host.openMeetingInBrowser() }
                 else { host.pauseFromUserClick() }
             } label: {
-                Image(systemName: host.phase == .paused ? "play.fill" : "pause.fill").frame(width: 24, height: 24)
+                Image(systemName: host.phase == .paused ? "play.fill" : "pause")
+                    .font(.system(size: 24, weight: .medium))
+                    .frame(width: TrailMarkerTokens.Layout.recordingControlDiameter,
+                           height: TrailMarkerTokens.Layout.recordingControlDiameter)
+                    .foregroundStyle(TrailMarkerTokens.Color.recordingForeground)
+                    .background(TrailMarkerTokens.Color.recordingSurface, in: Circle())
+                    .overlay(Circle().strokeBorder(TrailMarkerTokens.Color.recordingControlBorder, lineWidth: 1))
+                    .contentShape(Circle())
             }
             .disabled(host.phase != .recording && host.phase != .paused)
             .help(host.phase == .paused ? "Resume in Moss" : "Pause recording")
             .accessibilityLabel(host.phase == .paused ? "Resume in Moss" : "Pause recording")
-            Button(action: host.stopFromUserClick) { Image(systemName: "stop.fill").frame(width: 24, height: 24) }
+            Spacer(minLength: TrailMarkerTokens.Spacing.related)
+            Button(action: host.stopFromUserClick) {
+                Image(systemName: "stop")
+                    .font(.system(size: 24, weight: .medium))
+                    .frame(width: TrailMarkerTokens.Layout.recordingControlDiameter,
+                           height: TrailMarkerTokens.Layout.recordingControlDiameter)
+                    .foregroundStyle(TrailMarkerTokens.Color.recordingOnDanger)
+                    .background(TrailMarkerTokens.Color.recordingDanger, in: Circle())
+                    .contentShape(Circle())
+            }
                 .disabled(!host.canStop).help("Stop recording").accessibilityLabel("Stop recording")
-            Button(action: host.hideRecordingPill) { Image(systemName: "xmark").frame(width: 24, height: 24) }
-                .help("Hide until next Start. Recording continues.").accessibilityLabel("Hide recording pill; recording continues")
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, TrailMarkerTokens.Spacing.row)
-        .frame(width: 368, height: 56)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
+        .padding(.horizontal, TrailMarkerTokens.Spacing.section)
+        .frame(width: TrailMarkerTokens.Layout.recordingPillWidth, height: TrailMarkerTokens.Layout.recordingPillHeight)
+        .background(TrailMarkerTokens.Color.recordingSurface, in: Capsule())
+        .overlay(Capsule().strokeBorder(TrailMarkerTokens.Color.recordingBorder, lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Meeting recording controls")
+        .accessibilityValue(host.recordingPresentation.state.rawValue)
     }
 }
 
@@ -56,13 +59,14 @@ private struct CapturedWaveform: View {
             var path = Path()
             path.move(to: CGPoint(x: 0, y: size.height / 2))
             path.addLine(to: CGPoint(x: size.width, y: size.height / 2))
-            for (index, level) in levels.enumerated() {
-                let x = (CGFloat(index) + 0.5) * size.width / CGFloat(levels.count)
+            let visibleLevels = levels.suffix(8)
+            for (index, level) in visibleLevels.enumerated() {
+                let x = (CGFloat(index) + 0.5) * size.width / CGFloat(visibleLevels.count)
                 let height = CGFloat(level) * size.height / 2
                 path.move(to: CGPoint(x: x, y: size.height / 2 - height))
                 path.addLine(to: CGPoint(x: x, y: size.height / 2 + height))
             }
-            context.stroke(path, with: .color(.primary), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+            context.stroke(path, with: .color(TrailMarkerTokens.Color.recordingDanger), style: StrokeStyle(lineWidth: 2, lineCap: .round))
         }
     }
 }
@@ -82,7 +86,8 @@ final class MeetingRecordingPillController {
     private var subscription: AnyCancellable?
 
     init(host: MeetingCaptureHost) {
-        panel = RecordingPanel(contentRect: NSRect(x: 0, y: 0, width: 368, height: 56),
+        panel = RecordingPanel(contentRect: NSRect(x: 0, y: 0,
+                        width: TrailMarkerTokens.Layout.recordingPillWidth, height: TrailMarkerTokens.Layout.recordingPillHeight),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.title = "Meeting recording"
         panel.level = .floating
@@ -97,7 +102,8 @@ final class MeetingRecordingPillController {
         panel.hasShadow = true
         panel.contentView = RecordingPillHostingView(rootView: MeetingRecordingPill(host: host))
         if let screen = NSScreen.main ?? NSScreen.screens.first {
-            panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - 184, y: screen.visibleFrame.maxY - 72))
+            panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - TrailMarkerTokens.Layout.recordingPillWidth / 2,
+                y: screen.visibleFrame.maxY - TrailMarkerTokens.Layout.recordingPillHeight - TrailMarkerTokens.Spacing.group))
         }
         subscription = host.$recordingPresentation.map(\.showsPill).removeDuplicates().sink { [weak self] visible in
             if visible { self?.panel.orderFrontRegardless() }

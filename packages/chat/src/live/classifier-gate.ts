@@ -159,6 +159,8 @@ export interface ClassifierGatePorts {
 
 export interface GateRequest {
   readonly actorUserId: string;
+  /** Conversation captured when this turn starts. Missing identity stays fail-closed. */
+  readonly threadId: string | null;
   readonly message: string;
   readonly hasAttachment: boolean;
   readonly incognito: boolean;

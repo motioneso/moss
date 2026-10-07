@@ -24,12 +24,14 @@ import {
 import type { CreateSportsFollowRequest, SportsFollowDto } from "@moss/shared";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
 
 describe("AssistantToolGateway self-operation", () => {
   let appDb: Kysely<MossDatabase>;
   let bootstrapDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let repository: AiRepository;
   let tokens: SessionTokenRegistry;
   let confirmations: ConfirmationRegistry;
@@ -64,7 +66,9 @@ describe("AssistantToolGateway self-operation", () => {
     await appDb.destroy();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
+
     exampleToolCalls.length = 0;
     emitted = [];
     tokens = new SessionTokenRegistry();
@@ -119,7 +123,7 @@ describe("AssistantToolGateway self-operation", () => {
     const installGrantGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -127,7 +131,7 @@ describe("AssistantToolGateway self-operation", () => {
       actionPolicy: (ctx) => dbBackedActionPolicy(ctx)
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-install-grant",
       allowedToolNames: null
     });
@@ -149,7 +153,7 @@ describe("AssistantToolGateway self-operation", () => {
     const settingsGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [settingsModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -174,7 +178,7 @@ describe("AssistantToolGateway self-operation", () => {
       })
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-settings-affects-query-keys",
       allowedToolNames: null
     });
@@ -201,7 +205,7 @@ describe("AssistantToolGateway self-operation", () => {
     const overrideGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -209,7 +213,7 @@ describe("AssistantToolGateway self-operation", () => {
       actionPolicy: (ctx) => dbBackedActionPolicy(ctx)
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-always-confirm-override",
       allowedToolNames: null
     });
@@ -266,7 +270,7 @@ describe("AssistantToolGateway self-operation", () => {
     const calendarGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [calendarModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -275,7 +279,7 @@ describe("AssistantToolGateway self-operation", () => {
       toolServices: { calendarWrite: fakeCalendarWrite }
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-calendar-install-grant",
       allowedToolNames: null
     });
@@ -357,7 +361,7 @@ describe("AssistantToolGateway self-operation", () => {
     const sportsGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [sportsModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -365,7 +369,7 @@ describe("AssistantToolGateway self-operation", () => {
       actionPolicy: (ctx) => dbBackedSportsActionPolicy(ctx)
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-sports-install-grant",
       allowedToolNames: null
     });
@@ -385,8 +389,8 @@ describe("AssistantToolGateway self-operation", () => {
     // gateway (calling SportsService.followTeam/unfollowTeam directly with a scoped db); this
     // proves it through the tool/gateway path — i.e. that AssistantToolGateway.callTool threads
     // *the calling token's* actorUserId into the data context, not some cached/ambient one. That
-    // threading is the trust boundary self-operation introduces: these tools run with no
-    // confirmation card, so nothing else stands between an untrusted call and the DB.
+    // threading remains the RLS trust boundary. The initial calls on each clean thread run
+    // automatically; Alice's later call confirms because following admits sports source text.
     const grantManifest: SelfOperationManifestInput = {
       id: sportsModuleManifest.id,
       assistantTools: sportsModuleManifest.assistantTools,
@@ -427,7 +431,7 @@ describe("AssistantToolGateway self-operation", () => {
     const sportsGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [sportsModuleManifest],
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -436,12 +440,12 @@ describe("AssistantToolGateway self-operation", () => {
     });
 
     const tokenA = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "s-sports-rls-a",
       allowedToolNames: null
     });
     const tokenB = tokens.mint({
-      actorUserId: ids.userB,
+      ...conversations.bindingFor(ids.userB),
       chatSessionId: "s-sports-rls-b",
       allowedToolNames: null
     });
@@ -450,6 +454,12 @@ describe("AssistantToolGateway self-operation", () => {
       competitionKey: "nfl"
     });
     expect(followed.ok).toBe(true);
+    expect(
+      await conversations.gatewayDependencies.provenance.isTainted(
+        ids.userA,
+        conversations.bindingFor(ids.userA).threadId
+      )
+    ).toBe(true);
 
     // The actual assertion: user B's own token, entering via the same gateway/tool path an
     // untrusted request would use, must not see or remove user A's follow. Mutation-tight against
@@ -466,9 +476,15 @@ describe("AssistantToolGateway self-operation", () => {
 
     // Positive control: user A's own call still finds and removes the row it owns — proves the
     // follow genuinely exists and user B's `removed: false` isn't vacuously true for everyone.
-    const aliceUnfollow = await sportsGateway.callTool(tokenA, "sports.unfollowTeam", {
+    emitted.length = 0;
+    const pendingAliceUnfollow = sportsGateway.callTool(tokenA, "sports.unfollowTeam", {
       competitionKey: "nfl"
     });
+    const request = await waitForActionRequest();
+    expect(request.toolName).toBe("sports.unfollowTeam");
+    expect(emitted[0]?.record).toMatchObject({ outsideContentNotice: true });
+    await sportsGateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
+    const aliceUnfollow = await pendingAliceUnfollow;
     expect(aliceUnfollow.ok).toBe(true);
     if (aliceUnfollow.ok) {
       expect(aliceUnfollow.structuredData).toEqual({ removed: true });
@@ -550,7 +566,7 @@ describe("AssistantToolGateway self-operation", () => {
       const gateway = new AssistantToolGateway({
         resolveActiveModules: async () => [exampleToolModule],
         repository,
-        runner,
+        ...conversations.gatewayDependencies,
         tokens,
         confirmations,
         notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -564,7 +580,7 @@ describe("AssistantToolGateway self-operation", () => {
       // a user's explicit choice). Reusing userA here left every call stuck on the confirm path,
       // hanging the very first loop iteration in confirmAndRun with no assertion failure.
       const token = tokens.mint({
-        actorUserId: ids.userB,
+        ...conversations.bindingFor(ids.userB),
         chatSessionId: "s-rl-auto",
         allowedToolNames: null
       });
@@ -625,7 +641,7 @@ describe("AssistantToolGateway self-operation", () => {
       const gateway = new AssistantToolGateway({
         resolveActiveModules: async () => [exampleToolModule],
         repository,
-        runner,
+        ...conversations.gatewayDependencies,
         tokens,
         confirmations,
         notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -635,7 +651,7 @@ describe("AssistantToolGateway self-operation", () => {
       // #1264 Task 13: userB — see the same-named test above for why userA is poisoned to
       // tier "always_confirm" by the earlier "stored always_confirm override" test.
       const token = tokens.mint({
-        actorUserId: ids.userB,
+        ...conversations.bindingFor(ids.userB),
         chatSessionId: "s-rl-confirm-still-runs",
         allowedToolNames: null
       });
@@ -688,7 +704,7 @@ describe("AssistantToolGateway self-operation", () => {
       const gateway = new AssistantToolGateway({
         resolveActiveModules: async () => [exampleToolModule],
         repository,
-        runner,
+        ...conversations.gatewayDependencies,
         tokens,
         confirmations,
         notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -696,12 +712,12 @@ describe("AssistantToolGateway self-operation", () => {
         yoloMode: async () => true
       });
       const tokenA = tokens.mint({
-        actorUserId: ids.userA,
+        ...conversations.bindingFor(ids.userA),
         chatSessionId: "s-rl-yolo-a",
         allowedToolNames: null
       });
       const tokenB = tokens.mint({
-        actorUserId: ids.userB,
+        ...conversations.bindingFor(ids.userB),
         chatSessionId: "s-rl-yolo-b",
         allowedToolNames: null
       });
@@ -746,14 +762,14 @@ describe("AssistantToolGateway self-operation", () => {
       const gateway = new AssistantToolGateway({
         resolveActiveModules: async () => [exampleToolModule],
         repository,
-        runner,
+        ...conversations.gatewayDependencies,
         tokens,
         confirmations,
         notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
         confirmTimeoutMs: 30_000
       });
       const token = tokens.mint({
-        actorUserId: ids.userA,
+        ...conversations.bindingFor(ids.userA),
         chatSessionId: "s-rl-read",
         allowedToolNames: null
       });
@@ -783,6 +799,7 @@ describe("AssistantToolGateway self-operation", () => {
     // risk "read" instead (it never confirms now, so it is no longer a confirm_always tool).
     expect(confirmAlwaysTools.sort()).toEqual(
       [
+        "app.callAction",
         "chat.deleteClassifierShadowRecords",
         "email.sendReply",
         "memory.forget",

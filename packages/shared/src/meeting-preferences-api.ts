@@ -13,14 +13,12 @@ export interface MeetingCapturePreferences {
   readonly defaultCaptureMode: MeetingCaptureMode | null;
   readonly summarizeOnStop: boolean;
   readonly summaryTemplateId: GenerateMeetingOutputInput["templateId"];
-  readonly setupCompletedAt: string | null;
 }
 export interface UpdateMeetingCapturePreferences {
   readonly rememberedSource?: MeetingRememberedSource | null;
   readonly defaultCaptureMode?: MeetingCaptureMode | null;
   readonly summarizeOnStop?: boolean;
   readonly summaryTemplateId?: GenerateMeetingOutputInput["templateId"];
-  readonly completeSetup?: true;
 }
 const sourceSchema = {
   type: "object",
@@ -53,23 +51,15 @@ export const updateMeetingCapturePreferencesSchema = {
   additionalProperties: false,
   minProperties: 1,
   properties: {
-    ...preferenceProperties,
-    completeSetup: { const: true }
+    ...preferenceProperties
   }
 } as const;
 export const meetingCapturePreferencesSchema = {
   type: "object",
   additionalProperties: false,
-  required: [
-    "rememberedSource",
-    "defaultCaptureMode",
-    "summarizeOnStop",
-    "summaryTemplateId",
-    "setupCompletedAt"
-  ],
+  required: ["rememberedSource", "defaultCaptureMode", "summarizeOnStop", "summaryTemplateId"],
   properties: {
-    ...preferenceProperties,
-    setupCompletedAt: { type: "string", format: "date-time", nullable: true }
+    ...preferenceProperties
   }
 } as const;
 export function parseMeetingCaptureMode(value: unknown): MeetingCaptureMode | null {

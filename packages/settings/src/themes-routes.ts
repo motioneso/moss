@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import type { AccessContext, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 import {
   AESTHETIC_THEME_TOKEN_KEYS,
@@ -254,4 +254,16 @@ function sanitizeName(value: string): string {
   const name = value.trim().slice(0, 80);
   if (name.length === 0) throw new HttpError(400, "Theme name is required");
   return name;
+}
+
+/** The name of the actor's custom theme `id`, or null when there is none. */
+export async function readCustomThemeName(
+  preferencesRepository: ProfilePreferencesPort,
+  scopedDb: DataContextDb,
+  id: string
+): Promise<string | null> {
+  const custom = normalizeCustomThemes(
+    await preferencesRepository.get(scopedDb, CUSTOM_THEMES_KEY)
+  );
+  return custom.find((theme) => theme.id === id)?.name ?? null;
 }

@@ -198,6 +198,7 @@ function harness(options: HarnessOptions = {}): Harness {
 function request(overrides: Partial<GateRequest> = {}): GateRequest {
   return {
     actorUserId: "user-1",
+    threadId: "thread-1",
     message: "what is on my calendar today",
     hasAttachment: false,
     incognito: false,

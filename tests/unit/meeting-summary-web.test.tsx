@@ -144,8 +144,7 @@ beforeEach(() => {
     defaultCaptureMode: null,
     rememberedSource: null,
     summarizeOnStop: true,
-    summaryTemplateId: "general",
-    setupCompletedAt: null
+    summaryTemplateId: "general"
   });
   vi.mocked(api.getMeetingOutputs).mockResolvedValue({
     artifacts: [artifact],

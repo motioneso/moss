@@ -1,24 +1,13 @@
-# Recording pill concept
+# Superseded recording pill concept
 
-![Design mockup of the floating meeting pill in Recording, Paused, No audio and Reconnecting states](recording-pill-concept.png)
+The image in this folder is historical design work, not the approved implementation reference.
+Its state labels, elapsed timer, Close control and 368 × 56 geometry are superseded.
 
-Design reference for Part B R6/T12, following the approved spec at
-`687fd2bc45e48f6a8a75068302bc332ce3e86c06`. This is an illustrative mockup, not a screenshot or
-live-path proof. No recording was performed. Native layout targets 368 × 56 points; the image is
-enlarged for legibility rather than a pixel-perfect rendering of that geometry.
+Build from the [approved #3087 recording state](https://github.com/motioneso/moss/blob/5bca8dfb88cc6f436f599345fdf66e0150b89fac/docs/superpowers/specs/meetings-setup-wizard/03-recording.html):
+a 250 × 80 native floating capsule with a real captured-audio waveform, circular Pause and
+semantic-red Stop controls. No visible text, elapsed timer, meeting name or Close control.
+Silent or stale input makes the waveform flat. The paused control opens Resume in Moss and does
+not grant native Start authority. Preserve the menu-bar red dot, dragging and all-Spaces behavior.
 
-- The waveform is intended to read actual captured audio levels. Paused, missing and stale audio
-  stay flat; the drawn Recording waveform is illustrative only. Reconnecting can still show
-  current captured levels while its lease remains valid; the flat example depicts no current audio.
-- Pause and Stop are separate from the close control. The play icon while paused opens the existing
-  Resume in Moss action; it does not add native Start authority. Close hides the pill until the next
-  accepted Start and never stops capture.
-- The menu-bar recording dot persists for the session, including Pause, until Stop. The pill's
-  state indicator may be neutral or amber while its label explains the condition.
-- The native pill can be dragged and appears above other windows on every Space. No system
-  notification is part of this design.
-
-Generated with the built-in image tool. Prompt: a simple native macOS status-pill design board,
-warm off-white material with the existing forest/charcoal palette, four labeled states, elapsed
-timer, actual-level waveform intent, separate Pause/Stop/Hide controls, a persistent menu-bar dot,
-and explicit design-mockup/no-recording labels. The project-bound output is preserved here.
+The old image was generated as an illustrative mockup. It is not an installed-app screenshot or
+live capture proof, and no recording was performed to produce it.

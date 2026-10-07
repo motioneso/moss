@@ -43,7 +43,9 @@ describe("SettingsRepository external-module state (app.external_modules, #917)"
     expect(enabled).toMatchObject({
       id: "acme-widgets",
       status: "enabled",
-      packageHash: "sha256:p1"
+      packageHash: "sha256:p1",
+      manifestHash: "sha256:m1",
+      descriptorApprovedByUserId: ids.adminUser
     });
 
     await runner.withDataContext({ actorUserId: ids.adminUser, requestId: "ext-2" }, (db) =>
@@ -60,7 +62,8 @@ describe("SettingsRepository external-module state (app.external_modules, #917)"
     );
     expect(states.find((s) => s.id === "acme-widgets")).toMatchObject({
       status: "disabled",
-      disabledReason: "disabled by admin"
+      disabledReason: "disabled by admin",
+      descriptorApprovedByUserId: null
     });
 
     const audit = await runner.withDataContext(
@@ -98,7 +101,8 @@ describe("SettingsRepository external-module state (app.external_modules, #917)"
     );
     expect(states.find((s) => s.id === "drifter")).toMatchObject({
       status: "disabled",
-      disabledReason: "package changed since it was enabled"
+      disabledReason: "package changed since it was enabled",
+      descriptorApprovedByUserId: null
     });
 
     const audit = await runner.withDataContext(
@@ -188,6 +192,44 @@ describe("SettingsRepository external-module state (app.external_modules, #917)"
           .execute()
       )
     ).rejects.toThrow();
+  });
+
+  it("does not infer descriptor approval from legacy enabled_by or a personal toggle", async () => {
+    await runner.withDataContext(
+      { actorUserId: ids.adminUser, requestId: "legacy-insert" },
+      async (db) => {
+        await db.db
+          .insertInto("app.external_modules")
+          .values({
+            id: "legacy-install",
+            status: "enabled",
+            manifest_hash: "sha256:m",
+            package_hash: "sha256:p",
+            disabled_reason: null,
+            enabled_by: ids.adminUser,
+            enabled_at: new Date(),
+            owner_user_id: null,
+            created_at: new Date(),
+            updated_at: new Date()
+          })
+          .execute();
+      }
+    );
+    await runner.withDataContext(
+      { actorUserId: ids.userA, requestId: "personal-toggle" },
+      async (db) => {
+        await repo.setUserModuleDisabled(db, {
+          moduleId: "legacy-install",
+          disabled: false,
+          actorUserId: ids.userA,
+          requestId: "personal-toggle"
+        });
+        const states = await repo.listExternalModuleStates(db);
+        expect(
+          states.find((row) => row.id === "legacy-install")?.descriptorApprovedByUserId
+        ).toBeNull();
+      }
+    );
   });
 
   it("rejects an enabled row that carries an owner (#1753)", async () => {

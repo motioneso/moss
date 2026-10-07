@@ -23,7 +23,8 @@ import {
 } from "./capture-presentation.js";
 import { isMeetingAccessDenied, meetingKeys } from "./client.js";
 import { refreshCaptureStatus } from "./capture-status.js";
-import { isRecordingNoticeAcknowledged, refreshRecordingNotice } from "./recording-notice.js";
+import { meetingLinkKeys } from "./meeting-link-state.js";
+import { useSessionBoundary } from "./session-draft.js";
 
 type CaptureRequest =
   | { readonly kind: "start"; readonly input: MeetingCaptureStartInput }
@@ -57,7 +58,10 @@ export function newCaptureSession(): CaptureSession {
   };
 }
 const runs = new WeakMap<QueryClient, Map<string, AbortController>>();
-const stopping = new WeakMap<QueryClient, Map<string, Promise<void>>>();
+const stopping = new WeakMap<
+  QueryClient,
+  Map<string, { currentSession: () => boolean; promise: Promise<void> }>
+>();
 function pause(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(resolve, ms);
@@ -112,16 +116,27 @@ function acceptCapture(
   });
   return true;
 }
-async function send(client: QueryClient, id: string, request: CaptureRequest) {
+function captureAccessDenied(client: QueryClient, id: string) {
+  return [
+    meetingKeys.record(id),
+    captureKeys.status(id),
+    captureKeys.devices,
+    meetingLinkKeys.sessions,
+    meetingLinkKeys.capabilities
+  ].some((key) => isMeetingAccessDenied(client.getQueryState(key)?.error));
+}
+async function send(
+  client: QueryClient,
+  id: string,
+  request: CaptureRequest,
+  currentSession: () => boolean
+) {
   const key = captureKeys.session(id);
   const identity = client.getQueryCache().find({ queryKey: key, exact: true });
   const authorized = () =>
+    currentSession() &&
     identity === client.getQueryCache().find({ queryKey: key, exact: true }) &&
-    !isMeetingAccessDenied(client.getQueryState(meetingKeys.record(id))?.error) &&
-    !isMeetingAccessDenied(client.getQueryState(captureKeys.status(id))?.error);
-  const needsNotice =
-    request.kind === "start" || (request.kind === "control" && request.input.command === "record");
-  const noticeAccepted = () => !needsNotice || isRecordingNoticeAcknowledged(client);
+    !captureAccessDenied(client, id);
   const pending = client.getQueryData<CaptureSession>(key)?.operation;
   const previousGrantId =
     client.getQueryData<MeetingCaptureBrowserStatus>(captureKeys.status(id))?.capture?.grantId ??
@@ -131,7 +146,6 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
     (request.kind === "control" && request.input.command !== "record");
   if (
     !authorized() ||
-    !noticeAccepted() ||
     (pending?.request.kind === request.kind &&
       pending.request.input.requestKey === request.input.requestKey &&
       (pending.retryAt ?? 0) > Date.now()) ||
@@ -176,13 +190,6 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
   // A control response must never sit behind a long status read.
   await client.cancelQueries({ queryKey: captureKeys.status(id), exact: true });
   for (let attempt = 0; attempt < 3 && current(); attempt += 1) {
-    if (!noticeAccepted()) {
-      update({
-        operation: { request, phase: "retry" },
-        error: "Acknowledge the recording notice before retrying. Stop remains available."
-      });
-      return;
-    }
     try {
       const result =
         request.kind === "start"
@@ -249,9 +256,6 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
           /* Fall through to the visible recovery state after the bounded reconciliation. */
         }
       }
-      const noticeRequired =
-        error instanceof ApiError && error.code === "meeting_capture_notice_required";
-      if (noticeRequired) refreshRecordingNotice(client);
       const processingUnavailable =
         error instanceof ApiError && error.code === "meeting_capture_processing_unavailable";
       const recorderBusy = error instanceof ApiError && error.code === "meeting_capture_busy";
@@ -278,17 +282,15 @@ async function send(client: QueryClient, id: string, request: CaptureRequest) {
               phase: "retry",
               retryAt: error instanceof CaptureRequestError ? error.retryAt : undefined
             },
-        error: noticeRequired
-          ? "Review the current recording notice before trying again. Pause and Stop remain available."
-          : processingUnavailable
-            ? "Transcription unavailable. Check Settings → AI providers, then try again."
-            : error instanceof CaptureRequestError && error.status === 429
-              ? "The server asked us to wait before retrying. Trail Marker’s local Pause and Stop remain available."
-              : recorderBusy
-                ? "This Mac is still recording or finishing the previous meeting. Stop it and wait for the transcript to finish, then try Start again."
-                : definite
-                  ? "The connection or sources changed. Check the source summary and try again."
-                  : "The command is unconfirmed. Check Trail Marker’s indicator. Stop remains available; retry uses the same request."
+        error: processingUnavailable
+          ? "Transcription unavailable. Check Settings → AI providers, then try again."
+          : error instanceof CaptureRequestError && error.status === 429
+            ? "The server asked us to wait before retrying. Trail Marker’s local Pause and Stop remain available."
+            : recorderBusy
+              ? "This Mac is still recording or finishing the previous meeting. Stop it and wait for the transcript to finish, then try Start again."
+              : definite
+                ? "The connection or audio source changed. Check Trail Marker and try again."
+                : "The command is unconfirmed. Check Trail Marker’s indicator. Stop remains available; retry uses the same request."
       });
       if (
         definite &&
@@ -306,15 +308,16 @@ export async function startMeetingCapture(
   client: QueryClient,
   id: string,
   title: string,
-  input: MeetingCaptureStartInput
+  input: MeetingCaptureStartInput,
+  currentSession: () => boolean
 ) {
-  if (!isRecordingNoticeAcknowledged(client)) return false;
+  if (!currentSession() || captureAccessDenied(client, id)) return false;
   client.setQueryData<CaptureSession>(
     captureKeys.session(id),
     (current) => current ?? newCaptureSession()
   );
   client.setQueryData<ActiveCapture>(captureKeys.active, { meetingId: id, title });
-  return send(client, id, { kind: "start", input });
+  return send(client, id, { kind: "start", input }, currentSession);
 }
 export function effectiveCaptureChoice(
   session: CaptureSession,
@@ -336,11 +339,12 @@ export function useCaptureSession(id: string) {
     gcTime: Infinity
   });
   const identity = client.getQueryCache().find({ queryKey: key, exact: true });
+  const currentSession = useSessionBoundary(key);
   const retryAt = query.data.operation?.retryAt;
   useEffect(() => {
     if (!retryAt || retryAt <= Date.now()) return;
     const timer = setTimeout(() => {
-      if (identity !== client.getQueryCache().find({ queryKey: key, exact: true })) return;
+      if (!currentSession()) return;
       client.setQueryData<CaptureSession>(key, (current) =>
         current?.operation?.retryAt === retryAt
           ? { ...current, operation: { ...current.operation, retryAt: undefined } }
@@ -350,13 +354,14 @@ export function useCaptureSession(id: string) {
     return () => clearTimeout(timer);
   }, [client, id, identity, retryAt]);
   function update(change: (current: CaptureSession) => CaptureSession) {
-    if (identity === client.getQueryCache().find({ queryKey: key, exact: true }))
+    if (currentSession())
       client.setQueryData<CaptureSession>(key, (current) =>
         current ? change(current) : undefined
       );
   }
   return {
     state: query.data,
+    currentSession,
     bindCapture: (capture: MeetingCaptureState) => {
       const current = client.getQueryData<CaptureSession>(key);
       if (current?.grantId === capture.grantId && current.choiceGeneration === capture.generation)
@@ -380,19 +385,28 @@ export function useCaptureSession(id: string) {
         };
       }),
     control: (input: Omit<MeetingCaptureControlInput, "requestKey">) =>
-      send(client, id, { kind: "control", input: { ...input, requestKey: randomUuid() } }),
+      currentSession()
+        ? send(
+            client,
+            id,
+            { kind: "control", input: { ...input, requestKey: randomUuid() } },
+            currentSession
+          )
+        : Promise.resolve(false),
     stop: () => {
+      if (!currentSession()) return Promise.resolve();
       let registry = stopping.get(client);
       if (!registry) {
         registry = new Map();
         stopping.set(client, registry);
       }
       const pendingStop = registry.get(id);
-      if (pendingStop) return pendingStop;
+      if (pendingStop?.currentSession()) return pendingStop.promise;
       const stopped = (async () => {
         // Stop supersedes an uncertain Start/Pause and reconciles the latest generation first.
         runs.get(client)?.get(id)?.abort();
         await client.cancelQueries({ queryKey: captureKeys.status(id), exact: true });
+        if (!currentSession()) return;
         const state = client.getQueryData<CaptureSession>(key);
         let capture = client.getQueryData<MeetingCaptureBrowserStatus>(
           captureKeys.status(id)
@@ -404,13 +418,18 @@ export function useCaptureSession(id: string) {
               ? state?.startRequest
               : null;
         if (start) {
-          if (identity !== client.getQueryCache().find({ queryKey: key, exact: true })) return;
-          await send(client, id, {
-            kind: "cancel-start",
-            input: {
-              requestKey: start.requestKey
-            }
-          });
+          if (!currentSession()) return;
+          await send(
+            client,
+            id,
+            {
+              kind: "cancel-start",
+              input: {
+                requestKey: start.requestKey
+              }
+            },
+            currentSession
+          );
           return;
         }
         if (!capture) {
@@ -420,17 +439,22 @@ export function useCaptureSession(id: string) {
             /* An unresolved Stop stays visible; it never creates a new Start. */
           }
         }
-        if (identity !== client.getQueryCache().find({ queryKey: key, exact: true })) return;
+        if (!currentSession()) return;
         if (capture && capture.desired !== "stopped" && capture.desired !== "revoked")
-          await send(client, id, {
-            kind: "control",
-            input: {
-              grantId: capture.grantId,
-              command: "stop",
-              expectedGeneration: capture.generation,
-              requestKey: randomUuid()
-            }
-          });
+          await send(
+            client,
+            id,
+            {
+              kind: "control",
+              input: {
+                grantId: capture.grantId,
+                command: "stop",
+                expectedGeneration: capture.generation,
+                requestKey: randomUuid()
+              }
+            },
+            currentSession
+          );
         else
           update((current) => ({
             ...current,
@@ -440,15 +464,16 @@ export function useCaptureSession(id: string) {
               : "No recording was confirmed. Check Trail Marker’s local Stop before closing it."
           }));
       })();
-      registry.set(id, stopped);
+      registry.set(id, { currentSession, promise: stopped });
       void stopped.finally(() => {
-        if (registry!.get(id) === stopped) registry!.delete(id);
+        if (registry!.get(id)?.promise === stopped) registry!.delete(id);
       });
       return stopped;
     },
     retry: () => {
+      if (!currentSession()) return;
       const request = client.getQueryData<CaptureSession>(key)?.operation?.request;
-      if (request) void send(client, id, request);
+      if (request) void send(client, id, request, currentSession);
     }
   };
 }

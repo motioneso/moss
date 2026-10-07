@@ -5,90 +5,19 @@
   width: 100%;
   min-width: 0;
 }
-
-.meeting-settings-section,
-.meeting-settings-section__body,
-.meeting-settings-stack,
-.meeting-settings .meetings-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.meeting-settings-section__body {
+.meeting-settings-macs {
+  display: grid;
   gap: var(--space-5);
 }
-
-.meeting-settings-actions,
-.meeting-settings .meetings-actions {
+.meeting-settings-mac {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-3);
+  padding-bottom: var(--space-5);
 }
-
-.meeting-settings-fields {
-  display: flex;
-  flex-direction: column;
+.meeting-settings-audio {
+  display: grid;
   gap: var(--space-3);
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.meeting-settings-fields legend {
-  margin-bottom: var(--space-3);
-}
-
-.meeting-settings-source-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-5);
-}
-
-@media (max-width: 700px) {
-  .meeting-settings-source-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.meeting-settings-macs .jds-index {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.meeting-settings-macs .jds-index__row {
-  row-gap: var(--space-3);
-}
-
-.meeting-settings-macs .jds-index__excerpt {
-  grid-column: 1;
-  grid-row: 2;
-  display: block;
-  overflow: visible;
-}
-
-.meeting-settings-macs .jds-index__meta {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: start;
-}
-
-.meeting-settings-mac-status {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-@media (max-width: 560px) {
-  .meeting-settings-macs .jds-index {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .meeting-settings-macs .jds-index__meta {
-    grid-column: 1;
-    grid-row: auto;
-  }
+  max-width: 420px;
 }

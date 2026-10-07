@@ -39,6 +39,7 @@
   padding-block: var(--space-5);
   min-width: 0;
 }
+.jds-tabs__list[hidden],
 .jds-tabs__panel[hidden] {
   display: none;
 }
@@ -100,4 +101,8 @@
   .jds-radio-cards {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.jds-tabs__list[hidden] ~ .jds-tabs__panel {
+  padding-block: 0;
 }

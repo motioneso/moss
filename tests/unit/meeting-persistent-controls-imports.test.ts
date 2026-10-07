@@ -33,7 +33,6 @@ describe("Meetings persistent controls entry", () => {
       "packages/meetings/src/web/capture-controls.css"
     ]);
     expect(imports).not.toContain("packages/meetings/src/web/capture-controls.tsx");
-    expect(imports).not.toContain("packages/meetings/src/web/capture-notice.tsx");
     expect(imports).toContain("packages/meetings/src/web/transcript-time.ts");
     // Sanity: the old full entry really does reach the screen and broad stylesheet.
     const fullEntryImports = await runtimeImports("index.tsx");

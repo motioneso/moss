@@ -704,6 +704,10 @@
   word-break: break-word;
 }
 
+.action-request-preview__value--multiline {
+  white-space: pre-wrap;
+}
+
 .action-request-preview__body {
   margin: 0;
   max-height: 220px;

@@ -521,6 +521,7 @@ describe("classifier gate runner — token lifecycle", () => {
     await expect(
       runner.evaluate({
         actorUserId: "user-1",
+        threadId: "thread-1",
         message: "hi",
         hasAttachment: false,
         incognito: false,
@@ -551,6 +552,7 @@ describe("classifier gate runner — token lifecycle", () => {
 
     const outcome = await runner.evaluate({
       actorUserId: "user-1",
+      threadId: "thread-1",
       message: "hi",
       hasAttachment: false,
       incognito: false,

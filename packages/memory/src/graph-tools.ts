@@ -1,6 +1,7 @@
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import { RuntimeConfigResolver } from "@moss/settings";
-import type { ToolExecute, ToolResult } from "@moss/module-sdk";
+import { HttpError, type ToolExecute, type ToolResult } from "@moss/module-sdk";
+import type { MemoryForgetToolService } from "./forget-service.js";
 
 import {
   createEmbeddingProvider,
@@ -64,15 +65,17 @@ export const memoryRememberExecute: ToolExecute = async (
 };
 
 export const memoryForgetExecute: ToolExecute = async (
-  scopedDb,
+  _scopedDb,
   input,
-  ctx
+  ctx,
+  services
 ): Promise<ToolResult> => {
-  assertDataContextDb(scopedDb);
   const factId = requiredString(input.factId);
-  const result = await (
-    await createService(scopedDb)
-  ).forget(scopedDb, ctx.actorUserId, { factId });
+  const service = services?.memoryForget as MemoryForgetToolService | undefined;
+  if (!service || typeof service.forget !== "function") {
+    throw new HttpError(503, "Memory deletion is not ready. Start a new chat and try again.");
+  }
+  const result = await service.forget(factId, ctx);
   return {
     data: { ...result }
   };

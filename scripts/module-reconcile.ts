@@ -337,22 +337,27 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
         warn(row.id, "accept-staged", new Error(decision.reason));
         continue;
       }
-      await client.query(
+      const accepted = await client.query(
         `UPDATE app.external_modules
             SET status = 'enabled',
                 manifest_hash = $3,
                 package_hash = $2,
                 disabled_reason = NULL,
+                descriptor_approved_by = CASE
+                  WHEN staged_source = 'admin-download' THEN staged_by ELSE NULL END,
+                enabled_by = CASE
+                  WHEN staged_source = 'admin-download' THEN staged_by ELSE NULL END,
+                enabled_at = now(),
                 staged_version = NULL,
                 staged_package_hash = NULL,
                 staged_at = NULL,
                 staged_by = NULL,
                 staged_source = NULL,
                 updated_at = now()
-          WHERE id = $1`,
+          WHERE id = $1 AND staged_package_hash = $2`,
         [row.id, row.staged_package_hash, discovery!.manifestHash]
       );
-      report.accepted.push(row.id);
+      if (accepted.rowCount === 1) report.accepted.push(row.id);
     }
 
     // Phase 6 — DB install for every discovered module (idempotent: installModule
@@ -388,6 +393,7 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
                 SET last_install_error = $2,
                     status = 'disabled',
                     disabled_reason = 'database install failed',
+                    descriptor_approved_by = NULL,
                     updated_at = now()
               WHERE id = $1`,
             [discovery.id, message]
@@ -410,7 +416,8 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
       if (discovery && discovery.packageHash === row.package_hash) continue;
       await client.query(
         `UPDATE app.external_modules
-            SET status = 'disabled', disabled_reason = $2, updated_at = now()
+            SET status = 'disabled', disabled_reason = $2,
+                descriptor_approved_by = NULL, updated_at = now()
           WHERE id = $1`,
         [row.id, DRIFT_DISABLED_REASON]
       );

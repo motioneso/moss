@@ -163,16 +163,15 @@ test("reviewed summary versions create independent Tasks and private vault copie
     expect((await page.request.put(pinPath, { data: { modelId } })).status()).toBe(200);
     const title = `Synthetic Orchid summary ${randomUUID()}`;
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await page.getByRole("button", { name: "New meeting", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Set up Meetings", exact: true })).toBeVisible();
-    const created = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/meetings/records") && response.request().method() === "POST"
-    );
-    await page.getByRole("button", { name: "Continue with notes", exact: true }).click();
-    const createdResponse = await created;
+    // Notes-only output review does not require a linked Mac. Create the fixture through
+    // the real API, then open it from the unlinked account's preserved history list.
+    const createdResponse = await page.request.post("/api/meetings/records", {
+      data: { requestKey: randomUUID(), title: "Untitled meeting" }
+    });
     expect(createdResponse.status()).toBe(201);
     meetingId = (await createdResponse.json()).meeting.id as string;
+    await page.reload();
+    await meetingRow(page, "Untitled meeting").click();
     await page.getByRole("button", { name: "Edit meeting title", exact: true }).click();
     await page.getByLabel("Meeting title", { exact: true }).fill(title);
     const renamed = page.waitForResponse(
@@ -612,7 +611,6 @@ test("reviewed summary versions create independent Tasks and private vault copie
           "export_receipts",
           "export_requests",
           "stop_summaries",
-          "recording_notices",
           "capture_grants",
           "capture_connections",
           "capture_start_cancellations",
@@ -621,7 +619,6 @@ test("reviewed summary versions create independent Tasks and private vault copie
       );
       // This notes-only UAT does not create recording connections, cancellations, grants or Start history.
       expect(exported.stop_summaries).toEqual([]);
-      expect(exported.recording_notices).toEqual([]);
       expect(exported.capture_grants).toEqual([]);
       expect(exported.capture_connections).toEqual([]);
       expect(exported.capture_start_cancellations).toEqual([]);
@@ -630,7 +627,6 @@ test("reviewed summary versions create independent Tasks and private vault copie
         if (
           ![
             "stop_summaries",
-            "recording_notices",
             "capture_grants",
             "capture_connections",
             "capture_start_cancellations",
