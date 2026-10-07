@@ -108,6 +108,12 @@ export const chatModuleManifest = {
   ],
   features: [
     {
+      id: "chat.time_context",
+      description:
+        "Chat tool results include compact account-local timestamp references for normal full pages. Larger results report omissions; uncovered times keep conversion guidance. Original timestamps stay unchanged.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.acp_answers",
       description:
         "General chat answers through the agent protocol. Selected-meeting questions use the configured API-key chat model without tools.",

@@ -1,6 +1,7 @@
 import type { JsonSchema, ToolResult } from "@moss/module-sdk";
 import { renderToolResult } from "@moss/module-sdk";
 
+import { renderToolTimestampContext } from "./tool-timestamp-context.js";
 import type { GatewayToolResponse } from "./types.js";
 
 const MAX_RENDERED_TOOL_RESULT_CHARS = 16_000;
@@ -80,11 +81,19 @@ export function sanitizeAssistantToolResult(
 export function renderAndCap(
   schema: JsonSchema | undefined,
   result: ToolResult,
-  toolName?: string
+  toolName?: string,
+  localTimezone?: string
 ): Record<string, unknown> {
   const sanitized = sanitizeAssistantToolResult(schema, result);
   const text = capRenderedToolResult(renderToolResult(sanitized));
-  return { text: toolName ? wrapWithTrustBoundary(toolName, text) : text };
+  const rendered = toolName ? wrapWithTrustBoundary(toolName, text) : text;
+  const timestampContext = renderToolTimestampContext(
+    sanitized.data,
+    text,
+    localTimezone,
+    (reference) => wrapWithTrustBoundary("timestamp-reference", reference)
+  );
+  return { text: rendered, ...(timestampContext ? { timestampContext } : {}) };
 }
 
 /** @deprecated Use {@link renderAndCap} instead. */
@@ -236,5 +245,8 @@ export function liveStreamResult(
   if (tool.streamsStructuredResult === true && result.structuredData !== undefined) {
     return result.structuredData;
   }
-  return result.data;
+  if (!("timestampContext" in result.data)) return result.data;
+  const display = { ...result.data };
+  delete display.timestampContext;
+  return display;
 }

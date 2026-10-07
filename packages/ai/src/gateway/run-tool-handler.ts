@@ -86,7 +86,8 @@ export async function runToolHandler(
           // Scope trust-boundary wrapping to tools with untrusted external content only.
           // Internal tools whose output Jarvis controls must not be wrapped (PR #435 sets
           // externalContent: true on web.search + web.read; all others leave it unset).
-          found.tool.externalContent ? found.tool.name : undefined
+          found.tool.externalContent ? found.tool.name : undefined,
+          ctx.localTimezone
         ),
         structuredData: sanitized.data,
         // #1133 — media (image bytes) bypasses renderAndCap on purpose: sanitize's schema

@@ -414,6 +414,11 @@ export function gatewayResponseToMcp(res: GatewayToolResponse) {
     const content: McpContentBlock[] = res.media
       ? [{ type: "image", data: res.media.base64, mimeType: res.media.mimeType }, textBlock]
       : [textBlock];
+    // Derived account-local references are model-only. Preserve the original text and
+    // its trust envelope, media, schema projection and structured payload unchanged.
+    if (typeof res.data.timestampContext === "string") {
+      content.push({ type: "text", text: res.data.timestampContext });
+    }
     return { content, isError: false };
   }
   if ("denied" in res) {
