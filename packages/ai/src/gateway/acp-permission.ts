@@ -37,6 +37,7 @@ import {
   runAutomaticAction
 } from "./content-admission.js";
 import { actionResultRecord } from "./action-result-record.js";
+import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
 import { APPROVAL_REFUSED_REASON, approvalRefusalReason } from "./native-tool-guard.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type { AdmissionPath, ConversationProvenancePort, SessionNotifier } from "./types.js";
@@ -260,6 +261,7 @@ export async function requestAcpBuiltInPermission(
 
   const startedAt = Date.now();
   const family = acpRequestFamily(builtIn);
+  const outcomeTitle = nativePolicyOutcomeTitle(builtIn.toolName);
   const ctx: ToolContext = {
     actorUserId,
     requestId,
@@ -348,6 +350,7 @@ export async function requestAcpBuiltInPermission(
             toolName: builtIn.toolName ?? "(unnamed)",
             outcome: "denied",
             decidedBy: "policy",
+            ...(outcomeTitle ? { summary: outcomeTitle } : {}),
             holdDurationMs: null,
             reason: CONTEXT_ADMISSION_UNAVAILABLE
           })
@@ -414,6 +417,9 @@ export async function requestAcpBuiltInPermission(
                 actionRequestId: action.id,
                 toolName,
                 outcome: "denied",
+                ...(outcome === "admission_failed" && outcomeTitle
+                  ? { summary: outcomeTitle }
+                  : {}),
                 decidedBy:
                   outcome === "admission_failed"
                     ? "policy"
@@ -495,6 +501,7 @@ export async function requestAcpBuiltInPermission(
         toolName: builtIn.toolName ?? "(unnamed)",
         outcome: "denied",
         decidedBy: "policy",
+        ...(outcomeTitle ? { summary: outcomeTitle } : {}),
         holdDurationMs: null,
         ...(result.reason ? { reason: result.reason } : {})
       })

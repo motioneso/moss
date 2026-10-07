@@ -5,6 +5,7 @@ import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AssistantToolGatewayDependencies } from "./gateway.js";
 import { actionHoldDurationMs } from "./action-result-record.js";
 import { isConversationTainted } from "./conversation-policy.js";
+import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
 import {
   CONTEXT_ADMISSION_UNAVAILABLE,
   recordContextAdmission,
@@ -33,6 +34,7 @@ export async function requestNativeToolPermission(
 ): Promise<NativeToolPermissionResponse> {
   const { actorUserId, chatSessionId, threadId } = deps.tokens.verify(token);
   const toolName = safeNativeToolName(request.toolName);
+  const outcomeTitle = nativePolicyOutcomeTitle(toolName);
   if (toolName.startsWith("mcp__jarvis__") && toolName.length > "mcp__jarvis__".length) {
     return { decision: "allow", reason: "First-party Moss MCP transport." };
   }
@@ -102,6 +104,7 @@ export async function requestNativeToolPermission(
           toolName,
           outcome: "denied",
           decidedBy: "policy",
+          ...(outcomeTitle ? { summary: outcomeTitle } : {}),
           holdDurationMs: null,
           reason: CONTEXT_ADMISSION_UNAVAILABLE
         });
@@ -165,6 +168,7 @@ export async function requestNativeToolPermission(
         toolName,
         outcome: "denied",
         decidedBy: "policy",
+        ...(outcomeTitle ? { summary: outcomeTitle } : {}),
         holdDurationMs,
         reason: CONTEXT_ADMISSION_UNAVAILABLE
       });

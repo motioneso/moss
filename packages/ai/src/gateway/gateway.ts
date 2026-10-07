@@ -228,7 +228,7 @@ export class AssistantToolGateway {
     }
     if (route.kind === "yolo-run") {
       if (!this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
-        return this.denyRateLimited(found, ctx, "yolo");
+        return this.denyRateLimited(found, input, ctx, "yolo");
       }
       const dispatched = await this.runAutomatically(found, input, ctx);
       if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
@@ -315,7 +315,7 @@ export class AssistantToolGateway {
     }
     if (limited && !this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
       if (route.kind === "yolo-run") {
-        this.denyRateLimited(found, ctx, "yolo");
+        this.denyRateLimited(found, input, ctx, "yolo");
       } else {
         void recordGatewayAudit(
           this.deps,
@@ -506,14 +506,17 @@ export class AssistantToolGateway {
 
   private denyRateLimited(
     found: ExecutableTool,
+    input: Record<string, unknown>,
     ctx: ToolContext,
     approvalMode: "yolo"
   ): GatewayToolResponse {
+    const summary = captureActionOutcomeTitle(found.tool, input, ctx) ?? "Perform action";
     emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
       actionRequestId: ctx.requestId,
       toolName: found.dto.name,
       outcome: "denied",
       decidedBy: "policy",
+      summary,
       holdDurationMs: null,
       reason: "Rate limit exceeded for unattended runs of this tool."
     });

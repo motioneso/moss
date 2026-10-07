@@ -26,6 +26,7 @@ export function emitNativePermissionResult(
     readonly toolName: string;
     readonly outcome: "allowed" | "denied";
     readonly decidedBy: "person" | "timeout" | "cancelled" | "policy";
+    readonly summary?: string;
     readonly holdDurationMs: number | null;
     readonly reason?: string;
   }

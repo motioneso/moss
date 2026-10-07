@@ -161,6 +161,9 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   const createFailures = chatDialog.getByRole("status").filter({
     hasText: "Create note didn’t go through · The app reported a problem."
   });
+  const modelGuardReplies = chatDialog
+    .locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")
+    .filter({ hasText: /path is not within the linked notes source/i });
 
   // --- (a) legitimate in-root create / edit / delete succeed, and create syncs ------------
   const legitPath = `uat/notes-path-recheck-${stamp}.md`;
@@ -236,8 +239,10 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
     `mkdir -p /tmp/uat-1512-b-target-${stamp} && ln -sfn /tmp/uat-1512-b-target-${stamp} ${NOTES_ROOT}/D-${stamp}`
   );
 
-  // The screen reports a fixed plain failure; the audit and outside-file check prove refusal.
+  // The quiet status reports failure; the model's own reply must also explain the guard.
+  // Count matching replies before the turn so earlier assistant text cannot satisfy the check.
   const ancestorFailureCount = await createFailures.count();
+  const ancestorReplyCount = await modelGuardReplies.count();
   const ancestorAttemptNotBefore = Date.now();
   await composer.fill(
     `Use the notes.create tool with path set to exactly "D-${stamp}/x.md" and content set to ` +
@@ -247,6 +252,7 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   await expectToolOutcome(projectName, "notes.create", ancestorAttemptNotBefore, "failed");
   await expect(createFailures).toHaveCount(ancestorFailureCount + 1, { timeout: 60_000 });
   await expect(createFailures.nth(ancestorFailureCount)).toBeVisible();
+  await expect(modelGuardReplies.nth(ancestorReplyCount)).toBeVisible({ timeout: 60_000 });
   execInVaultAsOwner(projectName, `test ! -e /tmp/uat-1512-b-target-${stamp}/x.md`);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
   await expect(chatDialog.locator(".action-request-card")).toHaveCount(0);
@@ -274,6 +280,7 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   );
 
   const leafFailureCount = await createFailures.count();
+  const leafReplyCount = await modelGuardReplies.count();
   const leafAttemptNotBefore = Date.now();
   await composer.fill(
     `Use the notes.create tool with path set to exactly "b-${stamp}.md" and content set to ` +
@@ -283,10 +290,12 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   await expectToolOutcome(projectName, "notes.create", leafAttemptNotBefore, "failed");
   await expect(createFailures).toHaveCount(leafFailureCount + 1, { timeout: 60_000 });
   await expect(createFailures.nth(leafFailureCount)).toBeVisible();
+  await expect(modelGuardReplies.nth(leafReplyCount)).toBeVisible({ timeout: 60_000 });
   execInVaultAsOwner(projectName, `test ! -e /tmp/evil-${stamp}.md`);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
-  // The visible thread must not expose host filesystem paths or the raw technical error.
+  // Host paths stay out of the thread. The fixed guard explanation belongs in the model's
+  // reply, while the quiet outcome keeps its generic failure wording.
   const threadText = await chatDialog.innerText();
   expect(threadText).not.toMatch(/\/tmp\/|\/data\/vaults/);
   const outcomeText = (await chatDialog.getByRole("status").allTextContents()).join("\n");

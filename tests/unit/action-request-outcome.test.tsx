@@ -394,6 +394,33 @@ describe("quiet resolved approvals", () => {
     expect(host.textContent).not.toContain("Bash");
   });
 
+  it.each([false, true])(
+    "settles a policy refusal after a pending card (local approval %s)",
+    async (clicked) => {
+      vi.mocked(resolveActionRequest).mockResolvedValue(undefined);
+      mount([...steps, pending]);
+      if (clicked) {
+        act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+        await vi.waitFor(() => expectQuiet("Approved", 2, null));
+      }
+      const result: TranscriptRecord = {
+        kind: "action_result",
+        text: "Denied: app.callAction",
+        actionRequestId: "request-1",
+        outcome: "denied",
+        decidedBy: "policy",
+        summary: "Change files",
+        reason: "raw /api/private {body: secret}"
+      };
+      mount([...steps, pending, result]);
+      expectQuiet("Not allowed: Change files", 2, null);
+      expect(host.textContent).not.toMatch(/Approved|secret|raw \/api/);
+      mount([...steps, { ...pending, actionRequestId: "fresh-request" }, result]);
+      expect(host.querySelector(".action-request-card")).not.toBeNull();
+      expect(host.querySelector('[role="status"]')?.textContent).toBe("Not allowed: Change files");
+    }
+  );
+
   it.each([
     ["executed", "Done: Rename your meeting"],
     ["error", "Rename your meeting didn’t go through · The app reported a problem."]
@@ -424,7 +451,8 @@ describe("quiet resolved approvals", () => {
     ["timeout", "denied"],
     ["cancelled", "denied"],
     ["policy", "executed"],
-    ["policy", "error"]
+    ["policy", "error"],
+    ["policy", "denied"]
   ] as const)("keeps the %s/%s outcome before Moss’s reply after reload", (decidedBy, outcome) => {
     const result: TranscriptRecord = {
       kind: "action_result",

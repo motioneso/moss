@@ -133,8 +133,8 @@ export const chatModuleManifest = {
     {
       id: "chat.automatic_action_outcomes",
       description:
-        "Automatic changes show Done with a plain server title, or a short failure line. No approval is implied. " +
-        "Permission grants are not completion. Outcome lines remain before the reply after reload.",
+        "Automatic writes show Done or a short failure with a safe action title. Refusals name the action. " +
+        "No approval is implied; grants are not completion. Lines stay before the reply after reload.",
       featureFlagId: "chat.module"
     },
     {

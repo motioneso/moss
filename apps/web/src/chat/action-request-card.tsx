@@ -42,11 +42,13 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
     }
   });
 
+  const policyRefusal = props.decidedBy === "policy" && props.outcome === "denied";
+
   useEffect(() => {
-    if (mutation.isSuccess || mutation.isError || actionApprovalOutcome(props)) {
+    if (mutation.isSuccess || mutation.isError || actionApprovalOutcome(props) || policyRefusal) {
       rootRef.current?.focus();
     }
-  }, [mutation.isSuccess, mutation.isError, props.outcome, props.decidedBy]);
+  }, [mutation.isSuccess, mutation.isError, props.outcome, props.decidedBy, policyRefusal]);
 
   useEffect(() => {
     if (!props.focusRequested) return;
@@ -74,6 +76,7 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
     : null;
 
   const outcome =
+    (policyRefusal ? actionOutcomeText({ ...props, summary: props.outcomeTitle }) : null) ??
     actionApprovalOutcome(props) ??
     (mutation.isSuccess
       ? mutation.data === "rejected"

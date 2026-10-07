@@ -116,7 +116,10 @@ export function groupRecords(
     records
       .filter(
         (record) =>
-          record.kind === "action_result" && record.actionRequestId && actionApprovalOutcome(record)
+          record.kind === "action_result" &&
+          record.actionRequestId &&
+          (actionApprovalOutcome(record) ||
+            (record.decidedBy === "policy" && record.outcome === "denied"))
       )
       .map((record) => [record.actionRequestId, record])
   );
