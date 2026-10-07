@@ -8,7 +8,8 @@ import { afterEach, expect, it, vi } from "vitest";
 // `beforeunload` listener once privateMode goes true, which only this file's tests drive.
 vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 
-import { DEFAULT_CHAT_SURFACE, meetingChatSurface } from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE, meetingChatSurface, type TranscriptRecord } from "@moss/shared";
+import { Thread } from "@moss/ui";
 import type * as ApiClientModule from "../../apps/web/src/api/client.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
@@ -93,7 +94,11 @@ afterEach(async () => {
   client?.clear();
   vi.clearAllMocks();
 });
-async function mount(gated = false, initialSelection = selection) {
+async function mount(
+  gated = false,
+  initialSelection = selection,
+  records: readonly TranscriptRecord[] = []
+) {
   vi.stubGlobal("fetch", fetchMock);
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
@@ -106,7 +111,7 @@ async function mount(gated = false, initialSelection = selection) {
             <ChatDrawer
               open
               onClose={() => {}}
-              records={[]}
+              records={records}
               clearRecords={() => {}}
               streamErrorCount={0}
               isFounder={false}
@@ -341,11 +346,12 @@ it.each([401, 403, 404])(
     expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable");
   }
 );
-it.each(["access", "history"])(
+it.each(["access", "title", "history"])(
   "offers retry for an initial %s failure without claiming access was denied",
   async (source) => {
     fetchMock.mockImplementation(async (url: string) => {
-      if (source === "access") throw new TypeError("Failed to fetch");
+      if (source === "access" || (source === "title" && url.startsWith("/api/meetings/records/")))
+        throw new TypeError("Failed to fetch");
       return json(availableMeeting(url));
     });
     if (source === "history")
@@ -461,7 +467,7 @@ it("refreshes an edited meeting title without replacing the composer or its draf
     json(availableMeeting(url, "Renamed review"))
   );
   await act(async () => {
-    await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
+    await client.invalidateQueries({ queryKey: ["meeting-chat-title", meetingId] });
   });
   await vi.waitFor(() =>
     expect(view.root.findByProps({ className: "jds-sr-only" }).children.join("")).toBe(
@@ -470,6 +476,27 @@ it("refreshes an edited meeting title without replacing the composer or its draf
   );
   expect(view.root.findByType("textarea")).toBe(input);
   expect(input.props.value).toBe("Keep my question");
+});
+
+it("keeps the title, conversation and draft through a transient title refresh failure", async () => {
+  fetchMock.mockImplementation(async (url: string) =>
+    json(url === "/api/chat/turn" ? response : availableMeeting(url))
+  );
+  const view = await mount(true);
+  await act(async () => view.root.findByType(Composer).props.onSend("What was decided?"));
+  const input = view.root.findByType("textarea");
+  await act(async () => input.props.onChange({ target: { value: "Keep my question" } }));
+  fetchMock.mockImplementation(async () => json({ error: "Temporary failure" }, 503));
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["meeting-chat-title", meetingId] });
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  expect(view.root.findByType("textarea")).toBe(input);
+  expect(input.props.value).toBe("Keep my question");
+  expect(JSON.stringify(view.toJSON())).toContain("Private review");
+  expect(JSON.stringify(view.toJSON())).toContain("A selected meeting answer");
 });
 
 it.each(["meeting", "account"])(
@@ -533,6 +560,170 @@ it.each([401, 403, 404])(
     expect(listChatThreads).not.toHaveBeenCalled();
   }
 );
+
+it("retains a failed meeting question above the error without leaving the turn running", async () => {
+  fetchMock.mockImplementation(async () => json({ error: "Please try again" }, 503));
+  const view = await mount();
+  await act(async () => view.root.findByType(Composer).props.onSend("What was decided?"));
+  const transcript = view.root.findByType(Thread);
+  expect(transcript.props.records).toEqual([
+    expect.objectContaining({ kind: "user", text: "What was decided?" })
+  ]);
+  expect(transcript.props.working).toBe(false);
+  expect(view.root.findByType(Composer).props.isSending).toBe(false);
+  expect(view.root.findByType(Composer).props.sendError).toBe("Please try again");
+  const content = JSON.stringify(view.toJSON());
+  expect(content.indexOf("What was decided?")).toBeLessThan(content.indexOf("Please try again"));
+});
+
+it("keeps repeated failed questions distinct from matching history and a successful retry", async () => {
+  const question = "What was decided?";
+  let finish!: (value: Response) => void;
+  fetchMock.mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  const view = await mount(false, selection, [
+    { kind: "user", text: question, messageId: "saved-user" },
+    { kind: "reply", text: "A previous answer", messageId: "saved-answer" }
+  ]);
+  await act(async () => view.root.findByType(Composer).props.onSend(question));
+  expect(view.root.findByType(Thread).props.records).toHaveLength(3);
+  expect(view.root.findByType(Thread).props.working).toBe(true);
+  await act(async () => finish(json({ error: "Please try again" }, 503)));
+  fetchMock.mockImplementation(async () => json({ error: "Please try again" }, 503));
+  await act(async () => view.root.findByType(Composer).props.onSend(question));
+  expect(
+    view.root.findByType(Thread).props.records.filter((r: { kind: string }) => r.kind === "user")
+  ).toHaveLength(3);
+  fetchMock.mockImplementation(async () =>
+    json({ ...response, userMessageId: "retry-user", assistantMessageId: "retry-answer" })
+  );
+  await act(async () => view.root.findByType(Composer).props.onSend(question));
+  const records = view.root.findByType(Thread).props.records;
+  expect(records.map((r: { kind: string }) => r.kind)).toEqual([
+    "user",
+    "reply",
+    "user",
+    "user",
+    "user",
+    "reply"
+  ]);
+  expect(view.root.findByType(Composer).props.sendError).toBeNull();
+  expect(view.root.findByType(Thread).props.working).toBe(false);
+});
+
+it("clears failed meeting questions on New chat and ignores a late failure from the old turn", async () => {
+  fetchMock.mockImplementation(async () => json({ error: "First send failed" }, 503));
+  const view = await mount();
+  await act(async () => view.root.findByType(Composer).props.onSend("First private question"));
+  let finish!: (value: Response) => void;
+  fetchMock.mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  await act(async () => view.root.findByType(Composer).props.onSend("Second private question"));
+  await act(async () =>
+    view.root
+      .findAll((node) => node.type === "button" && node.props["aria-label"] === "New chat")[0]!
+      .props.onClick()
+  );
+  await act(async () => finish(json({ error: "Late failure" }, 503)));
+  expect(view.root.findAllByType(Thread)).toHaveLength(0);
+  expect(view.root.findByType(Composer).props.sendError).toBeNull();
+});
+
+it.each([401, 403, 404])(
+  "hides failed question text after a later %s access denial",
+  async (status) => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url === "/api/chat/turn" ? json({ error: "Try again" }, 503) : json(availableMeeting(url))
+    );
+    const view = await mount(true);
+    await act(async () => view.root.findByType(Composer).props.onSend("Private failed question"));
+    expect(JSON.stringify(view.toJSON())).toContain("Private failed question");
+    fetchMock.mockImplementation(async () => json({ error: "Unavailable" }, status));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
+    });
+    await vi.waitFor(() => expect(view.root.findAllByType(Composer)).toHaveLength(0));
+    expect(JSON.stringify(view.toJSON())).not.toContain("Private failed question");
+  }
+);
+
+it.each(["meeting", "account"])(
+  "discards failed questions and late failures after a %s change",
+  async (boundary) => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url === "/api/chat/turn" ? json({ error: "Try again" }, 503) : json(availableMeeting(url))
+    );
+    const view = await mount(true);
+    await act(async () => view.root.findByType(Composer).props.onSend("Previous private question"));
+    let finish!: (value: Response) => void;
+    fetchMock.mockImplementation(async (url: string) =>
+      url === "/api/chat/turn"
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : json(availableMeeting(url))
+    );
+    await act(async () => view.root.findByType(Composer).props.onSend("Late private question"));
+    const next = {
+      ...selection,
+      meetingId: boundary === "account" ? meetingId : "22334455-2233-4233-8233-223344556677",
+      selectionId: "next-selection"
+    };
+    await act(async () =>
+      view.update(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <MeetingChatDrawer
+              key={next.selectionId}
+              selection={next}
+              onClose={() => {}}
+              isFounder={false}
+            />
+          </MemoryRouter>
+        </QueryClientProvider>
+      )
+    );
+    await vi.waitFor(() => expect(view.root.findAllByType(Composer)).toHaveLength(1));
+    await act(async () => finish(json({ error: "Late private failure" }, 503)));
+    expect(view.root.findAllByType(Thread)).toHaveLength(0);
+    expect(view.root.findByType(Composer).props.sendError).toBeNull();
+  }
+);
+
+it("leaves ordinary chat's failed-send behavior unchanged", async () => {
+  const view = await mount();
+  await act(async () =>
+    view.update(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ChatDrawer
+            key="ordinary"
+            open
+            onClose={() => {}}
+            records={[]}
+            clearRecords={() => {}}
+            streamErrorCount={0}
+            isFounder={false}
+            surface={DEFAULT_CHAT_SURFACE}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+  );
+  vi.mocked(sendChatTurn).mockRejectedValueOnce(new Error("Ordinary send failed"));
+  await act(async () => view.root.findByType(Composer).props.onSend("Ordinary question"));
+  expect(view.root.findAllByType(Thread)).toHaveLength(0);
+  expect(view.root.findByType(Composer).props.sendError).toBe("Ordinary send failed");
+  expect(view.root.findByType(Composer).props.isSending).toBe(false);
+});
 
 it("exposes no feedback or memory controls on scoped turns", async () => {
   fetchMock.mockImplementation(async () => json(response));

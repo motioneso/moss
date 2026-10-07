@@ -140,7 +140,7 @@ test("Stop automatically writes one summary after finalization without a generat
     const path = `/api/meetings/records/${meetingId}`;
     await expect(page).toHaveURL(new RegExp(`id=${meetingId}`));
     await expect(page.getByRole("button", { name: "Edit meeting title", exact: true })).toHaveText(
-      "New meeting"
+      "Untitled meeting"
     );
     const starting = page.waitForResponse(
       (response) =>

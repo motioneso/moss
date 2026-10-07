@@ -30,23 +30,30 @@ export function MeetingChatDrawer(props: {
   const [unavailable, setUnavailable] = useState(false);
   const access = useQuery({
     queryKey: ["meeting-chat-access", selection.selectionId],
-    queryFn: async ({ signal }) => {
-      const status = await requestJson<{ available: true }>(
-        `/api/chat/meeting-context?surface=${surface}`,
-        { signal }
-      );
-      // Read the title through the public owner-scoped API, not a route label or a shared cache.
-      // Keep it in the same selection-bound access result so denials hide it with the history.
-      const { meeting } = await requestJson<{ meeting: MeetingRecord }>(
-        `/api/meetings/records/${encodeURIComponent(selection.meetingId)}`,
-        { signal }
-      );
-      return { ...status, title: meeting.title };
-    },
+    queryFn: ({ signal }) =>
+      requestJson<{ available: true }>(`/api/chat/meeting-context?surface=${surface}`, { signal }),
     enabled: !unavailable,
     gcTime: 0,
     retry: false,
     refetchInterval: 5000,
+    refetchOnWindowFocus: "always"
+  });
+  const title = useQuery({
+    queryKey: ["meeting-chat-title", selection.meetingId, selection.selectionId],
+    queryFn: async ({ signal }) => {
+      // Keep only the title in this selection-bound cache. The record also contains notes,
+      // so read it less often than the lightweight access check; title saves invalidate it.
+      const { meeting } = await requestJson<{ meeting: MeetingRecord }>(
+        `/api/meetings/records/${encodeURIComponent(selection.meetingId)}`,
+        { signal }
+      );
+      return meeting.title;
+    },
+    enabled: access.data?.available === true && !isAccessDenied(access.error) && !unavailable,
+    gcTime: 0,
+    retry: false,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
     refetchOnWindowFocus: "always"
   });
   const history = useQuery({
@@ -55,18 +62,29 @@ export function MeetingChatDrawer(props: {
       const { threads } = await listChatThreads(surface);
       return threads[0] ? (await listChatThreadMessages(threads[0].id, surface)).messages : [];
     },
-    enabled: access.data?.available === true && !isAccessDenied(access.error) && !unavailable,
+    enabled:
+      access.data?.available === true &&
+      title.data !== undefined &&
+      !isAccessDenied(access.error) &&
+      !isAccessDenied(title.error) &&
+      !unavailable,
     gcTime: 0,
     retry: false
   });
-  const accessDenied = isAccessDenied(access.error) || isAccessDenied(history.error);
+  const accessDenied =
+    isAccessDenied(access.error) || isAccessDenied(title.error) || isAccessDenied(history.error);
   useEffect(() => {
     // Once denied, another failed poll must not reveal previously cached history again.
     if (accessDenied) setUnavailable(true);
   }, [accessDenied]);
   const denied = accessDenied || unavailable;
-  if (denied || access.data?.available !== true || history.data === undefined) {
-    const loadFailed = access.isError || history.isError;
+  if (
+    denied ||
+    access.data?.available !== true ||
+    title.data === undefined ||
+    history.data === undefined
+  ) {
+    const loadFailed = access.isError || title.isError || history.isError;
     return (
       <aside
         className={`chatd${props.docked ? " chatd--docked" : ""}`}
@@ -92,9 +110,10 @@ export function MeetingChatDrawer(props: {
         {!denied && loadFailed ? (
           <Button
             variant="link"
-            disabled={access.isFetching || history.isFetching}
+            disabled={access.isFetching || title.isFetching || history.isFetching}
             onClick={() => {
               if (access.data?.available !== true) void access.refetch();
+              else if (title.data === undefined) void title.refetch();
               else void history.refetch();
             }}
           >
@@ -117,7 +136,7 @@ export function MeetingChatDrawer(props: {
       streamErrorCount={0}
       isFounder={props.isFounder}
       surface={surface}
-      meetingContext={{ ...selection, title: access.data.title }}
+      meetingContext={{ ...selection, title: title.data }}
       onRemoveMeetingContext={props.onRemoveContext}
       onMeetingUnavailable={() => setUnavailable(true)}
     />

@@ -108,9 +108,11 @@ export function useMeetingSettings() {
           ...value,
           requestKey: null,
           error:
-            pending.summarizeOnStop !== undefined
-              ? "Couldn’t save automatic summary. Your choice is kept here; the saved setting still applies."
-              : "Couldn’t save your audio source. Your choice is kept here."
+            pending.defaultCaptureMode !== undefined && pending.summarizeOnStop !== undefined
+              ? "Couldn’t save your audio source or automatic summary. Your choices are kept here; the saved settings still apply."
+              : pending.summarizeOnStop !== undefined
+                ? "Couldn’t save automatic summary. Your choice is kept here; the saved setting still applies."
+                : "Couldn’t save your audio source. Your choice is kept here."
         }));
     }
   }

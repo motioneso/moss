@@ -79,6 +79,10 @@ export function MeetingTitle({ meeting }: { readonly meeting: MeetingRecord }) {
       if (!current()) return;
       await client.cancelQueries({ queryKey: meetingKeys.record(meeting.id), exact: true });
       if (!current()) return;
+      // An initial title read has no cached data for invalidation to replace. Cancel it first
+      // so its old response cannot become fresh after this confirmed save.
+      await client.cancelQueries({ queryKey: ["meeting-chat-title", meeting.id] });
+      if (!current()) return;
       client.setQueryData<{ meeting: MeetingRecord }>(meetingKeys.record(meeting.id), (cached) => ({
         meeting: {
           ...result.meeting,
@@ -100,6 +104,7 @@ export function MeetingTitle({ meeting }: { readonly meeting: MeetingRecord }) {
       }));
       void client.invalidateQueries({ queryKey: meetingKeys.record(meeting.id), exact: true });
       void client.invalidateQueries({ queryKey: meetingKeys.history });
+      void client.invalidateQueries({ queryKey: ["meeting-chat-title", meeting.id] });
       setEditing(false);
     } catch (error) {
       if (!current()) return;
@@ -166,7 +171,7 @@ export function MeetingTitle({ meeting }: { readonly meeting: MeetingRecord }) {
           titleAs="h1"
           title={
             <RowButton aria-label="Edit meeting title" onClick={() => setEditing(true)}>
-              {draft.data.text === "Untitled meeting" ? "New meeting" : draft.data.text}
+              {draft.data.text}
             </RowButton>
           }
         />

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver, useQuery } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MeetingRecord } from "@moss/shared";
 import { hasSessionUnsavedChanges } from "@moss/module-web-sdk";
@@ -96,6 +96,79 @@ afterEach(async () => {
 });
 
 describe("meeting title editing (synthetic DOM transport, not live proof)", () => {
+  it.each(["Untitled meeting", "Previously named meeting"])(
+    "shows the stored heading %s without treating an existing record as new",
+    async (title) => {
+      client.setQueryData(meetingKeys.record(meeting.id), { meeting: { ...meeting, title } });
+      await mount();
+      expect(host.querySelector("h1")?.textContent).toBe(title);
+      expect(host.querySelector('[aria-label="Edit meeting title"]')?.textContent).toBe(title);
+      expect(saves).toHaveLength(0);
+      await edit(title);
+      expect(input().value).toBe(title);
+    }
+  );
+
+  it.each([true, false])(
+    "refreshes only this meeting's chat title after a confirmed save (success=%s)",
+    async (success) => {
+      const selected = ["meeting-chat-title", meeting.id, "selection"];
+      const other = ["meeting-chat-title", "other-meeting", "other-selection"];
+      client.setQueryData(selected, meeting.title);
+      client.setQueryData(other, "Other title");
+      await mount();
+      await edit("Changed title");
+      save();
+      await act(async () =>
+        saves[0]!.finish(
+          success
+            ? json({ meeting: { ...meeting, title: "Changed title" } })
+            : json({ message: "Save failed" }, 503)
+        )
+      );
+      await settle();
+      expect(client.getQueryState(selected)?.isInvalidated).toBe(success);
+      expect(client.getQueryState(other)?.isInvalidated).toBe(false);
+    }
+  );
+
+  it("cancels an initial in-flight chat title read before refreshing a confirmed rename", async () => {
+    const selected = ["meeting-chat-title", meeting.id, "selection"];
+    let finishOld!: (title: string) => void;
+    const signals: AbortSignal[] = [];
+    const query = vi.fn(({ signal }: { signal: AbortSignal }) => {
+      signals.push(signal);
+      return signals.length === 1
+        ? new Promise<string>((resolve) => {
+            finishOld = resolve;
+          })
+        : Promise.resolve("Changed title");
+    });
+    const observer = new QueryObserver(client, {
+      queryKey: selected,
+      queryFn: query,
+      staleTime: 60_000
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      await mount();
+      expect(query).toHaveBeenCalledOnce();
+      await edit("Changed title");
+      save();
+      await act(async () =>
+        saves[0]!.finish(json({ meeting: { ...meeting, title: "Changed title" } }))
+      );
+      await settle();
+      expect(signals[0]?.aborted).toBe(true);
+      expect(query).toHaveBeenCalledTimes(2);
+      finishOld(meeting.title);
+      await settle();
+      expect(client.getQueryData(selected)).toBe("Changed title");
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it("keeps every rapid title character before deferred query notifications flush", async () => {
     await mount();
     await edit("");

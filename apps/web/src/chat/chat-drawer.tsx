@@ -1,4 +1,4 @@
-import { requestJson } from "@moss/module-web-sdk";
+import { randomUuid, requestJson } from "@moss/module-web-sdk";
 import type { MeetingChatSelection, MeetingChatTurnResponse } from "@moss/shared";
 import { HistoryList } from "./history-list";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -118,18 +118,8 @@ export function ChatDrawer(props: {
   const [activatingPrivate, setActivatingPrivate] = useState(false);
   const [privateActivationError, setPrivateActivationError] = useState<string | null>(null);
 
-  /**
-   * #1780: two things write `privateMode` — the query below, which seeds it from the server when the
-   * drawer opens, and the local handlers, which set it from what the user just did. Nothing ordered
-   * them. A privacy response still in flight when the user pressed the toggle landed second and wrote
-   * its now-stale `incognito: false` over a session that had already been switched to private, so the
-   * drawer showed "not private" for a session the server considered private. That is the one direction
-   * this flag must never be wrong in.
-   *
-   * The user's action wins. Once anything local has decided the flag for this surface, seeding stops
-   * applying; a surface change clears it, because the new surface has its own server truth to seed
-   * from and none of the old surface's decisions carry over.
-   */
+  // #1780: local privacy actions outrank in-flight server reads, which could otherwise overwrite
+  // the user's new private session with stale `incognito: false`. Reset this on a surface change.
   const privateModeDecidedLocally = useRef(false);
   /**
    * #1521: transient, unlike `privateModeDecidedLocally` above. True only while a
@@ -245,12 +235,13 @@ export function ChatDrawer(props: {
   // check handles SSE pre-arriving before send). Safe to double-fire in StrictMode — idempotent.
   useEffect(() => {
     if (
+      !props.meetingContext &&
       pendingUser !== null &&
       props.records.some((r) => r.kind === "user" && r.text === pendingUser.text)
     ) {
       setPendingUser(null);
     }
-  }, [props.records, pendingUser]);
+  }, [props.records, pendingUser, props.meetingContext]);
 
   // #1533: switching surfaces (e.g. drawer <-> module-embedded chat) must not leak state from the
   // previous surface — reset all locally-derived state unconditionally on every surface change.
@@ -385,8 +376,19 @@ export function ChatDrawer(props: {
             typeof caught === "object" &&
             "status" in caught &&
             [401, 403, 404].includes(Number(caught.status))
-          )
+          ) {
             props.onMeetingUnavailable?.();
+            return;
+          }
+          if (props.meetingContext) {
+            // Local failed attempts are distinct even when an older saved question matches.
+            const failedQuestion = {
+              kind: "user" as const,
+              text: trimmed,
+              messageId: randomUuid()
+            };
+            setFallbackRecords((current) => [...current, failedQuestion]);
+          }
           if (isNoActiveChatModelError(caught)) {
             setNeedsProvider(true);
             return;
@@ -930,14 +932,8 @@ function sameTranscriptRecord(a: TranscriptRecord, b: TranscriptRecord): boolean
   return a.text === b.text;
 }
 
-// #1519: a pending-record fallback must be retired by AT MOST ONE live record, never by every
-// live record that happens to match it. sameTranscriptRecord alone can't guarantee that — when
-// two fallbacks share identical (kind, text) and neither the live record nor one of the fallbacks
-// carries a messageId (true of every "kind: user" SSE echo, which never carries one), a single
-// live record's arrival would otherwise satisfy the predicate against BOTH fallbacks at once and
-// collapse them together — the exact flicker this issue exists to prevent, just relocated from the
-// reply bubble to the user bubble. Consuming each matched live record once (in fallback order)
-// keeps the reconciliation one-to-one.
+// #1519: consume each matching live record once. Repeated identical text without message IDs
+// (including user SSE echoes) must not retire multiple fallbacks and collapse distinct sends.
 function reconcileFallbacks(
   fallbacks: readonly TranscriptRecord[],
   liveRecords: readonly TranscriptRecord[]

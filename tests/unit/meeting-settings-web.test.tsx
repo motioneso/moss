@@ -391,6 +391,42 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
       }
     }
   );
+  it.each(["audio", "summary"])(
+    "names both unsaved settings after %s fails first, then retries both choices",
+    async (first) => {
+      const normal = transport.getMockImplementation()!;
+      transport.mockImplementation((path, options) => {
+        if (path === preferencesPath && options?.method === "PUT") {
+          calls.push({ path, method: "PUT", body: JSON.parse(String(options.body)) });
+          return Promise.resolve(json({ message: "Unavailable" }, 503));
+        }
+        return normal(path, options);
+      });
+      await mount();
+      if (first === "audio") {
+        await select("meeting-settings-audio-source", "microphone-only");
+        await toggleSummary();
+      } else {
+        await toggleSummary();
+        await select("meeting-settings-audio-source", "microphone-only");
+      }
+      const choices = { defaultCaptureMode: "microphone-only", summarizeOnStop: false };
+      expect(writes().at(-1)?.body).toEqual(choices);
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+        "Couldn’t save your audio source or automatic summary. Your choices are kept here; the saved settings still apply."
+      );
+      expect(preferences.defaultCaptureMode).toBe("computer-audio");
+      expect(preferences.summarizeOnStop).toBe(true);
+      expect(host.querySelector<HTMLSelectElement>("select")?.value).toBe("microphone-only");
+      expect(summarySwitch().checked).toBe(false);
+      transport.mockImplementation(normal);
+      await click("Retry");
+      expect(writes().at(-1)?.body).toEqual(choices);
+      expect(preferences).toMatchObject(choices);
+      expect(host.querySelector('[role="alert"]')).toBeNull();
+    }
+  );
+
   it("saves only the chosen mode immediately, preserving exact legacy microphone and unrelated preferences", async () => {
     preferences = savedPreferences();
     await mount();

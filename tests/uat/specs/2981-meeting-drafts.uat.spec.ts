@@ -54,7 +54,7 @@ test("Minimal meeting workspace edits titles, autosaves notes, resolves conflict
     await assertMinimalMeetingWorkspace(page);
     await expect(page.getByRole("button", { name: "Start recording", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Edit meeting title", exact: true })).toHaveText(
-      "New meeting"
+      "Untitled meeting"
     );
     await page.getByRole("button", { name: "Edit meeting title", exact: true }).click();
     const titleInput = page.getByLabel("Meeting title", { exact: true });
