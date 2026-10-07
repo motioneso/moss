@@ -48,7 +48,11 @@ async function gateRisks(tools: ReturnType<typeof connectedTool>[]) {
   const factory = createClassifierGatePortsFactory({
     resolveActiveModules: async () => [manifest],
     dataContext,
-    gateway: { callToolForGate: vi.fn() } as never,
+    gateway: {
+      callToolForGate: vi.fn(),
+      recordContextForSession: vi.fn(async () => {}),
+      admitToolDescriptorsForSession: vi.fn(async () => {})
+    } as never,
     classifierDeps: {
       repository: {
         resolveSortingModel: vi.fn(async () => null),

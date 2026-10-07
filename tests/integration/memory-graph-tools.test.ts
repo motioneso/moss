@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Kysely } from "kysely";
 import pg from "pg";
 
@@ -6,7 +6,9 @@ import { createApiServer } from "../../apps/api/src/server.js";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import { memoryModuleManifest } from "@moss/memory";
+import { buildChatGatewayDependencies } from "../../packages/chat/src/gateway-services.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 
 const { Client } = pg;
 
@@ -34,6 +36,7 @@ interface InvocationResponse {
 describe("memory graph assistant tools", () => {
   let appDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let boss: PgBoss;
   let server: ReturnType<typeof createApiServer>;
   let originalSecretKey: string | undefined;
@@ -61,6 +64,10 @@ describe("memory graph assistant tools", () => {
     server = createApiServer({ appDb, boss, logger: false });
     await server.ready();
     runner = new DataContextRunner(appDb);
+  });
+
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
   });
 
   afterAll(async () => {
@@ -134,12 +141,16 @@ describe("memory graph assistant tools", () => {
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [memoryModuleManifest],
-      repository,
-      runner,
-      tokens,
-      confirmations,
-      notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
+      ...buildChatGatewayDependencies({
+        resolveActiveModules: async () => [memoryModuleManifest],
+        repository,
+        runner,
+        conversationProvenance: conversations.gatewayDependencies.provenance,
+        tokens,
+        confirmations,
+        notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
+        collaborators: {}
+      }),
       confirmTimeoutMs: 30_000,
       // memory_management promoted to trusted_auto: memory.remember (write, executionPolicy
       // "auto") must auto-run, but memory.forget's destructive risk always confirms regardless
@@ -152,7 +163,7 @@ describe("memory graph assistant tools", () => {
       })
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "memory-chat",
       allowedToolNames: null
     });

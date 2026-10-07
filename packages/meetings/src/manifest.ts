@@ -1,3 +1,4 @@
+import { meetingRecordTarget } from "./chat-targets.js";
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import { collectMeetingsExportSection } from "./data-lifecycle.js";
@@ -69,43 +70,140 @@ export const meetingsModuleManifest = {
     }
   ],
   routes: [
-    { method: "POST", path: "/api/meetings/history/search", permissionId: "meetings.read" },
-    { method: "GET", path: "/api/meetings/history/:id", permissionId: "meetings.read" },
-    { method: "GET", path: "/api/meetings/records/:id/exports", permissionId: "meetings.read" },
-    { method: "POST", path: "/api/meetings/records/:id/exports", permissionId: "meetings.write" },
-    { method: "GET", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.read" },
+    {
+      method: "POST",
+      path: "/api/meetings/history/search",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/history/:id",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/records/:id/exports",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/exports",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/records/:id/outputs",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
     {
       method: "GET",
       path: "/api/meetings/records/:id/outputs/:version",
+      chat: { access: "read" },
       permissionId: "meetings.read"
     },
-    { method: "POST", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.write" },
-    { method: "PUT", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.write" },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/outputs",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "PUT",
+      path: "/api/meetings/records/:id/outputs",
+      chat: { access: "write", title: "Edit a meeting summary" },
+      permissionId: "meetings.write"
+    },
     {
       method: "POST",
       path: "/api/meetings/records/:id/actions/:candidateId/review",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "meetings.write"
     },
     {
       method: "POST",
       path: "/api/meetings/records/:id/transcript",
+      chat: {
+        access: "write",
+        title: "Add or correct retained meeting transcript text",
+        content: "user_authored"
+      },
       permissionId: "meetings.write"
     },
-    { method: "GET", path: "/api/meetings/records/:id/transcript", permissionId: "meetings.read" },
+    {
+      method: "GET",
+      path: "/api/meetings/records/:id/transcript",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
     {
       method: "GET",
       path: "/api/meetings/records/:id/transcript/evidence",
+      chat: { access: "read" },
       permissionId: "meetings.read"
     },
-    { method: "GET", path: "/api/meetings/preferences", permissionId: "meetings.read" },
-    { method: "PUT", path: "/api/meetings/preferences", permissionId: "meetings.write" },
-    { method: "DELETE", path: "/api/meetings/records/:id", permissionId: "meetings.write" },
-    { method: "GET", path: "/api/meetings/records", permissionId: "meetings.read" },
-    { method: "GET", path: "/api/meetings/records/:id", permissionId: "meetings.read" },
-    { method: "POST", path: "/api/meetings/records", permissionId: "meetings.write" },
-    { method: "PUT", path: "/api/meetings/records/:id/notes", permissionId: "meetings.write" }
+    {
+      method: "GET",
+      path: "/api/meetings/preferences",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "PUT",
+      path: "/api/meetings/preferences",
+      chat: {
+        access: "write",
+        title: "Change your default meeting capture source",
+        content: "user_authored"
+      },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "DELETE",
+      path: "/api/meetings/records/:id",
+      chat: {
+        access: "destructive",
+        title: "Delete meeting, retained records and linked Moss chats",
+        content: "user_authored",
+        target: meetingRecordTarget
+      },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/records",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/records/:id",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/records",
+      chat: { access: "write", title: "Create a meeting draft", content: "user_authored" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "PUT",
+      path: "/api/meetings/records/:id/notes",
+      chat: { access: "write", title: "Save your meeting notes" },
+      permissionId: "meetings.write"
+    }
   ],
   features: [
+    {
+      id: "meetings.chat_app_actions",
+      description:
+        "App actions read retained meetings and save drafts, notes, transcript corrections and summaries. Generation and export stay in Meetings; deleting a meeting and linked Moss chats asks first."
+    },
     {
       id: "meetings.account_export",
       description:

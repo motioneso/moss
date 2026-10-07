@@ -15,6 +15,8 @@ export type ActiveChatProvider = Awaited<ReturnType<ChatPersistencePort["resolve
 export interface UserSession {
   actorUserId: string;
   surface: ChatSurface;
+  /** Conversation captured at launch; never follows the actor’s current-thread pointer. */
+  readonly threadId: string | null;
   engine: CliChatEngine;
   provider: ProviderKind;
   model: string;

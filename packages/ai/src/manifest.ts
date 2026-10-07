@@ -101,7 +101,9 @@ export const aiModuleManifest = {
       // #2956 — owner lines, owner-only detail with 30-day expiry, purge function.
       "sql/0258_activity_owner_lines.sql",
       // #2956 — turn link on the action audit log for the per-turn step join.
-      "sql/0259_audit_log_turn_id.sql"
+      "sql/0259_audit_log_turn_id.sql",
+      // #3065: a server-resolved read can require confirmation without becoming a write.
+      "sql/0289_ai_read_action_approval.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [
@@ -357,18 +359,21 @@ export const aiModuleManifest = {
     {
       method: "GET",
       path: "/api/ai/summary",
+      chat: { access: "read" },
       responseSchema: getAiSummaryResponseSchema,
       permissionId: "ai.view"
     },
     {
       method: "GET",
       path: "/api/ai/providers",
+      chat: { access: "blocked", blockedBecause: "assistant_brain" },
       responseSchema: listAiProviderConfigsResponseSchema,
       permissionId: "ai.view"
     },
     {
       method: "POST",
       path: "/api/ai/providers",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       requestSchema: createAiProviderConfigRequestSchema,
       responseSchema: createAiProviderConfigResponseSchema,
       permissionId: "ai.manage"
@@ -376,6 +381,7 @@ export const aiModuleManifest = {
     {
       method: "PATCH",
       path: "/api/ai/providers/:id",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       requestSchema: updateAiProviderConfigRequestSchema,
       responseSchema: updateAiProviderConfigResponseSchema,
       permissionId: "ai.manage"
@@ -383,30 +389,35 @@ export const aiModuleManifest = {
     {
       method: "POST",
       path: "/api/ai/providers/:id/revoke",
+      chat: { access: "blocked", blockedBecause: "assistant_brain" },
       responseSchema: revokeAiProviderConfigResponseSchema,
       permissionId: "ai.manage"
     },
     {
       method: "POST",
       path: "/api/ai/providers/:id/cli-check",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: revokeAiProviderConfigResponseSchema,
       permissionId: "ai.manage"
     },
     {
       method: "POST",
       path: "/api/ai/providers/:id/test",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: testAiProviderConfigResponseSchema,
       permissionId: "ai.manage"
     },
     {
       method: "POST",
       path: "/api/ai/providers/:id/discover-models",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: discoverAiProviderModelsResponseSchema,
       permissionId: "ai.manage"
     },
     {
       method: "GET",
       path: "/api/ai/providers/:id/models/discover",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: aiDiscoverModelsResponseSchema,
       permissionId: "ai.manage"
     },
@@ -414,18 +425,21 @@ export const aiModuleManifest = {
       // #2208: admin "Refresh models" — re-discover one provider's list and persist it.
       method: "POST",
       path: "/api/ai/providers/:id/models/refresh",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: refreshAiProviderModelsResponseSchema,
       permissionId: "ai.manage"
     },
     {
       method: "GET",
       path: "/api/ai/models",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: listAiConfiguredModelsResponseSchema,
       permissionId: "ai.view"
     },
     {
       method: "POST",
       path: "/api/ai/models",
+      chat: { access: "blocked", blockedBecause: "assistant_brain" },
       requestSchema: createAiConfiguredModelRequestSchema,
       responseSchema: createAiConfiguredModelResponseSchema,
       permissionId: "ai.manage"
@@ -433,6 +447,7 @@ export const aiModuleManifest = {
     {
       method: "PATCH",
       path: "/api/ai/models/:id",
+      chat: { access: "blocked", blockedBecause: "assistant_brain" },
       requestSchema: updateAiConfiguredModelRequestSchema,
       responseSchema: updateAiConfiguredModelResponseSchema,
       permissionId: "ai.manage"
@@ -441,12 +456,14 @@ export const aiModuleManifest = {
       // #2208 follow-up: Remove on a model row; the `default` sentinel is refused.
       method: "DELETE",
       path: "/api/ai/models/:id",
+      chat: { access: "blocked", blockedBecause: "assistant_brain" },
       responseSchema: deleteAiConfiguredModelResponseSchema,
       permissionId: "ai.manage"
     },
     {
       method: "GET",
       path: "/api/ai/capability-route/:capability",
+      chat: { access: "read" },
       responseSchema: lookupAiCapabilityRouteResponseSchema,
       permissionId: "ai.route"
     },
@@ -455,12 +472,14 @@ export const aiModuleManifest = {
       // Chat is the only bindable service (Voice moved to its own dedicated endpoint).
       method: "GET",
       path: "/api/ai/service-bindings",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       responseSchema: listAiServiceBindingsResponseSchema,
       permissionId: "ai.view"
     },
     {
       method: "PUT",
       path: "/api/ai/services/:service/binding",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: putAiServiceBindingRequestSchema,
       responseSchema: putAiServiceBindingResponseSchema,
       permissionId: "ai.manage"
@@ -468,6 +487,7 @@ export const aiModuleManifest = {
     {
       method: "DELETE",
       path: "/api/ai/services/:service/binding",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       responseSchema: deleteAiServiceBindingResponseSchema,
       permissionId: "ai.manage"
     },
@@ -475,12 +495,14 @@ export const aiModuleManifest = {
       // #870/H1: promote a provider to the single instance-default.
       method: "PUT",
       path: "/api/ai/providers/:id/default",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       responseSchema: createAiProviderConfigResponseSchema,
       permissionId: "ai.manage"
     },
     {
       method: "POST",
       path: "/api/ai/transcriptions",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: transcribeAudioResponseSchema,
       permissionId: "ai.route"
     },
@@ -490,12 +512,14 @@ export const aiModuleManifest = {
       // single `purpose='voice'` provider row and runs NO auto-discovery (CRIT-1).
       method: "GET",
       path: "/api/ai/voice-endpoint",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       responseSchema: getVoiceEndpointResponseSchema,
       permissionId: "ai.manage"
     },
     {
       method: "PUT",
       path: "/api/ai/voice-endpoint",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       requestSchema: putVoiceEndpointRequestSchema,
       responseSchema: putVoiceEndpointResponseSchema,
       permissionId: "ai.manage"
@@ -508,16 +532,19 @@ export const aiModuleManifest = {
     {
       method: "GET",
       path: "/api/ai/terminal/status",
+      chat: { access: "read" },
       permissionId: "ai.manage"
     },
     {
       method: "POST",
       path: "/api/ai/terminal/password",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "ai.manage"
     },
     {
       method: "POST",
       path: "/api/ai/terminal/ticket",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "ai.manage"
     },
     {
@@ -525,17 +552,20 @@ export const aiModuleManifest = {
       // so it must be declared here as method "GET" for assertRouteCoverage to recognize it.
       method: "GET",
       path: "/api/ai/terminal",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "ai.manage"
     },
     {
       method: "GET",
       path: "/api/ai/chat-model-override",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       responseSchema: getChatModelOverrideSettingsResponseSchema,
       permissionId: "ai.view"
     },
     {
       method: "PUT",
       path: "/api/ai/chat-model-override",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: putChatModelOverrideRequestSchema,
       responseSchema: getChatModelOverrideSettingsResponseSchema,
       permissionId: "ai.route"
@@ -543,12 +573,18 @@ export const aiModuleManifest = {
     {
       method: "GET",
       path: "/api/ai/chat-model-favorites",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: chatModelFavoritesSchema,
       permissionId: "ai.view"
     },
     {
       method: "PUT",
       path: "/api/ai/chat-model-favorites",
+      chat: {
+        access: "write",
+        title: "Change your favourite chat models",
+        content: "user_authored"
+      },
       requestSchema: chatModelFavoritesSchema,
       responseSchema: chatModelFavoritesSchema,
       permissionId: "ai.route"
@@ -556,6 +592,7 @@ export const aiModuleManifest = {
     {
       method: "PUT",
       path: "/api/admin/ai/chat-model-override",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: putAdminChatModelOverrideRequestSchema,
       responseSchema: getChatModelOverrideSettingsResponseSchema,
       permissionId: "ai.manage"
@@ -563,12 +600,14 @@ export const aiModuleManifest = {
     {
       method: "GET",
       path: "/api/admin/users/:userId/ai-pin",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       responseSchema: getAiAdminUserPinResponseSchema,
       permissionId: "ai.manage"
     },
     {
       method: "PUT",
       path: "/api/admin/users/:userId/ai-pin",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: putAiAdminUserPinRequestSchema,
       responseSchema: getAiAdminUserPinResponseSchema,
       permissionId: "ai.manage"
@@ -576,12 +615,14 @@ export const aiModuleManifest = {
     {
       method: "GET",
       path: "/api/ai/assistant-tools",
+      chat: { access: "read" },
       responseSchema: listAiAssistantToolsResponseSchema,
       permissionId: "ai.view"
     },
     {
       method: "POST",
       path: "/api/ai/assistant-tools/:name/invoke",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: invokeAiAssistantToolRequestSchema,
       responseSchema: invokeAiAssistantToolResponseSchema,
       permissionId: "ai.route"
@@ -589,12 +630,14 @@ export const aiModuleManifest = {
     {
       method: "GET",
       path: "/api/ai/assistant-actions",
+      chat: { access: "read" },
       responseSchema: listAiAssistantActionsResponseSchema,
       permissionId: "ai.assistant-actions"
     },
     {
       method: "POST",
       path: "/api/ai/assistant-actions/:id/resolve",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: resolveAiAssistantActionRequestSchema,
       responseSchema: resolveAiAssistantActionResponseSchema,
       permissionId: "ai.assistant-actions"
@@ -602,12 +645,14 @@ export const aiModuleManifest = {
     {
       method: "GET",
       path: "/api/ai/action-policy",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       responseSchema: getAiActionPoliciesResponseSchema,
       permissionId: "ai.view"
     },
     {
       method: "PATCH",
       path: "/api/ai/action-policy/:moduleId/:actionFamilyId",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: patchAiActionPolicyRequestSchema,
       responseSchema: patchAiActionPolicyResponseSchema,
       permissionId: "ai.manage"
@@ -615,6 +660,7 @@ export const aiModuleManifest = {
     {
       method: "GET",
       path: "/api/ai/action-audit",
+      chat: { access: "read" },
       responseSchema: listActionAuditLogRouteSchema.response[200],
       permissionId: "ai.assistant-actions"
     },
@@ -625,6 +671,8 @@ export const aiModuleManifest = {
       // admins read the same rows through this route instead.
       method: "GET",
       path: "/api/ai/activity-lines",
+      // Turn details retain the user's full message, including prior consent-gated words.
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listActivityLinesRouteSchema.response[200],
       permissionId: "ai.assistant-actions"
     },
@@ -636,6 +684,7 @@ export const aiModuleManifest = {
       // indistinguishable from approving one that does not exist.
       method: "POST",
       path: "/api/ai/module-builds/:buildId/approve",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       responseSchema: approveModuleBuildResponseSchema,
       permissionId: "ai.assistant-actions"
     },
@@ -643,6 +692,7 @@ export const aiModuleManifest = {
       // The Workshop Stop/Discard actions re-check ownership and cancellable status server-side.
       method: "POST",
       path: "/api/ai/module-builds/:buildId/cancel",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: approveModuleBuildResponseSchema,
       permissionId: "ai.assistant-actions"
     },
@@ -651,6 +701,7 @@ export const aiModuleManifest = {
       // scopes to owner_user_id, so this is never a cross-user listing.
       method: "GET",
       path: "/api/ai/module-builds/mine",
+      chat: { access: "read" },
       responseSchema: listMyModuleBuildsResponseSchema,
       permissionId: "ai.assistant-actions"
     }
@@ -661,6 +712,7 @@ export const aiModuleManifest = {
       description: "List recent structured error events visible to the active actor.",
       permissionId: "ai.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {

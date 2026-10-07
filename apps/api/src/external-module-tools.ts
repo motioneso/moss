@@ -16,6 +16,7 @@ import {
   createExternalModuleRpcHandler,
   createExternalToolManifests,
   ExternalModuleWorkerRuntime,
+  withExternalDescriptorApproval,
   type ExternalCandidateInvoker,
   type ExternalModuleAiRequest,
   type ExternalModuleAiResult,
@@ -235,7 +236,14 @@ export function createInstalledExternalModulesResolverForApi(input: {
 export function createExternalActiveModulesResolver(
   resolveEnabledModules: (actorUserId: string) => Promise<readonly MossModuleManifest[]>,
   getExternalModuleIds: () => ReadonlySet<string>,
-  getActiveExternalModules: (actorUserId: string) => Promise<readonly { id: string }[]>
+  getActiveExternalModules: (
+    actorUserId: string
+  ) => Promise<
+    readonly Pick<
+      ReconciledExternalModule,
+      "id" | "manifestHash" | "packageHash" | "descriptorApprovedByUserId"
+    >[]
+  >
 ): (actorUserId: string) => Promise<readonly MossModuleManifest[]> {
   return async (actorUserId) => {
     const externalModuleIds = getExternalModuleIds();
@@ -244,10 +252,12 @@ export function createExternalActiveModulesResolver(
       resolveEnabledModules(actorUserId),
       getActiveExternalModules(actorUserId)
     ]);
-    const activeIds = new Set(activeExternal.map((module) => module.id));
-    return enabled.filter(
-      (manifest) => !externalModuleIds.has(manifest.id) || activeIds.has(manifest.id)
-    );
+    const activeById = new Map(activeExternal.map((module) => [module.id, module]));
+    return enabled.flatMap((manifest) => {
+      if (!externalModuleIds.has(manifest.id)) return [manifest];
+      const active = activeById.get(manifest.id);
+      return active ? [withExternalDescriptorApproval(manifest, active, actorUserId)] : [];
+    });
   };
 }
 

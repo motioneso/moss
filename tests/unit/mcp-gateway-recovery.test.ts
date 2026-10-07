@@ -10,6 +10,15 @@ describe("first-party Moss MCP transport", () => {
     const resolveLocalTimezone = vi.fn();
     const yoloMode = vi.fn();
     const gateway = new AssistantToolGateway({
+      // This fixture exercises ordinary policy on an explicitly clean conversation.
+      provenance: {
+        isTainted: async () => false,
+        recordAdmission: async () => {},
+        runAutomatic: async (_actor, _thread, callback) => ({
+          kind: "ran",
+          value: await callback()
+        })
+      },
       resolveActiveModules: async () => [],
       repository: { createPendingAssistantAction } as never,
       runner: { withDataContext: vi.fn() } as never,
@@ -20,7 +29,12 @@ describe("first-party Moss MCP transport", () => {
       resolveLocalTimezone,
       yoloMode
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     await expect(
       gateway.requestNativeToolPermission(token, {
@@ -44,6 +58,15 @@ describe("first-party Moss MCP transport", () => {
     const createPendingAssistantAction = vi.fn(async () => ({ id: "native-not-transport" }));
     const resolveLocalTimezone = vi.fn(async () => null);
     const gateway = new AssistantToolGateway({
+      // This fixture exercises ordinary policy on an explicitly clean conversation.
+      provenance: {
+        isTainted: async () => false,
+        recordAdmission: async () => {},
+        runAutomatic: async (_actor, _thread, callback) => ({
+          kind: "ran",
+          value: await callback()
+        })
+      },
       resolveActiveModules: async () => [],
       repository: { createPendingAssistantAction } as never,
       runner: {
@@ -56,14 +79,19 @@ describe("first-party Moss MCP transport", () => {
       confirmTimeoutMs: 1,
       resolveLocalTimezone
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     await expect(
       gateway.requestNativeToolPermission(token, { toolName, toolInput: {} })
     ).resolves.toEqual({
       decision: "deny",
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
     expect(createPendingAssistantAction).toHaveBeenCalledOnce();
     expect(resolveLocalTimezone).toHaveBeenCalledOnce();
@@ -85,6 +113,15 @@ describe("logical action terminal results", () => {
     }> = [];
     const handlerRequestIds: string[] = [];
     const gateway = new AssistantToolGateway({
+      // This fixture exercises ordinary policy on an explicitly clean conversation.
+      provenance: {
+        isTainted: async () => false,
+        recordAdmission: async () => {},
+        runAutomatic: async (_actor, _thread, callback) => ({
+          kind: "ran",
+          value: await callback()
+        })
+      },
       resolveActiveModules: async () => [
         {
           id: "demo-module",
@@ -100,6 +137,8 @@ describe("logical action terminal results", () => {
               permissionId: "demo-module.resume.write",
               actionFamilyId: "resume_changes",
               risk: "write",
+              content: "user_authored",
+              isExternal: false,
               executionPolicy: "auto",
               execute: async (_db, _toolInput, ctx) => {
                 handlerRequestIds.push(ctx.requestId);
@@ -138,6 +177,7 @@ describe("logical action terminal results", () => {
       emitted,
       handlerRequestIds,
       token: tokens.mint({
+        threadId: "clean-thread",
         actorUserId: "u1",
         chatSessionId: "s1",
         allowedToolNames: null
@@ -208,6 +248,15 @@ describe("logical action terminal results", () => {
         toolName: "demo-module.notes.search",
         invoke: async (thrown: unknown) => {
           const gateway = new AssistantToolGateway({
+            // This fixture exercises ordinary policy on an explicitly clean conversation.
+            provenance: {
+              isTainted: async () => false,
+              recordAdmission: async () => {},
+              runAutomatic: async (_actor, _thread, callback) => ({
+                kind: "ran",
+                value: await callback()
+              })
+            },
             resolveActiveModules: async () => [
               {
                 id: "demo-module",

@@ -359,6 +359,7 @@ describe("Web Research self-operation manifest classification", () => {
 // classification test above for why, and Opus security review on PR #1268 (#1263) for the
 // original reasoning that put it here.
 const PLANNED_CONFIRM_ALWAYS_TOOL_NAMES = [
+  "app.callAction",
   "memory.forget",
   "people.merge",
   "people.splitIdentity",
@@ -455,7 +456,8 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // #2809: +1 (briefings.rerun), granted_at_install. It queues one fresh run of the caller's
     // own briefing; earlier reports stay, so nothing is lost or sent anywhere.
     expect(grantedAtInstall.length).toBe(44);
-    expect(confirmAlways.length).toBe(10);
+    // #3065: app.callAction is fail-closed at the static boundary; route policy is per call.
+    expect(confirmAlways.length).toBe(11);
     expect(userPromotable.length).toBe(5);
 
     // Task 12a moved calendar.deleteEvent out of granted_at_install (33 -> ...). PR #1268's
@@ -480,7 +482,8 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // (granted_at_install, own day-plan draft only, review-gated before any calendar effect)
     // — 43 + 9 + 5 = 57 total. #2809 adds briefings.rerun (granted_at_install) — 44 + 9 + 5 = 58.
     // #2911 adds chat.deleteClassifierShadowRecords (confirm_always, destructive) — 44 + 10 + 5 = 59.
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(59);
+    // #3065 adds one fail-closed static generic transport declaration (60 total).
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(60);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(

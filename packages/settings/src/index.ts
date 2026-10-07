@@ -77,3 +77,4 @@ export {
   type NotificationPreferenceWriteService,
   setNotificationPreferenceEnabled
 } from "./notification-preference-application.js";
+export { appCallActionExecute } from "./app-action-tools.js";

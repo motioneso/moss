@@ -206,9 +206,11 @@ export class ChatRepository {
   async openNewThread(scopedDb: DataContextDb, input: CreateChatThreadInput): Promise<ChatThread> {
     assertDataContextDb(scopedDb);
     const surface = normalizeChatSurface(input.surface);
+    await this.lockThreadSelection(scopedDb, surface);
 
     const now = new Date();
 
+    // The database AFTER INSERT trigger atomically initializes clean provenance.
     return scopedDb.db
       .insertInto("app.chat_threads")
       .values({
@@ -219,7 +221,7 @@ export class ChatRepository {
         surface,
         created_at: now,
         updated_at: now,
-        last_active_at: now
+        last_active_at: this.nextThreadActivity(surface)
       })
       .returningAll()
       .executeTakeFirstOrThrow();
@@ -368,8 +370,8 @@ export class ChatRepository {
   }
 
   /**
-   * Bumps a thread's last_active_at to now so it becomes the current conversation.
-   * Owner-scoped via RLS; app_runtime holds UPDATE on chat_threads.
+   * Advances the owned thread past the surface's latest activity to select it.
+   * The actor/surface lock orders this explicit resume with new chats and completions.
    */
   async touchThread(
     scopedDb: DataContextDb,
@@ -378,12 +380,54 @@ export class ChatRepository {
   ): Promise<ChatThread | undefined> {
     assertDataContextDb(scopedDb);
     const chatSurface = normalizeChatSurface(surface);
+    await this.lockThreadSelection(scopedDb, chatSurface);
+    return this.updateThreadActivity(scopedDb, threadId, chatSurface);
+  }
 
+  /** Refresh a completed bound turn without selecting it over a later new chat or resume. */
+  async touchCurrentThread(
+    scopedDb: DataContextDb,
+    threadId: string,
+    surface?: ChatSurface
+  ): Promise<ChatThread | undefined> {
+    assertDataContextDb(scopedDb);
+    const chatSurface = normalizeChatSurface(surface);
+    await this.lockThreadSelection(scopedDb, chatSurface);
+    const current = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .select("id")
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("surface", "=", chatSurface)
+      .orderBy("last_active_at", "desc")
+      .orderBy("id")
+      .limit(1)
+      .executeTakeFirst();
+    if (current?.id !== threadId) return undefined;
+    return this.updateThreadActivity(scopedDb, threadId, chatSurface);
+  }
+
+  private async lockThreadSelection(scopedDb: DataContextDb, surface: ChatSurface): Promise<void> {
+    // New-thread selection, explicit resume and bound completion use the same transaction
+    // lock before touching thread rows. The timestamp is generated only after this lock.
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(
+      'chat:thread-selection:' || app.current_actor_user_id()::text || ':' || ${surface}, 0
+    ))`.execute(scopedDb.db);
+  }
+
+  private nextThreadActivity(surface: ChatSurface) {
+    return sql<Date>`greatest(clock_timestamp(), (
+      SELECT max(last_active_at) + interval '1 microsecond' FROM app.chat_threads
+      WHERE owner_user_id = app.current_actor_user_id() AND surface = ${surface}
+    ))`;
+  }
+
+  private updateThreadActivity(scopedDb: DataContextDb, threadId: string, surface: ChatSurface) {
     return scopedDb.db
       .updateTable("app.chat_threads")
-      .set({ last_active_at: new Date() })
+      .set({ last_active_at: this.nextThreadActivity(surface) })
       .where("id", "=", threadId)
-      .where("surface", "=", chatSurface)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("surface", "=", surface)
       .returningAll()
       .executeTakeFirst();
   }

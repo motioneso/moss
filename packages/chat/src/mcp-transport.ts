@@ -83,9 +83,8 @@ export function registerMcpTransportRoute(
         return reply.code(401).send(jsonRpcError(null, -32600, "Missing Authorization header"));
       }
       const token = auth.slice(7);
-      let identity: ReturnType<typeof deps.tokens.verify>;
       try {
-        identity = deps.tokens.verify(token);
+        deps.tokens.verify(token);
       } catch {
         return reply.code(401).send(jsonRpcError(null, -32600, "Invalid or expired session token"));
       }
@@ -113,7 +112,7 @@ export function registerMcpTransportRoute(
       if (method === "tools/list") {
         let tools;
         try {
-          tools = (await deps.gateway.listToolsForActor(identity.actorUserId)).map(dtoToMcpTool);
+          tools = (await deps.gateway.listToolsForSession(token)).map(dtoToMcpTool);
         } catch (err) {
           // FAIL CLOSED + scrub: a resolver/DB failure must not expose the tool surface
           // nor leak err.message. Generic internal error; detail logged server-side.
@@ -388,6 +387,69 @@ export function registerNativePermissionRoute(
         .send({ decision: "deny", reason: "Permission gateway failed closed." });
     }
   });
+}
+
+/** A read is admitted only after durable provenance has been recorded for this token. */
+export function registerVaultReadReportRoute(
+  server: FastifyInstance,
+  deps: McpTransportDependencies
+): void {
+  const failure = { error: "Vault read admission failed closed." };
+  server.post(
+    "/internal/vault-read-report",
+    {
+      errorHandler: (_error, _request, reply) => reply.code(400).send(failure)
+    },
+    async (request, reply) => {
+      const auth = request.headers.authorization ?? "";
+      if (!auth.startsWith("Bearer ")) return reply.code(401).send(failure);
+      const token = auth.slice(7);
+      try {
+        const identity = deps.tokens.verify(token);
+        if (!identity.threadId) return reply.code(401).send(failure);
+      } catch {
+        return reply.code(401).send(failure);
+      }
+      if (!isVaultReadReport(request.body)) return reply.code(400).send(failure);
+      try {
+        // No identity or file content from the body reaches the provenance writer.
+        await deps.gateway.recordNativeVaultReadForSession(token);
+        return reply.code(204).send();
+      } catch {
+        // Provider/DB failures may contain private data. Keep response and logs content-free.
+        request.log.warn("vault read admission failed");
+        return reply.code(503).send(failure);
+      }
+    }
+  );
+}
+
+function isVaultReadReport(body: unknown): boolean {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return false;
+  const report = body as Record<string, unknown>;
+  if (typeof report.toolName !== "string" || !["Read", "Glob", "Grep"].includes(report.toolName))
+    return false;
+  if (
+    typeof report.cwd !== "string" ||
+    !report.cwd.startsWith("/") ||
+    report.cwd.includes("\0") ||
+    report.cwd.length > 8192
+  )
+    return false;
+  if (
+    report.toolInput === null ||
+    typeof report.toolInput !== "object" ||
+    Array.isArray(report.toolInput)
+  )
+    return false;
+  const input = report.toolInput as Record<string, unknown>;
+  const candidate =
+    report.toolName === "Read"
+      ? input.file_path
+      : report.toolName === "Glob"
+        ? (input.path ?? input.pattern)
+        : input.path;
+  return typeof candidate === "string" && candidate.startsWith("/") && !candidate.includes("\0");
 }
 
 function dtoToMcpTool(dto: AiAssistantToolDto) {

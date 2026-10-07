@@ -2,16 +2,22 @@ import { lstat, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import type { GatewayToolResponse } from "./types.js";
+import type { AwaitOutcome } from "./confirmation-registry.js";
 
-/**
- * Refusal wording for a held approval that expires or is denied (spec 6.2).
- * The agent retries a bare timeout exactly once, so both outcomes return the
- * same sentence: nothing was done, do not try again, report back. It reads in
- * chat after "Not changed — ", so it speaks to the person first and the agent
- * second.
- */
+/** Policy refusal without a human decision. Never attribute it to the user. */
 export const APPROVAL_REFUSED_REASON =
   "This action was not approved, so it was not done. Do not try it again; let the user know.";
+
+/** Preserve the approval outcome while keeping every refusal terminal for the agent. */
+export function approvalRefusalReason(outcome: Exclude<AwaitOutcome, "confirmed">): string {
+  if (outcome === "rejected") {
+    return "The user declined this action, so it was not done. Do not try it again; acknowledge the user's decision.";
+  }
+  if (outcome === "timeout") {
+    return "Approval timed out, so this action was not done. Do not try it again; let the user know.";
+  }
+  return "The approval request was cancelled, so this action was not done. Do not try it again; let the user know.";
+}
 
 // Bash and Task stay permanently gated: YOLO removes confirmation only for these mutation-only
 // tools, and unknown/future native capabilities fail closed to the normal confirmation path.
@@ -27,6 +33,7 @@ const NATIVE_CONFIG_FILE_NAMES = new Set([
   // rewrite would let later Bash/Task hooks bypass the gateway and every audit row.
   ".jarvis-claude-permission-hook.mjs",
   ".jarvis-claude-settings.json",
+  ".jarvis-claude-mcp.json",
   ".jarvis-claude-permission-token",
   ".claude.json"
 ]);

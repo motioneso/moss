@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import pg from "pg";
 
 import {
@@ -19,6 +19,7 @@ import {
   createExternalActiveModulesResolver,
   createExternalModuleTools
 } from "../../apps/api/src/external-module-tools.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -26,12 +27,19 @@ const { Client } = pg;
 describe("external module AssistantToolGateway", () => {
   let appDb: Kysely<MossDatabase>;
   let bootstrap: pg.Client;
+  let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
 
   beforeAll(async () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
     await bootstrap.connect();
+    runner = new DataContextRunner(appDb);
+  });
+
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
   });
 
   afterAll(async () => Promise.allSettled([appDb?.destroy(), bootstrap?.end()]));
@@ -82,7 +90,6 @@ describe("external module AssistantToolGateway", () => {
     const confirmations = new ConfirmationRegistry();
     const emitted: GatewaySessionRecord[] = [];
     const repository = new AiRepository();
-    const runner = new DataContextRunner(appDb);
     await runner.withDataContext(
       { actorUserId: ids.userA, requestId: "external-install-grant" },
       (scopedDb) => repository.setActionPolicy(scopedDb, "acme", "messages", "trusted_auto")
@@ -90,14 +97,14 @@ describe("external module AssistantToolGateway", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => manifests,
       repository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (_session, record) => emitted.push(record) },
       confirmTimeoutMs: 5_000
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "external",
       allowedToolNames: null
     });
@@ -173,14 +180,14 @@ describe("external module AssistantToolGateway", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => manifests,
       repository: new AiRepository(),
-      runner: new DataContextRunner(appDb),
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (_session, record) => emitted.push(record) },
       confirmTimeoutMs: 5_000
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: "external",
       allowedToolNames: null
     });
@@ -235,15 +242,18 @@ describe("external module AssistantToolGateway", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => manifests,
       repository: new AiRepository(),
-      runner: new DataContextRunner(appDb),
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (_session, record) => emitted.push(record) },
       confirmTimeoutMs: 5_000
     });
-    const result = await gateway.runReadToolForActor(ids.userA, "acme.read", {
-      value: "NOT-LOWERCASE-123"
-    });
+    const result = await gateway.runReadToolForActor(
+      ids.userA,
+      "acme.read",
+      { value: "NOT-LOWERCASE-123" },
+      { ...conversations.bindingFor(ids.userA), chatSessionId: "external-validation" }
+    );
     expect(result).toMatchObject({ ok: false });
     expect(calls).toHaveLength(0);
     expect((result as { ok: false; error: string }).error).toContain("acme.read");
@@ -273,7 +283,7 @@ describe("external module AssistantToolGateway", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules,
       repository: new AiRepository(),
-      runner: new DataContextRunner(appDb),
+      ...conversations.gatewayDependencies,
       tokens: new SessionTokenRegistry(),
       confirmations: new ConfirmationRegistry(),
       notifier: { emit: () => undefined },

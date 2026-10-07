@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "food",
   "name": "Food",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {

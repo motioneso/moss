@@ -1,5 +1,6 @@
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 
+import { candidateSummary, candidateTitle } from "./candidate-labels.js";
 import type { MemoryCandidateRecord } from "./candidates-repository.js";
 import { MemoryCandidatesRepository } from "./candidates-repository.js";
 import type {
@@ -110,8 +111,17 @@ export class MemoryDashboardService {
     req: AcceptMemoryCandidateRequest
   ): Promise<{ accepted: boolean }> {
     assertDataContextDb(scopedDb);
-    const candidate = await this.candidatesRepo.getById(scopedDb, ownerUserId, candidateId);
-    if (!candidate || candidate.status !== "pending") return { accepted: false };
+    const pending = await this.candidatesRepo.getById(scopedDb, ownerUserId, candidateId);
+    if (!pending || pending.status !== "pending") return { accepted: false };
+    // The earlier read is not a claim: another accept may have passed it too. Only
+    // the transaction that updates the still-pending row may create its memory.
+    const candidate = await this.candidatesRepo.claimPendingForPromotion(
+      scopedDb,
+      ownerUserId,
+      candidateId,
+      "accepted via dashboard"
+    );
+    if (!candidate) return { accepted: false };
 
     const payload = candidate.payloadJson as Record<string, unknown> | null;
     const kind = typeof payload?.kind === "string" ? payload.kind : null;
@@ -163,7 +173,7 @@ export class MemoryDashboardService {
         });
       }
     } else {
-      const summaryText = edited?.summary ?? extractCandidateSummary(payload);
+      const summaryText = edited?.summary ?? candidateSummary(payload);
       const selfEntity = await this.graphRepo.ensureSelfEntity(scopedDb, ownerUserId);
       await this.recallSvc.remember(scopedDb, ownerUserId, {
         subjectEntityId: selfEntity.id,
@@ -176,12 +186,6 @@ export class MemoryDashboardService {
       });
     }
 
-    await this.candidatesRepo.markPromoted(
-      scopedDb,
-      ownerUserId,
-      candidateId,
-      "accepted via dashboard"
-    );
     return { accepted: true };
   }
 
@@ -302,14 +306,14 @@ function safeSourceSummary(source: MemorySourceSummary | undefined): string {
 
 function candidateToItem(c: MemoryCandidateRecord): MemoryDashboardItem {
   const payload = c.payloadJson as Record<string, unknown> | null;
-  const title = extractCandidateTitle(payload);
+  const title = candidateTitle(payload);
   const recordKind =
     typeof payload?.recordKind === "string" ? (payload.recordKind as MemoryRecordKind) : undefined;
   return {
     itemKind: "candidate",
     id: c.id,
     title,
-    summary: extractCandidateSummary(payload),
+    summary: candidateSummary(payload),
     recordKind,
     status: c.status,
     confidence: c.confidence,
@@ -347,29 +351,6 @@ function factToItem(f: MemoryFactRecord): MemoryDashboardItem {
     pinned: f.pinned,
     editableFields: ["validFrom", "validTo", "staleAt", "pinned"]
   };
-}
-
-function extractCandidateTitle(payload: Record<string, unknown> | null): string {
-  if (!payload) return "Memory candidate";
-  const fact = (payload.fact ?? null) as Record<string, unknown> | null;
-  if (fact) {
-    const parts = [fact.subject, fact.predicate, fact.objectText ?? fact.objectName].filter(
-      Boolean
-    );
-    if (parts.length > 0) return (parts as string[]).join(" ");
-  }
-  const entity = (payload.entity ?? null) as Record<string, unknown> | null;
-  if (entity && typeof entity.name === "string") return entity.name;
-  if (typeof payload.summary === "string") return payload.summary.slice(0, 120);
-  return "Memory candidate";
-}
-
-function extractCandidateSummary(payload: Record<string, unknown> | null): string {
-  if (!payload) return "";
-  if (typeof payload.summary === "string") return payload.summary;
-  const fact = (payload.fact ?? null) as Record<string, unknown> | null;
-  if (fact && typeof fact.objectText === "string") return fact.objectText;
-  return extractCandidateTitle(payload);
 }
 
 function factTitle(f: MemoryFactRecord): string {
