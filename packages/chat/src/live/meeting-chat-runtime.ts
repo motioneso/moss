@@ -67,7 +67,8 @@ export function createMeetingChatRuntime(
       if (model.provider_auth_method !== "api_key")
         throw new MeetingChatError(
           "meeting_chat_unsupported",
-          "Meeting questions currently require an API-key chat model. Subscription chat support is not available yet."
+          "Meeting questions currently require an API-key chat model. " +
+            "Remove the ‘About this meeting’ chip to continue ordinary chat with your selected model."
         );
       const provider = await ai.selectProviderWithCredential(db, model.provider_config_id);
       if (

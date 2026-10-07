@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Button, Chip } from "@moss/ui";
 import { ApiError as ModuleApiError, requestJson } from "@moss/module-web-sdk";
-import { meetingChatSurface, type MeetingChatSelection } from "@moss/shared";
+import { meetingChatSurface, type MeetingChatSelection, type MeetingRecord } from "@moss/shared";
 import { ApiError, listChatThreads, listChatThreadMessages } from "../api/client";
 import { ChatDrawer } from "./chat-drawer";
 import { recordsFromMessages } from "./use-chat-stream";
@@ -30,8 +30,19 @@ export function MeetingChatDrawer(props: {
   const [unavailable, setUnavailable] = useState(false);
   const access = useQuery({
     queryKey: ["meeting-chat-access", selection.selectionId],
-    queryFn: ({ signal }) =>
-      requestJson<{ available: true }>(`/api/chat/meeting-context?surface=${surface}`, { signal }),
+    queryFn: async ({ signal }) => {
+      const status = await requestJson<{ available: true }>(
+        `/api/chat/meeting-context?surface=${surface}`,
+        { signal }
+      );
+      // Read the title through the public owner-scoped API, not a route label or a shared cache.
+      // Keep it in the same selection-bound access result so denials hide it with the history.
+      const { meeting } = await requestJson<{ meeting: MeetingRecord }>(
+        `/api/meetings/records/${encodeURIComponent(selection.meetingId)}`,
+        { signal }
+      );
+      return { ...status, title: meeting.title };
+    },
     enabled: !unavailable,
     gcTime: 0,
     retry: false,
@@ -106,7 +117,7 @@ export function MeetingChatDrawer(props: {
       streamErrorCount={0}
       isFounder={props.isFounder}
       surface={surface}
-      meetingContext={selection}
+      meetingContext={{ ...selection, title: access.data.title }}
       onRemoveMeetingContext={props.onRemoveContext}
       onMeetingUnavailable={() => setUnavailable(true)}
     />

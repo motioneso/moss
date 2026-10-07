@@ -111,7 +111,12 @@ export async function assertMeetingLinkControls({
       const settings = page.locator(".meeting-settings");
       const unlinkButton = settings.getByRole("button", { name: "Unlink Mac", exact: true });
       const audioSource = settings.getByLabel("Audio source", { exact: true });
-      await expect(settings.getByRole("checkbox")).toHaveCount(0);
+      const automaticSummary = settings.getByRole("checkbox", {
+        name: "Summarize automatically after Stop",
+        exact: true
+      });
+      await expect(settings.getByRole("checkbox")).toHaveCount(1);
+      await expect(automaticSummary).toBeChecked({ checked: saved.summarizeOnStop });
       await expect(settings.getByText("Linked", { exact: true })).toBeVisible();
       if (action === "revoke") {
         expect(saved.defaultCaptureMode).toBe("computer-audio");
@@ -131,6 +136,24 @@ export async function assertMeetingLinkControls({
           ).json()) as MeetingCaptureBrowserStatus;
           expect(current.capture?.selection).toEqual(capture.selection);
         }
+        for (const enabled of [!saved.summarizeOnStop, saved.summarizeOnStop]) {
+          const saving = page.waitForResponse(
+            (response) =>
+              response.url().endsWith("/api/meetings/preferences") &&
+              response.request().method() === "PUT"
+          );
+          await settings.locator(".jds-switch").click();
+          const savedSummary = await saving;
+          expect(savedSummary.status()).toBe(200);
+          expect(savedSummary.request().postDataJSON()).toEqual({ summarizeOnStop: enabled });
+          await expect(automaticSummary).toBeEnabled();
+          expect(await (await page.request.get("/api/meetings/preferences")).json()).toEqual({
+            ...saved,
+            summarizeOnStop: enabled
+          });
+          await page.reload();
+          await expect(automaticSummary).toBeChecked({ checked: enabled });
+        }
         expect(await (await page.request.get("/api/meetings/preferences")).json()).toEqual(saved);
       }
       const originalViewport = page.viewportSize();
@@ -140,7 +163,7 @@ export async function assertMeetingLinkControls({
           await page.evaluate((mode) => {
             document.documentElement.dataset.colorMode = mode;
           }, mode);
-          for (const control of [unlinkButton, audioSource]) {
+          for (const control of [unlinkButton, audioSource, settings.locator(".jds-switch")]) {
             await expect(control).toBeVisible();
             const bounds = await control.boundingBox();
             expect(bounds).not.toBeNull();

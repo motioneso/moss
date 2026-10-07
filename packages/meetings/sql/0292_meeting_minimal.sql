@@ -44,7 +44,7 @@ GRANT SELECT (meeting_id,owner_user_id,grant_id,request_key,template_id,status,c
 GRANT UPDATE (status,code,input_json) ON app.meeting_stop_summaries TO jarvis_worker_runtime;
 
 -- The canonical worker may reserve/save summaries under the owner's RLS. It cannot write capture
--- state, change notice/capability bindings, accept action candidates, or read capture credentials.
+-- state, change capability bindings, accept action candidates, or read capture credentials.
 CREATE POLICY meeting_records_summary_worker ON app.meeting_records FOR UPDATE TO jarvis_worker_runtime
   USING (owner_user_id=app.current_actor_user_id()) WITH CHECK (owner_user_id=app.current_actor_user_id());
 GRANT UPDATE (title,updated_at) ON app.meeting_records TO jarvis_worker_runtime;
