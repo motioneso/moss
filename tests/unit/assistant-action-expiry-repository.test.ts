@@ -3,6 +3,38 @@ import { AiRepository } from "../../packages/ai/src/repository.js";
 import { makeRecordingDb } from "./helpers/recording-db.js";
 
 describe("assistant-action lifecycle SQL", () => {
+  it("bounds recovery to due pending requests and unwritten bound timeouts", async () => {
+    const { scoped, queries } = makeRecordingDb();
+    await new AiRepository().listRecoverableAssistantActions(scoped, 1000, "previous-timeout");
+    expect(queries[0]?.sql).toContain('"status" = $1 and "expires_at" <= now()');
+    expect(queries[1]?.sql).toContain(
+      '"status" = $1 and "outcome_recorded_at" is null and "outcome_ignored_at" is null and "chat_thread_id" is not null and "chat_session_id" is not null and "id" > $2'
+    );
+    expect(queries[0]?.sql).toContain('order by "expires_at", "id" limit $2');
+    expect(queries[0]?.parameters).toEqual(["pending", 25]);
+    expect(queries[1]?.sql).toContain('order by "id" limit $3');
+    expect(queries[1]?.parameters).toEqual(["timed_out", "previous-timeout", 25]);
+  });
+
+  it("reads only the nearest future expiry and acknowledges only a terminal timeout", async () => {
+    const { scoped, queries } = makeRecordingDb();
+    const repository = new AiRepository();
+    await repository.nextAssistantActionExpiry(scoped);
+    expect(queries[0]?.sql).toContain('select "expires_at"');
+    expect(queries[0]?.sql).toContain('"expires_at" > now() order by "expires_at" limit $2');
+    expect(queries[0]?.parameters).toEqual(["pending", 1]);
+    await repository.markAssistantActionOutcomeRecorded(scoped, "action-1");
+    expect(queries[1]?.sql).toContain(
+      'set "outcome_recorded_at" = now() where "id" = $1 and "status" = $2 and "outcome_recorded_at" is null and "outcome_ignored_at" is null'
+    );
+    expect(queries[1]?.parameters).toEqual(["action-1", "timed_out"]);
+    await repository.markAssistantActionOutcomeIgnored(scoped, "action-2");
+    expect(queries[2]?.sql).toContain(
+      'set "outcome_ignored_at" = now() where "id" = $1 and "status" = $2 and "outcome_recorded_at" is null and "outcome_ignored_at" is null'
+    );
+    expect(queries[2]?.parameters).toEqual(["action-2", "timed_out"]);
+  });
+
   it("atomically expires only the owned pending row at its durable deadline", async () => {
     const { scoped, queries } = makeRecordingDb();
     await new AiRepository().expireAssistantAction(scoped, "action-1");

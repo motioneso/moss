@@ -62,7 +62,9 @@ class FakePersistence implements ChatPersistencePort {
     return { id: "thread-1", surface: DEFAULT_CHAT_SURFACE, incognito: false };
   }
 
-  async persistActionRecord(): Promise<void> {}
+  async persistActionRecord(): Promise<boolean> {
+    return false;
+  }
 
   async getThreadContext(): Promise<{
     threadTitle: string | null;
@@ -341,7 +343,9 @@ describe("task 8a Architect regressions", () => {
       persona: "persona",
       pollMs: 0
     });
-    injectResult = () => manager.injectOriginRecord("user-1", "thread-1", result);
+    injectResult = async () => {
+      await manager.injectOriginRecord("user-1", "thread-1", result);
+    };
     manager.subscribe("user-1", (record) => seen.push(serializeSubscriberRecord(record)));
 
     await expect(manager.submitTurn("user-1", "Ben", "Run action")).rejects.toThrow(

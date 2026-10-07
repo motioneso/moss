@@ -1,6 +1,7 @@
+import { reportActionRecordFailure } from "@moss/ai";
 import type { ChatPersistencePort } from "./chat-session-ports.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
-import { surfaceSessionKey, type ChatSurface } from "./chat-surface.js";
+import { normalizeChatSurface, surfaceSessionKey, type ChatSurface } from "./chat-surface.js";
 import { injectActionResultRecord, type PendingActionResult } from "./session-runtime-helpers.js";
 import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 
@@ -28,12 +29,12 @@ export async function withOriginThreadTransition<T>(
   }
 }
 
-/** Action delivery is bound to an owned conversation, never to whatever a surface now selects. */
-export async function routeOriginRecord(input: {
-  readonly actorUserId: string;
-  readonly originThreadId: string | null | undefined;
-  readonly record: TranscriptRecord;
-  readonly historyOnly?: boolean;
+export interface OriginRecordReceipt {
+  readonly historyPersisted: boolean;
+  readonly historyIgnored?: boolean;
+}
+
+interface OriginRoutingState {
   readonly persistence: ChatPersistencePort;
   readonly sessions: ReadonlyMap<string, UserSession>;
   readonly transitions: ReadonlyMap<string, OriginThreadTransition>;
@@ -43,10 +44,65 @@ export async function routeOriginRecord(input: {
   readonly turnRecords: ReadonlyMap<string, TranscriptRecord[]>;
   readonly actionResults: ReadonlyMap<string, ActionResultMetadata[]>;
   readonly emit: (surface: ChatSurface, record: TranscriptRecord) => void;
-}): Promise<void> {
+}
+
+/** Only server-verified origins may use this synchronous path; it never consults a current pointer. */
+export function routeLiveOriginRecord(
+  input: OriginRoutingState & {
+    readonly actorUserId: string;
+    readonly originThreadId: string;
+    readonly record: TranscriptRecord;
+    readonly surface: string;
+  }
+): boolean {
+  const { actorUserId, originThreadId, record } = input;
+  if (!originThreadId || !record.actionRequestId || !input.surface) return false;
+  if (record.kind !== "action_request" && record.kind !== "action_result") return false;
+  let surface: ChatSurface;
+  try {
+    surface = normalizeChatSurface(input.surface);
+  } catch {
+    return false;
+  }
+  const key = surfaceSessionKey(actorUserId, surface);
+  const session = input.sessions.get(key);
+  if (
+    !session ||
+    session.actorUserId !== actorUserId ||
+    session.threadId !== originThreadId ||
+    session.surface !== surface ||
+    input.transitions.get(key)?.pending
+  )
+    return false;
+  if (record.kind === "action_result" && record.outcome) {
+    injectActionResultRecord(record, {
+      sessionKey: key,
+      sequenceBySession: input.sequenceBySession,
+      turnRecords: input.turnRecords.get(key),
+      actionResults: input.actionResults.get(key),
+      emit: (next) => input.emit(surface, next)
+    });
+  } else {
+    input.emit(surface, record);
+  }
+  return true;
+}
+
+/** Action delivery is bound to an owned conversation, never to whatever a surface now selects. */
+export async function routeOriginRecord(
+  input: OriginRoutingState & {
+    readonly actorUserId: string;
+    readonly originThreadId: string | null | undefined;
+    readonly record: TranscriptRecord;
+    readonly historyOnly?: boolean;
+  }
+): Promise<OriginRecordReceipt> {
   const { actorUserId, originThreadId, record, persistence } = input;
-  if (!originThreadId || !record.actionRequestId) return;
-  if (record.kind !== "action_request" && record.kind !== "action_result") return;
+  const receipt: { historyPersisted: boolean; historyIgnored?: boolean } = {
+    historyPersisted: false
+  };
+  if (!originThreadId || !record.actionRequestId) return receipt;
+  if (record.kind !== "action_request" && record.kind !== "action_result") return receipt;
   const versions = new Map(input.transitions);
   // Reserve the original arrival position before the owner lookup can yield to engine reads.
   const arrivingSession = [...input.sessions.values()].find(
@@ -66,17 +122,27 @@ export async function routeOriginRecord(input: {
     approvalSequence = Math.max(current, recordSequence) + 1;
     input.sequenceBySession.set(arrivingKey, approvalSequence);
   }
-  const origin = await persistence.getOwnedThreadState?.(actorUserId, originThreadId);
-  if (!origin || origin.id !== originThreadId) return;
+  if (!persistence.getOwnedThreadState) return receipt;
+  const origin = await persistence.getOwnedThreadState(actorUserId, originThreadId);
+  if (!origin) return { historyPersisted: false, historyIgnored: true };
+  if (origin.id !== originThreadId) return receipt;
+  if (origin.incognito) receipt.historyIgnored = true;
   const key = surfaceSessionKey(actorUserId, origin.surface);
   // A separate idempotent write closes the race with an already-saving/completed model turn.
   if (record.kind === "action_result" && record.outcome && !origin.incognito) {
-    await persistence.persistActionRecord?.(actorUserId, originThreadId, {
-      ...record,
-      ...(recordSequence === undefined ? {} : { sequence: recordSequence })
-    });
+    try {
+      receipt.historyPersisted =
+        (await persistence.persistActionRecord?.(actorUserId, originThreadId, {
+          ...record,
+          ...(recordSequence === undefined ? {} : { sequence: recordSequence })
+        })) === true;
+    } catch {
+      // A history write failure must not hide a known live outcome or its refresh hints.
+      // The exact owned/current/session/transition checks still apply below.
+      reportActionRecordFailure(record.actionRequestId);
+    }
   }
-  if (input.historyOnly) return;
+  if (input.historyOnly) return receipt;
   const current = await persistence.getCurrentThreadState?.(actorUserId, origin.surface);
   const transition = input.transitions.get(key);
   if (
@@ -84,10 +150,10 @@ export async function routeOriginRecord(input: {
     transition?.pending ||
     (transition?.version ?? 0) !== (versions.get(key)?.version ?? 0)
   )
-    return;
+    return receipt;
   const session = input.sessions.get(key);
   if (session && (session.actorUserId !== actorUserId || session.threadId !== originThreadId))
-    return;
+    return receipt;
   if (record.kind === "action_result" && record.outcome) {
     if (input.turnsInFlight.has(key)) {
       const currentSequence = input.sequenceBySession.get(key) ?? 0;
@@ -97,7 +163,7 @@ export async function routeOriginRecord(input: {
       const pending = input.pendingBySession.get(key) ?? [];
       pending.push({ record, recordSequence, approvalSequence });
       input.pendingBySession.set(key, pending);
-      return;
+      return receipt;
     }
     injectActionResultRecord(record, {
       sessionKey: key,
@@ -108,7 +174,8 @@ export async function routeOriginRecord(input: {
       actionResults: input.actionResults.get(key),
       emit: (next) => input.emit(origin.surface, next)
     });
-    return;
+    return receipt;
   }
   input.emit(origin.surface, record);
+  return receipt;
 }

@@ -135,7 +135,7 @@ export async function requestNativeToolPermission(
   );
   const pendingResolution = awaitActionResolution(deps, access, action.id);
 
-  emitPendingActionRequest(deps, actorUserId, chatSessionId, {
+  emitPendingActionRequest(deps, actorUserId, chatSessionId, action, {
     kind: "action_request",
     actionRequestId: action.id,
     ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),

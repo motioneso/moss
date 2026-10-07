@@ -14,10 +14,21 @@ export function emitPendingActionRequest(
   deps: { readonly confirmations: ConfirmationRegistry; readonly notifier: SessionNotifier },
   actorUserId: string,
   chatSessionId: string,
+  action: AiAssistantActionRequestSafeRow,
   record: Extract<GatewaySessionRecord, { kind: "action_request" }>
 ): void {
-  deps.confirmations.storePresentation(actorUserId, record);
-  deps.notifier.emit(chatSessionId, record);
+  const { liveOrigin: _untrustedOrigin, ...presentation } = record;
+  const bound = {
+    ...presentation,
+    ...(action.id === record.actionRequestId &&
+    action.owner_user_id === actorUserId &&
+    action.chat_session_id === chatSessionId &&
+    action.chat_thread_id
+      ? { liveOrigin: { actorUserId, chatSessionId, threadId: action.chat_thread_id } }
+      : {})
+  };
+  deps.confirmations.storePresentation(actorUserId, bound);
+  deps.notifier.emit(chatSessionId, bound);
 }
 
 interface ActionRequestStore {

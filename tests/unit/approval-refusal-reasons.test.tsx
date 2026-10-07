@@ -58,11 +58,13 @@ describe.each(["module", "native", "acp"] as const)("%s approval outcomes", (pat
     vi.spyOn(repository, "createPendingAssistantAction").mockImplementation(async (_db, input) => {
       const now = new Date();
       action = {
-        id: "approval-outcome",
+        id: "42000000-0000-4000-8000-000000000001",
         owner_user_id: "u1",
         chat_thread_id: input.chatThreadId ?? null,
         chat_session_id: input.chatSessionId ?? null,
         expires_at: input.expiresAt ?? null,
+        outcome_recorded_at: null,
+        outcome_ignored_at: null,
         tool_module_id: input.toolModuleId,
         tool_module_name: input.toolModuleName,
         tool_name: input.toolName,
@@ -159,7 +161,11 @@ describe.each(["module", "native", "acp"] as const)("%s approval outcomes", (pat
             });
     if (test.outcome !== "timeout") {
       await vi.waitFor(() => expect(records[0]).toMatchObject({ kind: "action_request" }));
-      await gateway.resolveActionRequest("u1", "approval-outcome", test.outcome);
+      await gateway.resolveActionRequest(
+        "u1",
+        "42000000-0000-4000-8000-000000000001",
+        test.outcome
+      );
     }
     await expect(pending).resolves.toMatchObject(
       path === "module"
@@ -177,7 +183,9 @@ describe.each(["module", "native", "acp"] as const)("%s approval outcomes", (pat
     // Person-facing copy follows the real notifier, stream parser and chat row; model-only
     // instructions belong solely to the tool reply asserted above.
     const injectOriginRecord = vi.fn(
-      async (_actor: string, _thread: string, _record: TranscriptRecord) => {}
+      async (_actor: string, _thread: string, _record: TranscriptRecord) => ({
+        historyPersisted: false
+      })
     );
     const notifier = createChatGatewayNotifier(
       { injectOriginRecord } as unknown as ChatSessionManager,

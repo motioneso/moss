@@ -836,6 +836,8 @@ export interface AiAssistantActionRequestsTable {
   chat_thread_id: string | null;
   chat_session_id: string | null;
   expires_at: NullableTimestampColumn;
+  outcome_recorded_at: NullableTimestampColumn;
+  outcome_ignored_at: NullableTimestampColumn;
   owner_user_id: string;
   tool_module_id: string;
   tool_module_name: string;

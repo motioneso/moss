@@ -3,10 +3,12 @@ import type { AiAssistantActionRequestSafeRow } from "../../packages/ai/src/repo
 import { ConfirmationRegistry } from "../../packages/ai/src/gateway/confirmation-registry.js";
 import {
   awaitActionResolution,
+  emitPendingActionRequest,
   expireActionRequest,
   resolvePersistedActionRequest
 } from "../../packages/ai/src/gateway/action-request-lifecycle.js";
 import { ActionRequestRecovery } from "../../packages/ai/src/gateway/action-request-recovery.js";
+import { reportActionRecordFailure } from "../../packages/ai/src/gateway/action-record-diagnostics.js";
 
 afterEach(() => vi.useRealTimers());
 
@@ -28,6 +30,8 @@ function fixture() {
     request_id: "request-1",
     requested_at: new Date(),
     expires_at: new Date(Date.now() + 100),
+    outcome_recorded_at: null,
+    outcome_ignored_at: null,
     resolved_at: null,
     updated_at: new Date()
   };
@@ -36,6 +40,24 @@ function fixture() {
   const repository = {
     listAssistantActions: vi.fn(async (db: Scope) =>
       db.actor === row.owner_user_id ? [{ ...row }] : []
+    ),
+    listRecoverableAssistantActions: vi.fn(async (db: Scope) =>
+      db.actor === row.owner_user_id &&
+      ((row.status === "pending" && row.expires_at && row.expires_at.getTime() <= Date.now()) ||
+        (row.status === "timed_out" &&
+          !row.outcome_recorded_at &&
+          !row.outcome_ignored_at &&
+          row.chat_thread_id))
+        ? [{ ...row }]
+        : []
+    ),
+    nextAssistantActionExpiry: vi.fn(async (db: Scope) =>
+      db.actor === row.owner_user_id &&
+      row.status === "pending" &&
+      row.expires_at &&
+      row.expires_at.getTime() > Date.now()
+        ? row.expires_at
+        : null
     ),
     getAssistantAction: vi.fn(async (db: Scope, id: string) =>
       visible(db, id) ? { ...row } : undefined
@@ -97,6 +119,33 @@ function fixture() {
 }
 
 describe("durable action resolution", () => {
+  it("derives live delivery proof only from the matching owned persisted request", () => {
+    const h = fixture();
+    const record = {
+      kind: "action_request" as const,
+      actionRequestId: h.row.id,
+      toolName: h.row.tool_name,
+      summary: "Edit note",
+      outsideContentNotice: false,
+      liveOrigin: { actorUserId: "forged", chatSessionId: "forged", threadId: "forged" }
+    };
+    emitPendingActionRequest(h.deps, "owner-a", "owner-a:drawer", h.row, record);
+    expect(h.emit.mock.calls[0]?.[1].liveOrigin).toEqual({
+      actorUserId: "owner-a",
+      chatSessionId: "owner-a:drawer",
+      threadId: "conversation-a"
+    });
+    for (const row of [
+      { ...h.row, id: "other-action" },
+      { ...h.row, owner_user_id: "owner-b" },
+      { ...h.row, chat_session_id: "owner-a:other-surface" },
+      { ...h.row, chat_thread_id: null }
+    ]) {
+      emitPendingActionRequest(h.deps, "owner-a", "owner-a:drawer", row, record);
+      expect(h.emit.mock.lastCall?.[1]).not.toHaveProperty("liveOrigin");
+    }
+  });
+
   it("persists timeout before settling and keeps the captured conversation", async () => {
     const h = fixture();
     const pending = h.start();
@@ -177,6 +226,70 @@ describe("durable action resolution", () => {
 });
 
 describe("registry persistence failure races", () => {
+  it.each(["timeout", "cancelled"] as const)(
+    "bounds failed %s persistence and never grants execution",
+    async (outcome) => {
+      vi.useFakeTimers();
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const registry = new ConfirmationRegistry();
+        const actionId = `failed-${outcome}`;
+        const persist = vi.fn(async () => {
+          throw new Error("private SQL and action input");
+        });
+        registry.beginTurn("session", "turn");
+        const pending = registry.awaitResolution(actionId, 10, "session", "turn", persist);
+        if (outcome === "cancelled") registry.cancelSession("session");
+        await vi.advanceTimersByTimeAsync(3_010);
+        expect(await pending).toBe(outcome);
+        expect(persist).toHaveBeenCalledTimes(3);
+        expect(registry.isAwaiting(actionId)).toBe(false);
+        expect(registry.resolve(actionId, "confirmed")).toBe(false);
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(persist).toHaveBeenCalledTimes(3);
+        // A later notifier/history failure for the same record must not multiply diagnostics.
+        reportActionRecordFailure(actionId);
+        expect(warn.mock.calls).toEqual([
+          ["action_record_delivery_failed", { actionRequestId: actionId }]
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
+    }
+  );
+
+  it("bounds a hung timeout write and rejects a late approval completion", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const registry = new ConfirmationRegistry();
+      const persistTimeout = vi.fn(() => new Promise<"timeout">(() => {}));
+      const pending = registry.awaitResolution(
+        "hung-action",
+        10,
+        undefined,
+        undefined,
+        persistTimeout
+      );
+      let release!: () => void;
+      const approval = registry.resolveAndAwaitCompletion("hung-action", "confirmed", async () => {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return true;
+      });
+      await vi.advanceTimersByTimeAsync(3_010);
+      expect(await pending).toBe("timeout");
+      registry.markDone("hung-action");
+      release();
+      expect(await approval).toBe(false);
+      expect(persistTimeout).toHaveBeenCalledOnce();
+      expect(warn).toHaveBeenCalledOnce();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("does not strand approval completion when timeout persistence rejects", async () => {
     vi.useFakeTimers();
     const registry = new ConfirmationRegistry();
@@ -201,6 +314,49 @@ describe("registry persistence failure races", () => {
 });
 
 describe("owner-scoped restart recovery", () => {
+  it("expires a new request and rotates beyond fifty permanently failing history rows", async () => {
+    const h = fixture();
+    h.row.expires_at = new Date(Date.now() - 1);
+    const history = Array.from({ length: 51 }, (_, index) => ({
+      ...h.row,
+      id: `history-${String(index).padStart(3, "0")}`,
+      status: "timed_out" as const
+    }));
+    const list = vi.fn(async (_db: unknown, _limit: number, cursor?: string) => [
+      ...(h.row.status === "pending" ? [{ ...h.row }] : []),
+      ...history.filter((row) => !cursor || row.id > cursor).slice(0, 25)
+    ]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const recovery = new ActionRequestRecovery({
+      ...h.deps,
+      repository: { ...h.repository, listRecoverableAssistantActions: list } as never,
+      notifier: {
+        emit: h.emit,
+        flush: async () => {
+          throw new Error("private write failure");
+        }
+      }
+    });
+    try {
+      await recovery.recover("owner-a");
+      expect(h.row.status).toBe("timed_out");
+      expect(h.repository.expireAssistantAction).toHaveBeenCalledOnce();
+      await recovery.recover("owner-a");
+      await recovery.recover("owner-a");
+      expect(list.mock.calls.map((call) => call[2])).toEqual([
+        undefined,
+        "history-024",
+        "history-049"
+      ]);
+      expect(new Set(h.emit.mock.calls.map((call) => call[1].actionRequestId)).size).toBe(52);
+      await recovery.recover("owner-a");
+      expect(list.mock.lastCall?.[2]).toBeUndefined();
+    } finally {
+      recovery.dispose();
+      warn.mockRestore();
+    }
+  });
+
   it("recovers conversation A at its deadline while B is active, once", async () => {
     const h = fixture();
     const recovery = new ActionRequestRecovery(h.deps);
@@ -253,6 +409,59 @@ describe("owner-scoped restart recovery", () => {
     release();
     await pending;
     expect(finished).toBe(true);
+    recovery.dispose();
+  });
+
+  it("stops replaying acknowledged outcomes and never reads full action history", async () => {
+    const h = fixture();
+    h.row.status = "timed_out";
+    const recovery = new ActionRequestRecovery(h.deps);
+    await recovery.recover("owner-a");
+    expect(h.emit).toHaveBeenCalledOnce();
+    h.row.outcome_recorded_at = new Date();
+    await recovery.recover("owner-a");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.emit).toHaveBeenCalledOnce();
+    expect(h.repository.listAssistantActions).not.toHaveBeenCalled();
+    expect(h.repository.listRecoverableAssistantActions).toHaveBeenCalledWith(
+      { actor: "owner-a" },
+      50,
+      undefined
+    );
+    expect(h.repository.listRecoverableAssistantActions).toHaveBeenCalledTimes(2);
+    recovery.dispose();
+  });
+
+  it("does not replay a positively ignored timeout or pretend its history was written", async () => {
+    const h = fixture();
+    h.row.status = "timed_out";
+    h.row.outcome_ignored_at = new Date();
+    const recovery = new ActionRequestRecovery(h.deps);
+    await recovery.recover("owner-a");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(h.emit).not.toHaveBeenCalled();
+    expect(h.row.outcome_recorded_at).toBeNull();
+    expect(h.repository.listRecoverableAssistantActions).toHaveBeenCalledOnce();
+    recovery.dispose();
+  });
+
+  it("logs a failed record once using identifiers only and retries the unacknowledged outcome", async () => {
+    const h = fixture();
+    h.row.id = "recovery-error-1";
+    h.row.expires_at = new Date(Date.now() - 1);
+    h.repository.expireAssistantAction.mockRejectedValue(new Error("private SQL and content"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const recovery = new ActionRequestRecovery(h.deps);
+    await recovery.recover("owner-a");
+    await vi.advanceTimersByTimeAsync(3_000);
+    await vi.advanceTimersByTimeAsync(119_000);
+    expect(h.repository.expireAssistantAction).toHaveBeenCalledTimes(7);
+    expect(warn.mock.calls).toEqual([
+      ["action_record_delivery_failed", { actionRequestId: "recovery-error-1" }]
+    ]);
+    warn.mockRestore();
+    expect(h.row.status).toBe("pending");
+    expect(h.emit).not.toHaveBeenCalled();
     recovery.dispose();
   });
 

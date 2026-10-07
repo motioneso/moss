@@ -109,6 +109,14 @@ export type ActiveModulesResolver = (actorUserId: string) => Promise<readonly Mo
 export type GatewaySessionRecord =
   | {
       readonly kind: "action_request";
+      /** Server-only completeness rule declared by the owning tool manifest. */
+      readonly requiresTarget?: true;
+      /** Server-only proof copied from the owned persisted request, never provider/model input. */
+      readonly liveOrigin?: {
+        readonly actorUserId: string;
+        readonly chatSessionId: string;
+        readonly threadId: string;
+      };
       /** Server token's frozen conversation binding; never supplied by model tool input. */
       readonly originThreadId?: string;
       readonly actionRequestId: string;

@@ -647,13 +647,13 @@ export function ChatDrawer(props: {
     if (!change) return;
     privateModeDecidedLocally.current = true;
     closingPrivateChatRef.current = true;
+    setPrivateMode(false);
+    setPrivateEnded(false);
     const initiatingSurface = props.surface;
     void (async () => {
       try {
         await endPrivateChat(initiatingSurface);
         if (!transition.isCurrent(change)) return;
-        setPrivateMode(false);
-        setPrivateEnded(false);
         props.clearRecords();
         setFallbackRecords([]);
       } catch (caught) {
@@ -943,7 +943,7 @@ export function ChatDrawer(props: {
         readOnly={
           privateEnded ||
           historyActivationPending ||
-          transition.pending ||
+          (transition.pending && !activatingPrivate) ||
           (Boolean(props.meetingContext) && reviewing)
         }
         isFounder={props.isFounder}

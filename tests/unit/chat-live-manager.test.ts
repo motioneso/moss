@@ -263,7 +263,9 @@ class FakePersistence implements ChatPersistencePort {
     return { ...thread, surface: DEFAULT_CHAT_SURFACE };
   }
 
-  async persistActionRecord(): Promise<void> {}
+  async persistActionRecord(): Promise<boolean> {
+    return false;
+  }
 
   async resolveActiveProvider(): Promise<{ provider: ProviderKind; model: string }> {
     return this.active;

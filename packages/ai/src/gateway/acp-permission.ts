@@ -399,7 +399,7 @@ export async function requestAcpBuiltInPermission(
       request.turnId
     );
 
-    emitPendingActionRequest(deps, actorUserId, chatSessionId, {
+    emitPendingActionRequest(deps, actorUserId, chatSessionId, action, {
       kind: "action_request",
       actionRequestId: action.id,
       ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),

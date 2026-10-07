@@ -838,8 +838,9 @@ export class AssistantToolGateway {
       }
     }
 
-    emitPendingActionRequest(this.deps, ctx.actorUserId, ctx.chatSessionId, {
+    emitPendingActionRequest(this.deps, ctx.actorUserId, ctx.chatSessionId, action, {
       kind: "action_request",
+      ...(found.tool.requiresApprovalTarget ? { requiresTarget: true } : {}),
       actionRequestId: action.id,
       ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
       toolName: found.dto.name,

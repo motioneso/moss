@@ -652,6 +652,8 @@ export interface ModuleAssistantToolManifest {
   readonly requiresServices?: readonly string[];
   /** Host-only: refuse before an approval card unless the per-call binding is fully wired. */
   readonly requiresPerCallResolution?: true;
+  /** Host-owned approval disclosure: a nonempty server target must survive restoration. */
+  readonly requiresApprovalTarget?: boolean;
   /**
    * When true, the tool output contains untrusted external content (e.g. web search snippets,
    * fetched page text) that should be wrapped in a `<tool_result>` trust boundary before

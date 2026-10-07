@@ -366,6 +366,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       safeErrors: true,
       requiresServices: ["memoryForget"],
       requiresPerCallResolution: true,
+      requiresApprovalTarget: true,
       selfOperationGrant: "confirm_always",
       inputSchema: {
         type: "object",

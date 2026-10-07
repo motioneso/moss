@@ -61,6 +61,10 @@ function fixture() {
   );
   const connection = {
     executeQuery: async (query: CompiledQuery) => {
+      if (query.sql.startsWith("select") && query.sql.includes('"app"."chat_threads"')) {
+        const id = query.parameters.find((value) => value === THREAD || value === THREAD_B);
+        return { rows: id && !query.parameters.includes(OTHER) ? [{ ...thread, id }] : [] };
+      }
       if (query.sql.startsWith("select") && query.sql.includes('"app"."chat_messages"')) {
         const matching = query.parameters.find(
           (p) => typeof p === "string" && p.startsWith('[{"actionRequestId"')
@@ -79,6 +83,7 @@ function fixture() {
       if (query.sql.startsWith('update "app"."chat_messages"')) {
         const row = stored.find((item) => query.parameters.includes(item.id));
         if (row) row.tool_metadata = query.parameters[0] as typeof row.tool_metadata;
+        return { rows: [], numAffectedRows: row ? 1n : 0n };
       }
       return { rows: [] };
     },
@@ -139,6 +144,12 @@ function fixture() {
     chat_session_id: OWNER,
     expires_at: new Date(Date.now() - 1)
   };
+  vi.spyOn(AiRepository.prototype, "markAssistantActionOutcomeRecorded").mockResolvedValue(
+    undefined
+  );
+  vi.spyOn(AiRepository.prototype, "markAssistantActionOutcomeIgnored").mockResolvedValue(
+    undefined
+  );
   const expireAction = vi
     .spyOn(AiRepository.prototype, "expireAssistantAction")
     .mockImplementation(async (_db, id) => {
@@ -246,7 +257,7 @@ async function recordApproval(
       actor === OWNER && id === THREAD
         ? { id: THREAD, surface: normalizeChatSurface("drawer"), incognito: false }
         : undefined,
-    persistActionRecord: async () => {},
+    persistActionRecord: async () => true,
     getThreadContext: async () => ({ threadTitle: null, localTimezone: null, incognito: false }),
     touchExistingThread: async () => true,
     openNewConversation: async () => {},
@@ -357,7 +368,20 @@ describe("approval resolution route ownership before expiry", () => {
     expect(f.actionRow.status).toBe("timed_out");
     expect(f.expireAction).toHaveBeenCalledOnce();
     expect(f.resolveAction).not.toHaveBeenCalled();
-    expect(f.stored).toEqual([]);
+    await vi.waitFor(() => expect(f.stored).toHaveLength(1));
+    expect(f.stored[0]).toMatchObject({
+      thread_id: THREAD,
+      tool_metadata: {
+        activity: [
+          expect.objectContaining({
+            actionRequestId: ACTION,
+            decidedBy: "timeout",
+            outcome: "denied"
+          })
+        ]
+      }
+    });
+    expect(f.stored.some((row) => row.thread_id === THREAD_B)).toBe(false);
   });
 
   it("keeps a future orphan pending and distinguishes unavailable disclosure from timeout", async () => {
@@ -406,7 +430,9 @@ describe("late outcomes through real history routes", () => {
             const { terminalActionRecord } =
               await import("../../packages/chat/src/action-record-history.js");
             const terminal = terminalActionRecord(record);
-            if (terminal) await f.repository.persistActionRecord(f.scopedDb, actor, id, terminal);
+            return terminal
+              ? await f.repository.persistActionRecord(f.scopedDb, actor, id, terminal)
+              : false;
           }
         } as unknown as ChatPersistencePort,
         engineFactory: () => {

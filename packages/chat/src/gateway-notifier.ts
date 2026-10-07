@@ -1,7 +1,12 @@
 import type { DataContextRunner } from "@moss/db";
-import type { AiRepository, GatewaySessionRecord, SessionNotifier } from "@moss/ai";
+import {
+  reportActionRecordFailure,
+  type AiRepository,
+  type GatewaySessionRecord,
+  type SessionNotifier
+} from "@moss/ai";
 import type { ChatSessionManager } from "./live/chat-session-manager.js";
-import { parseSurfaceSessionKey } from "./live/chat-surface.js";
+import { DEFAULT_CHAT_SURFACE, parseSurfaceSessionKey } from "./live/chat-surface.js";
 import type { TranscriptRecord } from "./live/types.js";
 
 export type ActionOriginLookup = (
@@ -10,56 +15,99 @@ export type ActionOriginLookup = (
   chatSessionId: string
 ) => Promise<{ readonly found: boolean; readonly threadId?: string | null }>;
 
-/** Route action records by their durable request origin, never by the selected surface. */
+type LiveOrigin = NonNullable<
+  Extract<GatewaySessionRecord, { kind: "action_request" }>["liveOrigin"]
+>;
+
+/** Live origin proof comes from the persisted request at creation; history remains owner-scoped. */
 export class ChatGatewayNotifier implements SessionNotifier {
   private readonly pending = new Map<string, Promise<void>>();
+  private readonly liveOrigins = new Map<string, LiveOrigin>();
 
   constructor(
     private readonly manager: ChatSessionManager,
-    private readonly lookupOrigin?: ActionOriginLookup
+    private readonly lookupOrigin?: ActionOriginLookup,
+    private readonly acknowledgeHistory?: (
+      actorUserId: string,
+      actionRequestId: string,
+      disposition: "recorded" | "ignored"
+    ) => Promise<void>
   ) {}
 
   emit(chatSessionId: string, record: GatewaySessionRecord): void {
+    const transcriptRecord = toTranscriptRecord(record);
+    if (!transcriptRecord || !this.lookupOrigin) return;
+    let actorUserId = chatSessionId;
+    let surface: string | undefined;
+    try {
+      ({ actorUserId, surface } = parseSurfaceSessionKey(chatSessionId));
+    } catch {
+      // Bare actor keys are legacy transport identities, never conversation identities.
+    }
+    const key = `${chatSessionId}\0${record.actionRequestId}`;
+    if (record.kind === "action_request" && record.liveOrigin) {
+      const proof = record.liveOrigin;
+      if (
+        proof.actorUserId === actorUserId &&
+        proof.chatSessionId === chatSessionId &&
+        proof.threadId
+      ) {
+        this.liveOrigins.set(key, Object.freeze({ ...proof }));
+      }
+    }
+    const proof = this.liveOrigins.get(key);
+    let delivered = false;
+    if (proof && !(record.kind === "action_result" && record.historyOnly)) {
+      try {
+        delivered = this.manager.injectLiveOriginRecord(
+          actorUserId,
+          proof.threadId,
+          transcriptRecord,
+          surface ?? DEFAULT_CHAT_SURFACE
+        );
+      } catch {
+        reportActionRecordFailure(record.actionRequestId);
+      }
+    }
+    if (record.kind === "action_request" && delivered) return;
+    if (record.kind === "action_result" && !record.historyOnly) this.liveOrigins.delete(key);
+
     const queued = (this.pending.get(chatSessionId) ?? Promise.resolve())
       .then(async () => {
-        const transcriptRecord = toTranscriptRecord(record);
-        if (!transcriptRecord || !this.lookupOrigin) return;
-        let actorUserId = chatSessionId;
-        let surface: string | undefined;
-        try {
-          ({ actorUserId, surface } = parseSurfaceSessionKey(chatSessionId));
-        } catch {
-          // Bare actor keys are legacy transport identities, never conversation identities.
-        }
-        const origin = await this.lookupOrigin(actorUserId, record.actionRequestId, chatSessionId);
+        const origin = proof
+          ? { found: true, threadId: proof.threadId }
+          : await this.lookupOrigin!(actorUserId, record.actionRequestId, chatSessionId);
         const threadId = origin.found
           ? origin.threadId
           : record.kind === "action_result" && record.decidedBy === "policy"
             ? record.originThreadId
             : undefined;
         if (!threadId) return;
-        if (record.kind === "action_result" && record.historyOnly) {
-          await this.manager.injectOriginRecord(
-            actorUserId,
-            threadId,
-            transcriptRecord,
-            surface,
-            true
-          );
-        } else {
-          await this.manager.injectOriginRecord(actorUserId, threadId, transcriptRecord, surface);
+        const historyOnly = record.kind === "action_result" && (record.historyOnly || delivered);
+        const result = historyOnly
+          ? await this.manager.injectOriginRecord(
+              actorUserId,
+              threadId,
+              transcriptRecord,
+              surface,
+              true
+            )
+          : await this.manager.injectOriginRecord(actorUserId, threadId, transcriptRecord, surface);
+        if (record.kind === "action_result" && record.decidedBy === "timeout") {
+          if (result?.historyPersisted)
+            await this.acknowledgeHistory?.(actorUserId, record.actionRequestId, "recorded");
+          else if (result?.historyIgnored)
+            await this.acknowledgeHistory?.(actorUserId, record.actionRequestId, "ignored");
         }
       })
-      .catch(() => {
-        // Unknown or unavailable ownership/origin must never redirect into another chat.
-      });
+      .catch(() => reportActionRecordFailure(record.actionRequestId));
     this.pending.set(chatSessionId, queued);
     void queued.then(() => {
       if (this.pending.get(chatSessionId) === queued) this.pending.delete(chatSessionId);
     });
   }
 
-  /** Wait for admitted notifications before a controlled shutdown or a route-level test. */
+  /** Await side writes for history reads/shutdown, never as a prerequisite for live refresh. */
   async flush(chatSessionId?: string): Promise<void> {
     if (chatSessionId) await this.pending.get(chatSessionId);
     else await Promise.all(this.pending.values());
@@ -131,19 +179,33 @@ export function createChatGatewayNotifier(
   runner: DataContextRunner,
   repository: AiRepository | undefined
 ): ChatGatewayNotifier {
-  return new ChatGatewayNotifier(manager, async (actorUserId, actionRequestId, chatSessionId) => {
-    if (!repository) return { found: false };
-    return runner.withDataContext({ actorUserId }, async (scopedDb) => {
-      const action = await repository.getAssistantAction(scopedDb, actionRequestId);
-      return action
-        ? {
-            found: true,
-            threadId:
-              action.owner_user_id === actorUserId && action.chat_session_id === chatSessionId
-                ? action.chat_thread_id
-                : null
-          }
-        : { found: false };
-    });
-  });
+  return new ChatGatewayNotifier(
+    manager,
+    async (actorUserId, actionRequestId, chatSessionId) => {
+      // Unattended run IDs are correlation tokens, not UUID primary keys. They cannot
+      // identify a persisted request and must not be cast through the UUID column.
+      if (!repository || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(actionRequestId))
+        return { found: false };
+      return runner.withDataContext({ actorUserId }, async (scopedDb) => {
+        const action = await repository.getAssistantAction(scopedDb, actionRequestId);
+        return action
+          ? {
+              found: true,
+              threadId:
+                action.owner_user_id === actorUserId && action.chat_session_id === chatSessionId
+                  ? action.chat_thread_id
+                  : null
+            }
+          : { found: false };
+      });
+    },
+    async (actorUserId, actionRequestId, disposition) => {
+      if (!repository) return;
+      await runner.withDataContext({ actorUserId }, (scopedDb) =>
+        disposition === "recorded"
+          ? repository.markAssistantActionOutcomeRecorded(scopedDb, actionRequestId)
+          : repository.markAssistantActionOutcomeIgnored(scopedDb, actionRequestId)
+      );
+    }
+  );
 }

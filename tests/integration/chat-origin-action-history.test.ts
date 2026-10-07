@@ -58,7 +58,10 @@ function persistence(): DataContextChatPersistence {
   });
 }
 
-function manager(store = persistence()): ChatSessionManager {
+function manager(
+  store = persistence(),
+  engineOverrides: Partial<CliChatEngine> = {}
+): ChatSessionManager {
   // Provider/engine execution is outside this persistence regression; the database port is real.
   vi.spyOn(store, "resolveActiveProvider").mockResolvedValue({
     ...executed,
@@ -79,7 +82,8 @@ function manager(store = persistence()): ChatSessionManager {
     async isAlive() {
       return true;
     },
-    async kill() {}
+    async kill() {},
+    ...engineOverrides
   };
   return new ChatSessionManager({
     persistence: store,
@@ -146,9 +150,13 @@ describe("origin-bound action history with the real database", () => {
     const unsubscribe = restarted.subscribe(ids.userA, (record) => seen.push(record));
     try {
       expect((await restarted.ensureSession(ids.userA, "Owner")).threadId).toBe(b!.id);
-      await restarted.injectOriginRecord(ids.userA, a.id, timeout);
+      expect(await restarted.injectOriginRecord(ids.userA, a.id, timeout)).toEqual({
+        historyPersisted: true
+      });
       const afterFirst = await reload(a.id);
-      await restarted.injectOriginRecord(ids.userA, a.id, timeout);
+      expect(await restarted.injectOriginRecord(ids.userA, a.id, timeout)).toEqual({
+        historyPersisted: true
+      });
       expect(await reload(a.id)).toEqual(afterFirst);
 
       expect(seen).toEqual([]);
@@ -174,6 +182,70 @@ describe("origin-bound action history with the real database", () => {
     }
   });
 
+  it("delivers a successful action's refresh hints after a drawer subscriber reconnects to the same origin", async () => {
+    const origin = await createThread("Interrupted drawer action");
+    const submitted = deferred<void>();
+    const finish = deferred<void>();
+    const store = persistence();
+    const runtime = manager(store, {
+      async submit() {
+        submitted.resolve();
+      },
+      async readNew() {
+        await finish.promise;
+        return { records: [{ kind: "reply", text: "Theme changed." }], offset: 1, complete: true };
+      }
+    });
+    const beforeClose: TranscriptRecord[] = [];
+    const close = runtime.subscribe(ids.userA, (record) => beforeClose.push(record));
+    const turn = runtime.submitTurn(ids.userA, "Owner", "Change the named theme");
+    await submitted.promise;
+    close();
+    const reopened: TranscriptRecord[] = [];
+    const unsubscribe = runtime.subscribe(ids.userA, (record) => reopened.push(record));
+    const completed: TranscriptRecord = {
+      kind: "action_result",
+      text: "Executed: app.callAction",
+      actionRequestId: "theme-action",
+      toolName: "app.callAction",
+      summary: "Switch your theme",
+      outcome: "executed",
+      decidedBy: "person",
+      affectsQueryKeys: ["settings.themes"],
+      affectsModules: ["settings"]
+    };
+    try {
+      expect(await runtime.injectOriginRecord(ids.userA, origin.id, completed)).toEqual({
+        historyPersisted: true
+      });
+      finish.resolve();
+      await turn;
+      expect(beforeClose.some((record) => record.kind === "action_result")).toBe(false);
+      expect(reopened.filter((record) => record.kind === "action_result")).toEqual([completed]);
+      expect(await store.getCurrentThreadState(ids.userA)).toEqual({
+        id: origin.id,
+        incognito: false
+      });
+      const history = (await reload(origin.id)).map(serializeMessage);
+      expect(history.map((message) => message.body)).toEqual([
+        "Change the named theme",
+        "Theme changed."
+      ]);
+      expect(history[1]?.activity).toContainEqual(
+        expect.objectContaining({
+          kind: "action_result",
+          actionRequestId: "theme-action",
+          outcome: "executed"
+        })
+      );
+    } finally {
+      finish.resolve();
+      await turn;
+      unsubscribe();
+      await runtime.dropSessionsForProvider(executed.provider);
+    }
+  });
+
   it.each([ids.userB, ids.adminUser])(
     "foreign actor %s cannot insert into the origin",
     async (actorUserId) => {
@@ -184,12 +256,17 @@ describe("origin-bound action history with the real database", () => {
       const unsubscribe = foreignManager.subscribe(actorUserId, (record) => seen.push(record));
       try {
         expect(await store.getOwnedThreadState(actorUserId, origin.id)).toBeUndefined();
-        await foreignManager.injectOriginRecord(actorUserId, origin.id, timeout);
-        await store.persistActionRecord(actorUserId, origin.id, timeout);
+        expect(await foreignManager.injectOriginRecord(actorUserId, origin.id, timeout)).toEqual({
+          historyPersisted: false,
+          historyIgnored: true
+        });
+        expect(await store.persistActionRecord(actorUserId, origin.id, timeout)).toBe(false);
         // Supplying the real owner's ID must not override the runtime transaction's RLS actor.
-        await runner.withDataContext({ actorUserId }, (db) =>
-          repository.persistActionRecord(db, ids.userA, origin.id, timeout)
-        );
+        expect(
+          await runner.withDataContext({ actorUserId }, (db) =>
+            repository.persistActionRecord(db, ids.userA, origin.id, timeout)
+          )
+        ).toBe(false);
         expect(seen).toEqual([]);
         expect(await reload(origin.id, actorUserId)).toEqual([]);
         expect(await reload(origin.id)).toEqual([]);
@@ -202,25 +279,27 @@ describe("origin-bound action history with the real database", () => {
   it("recovers a timed-out origin silently and preserves its previously stored title and duration", async () => {
     const origin = await createThread("Recovery origin");
     const store = persistence();
-    await store.persistActionRecord(ids.userA, origin.id, timeout);
+    expect(await store.persistActionRecord(ids.userA, origin.id, timeout)).toBe(true);
     const before = await reload(origin.id);
     const restarted = manager();
     const seen: TranscriptRecord[] = [];
     const unsubscribe = restarted.subscribe(ids.userA, (record) => seen.push(record));
     try {
-      await restarted.injectOriginRecord(
-        ids.userA,
-        origin.id,
-        {
-          kind: "action_result",
-          text: "",
-          actionRequestId: timeout.actionRequestId,
-          outcome: "denied",
-          decidedBy: "timeout"
-        },
-        undefined,
-        true
-      );
+      expect(
+        await restarted.injectOriginRecord(
+          ids.userA,
+          origin.id,
+          {
+            kind: "action_result",
+            text: "",
+            actionRequestId: timeout.actionRequestId,
+            outcome: "denied",
+            decidedBy: "timeout"
+          },
+          undefined,
+          true
+        )
+      ).toEqual({ historyPersisted: true });
       expect(seen).toEqual([]);
       expect(await reload(origin.id)).toEqual(before);
     } finally {
@@ -240,10 +319,16 @@ describe("origin-bound action history with the real database", () => {
     const seen: TranscriptRecord[] = [];
     const unsubscribe = privateManager.subscribe(ids.userA, (record) => seen.push(record));
     try {
-      await privateManager.injectOriginRecord(ids.userA, origin.id, pending);
-      await privateManager.injectOriginRecord(ids.userA, origin.id, timeout);
+      expect(await privateManager.injectOriginRecord(ids.userA, origin.id, pending)).toEqual({
+        historyPersisted: false,
+        historyIgnored: true
+      });
+      expect(await privateManager.injectOriginRecord(ids.userA, origin.id, timeout)).toEqual({
+        historyPersisted: false,
+        historyIgnored: true
+      });
       expect(matchingResults(seen)).toHaveLength(1);
-      await store.persistActionRecord(ids.userA, origin.id, timeout);
+      expect(await store.persistActionRecord(ids.userA, origin.id, timeout)).toBe(false);
       expect(
         await store.recordTurn(ids.userA, "private question", "private answer", executed, {
           threadId: origin.id,
@@ -259,8 +344,12 @@ describe("origin-bound action history with the real database", () => {
   it("absorbs an idempotent action-only result when the originating turn completes later", async () => {
     const origin = await createThread("Unfinished origin");
     const store = persistence();
-    await manager(store).injectOriginRecord(ids.userA, origin.id, timeout);
-    await manager().injectOriginRecord(ids.userA, origin.id, timeout);
+    expect(await manager(store).injectOriginRecord(ids.userA, origin.id, timeout)).toEqual({
+      historyPersisted: true
+    });
+    expect(await manager().injectOriginRecord(ids.userA, origin.id, timeout)).toEqual({
+      historyPersisted: true
+    });
     const orphan = await reload(origin.id);
     expect(orphan).toHaveLength(1);
     expect(orphan[0]).toMatchObject({ role: "assistant", body: "" });
@@ -291,13 +380,13 @@ describe("origin-bound action history with the real database", () => {
       threadId: origin.id,
       activityRecords: [pending]
     });
-    await store.persistActionRecord(ids.userA, origin.id, timeout);
+    expect(await store.persistActionRecord(ids.userA, origin.id, timeout)).toBe(true);
     await store.recordTurn(ids.userA, "later question", "later answer", executed, {
       threadId: origin.id,
       activityRecords: [pending, timeout],
       actionResults: [timeout]
     });
-    await store.persistActionRecord(ids.userA, origin.id, timeout);
+    expect(await store.persistActionRecord(ids.userA, origin.id, timeout)).toBe(true);
 
     const history = (await reload(origin.id)).map(serializeMessage);
     expect(history.map((message) => message.body)).toEqual([
@@ -358,7 +447,7 @@ describe("origin-bound action history with the real database", () => {
           async () => {
             const waiting = await sql<{ blocked: boolean }>`SELECT EXISTS (
             SELECT 1 FROM pg_stat_activity
-            WHERE ${blockerPid} = ANY(pg_blocking_pids(pid)) AND wait_event = 'advisory'
+            WHERE ${blockerPid} = ANY(pg_blocking_pids(pid))
           ) AS blocked`.execute(observer);
             expect(waiting.rows).toEqual([{ blocked: true }]);
           },

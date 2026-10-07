@@ -38,6 +38,13 @@ describe("pending request origins are captured from the verified session", () =>
         }
       });
       const h = admissionFixture([tool], { deps: { yoloMode: async () => false } });
+      const createPending = h.deps.repository.createPendingAssistantAction;
+      h.deps.repository.createPendingAssistantAction = async (db, input) => ({
+        ...(await createPending(db, input)),
+        owner_user_id: "actor-a",
+        chat_thread_id: input.chatThreadId ?? null,
+        chat_session_id: input.chatSessionId ?? null
+      });
       const spoofed = { chatThreadId: "conversation-b", chatSessionId: "other-owner:drawer" };
       const pending =
         path === "module"
@@ -66,7 +73,11 @@ describe("pending request origins are captured from the verified session", () =>
           expiresAt: expect.any(Date)
         })
       );
-      expect(h.records[0]).toMatchObject({ kind: "action_request", originThreadId: "thread-a" });
+      expect(h.records[0]).toMatchObject({
+        kind: "action_request",
+        originThreadId: "thread-a",
+        liveOrigin: { actorUserId: "actor-a", chatSessionId: "actor-a:chat", threadId: "thread-a" }
+      });
       expect(h.records[1]).toMatchObject({ kind: "action_result", originThreadId: "thread-a" });
     }
   );

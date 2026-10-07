@@ -33,7 +33,6 @@ import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
 import {
   applyRemoteReap,
-  cleanupPrivateSession,
   clearChatSession,
   countSubscribersFor,
   delay,
@@ -46,7 +45,7 @@ import {
   type PendingActionResult,
   type SessionRecoveryHost,
   schedulePrivateDetachTimer,
-  sweepOrphanedPrivateThreads,
+  reconcileChatSessions,
   upsertActivityRecord,
   assertNewToolsAttached
 } from "./session-runtime-helpers.js";
@@ -74,7 +73,9 @@ import type {
 import { tryGatedTurn } from "./classifier-gate-lifecycle.js";
 import {
   routeOriginRecord,
+  routeLiveOriginRecord,
   withOriginThreadTransition,
+  type OriginRecordReceipt,
   type OriginThreadTransition
 } from "./origin-record-routing.js";
 export type {
@@ -841,18 +842,39 @@ export class ChatSessionManager {
     this.emit(actorUserId, normalizeChatSurface(surface), record);
   }
 
-  async injectOriginRecord(
+  injectLiveOriginRecord(
+    actorUserId: string,
+    originThreadId: string,
+    record: TranscriptRecord,
+    surface: string
+  ): boolean {
+    return routeLiveOriginRecord({
+      ...this.originRoutingState(actorUserId),
+      actorUserId,
+      originThreadId,
+      record,
+      surface
+    });
+  }
+
+  injectOriginRecord(
     actorUserId: string,
     originThreadId: string | null | undefined,
     record: TranscriptRecord,
     _surface?: string,
     historyOnly = false
-  ): Promise<void> {
-    await routeOriginRecord({
+  ): Promise<OriginRecordReceipt> {
+    return routeOriginRecord({
+      ...this.originRoutingState(actorUserId),
       actorUserId,
       originThreadId,
       record,
-      historyOnly,
+      historyOnly
+    });
+  }
+
+  private originRoutingState(actorUserId: string) {
+    return {
       persistence: this.deps.persistence,
       sessions: this.sessions,
       transitions: this.originTransitions,
@@ -861,8 +883,8 @@ export class ChatSessionManager {
       pendingBySession: this.pendingActionResultsBySession,
       turnRecords: this.turnActivityBySession,
       actionResults: this.actionResultsBySession,
-      emit: (surface, next) => this.emit(actorUserId, surface, next)
-    });
+      emit: (surface: ChatSurface, next: TranscriptRecord) => this.emit(actorUserId, surface, next)
+    };
   }
 
   /**
@@ -903,57 +925,14 @@ export class ChatSessionManager {
    * a session the api is itself bringing up.
    */
   async reconcileLiveSessions(liveKeys: Set<string>): Promise<void> {
-    await this.withMaintenanceLock(async () => {
-      // Treat in-flight launches as live for the entire launch window (§5.4).
-      const effectiveLive = new Set(liveKeys);
-      for (const key of this.launching.keys()) effectiveLive.add(key);
-
-      this.deps.reconcileMcpTokens?.(effectiveLive);
-
-      for (const [sessionKey, session] of this.sessions) {
-        if (!effectiveLive.has(sessionKey)) {
-          if (session.incognito) {
-            const thread = await this.deps.persistence.getCurrentThreadState?.(
-              session.actorUserId,
-              session.surface
-            );
-            await cleanupPrivateSession(
-              session.actorUserId,
-              session.surface,
-              thread?.incognito ? thread.id : undefined,
-              session,
-              this.deps,
-              this.sessions,
-              (k) => clearPrivateDetachTimer(this.privateDetachTimers, k)
-            );
-          } else {
-            try {
-              if (this.deps.killSession) {
-                await this.deps.killSession(sessionKey);
-              } else {
-                await session.engine.kill();
-              }
-            } catch {
-              /* best-effort stale kill */
-            }
-            this.sessions.delete(sessionKey);
-            this.deps.revokeMcpToken?.(sessionKey);
-          }
-        }
-      }
-
-      const known = new Set<string>(this.sessions.keys());
-      for (const key of this.launching.keys()) known.add(key);
-      for (const id of this.deps.listMcpTokenSessionIds?.() ?? []) known.add(id);
-      for (const liveKey of effectiveLive) {
-        if (!known.has(liveKey)) {
-          await this.deps.killSession?.(liveKey);
-        }
-      }
-      await sweepOrphanedPrivateThreads(effectiveLive, this.deps, this.sessions, (k) =>
-        clearPrivateDetachTimer(this.privateDetachTimers, k)
-      );
-    });
+    await this.withMaintenanceLock(() =>
+      reconcileChatSessions(liveKeys, {
+        launching: this.launching,
+        sessions: this.sessions,
+        deps: this.deps,
+        clearPrivateDetachTimer: (key) => clearPrivateDetachTimer(this.privateDetachTimers, key)
+      })
+    );
   }
 
   /** #1554 Decision 2 — api-side half of a `sessionReaped` push; see `applyRemoteReap`. */

@@ -37,6 +37,8 @@ function pendingAction(id: string): AiAssistantActionRequest {
     id,
     owner_user_id: "user-a",
     chat_thread_id: threadId,
+    outcome_recorded_at: null,
+    outcome_ignored_at: null,
     chat_session_id: "session-a",
     expires_at: null,
     tool_module_id: "notes",

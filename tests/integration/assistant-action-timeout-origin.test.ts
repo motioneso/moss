@@ -107,6 +107,12 @@ describe("durable timeout recovery through the real request and chat repositorie
         chat_session_id: session
       });
       expect(stored?.resolved_at).not.toBeNull();
+      expect(stored?.outcome_recorded_at).not.toBeNull();
+      expect(
+        await runner.withDataContext(owner, (scope) =>
+          actions.listRecoverableAssistantActions(scope)
+        )
+      ).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: request.id })]));
       expect(
         await runner.withDataContext(owner, (scope) => chat.getCurrentThread(scope, ids.userA))
       ).toMatchObject({ id: b.id });
@@ -129,6 +135,82 @@ describe("durable timeout recovery through the real request and chat repositorie
       recovery.dispose();
       unsubscribe();
     }
+  });
+
+  it("acknowledges only owned terminal history and keeps unwritten timeouts recoverable", async () => {
+    const thread = await runner.withDataContext(owner, (scope) =>
+      chat.openNewThread(scope, { title: "Unwritten timeout" })
+    );
+    const pending = await createAction(thread.id, new Date(Date.now() + 60_000));
+    await runner.withDataContext(owner, (scope) =>
+      actions.markAssistantActionOutcomeRecorded(scope, pending.id)
+    );
+    await runner.withDataContext(owner, (scope) =>
+      actions.markAssistantActionOutcomeIgnored(scope, pending.id)
+    );
+    expect(
+      (
+        await runner.withDataContext(owner, (scope) =>
+          actions.getAssistantAction(scope, pending.id)
+        )
+      )?.outcome_recorded_at
+    ).toBeNull();
+    const due = await createAction(thread.id, new Date(Date.now() - 1000));
+    await runner.withDataContext(owner, (scope) => actions.expireAssistantAction(scope, due.id));
+    for (const actorUserId of [ids.userB, ids.adminUser]) {
+      await runner.withDataContext({ actorUserId }, (scope) =>
+        actions.markAssistantActionOutcomeRecorded(scope, due.id)
+      );
+      await runner.withDataContext({ actorUserId }, (scope) =>
+        actions.markAssistantActionOutcomeIgnored(scope, due.id)
+      );
+      expect(
+        await runner.withDataContext({ actorUserId }, (scope) =>
+          actions.listRecoverableAssistantActions(scope)
+        )
+      ).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: due.id })]));
+    }
+    expect(
+      await runner.withDataContext(owner, (scope) => actions.listRecoverableAssistantActions(scope))
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: due.id, outcome_recorded_at: null })])
+    );
+    await runner.withDataContext(owner, (scope) =>
+      actions.markAssistantActionOutcomeRecorded(scope, due.id)
+    );
+    const recorded = await runner.withDataContext(owner, (scope) =>
+      actions.getAssistantAction(scope, due.id)
+    );
+    expect(recorded?.outcome_recorded_at).not.toBeNull();
+    await runner.withDataContext(owner, (scope) =>
+      actions.markAssistantActionOutcomeRecorded(scope, due.id)
+    );
+    expect(
+      (await runner.withDataContext(owner, (scope) => actions.getAssistantAction(scope, due.id)))
+        ?.outcome_recorded_at
+    ).toEqual(recorded?.outcome_recorded_at);
+    expect(
+      await runner.withDataContext(owner, (scope) => actions.listRecoverableAssistantActions(scope))
+    ).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: due.id })]));
+
+    const ignored = await createAction(thread.id, new Date(Date.now() - 1000));
+    await runner.withDataContext(owner, (scope) =>
+      actions.expireAssistantAction(scope, ignored.id)
+    );
+    await runner.withDataContext(owner, (scope) =>
+      actions.markAssistantActionOutcomeIgnored(scope, ignored.id)
+    );
+    await runner.withDataContext(owner, (scope) =>
+      actions.markAssistantActionOutcomeRecorded(scope, ignored.id)
+    );
+    const skipped = await runner.withDataContext(owner, (scope) =>
+      actions.getAssistantAction(scope, ignored.id)
+    );
+    expect(skipped?.outcome_ignored_at).not.toBeNull();
+    expect(skipped?.outcome_recorded_at).toBeNull();
+    expect(
+      await runner.withDataContext(owner, (scope) => actions.listRecoverableAssistantActions(scope))
+    ).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: ignored.id })]));
   });
 
   it("enforces the deadline and pending compare-and-set in PostgreSQL", async () => {

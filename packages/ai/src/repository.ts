@@ -2117,6 +2117,82 @@ export class AiRepository {
     return this.safeAssistantActionQuery(scopedDb).where("id", "=", actionId).executeTakeFirst();
   }
 
+  /** A bounded owner-only work queue, not the owner's full action history. */
+  async listRecoverableAssistantActions(
+    scopedDb: DataContextDb,
+    limit = 50,
+    afterTimeoutId?: string
+  ): Promise<AiAssistantActionRequestSafeRow[]> {
+    assertDataContextDb(scopedDb);
+    const pageSize = Math.max(1, Math.min(Math.floor(limit / 2), 25));
+    const pending = await scopedDb.db
+      .selectFrom("app.ai_assistant_action_requests")
+      .selectAll()
+      .where("status", "=", "pending")
+      .where("expires_at", "<=", sql<Date>`now()`)
+      .orderBy("expires_at")
+      .orderBy("id")
+      .limit(pageSize)
+      .execute();
+    let timeouts = scopedDb.db
+      .selectFrom("app.ai_assistant_action_requests")
+      .selectAll()
+      .where("status", "=", "timed_out")
+      .where("outcome_recorded_at", "is", null)
+      .where("outcome_ignored_at", "is", null)
+      .where("chat_thread_id", "is not", null)
+      .where("chat_session_id", "is not", null)
+      .orderBy("id")
+      .limit(pageSize);
+    if (afterTimeoutId) timeouts = timeouts.where("id", ">", afterTimeoutId);
+    return [...pending, ...(await timeouts.execute())];
+  }
+
+  async nextAssistantActionExpiry(scopedDb: DataContextDb): Promise<Date | string | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.ai_assistant_action_requests")
+      .select("expires_at")
+      .where("status", "=", "pending")
+      .where("expires_at", ">", sql<Date>`now()`)
+      .orderBy("expires_at")
+      .limit(1)
+      .executeTakeFirst();
+    return row?.expires_at ?? null;
+  }
+
+  /** Called only after the bound chat outcome has actually been written. */
+  async markAssistantActionOutcomeRecorded(
+    scopedDb: DataContextDb,
+    actionId: string
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .updateTable("app.ai_assistant_action_requests")
+      .set({ outcome_recorded_at: sql<Date>`now()` })
+      .where("id", "=", actionId)
+      .where("status", "=", "timed_out")
+      .where("outcome_recorded_at", "is", null)
+      .where("outcome_ignored_at", "is", null)
+      .execute();
+  }
+
+  /** Only a positive, chat-owned permanent-drop receipt may call this; exceptions never do. */
+  async markAssistantActionOutcomeIgnored(
+    scopedDb: DataContextDb,
+    actionId: string
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .updateTable("app.ai_assistant_action_requests")
+      .set({ outcome_ignored_at: sql<Date>`now()` })
+      .where("id", "=", actionId)
+      .where("status", "=", "timed_out")
+      .where("outcome_recorded_at", "is", null)
+      .where("outcome_ignored_at", "is", null)
+      .execute();
+  }
+
   async createPendingAssistantAction(
     scopedDb: DataContextDb,
     input: CreateAiAssistantActionInput

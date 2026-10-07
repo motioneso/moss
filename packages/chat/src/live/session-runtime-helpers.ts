@@ -568,3 +568,67 @@ export async function healAndRelaunchSession(
   });
   return host.ensureSession(actorUserId, userName, undefined, dead.surface);
 }
+
+/** Called only under the manager's maintenance mutex; preserve launching sessions during reconciliation. */
+export async function reconcileChatSessions(
+  liveKeys: Set<string>,
+  input: {
+    readonly launching: ReadonlyMap<string, unknown>;
+    readonly sessions: Map<string, UserSession>;
+    readonly deps: ChatSessionManagerDeps;
+    readonly clearPrivateDetachTimer: (key: string) => void;
+  }
+): Promise<void> {
+  // Treat in-flight launches as live for the entire launch window (§5.4).
+  const effectiveLive = new Set(liveKeys);
+  for (const key of input.launching.keys()) effectiveLive.add(key);
+
+  input.deps.reconcileMcpTokens?.(effectiveLive);
+
+  for (const [sessionKey, session] of input.sessions) {
+    if (!effectiveLive.has(sessionKey)) {
+      if (session.incognito) {
+        const thread = await input.deps.persistence.getCurrentThreadState?.(
+          session.actorUserId,
+          session.surface
+        );
+        await cleanupPrivateSession(
+          session.actorUserId,
+          session.surface,
+          thread?.incognito ? thread.id : undefined,
+          session,
+          input.deps,
+          input.sessions,
+          input.clearPrivateDetachTimer
+        );
+      } else {
+        try {
+          if (input.deps.killSession) {
+            await input.deps.killSession(sessionKey);
+          } else {
+            await session.engine.kill();
+          }
+        } catch {
+          /* best-effort stale kill */
+        }
+        input.sessions.delete(sessionKey);
+        input.deps.revokeMcpToken?.(sessionKey);
+      }
+    }
+  }
+
+  const known = new Set<string>(input.sessions.keys());
+  for (const key of input.launching.keys()) known.add(key);
+  for (const id of input.deps.listMcpTokenSessionIds?.() ?? []) known.add(id);
+  for (const liveKey of effectiveLive) {
+    if (!known.has(liveKey)) {
+      await input.deps.killSession?.(liveKey);
+    }
+  }
+  await sweepOrphanedPrivateThreads(
+    effectiveLive,
+    input.deps,
+    input.sessions,
+    input.clearPrivateDetachTimer
+  );
+}

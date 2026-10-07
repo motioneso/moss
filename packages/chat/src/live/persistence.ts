@@ -547,10 +547,10 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     actorUserId: string,
     threadId: string,
     record: TranscriptRecord
-  ): Promise<void> {
+  ): Promise<boolean> {
     const terminal = terminalActionRecord(record);
-    if (!threadId || !terminal) return;
-    await this.run(actorUserId, "persist-action-record", (scopedDb) =>
+    if (!threadId || !terminal) return false;
+    return this.run(actorUserId, "persist-action-record", (scopedDb) =>
       this.chat.persistActionRecord(scopedDb, actorUserId, threadId, terminal)
     );
   }

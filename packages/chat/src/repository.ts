@@ -146,11 +146,17 @@ export class ChatRepository {
     actorUserId: string,
     threadId: string,
     record: TerminalActionRecord
-  ): Promise<void> {
+  ): Promise<boolean> {
     assertDataContextDb(scopedDb);
+    const thread = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("id", "=", threadId)
+      .where("owner_user_id", "=", actorUserId)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!thread || thread.owner_user_id !== actorUserId || thread.incognito) return false;
     await this.lockActionHistory(scopedDb, threadId);
-    const thread = await this.getOwnedThreadById(scopedDb, actorUserId, threadId);
-    if (!thread || thread.owner_user_id !== actorUserId || thread.incognito) return;
     const matching = JSON.stringify([{ actionRequestId: record.actionRequestId }]);
     const message = await scopedDb.db
       .selectFrom("app.chat_messages")
@@ -158,6 +164,7 @@ export class ChatRepository {
       .where("thread_id", "=", thread.id)
       .where("owner_user_id", "=", actorUserId)
       .where("role", "=", "assistant")
+      .where("status", "=", "stored")
       .where(
         sql<boolean>`(tool_metadata->'activity' @> ${matching}::jsonb OR tool_metadata->'actionResults' @> ${matching}::jsonb)`
       )
@@ -166,6 +173,7 @@ export class ChatRepository {
       )
       .orderBy("created_at", "desc")
       .limit(1)
+      .forUpdate()
       .executeTakeFirst();
     if (message) {
       const metadata = message.tool_metadata;
@@ -178,7 +186,7 @@ export class ChatRepository {
           20
         )
       };
-      await scopedDb.db
+      const updated = await scopedDb.db
         .updateTable("app.chat_messages")
         .set({
           tool_metadata: updatedMetadata,
@@ -190,8 +198,18 @@ export class ChatRepository {
         .where(
           sql<boolean>`tool_metadata IS DISTINCT FROM ${JSON.stringify(updatedMetadata)}::jsonb`
         )
-        .execute();
-      return;
+        .executeTakeFirst();
+      if (updated.numUpdatedRows > 0n) return true;
+      const unchanged = await scopedDb.db
+        .selectFrom("app.chat_messages")
+        .select("id")
+        .where("id", "=", message.id)
+        .where("thread_id", "=", threadId)
+        .where("owner_user_id", "=", actorUserId)
+        .where("status", "=", "stored")
+        .where(sql<boolean>`tool_metadata = ${JSON.stringify(updatedMetadata)}::jsonb`)
+        .executeTakeFirst();
+      return Boolean(unchanged);
     }
     await this.insertMessage(scopedDb, {
       thread,
@@ -207,6 +225,7 @@ export class ChatRepository {
       },
       now: new Date()
     });
+    return true;
   }
 
   private async lockActionHistory(scopedDb: DataContextDb, threadId: string): Promise<void> {
@@ -391,7 +410,14 @@ export class ChatRepository {
   ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
     assertDataContextDb(scopedDb);
 
-    const thread = await this.getThreadById(scopedDb, threadId, surface);
+    // Match the live persistence path: lock the parent before the action-history lock.
+    const thread = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("id", "=", threadId)
+      .where("surface", "=", normalizeChatSurface(surface))
+      .forUpdate()
+      .executeTakeFirst();
 
     if (!thread) {
       return undefined;

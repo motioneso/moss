@@ -120,12 +120,12 @@ export interface ChatPersistencePort {
   ): Promise<
     { readonly id: string; readonly surface: ChatSurface; readonly incognito: boolean } | undefined
   >;
-  /** Idempotently persist a terminal record in its exact owned origin; private threads are excluded. */
+  /** True only after saving or confirming an identical owned nonprivate terminal record. */
   persistActionRecord?(
     actorUserId: string,
     threadId: string,
     record: TranscriptRecord
-  ): Promise<void>;
+  ): Promise<boolean>;
   listIncognitoThreadStates?(): Promise<readonly PrivateThreadState[]>;
   deleteThread?(actorUserId: string, threadId: string, surface?: ChatSurface): Promise<void>;
   /** Return the current thread title and the user's persisted timezone (null if unset). */

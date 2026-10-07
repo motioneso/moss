@@ -62,7 +62,8 @@ export const chatModuleManifest = {
       "sql/0276_meeting_chat_cleanup.sql",
       "sql/0277_chat_surface_immutable.sql",
       "sql/0291_chat_conversation_provenance.sql",
-      "sql/0293_chat_automatic_action_reservations.sql"
+      "sql/0293_chat_automatic_action_reservations.sql",
+      "sql/0297_chat_action_history_permissions.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -135,6 +136,13 @@ export const chatModuleManifest = {
       description:
         "Restored requests use full server details when available. Without them, approval is hidden and decline remains available. " +
         "Expired requests become timed out; outcomes stay with their original conversation.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.action_outcome_delivery",
+      description:
+        "Live results refresh the originating chat while Moss is answering; history saves separately. " +
+        "Opening chat resumes expiry recovery in bounded batches without replaying already saved outcomes.",
       featureFlagId: "chat.module"
     },
     {
