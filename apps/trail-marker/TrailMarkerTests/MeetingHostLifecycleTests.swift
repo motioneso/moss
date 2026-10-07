@@ -109,6 +109,9 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try await waitUntil { host.phase == .paused }
         XCTAssertEqual(permissionRequests, 0)
         XCTAssertEqual(fixture.device.starts, 0)
+        XCTAssertFalse(host.canResumeFromUserClick, "An unstarted claim is not native Resume authority")
+        host.resumeFromUserClick()
+        XCTAssertEqual(fixture.server.controlCount, 0, "Initial Start remains browser-only")
         fixture.wall = fixture.wall.addingTimeInterval(61)
         fixture.server.browserState("recording", generation: 3)
         try await waitUntil(timeout: 4) { host.phase == .recording }
@@ -352,6 +355,191 @@ final class MeetingHostLifecycleTests: XCTestCase {
         }
     }
 
+    func testNativeResumeWaitsForAuthoritativeStatusAndPreservesPausedObservation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { false }
+        defer { host.shutdown(reason: "Synthetic Resume finished") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        host.pauseFromUserClick()
+        XCTAssertFalse(host.canResumeFromUserClick, "Resume is disabled until server Pause acknowledgment")
+        host.resumeFromUserClick()
+        try await waitUntil { host.canResumeFromUserClick }
+        XCTAssertEqual(fixture.server.resumeKeys.count, 0, "An unconfirmed Pause cannot be overridden")
+        fixture.server.configureResume(holdStatus: true)
+        host.resumeFromUserClick()
+        host.resumeFromUserClick()
+        try await waitUntil { host.controlTask == nil }
+        XCTAssertEqual(fixture.server.resumeKeys.count, 1, "Repeated click must stage only one Resume")
+        XCTAssertEqual(host.phase, .paused)
+        XCTAssertEqual(fixture.device.starts, 1, "Resume receipt alone must never open hardware")
+        XCTAssertEqual(fixture.server.audioCount, 0)
+        XCTAssertFalse(host.canResumeFromUserClick)
+        fixture.server.configureResume(holdStatus: false)
+        try await waitUntil(timeout: 5) { host.phase == .recording }
+        XCTAssertEqual(fixture.device.starts, 2, "Authoritative status must open exactly one resumed epoch")
+        XCTAssertEqual(fixture.server.lastObservation?.generation, 2, "Resume must preserve the previous-generation paused observation")
+        XCTAssertEqual(fixture.server.lastObservation?.phase, "paused")
+        XCTAssertEqual(fixture.server.captureGeneration, 3, "Old paused observation must not re-pause the accepted Resume")
+        let buffer = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
+        for index in 0..<5 {
+            buffer.receive(hostTimeNanoseconds: fixture.monotonic + UInt64(index) * 1_000_000_000,
+                sampleRate: 8000, frameCount: 8000, sampleAt: { _ in 0.25 })
+        }
+        fixture.server.advanceElapsed(to: 8000)
+        host.service()
+        XCTAssertEqual(fixture.server.audioCount, 0, "No resumed audio before recording observation is acknowledged")
+        try await waitUntil(timeout: 5) { fixture.server.lastObservation?.generation == 3 && fixture.server.lastObservation?.phase == "recording" }
+        fixture.monotonic += 6_000_000_000
+        host.service()
+        try await waitUntil { fixture.server.audioCount == 1 }
+        XCTAssertEqual(fixture.server.resumeKeys.count, 1)
+    }
+
+    func testLostResumeReplyRecoversFromStatusWithoutExtraEpoch() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { false }
+        defer { host.shutdown(reason: "Synthetic Resume finished") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        host.pauseFromUserClick()
+        try await waitUntil { host.canResumeFromUserClick }
+        fixture.server.configureResume(holdStatus: true, loseReply: true)
+        host.resumeFromUserClick()
+        try await waitUntil { host.controlTask == nil }
+        XCTAssertEqual(host.phase, .paused)
+        XCTAssertEqual(fixture.device.starts, 1, "Uncertain Resume cannot open hardware")
+        fixture.server.configureResume(holdStatus: false)
+        try await waitUntil(timeout: 5) { host.phase == .recording }
+        XCTAssertEqual(fixture.device.starts, 2)
+        XCTAssertEqual(fixture.server.captureGeneration, 3)
+        XCTAssertEqual(fixture.server.resumeKeys.count, 1, "Authoritative status recovers the lost reply without another epoch")
+    }
+
+    func testNewerPauseCancelsFailedResumeUntilAnotherClick() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { false }
+        defer { host.shutdown(reason: "Synthetic Resume finished") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        host.pauseFromUserClick()
+        try await waitUntil { host.canResumeFromUserClick }
+        fixture.server.configureResume(holdStatus: true, rejectRequest: true)
+        host.resumeFromUserClick()
+        try await waitUntil { host.controlTask == nil }
+        fixture.server.browserState("paused", generation: 4)
+        fixture.monotonic += 2_000_000_000
+        fixture.server.configureResume(holdStatus: false)
+        try await waitUntil(timeout: 5) { host.canResumeFromUserClick }
+        XCTAssertEqual(fixture.server.resumeKeys.count, 1, "Newer Pause must cancel the failed Resume instead of rebasing")
+        XCTAssertEqual(fixture.device.starts, 1)
+        host.resumeFromUserClick()
+        try await waitUntil(timeout: 5) { host.phase == .recording }
+        XCTAssertEqual(fixture.server.resumeKeys.count, 2, "A new explicit click can resume the newer Pause")
+        XCTAssertEqual(fixture.server.captureGeneration, 5)
+    }
+
+    func testStopCancelsQueuedResumeBeforeTransportAndKeepsHardwareClosed() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { false }
+        defer { host.shutdown(reason: "Synthetic Resume finished") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        host.pauseFromUserClick()
+        try await waitUntil { host.canResumeFromUserClick }
+        host.resumeFromUserClick()
+        host.stopFromUserClick()
+        let queued = try XCTUnwrap(host.controlTask)
+        await queued.value
+        XCTAssertEqual(fixture.server.resumeKeys.count, 0, "Stop must cancel queued Resume before transport")
+        try await waitUntil(timeout: 5) { fixture.server.stopCount == 1 }
+        XCTAssertEqual(fixture.device.starts, 1)
+        XCTAssertFalse(host.canResumeFromUserClick)
+    }
+
+    func testRejectedResumeRequiresAnotherExplicitClickInsteadOfRetryingLater() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { false }
+        defer { host.shutdown(reason: "Synthetic Resume finished") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        host.pauseFromUserClick()
+        try await waitUntil { host.canResumeFromUserClick }
+        fixture.server.configureResume(holdStatus: false, denyRequest: true)
+        host.resumeFromUserClick()
+        try await waitUntil { host.controlTask == nil }
+        XCTAssertTrue(host.canResumeFromUserClick, "Definitive rejection must clear Resume intent")
+        XCTAssertTrue(host.message.contains("press Resume again"), "Definitive rejection needs actionable source guidance")
+        fixture.server.configureResume(holdStatus: false)
+        fixture.monotonic += 4_000_000_000
+        try await Task.sleep(nanoseconds: 2_500_000_000)
+        XCTAssertEqual(fixture.server.resumeKeys.count, 1, "A rejected Resume must never retry after the source recovers")
+        XCTAssertEqual(fixture.device.starts, 1)
+        host.resumeFromUserClick()
+        try await waitUntil(timeout: 5) { host.phase == .recording }
+        XCTAssertEqual(fixture.server.resumeKeys.count, 2)
+        XCTAssertEqual(Set(fixture.server.resumeKeys).count, 2)
+    }
+
+    func testSourceChangeCancelsQueuedResumeAndRequiresNewClick() async throws {
+        for stopFirst in [false, true] {
+            let fixture = try Fixture()
+            defer { fixture.close() }
+            fixture.permission = .granted
+            let host = fixture.host { false }
+            defer { host.shutdown(reason: "Synthetic Resume finished") }
+            try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+            try await waitUntil { host.phase == .recording }
+            host.pauseFromUserClick()
+            try await waitUntil { host.canResumeFromUserClick }
+            host.resumeFromUserClick()
+            if stopFirst { host.stopFromUserClick() }
+            host.sourceChanged()
+            let queued = try XCTUnwrap(host.controlTask)
+            await queued.value
+            XCTAssertEqual(fixture.server.resumeKeys.count, 0, "Source change must cancel queued Resume before transport")
+            if stopFirst {
+                try await waitUntil(timeout: 5) { fixture.server.stopCount == 1 }
+                XCTAssertFalse(host.canResumeFromUserClick, "Source change must preserve pending Stop")
+            } else {
+                try await waitUntil(timeout: 5) { host.canResumeFromUserClick }
+            }
+            XCTAssertEqual(fixture.device.starts, 1, "Source recovery requires another Resume click")
+        }
+    }
+
+    func testSourceChangePausesAnAlreadyAcceptedResumeWithLostReply() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { false }
+        defer { host.shutdown(reason: "Synthetic Resume finished") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        host.pauseFromUserClick()
+        try await waitUntil { host.canResumeFromUserClick }
+        fixture.server.configureResume(holdStatus: true, loseReply: true)
+        host.resumeFromUserClick()
+        try await waitUntil { host.controlTask == nil }
+        XCTAssertEqual(fixture.server.captureGeneration, 3)
+        host.sourceChanged()
+        fixture.server.configureResume(holdStatus: false)
+        try await waitUntil(timeout: 5) { host.canResumeFromUserClick }
+        XCTAssertEqual(fixture.device.starts, 1, "Source change must keep hardware closed after an accepted Resume")
+        XCTAssertEqual(fixture.server.captureGeneration, 4, "An accepted Resume must be followed by Pause after source change")
+        XCTAssertEqual(fixture.server.resumeKeys.count, 1)
+    }
+
     private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition(), Date() < deadline { try await Task.sleep(nanoseconds: 10_000_000) }
@@ -422,6 +610,8 @@ final class MeetingHostLifecycleTests: XCTestCase {
     }
 }
 
+private struct ResumeFixtureRejection: Error {}
+
 private final class FixtureServer {
     static let baseTime = Date(timeIntervalSince1970: 1_791_259_200)
     let grantId = UUID().uuidString.lowercased()
@@ -431,6 +621,14 @@ private final class FixtureServer {
     private let lock = NSLock()
     private var desired = "recording"
     private var generation = 1
+    private var epoch = 1
+    private var holdStatus = false
+    private var loseResumeReply = false
+    private var rejectResumeRequest = false
+    private var denyResumeRequest = false
+    private var enforceObservedPause = false
+    private var resumes: [String] = []
+    private var acceptedResumeKeys: Set<String> = []
     private var hashes: [String] = []
     private var stops = 0
     private var controls = 0
@@ -443,6 +641,14 @@ private final class FixtureServer {
     private var gaps: [MeetingCaptureGap] = []
     private var gapReports: [MeetingCaptureGap] = []
     var loseFirstClaim = false
+    var resumeKeys: [String] { lock.lock(); defer { lock.unlock() }; return resumes }
+    var captureGeneration: Int { lock.lock(); defer { lock.unlock() }; return generation }
+    func advanceElapsed(to value: UInt64) { lock.lock(); elapsedMs = value; lock.unlock() }
+    func configureResume(holdStatus: Bool, loseReply: Bool = false, rejectRequest: Bool = false, denyRequest: Bool = false) {
+        lock.lock(); defer { lock.unlock() }
+        self.holdStatus = holdStatus; loseResumeReply = loseReply; rejectResumeRequest = rejectRequest
+        enforceObservedPause = true; denyResumeRequest = denyRequest
+    }
     var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stops }
     var controlCount: Int { lock.lock(); defer { lock.unlock() }; return controls }
     var requestCount: Int { lock.lock(); defer { lock.unlock() }; return requests }
@@ -467,6 +673,7 @@ private final class FixtureServer {
     func reply(path: String, body: [String: Any]) throws -> Data {
         lock.lock(); defer { lock.unlock() }
         requests += 1
+        if path.hasSuffix("/status"), holdStatus { throw URLError(.timedOut) }
         if path.hasSuffix("/audio"), let failure = audioFailure,
            let requestKey = body["requestKey"] as? String, let source = body["sourceId"] as? String,
            let epoch = body["epoch"] as? UInt64, let start = body["startMs"] as? UInt64,
@@ -494,21 +701,45 @@ private final class FixtureServer {
             hashes.append(hash)
             if loseFirstClaim, hashes.count == 1 { throw URLError(.timedOut) }
         }
-        if path.hasSuffix("/control"), body["command"] as? String == "stop" {
-            desired = "stopped"; generation = 2; stops += 1
+        if path.hasSuffix("/control"), let command = body["command"] as? String {
+            if command == "record", let key = body["requestKey"] as? String {
+                resumes.append(key)
+                if rejectResumeRequest { throw URLError(.timedOut) }
+                if denyResumeRequest { throw ResumeFixtureRejection() }
+                if !acceptedResumeKeys.contains(key) {
+                    guard desired == "paused", body["expectedGeneration"] as? Int == generation,
+                          body["selection"] == nil else { throw URLError(.badServerResponse) }
+                    desired = "recording"; generation += 1; epoch += 1; acceptedResumeKeys.insert(key)
+                }
+                if loseResumeReply { loseResumeReply = false; throw URLError(.timedOut) }
+            } else if command == "pause" {
+                desired = "paused"; generation += 1
+            } else if command == "stop" {
+                desired = "stopped"; generation += 1; stops += 1
+            }
         }
         if path.hasSuffix("/status"), body["finalized"] as? Bool == true { finished = true }
         if path.hasSuffix("/status"), let observed = body["observed"] as? [String: Any] {
             observation = try JSONDecoder().decode(MeetingCaptureObserved.self,
                 from: JSONSerialization.data(withJSONObject: observed))
+            if enforceObservedPause, observation?.generation == generation,
+               observation?.phase == "paused", desired == "recording" {
+                desired = "paused"; generation += 1
+            }
+        }
+        if path.hasSuffix("/audio"), let key = body["requestKey"] as? String {
+            audioRequests += 1
+            return try JSONSerialization.data(withJSONObject: ["requestKey": key, "status": "saved", "replayed": false,
+                "receipt": ["version": 1, "cursor": 1, "transcriptRevision": 1, "stopCutoffMs": NSNull()]])
         }
         let selection = try JSONSerialization.jsonObject(with: JSONEncoder().encode(command.selection))
         var capture: [String: Any] = ["grantId": grantId, "deviceId": deviceId, "deviceName": "Synthetic Mac",
-            "generation": generation, "epoch": 1, "desired": desired, "selection": selection,
+            "generation": generation, "epoch": epoch, "desired": desired, "selection": selection,
             "epochStartMs": 0, "expiresAt": ServerTime.format(Self.baseTime.addingTimeInterval(7200)),
             "serverTime": ServerTime.format(Self.baseTime), "elapsedMs": elapsedMs, "leaseMs": 30000,
             "gaps": try JSONSerialization.jsonObject(with: JSONEncoder().encode(gaps)), "gapLimitReached": false,
             "finalization": desired == "stopped" ? (finished ? "complete" : "pending") : "none"]
+        if desired == "paused" { capture["epochEndMs"] = 1000 }
         if desired == "stopped" { capture["stopCutoffMs"] = 1000; capture["epochEndMs"] = 1000 }
         var reply: [String: Any] = ["capture": capture]
         if path.hasSuffix("/claim") {
@@ -548,6 +779,12 @@ private final class HostLifecycleProtocol: URLProtocol {
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch is ResumeFixtureRejection {
+            let response = HTTPURLResponse(url: request.url!, statusCode: 409, httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"])!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data("{}".utf8))
             client?.urlProtocolDidFinishLoading(self)
         } catch { client?.urlProtocol(self, didFailWithError: error) }
     }

@@ -2,20 +2,36 @@
 
 Status: approved direction; implementation and live verification tracked in #2981.
 Implementation PRs: #3056 (capture), #3079 (workspace), #3082 (Mac controls).
-Design PR: #3077. Latest approved screens: #3087 at `5bca8dfb88cc6f436f599345fdf66e0150b89fac`.
+Design PR: #3077. Owner-approved screen sources: #3087 and merged #3089.
 
 ## Approved source
 
-The four approved HTML states are the source of truth for setup, readiness, recording and Settings:
+Ben approved the screens in #3087 and #3089 in owner chat on **2026-10-06** (owner-local date),
+and reaffirmed that approval when requesting the fixes to [review 6034226446](https://github.com/motioneso/moss/pull/3077#issuecomment-6034226446).
+This records owner-chat approval, not a GitHub review. #3087 remains a design-source PR;
+#3089 is merged. Neither status is a prerequisite for opening this spec's self-contained screens.
 
-- [Not linked](https://github.com/motioneso/moss/blob/5bca8dfb88cc6f436f599345fdf66e0150b89fac/docs/superpowers/specs/meetings-setup-wizard/01-not-linked.html)
-- [Ready](https://github.com/motioneso/moss/blob/5bca8dfb88cc6f436f599345fdf66e0150b89fac/docs/superpowers/specs/meetings-setup-wizard/02-ready.html)
-- [Recording](https://github.com/motioneso/moss/blob/5bca8dfb88cc6f436f599345fdf66e0150b89fac/docs/superpowers/specs/meetings-setup-wizard/03-recording.html)
-- [Settings](https://github.com/motioneso/moss/blob/5bca8dfb88cc6f436f599345fdf66e0150b89fac/docs/superpowers/specs/meetings-setup-wizard/04-settings.html)
+The four local HTML states are the source of truth for linking, readiness, recording and Settings:
 
-In a checkout containing that design, open `docs/superpowers/specs/meetings-setup-wizard/index.html`.
-The earlier seven-screen design in `docs/superpowers/mockups/meetings-minimal/` is superseded for
-these four states. Its historical critique is background, not a build specification.
+- [Not linked](meetings-minimal/01-not-linked.html)
+- [Ready](meetings-minimal/02-ready.html)
+- [Recording](meetings-minimal/03-recording.html)
+- [Settings](meetings-minimal/04-settings.html)
+
+Open the [local index](meetings-minimal/index.html). These carry #3087 commit
+`5bca8dfb88cc6f436f599345fdf66e0150b89fac`, with the owner's corrections below and the
+automatic-summary switch retained from #3079. The [source record](meetings-minimal/README.md)
+lists the exact provenance and changes.
+
+The same folder carries #3089's approved [record-backed card](meetings-minimal/approval-card/02-change-settings.html),
+[approved result](meetings-minimal/approval-card/04-approved.html) and
+[declined result](meetings-minimal/approval-card/05-declined.html) as visual references for ordinary
+approval presentation. They are unchanged synthetic examples, not an additional Meetings screen
+or a second recording approval. The existing browser linking flow remains the sole initial
+approval surface; do not transplant a settings-change card into it.
+
+The [earlier critique](../mockups/meetings-minimal/critique.md) is explicitly historical and
+does not authorize its old setup controls.
 
 ## Direction
 
@@ -24,10 +40,10 @@ creating a meeting never begin capture. The page is a transcript and a place for
 available width. Moss chat stays the ordinary docked drawer, scoped to the open meeting.
 
 No source question or separate linking wizard precedes a meeting. The native app's existing
-connect-in-browser flow owns the single initial approval, including recording on supported Macs.
-Recording still requires separate capability proof and operating system permissions; there is no
-second recording-approval screen or notice. Macs missing recording authority must sign out under
-Active sessions and explicitly relink. Already-approved Macs remain linked.
+connect-in-browser flow owns linking. Its one initial linking approval also grants the recording
+capability for that exact Mac. There is no separate Approve recording / Deny recording card,
+acknowledgement, recording disclosure paragraph or reminder after linking. Authentication and
+operating-system permissions remain required, and each recording still needs an explicit Start.
 
 ## Four states
 
@@ -40,7 +56,9 @@ Show the Meetings heading and the shared empty state:
 - Button: “Download app”
 
 Download app is an inert button with no link or release URL. There is no signed release yet.
-Do not show the Moss address or a copy button. This is the final approved choice; keep the not-linked screen exactly as the mockup.
+Do not show the Moss address or a copy button in this browser state. This is the final approved
+choice; keep the not-linked screen exactly as the mockup. The native app’s existing first-screen
+Moss address input is outside this change and remains available for its normal linking flow.
 
 A temporarily disconnected linked Mac is not an unlinked Mac. Keep existing meetings readable and
 show a truthful connection problem rather than asking the user to link again unnecessarily.
@@ -66,22 +84,31 @@ Keep transcript and notes side by side. Show Recording only for a confirmed live
 autosave, retain conflict recovery and survive navigation.
 
 The compact pill illustrated over the browser scene is Trail Marker's floating native overlay.
-It is not a second browser waveform or a new audio-level transport. Existing browser controls
+It is not a second browser level meter or a new audio-level transport. Existing browser controls
 remain usable for capture recovery and safe Pause/Resume/Stop.
 
-The native pill is approximately 250 × 80 points, using the approved warm Moss surface, light
-border, pill radius and soft floating shadow. It contains:
+The native pill is approximately 250 × 80 points, with a **pure white surface in every appearance,
+including dark mode**, a light border, pill radius and soft floating shadow. Its surface must not
+follow the app's light/dark background token. It contains:
 
-- A small red waveform, approximately 32 × 24 points
-- A 54-point circular Pause control
-- A 54-point solid semantic-red Stop control with an outlined square
+- A small red **three-bar level meter**, approximately 32 × 24 points; never a zigzag waveform
+- A 54-point circular Pause control with a grey ring and grey pause icon
+- A 54-point solid semantic-red Stop control with a filled white square
 
 There is no visible status text, meeting name, elapsed timer or close button. Accessible names,
-status descriptions and tooltips remain. The waveform comes from actual captured audio; silence,
-no fresh audio, Pause and terminal states make it flat. No decorative activity animation.
+status descriptions and tooltips remain. The three bars reflect actual captured audio levels;
+silence, absent or stale audio, Pause and terminal states flatten all three bars. No decorative
+activity animation. The static mockup illustrates the shape, not a live level signal.
 
-Keep the existing native Pause and Stop authority. Resume remains an explicit authorized browser
-action. The pill remains draggable, nonactivating and visible across Spaces and full-screen apps.
+Keep the existing native Pause and Stop authority. The paused pill’s play button resumes the
+current recording directly after an explicit click. Resume retains the same paused, claimed grant, exact
+audio sources, owner, device, session, capability and expiry. It cannot create an initial Start,
+change sources or revive ended authority. A newer Pause or Stop cancels a queued Resume; a known
+rejection requires a new click. An uncertain transport result may retry only the same request
+identity within the existing bounds, without a replacement grant or extended expiry. Hardware and
+uploads remain paused until authoritative server acknowledgment and normal status application.
+The browser’s Resume remains available. The pill remains draggable, nonactivating and visible
+across Spaces and full-screen apps.
 The menu-bar red dot stays visible from Start through Pause until Stop. No system notification.
 
 ### Settings
@@ -163,10 +190,21 @@ These requirements survive the simpler screens and must be verified against impl
 Existing code descriptions alone are not live security proof.
 
 - Device linking uses the app's current browser approval and Keychain-backed credentials.
-  Its capabilities list says “Record meetings when you choose Start”. No separate
-  recording approval is shown, and no browser-to-Mac inbound connection is introduced.
-- The recording capability is separate from ordinary device authority. A device token alone is
-  insufficient for capture. Capability revision and owner binding remain enforced.
+  The same initial owner approval grants linking and recording capability for that exact Mac;
+  linking must not report recording-ready until both are established. No second approval card or
+  disclosure paragraph follows. No new credential type or browser-to-Mac inbound connection is
+  introduced.
+- The server may store and enforce the recording capability separately from ordinary device
+  authority. A device token alone remains insufficient for capture. Keep capability revision,
+  owner/device binding, session checks, exact source scope, expiry and revocation enforcement.
+- Previously linked Macs without authoritative prior recording consent must explicitly relink
+  through the existing browser approval. Never silently upgrade an ordinary device token into
+  recording authority. An existing authoritative recording grant may be preserved only within its
+  original owner, device and scope; no migration may broaden it or replace evidence of consent
+  with an inferred preference. Until eligible, show a concise relink recovery action, not a new
+  Approve recording card. Retired attempt/decide mutations retain authentication and origin checks
+  and return 410 to authenticated callers; they cannot issue recording authority. Read-only recovery
+  may restore only an exact previously approved candidate still bound to live authority.
 - Start creates a per-meeting grant bound to the starting browser session, exact device,
   connection and recording capability. Opening, linking and permission grants never issue Start.
 - Preserve claim deadline 60 seconds, capture lease 30 seconds and hard session cap 2 hours,
@@ -208,7 +246,6 @@ or missing sources must stop the new Start, preserving the explicit scope of an 
 
 ## Migration and stack rules
 
-Merge main `a92148a010d7a771a8f2fdd20300f3e0cccd2cc9` into the three implementation branches.
 Keep published branch history and push only fast-forward updates. Do not rebase or force-push.
 
 Main already owns migration numbers 0289, 0291, 0293 and 0294. Check both main and other active PR
@@ -236,13 +273,17 @@ and permission boundaries even when adjacent explanatory copy becomes shorter.
    or copy field appears. Existing meetings remain readable.
 3. Creating/opening/linking does not record. One explicit Start does. Repeated clicks, interrupted
    navigation, late replies, account changes and denied access preserve existing fences.
+   One initial linking approval grants the exact Mac's recording capability without a second
+   card or disclosure paragraph. Legacy linked devices without authoritative consent fail closed
+   with explicit relink recovery; existing eligible grants are not silently widened.
 4. Settings includes its four controls. Audio and automatic-summary saves handle failure, retry,
    navigation, stale replies and account-reset fencing.
    Legacy selected-app scope is preserved until an explicit change.
 5. Pause/Resume/Stop, cancellation, superseded generations, missing sources and permissions are
    covered independently. UI simplification does not bypass a server guard.
-6. Native actual audio moves the waveform. Silence, stale samples, Pause and every terminal path
-   flatten it. Geometry is 250 × 80, controls are 54 points and visible text is absent.
+6. Native actual audio moves exactly three red bars. Silence, absent/stale samples, Pause and every
+   terminal path flatten all bars. Geometry is 250 × 80, controls are 54 points, Pause has a grey
+   ring, visible text is absent and the capsule stays pure white in light and dark appearances.
 7. Unlink from browser and Mac, capability revoke, session logout, expiry, cross-owner access,
    grant replay and rate limits retain positive and guard-removal negative controls.
 8. Catalog, export, deletion and module lifecycle tests match the new schema and API surface.

@@ -367,8 +367,8 @@ test("shared connection, single Start, recording controls, transcript and Stopâ†
     await expect(page.getByRole("region", { name: "Transcript", exact: true })).toHaveCount(0);
     await expect(strip).toHaveCount(0);
     await expect(page.locator(".meetings-recording-indicator")).toHaveCount(0);
-    // Set summary-off through the real preferences API for the next worker receipt.
-    // The link-controls helper separately exercises the Settings summary switch.
+    // The compact Settings UI edits only audio source. Keep legacy summary-off worker
+    // coverage through the real preferences API, without inventing a removed UI control.
     const settingsResult = await page.request.put("/api/meetings/preferences", {
       data: { summarizeOnStop: false }
     });

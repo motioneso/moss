@@ -29,11 +29,21 @@ CONTROLS = [
         "assertion": "XCTAssertTrue failed",
     }),
     ("Meetings/MeetingRecordingPresentation.swift", "MeetingRecordingPresentationTests", {
-        "name": "T12-silence-flat", "test": "testWaveformIsFlatOnSilentMissingOrNonfiniteInputIncludingReconnect",
+        "name": "T12-silence-flat", "test": "testMeterIsFlatOnSilentMissingOrNonfiniteInputIncludingReconnect",
         "before": "        if captured == 0 {", "after": "        if captured < 0 {", "assertion": "XCTAssertTrue failed",
     }),
     ("Meetings/MeetingRecordingPresentation.swift", "MeetingRecordingPresentationTests", {
-        "name": "T12-terminal-surfaces", "test": "testEveryTerminalPhaseClearsBothSurfacesAndWaveform",
+        "name": "T12-three-captured-bars", "test": "testMeterContainsOnlyThreeLatestCapturedPeaks",
+        "before": "private(set) var meterLevels = [Float](repeating: 0, count: 3)",
+        "after": "private(set) var meterLevels = [Float](repeating: 0, count: 8)", "assertion": "XCTAssertEqual failed",
+    }),
+    ("Design/DesignTokens.swift", "MeetingRecordingPresentationTests", {
+        "name": "T12-pure-white-capsule", "test": "testRecordingPillPaletteMatchesReferenceInLightAndDarkAppearance",
+        "before": "static let recordingSurface = SwiftUI.Color.white",
+        "after": "static let recordingSurface = SwiftUI.Color.black", "assertion": "XCTAssertEqualWithAccuracy failed",
+    }),
+    ("Meetings/MeetingRecordingPresentation.swift", "MeetingRecordingPresentationTests", {
+        "name": "T12-terminal-surfaces", "test": "testEveryTerminalPhaseClearsBothSurfacesAndMeter",
         "before": "        guard [.ready, .recording, .paused].contains(phase) else { stop(); return }",
         "after": "        guard active else { return }", "assertion": "XCTAssertFalse failed",
     }),
@@ -80,6 +90,7 @@ CONTROLS = [
         "before": "        if preferences.unlinkPending, identity != nil {",
         "after": "        if false, identity != nil {", "assertion": "XCTAssertEqual failed",
     }),
+
 ]
 
 

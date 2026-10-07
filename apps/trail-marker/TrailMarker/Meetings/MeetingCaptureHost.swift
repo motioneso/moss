@@ -4,7 +4,7 @@ import Combine
 import Foundation
 
 /// App-lifetime capture host. The shared connection advertises sources without opening them.
-/// Capture starts only from a fresh explicit browser Start claimed by that connection.
+/// Initial capture requires a fresh browser Start; native Resume retains that claimed session.
 @MainActor
 final class MeetingCaptureHost: ObservableObject {
     enum Phase: String { case unprepared, ready, recording, paused, stopping, stopped, error }
@@ -51,16 +51,16 @@ final class MeetingCaptureHost: ObservableObject {
     private var sessionGeneration = 0
     private var fence = MeetingCommandFence()
     private var observed = MeetingCaptureObserved(generation: 0, phase: "idle", errorCode: nil)
-    private var remote: MeetingRemoteCapture?
+    @Published private var remote: MeetingRemoteCapture?
     private var selected: MeetingInventorySnapshot.Resolved?
     private var choice: MeetingCaptureChoice?
     private var originNanoseconds: UInt64?
     private var recordingDuration = MeetingRecordingDuration()
     private var uploadAdmitted = false
     private var stoppedByUser = false
-    private var controlInFlight = false
+    @Published private var controlInFlight = false
     private var controlRetryAtNanoseconds: UInt64 = 0
-    private var controlOutbox = MeetingControlOutbox()
+    @Published private var controlOutbox = MeetingControlOutbox()
     private var pauseStartedNanoseconds: UInt64?
     private var pauseReason = "paused"
     private var pausedCaptureCutoff: UInt64?
@@ -95,6 +95,13 @@ final class MeetingCaptureHost: ObservableObject {
 
     var isRecording: Bool { phase == .recording || cleanupBlocked }
     var canStop: Bool { [.recording, .paused, .stopping].contains(phase) || (phase == .ready && grantId != nil) || cleanupBlocked }
+
+    var canResumeFromUserClick: Bool {
+        phase == .paused && remote?.desired == "paused" && remote?.selection == choice &&
+            !epochs.isEmpty && !stoppedByUser && !cleanupBlocked && !gapCoverageIncomplete &&
+            controlOutbox.pending == nil && !controlInFlight && credential != nil &&
+            grantExpiry.map({ ports.wallNow() < $0 }) == true && self.now() < leaseDeadlineNanoseconds
+    }
 
     func hideRecordingPill() { recordingPresentation.hide() }
     private func refreshRecordingPresentation() {
@@ -180,7 +187,8 @@ final class MeetingCaptureHost: ObservableObject {
                     try? await Task.sleep(nanoseconds: 250_000_000)
                     continue
                 }
-                controlOutbox.reconcile(generation: reply.capture.generation, desired: reply.capture.desired)
+                controlOutbox.reconcile(generation: reply.capture.generation, desired: reply.capture.desired,
+                    retainedSourceMatches: reply.capture.selection == choice)
                 let now = self.now()
                 let lease = min(30000, reply.capture.leaseMs ?? 30000)
                 guard lease >= 15000 else { throw MeetingHostError.invalidResponse }
@@ -524,6 +532,16 @@ final class MeetingCaptureHost: ObservableObject {
         return admitted ? .started : .deferred
     }
 
+    func resumeFromUserClick() {
+        guard canResumeFromUserClick, let activation, let grantId, let remote else { return }
+        uploadAdmitted = false
+        controlRetryAtNanoseconds = 0
+        controlOutbox.stage(command: "record", meetingId: activation.meetingId, grantId: grantId,
+            generation: remote.generation)
+        message = "Paused. Waiting for Moss to confirm Resume."
+        retryPendingControl()
+    }
+
     func pauseFromUserClick() { localControl("pause") }
     func stopFromUserClick() {
         if cleanupBlocked { _ = terminate(reason: "Recording stopped."); return }
@@ -579,6 +597,7 @@ final class MeetingCaptureHost: ObservableObject {
                 }
             }
             do {
+                guard body.command != "record" || self.controlOutbox.pending?.requestKey == body.requestKey else { return }
                 let reply = try await client.control(body, credential: credential)
                 guard generation == self.sessionGeneration else { return }
                 guard reply.capture.grantId == self.grantId, reply.capture.deviceId == self.ports.identity()?.deviceId else {
@@ -588,30 +607,44 @@ final class MeetingCaptureHost: ObservableObject {
                 self.controlRetryAtNanoseconds = 0
                 self.controlOutbox.received(requestKey: body.requestKey, desired: reply.capture.desired)
                 guard self.controlOutbox.accepts(generation: reply.capture.generation) else { return }
-                self.controlOutbox.reconcile(generation: reply.capture.generation, desired: reply.capture.desired)
+                self.controlOutbox.reconcile(generation: reply.capture.generation, desired: reply.capture.desired,
+                    retainedSourceMatches: reply.capture.selection == self.choice)
                 self.remote = reply.capture
                 if body.command == "pause" {
                     self.pausedCaptureCutoff = try reply.capture.epochEndMs.map(self.nativeTime)
                     if let cutoff = self.pausedCaptureCutoff { self.runtime.tightenPauseCutoff(to: cutoff) }
                 }
-                _ = self.fence.shouldStart(generation: reply.capture.generation, desired: reply.capture.desired)
+                // Resume acknowledgment does not open hardware or consume the recording fence.
+                // Keep the prior paused observation until the normal status/apply path starts
+                // the acknowledged epoch, then a later status admits its first audio upload.
+                if body.command != "record" {
+                    _ = self.fence.shouldStart(generation: reply.capture.generation, desired: reply.capture.desired)
+                    self.observed = .init(generation: reply.capture.generation,
+                        phase: self.stoppedByUser ? "stopped" : "paused", errorCode: nil)
+                }
                 if body.command == "stop", let cutoff = [reply.capture.stopCutoffMs, reply.capture.epochEndMs].compactMap({ $0 }).min(), self.runtime.snapshot.stopCutoffNanoseconds != nil {
                     try self.runtime.tightenStopCutoff(to: self.nativeTime(cutoff))
                 }
-                self.observed = .init(generation: reply.capture.generation,
-                    phase: self.stoppedByUser ? "stopped" : "paused", errorCode: nil)
                 // A later status must acknowledge this observation before any final flush.
                 self.uploadAdmitted = false
             } catch {
                 guard generation == self.sessionGeneration else { return }
                 if (error as? MeetingHostError) == .authorizationExpired {
                     _ = self.terminate(reason: MeetingHostError.authorizationExpired.message)
+                } else if body.command == "record", (error as? MeetingHostError) == .rejected {
+                    if self.controlOutbox.rejectResume(requestKey: body.requestKey) {
+                        self.message = "Resume was not accepted. Check the selected sources in Moss, then press Resume again."
+                    }
                 } else {
                     // Keep the request and UUID. The polling loop reconciles conflicts and
                     // retries delivery; a new explicit Start can never override pending Stop.
                     self.uploadAdmitted = false
                     self.controlRetryAtNanoseconds = self.now() + ((error as? MeetingHostError)?.retryDelayMilliseconds ?? 2000) * 1_000_000
-                    self.message = body.command == "stop" ? "Recording stopped on this Mac. Waiting to confirm Stop with Moss." : "Paused on this Mac. Waiting to confirm Pause with Moss."
+                    if body.command == "record" {
+                        self.message = "Paused. Resume is not confirmed. Waiting for Moss."
+                    } else {
+                        self.message = body.command == "stop" ? "Recording stopped on this Mac. Waiting to confirm Stop with Moss." : "Paused on this Mac. Waiting to confirm Pause with Moss."
+                    }
                 }
             }
         }
@@ -715,6 +748,12 @@ final class MeetingCaptureHost: ObservableObject {
     /// Source churn is an admission failure. Retained resource handles survive a failed teardown,
     /// and both Stop and the service tick can retry them without reopening any source.
     func sourceChanged() {
+        if let pending = controlOutbox.pending, pending.command == "record" {
+            // Cancel queued Resume, or follow an already-dispatched Resume with Pause.
+            controlOutbox.stage(command: "pause", meetingId: pending.meetingId, grantId: pending.grantId,
+                generation: pending.expectedGeneration)
+            controlRetryAtNanoseconds = 0
+        }
         let now = self.now()
         recordDiscardedTail(at: now, reason: "source-unavailable")
         pauseStartedNanoseconds = now

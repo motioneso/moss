@@ -205,7 +205,7 @@ describe("real auth fence races (isolated gate only)", () => {
       await admitted.promise;
       try {
         if (target === "device")
-          await runtime.companionDevices.logout({ ...f.browser, deviceId: f.deviceId });
+          await runtime.companionDevices.logoutCredential({ headers: f.native });
         else {
           // The dispatch transaction is bounded. Retry its documented busy result once it releases.
           await expect

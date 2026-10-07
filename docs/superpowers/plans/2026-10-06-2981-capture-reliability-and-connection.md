@@ -70,7 +70,7 @@ revocation. Fresh supported pairing presents that capability as part of the sing
 approval. Already paired devices without recording authorization must explicitly sign out
 under Settings → Active sessions and relink through Trail Marker; already-approved Macs remain
 linked. Do not show a second recording approval or a separate recording disclosure paragraph.
-Legacy attempt/decide routes return 410. Read-only recovery can restore only an exact previously
+Legacy attempt/decide routes retain authentication/origin checks and return authenticated 410. Read-only recovery can restore only an exact previously
 approved candidate whose live capability, proof and revision still match.
 No background migration grants recording access; Backtrack's existing consent and buffer policy
 remain unchanged. Keep independent native-held recording-capability proof in the Keychain, granted

@@ -56,7 +56,6 @@ export interface CompanionDevicesService {
     input: CompanionHeartbeatRequest
   ): Promise<CompanionHeartbeatResponse>;
   rename(ctx: CompanionContext, displayName: string): Promise<CompanionDeviceSummary>;
-  logout(ctx: CompanionContext): Promise<void>;
   logoutCredential(input: { headers: IncomingHttpHeaders }): Promise<void>;
 }
 
@@ -178,13 +177,6 @@ export function createCompanionDevicesService(deps: CompanionDevicesDeps): Compa
       // No identity or reusable authorization is returned, including on a lost-response retry.
       await pool.query("DELETE FROM app.companion_devices WHERE credential_hash = $1", [
         sha256Base64url(credential)
-      ]);
-    },
-    async logout(ctx) {
-      // Deleting the row is the revocation. Nothing is retained to retry with.
-      await pool.query("DELETE FROM app.companion_devices WHERE id = $1 AND user_id = $2", [
-        ctx.deviceId,
-        ctx.actorUserId
       ]);
     }
   };

@@ -27,22 +27,24 @@ an operator's deployed proxy.
 
 Connect Trail Marker once through the native app's existing connect-in-browser flow. Linking
 grants recording capability in the single initial linking approval but never starts capture.
-Missing or revoked recording authority requires signing the Mac out under Settings → Active
-sessions and explicitly relinking through Trail Marker. There is no separate recording approval;
-already-approved Macs remain linked. New meeting opens a ready
-transcript-and-notes workspace; press **Start recording** explicitly. Microphone + system audio
-is the default, using the Mac's advertised OS-default microphone. Change audio mode only in
-Settings → Meetings, alongside link status and Unlink Mac. No source-selection setup is required.
-Existing exact saved microphone/app choices remain scoped until an explicit Settings change.
+Missing or revoked recording access requires explicit Unlink in Settings → Meetings and relinking
+through Trail Marker; already-approved Macs stay linked. There is no separate recording approval.
+New meeting opens a ready transcript-and-notes workspace; press **Start recording** explicitly.
+Microphone + system audio is the default, using the Mac's advertised OS-default microphone. Change
+audio mode only in Settings → Meetings, alongside link status and Unlink Mac. Existing exact
+microphone/app choices remain scoped; a missing source never authorizes broader capture.
 Download app has no link until a supported signed release exists; no Moss-address copy control
 is added. The [approved four states](../../docs/superpowers/specs/2026-10-06-meetings-minimal-design.md)
 are the current design authority.
 
-The native floating recording pill is 250 × 80 points with an actual captured-audio waveform,
-Pause and Stop. It has no visible text, timer, name or close button. Silent or stale audio makes
-the waveform flat. Existing credentials, OS permissions, revocation and capture limits remain.
-The first explicit Start may request an OS permission; permission approval alone cannot start a
-cancelled or expired command.
+The native floating pill is pure white in light and dark appearances, 250 × 80 points, with a red
+three-bar captured-audio level meter, grey-ringed Pause and solid red Stop with a filled square.
+It has no visible text, timer, name or close button. Silent or stale audio flattens all three bars.
+The paused pill's play control explicitly resumes only the existing paused, claimed recording with
+its retained sources and live authority. It cannot create an initial Start. A newer Pause/Stop or
+known rejection cancels pending Resume; hardware waits for authoritative status confirmation.
+Existing credentials, OS permissions, revocation and capture limits remain. The first explicit
+Start may request an OS permission; permission approval cannot start a cancelled or expired command.
 A second browser signed in as the same owner may explicitly control the named recorder. Opening
 a meeting never changes the recording computer. Missing or ambiguous remembered sources require
 selection; a missing selected app never widens to computer audio. Provider configuration stays in

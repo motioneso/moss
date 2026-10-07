@@ -90,7 +90,7 @@ describe("Mac link real-auth security matrix (isolated gate only)", () => {
   );
   it("T1 missing device is rejected independently by real session checks and the auth fence", async () => {
     const f = await fixture();
-    await runtime.companionDevices.logout({ ...f.browser, deviceId: f.deviceId });
+    await runtime.companionDevices.logoutCredential({ headers: f.native });
     await expect(
       runtime.sessionBindings.assertLive({
         actorUserId: f.browser.actorUserId,
@@ -107,7 +107,7 @@ describe("Mac link real-auth security matrix (isolated gate only)", () => {
   });
   it("T1 the cascaded capability independently denies after unlink without the separate device precheck", async () => {
     const f = await fixture();
-    await runtime.companionDevices.logout({ ...f.browser, deviceId: f.deviceId });
+    await runtime.companionDevices.logoutCredential({ headers: f.native });
     await expect(
       runtime.recordingCapabilities.assertLive({
         actorUserId: f.browser.actorUserId,

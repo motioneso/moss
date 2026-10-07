@@ -318,9 +318,9 @@ export const meetingsModuleManifest = {
       remediations: [
         {
           id: "meetings.restore_mac_link",
-          path: "/settings?section=profile",
+          path: "/settings?section=modules&module=meetings",
           description:
-            "Link again or request a recording connection update in Trail Marker and approve it in Profile settings. Neither starts capture. If Unlink is unconfirmed, use local Stop, check the connection and retry."
+            "For missing or revoked recording access, unlink this Mac in Settings → Meetings and relink through Trail Marker. If Unlink is unconfirmed, use local Stop, check the connection and retry. Linking never starts capture."
         }
       ]
     },
@@ -363,7 +363,7 @@ export const meetingsModuleManifest = {
           class: "prerequisite",
           remediationRef: "meetings.connect_recorder",
           description:
-            "The recording connection is unavailable, expired or revoked. Check the companion connection. For missing or revoked recording access, sign the Mac out under Settings → Active sessions and reconnect through Trail Marker."
+            "The recording connection is unavailable, expired or revoked. Check the Mac in Settings → Meetings. For missing or revoked recording access, unlink the Mac and reconnect through Trail Marker."
         },
         {
           code: "meeting_capture_processing_unavailable",
@@ -402,7 +402,7 @@ export const meetingsModuleManifest = {
           id: "meetings.connect_recorder",
           path: "/settings?section=modules&module=meetings",
           description:
-            "Check the linked Mac and audio mode in Settings → Meetings. For missing or revoked recording access, sign the Mac out under Active sessions and relink through Trail Marker. Check macOS audio permissions, then press Start in New meeting."
+            "Check the Mac and audio in Settings → Meetings. For missing or revoked recording access, unlink and relink through Trail Marker. Check macOS audio permissions, then press Start in New meeting."
         },
         {
           id: "meetings.configure_transcription",
@@ -415,7 +415,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.mac_recording_status",
       description:
-        "The Mac shows a 250 × 80 text-free floating pill with actual captured audio, Pause and Stop, plus a menu-bar red dot. Silence or stale audio makes the waveform flat. Stop clears both. No system notification is posted."
+        "White 250 × 80 native pill: three red captured-level bars, grey-ringed Pause and solid Stop. Play resumes only the same paused recording. Silence/stale audio flattens the bars. Stop clears pill and menu dot; no notification."
     },
     {
       id: "meetings.account_export",

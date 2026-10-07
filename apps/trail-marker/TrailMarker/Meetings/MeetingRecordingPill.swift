@@ -7,31 +7,32 @@ struct MeetingRecordingPill: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            CapturedWaveform(levels: host.recordingPresentation.waveform)
-                .frame(width: 32, height: 24)
+            CapturedAudioLevelMeter(levels: host.recordingPresentation.meterLevels)
+                .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Captured audio level")
-                .accessibilityValue(host.recordingPresentation.waveform.allSatisfy { $0 == 0 } ? "Silent" : "Audio arriving")
+                .accessibilityValue(host.recordingPresentation.meterLevels.allSatisfy { $0 == 0 } ? "Silent" : "Audio arriving")
             Spacer(minLength: TrailMarkerTokens.Spacing.related)
             Button {
-                if host.phase == .paused { host.openMeetingInBrowser() }
+                if host.phase == .paused { host.resumeFromUserClick() }
                 else { host.pauseFromUserClick() }
             } label: {
                 Image(systemName: host.phase == .paused ? "play.fill" : "pause")
-                    .font(.system(size: 24, weight: .medium))
+                    .font(.system(size: TrailMarkerTokens.Layout.recordingControlIconSize, weight: .regular))
                     .frame(width: TrailMarkerTokens.Layout.recordingControlDiameter,
                            height: TrailMarkerTokens.Layout.recordingControlDiameter)
                     .foregroundStyle(TrailMarkerTokens.Color.recordingForeground)
                     .background(TrailMarkerTokens.Color.recordingSurface, in: Circle())
-                    .overlay(Circle().strokeBorder(TrailMarkerTokens.Color.recordingControlBorder, lineWidth: 1))
+                    .overlay(Circle().strokeBorder(TrailMarkerTokens.Color.recordingControlBorder,
+                                                  lineWidth: TrailMarkerTokens.Layout.recordingControlBorderWidth))
                     .contentShape(Circle())
             }
-            .disabled(host.phase != .recording && host.phase != .paused)
-            .help(host.phase == .paused ? "Resume in Moss" : "Pause recording")
-            .accessibilityLabel(host.phase == .paused ? "Resume in Moss" : "Pause recording")
+            .disabled(host.phase != .recording && !host.canResumeFromUserClick)
+            .help(host.phase == .paused ? "Resume recording" : "Pause recording")
+            .accessibilityLabel(host.phase == .paused ? "Resume recording" : "Pause recording")
             Spacer(minLength: TrailMarkerTokens.Spacing.related)
             Button(action: host.stopFromUserClick) {
-                Image(systemName: "stop")
-                    .font(.system(size: 24, weight: .medium))
+                Image(systemName: "stop.fill")
+                    .font(.system(size: TrailMarkerTokens.Layout.recordingControlIconSize, weight: .regular))
                     .frame(width: TrailMarkerTokens.Layout.recordingControlDiameter,
                            height: TrailMarkerTokens.Layout.recordingControlDiameter)
                     .foregroundStyle(TrailMarkerTokens.Color.recordingOnDanger)
@@ -41,33 +42,33 @@ struct MeetingRecordingPill: View {
                 .disabled(!host.canStop).help("Stop recording").accessibilityLabel("Stop recording")
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, TrailMarkerTokens.Spacing.section)
+        .padding(.horizontal, TrailMarkerTokens.Layout.recordingPillHorizontalInset)
         .frame(width: TrailMarkerTokens.Layout.recordingPillWidth, height: TrailMarkerTokens.Layout.recordingPillHeight)
         .background(TrailMarkerTokens.Color.recordingSurface, in: Capsule())
-        .overlay(Capsule().strokeBorder(TrailMarkerTokens.Color.recordingBorder, lineWidth: 1))
+        .overlay(Capsule().strokeBorder(TrailMarkerTokens.Color.recordingBorder,
+                                       lineWidth: TrailMarkerTokens.Layout.recordingPillBorderWidth))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Meeting recording controls")
         .accessibilityValue(host.recordingPresentation.state.rawValue)
     }
 }
 
-/// Every vertical stroke comes from an actual captured peak. Zero is a flat centre line.
-private struct CapturedWaveform: View {
+/// Three recent captured peaks, with no connecting waveform or decorative motion.
+/// Silence collapses every bar to a flat dash immediately, including stale input.
+private struct CapturedAudioLevelMeter: View {
     let levels: [Float]
     var body: some View {
-        Canvas { context, size in
-            var path = Path()
-            path.move(to: CGPoint(x: 0, y: size.height / 2))
-            path.addLine(to: CGPoint(x: size.width, y: size.height / 2))
-            let visibleLevels = levels.suffix(8)
-            for (index, level) in visibleLevels.enumerated() {
-                let x = (CGFloat(index) + 0.5) * size.width / CGFloat(visibleLevels.count)
-                let height = CGFloat(level) * size.height / 2
-                path.move(to: CGPoint(x: x, y: size.height / 2 - height))
-                path.addLine(to: CGPoint(x: x, y: size.height / 2 + height))
+        HStack(spacing: TrailMarkerTokens.Layout.recordingMeterBarSpacing) {
+            ForEach(levels.indices, id: \.self) { index in
+                RoundedRectangle(cornerRadius: TrailMarkerTokens.Layout.recordingMeterBarCornerRadius)
+                    .fill(TrailMarkerTokens.Color.recordingDanger)
+                    .frame(width: TrailMarkerTokens.Layout.recordingMeterBarWidth,
+                           height: max(TrailMarkerTokens.Layout.recordingMeterSilentHeight,
+                                       CGFloat(levels[index]) * TrailMarkerTokens.Layout.recordingMeterHeight))
             }
-            context.stroke(path, with: .color(TrailMarkerTokens.Color.recordingDanger), style: StrokeStyle(lineWidth: 2, lineCap: .round))
         }
+        .frame(width: TrailMarkerTokens.Layout.recordingMeterWidth,
+               height: TrailMarkerTokens.Layout.recordingMeterHeight)
     }
 }
 

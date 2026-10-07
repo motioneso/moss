@@ -218,7 +218,13 @@ describe("own-device operations", () => {
     const forged: CompanionContext = { ...ctx, deviceId: theirs.deviceId };
 
     await expectAuthError(devices.rename(forged, "Hijacked"), "companion_credential_invalid", 401);
-    await devices.logout(forged);
+    // Logout accepts only the caller’s credential, never a context-supplied device id.
+    await devices.logoutCredential(bearer(mine.credential));
+    await expectAuthError(
+      devices.resolve(bearer(mine.credential)),
+      "companion_credential_invalid",
+      401
+    );
 
     const survived = await pool.query("SELECT 1 FROM app.companion_devices WHERE id = $1", [
       theirs.deviceId
@@ -228,9 +234,7 @@ describe("own-device operations", () => {
 
   it("logging out removes the credential and nothing works afterwards", async () => {
     const { credential, deviceId } = await linkDevice(activeUserId, "Logout Mac");
-    const ctx = await devices.resolve(bearer(credential));
-
-    await devices.logout(ctx);
+    await devices.logoutCredential(bearer(credential));
 
     const row = await pool.query("SELECT 1 FROM app.companion_devices WHERE id = $1", [deviceId]);
     expect(row.rows).toHaveLength(0);
@@ -242,8 +246,7 @@ describe("own-device operations", () => {
     const second = await linkDevice(activeUserId, "MacBook Pro");
     expect(first.deviceId).not.toBe(second.deviceId);
 
-    const firstCtx = await devices.resolve(bearer(first.credential));
-    await devices.logout(firstCtx);
+    await devices.logoutCredential(bearer(first.credential));
 
     const survivor = await devices.resolve(bearer(second.credential));
     expect(survivor.deviceId).toBe(second.deviceId);

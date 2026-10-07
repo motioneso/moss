@@ -8,7 +8,7 @@ struct MeetingRecordingPresentation: Equatable {
     private(set) var hidden = false
     private(set) var state: State = .noAudio
     private(set) var elapsedMilliseconds: UInt64 = 0
-    private(set) var waveform = [Float](repeating: 0, count: 24)
+    private(set) var meterLevels = [Float](repeating: 0, count: 3)
     var showsPill: Bool { active && !hidden }
     var showsRedDot: Bool { active }
     var elapsedText: String {
@@ -32,10 +32,10 @@ struct MeetingRecordingPresentation: Equatable {
         else if reconnecting { state = .reconnecting }
         else { state = captured > 0 ? .recording : .noAudio }
         if captured == 0 {
-            waveform = [Float](repeating: 0, count: waveform.count)
+            meterLevels = [Float](repeating: 0, count: meterLevels.count)
         } else {
-            waveform.removeFirst()
-            waveform.append(captured)
+            meterLevels.removeFirst()
+            meterLevels.append(captured)
         }
     }
 }

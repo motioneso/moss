@@ -210,6 +210,7 @@ describe("read-only recovery of previously approved recording proof", () => {
     });
     const service = createRecordingCapabilitiesService({
       pool: { query } as unknown as pg.Pool,
+      maintenancePool: { withClient: vi.fn() } as unknown as AbortablePgPool,
       companionDevices: {} as CompanionDevicesService
     });
     const actor = { actorUserId: owner, deviceId: device, requestId: "recovery" };

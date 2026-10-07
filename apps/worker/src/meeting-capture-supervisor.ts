@@ -3,7 +3,10 @@ import { MEETING_CAPTURE_MAINTENANCE_QUEUE } from "@moss/meetings";
 
 export const CAPTURE_SUPERVISE_INTERVAL_MS = 1000;
 
-/** Only the worker calls this; the same boss keeps its ordinary global supervision cadence. */
+/**
+ * Only the worker calls this. The one-second pass adds capture-queue supervision database work,
+ * bounded to this queue and one in-flight pass; the boss keeps its ordinary global cadence.
+ */
 export function startMeetingCaptureSupervision(
   boss: Pick<PgBoss, "supervise">,
   onError: (error: Error) => void

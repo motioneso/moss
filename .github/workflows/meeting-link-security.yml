@@ -40,6 +40,9 @@ on:
       - "infra/env.production.example"
       - "scripts/setup-prod.ts"
       - "scripts/check-meeting-link-negative-controls.py"
+      - "scripts/check-meeting-resume-negative-controls.py"
+      - "tests/unit/meeting-native-resume.test.ts"
+      - "tests/unit/helpers/meeting-capture-fixture.ts"
       - ".github/workflows/meeting-link-security.yml"
   workflow_dispatch:
 
@@ -66,6 +69,8 @@ jobs:
         run: |
           node node_modules/vitest/vitest.mjs run tests/unit/owned-pg-client.test.ts tests/unit/meeting-capture-maintenance.test.ts tests/unit/worker-schedule-mode.test.ts tests/unit/capture-maintenance-deployment.test.ts tests/unit/api-capture-maintenance-startup.test.ts tests/unit/database-pool-idle-error.test.ts tests/unit/meeting-link-proof-recognition.test.ts
           python3 scripts/check-meeting-link-negative-controls.py --unit
+      - name: Verify scoped native Resume guard removals
+        run: python3 scripts/check-meeting-resume-negative-controls.py --unit
       - name: Verify real auth, database races and source restoration
         run: |
           set -euo pipefail
@@ -81,6 +86,7 @@ jobs:
           name: meeting-link-security
           path: |
             /tmp/meeting-link-negative-*/
+            /tmp/meeting-resume-negative-*/
             /tmp/jarv1s-gate/*.log
           if-no-files-found: warn
       - name: Stop the isolated database

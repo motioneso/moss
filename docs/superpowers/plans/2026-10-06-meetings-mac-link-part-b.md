@@ -1,4 +1,4 @@
-> Current design authority: #3087 at `5bca8dfb88cc6f436f599345fdf66e0150b89fac` and the updated minimal Meetings spec. Historical R/T identifiers below remain traceability labels.
+> Current design authority: the [minimal Meetings spec](../specs/2026-10-06-meetings-minimal-design.md) and its [local approved screens](../specs/meetings-minimal/index.html), including the owner's latest linking and native-control corrections. The #3087/#3089 screen approvals were given in owner chat on 2026-10-06. Historical R/T identifiers below remain traceability labels.
 
 # Meetings Mac link: Part B (#2981)
 
@@ -6,22 +6,56 @@ Status: approved implementation, draft pull request only. No merge or deployment
 
 ## Source and branch
 
-Build from repaired, published Part A, PR #3079 at `1b1e459c4d0ea87e3e13d11b1093e4f853b58673`,
+Historical starting point: repaired, published Part A, PR #3079 at `1b1e459c4d0ea87e3e13d11b1093e4f853b58673`,
 tree `a0f3403b0de7f5d72d69efab60d67be036dd3c13`. The branch is
 `feat/2981-meetings-mac-link`, with intended PR base `feat/2981-meetings-minimal`.
 
-The approved controls and test matrix are the Link design sign-off in
-`docs/superpowers/specs/2026-10-06-meetings-minimal-design.md`. Its current source is PR #3077
-at `687fd2bc45e48f6a8a75068302bc332ce3e86c06`, which supersedes the original R6/R9 defaults
-and T9/T12/T14 checks before implementation began. The copied spec also corrects its stale
-lifetime sentence to match R9 and identifies the pill as required work rather than old baseline.
-The source's historical baseline is context, not a claim about this build's current behavior.
+Current builds follow the local approved controls and test matrix in
+`docs/superpowers/specs/2026-10-06-meetings-minimal-design.md`. Its source and owner corrections
+are recorded in that spec and its own mockup folder. Do not build against an earlier pinned
+#3077 snapshot or the superseded recording-pill concept. Preserve published branch history and
+integrate the current reviewed stack additively; the baseline above is provenance, not a reset target.
+The later execution sections below are historical verification records, not current build instructions.
 
-Use the existing pairing, capability-attempt/decide, companion logout, browser session and
-capture-grant flows. Every Start remains a deliberate browser action. Creating, opening, linking,
-and reconnecting must never start recording.
+Use the existing browser pairing approval, companion logout, browser-session and capture-grant
+flows. The single initial owner approval also grants the exact Mac's recording capability with
+its independent native-held proof and policy revision. There is no separate Approve recording /
+Deny recording card or recording-disclosure paragraph after linking. Retired capability
+attempt/decide mutations return **410 to authenticated callers** after their existing credential,
+owner/session and origin checks; retirement does not make those endpoints anonymous.
 
-The latest approved #3087 design requires a draggable native 250 × 80 pill above windows on every Space: real captured waveform, circular Pause and semantic-red Stop. No visible text, elapsed timer, meeting name or close button. Silence or stale input makes the waveform flat. Keep the menu-bar red dot through Pause until every terminal path clears it. No system notification or browser waveform transport is added.
+Already linked Macs lacking authoritative recording approval, and Macs with revoked recording
+access, must use the real normal relink flow: explicitly sign out the device under Settings →
+Active sessions, then relink through Trail Marker and approve the new link. Do not silently
+upgrade a legacy device or revive revoked grants. Read-only recovery may restore only an exact
+previously approved candidate whose owner, device, policy, proof and revision still match live
+authority; it cannot create an approval attempt or new authority.
+
+Every initial Start remains a deliberate browser action. Creating, opening, linking and
+reconnecting must never start recording. Linking grants app capability, not OS microphone or
+system-audio permission. Preserve the meaning of those OS permissions and independent Backtrack
+consent, toggles and buffer policy. The native first screen's Moss address input remains part of
+the existing linking flow and is explicitly out of scope. The browser's not-linked Meetings
+screen still omits the Moss address and copy control.
+
+The current approved design requires a draggable native **250 × 80 pure-white capsule**, including
+in dark appearance, above windows on every Space. It contains exactly **three red bars** driven by
+actual captured audio, a circular Pause control with a grey ring, and a solid semantic-red Stop
+control with a filled white square (`stop.fill`). No zigzag waveform, visible text, elapsed timer,
+meeting name or close button. Silence, absent/stale input, Pause and terminal states flatten all
+three bars. Keep the menu-bar red dot through Pause until every terminal path clears it. No system
+notification or browser audio-level transport is added.
+
+The paused capsule's explicit play-button click may Resume only the existing **paused, claimed**
+grant. Retain its exact source selection, owner, device, connection, starting browser session,
+recording capability, current generation and expiry bounds. Native Resume creates neither an
+initial Start nor fresh authority, cannot change sources, and cannot revive terminal or expired
+authority. Keep normal server authorization/status application on this path; do not open capture
+hardware or resume uploads until authoritative server acknowledgment and status permit it.
+A known rejection or a newer Pause/Stop cancels the queued Resume. Known rejection requires a new
+explicit click. An uncertain transport result may retry only the same request identity under its
+existing bounds; it cannot create a replacement grant or extend expiry. Browser Resume remains
+available, and source changes remain an explicit authorized browser/Settings operation.
 
 The recording capability has no independent expiry; it ends on Unlink, revoke or device expiry.
 Device expiry remains 90 days of inactivity and a 365-day absolute bound. Hardware-bound
@@ -30,20 +64,20 @@ new secret or authentication flow.
 
 ## Control mapping
 
-| Control | Required implementation and review scope                                                                                                                                | Proof                                |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| R1      | Settings Unlink uses the canonical owner device deletion transaction; subsequent native credentials fail and post-commit audio is refused                               | T1                                   |
-| R2      | Mac Unlink confirms logout before deleting both Keychain items; failed logout retains credentials and visible retry state                                               | T2, T13                              |
-| R3      | Meetings settles invalid bindings as revoked, discards unsent native audio, and exposes the unlink/revoke reason within one lease                                       | T1–T3                                |
-| R4      | Preserve claim, lease, hard-cap and session/device/connection bounds on every live capture operation                                                                    | T5                                   |
-| R5      | Preserve the starting browser session binding through local and everywhere-else sign-out                                                                                | T4                                   |
-| R6      | Each accepted Start shows the floating pill and menu-bar red dot; actual captured levels drive the text-free waveform, and every stop path clears both; no notification | T12, T14                             |
-| R7      | No additional Mac confirmation and no record-on-link behavior                                                                                                           | T12, T14                             |
-| R9      | Capability remains valid without a Start for more than 90 days when the device remains valid; Unlink, revoke and device expiry still end it                             | T9                                   |
-| R10     | Preserve per-IP limits; add shared per-account Start limits of 10/minute and 60/hour with Retry-After                                                                   | T10                                  |
-| R11     | Trace bearer/proof/verifier/grant secrets through logger, queues, export, AI and response consumers; add authorization-header redaction                                 | T11                                  |
-| R12     | Settings offers device Unlink; existing recording-capability revoke stays enforced; Mac offers truthful Unlink                                                          | T1–T3, T13                           |
-| R13     | Preserve exact saved-source selection, current inventory validation and refusal of unavailable sources                                                                  | T6, T7 plus saved-source regressions |
+| Control | Required implementation and review scope                                                                                                                                           | Proof                                |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| R1      | Settings Unlink uses the canonical owner device deletion transaction; subsequent native credentials fail and post-commit audio is refused                                          | T1                                   |
+| R2      | Mac Unlink confirms logout before deleting both Keychain items; failed logout retains credentials and visible retry state                                                          | T2, T13                              |
+| R3      | Meetings settles invalid bindings as revoked, discards unsent native audio, and exposes the unlink/revoke reason within one lease                                                  | T1–T3                                |
+| R4      | Preserve claim, lease, hard-cap and session/device/connection bounds on every live capture operation                                                                               | T5                                   |
+| R5      | Preserve the starting browser session binding through local and everywhere-else sign-out                                                                                           | T4                                   |
+| R6      | Each accepted Start shows the floating pill and menu-bar red dot; actual captured levels drive three red bars on a white capsule, and every stop path clears both; no notification | T12, T14                             |
+| R7      | Single initial linking approval includes recording capability; no second card/disclosure, no record-on-link, and no initial native Start                                           | T12, T14                             |
+| R9      | Capability remains valid without a Start for more than 90 days when the device remains valid; Unlink, revoke and device expiry still end it                                        | T9                                   |
+| R10     | Preserve per-IP limits; add shared per-account Start limits of 10/minute and 60/hour with Retry-After                                                                              | T10                                  |
+| R11     | Trace bearer/proof/verifier/grant secrets through logger, queues, export, AI and response consumers; add authorization-header redaction                                            | T11                                  |
+| R12     | Settings offers device Unlink; existing recording-capability revoke stays enforced; Mac offers truthful Unlink                                                                     | T1–T3, T13                           |
+| R13     | Preserve exact saved-source selection, inventory checks and source-unavailable refusal; native Resume retains the paused claimed grant without widening authority                  | T6, T7 plus saved-source regressions |
 
 Every T1–T13 guard-removal check needs an observed failing execution, then a restored passing
 execution. Author the real-service integration cases without substituting the old reapprove fake.
@@ -94,8 +128,9 @@ owner denial after restoration. T11 temporarily grants forbidden export columns,
 denial after rollback. These are authored database proofs, not local execution claims.
 
 The earlier recording-pill concept is superseded. Use the approved #3087 recording state linked
-from the updated minimal Meetings spec: 250 × 80, text-free waveform, Pause and Stop. Neither
-mockup is installed-app or live-capture proof. Hardware binding remains deferred at the
+from the updated minimal Meetings spec: 250 × 80 pure white, three red level bars, grey-ring Pause
+and filled-square Stop. Direct native Resume is bounded as above. Neither mockup is installed-app
+or live-capture proof. Hardware binding remains deferred at the
 credential storage/server verifier boundary.
 
 ## Work and integration lanes
@@ -116,10 +151,12 @@ attributed to their proper stack; do not silently rewrite or publish another bra
 
 ## Migration and verification boundaries
 
-A fresh inventory of all seven open PRs leaves 0295 free; reserve it for the Meetings account
-rate-limit state if a migration is needed. No capability-expiry migration is planned. PR #3071 owns 0289, 0291, 0293,
-0294; Part A owns 0292. Never edit applied SQL. Update the foundation schema catalog and affected
-export, deletion and role fixtures for every new table or migration.
+The original Part B allocation reserved 0295 for Meetings account rate-limit state; PR #3071
+owned 0289, 0291, 0293 and 0294, and Part A owned 0292. Treat that allocation inventory as
+historical and verify current claims before any future migration. This linking/control correction
+adds no migration and leaves all existing SQL unchanged. Never edit applied SQL. Any separately
+authorized future table or migration must update the foundation schema catalog and affected
+export, deletion and role fixtures.
 
 Use the repository verify-gate procedure for any database test. This executor has no Docker,
 Swift or Xcode and Chromium previously failed its socket operation before assertions. Do not
@@ -283,7 +320,8 @@ Three issues found during an owner-run recording are repaired together. A genuin
 report that causes the server's automatic Pause now acknowledges that exact new generation.
 Older reports cannot regress it; error-only and unrelated Pause requests still require a real
 acknowledgement. The Mac also acknowledges a newer Pause while already safely paused, without
-reopening devices. Resume remains an explicit browser action.
+reopening devices. At that historical baseline, Resume was browser-only; the current explicit
+native Resume contract in Source and branch above supersedes that restriction.
 
 Provider segment ends may overshoot the admitted clip by at most 100ms, inclusive, and are clamped
 before persistence. A 101ms overshoot, invalid start, nonfinite value, reversed or empty interval

@@ -161,14 +161,16 @@ that browser's hardware or the server's hardware. Browser-only capture is not im
 Transcription is configured only through AI providers in Moss.
 
 Each accepted Start shows a small draggable pill above ordinary windows on every Space, including
-alongside full-screen apps. The 250 × 80-point warm-surface capsule shows a small red waveform,
-a round Pause button and a solid red Stop button, without visible status text, elapsed time,
+alongside full-screen apps. The 250 × 80-point pure-white capsule (including dark mode) shows a red three-bar level meter,
+a grey-ringed round Pause button and a solid red Stop button, without visible status text, elapsed time,
 meeting title or close button. Its accessibility value still describes Recording, Paused,
-No audio or Reconnecting. Each 250 ms display tick draws silence as a flat line and treats a
+No audio or Reconnecting. Each 250 ms display tick flattens all three bars for silence and treats a
 peak at least 500 ms old as missing input; Pause clears it immediately.
 The display reads a bounded local atomic scalar per source; it does not retain extra samples, send levels or put them in logs. When both
 sources are selected, it shows the maximum current source peak. Reconnecting can still display
-real input during a valid capture lease. Its paused play button opens the existing Resume action in Moss.
+real input during a valid capture lease. Its paused play button explicitly resumes the same paused recording through Moss. It retains the
+original grant and sources, waits for authoritative status before reopening hardware, and cancels
+pending Resume when a newer Pause/Stop or a known rejection wins. Initial Start remains in Moss.
 No system notification or additional on-Mac recording confirmation is added.
 
 The Trail Marker menu-bar mark shows a red dot from accepted Start until Stop, including Pause.

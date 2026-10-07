@@ -10,20 +10,18 @@ enum TrailMarkerTokens {
         static let gold = SwiftUI.Color(red: 199.0 / 255.0, green: 155.0 / 255.0, blue: 69.0 / 255.0)
         static let charcoal = SwiftUI.Color(red: 38.0 / 255.0, green: 42.0 / 255.0, blue: 39.0 / 255.0)
 
-        // Native equivalents of the approved Moss surface, border and danger tokens.
-        static let recordingSurface = adaptive(light: 0xFAF8F1, dark: 0x232019)
-        static let recordingBorder = adaptive(light: 0xC6CBBC, dark: 0x35322B)
-        static let recordingControlBorder = adaptive(light: 0x9BA591, dark: 0x46443E)
-        static let recordingForeground = adaptive(light: 0x676C60, dark: 0xB7B1A2)
-        static let recordingDanger = adaptive(light: 0xB23C2E, dark: 0xD4685A)
-        static let recordingOnDanger = adaptive(light: 0xFFFFFF, dark: 0x1C1A16)
+        // The approved recording-pill reference stays white, grey and red in every appearance.
+        // These recording-only colors deliberately do not follow the app's warm/dark surfaces.
+        static let recordingSurface = SwiftUI.Color.white
+        static let recordingBorder = fixed(0xD8D8D2)
+        static let recordingControlBorder = fixed(0xCBD0D6)
+        static let recordingForeground = fixed(0x6B7280)
+        static let recordingDanger = fixed(0xDB3D38)
+        static let recordingOnDanger = SwiftUI.Color.white
 
-        private static func adaptive(light: UInt32, dark: UInt32) -> SwiftUI.Color {
-            SwiftUI.Color(nsColor: NSColor(name: nil) { appearance in
-                let value = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
-                return NSColor(srgbRed: CGFloat((value >> 16) & 0xFF) / 255,
-                    green: CGFloat((value >> 8) & 0xFF) / 255, blue: CGFloat(value & 0xFF) / 255, alpha: 1)
-            })
+        private static func fixed(_ value: UInt32) -> SwiftUI.Color {
+            SwiftUI.Color(.sRGB, red: Double((value >> 16) & 0xFF) / 255,
+                green: Double((value >> 8) & 0xFF) / 255, blue: Double(value & 0xFF) / 255, opacity: 1)
         }
     }
 
@@ -45,6 +43,16 @@ enum TrailMarkerTokens {
         static let brandPanelRadius: CGFloat = 12
         static let recordingPillWidth: CGFloat = 250
         static let recordingPillHeight: CGFloat = 80
+        static let recordingPillHorizontalInset: CGFloat = 30
+        static let recordingPillBorderWidth: CGFloat = 2
         static let recordingControlDiameter: CGFloat = 54
+        static let recordingControlIconSize: CGFloat = 20
+        static let recordingControlBorderWidth: CGFloat = 3
+        static let recordingMeterWidth: CGFloat = 32
+        static let recordingMeterHeight: CGFloat = 24
+        static let recordingMeterBarWidth: CGFloat = 6
+        static let recordingMeterBarSpacing: CGFloat = 7
+        static let recordingMeterBarCornerRadius: CGFloat = 1
+        static let recordingMeterSilentHeight: CGFloat = 2
     }
 }

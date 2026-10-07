@@ -118,7 +118,7 @@ export function MeetingSettingsForm() {
               <Button
                 variant="quiet"
                 aria-label={state.linked.length > 1 ? `Unlink ${name}` : undefined}
-                disabled={state.saving || !state.links.canChange(session.id, "unlink")}
+                disabled={state.saving || !state.links.canUnlink(session.id)}
                 onClick={() => setUnlink({ id: session.id, name })}
               >
                 Unlink Mac
@@ -138,13 +138,13 @@ export function MeetingSettingsForm() {
         <MeetingUnlinkDialog
           name={unlink.name}
           pending={state.links.pending}
-          allowed={state.links.canChange(unlink.id, "unlink")}
+          allowed={state.links.canUnlink(unlink.id)}
           error={
             state.links.failed && state.links.deviceId === unlink.id ? state.links.message : null
           }
           onClose={() => setUnlink(null)}
           onConfirm={() => {
-            void state.links.change(unlink.id, "unlink").then((confirmed) => {
+            void state.links.unlink(unlink.id).then((confirmed) => {
               if (confirmed) setUnlink(null);
             });
           }}

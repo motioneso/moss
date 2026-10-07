@@ -471,7 +471,8 @@ export class MeetingCaptureService {
     requestId: string,
     input: MeetingCaptureControlInput & { meetingId: string; grantId: string }
   ) {
-    if (input.command !== "pause" && input.command !== "stop") throw new MeetingCaptureError();
+    if (!["pause", "stop", "record"].includes(input.command) || input.selection !== undefined)
+      throw new MeetingCaptureError();
     const proof = await this.authenticate(headers, requestId, input.meetingId, input.grantId);
     return this.control(proof.actor, input.grantId, input.meetingId, input, proof);
   }
@@ -537,6 +538,17 @@ export class MeetingCaptureService {
         if (input.command === "record" && (!processing?.ready || !processing.modelRoute))
           throw new MeetingCaptureError("meeting_capture_processing_unavailable", 503);
         const state = captureState(grant);
+        // Native Record is only an explicit Resume of this already claimed, paused epoch.
+        // Receipt replay above remains idempotent even after the accepted Resume advanced it.
+        if (
+          proof &&
+          input.command === "record" &&
+          (grant.status !== "active" ||
+            !grant.credential_hash ||
+            state.desired !== "paused" ||
+            !state.epochs.at(-1)?.selection)
+        )
+          throw new MeetingCaptureError();
         await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
         if (grant.status !== "approved") expireCaptureLease(state, this.now(), grant.expires_at);
         let command = input;
