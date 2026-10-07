@@ -1,4 +1,7 @@
-import { createMeetingCaptureMaintenanceRuntime } from "./meeting-capture-maintenance-runtime.js";
+import {
+  createMeetingCaptureMaintenanceRuntime,
+  type MeetingCaptureMaintenanceRuntime
+} from "./meeting-capture-maintenance-runtime.js";
 import { recordingLoggerOptions } from "./recording-logger-options.js";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -112,6 +115,8 @@ export interface CreateApiServerOptions {
   readonly appDb?: Kysely<MossDatabase>;
   readonly workerDb?: Kysely<MossDatabase>;
   readonly boss?: PgBoss;
+  /** Override the maintenance lifecycle; the API still awaits start and drains close. */
+  readonly captureMaintenance?: MeetingCaptureMaintenanceRuntime;
   readonly authRuntime?: MossAuthRuntime;
   /** #3065: tests inject a registry with a fake clock. */
   readonly actAsGrants?: ActAsGrantRegistry;
@@ -277,12 +282,14 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   );
   installActAsActorLookup(server, actAsActor);
   const ownsAuthRuntime = options.authRuntime === undefined;
-  const captureMaintenance = createMeetingCaptureMaintenanceRuntime({
-    producer: boss,
-    workerConnectionString: getMossDatabaseUrls().worker,
-    appConnectionString: getMossDatabaseUrls().app,
-    auth: authRuntime
-  });
+  const captureMaintenance =
+    options.captureMaintenance ??
+    createMeetingCaptureMaintenanceRuntime({
+      producer: boss,
+      workerConnectionString: getMossDatabaseUrls().worker,
+      appConnectionString: getMossDatabaseUrls().app,
+      auth: authRuntime
+    });
   server.addHook("preClose", async () => captureMaintenance.close());
   const AUTH_MAX = parsePositiveIntEnv(resolveMossEnv(process.env, "JARVIS_RL_AUTH_MAX"), 10);
 

@@ -7,6 +7,7 @@ import { createApiServer } from "../../apps/api/src/server.js";
 const lifecycle = vi.hoisted(() => ({
   hooks: new Map<string, (() => Promise<void>)[]>(),
   events: [] as string[],
+  constructions: [] as string[],
   producerStart: async () => {},
   consumerStart: async () => {}
 }));
@@ -33,6 +34,7 @@ vi.mock("@moss/jobs", async (original) => ({
   ...(await original<typeof JobsModule>()),
   createPgBossClient: (connectionString: string) => {
     const role = connectionString.includes("jarvis_worker_runtime") ? "consumer" : "producer";
+    lifecycle.constructions.push(role);
     return {
       send: vi.fn(),
       start: async () => {
@@ -73,6 +75,7 @@ afterEach(async () => {
     for (const hook of lifecycle.hooks.get(name) ?? []) await hook();
   lifecycle.hooks.clear();
   lifecycle.events.length = 0;
+  lifecycle.constructions.length = 0;
   lifecycle.producerStart = async () => {};
   lifecycle.consumerStart = async () => {};
 });
@@ -89,6 +92,7 @@ describe("API capture queue lifecycle ownership", () => {
         releaseConsumer = resolve;
       });
     const api = build();
+    expect(lifecycle.constructions).toEqual(["producer", "consumer"]);
     let ready = false;
     const pending = api.ready().then(() => {
       ready = true;
@@ -121,6 +125,7 @@ describe("API capture queue lifecycle ownership", () => {
   it("accepts a caller-owned send-only producer and still readies and drains its consumer", async () => {
     const producer = { send: vi.fn() };
     const api = build(producer);
+    expect(lifecycle.constructions).toEqual(["consumer"]);
     const failure = await api.ready().catch((error: unknown) => error);
     expect(failure, "api-borrowed-producer-needs-no-start").toBeUndefined();
     expect(lifecycle.events).toEqual(["consumer-start", "consumer-ready", "consumer-register"]);

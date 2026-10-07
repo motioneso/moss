@@ -7,6 +7,13 @@ import {
   MEETING_CAPTURE_MAINTENANCE_QUEUE
 } from "@moss/meetings";
 
+/** The API awaits start at readiness and close in its preClose hook. */
+export interface MeetingCaptureMaintenanceRuntime {
+  start(): Promise<void>;
+  /** Must also be safe when readiness never started or start failed. */
+  close(): Promise<void>;
+}
+
 /**
  * Queue claiming uses the existing worker role, as does the API's external-module consumer.
  * Auth-owned session/device/capability tables are unavailable to that role, and capture grants
@@ -19,7 +26,7 @@ export function createMeetingCaptureMaintenanceRuntime(input: {
   workerConnectionString: string;
   appConnectionString: string;
   auth: MossAuthRuntime;
-}) {
+}): MeetingCaptureMaintenanceRuntime {
   const consumer = createPgBossClient(input.workerConnectionString);
   let started = false;
   let maintenancePool: AbortablePgPool | undefined;
