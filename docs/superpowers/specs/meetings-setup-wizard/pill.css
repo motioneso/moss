@@ -1,0 +1,10 @@
+.meeting-recording-pill button[aria-label="Hide recording pill"] {
+  opacity: 0;
+  pointer-events: none;
+}
+.meeting-recording-pill:hover button[aria-label="Hide recording pill"],
+.meeting-recording-pill:focus-within button[aria-label="Hide recording pill"],
+.meeting-recording-pill[data-close-visible] button[aria-label="Hide recording pill"] {
+  opacity: 1;
+  pointer-events: auto;
+}

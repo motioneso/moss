@@ -5,6 +5,7 @@ Four states. Open `index.html` locally at **1440px**.
 - `01-not-linked.html`: Download app; one line points to Trail Marker’s linking instructions.
 - `02-ready.html`: connected Mac, ready for an explicit Start recording.
 - `03-recording.html`: transcript, notes and the **200 × 64px** recording pill.
+- `03-recording-hover.html`: the same recording screen with the small close X exposed for review.
 - `04-settings.html`: link status, audio source, automatic-summary switch and Unlink Mac.
 
 Microphone + system audio is the default. Audio source can be changed in Settings.
@@ -33,3 +34,9 @@ Regenerate from the repository root with:
 
 The two configurations separate runtime package entry points from declaration-file paths.
 The existing CSS bundle and font license are unchanged; tokens.css contains the fixed native-overlay colours.
+
+The small top-left close X appears on pointer hover or keyboard focus. Its accessible name is
+“Hide recording pill”. It only hides the native overlay: recording continues, the red meeting
+menu item remains, and menu Pause/Stop stay available. “Show recording pill” restores it;
+the next recording shows it automatically. The HTML controls remain illustrative. Open
+`03-recording-hover.html` to inspect the visible-X state without needing pointer interaction.

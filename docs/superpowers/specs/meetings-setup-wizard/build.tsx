@@ -15,7 +15,7 @@ import {
   Select,
   Switch
 } from "@moss/ui";
-import { Pause, Square } from "lucide-react";
+import { Pause, Square, X } from "lucide-react";
 Object.assign(globalThis, { React });
 const out = resolve("docs/superpowers/specs/meetings-setup-wizard");
 const stack = { display: "flex", flexDirection: "column", gap: "var(--space-5)" } as CSSProperties;
@@ -49,11 +49,14 @@ function Shell({ settings = false, children }: { settings?: boolean; children: R
     </>
   );
 }
-function Pill() {
+function Pill({ showClose = false }: { showClose?: boolean }) {
   return (
     <div
       aria-label="Recording controls"
+      className="meeting-recording-pill"
+      data-close-visible={showClose || undefined}
       style={{
+        position: "relative",
         width: 200,
         height: 64,
         display: "flex",
@@ -66,6 +69,26 @@ function Pill() {
         boxShadow: "var(--shadow-md)"
       }}
     >
+      <IconButton
+        aria-label="Hide recording pill"
+        title="Hide recording pill"
+        style={{
+          position: "absolute",
+          top: 4,
+          left: 16,
+          width: 16,
+          height: 16,
+          minWidth: 16,
+          minHeight: 16,
+          padding: 0,
+          border: "0.8px solid var(--meeting-pill-pause-ring)",
+          borderRadius: "var(--radius-pill)",
+          background: "var(--meeting-pill-surface)",
+          color: "var(--meeting-pill-pause-ink)"
+        }}
+      >
+        <X style={{ width: 8, height: 8 }} strokeWidth={2} />
+      </IconButton>
       <svg
         width="25.6"
         height="19.2"
@@ -107,7 +130,13 @@ function Pill() {
     </div>
   );
 }
-function Meeting({ recording = false }: { recording?: boolean }) {
+function Meeting({
+  recording = false,
+  showClose = false
+}: {
+  recording?: boolean;
+  showClose?: boolean;
+}) {
   return (
     <Shell>
       <div style={row}>
@@ -137,7 +166,7 @@ function Meeting({ recording = false }: { recording?: boolean }) {
       </div>
       {recording && (
         <aside style={{ position: "fixed", bottom: "var(--space-6)", right: "var(--space-6)" }}>
-          <Pill />
+          <Pill showClose={showClose} />
         </aside>
       )}
     </Shell>
@@ -210,9 +239,15 @@ const pages = [
 ];
 const base = `*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:var(--text-md);line-height:var(--leading-normal)}p,h1,h2,h3{margin:0}button,a,input,select,textarea{font:inherit}.meeting-columns{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:var(--space-7)}@media(max-width:720px){.meeting-columns{grid-template-columns:minmax(0,1fr)}}`;
 function document(title: string, content: ReactNode) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Moss mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="tokens.css"><style>${base}</style></head><body>${renderToStaticMarkup(content)}</body></html>`;
+  const pillStyles = title.startsWith("Recording") ? '<link rel="stylesheet" href="pill.css">' : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Moss mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="tokens.css">${pillStyles}<style>${base}</style></head><body>${renderToStaticMarkup(content)}</body></html>`;
 }
 for (const p of pages) writeFileSync(resolve(out, p.file + ".html"), document(p.title, p.content));
+// A second recording preview makes the transient hover control directly reviewable.
+writeFileSync(
+  resolve(out, "03-recording-hover.html"),
+  document("Recording · Close control", <Meeting recording showClose />)
+);
 writeFileSync(
   resolve(out, "screens.json"),
   JSON.stringify(
