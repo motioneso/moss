@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { setTimeout } from "node:timers/promises";
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import type { MeetingCaptureInventory } from "@moss/shared";
@@ -11,6 +10,7 @@ import {
 import { MeetingCaptureConnectionRepository } from "../../packages/meetings/src/capture-connection-repository.js";
 import type { MeetingCaptureDependencies } from "../../packages/meetings/src/capture-service.js";
 import type { CaptureStoredState } from "../../packages/meetings/src/capture-domain.js";
+import { CaptureWaiters } from "../../packages/meetings/src/capture-waiters.js";
 const owner = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 describe("assembled native heartbeat and conditional browser transport", () => {
@@ -113,9 +113,28 @@ describe("assembled native heartbeat and conditional browser transport", () => {
         expires_at: grant.expires_at
       })
     ];
+    let confirmHeld!: () => void;
+    const held = new Promise<void>((resolve) => {
+      confirmHeld = resolve;
+    });
+    const realWait = CaptureWaiters.prototype.wait;
+    const waiter = vi.spyOn(CaptureWaiters.prototype, "wait").mockImplementation(function (
+      this: CaptureWaiters,
+      key,
+      milliseconds,
+      signal
+    ) {
+      const pending = realWait.call(this, key, milliseconds, signal);
+      confirmHeld();
+      return pending;
+    });
     const app = Fastify();
-    registerMeetingCaptureRoutes(app, dependencies);
     try {
+      // Control both the relative timer and the route's Date.now deadline. An early real-timer
+      // wake could otherwise refresh just before the deadline, then wait and refresh again.
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      vi.setSystemTime(clock);
+      registerMeetingCaptureRoutes(app, dependencies);
       const initial = await app.inject({ url: `/api/meetings/records/${id}/capture` });
       expect(initial.statusCode).toBe(200);
       const revision = initial.json().revision as string;
@@ -126,7 +145,10 @@ describe("assembled native heartbeat and conditional browser transport", () => {
           completed = true;
           return result;
         });
-      await setTimeout(10);
+      await Promise.race([held, waiting]);
+      expect(completed).toBe(false);
+      expect(waiter).toHaveBeenCalledTimes(1);
+      expect(spies[2]).toHaveBeenCalledTimes(2);
       for (let index = 1; index <= 8; index++) {
         clock = new Date(origin.getTime() + 2000 + index * 1000);
         const native = await app.inject({
@@ -141,19 +163,33 @@ describe("assembled native heartbeat and conditional browser transport", () => {
             recordedDurationMs: 1000 + index * 1000
           }
         });
+        await vi.advanceTimersByTimeAsync(0);
         expect(native.statusCode).toBe(200);
         expect(native.json().capture.revision).toBe(revision);
         expect(completed).toBe(false);
+        expect(spies[2]).toHaveBeenCalledTimes(2);
+        expect(waiter).toHaveBeenCalledTimes(1);
       }
+      await vi.advanceTimersByTimeAsync(149);
+      expect(completed).toBe(false);
+      expect(spies[2]).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1);
       const snapshot = await waiting;
       expect(snapshot.json().capture.recordedDurationMs).toBe(9000);
       expect(snapshot.json().capture.lastSeenAt).toBe(clock.toISOString());
       expect(snapshot.json().revision).toBe(revision);
-      // Two reads total: initial snapshot and its bounded keepalive. Eight heartbeats did not restart a browser request.
+      // Initial GET, held GET's initial read, then exactly one timeout refresh.
       expect(spies[2]).toHaveBeenCalledTimes(3);
+      expect(waiter).toHaveBeenCalledTimes(1);
     } finally {
-      await app.close();
-      for (const spy of spies) spy.mockRestore();
+      try {
+        await vi.runOnlyPendingTimersAsync();
+        await app.close();
+      } finally {
+        waiter.mockRestore();
+        for (const spy of spies) spy.mockRestore();
+        vi.useRealTimers();
+      }
     }
   });
 });
