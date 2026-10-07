@@ -16,11 +16,31 @@ describe("meetings composition", () => {
     const description = (id: string) => features.find((item) => item.id === id)!.description;
     expect(description("meetings.referenced_evidence")).toContain("Meetings to return to the list");
     expect(description("meetings.referenced_evidence")).not.toContain("Close evidence");
-    expect(description("meetings.questions")).toContain("automatically with saved notes");
-    expect(description("meetings.questions")).toContain("Remove meeting context");
-    expect(description("meetings.questions")).not.toContain("Ask Moss");
-    expect(description("meetings.automatic_summary")).toContain("still-Untitled meeting");
-    expect(description("meetings.automatic_summary")).toContain("first sentence");
+    const questions = features.find((item) => item.id === "meetings.questions")!;
+    expect(questions.description).toBe(
+      "Chat attaches the open meeting’s notes and transcript; its chip announces the title. API-key only, no actions. Remove About this meeting for ordinary subscription chat. Admin pins and locked defaults apply."
+    );
+    expect(questions.errors).toEqual([
+      {
+        code: "meeting_chat_unsupported",
+        class: "prerequisite",
+        remediationRef: "meetings.remove_chat_context",
+        description:
+          "Selected-meeting questions need an API-key chat model. Remove the About this meeting chip to continue ordinary chat with your subscription model."
+      }
+    ]);
+    expect(questions.remediations).toEqual([
+      {
+        id: "meetings.remove_chat_context",
+        path: "/meetings",
+        description:
+          "Remove the About this meeting chip in the chat drawer to continue ordinary subscription chat, or choose an API-key chat model for meeting questions."
+      }
+    ]);
+    expect(questions.description).not.toContain("Ask Moss");
+    expect(description("meetings.automatic_summary")).toBe(
+      "Automatic summaries default on. Turn off Summarize automatically after Stop in Settings → Meetings (summarizeOnStop=false). Only this automatic path renames Untitled meeting. Rewrite summary remains available."
+    );
   });
 
   it("explains export and history failures, including the Notes prerequisite", () => {
