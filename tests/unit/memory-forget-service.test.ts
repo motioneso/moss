@@ -41,7 +41,7 @@ describe("memory forget target version and conditional deletion", () => {
     const h = harness();
     h.row.object_text = `First line\n${"full text ".repeat(800)}`;
     const target = await h.service.target(h.scoped, OWNER, FACT);
-    expect(target?.label).toBe(`Mira: prefers: ${h.row.object_text} [fact ${FACT}]`);
+    expect(target?.label).toBe(`Mira: prefers: ${h.row.object_text}`);
     expect(target?.version).toMatch(/^[a-f0-9]{64}$/);
     expect(h.queries[0]?.sql).toContain("f.xmin::text AS row_version");
     expect(h.queries[0]?.sql).toContain("f.owner_user_id =");

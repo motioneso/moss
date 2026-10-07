@@ -21,6 +21,7 @@ import {
 import { MemoryForgetService, memoryModuleManifest } from "@moss/memory";
 import type { MossModuleManifest } from "@moss/module-sdk";
 
+import { appActionCatalog, appActionManifests } from "../fixtures/app-actions-gateway.js";
 import { buildChatGatewayDependencies } from "../../packages/chat/src/gateway-services.js";
 import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
@@ -70,6 +71,27 @@ afterAll(async () => {
 });
 
 describe("memory.forget owner-bound approval through the production gateway", () => {
+  it.each([false, true])(
+    "generic app deletion uses the exact approved database version (changed=%s)",
+    async (changed) => {
+      const fact = await seedFact(ids.userA);
+      const h = await gatewayFor(ids.userA, memoryModuleManifest, false, true);
+      const { call, card } = await requestForget(h, fact.id, true);
+      expect(card.details?.target).toBe(`Subject: prefers: ${fact.text}`);
+      if (changed)
+        await asActor(ids.userA, (db) =>
+          sql`UPDATE app.memory_facts SET object_text = object_text WHERE id = ${fact.id}::uuid`.execute(
+            db.db
+          )
+        );
+      await h.gateway.resolveActionRequest(ids.userA, card.actionRequestId, "confirmed");
+      expect((await call).ok).toBe(!changed);
+      if (changed) expect(await readFact(fact.id)).toBeDefined();
+      else expect(await readFact(fact.id)).toBeUndefined();
+      expect(await searchStatus(fact.id)).toBe(changed ? "active" : "inactive");
+    }
+  );
+
   it("shows the complete exact target, admits it before the card, and commits deletion with the search update on pool size one", async () => {
     const text = "Keep the complete memory text in the approval. ".repeat(80) + "FINAL DETAIL";
     const fact = await seedFact(ids.userA, text);
@@ -78,7 +100,7 @@ describe("memory.forget owner-bound approval through the production gateway", ()
     const h = await gatewayFor(ids.userA);
     const { call, card } = await requestForget(h, fact.id);
     expect(card.details).toEqual({
-      target: `Subject: prefers: ${text} [fact ${fact.id}]`,
+      target: `Subject: prefers: ${text}`,
       fields: []
     });
     expect(card.outsideContentNotice).toBe(true);
@@ -230,7 +252,7 @@ describe("memory.forget owner-bound approval through the production gateway", ()
       const fact = await seedFact(ids.userA, null);
       const h = await gatewayFor(ids.userA);
       const { call, card } = await requestForget(h, fact.id);
-      expect(card.details?.target).toBe(`Subject: prefers: Object [fact ${fact.id}]`);
+      expect(card.details?.target).toBe(`Subject: prefers: Object`);
       if (change === "rename") {
         await asActor(ids.userA, (db) =>
           sql`UPDATE app.memory_entities SET name = 'new object name' WHERE id = ${fact.objectId}::uuid`.execute(
@@ -517,12 +539,20 @@ async function actionCount(actor: string) {
   );
 }
 
-async function gatewayFor(actor: string, manifest = memoryModuleManifest, rejectAdmission = false) {
+async function gatewayFor(
+  actor: string,
+  manifest = memoryModuleManifest,
+  rejectAdmission = false,
+  generic = false
+) {
   const conversations = await createCleanConversationFixture(runner, [actor]);
   const tokens = new SessionTokenRegistry();
   const confirmations = new ConfirmationRegistry();
   const records: GatewaySessionRecord[] = [];
-  const modules: MossModuleManifest[] = [manifest];
+  const modules: MossModuleManifest[] = [
+    manifest,
+    ...(generic ? appActionManifests.filter((m) => m.id === "settings") : [])
+  ];
   const provenance = conversations.gatewayDependencies.provenance;
   const binding = conversations.bindingFor(actor);
   const deps = buildChatGatewayDependencies({
@@ -540,6 +570,16 @@ async function gatewayFor(actor: string, manifest = memoryModuleManifest, reject
         }
       : provenance,
     notifier: { emit: (_sessionId, record) => records.push(record) },
+    ...(generic
+      ? {
+          appActions: {
+            catalog: () => appActionCatalog,
+            call: async () => {
+              throw new Error("Unversioned DELETE must never run");
+            }
+          }
+        }
+      : {}),
     collaborators: {}
   });
   const gateway = new AssistantToolGateway({ ...deps, confirmTimeoutMs: 15_000 });
@@ -556,8 +596,17 @@ async function gatewayFor(actor: string, manifest = memoryModuleManifest, reject
   };
 }
 
-async function requestForget(harness: Awaited<ReturnType<typeof gatewayFor>>, factId: string) {
-  const call = harness.gateway.callTool(harness.token, "memory.forget", { factId });
+async function requestForget(
+  harness: Awaited<ReturnType<typeof gatewayFor>>,
+  factId: string,
+  generic = false
+) {
+  const call = generic
+    ? harness.gateway.callTool(harness.token, "app.callAction", {
+        method: "DELETE",
+        path: `/api/memory/graph/facts/${factId}`
+      })
+    : harness.gateway.callTool(harness.token, "memory.forget", { factId });
   pending.push({ harness, call });
   await vi.waitFor(
     () => expect(harness.records.some((record) => record.kind === "action_request")).toBe(true),

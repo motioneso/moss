@@ -18,7 +18,7 @@ import {
   AssistantToolGateway,
   type AssistantToolGatewayDependencies
 } from "../../packages/ai/src/gateway/gateway.js";
-import { APPROVAL_REFUSED_REASON } from "../../packages/ai/src/gateway/native-tool-guard.js";
+
 import { SessionTokenRegistry } from "../../packages/ai/src/gateway/session-tokens.js";
 import type { AdmissionPath, GatewaySessionRecord } from "../../packages/ai/src/gateway/types.js";
 import type { AiRepository } from "../../packages/ai/src/repository.js";
@@ -28,6 +28,7 @@ import {
   MemoryForgetService,
   type MemoryForgetToolService
 } from "../../packages/memory/src/forget-service.js";
+import { appActionCatalog, appActionManifests } from "../fixtures/app-actions-gateway.js";
 import { memoryModuleManifest } from "../../packages/memory/src/manifest.js";
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
@@ -39,7 +40,7 @@ const RETRY =
   "The memory changed or is no longer available. Find it again and review a new request.";
 const CONSENT_OFF =
   "Memory AI consent is off. Review it in Settings before requesting this action again.";
-const DEFAULT_LABEL = `Mira: prefers: green tea [fact ${FACT_ID}]`;
+const DEFAULT_LABEL = `Mira: prefers: green tea`;
 type ActionRequest = Extract<GatewaySessionRecord, { kind: "action_request" }>;
 type ActorDb = DataContextDb & { actorUserId: string };
 
@@ -48,6 +49,7 @@ function build(
     label?: string;
     yolo?: boolean;
     consentHook?: boolean;
+    appActions?: boolean;
     dependencies?: Partial<AssistantToolGatewayDependencies>;
   } = {}
 ) {
@@ -125,7 +127,14 @@ function build(
         }
       }
     : memoryModuleManifest;
-  const resolveActiveModules = async () => (state.enabled ? [module] : []);
+  const resolveActiveModules = async () =>
+    state.enabled
+      ? [
+          module,
+          ...(options.appActions ? appActionManifests.filter((m) => m.id === "settings") : [])
+        ]
+      : [];
+  const injectedDelete = vi.fn().mockResolvedValue({ status: 200, body: { deleted: true } });
   let pendingRow: { id: string; owner: string; status: string } | undefined;
   const createPending = vi.fn(async (db: DataContextDb, _input: unknown) => {
     order.push("pending");
@@ -173,6 +182,9 @@ function build(
         records.push(record);
       }
     },
+    ...(options.appActions
+      ? { appActions: { catalog: () => appActionCatalog, call: injectedDelete } }
+      : {}),
     collaborators: {}
   });
   const gateway = new AssistantToolGateway({
@@ -188,6 +200,7 @@ function build(
   });
   return {
     state,
+    injectedDelete,
     order,
     records,
     scopedActors,
@@ -252,7 +265,7 @@ function expectRenderedTarget(record: ActionRequest, expected: string) {
   expect(html).toContain(
     'class="action-request-preview__value action-request-preview__value--multiline"'
   );
-  expect(html).toContain(FACT_ID);
+  expect(html).not.toContain(FACT_ID);
   expect(html).not.toContain("<script>");
   expect(html).toContain("outside or unverified context");
   expect(html).toContain("Approve");
@@ -263,9 +276,9 @@ function expectRenderedTarget(record: ActionRequest, expected: string) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("legacy memory.forget approval binding", () => {
-  it("emits and renders the complete long multiline memory and exact fact ID", async () => {
+  it("emits and renders the complete long multiline memory without internal IDs", async () => {
     const text = `First line <script>never execute()</script> & "quotes"\n${"Full memory text must survive. ".repeat(180)}\nFinal line **literal markup**`;
-    const label = `Mira: remembers: ${text} [fact ${FACT_ID}]`;
+    const label = `Mira: remembers: ${text}`;
     const h = build({ label });
     const pending = h.gateway.callTool(h.token, "memory.forget", { factId: FACT_ID });
     const request = await card(h);
@@ -293,24 +306,28 @@ describe("legacy memory.forget approval binding", () => {
     await expect(pending).resolves.toEqual({
       ok: false,
       denied: true,
-      reason: APPROVAL_REFUSED_REASON
+      reason:
+        "The user declined this action, so it was not done. Do not try it again; acknowledge the user's decision."
     });
     expect(h.forgetApproved).not.toHaveBeenCalled();
     expect(JSON.stringify(h.audit.mock.calls)).not.toContain(text);
     expect(JSON.stringify(h.audit.mock.calls)).not.toContain(VERSION);
   });
 
-  it("emits and renders an entity-backed memory with both entity names and its exact fact ID", async () => {
-    const label = factLabel({
-      id: FACT_ID,
-      subject_entity_id: OWNER,
-      subject_name: "Mira",
-      predicate: "works with",
-      object_entity_id: OTHER_OWNER,
-      object_text: null,
-      object_name: "Jo <Research & Development>"
-    });
-    const expected = `Mira: works with: Jo <Research & Development> [fact ${FACT_ID}]`;
+  it("emits and renders an entity-backed memory with both entity names without internal IDs", async () => {
+    const label = factLabel(
+      {
+        id: FACT_ID,
+        subject_entity_id: OWNER,
+        subject_name: "Mira",
+        predicate: "works with",
+        object_entity_id: OTHER_OWNER,
+        object_text: null,
+        object_name: "Jo <Research & Development>"
+      },
+      false
+    );
+    const expected = `Mira: works with: Jo <Research & Development>`;
     const h = build({ label });
     const pending = h.gateway.callTool(h.token, "memory.forget", { factId: FACT_ID });
     const request = await card(h);
@@ -593,4 +610,54 @@ describe("legacy memory.forget approval binding", () => {
     expect(JSON.stringify(response)).not.toContain(VERSION);
     expect(h.audit).not.toHaveBeenCalled();
   });
+});
+
+describe("generic app memory deletion shares the exact-version boundary", () => {
+  it("refuses a change racing the final generic delete without falling back to HTTP", async () => {
+    const h = build({ appActions: true });
+    const pending = h.gateway.callTool(h.token, "app.callAction", {
+      method: "DELETE",
+      path: `/api/memory/graph/facts/${FACT_ID}`
+    });
+    await card(h);
+    // The snapshot recheck still matches. The conditional DELETE detects a later change.
+    h.forgetApproved.mockResolvedValueOnce(false);
+    await resolve(h, "confirmed");
+    await expect(pending).resolves.toEqual({ ok: false, error: RETRY });
+    expect(h.state.exists).toBe(true);
+    expect(h.injectedDelete).not.toHaveBeenCalled();
+    expect(h.forgetApproved).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      OWNER,
+      FACT_ID,
+      VERSION
+    );
+  });
+
+  it.each([false, true])(
+    "checks the approved version before deletion (changed=%s)",
+    async (changed) => {
+      const h = build({ appActions: true });
+      const pending = h.gateway.callTool(h.token, "app.callAction", {
+        method: "DELETE",
+        path: `/api/memory/graph/facts/${FACT_ID}`
+      });
+      const request = await card(h);
+      expect(request.details).toEqual({ target: DEFAULT_LABEL, fields: [] });
+      if (changed) h.state.version = "new-version-with-identical-label";
+      await resolve(h, "confirmed");
+      const result = await pending;
+      expect(result.ok).toBe(!changed);
+      expect(h.injectedDelete).not.toHaveBeenCalled();
+      expect(h.state.exists).toBe(changed);
+      if (changed) expect(h.forgetApproved).not.toHaveBeenCalled();
+      else
+        expect(h.forgetApproved).toHaveBeenCalledExactlyOnceWith(
+          expect.anything(),
+          OWNER,
+          FACT_ID,
+          VERSION
+        );
+    }
+  );
 });

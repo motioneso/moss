@@ -96,9 +96,8 @@ function inputShapeFor(
 }
 
 function normalizeWord(word: string): string {
-  // Keep common memory-review wording equivalent without applying broad stemming rules.
+  // Keep singular/plural wording equivalent without applying broad stemming rules.
   if (word === "memories") return "memory";
-  if (word === "suggested") return "suggestion";
   return word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word;
 }
 
@@ -284,7 +283,16 @@ export function buildRouteCatalog(
     },
     search(query, limit) {
       if (limit <= 0) return [];
-      const wanted = [...new Set(words(query))];
+      const queryWords = words(query);
+      // Memory-review wording is a query synonym, not a schema-value synonym: task status
+      // "suggested" must remain searchable without matching requests for memory suggestions.
+      const wanted = [
+        ...new Set(
+          queryWords.includes("memory")
+            ? queryWords.map((word) => (word === "suggested" ? "suggestion" : word))
+            : queryWords
+        )
+      ];
       if (wanted.length === 0) return [];
       return routes
         .filter((route) => !pathRuleBlocked.has(route))

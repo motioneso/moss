@@ -15,14 +15,20 @@ interface FactLabelRow {
   readonly object_name: string | null;
 }
 
-export function factLabel(row: FactLabelRow): string {
-  const subject = row.subject_name?.trim() || `Entity ${row.subject_entity_id}`;
+export function factLabel(row: FactLabelRow, includeIdentity = true): string {
+  const subject =
+    row.subject_name?.trim() ||
+    (includeIdentity ? `Entity ${row.subject_entity_id}` : "Saved subject");
   const object =
     row.object_text ??
     row.object_name ??
-    (row.object_entity_id ? `Entity ${row.object_entity_id}` : null);
+    (row.object_entity_id
+      ? includeIdentity
+        ? `Entity ${row.object_entity_id}`
+        : "saved item"
+      : null);
   const label = [subject, row.predicate, object].filter(Boolean).join(": ");
-  return `${label} [fact ${row.id}]`;
+  return includeIdentity ? `${label} [fact ${row.id}]` : label;
 }
 
 /** The actor-scoped fact being deleted or superseded, without its source excerpts. */
@@ -68,7 +74,7 @@ export const memoryFactResolutionTarget: RouteChatTargetResolver = async (db, pa
   `.execute(db.db);
   const selected = result.rows.find((row) => row.id === id);
   if (!selected) return null;
-  const others = result.rows.filter((row) => row.id !== id).map(factLabel);
+  const others = result.rows.filter((row) => row.id !== id).map((row) => factLabel(row));
   return (
     `Selected memory: ${factLabel(selected)}` +
     (others.length > 0 ? `; other affected memories: ${others.join("; ")}` : "")

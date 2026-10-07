@@ -42,7 +42,7 @@ import {
   summarizeToolAction
 } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
-import { APPROVAL_REFUSED_REASON, gatewayFailureReason } from "./native-tool-guard.js";
+import { approvalRefusalReason, gatewayFailureReason } from "./native-tool-guard.js";
 import {
   type NativeToolPermissionRequest,
   type NativeToolPermissionResponse
@@ -890,7 +890,7 @@ export class AssistantToolGateway {
               ? "Action timed out."
               : outcome === "cancelled"
                 ? "Action cancelled."
-                : APPROVAL_REFUSED_REASON
+                : approvalRefusalReason(outcome)
         });
         const approvalMode =
           outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";
@@ -901,7 +901,7 @@ export class AssistantToolGateway {
           chatSessionId: ctx.chatSessionId,
           ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
         });
-        const reason = APPROVAL_REFUSED_REASON;
+        const reason = approvalRefusalReason(outcome);
         return { ok: false, denied: true, reason };
       }
 

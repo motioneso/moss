@@ -11,7 +11,7 @@ import {
   runAutomaticAction
 } from "./content-admission.js";
 import {
-  APPROVAL_REFUSED_REASON,
+  approvalRefusalReason,
   nativeToolRisk,
   nativeToolSummary,
   nativeYoloCanAutoAllow,
@@ -154,9 +154,9 @@ export async function requestNativeToolPermission(
             ? "Action timed out."
             : outcome === "cancelled"
               ? "Action cancelled."
-              : APPROVAL_REFUSED_REASON
+              : approvalRefusalReason(outcome)
       });
-      return { decision: "deny", reason: APPROVAL_REFUSED_REASON };
+      return { decision: "deny", reason: approvalRefusalReason(outcome) };
     }
 
     if (!(await admitNativeResult(deps, ctx))) {

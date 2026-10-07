@@ -91,7 +91,7 @@ describe("first-party Moss MCP transport", () => {
     ).resolves.toEqual({
       decision: "deny",
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
     expect(createPendingAssistantAction).toHaveBeenCalledOnce();
     expect(resolveLocalTimezone).toHaveBeenCalledOnce();

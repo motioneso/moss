@@ -422,8 +422,26 @@ describe("real manifests", () => {
         "POST /api/memory/candidates/:id/reject",
         "POST /api/memory/candidates/:id/suppress"
       ]);
+      // A high limit also catches low-ranking schema-only hits. Task status "suggested"
+      // must not make unrelated task actions appear when reviewing memory suggestions.
+      expect(catalog.search(query, 100).some((hit) => hit.moduleId === "tasks")).toBe(false);
     }
   );
+
+  it("keeps the suggested task status searchable as a literal schema value", () => {
+    const catalog = buildRouteCatalog(getBuiltInModuleManifests(), []);
+    const taskStatusRoutes = [
+      "POST /api/tasks",
+      "PATCH /api/tasks/:id",
+      "POST /api/tasks/:id/deferred-status"
+    ];
+    expect(catalog.search("suggested", 100).map((hit) => `${hit.method} ${hit.path}`)).toEqual(
+      expect.arrayContaining(taskStatusRoutes)
+    );
+    expect(
+      catalog.search("task status suggested", 3).map((hit) => `${hit.method} ${hit.path}`)
+    ).toEqual(expect.arrayContaining(taskStatusRoutes));
+  });
 
   it("ranks the pending memory rejection first for 'reject suggestion'", () => {
     const catalog = buildRouteCatalog(getBuiltInModuleManifests(), []);

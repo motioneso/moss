@@ -169,7 +169,8 @@ export function buildChatGatewayDependencies(args: {
     ? createAppActionResolver({
         appActions: args.appActions,
         runner: args.runner,
-        resolveActiveModules: args.resolveActiveModules
+        resolveActiveModules: args.resolveActiveModules,
+        memoryForgetResolver: memoryForget.resolver
       })
     : undefined;
   return {
@@ -199,7 +200,8 @@ export function buildChatGatewayDependencies(args: {
         ? {
             "app.callAction": createAppActionCallServices({
               appActions: args.appActions,
-              resolver: appResolver
+              resolver: appResolver,
+              memoryForgetServices: memoryForget.bindServices
             })
           }
         : {})

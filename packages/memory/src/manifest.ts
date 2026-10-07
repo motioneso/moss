@@ -382,7 +382,7 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.forget_approval",
       description:
-        "Forgetting saved memory asks first and shows its full text. If it changes, ask again. After reload, a request without its details cannot be approved; reject it and ask again. Approval text counts as outside content."
+        "Memory deletion asks first with full text, never IDs. Both chat paths check the exact version. Changed or reloaded requests need a new approval. Displayed targets count as outside content. Rejection tells Moss you declined."
     },
     {
       id: "memory.chat_app_actions",

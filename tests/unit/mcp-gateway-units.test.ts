@@ -315,7 +315,7 @@ describe("native Claude tool permission bridge", () => {
     ).resolves.toEqual({
       decision: "deny",
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
     expect(emitted.at(-1)).toMatchObject({
       kind: "action_result",
@@ -391,7 +391,7 @@ describe("native Claude tool permission bridge", () => {
     ).resolves.toEqual({
       decision: "deny",
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
   });
 
@@ -913,7 +913,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
       ok: false,
       denied: true,
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
   });
 
@@ -972,7 +972,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
       ok: false,
       denied: true,
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
   });
 });

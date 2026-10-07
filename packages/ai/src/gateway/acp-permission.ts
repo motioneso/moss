@@ -37,7 +37,7 @@ import {
   runAutomaticAction
 } from "./content-admission.js";
 import { actionResultRecord } from "./action-result-record.js";
-import { APPROVAL_REFUSED_REASON } from "./native-tool-guard.js";
+import { APPROVAL_REFUSED_REASON, approvalRefusalReason } from "./native-tool-guard.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type { AdmissionPath, ConversationProvenancePort, SessionNotifier } from "./types.js";
 
@@ -361,6 +361,7 @@ export async function requestAcpBuiltInPermission(
     }
   }
   let humanHoldDurationMs: number | null = null;
+  let humanRefusalReason = APPROVAL_REFUSED_REASON;
   const ask = async (): Promise<"allow" | "deny"> => {
     const toolName = builtIn.toolName ?? "";
     const action = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
@@ -395,6 +396,7 @@ export async function requestAcpBuiltInPermission(
       const resolution = await pendingResolution;
       const outcome =
         resolution === "confirmed" && !(await admitAllowed()) ? "admission_failed" : resolution;
+      if (resolution !== "confirmed") humanRefusalReason = approvalRefusalReason(resolution);
       const holdDurationMs = Math.max(0, Date.now() - holdStartedAt);
       humanHoldDurationMs = holdDurationMs;
       deps.notifier.emit(
@@ -428,7 +430,7 @@ export async function requestAcpBuiltInPermission(
                       ? "Action timed out."
                       : outcome === "cancelled"
                         ? "Action cancelled."
-                        : APPROVAL_REFUSED_REASON
+                        : humanRefusalReason
               }
         )
       );
@@ -525,7 +527,7 @@ export async function requestAcpBuiltInPermission(
       : result.asked
         ? result.decision === "allow"
           ? "Approved by user."
-          : APPROVAL_REFUSED_REASON
+          : humanRefusalReason
         : result.decision === "allow"
           ? "Allowed by policy."
           : APPROVAL_REFUSED_REASON,

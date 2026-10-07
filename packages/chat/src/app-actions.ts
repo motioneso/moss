@@ -1,7 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { isDeepStrictEqual } from "node:util";
 import type { DataContextRunner } from "@moss/db";
-import type { ActiveModulesResolver, PerCallResolution, PerCallResolver } from "@moss/ai";
+import type {
+  ActiveModulesResolver,
+  PerCallResolution,
+  PerCallResolver,
+  PerCallServices
+} from "@moss/ai";
 
 import {
   canonicalAppPath,
@@ -107,6 +112,7 @@ export function createAppActionResolver(deps: {
   readonly appActions: AppActionsService;
   readonly runner: Pick<DataContextRunner, "withDataContext">;
   readonly resolveActiveModules: ActiveModulesResolver;
+  readonly memoryForgetResolver?: PerCallResolver;
 }): PerCallResolver {
   return async (rawInput, ctx) => {
     const catalog = deps.appActions.catalog();
@@ -119,11 +125,25 @@ export function createAppActionResolver(deps: {
     if (policy.access === "blocked") {
       return { kind: "refuse", reason: "blocked", category: policy.blockedBecause };
     }
-    const risk = policy.access;
     const module = (await deps.resolveActiveModules(ctx.actorUserId)).find(
       (manifest) => manifest.id === route.moduleId
     );
     if (!module) return { kind: "refuse", reason: "unknown_route" };
+    // A dedicated executor must not bypass a malformed route consent declaration.
+    if (
+      (module.aiConsent || policy.consent) &&
+      (!module.aiConsent || policy.consent !== module.aiConsent.key)
+    ) {
+      return { kind: "refuse", reason: "consent_off" };
+    }
+    // The generic entry point must share the same atomic version-bound deletion as
+    // memory.forget, rather than injecting the unversioned browser DELETE route.
+    if (policy.coveredBy === "memory.forget") {
+      return deps.memoryForgetResolver
+        ? deps.memoryForgetResolver({ factId: params.id }, ctx)
+        : { kind: "refuse", reason: "not_ready" };
+    }
+    const risk = policy.access;
     const access = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
     return deps.runner.withDataContext(access, async (scopedDb): Promise<PerCallResolution> => {
       // A malformed consent declaration also refuses. No target lookup or response can leak
@@ -159,12 +179,22 @@ export function createAppActionResolver(deps: {
 export function createAppActionCallServices(deps: {
   readonly appActions: AppActionsService;
   readonly resolver: PerCallResolver;
+  readonly memoryForgetServices?: PerCallServices;
 }) {
   return (
     input: Record<string, unknown>,
     ctx: ToolContext,
     resolution: Extract<PerCallResolution, { kind: "proceed" }>
   ) => {
+    const request = actionInput(input);
+    const match = request ? deps.appActions.catalog()?.resolve(request.method, request.path) : null;
+    const factId = match?.route.policy.coveredBy === "memory.forget" ? match.params.id : null;
+    const memoryService =
+      factId && deps.memoryForgetServices
+        ? (deps.memoryForgetServices({ factId }, ctx, resolution).memoryForget as {
+            forget(id: string, caller: ToolContext): Promise<{ deleted: true }>;
+          })
+        : null;
     let consumed = false;
     return {
       appActions: {
@@ -187,6 +217,10 @@ export function createAppActionCallServices(deps: {
           }
           const bound = actionInput(input);
           if (!bound) throw new AppActionRefusedError("invalid_call_binding");
+          if (factId) {
+            if (!memoryService) throw new AppActionRefusedError("not_ready");
+            return { status: 200, body: await memoryService.forget(factId, ctx) };
+          }
           try {
             return await deps.appActions.call(bound, ctx);
           } catch {

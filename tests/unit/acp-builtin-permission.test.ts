@@ -335,7 +335,7 @@ describe("agent built-in permission through the shared approval card", () => {
     });
   });
 
-  it("denies with the shared refusal wording when the hold expires", async () => {
+  it("denies with explicit timeout wording when the hold expires", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store, 20);
     const token = tokens.mint({
@@ -358,7 +358,8 @@ describe("agent built-in permission through the shared approval card", () => {
       })
     ).resolves.toMatchObject({
       decision: "deny",
-      reason: APPROVAL_REFUSED_REASON,
+      reason:
+        "Approval timed out, so this action was not done. Do not try it again; let the user know.",
       asked: true
     });
     expect(store.emitted.at(-1)).toMatchObject({
@@ -396,7 +397,8 @@ describe("agent built-in permission through the shared approval card", () => {
     );
     await expect(pending).resolves.toMatchObject({
       decision: "deny",
-      reason: APPROVAL_REFUSED_REASON,
+      reason:
+        "The approval request was cancelled, so this action was not done. Do not try it again; let the user know.",
       asked: true
     });
     expect((await pending).holdDurationMs).toBeGreaterThan(0);
@@ -549,7 +551,8 @@ describe("agent built-in permission through the shared approval card", () => {
     expect(confirmations.isAwaiting("acp-action-1")).toBe(false);
     await expect(pending).resolves.toMatchObject({
       decision: "deny",
-      reason: APPROVAL_REFUSED_REASON,
+      reason:
+        "The approval request was cancelled, so this action was not done. Do not try it again; let the user know.",
       asked: true
     });
     await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(

@@ -725,7 +725,7 @@ describe("native permission YOLO", () => {
     expect(response.json()).toEqual({
       decision: "deny",
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "The user declined this action, so it was not done. Do not try it again; acknowledge the user's decision."
     });
   }
 

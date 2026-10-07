@@ -417,7 +417,13 @@ model-written summary lie.
 - The exact fields being sent, as label and value rows.
 - When the conversation is tainted, one line saying Moss read outside content in this chat, so
   changes need approval.
-- Approve and Reject, as today.
+- Approval targets can quote text imported from email, tools or other sources. Displaying a
+  resolved card admits that text as outside content before the card is emitted, including a
+  changed target on a fresh card; displaying it does not make its instructions authoritative.
+- Memory deletion through either `memory.forget` or `app.callAction` shares the exact-version
+  snapshot and conditional deletion boundary. Cards show the full memory text, not internal IDs.
+- Approve and Reject, as today. A rejection tells Moss the user declined the action, distinct
+  from a policy block, cancellation or timeout.
 
 Phase 1 puts the target and fields into the existing card as plain text rows. Two different theme
 deletions never show the same card. The redesigned card needs an agreed mockup before phase 2
