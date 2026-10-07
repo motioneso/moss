@@ -75,8 +75,9 @@ final class MeetingCaptureStatusItem: NSObject {
         self.showControls = showControls
         super.init()
         host.$phase.combineLatest(host.$cleanupBlocked,
-            host.$recordingPresentation.map(\.showsRedDot).removeDuplicates())
-        .sink { [weak self] _, _, _ in
+            host.$recordingPresentation.map(\.showsRedDot).removeDuplicates(),
+            host.$recordingPresentation.map(\.showsPill).removeDuplicates())
+        .sink { [weak self] _, _, _, _ in
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.update(self.host.phase, cleanup: self.host.cleanupBlocked)
@@ -97,6 +98,9 @@ final class MeetingCaptureStatusItem: NSObject {
         let menu = NSMenu()
         menu.autoenablesItems = false
         menu.addItem(action("Meeting controls…", #selector(openControls)))
+        if recording && !host.recordingPresentation.showsPill {
+            menu.addItem(action("Show recording pill", #selector(showRecordingPill)))
+        }
         let pause = action("Pause recording", #selector(pauseCapture))
         pause.isEnabled = phase == .recording
         menu.addItem(pause)
@@ -112,6 +116,7 @@ final class MeetingCaptureStatusItem: NSObject {
         return item
     }
     @objc private func openControls() { showControls() }
+    @objc private func showRecordingPill() { host.showRecordingPill() }
     @objc private func pauseCapture() { host.pauseFromUserClick() }
     @objc private func stopCapture() { host.stopFromUserClick() }
 }

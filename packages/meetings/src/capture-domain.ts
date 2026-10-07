@@ -4,6 +4,7 @@ import type {
   MeetingCaptureRevocationReason,
   MeetingCaptureAudioInput,
   MeetingCaptureControlInput,
+  MeetingCaptureNativeControlInput,
   MeetingCaptureInventory,
   MeetingCaptureState,
   MeetingCaptureSelection,
@@ -32,7 +33,7 @@ export interface CaptureEpoch {
   startMs: number;
   endMs: number | null;
   selection: MeetingCaptureSelection;
-  microphoneLabel: string;
+  microphoneLabel: string | null;
   outputLabel: string | null;
   modelRoute: string;
 }
@@ -79,7 +80,7 @@ export function expireCaptureLease(state: CaptureStoredState, at: Date, expiresA
       const endMs = elapsed(state, leaseEnd);
       if (endMs > startMs) {
         const sources = [
-          epoch.selection.microphone.sourceId,
+          ...(epoch.selection.microphone ? [epoch.selection.microphone.sourceId] : []),
           ...(epoch.selection.mode === "microphone-only" ? [] : [epoch.selection.outputSourceId])
         ];
         for (const sourceId of sources)
@@ -114,42 +115,123 @@ export function validateCaptureSelection(
   selection: MeetingCaptureSelection,
   inventory: MeetingCaptureInventory
 ): void {
-  if (
-    !selection ||
-    !inventory.microphones.some(
+  if (!selection) invalid();
+  if (selection.microphone) {
+    const matches = inventory.microphones.filter(
       (mic) =>
-        mic.deviceId === selection.microphone?.deviceId &&
+        mic.deviceId === selection.microphone?.deviceId ||
         mic.sourceId === selection.microphone?.sourceId
-    ) ||
-    inventory.microphonePermission === "denied"
-  )
-    invalid();
+    );
+    if (
+      inventory.microphonePermission === "denied" ||
+      matches.length !== 1 ||
+      matches[0]!.deviceId !== selection.microphone.deviceId ||
+      matches[0]!.sourceId !== selection.microphone.sourceId
+    )
+      invalid();
+  } else if (selection.mode !== "computer-audio" || selection.microphone !== null) invalid();
   if (selection.mode === "microphone-only") return;
   if (
-    !selection.outputSourceId ||
-    selection.outputSourceId === selection.microphone.sourceId ||
+    typeof selection.outputSourceId !== "string" ||
+    !selection.outputSourceId.trim() ||
+    selection.outputSourceId.length > 256 ||
+    selection.outputSourceId.includes("\0") ||
+    inventory.microphones.some((mic) => mic.sourceId === selection.outputSourceId) ||
     inventory.systemAudioPermission === "denied"
   )
     invalid();
   if (selection.mode === "selected-app") {
+    const matches = inventory.applications.filter(
+      (app) => app.appProcessTreeId === selection.appProcessTreeId
+    );
     if (
-      !inventory.applications.some(
-        (app) =>
-          app.appProcessTreeId === selection.appProcessTreeId &&
-          (!selection.applicationId || app.applicationId === selection.applicationId)
-      )
+      matches.length !== 1 ||
+      (selection.applicationId !== undefined &&
+        matches[0]!.applicationId !== selection.applicationId)
     )
       invalid();
   } else if (selection.mode === "computer-audio") {
     if (
       !inventory.computerAudio.available ||
-      selection.scope.kind !== "process-exclusion" ||
+      selection.scope?.kind !== "process-exclusion" ||
       !selection.scope.excludedProcessTreeIds.length ||
       JSON.stringify([...selection.scope.excludedProcessTreeIds].sort()) !==
         JSON.stringify([...inventory.computerAudio.excludedProcessTreeIds].sort())
     )
       invalid();
   } else invalid();
+}
+function captureEpoch(
+  state: CaptureStoredState,
+  selection: MeetingCaptureSelection,
+  atMs: number,
+  modelRoute: string,
+  paused = false
+): CaptureEpoch {
+  return {
+    modelRoute,
+    epoch: state.epochs.length + 1,
+    generation: state.generation + 1,
+    startMs: atMs,
+    endMs: paused ? atMs : null,
+    selection: structuredClone(selection),
+    microphoneLabel: selection.microphone
+      ? state.inventory!.microphones.find(
+          (m) =>
+            m.deviceId === selection.microphone?.deviceId &&
+            m.sourceId === selection.microphone?.sourceId
+        )!.label
+      : null,
+    outputLabel:
+      selection.mode === "selected-app"
+        ? state.inventory!.applications.find(
+            (app) => app.appProcessTreeId === selection.appProcessTreeId
+          )!.label
+        : selection.mode === "computer-audio"
+          ? "Computer audio"
+          : null
+  };
+}
+/** Explicit native intent creates a new immutable source epoch; paused edits cannot resume. */
+export function applyCaptureSourceChange(
+  state: CaptureStoredState,
+  input: Extract<MeetingCaptureNativeControlInput, { command: "change-sources" }>,
+  at: Date
+): void {
+  const current = state.epochs.at(-1);
+  if (input.expectedGeneration !== state.generation || input.expectedEpoch !== current?.epoch)
+    throw new MeetingCaptureError("meeting_capture_conflict", 409);
+  if (!["recording", "paused"].includes(state.desired) || !current || !state.inventory) invalid();
+  if (state.gapLimitReached || state.epochs.length >= 64)
+    throw new MeetingCaptureError("meeting_capture_limit", 413);
+  if (!state.lastSeenAt || at.getTime() - Date.parse(state.lastSeenAt) > MEETING_CAPTURE_LEASE_MS)
+    throw new MeetingCaptureError("meeting_capture_interrupted", 409);
+  validateCaptureSelection(input.selection, state.inventory);
+  // A source ID retains its kind across the immutable transcript history.
+  if (
+    state.epochs.some(
+      (epoch) =>
+        (input.selection.microphone &&
+          epoch.selection.mode !== "microphone-only" &&
+          input.selection.microphone.sourceId === epoch.selection.outputSourceId) ||
+        (input.selection.mode !== "microphone-only" &&
+          input.selection.outputSourceId === epoch.selection.microphone?.sourceId)
+    )
+  )
+    invalid();
+  const atMs = elapsed(state, at);
+  if (atMs < (current.endMs ?? current.startMs))
+    throw new MeetingCaptureError("meeting_capture_conflict", 409);
+  const next = captureEpoch(
+    state,
+    input.selection,
+    atMs,
+    current.modelRoute,
+    state.desired === "paused"
+  );
+  if (current.endMs === null) current.endMs = atMs;
+  state.epochs.push(next);
+  state.generation += 1;
 }
 export function applyCaptureControl(
   state: CaptureStoredState,
@@ -170,28 +252,7 @@ export function applyCaptureControl(
       throw new MeetingCaptureError("meeting_capture_interrupted", 409);
     if (state.epochs.length >= 64) throw new MeetingCaptureError("meeting_capture_limit", 413);
     validateCaptureSelection(input.selection, state.inventory);
-    state.epochs.push({
-      modelRoute,
-      epoch: state.epochs.length + 1,
-      generation: state.generation + 1,
-      startMs: atMs,
-      endMs: null,
-      selection: input.selection,
-      microphoneLabel: state.inventory.microphones.find(
-        (m) => m.deviceId === input.selection!.microphone.deviceId
-      )!.label,
-      outputLabel:
-        input.selection.mode === "selected-app"
-          ? state.inventory.applications.find(
-              (a) =>
-                a.appProcessTreeId ===
-                (input.selection as Extract<MeetingCaptureSelection, { mode: "selected-app" }>)
-                  .appProcessTreeId
-            )!.label
-          : input.selection.mode === "computer-audio"
-            ? "Computer audio"
-            : null
-    });
+    state.epochs.push(captureEpoch(state, input.selection, atMs, modelRoute));
     state.desired = "recording";
   } else if (input.command === "pause") {
     if (state.desired !== "recording") invalid();
@@ -275,7 +336,7 @@ export function assertCaptureAudioAdmission(
   )
     throw new MeetingCaptureError("meeting_capture_conflict", 409);
   if (
-    input.sourceId !== epoch.selection.microphone.sourceId &&
+    input.sourceId !== epoch.selection.microphone?.sourceId &&
     (epoch.selection.mode === "microphone-only" ||
       input.sourceId !== epoch.selection.outputSourceId)
   )
@@ -334,14 +395,18 @@ export function retainCaptureGap(
   at: Date
 ): void {
   const epoch = state.epochs.find((entry) => entry.epoch === gap.epoch);
+  // Paused time belongs to the selected sources until the next selection epoch,
+  // including a zero-length paused edit. Audio itself remains bounded by endMs.
+  const nextEpoch = state.epochs.find((entry) => entry.epoch > gap.epoch);
   if (
     !epoch ||
     ![gap.startMs, gap.endMs].every(Number.isSafeInteger) ||
     gap.startMs < epoch.startMs ||
     gap.endMs <= gap.startMs ||
     gap.endMs > elapsed(state, at) ||
+    (nextEpoch !== undefined && gap.endMs > nextEpoch.startMs) ||
     (state.stopCutoffMs !== null && gap.endMs > state.stopCutoffMs) ||
-    (gap.sourceId !== epoch.selection.microphone.sourceId &&
+    (gap.sourceId !== epoch.selection.microphone?.sourceId &&
       (epoch.selection.mode === "microphone-only" ||
         gap.sourceId !== epoch.selection.outputSourceId))
   )

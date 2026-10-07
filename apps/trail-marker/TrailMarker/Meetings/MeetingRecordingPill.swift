@@ -12,6 +12,8 @@ struct MeetingRecordingPill: View {
                 .accessibilityLabel("Captured audio level")
                 .accessibilityValue(host.recordingPresentation.meterLevels.allSatisfy { $0 == 0 } ? "Silent" : "Audio arriving")
             Spacer(minLength: TrailMarkerTokens.Layout.recordingControlMinimumGap)
+            MeetingRecordingSourceMenu(host: host)
+            Spacer(minLength: TrailMarkerTokens.Layout.recordingControlMinimumGap)
             Button {
                 if host.phase == .paused { host.resumeFromUserClick() }
                 else { host.pauseFromUserClick() }
@@ -40,9 +42,29 @@ struct MeetingRecordingPill: View {
                     .contentShape(Circle())
             }
                 .disabled(!host.canStop).help("Stop recording").accessibilityLabel("Stop recording")
+            Spacer(minLength: TrailMarkerTokens.Layout.recordingControlMinimumGap)
+            HStack(spacing: TrailMarkerTokens.Layout.recordingCloseSectionSpacing) {
+                Rectangle().fill(TrailMarkerTokens.Color.recordingBorder)
+                    .frame(width: TrailMarkerTokens.Layout.recordingCloseDividerWidth,
+                           height: TrailMarkerTokens.Layout.recordingCloseDividerHeight)
+                    .accessibilityHidden(true)
+                Button(action: host.hideRecordingPill) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: TrailMarkerTokens.Layout.recordingCloseIconSize, weight: .regular))
+                        .frame(width: TrailMarkerTokens.Layout.recordingCloseDiameter,
+                               height: TrailMarkerTokens.Layout.recordingCloseDiameter)
+                        .foregroundStyle(TrailMarkerTokens.Color.recordingForeground)
+                        .contentShape(Rectangle())
+                }
+                .help("Hide recording pill; recording continues")
+                .accessibilityLabel("Hide recording pill")
+                .accessibilityHint("Recording continues. Show it again from the Meeting menu.")
+            }
+            .frame(width: TrailMarkerTokens.Layout.recordingCloseSectionWidth)
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, TrailMarkerTokens.Layout.recordingPillHorizontalInset)
+        .padding(.leading, TrailMarkerTokens.Layout.recordingPillLeadingInset)
+        .padding(.trailing, TrailMarkerTokens.Layout.recordingPillTrailingInset)
         .frame(width: TrailMarkerTokens.Layout.recordingPillWidth, height: TrailMarkerTokens.Layout.recordingPillHeight)
         .background(TrailMarkerTokens.Color.recordingSurface, in: Capsule())
         .overlay(Capsule().strokeBorder(TrailMarkerTokens.Color.recordingBorder,
@@ -74,7 +96,11 @@ private struct CapturedAudioLevelMeter: View {
 
 /// A borderless nonactivating panel can still accept keyboard focus when its user clicks it.
 private final class RecordingPanel: NSPanel {
+    var hidePill: (() -> Void)?
     override var canBecomeKey: Bool { true }
+    // A native close command has the same visibility-only meaning as the pill's X.
+    override func close() { hidePill?() }
+    override func performClose(_ sender: Any?) { close() }
 }
 
 private final class RecordingPillHostingView: NSHostingView<MeetingRecordingPill> {
@@ -87,9 +113,11 @@ final class MeetingRecordingPillController {
     private var subscription: AnyCancellable?
 
     init(host: MeetingCaptureHost) {
-        panel = RecordingPanel(contentRect: NSRect(x: 0, y: 0,
+        let recordingPanel = RecordingPanel(contentRect: NSRect(x: 0, y: 0,
                         width: TrailMarkerTokens.Layout.recordingPillWidth, height: TrailMarkerTokens.Layout.recordingPillHeight),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        recordingPanel.hidePill = { [weak host] in host?.hideRecordingPill() }
+        panel = recordingPanel
         panel.title = "Meeting recording"
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]

@@ -41,19 +41,30 @@ enum TrailMarkerTokens {
         static let settingsSidebarWidth: CGFloat = 196
         static let menuPopoverWidth: CGFloat = 320
         static let brandPanelRadius: CGFloat = 12
-        static let recordingPillWidth: CGFloat = 200
-        static let recordingPillHeight: CGFloat = 64
-        static let recordingPillHorizontalInset: CGFloat = 24
-        static let recordingPillBorderWidth: CGFloat = 1.6
-        static let recordingControlDiameter: CGFloat = 43.2
-        static let recordingControlMinimumGap: CGFloat = 6.4
-        static let recordingControlIconSize: CGFloat = 16
-        static let recordingControlBorderWidth: CGFloat = 2.4
-        static let recordingMeterWidth: CGFloat = 25.6
-        static let recordingMeterHeight: CGFloat = 19.2
-        static let recordingMeterBarWidth: CGFloat = 4.8
-        static let recordingMeterBarSpacing: CGFloat = 5.6
-        static let recordingMeterBarCornerRadius: CGFloat = 0.8
-        static let recordingMeterSilentHeight: CGFloat = 1.6
+        static let recordingPillWidth: CGFloat = 222
+        static let recordingPillHeight: CGFloat = 32
+        // Match the mockup's 12/2-point padding inside its 0.8-point border.
+        static let recordingPillLeadingInset: CGFloat = 12.8
+        static let recordingPillTrailingInset: CGFloat = 2.8
+        static let recordingPillBorderWidth: CGFloat = 0.8
+        static let recordingControlDiameter: CGFloat = 24
+        static let recordingControlMinimumGap: CGFloat = 8
+        static let recordingControlIconSize: CGFloat = 10
+        static let recordingControlBorderWidth: CGFloat = 0.8
+        static let recordingSourceMenuWidth: CGFloat = 36
+        static let recordingSourceIconSize: CGFloat = 14
+        static let recordingSourceChevronSize: CGFloat = 9
+        static let recordingCloseDiameter: CGFloat = 20
+        static let recordingCloseIconSize: CGFloat = 10
+        static let recordingCloseSectionWidth: CGFloat = 24
+        static let recordingCloseSectionSpacing: CGFloat = 3
+        static let recordingCloseDividerWidth: CGFloat = 1
+        static let recordingCloseDividerHeight: CGFloat = 16
+        static let recordingMeterWidth: CGFloat = 24
+        static let recordingMeterHeight: CGFloat = 18
+        static let recordingMeterBarWidth: CGFloat = 4.5
+        static let recordingMeterBarSpacing: CGFloat = 5.25
+        static let recordingMeterBarCornerRadius: CGFloat = 2.25
+        static let recordingMeterSilentHeight: CGFloat = 1.5
     }
 }

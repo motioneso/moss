@@ -149,7 +149,7 @@ function fixture() {
   });
   vi.spyOn(connections, "lockRequest").mockResolvedValue();
   const service = new MeetingCaptureConnectionService(deps, grants, connections, preferences);
-  const legacyStart: MeetingCaptureLegacyStartInput = {
+  const legacyStart = {
     deviceId,
     connectionId,
     expectedRevision: 1,
@@ -161,7 +161,7 @@ function fixture() {
       appProcessTreeId: "123",
       applicationId: "com.example.meeting"
     }
-  };
+  } satisfies MeetingCaptureLegacyStartInput;
   const headers = {
     authorization: "Bearer tm1_synthetic",
     "x-moss-recording-proof": "p".repeat(43)

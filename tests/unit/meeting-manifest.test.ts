@@ -167,6 +167,8 @@ describe("meetings composition", () => {
       "transcribe.meeting",
       "meetings.native_capture",
       "meetings.mac_recording_status",
+      "meetings.mac_recording_pill_visibility",
+      "meetings.mac_audio_sources",
       "meetings.account_export",
       "meetings.history",
       "meetings.unsaved_changes",

@@ -98,7 +98,7 @@ final class MeetingCaptureRuntime {
         pruneClosedSources()
         guard pending.count <= 14 else { throw MeetingAudioFailure.bufferFull }
         let created = try factory(selection)
-        let expected: Set<MeetingAudioSource> = selection.output == nil ? [.microphone] : [.microphone, .output]
+        let expected = selection.sources
         guard Set(created.keys) == expected else { throw MeetingAudioFailure.invalidSelection }
         let sourceOrder = MeetingAudioSource.allCases.filter { expected.contains($0) }
         let fresh = try sourceOrder.map { source in
@@ -184,8 +184,12 @@ final class MeetingCaptureRuntime {
         }
     }
 
+    /// The host splits the pause gap at the authoritative source-selection boundary.
+    /// No old-source gap may extend into the replacement selection's epoch.
+    func clearPauseGapForSourceChange() { queue.sync { pauseBoundary = nil } }
+
     private func rememberPause(at: UInt64) {
-        let sources: [MeetingAudioSource] = machine.selection?.output == nil ? [.microphone] : [.microphone, .output]
+        let sources = MeetingAudioSource.allCases.filter { machine.selection?.sources.contains($0) == true }
         pauseBoundary = (at, machine.epoch, sources)
     }
 
@@ -322,6 +326,12 @@ final class MeetingCaptureRuntime {
                 guard pending[index].inFlightSequence == nil,
                       !pending[index].buffer.isScopeVerificationPending,
                       eligibleSources.contains(pending[index].buffer.source) else { continue }
+                // Retained tails precede newer epochs of the same track. An unknown old
+                // receipt cannot be overtaken by a replacement device's first packet.
+                guard !pending.prefix(index).contains(where: {
+                    $0.buffer.source == pending[index].buffer.source &&
+                    ($0.inFlightSequence != nil || $0.buffer.peek(cutoffNanoseconds: $0.cutoff) != nil)
+                }) else { continue }
                 // A retained old epoch may send a short tail only after explicit retained-audio
                 // consent on Resume, or Stop. Pause itself never admits a new send.
                 let chunk = pending[index].offeredChunk ?? pending[index].buffer.peekChunk(

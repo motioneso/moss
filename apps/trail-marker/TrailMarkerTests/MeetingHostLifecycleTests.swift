@@ -196,6 +196,116 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try await waitUntil { status.item.button?.attributedTitle.string == "Meeting" }
     }
 
+    func testHideAndNativeCloseKeepCaptureRunningAndMenuRestoresPill() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { XCTFail("Visibility must not request permission"); return false }
+        defer { host.shutdown(reason: "Synthetic visibility test finished") }
+        let pill = MeetingRecordingPillController(host: host)
+        let status = MeetingCaptureStatusItem(host: host, showControls: {})
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        let poll = try XCTUnwrap(host.pollTask)
+        let buffer = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
+        let closeActions: [() -> Void] = [host.hideRecordingPill, { pill.panel.performClose(nil) }, { pill.panel.close() }]
+        for close in closeActions {
+            let deviceStops = fixture.device.stops
+            close()
+            XCTAssertEqual(host.phase, .recording, "Close must not Pause or Stop")
+            XCTAssertFalse(pill.panel.isVisible)
+            XCTAssertTrue(host.recordingPresentation.showsRedDot)
+            XCTAssertFalse(poll.isCancelled, "Hiding must not cancel the host loop")
+            fixture.monotonic += 100_000_000
+            buffer.receive(hostTimeNanoseconds: fixture.monotonic, sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.5 })
+            XCTAssertEqual(buffer.capturedLevel(at: fixture.monotonic), 0.5, accuracy: 0.0001,
+                "The same source must still accept new audio while hidden")
+            try await waitUntil { status.item.menu?.item(withTitle: "Show recording pill") != nil }
+            XCTAssertTrue(status.item.isVisible)
+            XCTAssertEqual(status.item.button?.attributedTitle.string, "● Meeting")
+            XCTAssertTrue(status.item.menu?.item(withTitle: "Pause recording")?.isEnabled == true)
+            XCTAssertTrue(status.item.menu?.item(withTitle: "Stop recording")?.isEnabled == true)
+            try invokeMenuItem("Show recording pill", in: status)
+            XCTAssertTrue(pill.panel.isVisible)
+            XCTAssertEqual(host.phase, .recording)
+            try await waitUntil { status.item.menu?.item(withTitle: "Show recording pill") == nil }
+            XCTAssertEqual(fixture.device.starts, 1, "Show cannot reopen hardware")
+            XCTAssertEqual(fixture.device.stops, deviceStops, "Visibility cannot close hardware")
+            XCTAssertEqual(fixture.server.controlCount, 0, "Hide and Show cannot send Pause, Stop or Resume")
+            XCTAssertEqual(fixture.server.stopCount, 0)
+        }
+
+        host.hideRecordingPill()
+        try await waitUntil { status.item.menu?.item(withTitle: "Show recording pill") != nil }
+        try invokeMenuItem("Pause recording", in: status)
+        XCTAssertEqual(host.phase, .paused, "The menu can Pause while the pill is hidden")
+        XCTAssertFalse(pill.panel.isVisible)
+        try await waitUntil { host.canResumeFromUserClick }
+        XCTAssertEqual(fixture.server.controlCount, 1)
+        let pausedDeviceStops = fixture.device.stops
+        try invokeMenuItem("Show recording pill", in: status)
+        XCTAssertTrue(pill.panel.isVisible)
+        XCTAssertEqual(host.phase, .paused, "Show must not resume a paused recording")
+        XCTAssertEqual(fixture.device.starts, 1)
+        XCTAssertEqual(fixture.device.stops, pausedDeviceStops)
+        XCTAssertEqual(fixture.server.controlCount, 1)
+        host.hideRecordingPill()
+        try await waitUntil { status.item.menu?.item(withTitle: "Show recording pill") != nil }
+        try invokeMenuItem("Stop recording", in: status)
+        XCTAssertFalse(host.recordingPresentation.showsRedDot)
+        try await waitUntil(timeout: 6) { fixture.server.finalized && host.phase == .stopped }
+        XCTAssertEqual(fixture.server.stopCount, 1, "The hidden session still follows normal Stop finalization")
+        host.showRecordingPill()
+        XCTAssertFalse(pill.panel.isVisible, "Show cannot resurrect a stopped recording")
+        try await waitUntil { status.item.menu?.item(withTitle: "Show recording pill") == nil }
+
+        let next = FixtureServer()
+        HostLifecycleProtocol.register(next)
+        defer { HostLifecycleProtocol.remove(next.grantId) }
+        let pending = MeetingPendingStart(command: next.command, connectionId: "connection", deviceId: next.deviceId, secret: String(repeating: "n", count: 43))
+        let claim = try await fixture.client.claim(pending.body(verifier: String(repeating: "v", count: 43)),
+            companionCredential: "tm1_synthetic", recordingProof: String(repeating: "p", count: 43))
+        try host.acceptStart(next.command, claim: claim, credential: pending.credential, origin: fixture.monotonic)
+        XCTAssertTrue(pill.panel.isVisible, "The next accepted recording automatically shows its pill")
+        XCTAssertTrue(host.recordingPresentation.showsRedDot)
+    }
+
+    func testNativeCloseDuringPermissionWaitOnlyHidesPill() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        let entered = expectation(description: "Permission wait")
+        var permission: CheckedContinuation<Bool, Never>?
+        let host = fixture.host {
+            entered.fulfill()
+            let granted = await withCheckedContinuation { permission = $0 }
+            fixture.permission = .granted
+            return granted
+        }
+        defer { host.shutdown(reason: "Synthetic visibility test finished") }
+        let pill = MeetingRecordingPillController(host: host)
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
+        await fulfillment(of: [entered], timeout: 2)
+        pill.panel.performClose(nil)
+        XCTAssertFalse(pill.panel.isVisible)
+        XCTAssertTrue(host.canStop)
+        XCTAssertTrue(host.recordingPresentation.showsRedDot)
+        XCTAssertEqual(fixture.device.starts, 0)
+        XCTAssertEqual(fixture.device.stops, 0)
+        permission?.resume(returning: true)
+        permission = nil
+        try await waitUntil { host.phase == .recording }
+        XCTAssertFalse(pill.panel.isVisible, "Completing the existing Start does not undo Hide")
+        XCTAssertEqual(fixture.device.starts, 1, "Hide does not cancel the user's authorized Start")
+        XCTAssertEqual(fixture.server.controlCount, 0)
+    }
+
+    private func invokeMenuItem(_ title: String, in status: MeetingCaptureStatusItem) throws {
+        let menu = try XCTUnwrap(status.item.menu)
+        let index = try XCTUnwrap(menu.items.firstIndex(where: { $0.title == title }))
+        XCTAssertTrue(menu.items[index].isEnabled)
+        menu.performActionForItem(at: index)
+    }
+
     func testEveryIdentityStopPathClearsSurfacesAndDiscardsUnsentAudio() async throws {
         let another = LinkedIdentity(instance: try InstanceURL.parse("https://moss.example").get(),
             deviceId: "another-device", accountName: "Fixture", accountEmail: "another@example.invalid")
@@ -546,7 +656,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         XCTAssertTrue(condition(), "Synthetic host did not reach the expected lifecycle state")
     }
 
-    private final class Device: MeetingAudioCapturing {
+    final class Device: MeetingAudioCapturing {
         var starts = 0
         var stops = 0
         var failStop = false
@@ -556,7 +666,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
     }
 
     @MainActor
-    private final class Fixture {
+    final class Fixture {
         let server = FixtureServer()
         let device = Device()
         let client: MeetingCaptureClient
@@ -566,6 +676,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         var wall = FixtureServer.baseTime
         var monotonic: UInt64 = 10_000_000_000
         var permission: MeetingCapturePermission = .unknown
+        var permissionReads = 0
 
         init() throws {
             instance = try InstanceURL.parse("https://moss.example").get()
@@ -588,19 +699,21 @@ final class MeetingHostLifecycleTests: XCTestCase {
             catch { XCTAssertEqual(error as? MeetingHostError, .network) }
             return try await claim()
         }
-        func host(permissionRequest: @escaping () async -> Bool) -> MeetingCaptureHost {
+        func host(snapshot customSnapshot: MeetingInventorySnapshot? = nil,
+                  factory customFactory: MeetingCaptureRuntime.DeviceFactory? = nil,
+                  permissionRequest: @escaping () async -> Bool) -> MeetingCaptureHost {
             let identity = LinkedIdentity(instance: instance, deviceId: server.deviceId, accountName: "Fixture", accountEmail: "fixture@example.invalid")
             let inventory = MeetingCaptureInventory(microphones: [.init(deviceId: "mic-uid", sourceId: "mic", label: "Synthetic mic")],
                 applications: [], computerAudio: .init(available: false, excludedProcessTreeIds: []),
                 microphonePermission: .unknown, systemAudioPermission: .unknown)
             let snapshot = MeetingInventorySnapshot(wire: inventory, microphones: ["mic-uid": 42], applications: [:],
                 processes: [], audioObjects: [:], excluded: [])
-            let ports = MeetingCaptureHostPorts(identity: { identity }, connectionAvailable: { true }, readInventory: { snapshot },
-                microphonePermission: { self.permission }, requestMicrophone: permissionRequest,
+            let ports = MeetingCaptureHostPorts(identity: { identity }, connectionAvailable: { true }, readInventory: { customSnapshot ?? snapshot },
+                microphonePermission: { self.permissionReads += 1; return self.permission }, requestMicrophone: permissionRequest,
                 makeClient: Self.client, now: { self.monotonic }, wallNow: { self.wall })
             let defaults = UserDefaults(suiteName: defaultsName)!
             let connection = ConnectionRuntime(keychain: KeychainStore(service: defaultsName), preferences: PreferencesStore(defaults: defaults))
-            return MeetingCaptureHost(connection: connection, ports: ports, factory: { _ in [.microphone: self.device] })
+            return MeetingCaptureHost(connection: connection, ports: ports, factory: customFactory ?? { _ in [.microphone: self.device] })
         }
         func close() {
             client.close()
@@ -608,185 +721,4 @@ final class MeetingHostLifecycleTests: XCTestCase {
             UserDefaults.standard.removePersistentDomain(forName: defaultsName)
         }
     }
-}
-
-private struct ResumeFixtureRejection: Error {}
-
-private final class FixtureServer {
-    static let baseTime = Date(timeIntervalSince1970: 1_791_259_200)
-    let grantId = UUID().uuidString.lowercased()
-    let meetingId = UUID().uuidString.lowercased()
-    let ownerId = UUID().uuidString.lowercased()
-    let deviceId = "37c0998f-b3cc-46f8-93de-3d938375b09e"
-    private let lock = NSLock()
-    private var desired = "recording"
-    private var generation = 1
-    private var epoch = 1
-    private var holdStatus = false
-    private var loseResumeReply = false
-    private var rejectResumeRequest = false
-    private var denyResumeRequest = false
-    private var enforceObservedPause = false
-    private var resumes: [String] = []
-    private var acceptedResumeKeys: Set<String> = []
-    private var hashes: [String] = []
-    private var stops = 0
-    private var controls = 0
-    private var requests = 0
-    private var finished = false
-    private var observation: MeetingCaptureObserved?
-    private var audioFailure: (code: String, reason: String, gapReason: String)?
-    private var elapsedMs: UInt64 = 1000
-    private var audioRequests = 0
-    private var gaps: [MeetingCaptureGap] = []
-    private var gapReports: [MeetingCaptureGap] = []
-    var loseFirstClaim = false
-    var resumeKeys: [String] { lock.lock(); defer { lock.unlock() }; return resumes }
-    var captureGeneration: Int { lock.lock(); defer { lock.unlock() }; return generation }
-    func advanceElapsed(to value: UInt64) { lock.lock(); elapsedMs = value; lock.unlock() }
-    func configureResume(holdStatus: Bool, loseReply: Bool = false, rejectRequest: Bool = false, denyRequest: Bool = false) {
-        lock.lock(); defer { lock.unlock() }
-        self.holdStatus = holdStatus; loseResumeReply = loseReply; rejectResumeRequest = rejectRequest
-        enforceObservedPause = true; denyResumeRequest = denyRequest
-    }
-    var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stops }
-    var controlCount: Int { lock.lock(); defer { lock.unlock() }; return controls }
-    var requestCount: Int { lock.lock(); defer { lock.unlock() }; return requests }
-    var finalized: Bool { lock.lock(); defer { lock.unlock() }; return finished }
-    var claimHashes: [String] { lock.lock(); defer { lock.unlock() }; return hashes }
-    var lastObservation: MeetingCaptureObserved? { lock.lock(); defer { lock.unlock() }; return observation }
-    var audioCount: Int { lock.lock(); defer { lock.unlock() }; return audioRequests }
-    var retainedGaps: [MeetingCaptureGap] { lock.lock(); defer { lock.unlock() }; return gaps }
-    var reportedGaps: [MeetingCaptureGap] { lock.lock(); defer { lock.unlock() }; return gapReports }
-    var command: MeetingRecordingCommand {
-        .init(meetingId: meetingId, grantId: grantId, ownerUserId: ownerId,
-            expiresAt: ServerTime.format(Self.baseTime.addingTimeInterval(60)),
-            selection: .init(mode: "microphone-only", microphone: .init(deviceId: "mic-uid", sourceId: "mic"),
-                outputSourceId: nil, appProcessTreeId: nil, scope: nil), capabilityRevision: 1)
-    }
-    func browserState(_ state: String, generation: Int) {
-        lock.lock(); desired = state; self.generation = generation; lock.unlock()
-    }
-    func failAudio(code: String, reason: String, gapReason: String, elapsedMs: UInt64) {
-        lock.lock(); audioFailure = (code, reason, gapReason); self.elapsedMs = elapsedMs; lock.unlock()
-    }
-    func reply(path: String, body: [String: Any]) throws -> Data {
-        lock.lock(); defer { lock.unlock() }
-        requests += 1
-        if path.hasSuffix("/status"), holdStatus { throw URLError(.timedOut) }
-        if path.hasSuffix("/audio"), let failure = audioFailure,
-           let requestKey = body["requestKey"] as? String, let source = body["sourceId"] as? String,
-           let epoch = body["epoch"] as? UInt64, let start = body["startMs"] as? UInt64,
-           let end = body["endMs"] as? UInt64 {
-            audioRequests += 1
-            gaps.append(.init(id: requestKey, sourceId: source, epoch: epoch, startMs: start, endMs: end,
-                reason: failure.gapReason))
-            return try JSONSerialization.data(withJSONObject: ["requestKey": requestKey, "status": "failed", "code": failure.code,
-                "reason": failure.reason, "retryable": false])
-        }
-        if path.hasSuffix("/status"), let reports = body["gaps"] as? [[String: Any]] {
-            let decoded = try JSONDecoder().decode([MeetingCaptureGap].self, from: JSONSerialization.data(withJSONObject: reports))
-            gapReports.append(contentsOf: decoded)
-            for gap in decoded {
-                if let existing = gaps.first(where: { $0.id == gap.id }) {
-                    guard existing == gap else { throw URLError(.badServerResponse) }
-                } else { gaps.append(gap) }
-            }
-        }
-        if path.hasSuffix("/control") { controls += 1 }
-        if path.hasSuffix("/claim") {
-            guard let hash = body["credentialHash"] as? String, hashes.first.map({ $0 == hash }) ?? true else {
-                throw URLError(.badServerResponse)
-            }
-            hashes.append(hash)
-            if loseFirstClaim, hashes.count == 1 { throw URLError(.timedOut) }
-        }
-        if path.hasSuffix("/control"), let command = body["command"] as? String {
-            if command == "record", let key = body["requestKey"] as? String {
-                resumes.append(key)
-                if rejectResumeRequest { throw URLError(.timedOut) }
-                if denyResumeRequest { throw ResumeFixtureRejection() }
-                if !acceptedResumeKeys.contains(key) {
-                    guard desired == "paused", body["expectedGeneration"] as? Int == generation,
-                          body["selection"] == nil else { throw URLError(.badServerResponse) }
-                    desired = "recording"; generation += 1; epoch += 1; acceptedResumeKeys.insert(key)
-                }
-                if loseResumeReply { loseResumeReply = false; throw URLError(.timedOut) }
-            } else if command == "pause" {
-                desired = "paused"; generation += 1
-            } else if command == "stop" {
-                desired = "stopped"; generation += 1; stops += 1
-            }
-        }
-        if path.hasSuffix("/status"), body["finalized"] as? Bool == true { finished = true }
-        if path.hasSuffix("/status"), let observed = body["observed"] as? [String: Any] {
-            observation = try JSONDecoder().decode(MeetingCaptureObserved.self,
-                from: JSONSerialization.data(withJSONObject: observed))
-            if enforceObservedPause, observation?.generation == generation,
-               observation?.phase == "paused", desired == "recording" {
-                desired = "paused"; generation += 1
-            }
-        }
-        if path.hasSuffix("/audio"), let key = body["requestKey"] as? String {
-            audioRequests += 1
-            return try JSONSerialization.data(withJSONObject: ["requestKey": key, "status": "saved", "replayed": false,
-                "receipt": ["version": 1, "cursor": 1, "transcriptRevision": 1, "stopCutoffMs": NSNull()]])
-        }
-        let selection = try JSONSerialization.jsonObject(with: JSONEncoder().encode(command.selection))
-        var capture: [String: Any] = ["grantId": grantId, "deviceId": deviceId, "deviceName": "Synthetic Mac",
-            "generation": generation, "epoch": epoch, "desired": desired, "selection": selection,
-            "epochStartMs": 0, "expiresAt": ServerTime.format(Self.baseTime.addingTimeInterval(7200)),
-            "serverTime": ServerTime.format(Self.baseTime), "elapsedMs": elapsedMs, "leaseMs": 30000,
-            "gaps": try JSONSerialization.jsonObject(with: JSONEncoder().encode(gaps)), "gapLimitReached": false,
-            "finalization": desired == "stopped" ? (finished ? "complete" : "pending") : "none"]
-        if desired == "paused" { capture["epochEndMs"] = 1000 }
-        if desired == "stopped" { capture["stopCutoffMs"] = 1000; capture["epochEndMs"] = 1000 }
-        var reply: [String: Any] = ["capture": capture]
-        if path.hasSuffix("/claim") {
-            reply["meetingId"] = meetingId; reply["grantId"] = grantId
-            reply["expiresAt"] = ServerTime.format(Self.baseTime.addingTimeInterval(7200))
-        }
-        return try JSONSerialization.data(withJSONObject: reply)
-    }
-}
-
-private final class HostLifecycleProtocol: URLProtocol {
-    private static let lock = NSLock()
-    private static var servers: [String: FixtureServer] = [:]
-    static func register(_ server: FixtureServer) { lock.lock(); servers[server.grantId] = server; lock.unlock() }
-    static func remove(_ id: String) { lock.lock(); servers[id] = nil; lock.unlock() }
-    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "moss.example" }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-    override func startLoading() {
-        do {
-            let bytes: Data
-            if let data = request.httpBody { bytes = data }
-            else if let stream = request.httpBodyStream {
-                stream.open(); defer { stream.close() }
-                var data = Data(), buffer = [UInt8](repeating: 0, count: 4096)
-                while stream.hasBytesAvailable {
-                    let count = stream.read(&buffer, maxLength: buffer.count)
-                    if count <= 0 { break }
-                    data.append(contentsOf: buffer.prefix(count))
-                }
-                bytes = data
-            } else { throw URLError(.badServerResponse) }
-            guard let body = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
-                  let grantId = body["grantId"] as? String else { throw URLError(.badServerResponse) }
-            Self.lock.lock(); let server = Self.servers[grantId]; Self.lock.unlock()
-            guard let server else { throw URLError(.badServerResponse) }
-            let data = try server.reply(path: request.url!.path, body: body)
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data)
-            client?.urlProtocolDidFinishLoading(self)
-        } catch is ResumeFixtureRejection {
-            let response = HTTPURLResponse(url: request.url!, statusCode: 409, httpVersion: nil,
-                headerFields: ["Content-Type": "application/json"])!
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: Data("{}".utf8))
-            client?.urlProtocolDidFinishLoading(self)
-        } catch { client?.urlProtocol(self, didFailWithError: error) }
-    }
-    override func stopLoading() {}
 }

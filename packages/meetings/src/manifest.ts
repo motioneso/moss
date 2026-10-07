@@ -415,7 +415,17 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.mac_recording_status",
       description:
-        "White 200 × 64 native pill: three red captured-level bars, grey-ringed Pause and solid Stop. Play resumes only the same paused recording. Silence/stale audio flattens the bars. Stop clears pill and menu dot; no notification."
+        "White 222 × 32 pill with three live audio bars, source menu, Pause/Resume, Stop and Hide X. Silence/stale audio flattens the bars. Resume keeps the current sources. Stop clears the pill and red menu item."
+    },
+    {
+      id: "meetings.mac_recording_pill_visibility",
+      description:
+        "X only hides the pill. Recording and the red Meeting menu continue, with Pause/Stop and Show recording pill available. Showing a paused pill never resumes it. Each new Start shows the pill."
+    },
+    {
+      id: "meetings.mac_audio_sources",
+      description:
+        "Select a mic or None and toggle computer audio for this recording. System-only skips mic permission. Both-off is rejected; select audio. Paused edits stay paused. Changes await confirmation and keep Settings defaults."
     },
     {
       id: "meetings.account_export",

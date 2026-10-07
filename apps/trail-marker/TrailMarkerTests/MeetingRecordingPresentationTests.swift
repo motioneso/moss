@@ -40,6 +40,27 @@ final class MeetingRecordingPresentationTests: XCTestCase {
             XCTAssertFalse(presentation.showsPill, phase.rawValue)
             XCTAssertFalse(presentation.showsRedDot, phase.rawValue)
             XCTAssertTrue(presentation.meterLevels.allSatisfy { $0 == 0 })
+            presentation.show()
+            XCTAssertFalse(presentation.showsPill, "Show cannot restore a terminal session")
+            XCTAssertFalse(presentation.showsRedDot)
+        }
+    }
+
+    func testShowOnlyRestoresVisibilityAndNextStartResetsHide() {
+        var presentation = MeetingRecordingPresentation()
+        presentation.show()
+        XCTAssertFalse(presentation.showsPill, "Show cannot accept a Start")
+        for phase in [MeetingCaptureHost.Phase.recording, .paused] {
+            presentation.acceptedStart()
+            presentation.update(phase: phase, reconnecting: false, elapsedMilliseconds: 1000, level: 0.5)
+            let visible = presentation
+            presentation.hide()
+            presentation.show()
+            XCTAssertEqual(presentation, visible, "Show preserves the recording state, duration and levels")
+            presentation.hide()
+            presentation.acceptedStart()
+            XCTAssertTrue(presentation.showsPill, "Every new recording resets the previous Hide")
+            XCTAssertFalse(presentation.hidden)
         }
     }
 
@@ -134,14 +155,22 @@ final class MeetingRecordingPresentationTests: XCTestCase {
             return [:]
         })
         let controller = MeetingRecordingPillController(host: host)
-        XCTAssertEqual(controller.panel.frame.size, NSSize(width: 200, height: 64))
-        XCTAssertEqual(controller.panel.contentView?.frame.size, NSSize(width: 200, height: 64))
-        XCTAssertEqual(TrailMarkerTokens.Layout.recordingControlDiameter, 43.2)
-        XCTAssertEqual(TrailMarkerTokens.Layout.recordingMeterWidth, 25.6)
-        XCTAssertEqual(TrailMarkerTokens.Layout.recordingMeterHeight, 19.2)
+        XCTAssertEqual(controller.panel.frame.size, NSSize(width: 222, height: 32))
+        XCTAssertEqual(controller.panel.contentView?.frame.size, NSSize(width: 222, height: 32))
+        XCTAssertEqual(TrailMarkerTokens.Layout.recordingControlDiameter, 24)
+        XCTAssertEqual(TrailMarkerTokens.Layout.recordingMeterWidth, 24)
+        XCTAssertEqual(TrailMarkerTokens.Layout.recordingMeterHeight, 18)
         XCTAssertEqual(3 * TrailMarkerTokens.Layout.recordingMeterBarWidth + 2 * TrailMarkerTokens.Layout.recordingMeterBarSpacing,
                        TrailMarkerTokens.Layout.recordingMeterWidth, accuracy: 0.001)
-        XCTAssertEqual(TrailMarkerTokens.Layout.recordingControlBorderWidth, 2.4)
+        XCTAssertEqual(TrailMarkerTokens.Layout.recordingControlBorderWidth, 0.8)
+        XCTAssertEqual(TrailMarkerTokens.Layout.recordingCloseDiameter, 20)
+        XCTAssertEqual(TrailMarkerTokens.Layout.recordingCloseSectionWidth, 24)
+        XCTAssertEqual(TrailMarkerTokens.Layout.recordingCloseDividerWidth +
+                       TrailMarkerTokens.Layout.recordingCloseSectionSpacing +
+                       TrailMarkerTokens.Layout.recordingCloseDiameter,
+                       TrailMarkerTokens.Layout.recordingCloseSectionWidth)
+        XCTAssertEqual(TrailMarkerTokens.Layout.recordingCloseSectionWidth +
+                       TrailMarkerTokens.Layout.recordingPillTrailingInset, 26.8, accuracy: 0.001)
         XCTAssertEqual(controller.panel.level, .floating)
         XCTAssertTrue(controller.panel.collectionBehavior.contains(.canJoinAllSpaces))
         XCTAssertTrue(controller.panel.collectionBehavior.contains(.fullScreenAuxiliary))

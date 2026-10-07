@@ -8,73 +8,80 @@ import Foundation
 @MainActor
 final class MeetingCaptureHost: ObservableObject {
     enum Phase: String { case unprepared, ready, recording, paused, stopping, stopped, error }
-    @Published private(set) var phase: Phase = .unprepared {
+    @Published var phase: Phase = .unprepared {
         didSet { refreshRecordingPresentation() }
     }
-    @Published private(set) var recordingPresentation = MeetingRecordingPresentation()
-    @Published private(set) var message = "Choose sources and press Start meeting in Moss."
-    @Published private(set) var processingMessage: String?
-    @Published private(set) var connectivityMessage: String?
-    @Published private(set) var backlogMessage: String?
-    @Published private(set) var outputMessage: String?
-    @Published private(set) var diagnostics: [String] = []
-    @Published private(set) var activation: MeetingActivation?
-    @Published private(set) var inventory: MeetingCaptureInventory?
-    @Published private(set) var sourceDescription = "No audio sources selected"
-    @Published private(set) var cleanupBlocked = false
-    @Published private(set) var gapCount = 0
-    @Published private(set) var gapCoverageIncomplete = false
+    @Published var recordingPresentation = MeetingRecordingPresentation()
+    @Published var message = "Choose sources and press Start meeting in Moss."
+    @Published var processingMessage: String?
+    @Published var connectivityMessage: String?
+    @Published var backlogMessage: String?
+    @Published var outputMessage: String?
+    @Published var diagnostics: [String] = []
+    @Published var activation: MeetingActivation?
+    @Published var inventory: MeetingCaptureInventory?
+    @Published var sourceDescription = "No audio sources selected"
+    @Published var cleanupBlocked = false
+    @Published var gapCount = 0
+    @Published var gapCoverageIncomplete = false
 
-    private let connection: ConnectionRuntime
-    private let ports: MeetingCaptureHostPorts
-    private let runtime: MeetingCaptureRuntime
-    private var client: MeetingCaptureClient?
-    private var credential: String?
-    private var grantId: String?
-    private var grantExpiry: Date?
-    private(set) var pollTask: Task<Void, Never>?
-    private(set) var controlTask: Task<Void, Never>?
-    private var uploadTasks: [MeetingAudioSource: URLSessionDataTask] = [:]
-    private var uploadRetryAt: [MeetingAudioSource: UInt64] = [:]
-    private var uploadFailures: [MeetingAudioSource: Int] = [:]
-    private var lastAudioDiagnostics: [MeetingAudioSource: String] = [:]
-    private var startCommandDeadline: Date?
-    private var initialStartGeneration: Int?
-    private var leaseDeadlineNanoseconds: UInt64 = 0
-    private lazy var recordingConnection = MeetingRecordingConnection(connection: connection, activate: { [weak self] command, claim, credential, origin in
+    let connection: ConnectionRuntime
+    let ports: MeetingCaptureHostPorts
+    let runtime: MeetingCaptureRuntime
+    var client: MeetingCaptureClient?
+    var credential: String?
+    var grantId: String?
+    var grantExpiry: Date?
+    var pollTask: Task<Void, Never>?
+    var controlTask: Task<Void, Never>?
+    var uploadTasks: [MeetingAudioSource: URLSessionDataTask] = [:]
+    var uploadRetryAt: [MeetingAudioSource: UInt64] = [:]
+    var uploadFailures: [MeetingAudioSource: Int] = [:]
+    var lastAudioDiagnostics: [MeetingAudioSource: String] = [:]
+    var startCommandDeadline: Date?
+    var initialStartGeneration: Int?
+    var leaseDeadlineNanoseconds: UInt64 = 0
+    lazy var recordingConnection = MeetingRecordingConnection(connection: connection, activate: { [weak self] command, claim, credential, origin in
         try self?.acceptStart(command, claim: claim, credential: credential, origin: origin)
     }, report: { [weak self] text in
         guard let self else { return }
         self.connectivityMessage = text
     })
-    private var timer: Timer?
-    private var sessionGeneration = 0
-    private var fence = MeetingCommandFence()
-    private var observed = MeetingCaptureObserved(generation: 0, phase: "idle", errorCode: nil)
-    @Published private var remote: MeetingRemoteCapture?
-    private var selected: MeetingInventorySnapshot.Resolved?
-    private var choice: MeetingCaptureChoice?
-    private var originNanoseconds: UInt64?
-    private var recordingDuration = MeetingRecordingDuration()
-    private var uploadAdmitted = false
-    private var stoppedByUser = false
-    @Published private var controlInFlight = false
-    private var controlRetryAtNanoseconds: UInt64 = 0
-    @Published private var controlOutbox = MeetingControlOutbox()
-    private var pauseStartedNanoseconds: UInt64?
-    private var pauseReason = "paused"
-    private var pausedCaptureCutoff: UInt64?
-    private var observers: [(NotificationCenter, NSObjectProtocol)] = []
-    private struct Epoch {
+    var timer: Timer?
+    var sessionGeneration = 0
+    var fence = MeetingCommandFence()
+    var observed = MeetingCaptureObserved(generation: 0, phase: "idle", errorCode: nil)
+    @Published var remote: MeetingRemoteCapture?
+    var selected: MeetingInventorySnapshot.Resolved?
+    var choice: MeetingCaptureChoice?
+    var originNanoseconds: UInt64?
+    var recordingDuration = MeetingRecordingDuration()
+    var uploadAdmitted = false
+    var stoppedByUser = false
+    @Published var controlInFlight = false
+    var controlRetryAtNanoseconds: UInt64 = 0
+    @Published var controlOutbox = MeetingControlOutbox()
+    var pauseStartedNanoseconds: UInt64?
+    var pauseReason = "paused"
+    var pausedCaptureCutoff: UInt64?
+    var observers: [(NotificationCenter, NSObjectProtocol)] = []
+    struct Epoch {
         let remoteEpoch: UInt64
         let generation: Int
         let choice: MeetingCaptureChoice
         let startNanoseconds: UInt64
+        var endNanoseconds: UInt64? = nil
     }
-    private var epochs: [UInt64: Epoch] = [:]
-    private var uploadSequencer = MeetingUploadSequencer()
-    private var pendingGaps: [MeetingCaptureGap] = []
-    private var acknowledgedEnds: [MeetingUploadSequencer.Stream: UInt64] = [:]
+    var epochs: [UInt64: Epoch] = [:]
+    var uploadSequencer = MeetingUploadSequencer()
+    var pendingGaps: [MeetingCaptureGap] = []
+    @Published var sourceSelectionError: String?
+    var sourceChangeIntent: MeetingSourceChangeIntent?
+    var sourceChangeTask: Task<Void, Never>?
+    var sourceChangeRevision = 0
+    var pauseGapSelection: (epoch: UInt64, choice: MeetingCaptureChoice)?
+    var sourceBoundaryEpoch: UInt64 = 0
+    var acknowledgedEnds: [MeetingUploadSequencer.Stream: UInt64] = [:]
 
     init(connection: ConnectionRuntime, runtime: MeetingCaptureRuntime? = nil, ports: MeetingCaptureHostPorts? = nil, factory: @escaping MeetingCaptureRuntime.DeviceFactory = MeetingCaptureHost.devices) {
         self.connection = connection
@@ -83,9 +90,11 @@ final class MeetingCaptureHost: ObservableObject {
     }
 
     nonisolated static func devices(_ selection: MeetingNativeSelection) throws -> [MeetingAudioSource: MeetingAudioCapturing] {
-        var devices: [MeetingAudioSource: MeetingAudioCapturing] = [
-            .microphone: MeetingMicrophoneCapture(selectedDeviceID: selection.microphoneDeviceID)
-        ]
+        try selection.validate()
+        var devices: [MeetingAudioSource: MeetingAudioCapturing] = [:]
+        if let microphone = selection.microphoneDeviceID {
+            devices[.microphone] = MeetingMicrophoneCapture(selectedDeviceID: microphone)
+        }
         if let output = selection.output {
             guard #available(macOS 14.2, *) else { throw MeetingHostError.unavailable }
             devices[.output] = CoreAudioMeetingOutput(scope: output)
@@ -97,13 +106,14 @@ final class MeetingCaptureHost: ObservableObject {
     var canStop: Bool { [.recording, .paused, .stopping].contains(phase) || (phase == .ready && grantId != nil) || cleanupBlocked }
 
     var canResumeFromUserClick: Bool {
-        phase == .paused && remote?.desired == "paused" && remote?.selection == choice &&
+        sourceChangeIntent == nil && phase == .paused && remote?.desired == "paused" && remote?.selection == choice &&
             !epochs.isEmpty && !stoppedByUser && !cleanupBlocked && !gapCoverageIncomplete &&
             controlOutbox.pending == nil && !controlInFlight && credential != nil &&
             grantExpiry.map({ ports.wallNow() < $0 }) == true && self.now() < leaseDeadlineNanoseconds
     }
 
     func hideRecordingPill() { recordingPresentation.hide() }
+    func showRecordingPill() { recordingPresentation.show() }
     private func refreshRecordingPresentation() {
         let now = self.now()
         recordingPresentation.update(phase: phase, reconnecting: connectivityMessage != nil,
@@ -166,6 +176,11 @@ final class MeetingCaptureHost: ObservableObject {
             if nextDelay > 0 { try? await Task.sleep(nanoseconds: nextDelay * 1_000_000) }
             guard !Task.isCancelled, generation == sessionGeneration else { return }
             nextDelay = 2000
+            if sourceChangeIntent?.awaitingControl == true {
+                retrySourceChange()
+                continue
+            }
+            let sourceRevision = sourceChangeRevision
             do {
                 guard let client, let activation, let credential, let grantId, let grantExpiry,
                       self.ports.wallNow() < grantExpiry else { throw MeetingHostError.authorizationExpired }
@@ -175,18 +190,21 @@ final class MeetingCaptureHost: ObservableObject {
                 let sentObservation = observed
                 let requestSent = self.now()
                 let reply = try await client.status(.init(meetingId: activation.meetingId, grantId: grantId,
-                    inventory: fresh.wire, observed: sentObservation, gaps: Array(pendingGaps.filter { $0.endMs <= (remote?.elapsedMs ?? 0) }.prefix(32)),
+                    inventory: fresh.wire, observed: sentObservation, gaps: gapsForStatus(),
                     finalized: phase == .stopped && pendingGaps.isEmpty ? true : nil,
                     recordedDurationMs: recordingDuration.milliseconds(at: requestSent)), credential: credential)
                 guard generation == sessionGeneration, !Task.isCancelled else { return }
+                guard sourceRevision == sourceChangeRevision else { continue }
                 guard reply.capture.grantId == grantId, reply.capture.deviceId == ports.identity()?.deviceId else {
                     throw MeetingHostError.authorizationExpired
                 }
                 try reply.capture.validate()
+                try reconcileSourceChangeStatus(reply.capture)
                 guard controlOutbox.accepts(generation: reply.capture.generation) else {
                     try? await Task.sleep(nanoseconds: 250_000_000)
                     continue
                 }
+                try reconcileClosedSourceEpoch(reply.capture)
                 controlOutbox.reconcile(generation: reply.capture.generation, desired: reply.capture.desired,
                     retainedSourceMatches: reply.capture.selection == choice)
                 let now = self.now()
@@ -231,10 +249,13 @@ final class MeetingCaptureHost: ObservableObject {
                 guard generation == sessionGeneration, !Task.isCancelled else { return }
                 retryPendingControl()
                 // The status request has acknowledged this exact epoch before its first audio send.
-                uploadAdmitted = controlOutbox.pending == nil && !controlInFlight && MeetingSendAdmission.permits(phase: phase, desired: reply.capture.desired,
+                uploadAdmitted = sourceChangeIntent == nil && reply.capture.selection == choice &&
+                    (phase == .stopping || epochs[runtime.snapshot.epoch]?.remoteEpoch == reply.capture.epoch) &&
+                    controlOutbox.pending == nil && !controlInFlight && MeetingSendAdmission.permits(phase: phase, desired: reply.capture.desired,
                     submitted: sentObservation, current: observed)
             } catch {
                 guard generation == sessionGeneration, !Task.isCancelled else { return }
+                guard sourceRevision == sourceChangeRevision else { continue }
                 if (error as? MeetingHostError) == .authorizationExpired {
                     _ = terminate(reason: MeetingHostError.authorizationExpired.message)
                     return
@@ -270,7 +291,10 @@ final class MeetingCaptureHost: ObservableObject {
             }
             return
         }
-        if next.desired == "paused" { startCommandDeadline = nil }
+        if next.desired == "paused" {
+            startCommandDeadline = nil
+            if next.selection != choice, !epochs.isEmpty { try adoptPausedSourceChoice(next) }
+        }
         if next.desired == "paused", phase == .ready {
             observed = .init(generation: next.generation, phase: "paused", errorCode: nil)
             phase = .paused
@@ -299,7 +323,7 @@ final class MeetingCaptureHost: ObservableObject {
         guard start, !stoppedByUser, !controlInFlight, !cleanupBlocked, !gapCoverageIncomplete, let selection = next.selection else { return }
         if next.generation != initialStartGeneration { startCommandDeadline = nil }
         let generation = sessionGeneration
-        if ports.microphonePermission() != .granted {
+        if selection.microphone != nil, ports.microphonePermission() != .granted {
             let permissionFence = MeetingStartPermissionFence(sessionGeneration: generation, captureGeneration: next.generation,
                 grantId: next.grantId, deviceId: next.deviceId, expiresAt: startCommandDeadline)
             let permissionStarted = self.now()
@@ -339,10 +363,12 @@ final class MeetingCaptureHost: ObservableObject {
         let resolved = try ports.readInventory().resolve(selection)
         let readiness = MeetingNativeReadiness(permissionsGranted: true, processingReady: true,
             meetingDeviceAuthorized: true)
+        if let previousEpoch = pauseGapSelection?.epoch ?? epochs[runtime.snapshot.epoch]?.remoteEpoch,
+           next.epoch > previousEpoch { try adoptPausedSourceChoice(next) }
         if runtime.snapshot.state == .paused {
             try runtime.resume(selection: resolved.selection, readiness: readiness, permitRetainedAudio: true, at: now)
         } else {
-            recordPauseGap(endingAt: now)
+            if pauseGapSelection == nil { recordPauseGap(endingAt: now) }
             if [.failed, .finished].contains(runtime.snapshot.state) { try runtime.reset(at: now) }
             try runtime.prepare(selection: resolved.selection, readiness: readiness, at: now)
             try runtime.start(readiness: readiness, at: now)
@@ -354,6 +380,7 @@ final class MeetingCaptureHost: ObservableObject {
             guard closeCaptureDiscarding(at: self.now()) else { throw MeetingHostError.cleanupFailed }
             throw MeetingHostError.sourceChanged
         }
+        if pauseGapSelection != nil { recordPauseGap(endingAt: now) }
         recordingDuration.start(at: self.now())
         epochs[runtime.snapshot.epoch] = Epoch(remoteEpoch: next.epoch, generation: next.generation, choice: selection, startNanoseconds: now)
         pauseStartedNanoseconds = nil
@@ -455,7 +482,7 @@ final class MeetingCaptureHost: ObservableObject {
 
     private func validateCurrentSources(_ fresh: MeetingInventorySnapshot) {
         guard phase == .recording, let choice, let selected else { return }
-        guard ports.microphonePermission() == .granted,
+        guard choice.microphone == nil || ports.microphonePermission() == .granted,
               let current = try? fresh.resolve(choice), current == selected else {
             // Drop pending audio on membership change, including newly appearing Moss helpers.
             // This never replaces a failed app-scoped route with computer capture.
@@ -475,7 +502,7 @@ final class MeetingCaptureHost: ObservableObject {
         let bounds = try MeetingWireAudioBoundary(packet: packet, originNanoseconds: origin)
         let start = bounds.startMs
         let end = bounds.endMs
-        let source = packet.source == .microphone ? epoch.choice.microphone.sourceId : epoch.choice.outputSourceId
+        let source = packet.source == .microphone ? epoch.choice.microphone?.sourceId : epoch.choice.outputSourceId
         guard let source else { throw MeetingHostError.invalidResponse }
         let identity = uploadSequencer.identity(epoch: epoch.remoteEpoch, source: source, callbackSequence: packet.sequence)
         let key = identity.requestKey
@@ -532,125 +559,7 @@ final class MeetingCaptureHost: ObservableObject {
         return admitted ? .started : .deferred
     }
 
-    func resumeFromUserClick() {
-        guard canResumeFromUserClick, let activation, let grantId, let remote else { return }
-        uploadAdmitted = false
-        controlRetryAtNanoseconds = 0
-        controlOutbox.stage(command: "record", meetingId: activation.meetingId, grantId: grantId,
-            generation: remote.generation)
-        message = "Paused. Waiting for Moss to confirm Resume."
-        retryPendingControl()
-    }
-
-    func pauseFromUserClick() { localControl("pause") }
-    func stopFromUserClick() {
-        if cleanupBlocked { _ = terminate(reason: "Recording stopped."); return }
-        localControl("stop")
-    }
-
-    private func localControl(_ command: String) {
-        guard let activation, let grantId, let remote,
-              phase == .recording || (command == "stop" && [.ready, .paused, .stopping].contains(phase)) else { return }
-        if command == "stop", phase == .stopping { retryPendingControl(); return }
-        uploadAdmitted = false
-        do {
-            if command == "pause" {
-                let now = self.now()
-                recordingDuration.pause(at: now)
-                try runtime.pause(at: now)
-                pauseStartedNanoseconds = now
-                pauseReason = "paused"
-                phase = .paused
-            }
-            else {
-                if ![.idle, .ready, .finished].contains(runtime.snapshot.state) {
-                    recordPauseGap(endingAt: self.now())
-                    if ![.idle, .ready, .finished].contains(runtime.snapshot.state) {
-                        recordingDuration.pause(at: self.now())
-                        try runtime.stop(at: self.now(), captureCutoffNanoseconds: pausedCaptureCutoff)
-                    }
-                }
-                phase = .stopping
-                stoppedByUser = true
-            }
-        } catch { interrupt(error: error); return }
-        observed = .init(generation: remote.generation, phase: command == "pause" ? "paused" : "stopped", errorCode: nil)
-        outputMessage = nil
-        message = command == "pause" ? "Paused. No new audio is captured or sent." : "Recording stopped. Finishing captured audio."
-        controlRetryAtNanoseconds = 0
-        controlOutbox.stage(command: command, meetingId: activation.meetingId, grantId: grantId,
-            generation: remote.generation)
-        retryPendingControl()
-    }
-
-    private func retryPendingControl() {
-        guard !controlInFlight, self.now() >= controlRetryAtNanoseconds, let body = controlOutbox.pending, let client, let credential else { return }
-        controlInFlight = true
-        uploadAdmitted = false
-        let generation = sessionGeneration
-        controlTask = Task { [weak self] in
-            guard let self, generation == self.sessionGeneration, !Task.isCancelled else { return }
-            defer {
-                if generation == self.sessionGeneration {
-                    self.controlInFlight = false
-                    self.controlTask = nil
-                }
-            }
-            do {
-                guard body.command != "record" || self.controlOutbox.pending?.requestKey == body.requestKey else { return }
-                let reply = try await client.control(body, credential: credential)
-                guard generation == self.sessionGeneration else { return }
-                guard reply.capture.grantId == self.grantId, reply.capture.deviceId == self.ports.identity()?.deviceId else {
-                    throw MeetingHostError.authorizationExpired
-                }
-                try reply.capture.validate()
-                self.controlRetryAtNanoseconds = 0
-                self.controlOutbox.received(requestKey: body.requestKey, desired: reply.capture.desired)
-                guard self.controlOutbox.accepts(generation: reply.capture.generation) else { return }
-                self.controlOutbox.reconcile(generation: reply.capture.generation, desired: reply.capture.desired,
-                    retainedSourceMatches: reply.capture.selection == self.choice)
-                self.remote = reply.capture
-                if body.command == "pause" {
-                    self.pausedCaptureCutoff = try reply.capture.epochEndMs.map(self.nativeTime)
-                    if let cutoff = self.pausedCaptureCutoff { self.runtime.tightenPauseCutoff(to: cutoff) }
-                }
-                // Resume acknowledgment does not open hardware or consume the recording fence.
-                // Keep the prior paused observation until the normal status/apply path starts
-                // the acknowledged epoch, then a later status admits its first audio upload.
-                if body.command != "record" {
-                    _ = self.fence.shouldStart(generation: reply.capture.generation, desired: reply.capture.desired)
-                    self.observed = .init(generation: reply.capture.generation,
-                        phase: self.stoppedByUser ? "stopped" : "paused", errorCode: nil)
-                }
-                if body.command == "stop", let cutoff = [reply.capture.stopCutoffMs, reply.capture.epochEndMs].compactMap({ $0 }).min(), self.runtime.snapshot.stopCutoffNanoseconds != nil {
-                    try self.runtime.tightenStopCutoff(to: self.nativeTime(cutoff))
-                }
-                // A later status must acknowledge this observation before any final flush.
-                self.uploadAdmitted = false
-            } catch {
-                guard generation == self.sessionGeneration else { return }
-                if (error as? MeetingHostError) == .authorizationExpired {
-                    _ = self.terminate(reason: MeetingHostError.authorizationExpired.message)
-                } else if body.command == "record", (error as? MeetingHostError) == .rejected {
-                    if self.controlOutbox.rejectResume(requestKey: body.requestKey) {
-                        self.message = "Resume was not accepted. Check the selected sources in Moss, then press Resume again."
-                    }
-                } else {
-                    // Keep the request and UUID. The polling loop reconciles conflicts and
-                    // retries delivery; a new explicit Start can never override pending Stop.
-                    self.uploadAdmitted = false
-                    self.controlRetryAtNanoseconds = self.now() + ((error as? MeetingHostError)?.retryDelayMilliseconds ?? 2000) * 1_000_000
-                    if body.command == "record" {
-                        self.message = "Paused. Resume is not confirmed. Waiting for Moss."
-                    } else {
-                        self.message = body.command == "stop" ? "Recording stopped on this Mac. Waiting to confirm Stop with Moss." : "Paused on this Mac. Waiting to confirm Pause with Moss."
-                    }
-                }
-            }
-        }
-    }
-
-    private func interrupt(error: Error) {
+    func interrupt(error: Error) {
         recordingDuration.pause(at: self.now())
         outputMessage = nil
         uploadAdmitted = false
@@ -686,6 +595,8 @@ final class MeetingCaptureHost: ObservableObject {
     @discardableResult
     func terminate(reason: String) -> Bool {
         recordingPresentation.stop()
+        cancelSourceChange()
+        sourceSelectionError = nil
         uploadAdmitted = false
         var clean = true
         recordingDuration.pause(at: self.now())
@@ -703,7 +614,7 @@ final class MeetingCaptureHost: ObservableObject {
         for (center, observer) in observers { center.removeObserver(observer) }
         observers.removeAll()
         choice = nil; selected = nil; remote = nil; originNanoseconds = nil
-        pauseStartedNanoseconds = nil; pausedCaptureCutoff = nil; pauseReason = "paused"
+        pauseStartedNanoseconds = nil; pausedCaptureCutoff = nil; pauseReason = "paused"; pauseGapSelection = nil; sourceBoundaryEpoch = 0
         epochs.removeAll(); pendingGaps.removeAll(); acknowledgedEnds.removeAll(); uploadSequencer = MeetingUploadSequencer(); fence = MeetingCommandFence(); controlInFlight = false; controlRetryAtNanoseconds = 0; controlOutbox = MeetingControlOutbox()
         observed = .init(generation: 0, phase: "idle", errorCode: nil)
         cleanupBlocked = !clean
@@ -748,6 +659,7 @@ final class MeetingCaptureHost: ObservableObject {
     /// Source churn is an admission failure. Retained resource handles survive a failed teardown,
     /// and both Stop and the service tick can retry them without reopening any source.
     func sourceChanged() {
+        if sourceChangeIntent != nil { failSourceChange(MeetingHostError.sourceChanged) }
         if let pending = controlOutbox.pending, pending.command == "record" {
             // Cancel queued Resume, or follow an already-dispatched Resume with Pause.
             controlOutbox.stage(command: "pause", meetingId: pending.meetingId, grantId: pending.grantId,
@@ -775,17 +687,20 @@ final class MeetingCaptureHost: ObservableObject {
         }
     }
 
-    private func recordPauseGap(endingAt end: UInt64) {
-        guard let start = pauseStartedNanoseconds, let epoch = epochs[runtime.snapshot.epoch] else { return }
+    func recordPauseGap(endingAt end: UInt64) {
+        guard let start = pauseStartedNanoseconds else { return }
+        let context = pauseGapSelection ?? epochs[runtime.snapshot.epoch].map { (epoch: $0.remoteEpoch, choice: $0.choice) }
+        guard let context else { return }
         pauseStartedNanoseconds = nil
-        for source in [epoch.choice.microphone.sourceId, epoch.choice.outputSourceId].compactMap({ $0 }) {
-            recordGap(source: source, epoch: epoch.remoteEpoch, start: start, end: end, reason: pauseReason)
+        pauseGapSelection = nil
+        for source in [context.choice.microphone?.sourceId, context.choice.outputSourceId].compactMap({ $0 }) {
+            recordGap(source: source, epoch: context.epoch, start: start, end: end, reason: pauseReason)
         }
     }
 
     private func record(_ gap: MeetingAudioGap) {
         guard let epoch = epochs[gap.epoch] else { return }
-        let source = gap.source == .microphone ? epoch.choice.microphone.sourceId : epoch.choice.outputSourceId
+        let source = gap.source == .microphone ? epoch.choice.microphone?.sourceId : epoch.choice.outputSourceId
         guard let source else { return }
         let reason: String
         switch gap.reason {
@@ -796,20 +711,23 @@ final class MeetingCaptureHost: ObservableObject {
         case .callbackContention: reason = "interrupted"
         case .retentionDeclined, .cutoffChanged: reason = "discarded"
         }
-        recordGap(source: source, epoch: epoch.remoteEpoch, start: gap.startNanoseconds, end: gap.endNanoseconds, reason: reason)
+        recordGap(source: source, epoch: epoch.remoteEpoch, start: gap.startNanoseconds,
+            end: min(gap.endNanoseconds, epoch.endNanoseconds ?? gap.endNanoseconds), reason: reason)
     }
 
     private func recordDiscardedTail(at now: UInt64, reason: String) {
         let localEpoch = runtime.snapshot.epoch
         guard let epoch = epochs[localEpoch] else { return }
-        let sources = [epoch.choice.microphone.sourceId, epoch.choice.outputSourceId].compactMap { $0 }
+        let sources = [epoch.choice.microphone?.sourceId, epoch.choice.outputSourceId].compactMap { $0 }
         for source in sources {
             let start = acknowledgedEnds[.init(epoch: localEpoch, source: source)] ?? epoch.startNanoseconds
-            recordGap(source: source, epoch: epoch.remoteEpoch, start: start, end: now, reason: reason)
+            recordGap(source: source, epoch: epoch.remoteEpoch, start: start,
+                end: min(now, epoch.endNanoseconds ?? now), reason: reason)
         }
+        if pauseGapSelection != nil { recordPauseGap(endingAt: now) }
     }
 
-    private func recordGap(source: String, epoch: UInt64, start: UInt64, end: UInt64, reason: String) {
+    func recordGap(source: String, epoch: UInt64, start: UInt64, end: UInt64, reason: String) {
         guard let origin = originNanoseconds, end > start, start >= origin else { return }
         queueGap(.init(id: UUID().uuidString.lowercased(), sourceId: source, epoch: epoch,
             startMs: (start - origin) / 1_000_000, endMs: (end - origin + 999_999) / 1_000_000, reason: reason))
@@ -852,7 +770,7 @@ final class MeetingCaptureHost: ObservableObject {
     }
 
     /// Only stage and bounded timing enter diagnostics, never credentials, PCM, URLs or text.
-    private func noteDiagnostic(_ stage: String, duration: UInt64) {
+    func noteDiagnostic(_ stage: String, duration: UInt64) {
         diagnostics.append("\(stage): \(duration / 1_000_000) ms")
         if diagnostics.count > 32 { diagnostics.removeFirst(diagnostics.count - 32) }
     }
@@ -878,15 +796,18 @@ final class MeetingCaptureHost: ObservableObject {
         message = (error as? MeetingHostError)?.message ?? "Capture is unavailable. Check this meeting in Moss."
     }
 
-    private func nativeTime(_ milliseconds: UInt64) throws -> UInt64 {
+    func nativeTime(_ milliseconds: UInt64) throws -> UInt64 {
         guard let origin = originNanoseconds, milliseconds <= (UInt64.max - origin) / 1_000_000 else {
             throw MeetingHostError.invalidResponse
         }
         return origin + milliseconds * 1_000_000
     }
-    private func now() -> UInt64 { ports.now() }
-    private static func describe(_ selection: MeetingCaptureChoice, inventory: MeetingCaptureInventory) -> String {
-        let microphone = inventory.microphones.first { $0.deviceId == selection.microphone.deviceId }?.label ?? "Selected microphone"
+    func now() -> UInt64 { ports.now() }
+    static func describe(_ selection: MeetingCaptureChoice, inventory: MeetingCaptureInventory) -> String {
+        let microphone = selection.microphone.map { requested in
+            inventory.microphones.first { $0.deviceId == requested.deviceId && $0.sourceId == requested.sourceId }?.label ?? "Selected microphone"
+        }
+        guard let microphone else { return "Computer audio" }
         switch selection.mode {
         case "microphone-only": return microphone
         case "selected-app":

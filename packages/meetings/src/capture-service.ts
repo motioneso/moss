@@ -8,6 +8,7 @@ import {
 } from "./preferences.js";
 import { captureAuthorizationError } from "./capture-authorization.js";
 import { captureMetadataJson } from "./capture-metadata.js";
+import { captureTranscriptSources } from "./capture-transcript-sources.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import { isUuid, type AccessContext, type DataContextDb, type DataContextRunner } from "@moss/db";
@@ -20,12 +21,13 @@ import type {
   MeetingCaptureProcessingFailure,
   MeetingCaptureBrowserStatus,
   MeetingCaptureControlInput,
+  MeetingCaptureNativeControlInput,
   MeetingCaptureState,
-  MeetingCaptureStatusInput,
-  MeetingTranscriptSource
+  MeetingCaptureStatusInput
 } from "@moss/shared";
 import {
   applyCaptureControl,
+  applyCaptureSourceChange,
   assertCaptureAudioAdmission,
   decodeCaptureAudio,
   expireCaptureLease,
@@ -456,6 +458,8 @@ export class MeetingCaptureService {
     meetingId: string,
     input: MeetingCaptureControlInput
   ) {
+    if (!["record", "pause", "stop", "revoke"].includes(input.command))
+      throw new MeetingCaptureError();
     const grant = await this.deps.dataContext.withDataContext(actor, (db) =>
       this.repository.grant(db, input.grantId)
     );
@@ -469,9 +473,50 @@ export class MeetingCaptureService {
   async nativeControl(
     headers: IncomingHttpHeaders,
     requestId: string,
-    input: MeetingCaptureControlInput & { meetingId: string; grantId: string }
+    input: MeetingCaptureNativeControlInput
   ) {
-    if (!["pause", "stop", "record"].includes(input.command) || input.selection !== undefined)
+    if (input.command === "change-sources") {
+      if (!input.selection || !Number.isSafeInteger(input.expectedEpoch) || input.expectedEpoch < 1)
+        throw new MeetingCaptureError("meeting_capture_invalid_input", 400);
+      const proof = await this.authenticate(headers, requestId, input.meetingId, input.grantId);
+      const fingerprint = hash(captureMetadataJson(input));
+      return this.nativeTransaction(proof, async (db, grant) => {
+        const prior = await this.repository.receipt(db, grant.id, input.requestKey, fingerprint);
+        if (prior?.result_json)
+          return { capture: captureView(grant, captureState(grant), this.now()) };
+        if (grant.status !== "active" || !grant.credential_hash)
+          throw new MeetingCaptureError("meeting_capture_conflict", 409);
+        const connection = await this.connections.connection(db, grant.device_id);
+        if (
+          !connection ||
+          connection.expires_at <= this.now() ||
+          this.now().getTime() - connection.last_seen_at.getTime() > MEETING_CAPTURE_LEASE_MS
+        )
+          throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
+        const state = captureState(grant);
+        await this.repository.reconcileExpiredAudio(db, grant, state, this.now());
+        expireCaptureLease(state, this.now(), grant.expires_at);
+        state.inventory = JSON.parse(connection.inventory_json) as NonNullable<
+          typeof state.inventory
+        >;
+        applyCaptureSourceChange(state, input, this.now());
+        await this.repository.save(db, grant, state);
+        const result = { capture: captureView(grant, state, this.now()) };
+        await this.repository.reserve(db, grant.id, {
+          requestKey: input.requestKey,
+          kind: "control",
+          fingerprint,
+          metadata: { command: input.command },
+          result
+        });
+        return result;
+      });
+    }
+    if (
+      !["pause", "stop", "record"].includes(input.command) ||
+      input.selection !== undefined ||
+      input.expectedEpoch !== undefined
+    )
       throw new MeetingCaptureError();
     const proof = await this.authenticate(headers, requestId, input.meetingId, input.grantId);
     return this.control(proof.actor, input.grantId, input.meetingId, input, proof);
@@ -824,27 +869,7 @@ export class MeetingCaptureService {
           maxSegments: 1,
           maxCharacters: 1
         });
-        const sources: MeetingTranscriptSource[] = [...(retained?.sources ?? [])];
-        const source = sources.find(
-          (entry) => entry.sourceId === input.sourceId && entry.epoch === input.epoch
-        );
-        if (source)
-          sources[sources.indexOf(source)] = {
-            ...source,
-            endMs: Math.max(source.endMs, input.endMs)
-          };
-        else
-          sources.push({
-            sourceId: input.sourceId,
-            epoch: input.epoch,
-            kind: input.sourceId === epoch.selection.microphone.sourceId ? "microphone" : "output",
-            label:
-              input.sourceId === epoch.selection.microphone.sourceId
-                ? epoch.microphoneLabel
-                : epoch.outputLabel!,
-            startMs: epoch.startMs,
-            endMs: input.endMs
-          });
+        const sources = captureTranscriptSources(state, input, retained?.sources ?? []);
         const saved = await this.transcript.ingest(db, {
           meetingId: input.meetingId,
           requestKey: input.requestKey,

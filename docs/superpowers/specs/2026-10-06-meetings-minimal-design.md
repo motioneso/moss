@@ -13,7 +13,7 @@ This records owner-chat approval, not a GitHub review.
 The corrected four-state mockups and their provenance belong to the
 [design PR #3077](https://github.com/motioneso/moss/pull/3077), rather than being duplicated
 in this implementation PR. The canonical four-state source is
-[#3087 at 4f70a208](https://github.com/motioneso/moss/tree/4f70a20893ca88c99a00c55fdf7be70723667e11/docs/superpowers/specs/meetings-setup-wizard).
+[#3087 at c6d4f08a](https://github.com/motioneso/moss/tree/c6d4f08a052a2fc714c794e645aa6ad994a59601/docs/superpowers/specs/meetings-setup-wizard).
 That later owner-requested correction matches the white three-bar pill and shipped automatic-summary switch.
 The original 2026-10-06 approval date does not claim a fresh rendered review of those corrections.
 
@@ -80,29 +80,61 @@ The compact pill illustrated over the browser scene is Trail Marker's floating n
 It is not a second browser level meter or a new audio-level transport. Existing browser controls
 remain usable for capture recovery and safe Pause/Resume/Stop.
 
-The native pill is approximately 200 × 64 points, with a **pure white surface in every appearance,
-including dark mode**, a light border, pill radius and soft floating shadow. Its surface must not
-follow the app's light/dark background token. It contains:
+The native pill is **222 × 32 points**, with a pure white surface in every appearance, including
+dark mode, a light border and floating shadow. The compact close section is about half the
+previous proposal’s width. It contains:
 
-- A small red **three-bar level meter**, approximately 25.6 × 19.2 points; never a zigzag waveform
-- A 43.2-point circular Pause control with a grey ring and grey pause icon
-- A 43.2-point solid semantic-red Stop control with a filled white square
+- Exactly three red captured-audio bars in a 24 × 18-point meter, never a zigzag waveform
+- A microphone/chevron menu for the current recording’s sources
+- A 24-point circular Pause control with a grey ring, changing to play while paused
+- A 24-point solid semantic-red Stop control with a filled white square
+- A separate, always-visible X and divider in a compact 24-point close group
 
-There is no visible status text, meeting name, elapsed timer or close button. Accessible names,
-status descriptions and tooltips remain. The three bars reflect actual captured audio levels;
-silence, absent or stale audio, Pause and terminal states flatten all three bars. No decorative
-activity animation. The static mockup illustrates the shape, not a live level signal.
+There is no visible status text, meeting name or elapsed timer. Accessible names and tooltips
+remain. The three bars reflect actual captured audio, flattening on silence, stale/absent samples,
+Pause and terminal states. The static mockup illustrates shape, not a live signal.
 
-Keep the existing native Pause and Stop authority. The paused pill’s play button resumes the
-current recording directly after an explicit click. Resume retains the same paused, claimed grant, exact
-audio sources, owner, device, session, capability and expiry. It cannot create an initial Start,
-change sources or revive ended authority. A newer Pause or Stop cancels a queued Resume; a known
-rejection requires a new click. An uncertain transport result may retry only the same request
-identity within the existing bounds, without a replacement grant or extended expiry. Hardware and
-uploads remain paused until authoritative server acknowledgment and normal status application.
-The browser’s Resume remains available. The pill remains draggable, nonactivating and visible
-across Spaces and full-screen apps.
-The menu-bar red dot stays visible from Start through Pause until Stop. No system notification.
+X means **Hide recording pill** only. Hiding, native window close and showing the pill must not
+pause, stop, resume or otherwise change capture. The red Meeting menu item stays visible, with
+Pause and Stop still available while hidden. “Show recording pill” restores the same recording’s
+pill; showing a paused pill does not resume it. Every new recording shows the pill automatically.
+The pill remains draggable, nonactivating and available across Spaces/full-screen apps. Stop
+clears both pill and red menu indication. No system notification is added.
+
+#### Native audio menu
+
+The Microphone group lists the Mac’s exact advertised devices and **None**. The System Audio
+group offers **No computer audio** and **Record computer audio**. These choose recording inputs;
+they do not route playback to a speaker device or change macOS default devices. A saved selected-app
+scope remains truthful until the owner explicitly changes it; changing its microphone alone must
+not silently broaden it to all computer audio.
+
+Microphone + computer audio, microphone only and computer-audio-only are supported. Selecting
+both None and No computer audio is rejected before disturbing current capture or sending a control,
+with “Select a microphone or turn on computer audio.” Never substitute a default device silently.
+System-only capture must not open a microphone unit or request microphone permission.
+
+The menu changes only the current recording. It does not silently rewrite the Settings defaults
+for future Starts. Every choice is an explicit source-change command with the current grant,
+generation, epoch, request identity and full exact selection. The server revalidates the current
+Mac inventory and authorized recording binding, then creates a new generation/source epoch at an
+authoritative boundary. A change while paused stays paused; it never resumes by itself.
+
+Old devices and callbacks are closed/fenced before replacements open. Pending source changes block
+uploads and avoid publishing an old-generation paused status that could race the explicit command.
+Identical uncertain retries retain their original request identity/body; stale or rejected intent
+must not rebase itself onto newer authority. Apply the exact confirmed selection/epoch and normal
+status acknowledgment before new audio is admitted. Stop, unlink, revocation and expiry override
+pending source changes. Failure leaves hardware paused, with a clear recovery message and Stop
+available. Retained old-epoch tails and gap boundaries keep their original source identity/cutoff;
+out-of-order transcription completion must not relabel or silently discard them.
+
+Keep the existing native Pause and Stop authority. The paused pill’s play button resumes only the
+same paused, claimed recording with its retained current selection. Ordinary Resume carries no
+new selection; only the explicit source-change operation changes sources. Both paths retain exact
+owner, device, connection, starting browser session, capability revision, proof and grant expiry.
+Neither can create an initial Start, renew expired authority or widen source scope implicitly.
+The browser’s Resume remains available.
 
 ### Settings
 
@@ -275,8 +307,13 @@ and permission boundaries even when adjacent explanatory copy becomes shorter.
 5. Pause/Resume/Stop, cancellation, superseded generations, missing sources and permissions are
    covered independently. UI simplification does not bypass a server guard.
 6. Native actual audio moves exactly three red bars. Silence, absent/stale samples, Pause and every
-   terminal path flatten all bars. Geometry is 200 × 64, controls are 43.2 points, Pause has a grey
+   terminal path flatten all bars. Geometry is 222 × 32, Pause/Stop controls are 24 points, Pause has a grey
    ring, visible text is absent and the capsule stays pure white in light and dark appearances.
+   The always-visible X hides only the pill, menu Pause/Stop still work, Show recording pill restores
+   it, and the next Start shows it. Test no Pause/Stop command or device closure on Hide.
+   Source changes cover system-only/no microphone permission, both-off rejection, exact inventory,
+   versioned source boundaries, immutable retry, no premature upload, Stop/revoke races and
+   reversed provider completion across old/new epochs.
 7. Unlink from browser and Mac, capability revoke, session logout, expiry, cross-owner access,
    grant replay and rate limits retain positive and guard-removal negative controls.
 8. Catalog, export, deletion and module lifecycle tests match the new schema and API surface.

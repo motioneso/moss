@@ -21,6 +21,7 @@ struct MeetingRecordingPresentation: Equatable {
         active = true
     }
     mutating func hide() { hidden = true }
+    mutating func show() { hidden = false }
     mutating func stop() { self = Self() }
 
     mutating func update(phase: MeetingCaptureHost.Phase, reconnecting: Bool, elapsedMilliseconds: UInt64, level: Float) {

@@ -89,6 +89,10 @@ jobs:
         working-directory: apps/trail-marker
         run: python3 scripts/check-meeting-resume-negative-controls.py
 
+      - name: Verify native source selection negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-source-negative-controls.py
+
       - name: Verify single-link recovery negative controls
         working-directory: apps/trail-marker
         run: python3 scripts/check-meeting-single-link-controls.py
@@ -103,5 +107,6 @@ jobs:
             ${{ runner.temp }}/meeting-link-negative-*/
             ${{ runner.temp }}/meeting-single-link-negative-*/
             ${{ runner.temp }}/meeting-resume-negative-*/
+            ${{ runner.temp }}/meeting-source-negative-*/
           if-no-files-found: ignore
           retention-days: 7

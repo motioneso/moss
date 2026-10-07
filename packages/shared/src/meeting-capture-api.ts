@@ -119,6 +119,24 @@ export interface MeetingCaptureControlInput {
   readonly command: "record" | "pause" | "stop" | "revoke";
   readonly selection?: MeetingCaptureSelection;
 }
+/** Only the claimed native recorder may explicitly change this recording's sources. */
+export type MeetingCaptureNativeControlInput = {
+  readonly meetingId: string;
+  readonly grantId: string;
+  readonly requestKey: string;
+  readonly expectedGeneration: number;
+} & (
+  | {
+      readonly command: "record" | "pause" | "stop";
+      readonly selection?: never;
+      readonly expectedEpoch?: never;
+    }
+  | {
+      readonly command: "change-sources";
+      readonly expectedEpoch: number;
+      readonly selection: MeetingCaptureSelection;
+    }
+);
 export interface MeetingCaptureAudioInput {
   readonly meetingId: string;
   readonly grantId: string;

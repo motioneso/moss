@@ -60,13 +60,28 @@ struct MeetingInventorySnapshot {
     }
 
     func resolve(_ choice: MeetingCaptureChoice) throws -> Resolved {
-        guard let microphone = microphones[choice.microphone.deviceId],
-              wire.microphones.contains(where: { $0.deviceId == choice.microphone.deviceId && $0.sourceId == choice.microphone.sourceId }) else {
-            throw MeetingHostError.unavailable
+        let microphone: AudioObjectID?
+        if let requested = choice.microphone {
+            let matches = wire.microphones.filter { $0.deviceId == requested.deviceId && $0.sourceId == requested.sourceId }
+            guard matches.count == 1,
+                  wire.microphones.filter({ $0.deviceId == requested.deviceId }).count == 1,
+                  wire.microphones.filter({ $0.sourceId == requested.sourceId }).count == 1,
+                  let device = microphones[requested.deviceId], device != 0 else {
+                throw MeetingHostError.unavailable
+            }
+            microphone = device
+        } else {
+            guard choice.mode == "computer-audio" else { throw MeetingHostError.unavailable }
+            microphone = nil
+        }
+        if let output = choice.outputSourceId {
+            guard !output.isEmpty, !wire.microphones.contains(where: { $0.sourceId == output }) else {
+                throw MeetingHostError.unavailable
+            }
         }
         switch choice.mode {
         case "microphone-only":
-            guard choice.outputSourceId == nil, choice.appProcessTreeId == nil, choice.scope == nil else {
+            guard choice.outputSourceId == nil, choice.appProcessTreeId == nil, choice.scope == nil, choice.applicationId == nil else {
                 throw MeetingHostError.unavailable
             }
             return Resolved(selection: MeetingNativeSelection(microphoneDeviceID: microphone, output: nil), members: [], exclusions: [])
@@ -83,9 +98,10 @@ struct MeetingInventorySnapshot {
                 outputRoutes: audioRoutes.filter { pair in members.contains { $0.pid == pair.key } })
         case "computer-audio":
             guard wire.computerAudio.available, choice.scope?.kind == "process-exclusion",
-                  let declared = choice.scope?.excludedProcessTreeIds,
+                  choice.scope?.endpointId == nil, let declared = choice.scope?.excludedProcessTreeIds,
+                  !declared.isEmpty, Set(declared).count == declared.count,
                   Set(declared) == Set(wire.computerAudio.excludedProcessTreeIds),
-                  choice.outputSourceId != nil, choice.appProcessTreeId == nil else { throw MeetingHostError.unavailable }
+                  choice.outputSourceId != nil, choice.appProcessTreeId == nil, choice.applicationId == nil else { throw MeetingHostError.unavailable }
             let ids = excluded.compactMap { audioObjects[$0.pid] }.sorted()
             guard !ids.isEmpty else { throw MeetingHostError.unavailable }
             let selection = MeetingNativeSelection(microphoneDeviceID: microphone, output: .excludingProcesses(ids))

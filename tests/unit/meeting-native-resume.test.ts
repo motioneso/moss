@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import type { MeetingCaptureSelection } from "@moss/shared";
+import type { MeetingCaptureNativeControlInput, MeetingCaptureSelection } from "@moss/shared";
 import { captureState } from "../../packages/meetings/src/capture-repository.js";
 import { MeetingCaptureError } from "../../packages/meetings/src/capture-domain.js";
 import {
@@ -162,9 +162,13 @@ describe("narrow native Resume", () => {
         result_json: "{}",
         created_at: at(2000)
       });
-      await expect(f.service.nativeControl(f.headers, "denied", input)).rejects.toMatchObject({
-        httpStatus: 401
-      });
+      await expect(
+        f.service.nativeControl(
+          f.headers,
+          "denied",
+          input as unknown as MeetingCaptureNativeControlInput
+        )
+      ).rejects.toMatchObject({ httpStatus: 401 });
       expect(f.repository.receipt).not.toHaveBeenCalled();
       expect(f.repository.save).not.toHaveBeenCalled();
     }
@@ -181,7 +185,10 @@ describe("narrow native Resume", () => {
       created_at: at(2000)
     });
     await expect(
-      f.service.nativeControl(f.headers, "denied", { ...resume(), command: "revoke" })
+      f.service.nativeControl(f.headers, "denied", {
+        ...resume(),
+        command: "revoke"
+      } as unknown as MeetingCaptureNativeControlInput)
     ).rejects.toMatchObject({ httpStatus: 401 });
     expect(f.repository.receipt).not.toHaveBeenCalled();
     expect(f.repository.save).not.toHaveBeenCalled();

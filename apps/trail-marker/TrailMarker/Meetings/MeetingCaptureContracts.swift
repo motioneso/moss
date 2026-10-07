@@ -53,11 +53,26 @@ struct MeetingCaptureChoice: Codable, Equatable {
         let excludedProcessTreeIds: [String]?
     }
     let mode: String
-    let microphone: Microphone
+    let microphone: Microphone?
     let outputSourceId: String?
     let appProcessTreeId: String?
     let scope: Scope?
     var applicationId: String? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case mode, microphone, outputSourceId, appProcessTreeId, scope, applicationId
+    }
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(mode, forKey: .mode)
+        // Computer-only capture explicitly transmits null; omission is not a source choice.
+        if let microphone { try values.encode(microphone, forKey: .microphone) }
+        else { try values.encodeNil(forKey: .microphone) }
+        try values.encodeIfPresent(outputSourceId, forKey: .outputSourceId)
+        try values.encodeIfPresent(appProcessTreeId, forKey: .appProcessTreeId)
+        try values.encodeIfPresent(scope, forKey: .scope)
+        try values.encodeIfPresent(applicationId, forKey: .applicationId)
+    }
 }
 struct MeetingCaptureObserved: Codable, Equatable {
     let generation: Int
@@ -137,6 +152,8 @@ struct MeetingCaptureControlBody: Encodable {
     let requestKey: String
     let expectedGeneration: Int
     let command: String
+    var expectedEpoch: UInt64? = nil
+    var selection: MeetingCaptureChoice? = nil
 }
 struct MeetingCaptureAudioBody: Encodable {
     let meetingId: String

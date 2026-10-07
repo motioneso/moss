@@ -58,6 +58,17 @@ CONTROLS = [
         "after": "title.addAttribute(.foregroundColor, value: NSColor.labelColor, range: NSRange(location: 0, length: 1))",
         "assertion": "XCTAssertEqual failed",
     }),
+    ("Meetings/MeetingCaptureHost.swift", "MeetingHostLifecycleTests", {
+        "name": "T12-hide-never-pauses", "test": "testHideAndNativeCloseKeepCaptureRunningAndMenuRestoresPill",
+        "before": "func hideRecordingPill() { recordingPresentation.hide() }",
+        "after": "func hideRecordingPill() { recordingPresentation.hide(); pauseFromUserClick() }",
+        "assertion": "XCTAssertEqual failed",
+    }),
+    ("Meetings/MeetingRecordingPresentation.swift", "MeetingRecordingPresentationTests", {
+        "name": "T12-show-preserves-session", "test": "testShowOnlyRestoresVisibilityAndNextStartResetsHide",
+        "before": "mutating func show() { hidden = false }",
+        "after": "mutating func show() { acceptedStart() }", "assertion": "XCTAssertEqual failed",
+    }),
     ("Meetings/MeetingAudioBuffer.swift", "MeetingRecordingPresentationTests", {
         "name": "T12-actual-captured-level", "test": "testActualCapturedPeakExpiresAndPauseNeverDisplaysRetainedAudio",
         "before": "        MeetingAudioLevelStore(displayLevel, peak, host)",

@@ -20,7 +20,7 @@ export function choiceFromCapture(capture: MeetingCaptureState | null | undefine
   return selection
     ? {
         mode: selection.mode,
-        microphoneId: selection.microphone.deviceId,
+        microphoneId: selection.microphone?.deviceId ?? "",
         applicationId: selection.mode === "selected-app" ? (selection.applicationId ?? "") : ""
       }
     : emptyCaptureChoice;

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { expect, vi } from "vitest";
+import type { DataContextDb } from "@moss/db";
 import type {
   MeetingCaptureAudioInput,
   MeetingCaptureControlInput,
@@ -8,6 +9,7 @@ import type {
 } from "@moss/shared";
 import {
   applyCaptureControl,
+  MeetingCaptureError,
   type CaptureStoredState
 } from "../../../packages/meetings/src/capture-domain.js";
 import {
@@ -91,7 +93,7 @@ export function audio(): MeetingCaptureAudioInput {
     pcmBase64: Buffer.alloc(32000).toString("base64")
   };
 }
-export function fixture(selection?: MeetingCaptureSelection) {
+export function fixture(selection?: MeetingCaptureSelection, now: () => Date = () => at(2000)) {
   let active = 0;
   const value = recording(selection);
   const credential = `mm1_${owner}.${grantId}.${"s".repeat(43)}`;
@@ -112,22 +114,43 @@ export function fixture(selection?: MeetingCaptureSelection) {
     state_json: JSON.stringify(value)
   };
   const repository = new MeetingCaptureRepository();
+  const grantRows = [grant];
+  const actors = new WeakMap<DataContextDb, string>();
   const receipts = new Map<string, CaptureReceipt>();
+  const receiptRows = new Map([[grantId, receipts]]);
+  const receiptsFor = (id: string) => {
+    let rows = receiptRows.get(id);
+    if (!rows) {
+      rows = new Map();
+      receiptRows.set(id, rows);
+    }
+    return rows;
+  };
   vi.spyOn(repository, "reconcileExpiredAudio").mockResolvedValue();
   vi.spyOn(repository, "hasPendingAudio").mockResolvedValue(false);
   vi.spyOn(repository, "lockMeeting").mockResolvedValue();
-  vi.spyOn(repository, "grant").mockImplementation(async () => grant);
-  vi.spyOn(repository, "save").mockImplementation(async (_db, _grant, next) => {
-    grant.state_json = JSON.stringify(next);
-    if (next.desired === "revoked") grant.status = "revoked";
+  // Model the repository's owner-scoped lookup; these unit doubles do not exercise SQL RLS.
+  vi.spyOn(repository, "grant").mockImplementation(
+    async (db, id) =>
+      grantRows.find((row) => row.id === id && row.owner_user_id === actors.get(db)) ?? null
+  );
+  vi.spyOn(repository, "save").mockImplementation(async (db, saved, next) => {
+    const row = grantRows.find(
+      (candidate) => candidate.id === saved.id && candidate.owner_user_id === actors.get(db)
+    );
+    expect(row).toBeDefined();
+    row!.state_json = JSON.stringify(next);
+    saved.state_json = row!.state_json;
+    if (next.desired === "revoked") row!.status = saved.status = "revoked";
   });
-  vi.spyOn(repository, "receipt").mockImplementation(async (_db, _id, key, fingerprint) => {
-    const row = receipts.get(key);
-    if (row && row.fingerprint !== fingerprint) throw Error("conflict");
+  vi.spyOn(repository, "receipt").mockImplementation(async (_db, id, key, fingerprint) => {
+    const row = receiptsFor(id).get(key);
+    if (row && row.fingerprint !== fingerprint)
+      throw new MeetingCaptureError("meeting_capture_conflict", 409);
     return row ?? null;
   });
-  vi.spyOn(repository, "reserve").mockImplementation(async (_db, _id, input) => {
-    receipts.set(input.requestKey, {
+  vi.spyOn(repository, "reserve").mockImplementation(async (_db, id, input) => {
+    receiptsFor(id).set(input.requestKey, {
       request_key: input.requestKey,
       kind: input.kind,
       fingerprint: input.fingerprint,
@@ -136,16 +159,16 @@ export function fixture(selection?: MeetingCaptureSelection) {
       created_at: at(2000)
     });
   });
-  vi.spyOn(repository, "admitAudio").mockImplementation(async (db, _grant, input, fingerprint) =>
-    repository.reserve(db, grantId, {
+  vi.spyOn(repository, "admitAudio").mockImplementation(async (db, admitted, input, fingerprint) =>
+    repository.reserve(db, admitted.id, {
       requestKey: input.requestKey,
       kind: "audio",
       fingerprint,
       metadata: {}
     })
   );
-  vi.spyOn(repository, "finish").mockImplementation(async (_db, _id, result) => {
-    const receipt = receipts.get(result.requestKey);
+  vi.spyOn(repository, "finish").mockImplementation(async (_db, id, result) => {
+    const receipt = receiptsFor(id).get(result.requestKey);
     if (receipt) receipt.result_json = JSON.stringify(result);
   });
   vi.spyOn(repository, "transcriptHead").mockResolvedValue({
@@ -163,10 +186,12 @@ export function fixture(selection?: MeetingCaptureSelection) {
   });
   const deps: MeetingCaptureDependencies = {
     dataContext: {
-      withDataContext: async (_actor, run) => {
+      withDataContext: async (actor, run) => {
         active++;
+        const db = {} as Parameters<typeof run>[0];
+        actors.set(db, actor.actorUserId);
         try {
-          return await run({} as Parameters<typeof run>[0]);
+          return await run(db);
         } finally {
           active--;
         }
@@ -192,7 +217,7 @@ export function fixture(selection?: MeetingCaptureSelection) {
       }))
     ),
     trustedOrigins: ["https://moss.example"],
-    now: () => at(2000)
+    now
   };
   const connections = new MeetingCaptureConnectionRepository();
   vi.spyOn(connections, "lock").mockResolvedValue();
@@ -208,7 +233,12 @@ export function fixture(selection?: MeetingCaptureSelection) {
     last_seen_at: at(2000),
     expires_at: at(7200000)
   };
-  vi.spyOn(connections, "connection").mockImplementation(async () => connection);
+  const connectionRows = [connection];
+  vi.spyOn(connections, "connection").mockImplementation(
+    async (db, id) =>
+      connectionRows.find((row) => row.device_id === id && row.owner_user_id === actors.get(db)) ??
+      null
+  );
   const preferences = new MeetingPreferencesRepository();
   vi.spyOn(preferences, "get").mockResolvedValue({
     rememberedSource: { deviceId, microphoneId: "mic-device", mode: "microphone-only" },
@@ -223,12 +253,42 @@ export function fixture(selection?: MeetingCaptureSelection) {
     service,
     preferences,
     connection,
+    connectionRows,
     connections,
     grant,
+    grantRows,
     ingest,
+    transcript,
     repository,
     receipts,
+    receiptsFor,
     headers: { authorization: `Bearer ${credential}` },
     browser: { actorUserId: owner, sessionId: grant.session_id!, expiresAt: grant.expires_at }
   };
+}
+
+export function addRecording(
+  f: ReturnType<typeof fixture>,
+  identity: Partial<Pick<CaptureGrant, "id" | "meeting_id" | "owner_user_id" | "device_id">> = {}
+) {
+  const grant = {
+    ...f.grant,
+    id: randomUUID(),
+    meeting_id: randomUUID(),
+    device_id: randomUUID(),
+    session_id: randomUUID(),
+    connection_id: randomUUID(),
+    ...identity
+  };
+  const credential = `mm1_${grant.owner_user_id}.${grant.id}.${"t".repeat(43)}`;
+  grant.credential_hash = createHash("sha256").update(credential).digest("hex");
+  const connection = {
+    ...f.connection,
+    owner_user_id: grant.owner_user_id,
+    device_id: grant.device_id,
+    connection_id: grant.connection_id
+  };
+  f.grantRows.push(grant);
+  f.connectionRows.push(connection);
+  return { grant, connection, headers: { authorization: `Bearer ${credential}` } };
 }
