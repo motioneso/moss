@@ -79,27 +79,20 @@ function SourceChoice({
     </button>
   );
 }
-function Pill({
-  showClose = false,
-  showSources = false
-}: {
-  showClose?: boolean;
-  showSources?: boolean;
-}) {
+function Pill({ showSources = false }: { showSources?: boolean }) {
   const icon = { width: 14, height: 14 };
   return (
     <div
       aria-label="Recording controls"
       className="meeting-recording-pill"
-      data-close-visible={showClose || undefined}
       style={{
         position: "relative",
-        width: 248,
+        width: 222,
         height: 32,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 var(--space-3)",
+        padding: "0 2px 0 var(--space-3)",
         border: "0.8px solid var(--meeting-pill-border)",
         borderRadius: "var(--radius-pill)",
         background: "var(--meeting-pill-surface)",
@@ -170,27 +163,32 @@ function Pill({
       >
         <Square style={{ width: 10, height: 10 }} fill="currentColor" strokeWidth={0} />
       </IconButton>
-      <span
-        aria-hidden
-        data-close-divider
-        style={{ width: 1, height: 16, background: "var(--meeting-pill-border)" }}
-      />
-      <IconButton
-        aria-label="Hide recording pill"
-        title="Hide recording pill"
-        style={{
-          width: 20,
-          height: 20,
-          minWidth: 20,
-          minHeight: 20,
-          padding: 0,
-          borderRadius: "var(--radius-pill)",
-          background: "var(--meeting-pill-surface)",
-          color: "var(--meeting-pill-pause-ink)"
-        }}
+      <div
+        data-close-section
+        style={{ display: "flex", alignItems: "center", gap: 3, width: 24, flexShrink: 0 }}
       >
-        <X style={{ width: 10, height: 10 }} strokeWidth={2} />
-      </IconButton>
+        <span
+          aria-hidden
+          data-close-divider
+          style={{ width: 1, height: 16, background: "var(--meeting-pill-border)" }}
+        />
+        <IconButton
+          aria-label="Hide recording pill"
+          title="Hide recording pill"
+          style={{
+            width: 20,
+            height: 20,
+            minWidth: 20,
+            minHeight: 20,
+            padding: 0,
+            borderRadius: "var(--radius-pill)",
+            background: "var(--meeting-pill-surface)",
+            color: "var(--meeting-pill-pause-ink)"
+          }}
+        >
+          <X style={{ width: 10, height: 10 }} strokeWidth={2} />
+        </IconButton>
+      </div>
       <div
         className="jds-menu__list meeting-source-menu"
         role="menu"
@@ -246,11 +244,9 @@ function Pill({
 
 function Meeting({
   recording = false,
-  showClose = false,
   showSources = false
 }: {
   recording?: boolean;
-  showClose?: boolean;
   showSources?: boolean;
 }) {
   return (
@@ -282,7 +278,7 @@ function Meeting({
       </div>
       {recording && (
         <aside style={{ position: "fixed", bottom: "var(--space-6)", right: "var(--space-6)" }}>
-          <Pill showClose={showClose} showSources={showSources} />
+          <Pill showSources={showSources} />
         </aside>
       )}
     </Shell>
@@ -341,8 +337,8 @@ const pages = [
               checked
             />
             <p className="jds-hint">
-              Send the finalized transcript and notes to your default model after Stop.
-              Turn this off to use Rewrite summary only when you choose.
+              Send the finalized transcript and notes to your default model after Stop. Turn this
+              off to use Rewrite summary only when you choose.
             </p>
           </div>
           <div>
@@ -359,11 +355,7 @@ function document(title: string, content: ReactNode) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Moss mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="tokens.css">${pillStyles}<style>${base}</style></head><body>${renderToStaticMarkup(content)}${title.startsWith("Recording") ? '<script src="pill-preview.js"></script>' : ""}</body></html>`;
 }
 for (const p of pages) writeFileSync(resolve(out, p.file + ".html"), document(p.title, p.content));
-// Explicit states make the transient controls reviewable without pointer interaction.
-writeFileSync(
-  resolve(out, "03-recording-hover.html"),
-  document("Recording · Close control", <Meeting recording showClose />)
-);
+// The open menu is a separate review view; the close control is always visible.
 writeFileSync(
   resolve(out, "03-recording-sources.html"),
   document("Recording · Audio sources", <Meeting recording showSources />)
