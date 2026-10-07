@@ -12,9 +12,10 @@ This records owner-chat approval, not a GitHub review.
 
 The corrected four-state mockups and their provenance belong to the
 [design PR #3077](https://github.com/motioneso/moss/pull/3077), rather than being duplicated
-in this implementation PR. The original approved four-state source is
-[#3087 at 5bca8dfb](https://github.com/motioneso/moss/tree/5bca8dfb88cc6f436f599345fdf66e0150b89fac/docs/superpowers/specs/meetings-setup-wizard).
-The requirements below supersede its old meter treatment and preserve the automatic-summary switch.
+in this implementation PR. The canonical four-state source is
+[#3087 at 0d3291c2](https://github.com/motioneso/moss/tree/0d3291c2ae0a3fa89126970cbe4bab08bffb0688/docs/superpowers/specs/meetings-setup-wizard).
+That later owner-requested correction matches the white three-bar pill and shipped automatic-summary switch.
+The original 2026-10-06 approval date does not claim a fresh rendered review of those corrections.
 
 Ordinary approval presentation is maintained separately in
 [approval-card](https://github.com/motioneso/moss/blob/main/docs/superpowers/specs/approval-card/index.html), approved in #3089 and refined by merged
