@@ -56,7 +56,9 @@ function Approval({ record }: { record: ApprovalRecord }) {
           </dl>
         )}
         {record.outsideContent && (
-          <p className="jds-hint approval-notice">Outside content read; approval needed.</p>
+          <p className="jds-hint approval-notice">
+            moss read something from outside your account before asking this.
+          </p>
         )}
         <div className="approval-actions">
           <Button variant={record.title.startsWith("Delete") ? "danger" : "primary"}>
@@ -174,7 +176,7 @@ const screens = [
   }))
 ];
 function document(title: string, content: ReactNode) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Moss mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="mockup.css"></head><body>${renderToStaticMarkup(content)}</body></html>\n`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Moss mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="mockup.css"></head><body>${renderToStaticMarkup(content).replaceAll('<p class="approval-target">', '<!-- prettier-ignore --><p class="approval-target">')}</body></html>\n`;
 }
 for (const p of screens)
   writeFileSync(resolve(out, p.file + ".html"), document(p.title, p.content));
