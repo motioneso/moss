@@ -11,6 +11,7 @@ import { registerMeetingCaptureRoutes } from "../../packages/meetings/src/captur
 import type { MeetingCaptureDependencies } from "../../packages/meetings/src/capture-service.js";
 import { MeetingCaptureRepository } from "../../packages/meetings/src/capture-repository.js";
 import { MeetingRecordsRepository } from "../../packages/meetings/src/repository.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import {
   connectionStrings,
   resetEmptyFoundationDatabase,
@@ -19,6 +20,7 @@ import {
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const inventory = {
+  defaultMicrophoneId: "fixture-mic",
   microphones: [{ deviceId: "fixture-mic", sourceId: "mic", label: "Synthetic microphone" }],
   applications: [],
   computerAudio: { available: false, excludedProcessTreeIds: [] },
@@ -122,6 +124,13 @@ export async function meetingLinkRevocationFixture() {
     transcribe,
     now: () => clock
   };
+  // Exercise the real persisted preference path used by request-key-only Start.
+  await context.withDataContext(browser, (db) =>
+    new MeetingPreferencesRepository().update(db, {
+      defaultCaptureMode: "microphone-only",
+      rememberedSource: { deviceId, microphoneId: "fixture-mic", mode: "microphone-only" }
+    })
+  );
   const meeting = await context.withDataContext(
     browser,
     async (db) =>
@@ -156,18 +165,13 @@ export async function meetingLinkRevocationFixture() {
       method: "POST",
       url: `/api/meetings/records/${meeting.id}/capture/start`,
       headers: browserHeaders,
-      payload: {
-        deviceId,
-        connectionId,
-        expectedRevision: registered.json().revision,
-        requestKey: randomUUID(),
-        selection: {
-          mode: "microphone-only",
-          microphone: { deviceId: "fixture-mic", sourceId: "mic" }
-        }
-      }
+      payload: { requestKey: randomUUID() }
     });
     expect(started.statusCode, "explicit-browser-start").toBe(200);
+    expect(started.json().capture.selection, "persisted-microphone-only-start-source").toEqual({
+      mode: "microphone-only",
+      microphone: { deviceId: "fixture-mic", sourceId: "mic" }
+    });
     const grantId = started.json<{ capture: { grantId: string } }>().capture.grantId;
     const credential = `mm1_${browser.actorUserId}.${grantId}.${"s".repeat(43)}`;
     const claimed = await server.inject({
