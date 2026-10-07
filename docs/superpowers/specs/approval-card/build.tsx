@@ -57,7 +57,7 @@ function Approval({ record }: { record: ApprovalRecord }) {
         )}
         {record.outsideContent && (
           <p className="jds-hint approval-notice">
-            moss read something from outside your account before asking this.
+            Moss read something from outside your account before asking this.
           </p>
         )}
         <div className="approval-actions">
