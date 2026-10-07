@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-07
+
+#### Fixed
+
+- **Clearer action outcomes.** Unattended writes now show a quiet result line, expired requests stay in their original chat, and saved questions stay before replies in history and exports. [PR #3091](https://github.com/motioneso/moss/pull/3091)
+
 ### 2026-10-06
 
 #### Changed
