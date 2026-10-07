@@ -5,15 +5,30 @@ import type { AppActionCallInput } from "./app-actions.js";
 type Validator = ReturnType<NonNullable<FastifyInstance["validatorCompiler"]>>;
 type Part = "body" | "querystring" | "params";
 
-/** Detect schema removal on the clone without dropping any submitted field from disclosure. */
-function removedSubmittedField(original: unknown, validated: unknown): boolean {
-  if (original === null || typeof original !== "object") return false;
-  if (validated === null || typeof validated !== "object") return true;
-  return Object.entries(original).some(
-    ([key, value]) =>
-      !Object.hasOwn(validated, key) ||
-      removedSubmittedField(value, (validated as Record<string, unknown>)[key])
-  );
+/** Return the first removed path; unsafe paths use an empty identifier, never submitted values. */
+function removedSubmittedField(
+  original: unknown,
+  validated: unknown,
+  path: string | null = ""
+): string | undefined {
+  if (original === null || typeof original !== "object") return undefined;
+  if (validated === null || typeof validated !== "object") return path ?? "";
+  for (const [key, value] of Object.entries(original)) {
+    const safeSegment = Array.isArray(original)
+      ? /^(?:0|[1-9][0-9]{0,9})$/.test(key)
+      : /^[A-Za-z_][A-Za-z0-9_-]{0,47}$/.test(key) &&
+        !["__proto__", "constructor", "prototype"].includes(key);
+    const nextPath =
+      path !== null && safeSegment && path.length + key.length + 1 <= 128 ? `${path}/${key}` : null;
+    if (!Object.hasOwn(validated, key)) return nextPath ?? "";
+    const removed = removedSubmittedField(
+      value,
+      (validated as Record<string, unknown>)[key],
+      nextPath
+    );
+    if (removed !== undefined) return removed;
+  }
+  return undefined;
 }
 
 /** Reuse the running server's compiler; validation never injects a route or grants execution. */
@@ -70,8 +85,9 @@ export function createAppActionValidator(server: FastifyInstance) {
       }
       const normalized =
         result !== null && typeof result === "object" && "value" in result ? result.value : clone;
-      if (removedSubmittedField(original, normalized))
-        return `Invalid ${label}: remove fields not declared for this action.`;
+      const removed = removedSubmittedField(original, normalized);
+      if (removed !== undefined)
+        return `Invalid ${label}${removed}: remove fields not declared for this action.`;
     }
     return null;
   };

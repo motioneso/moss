@@ -77,6 +77,34 @@ describe("invalid app input is validation failure, not missing presentation", ()
       ).toBe(true);
     }
   );
+
+  it("identifies only the first extra field without exposing its value or changing the submitted input", async () => {
+    const h = await harness();
+    const body = Object.freeze({
+      unit: "metric",
+      firstExtra: "PRIVATE_FIRST_VALUE",
+      secondExtra: "PRIVATE_SECOND_VALUE"
+    });
+    const original = structuredClone(body);
+    const result = await h.call({ method: "PUT", path: "/api/me/weather-unit", body });
+    expect(result).toMatchObject({
+      ok: true,
+      structuredData: {
+        ok: false,
+        status: 400,
+        body: { error: "Invalid body/firstExtra: remove fields not declared for this action." }
+      }
+    });
+    expect(JSON.stringify(result)).not.toContain("PRIVATE_FIRST_VALUE");
+    expect(JSON.stringify(result)).not.toContain("PRIVATE_SECOND_VALUE");
+    expect(JSON.stringify(result)).not.toContain("secondExtra");
+    expect(body).toEqual(original);
+    expect(h.handler).not.toHaveBeenCalled();
+    expect(h.mint).not.toHaveBeenCalled();
+    expect(h.transport).not.toHaveBeenCalled();
+    expect(h.repository.createPendingAssistantAction).not.toHaveBeenCalled();
+    expect(h.events.some((event) => event.kind === "action_request")).toBe(false);
+  });
 });
 
 it("valid fields retain complete disclosure and never receive a validation-only execution grant", async () => {
@@ -164,7 +192,7 @@ describe("schema preflight preserves submitted data and route normalization cont
       route,
       {}
     );
-    expect(result).toBe("Invalid body: remove fields not declared for this action.");
+    expect(result).toBe("Invalid body/options/extra: remove fields not declared for this action.");
     expect(result).not.toContain("PRIVATE_SUBMITTED");
     expect(body.options.extra).toBe("PRIVATE_SUBMITTED");
   });
@@ -190,9 +218,115 @@ describe("schema preflight preserves submitted data and route normalization cont
     const validate = createAppActionValidator(server);
     expect(await validate({ method: "GET", path: route.path, query }, route, {})).toBeNull();
     expect(query).toEqual({ lat: "48.8" });
+    const extraQuery = Object.freeze({ lat: "48.8", extra: "PRIVATE_QUERY_VALUE" });
+    expect(await validate({ method: "GET", path: route.path, query: extraQuery }, route, {})).toBe(
+      "Invalid query/extra: remove fields not declared for this action."
+    );
+    expect(extraQuery).toEqual({ lat: "48.8", extra: "PRIVATE_QUERY_VALUE" });
     expect(
       await validate({ method: "GET", path: route.path, query: { lat: "91" } }, route, {})
     ).toContain("Invalid query/lat");
+  });
+});
+
+describe("stripped field corrections expose only safe bounded identifiers", () => {
+  const itemSchema = {
+    type: "object",
+    additionalProperties: false,
+    properties: { label: { type: "string" } }
+  } as const;
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      items: { type: "array", items: itemSchema },
+      options: itemSchema,
+      "unsafe\nparent": itemSchema,
+      ["p".repeat(48)]: {
+        type: "object",
+        properties: { ["q".repeat(48)]: itemSchema }
+      }
+    }
+  } as const;
+  const genericCorrection = "Invalid body: remove fields not declared for this action.";
+
+  it.each([
+    {
+      name: "array index and nested extra field",
+      body: {
+        items: [{ label: "PRIVATE_KEPT" }, { label: "PRIVATE_KEPT", extra: "PRIVATE_VALUE" }]
+      },
+      correction: "Invalid body/items/1/extra: remove fields not declared for this action."
+    },
+    {
+      name: "ordinary underscore identifier",
+      body: { options: { extra_field: "PRIVATE_VALUE", "other-field": "PRIVATE_VALUE" } },
+      correction: "Invalid body/options/extra_field: remove fields not declared for this action."
+    },
+    {
+      name: "ordinary dash identifier",
+      body: { options: { "extra-field": "PRIVATE_VALUE" } },
+      correction: "Invalid body/options/extra-field: remove fields not declared for this action."
+    },
+    {
+      name: "maximum segment length",
+      body: { options: { ["x".repeat(48)]: "PRIVATE_VALUE" } },
+      correction: `Invalid body/options/${"x".repeat(48)}: remove fields not declared for this action.`
+    },
+    {
+      name: "maximum total path length",
+      body: { ["p".repeat(48)]: { ["q".repeat(48)]: { ["r".repeat(29)]: "PRIVATE_VALUE" } } },
+      correction: `Invalid body/${"p".repeat(48)}/${"q".repeat(48)}/${"r".repeat(29)}: remove fields not declared for this action.`
+    },
+    ...[
+      "unsafe\nkey",
+      "unsafe\u0000key",
+      "unsafe\u202ekey",
+      "private/key",
+      "<script>",
+      "private key",
+      "x".repeat(49),
+      "__proto__",
+      "constructor",
+      "prototype"
+    ].map((key) => ({
+      name: `unsafe field ${JSON.stringify(key)}`,
+      body: { options: { [key]: "PRIVATE_VALUE", safeLater: "PRIVATE_LATER_VALUE" } },
+      correction: genericCorrection
+    })),
+    {
+      name: "unsafe ancestor",
+      body: { "unsafe\nparent": { extra: "PRIVATE_VALUE" } },
+      correction: genericCorrection
+    },
+    {
+      name: "bounded total path length",
+      body: { ["p".repeat(48)]: { ["q".repeat(48)]: { ["r".repeat(30)]: "PRIVATE_VALUE" } } },
+      correction: genericCorrection
+    }
+  ])("$name", async ({ body, correction }) => {
+    const server = Fastify();
+    servers.push(server);
+    const handler = vi.fn(async () => ({}));
+    server.post("/field-identifiers", { schema: { body: schema } }, handler);
+    await server.ready();
+    const route = {
+      moduleId: "example",
+      method: "POST",
+      path: "/field-identifiers",
+      policy: { access: "write", content: "user_authored" },
+      inputShape: { body: schema }
+    } as const;
+    const original = structuredClone(body);
+    const result = await createAppActionValidator(server)(
+      { method: "POST", path: route.path, body },
+      route,
+      {}
+    );
+    expect(result).toBe(correction);
+    expect(result).not.toContain("PRIVATE_");
+    expect(body).toEqual(original);
+    expect(handler).not.toHaveBeenCalled();
   });
 });
 

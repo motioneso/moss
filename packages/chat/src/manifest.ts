@@ -125,7 +125,7 @@ export const chatModuleManifest = {
           code: "invalid_input",
           class: "validation",
           description:
-            "Invalid fields or impossible target changes return a correction before approval; nothing executes. Correct the fields or choose a specific target and ask again."
+            "Invalid fields or impossible target changes return a correction before approval; nothing executes. The quiet row says details need correcting. Extra-field errors identify safe field names, never values. Correct the fields and ask again."
         },
         {
           code: "approval_unavailable",

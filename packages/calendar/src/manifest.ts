@@ -606,6 +606,11 @@ export const calendarModuleManifest = {
       ]
     },
     {
+      id: "calendar.draft_removal_disclosure",
+      description:
+        "Draft approval separates list changes from an empty block list. Every omitted block is identified; if its task is gone and it has no title, its kind and position identify it without exposing internal IDs."
+    },
+    {
       id: "calendar.saved_day_plan_draft",
       description:
         "Save evening intent and draft blocks. Approval lists every omitted block that the replacement removes from the draft. Placed blocks require pending removal. Draft saves never schedule or write calendar events.",

@@ -123,7 +123,7 @@ class PlanDisclosure {
     if (!Array.isArray(value)) throw new Error("Invalid blocks");
     if (!additions) {
       this.add(
-        "Draft blocks",
+        "Draft changes",
         "Replace the current list; omitted blocks are removed from this draft only"
       );
       const retained = new Set(value.map((item) => object(item)?.id));
@@ -134,11 +134,12 @@ class PlanDisclosure {
           throw new ApprovalInputError(
             "Placed calendar blocks must be kept in the draft with a pending removal; omitting them cannot save the plan."
           );
+        // Removing an existing owner-bound draft block does not require its task to survive.
+        // Keep the block identity in the plan snapshot; never invent or expose a missing task name.
         const name =
           block.title ??
-          (block.taskId
-            ? await this.task(block.taskId)
-            : `${choice(block.kind, "kind")} block ${index + 1}`);
+          (block.taskId ? await this.task(block.taskId) : null) ??
+          `${choice(block.kind, "kind") ?? "Draft"} block ${index + 1}`;
         this.add(`Removed block ${++removed}`, name);
       }
     }

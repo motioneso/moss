@@ -159,7 +159,7 @@ describe("day-plan human disclosure", () => {
       ctx
     );
     expect(view?.fields).toContainEqual({
-      label: "Draft blocks",
+      label: "Draft changes",
       value: "Replace the current list; omitted blocks are removed from this draft only"
     });
     expect(view?.fields.filter((field) => field.label.startsWith("Removed block"))).toEqual([
@@ -209,7 +209,7 @@ describe("day-plan human disclosure", () => {
       "Placed calendar blocks must be kept in the draft with a pending removal; omitting them cannot save the plan."
     );
   });
-  it("names unlinked omitted blocks by kind and position and refuses unreadable linked names", async () => {
+  it("names omitted blocks honestly when linked task details are unavailable", async () => {
     const body = { date: plan.localDay, timeZone: plan.timeZone, expectedRevision: 3, blocks: [] };
     getById.mockResolvedValue({
       ...plan,
@@ -224,7 +224,29 @@ describe("day-plan human disclosure", () => {
       blocks: [{ id: "linked-id", title: null, taskId: "foreign-task", kind: "focus" }]
     });
     findTask.mockResolvedValue({ ...task, owner_user_id: "other" });
-    expect(await saveDayPlanPresentation(db, route(body), ctx)).toBeNull();
+    const unavailable = await saveDayPlanPresentation(db, route(body), ctx);
+    expect(unavailable?.fields).toContainEqual({
+      label: "Removed block 1",
+      value: "Focus block 1"
+    });
+    expect(JSON.stringify(unavailable?.fields)).not.toContain(task.title);
+    findTask.mockResolvedValue(undefined);
+    const deleted = await saveDayPlanPresentation(db, route(body), ctx);
+    expect(deleted).toEqual(unavailable);
+    expect(deleted?.fields).toContainEqual({
+      label: "Draft changes",
+      value: "Replace the current list; omitted blocks are removed from this draft only"
+    });
+    expect(deleted?.fields).toContainEqual({ label: "Draft blocks", value: "None" });
+    expect(deleted?.fields.filter((field) => field.label === "Draft blocks")).toHaveLength(1);
+    getById.mockResolvedValue({
+      ...plan,
+      blocks: [{ id: "replacement-block-id", title: null, taskId: "foreign-task", kind: "focus" }]
+    });
+    const replacement = await saveDayPlanPresentation(db, route(body), ctx);
+    expect(replacement?.fields).toEqual(deleted?.fields);
+    expect(replacement?.version).not.toBe(deleted?.version);
+    expect(JSON.stringify(replacement?.fields)).not.toContain("replacement-block-id");
   });
   it("versions authoritative changes without putting IDs in displayed values", async () => {
     const input = { planId: plan.id, expectedRevision: 3, additions: [{ taskId: task.id }] };
