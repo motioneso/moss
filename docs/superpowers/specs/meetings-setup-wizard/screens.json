@@ -1,86 +1,18 @@
 [
   {
-    "file": "01-get-app",
-    "title": "Get Trail Marker"
+    "file": "01-not-linked",
+    "title": "Not linked"
   },
   {
-    "file": "02-connect",
-    "title": "Connect your Mac"
+    "file": "02-ready",
+    "title": "Ready"
   },
   {
-    "file": "03-approve",
-    "title": "Approve this Mac"
+    "file": "03-recording",
+    "title": "Recording"
   },
   {
-    "file": "04-waiting",
-    "title": "Waiting for your Mac"
-  },
-  {
-    "file": "05-linked",
-    "title": "Your Mac is linked"
-  },
-  {
-    "file": "06-microphone",
-    "title": "Allow the microphone"
-  },
-  {
-    "file": "06-microphone-allowed",
-    "title": "Microphone allowed"
-  },
-  {
-    "file": "07-computer-audio",
-    "title": "Allow computer audio"
-  },
-  {
-    "file": "07-computer-audio-allowed",
-    "title": "Computer audio allowed"
-  },
-  {
-    "file": "08-listen-to",
-    "title": "Choose what to hear"
-  },
-  {
-    "file": "08-listen-to-one-app",
-    "title": "Listen to one app"
-  },
-  {
-    "file": "09-choose-microphone",
-    "title": "Choose a microphone"
-  },
-  {
-    "file": "10-summary",
-    "title": "Summary when you stop"
-  },
-  {
-    "file": "11-notice",
-    "title": "Recording notice"
-  },
-  {
-    "file": "12-ready",
-    "title": "Ready meeting"
-  },
-  {
-    "file": "13-mac-not-connected",
-    "title": "Your Mac hasn’t connected"
-  },
-  {
-    "file": "14-approval-expired",
-    "title": "The approval has expired"
-  },
-  {
-    "file": "15-permission-denied",
-    "title": "Microphone access is off"
-  },
-  {
-    "file": "16-settings-before-after",
-    "title": "Settings before and after"
-  },
-  {
-    "file": "17-settings-advanced",
-    "title": "Advanced meeting settings"
-  },
-  {
-    "file": "18-recording-pill",
-    "title": "Smaller recording pill"
+    "file": "04-settings",
+    "title": "Settings"
   }
 ]

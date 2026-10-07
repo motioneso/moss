@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Meetings · Moss mockup</title>
+    <title>Not linked · Moss mockup</title>
     <link rel="stylesheet" href="moss-ui.css" />
     <style>
       * {
@@ -44,19 +44,33 @@
     </style>
   </head>
   <body>
+    <header
+      style="
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-4) var(--space-6);
+        border-bottom: 1px solid var(--border);
+      "
+    >
+      <strong style="font-family: var(--font-display); font-size: var(--text-xl)">moss</strong
+      ><span class="jds-hint">Meetings</span
+      ><span style="margin-left: auto"
+        ><a href="04-settings.html" class="jds-btn jds-btn--quiet">Settings</a></span
+      >
+    </header>
     <main
-      style="display: flex; flex-direction: column; gap: var(--space-5); padding: var(--space-7)"
+      style="display: flex; flex-direction: column; gap: var(--space-7); padding: var(--space-6)"
     >
       <div class="jds-section-head"><h1 class="jds-section-head__title">Meetings</h1></div>
-      <nav
-        aria-label="Mockup states"
-        style="display: flex; flex-direction: column; gap: var(--space-5); align-items: flex-start"
-      >
-        <a href="01-not-linked.html" class="jds-btn jds-btn--link">Not linked</a
-        ><a href="02-ready.html" class="jds-btn jds-btn--link">Ready</a
-        ><a href="03-recording.html" class="jds-btn jds-btn--link">Recording</a
-        ><a href="04-settings.html" class="jds-btn jds-btn--link">Settings</a>
-      </nav>
+      <div class="jds-empty">
+        <div class="jds-empty__title">Link your Mac</div>
+        <div class="jds-empty__sub">Open Trail Marker and follow its linking instructions.</div>
+        <div style="margin-top: var(--space-5)">
+          <button type="button" class="jds-btn jds-btn--primary">Download app</button>
+        </div>
+      </div>
     </main>
   </body>
 </html>
