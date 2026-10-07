@@ -8,6 +8,7 @@ import { captureMetadataJson } from "./capture-metadata.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import { isUuid, type AccessContext, type DataContextDb, type DataContextRunner } from "@moss/db";
+import { MEETING_CAPTURE_LEASE_MS } from "@moss/shared";
 import type {
   MeetingCaptureAudioInput,
   MeetingCaptureAudioReceipt,
@@ -461,7 +462,7 @@ export class MeetingCaptureService {
           connection.connection_id !== grant.connection_id ||
           connection.capability_revision !== grant.capability_revision ||
           connection.expires_at <= this.now() ||
-          this.now().getTime() - connection.last_seen_at.getTime() > 30000
+          this.now().getTime() - connection.last_seen_at.getTime() > MEETING_CAPTURE_LEASE_MS
         )
           throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
         const inventory = JSON.parse(connection.inventory_json) as NonNullable<
@@ -472,14 +473,17 @@ export class MeetingCaptureService {
         if (!input.selection)
           command = {
             ...input,
-            selection: savedCaptureSelection(
-              resolveCaptureSource(
-                await readMeetingCapturePreferences(db),
-                grant.device_id,
-                inventory
-              ),
-              inventory
-            )
+            selection:
+              state.desired === "paused"
+                ? state.epochs.at(-1)?.selection
+                : savedCaptureSelection(
+                    resolveCaptureSource(
+                      await readMeetingCapturePreferences(db),
+                      grant.device_id,
+                      inventory
+                    ),
+                    inventory
+                  )
           };
       }
       applyCaptureControl(state, command, this.now(), processing?.modelRoute ?? "");
