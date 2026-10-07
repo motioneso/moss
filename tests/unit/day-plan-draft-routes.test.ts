@@ -352,6 +352,8 @@ describe("saved day-plan draft route", () => {
     const feature = calendarModuleManifest.features.find(
       (entry) => entry.id === "calendar.saved_day_plan_draft"
     );
-    expect(feature?.description).toMatch(/not previewed, approved, scheduled/i);
+    expect(feature?.description).toBe(
+      "Save evening intent and draft blocks. Approval lists every omitted block that the replacement removes from the draft. Placed blocks require pending removal. Draft saves never schedule or write calendar events."
+    );
   });
 });
