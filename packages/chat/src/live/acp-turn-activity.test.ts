@@ -53,6 +53,10 @@ class FakePersistence implements ChatPersistencePort {
 
   async openNewConversation(): Promise<void> {}
 
+  async getCurrentThreadState() {
+    return { id: "thread-1", incognito: false };
+  }
+
   async getThreadContext(): Promise<{
     threadTitle: string | null;
     localTimezone: string | null;
@@ -368,6 +372,7 @@ describe("task 8a Architect regressions", () => {
         });
         return engineRef;
       },
+      conversationProvenance: { recordAdmission: async () => {} },
       persistence,
       personaFs: noopPersonaFs,
       clock,
@@ -415,6 +420,7 @@ describe("task 8a Architect regressions", () => {
         kind: "action_result",
         actionRequestId: "tc-1",
         toolName: "calendar.list",
+        summary: "List calendar events",
         outcome: "executed",
         decidedBy: "person",
         durationMs: 1500,
@@ -463,6 +469,14 @@ describe("task 8a Architect regressions", () => {
     expect(activity[1]?.text).toBe("calendar.list, today");
     expect(activity[2]?.text).toBe("Found 2 events");
     expect(activity[4]?.text).toMatch(/calendar\.list, approved by you at \d\d:\d\d after 2 s/);
+    for (const record of [activity[3], activity[4], recorded.opts?.actionResults?.[0]]) {
+      expect(record).toMatchObject({
+        actionRequestId: "tc-1",
+        summary: "List calendar events",
+        outcome: "executed",
+        decidedBy: "person"
+      });
+    }
 
     // Elapsed alone when usage absent
     const tunnel2 = new MockTunnel();
@@ -545,6 +559,7 @@ describe("task 8a Architect regressions", () => {
         });
         return engineRef;
       },
+      conversationProvenance: { recordAdmission: async () => {} },
       persistence,
       personaFs: noopPersonaFs,
       clock,

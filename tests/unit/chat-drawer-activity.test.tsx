@@ -62,9 +62,11 @@ describe("chat drawer activity outcomes", () => {
     expect(html).toContain("Tool");
     expect(html).toContain("Result");
     expect(html).toContain("Approved");
-    expect(html.indexOf("Plan more")).toBeLessThan(html.indexOf("calendar.list"));
-    expect(html.indexOf("calendar.list")).toBeLessThan(html.indexOf("2 events"));
-    expect(html.indexOf("2 events")).toBeLessThan(html.indexOf("Approved by you"));
+    expect(html.indexOf("Plan more")).toBeLessThan(html.indexOf("Working on your request."));
+    expect(html.indexOf("Working on your request.")).toBeLessThan(html.indexOf("Step finished."));
+    expect(html.indexOf("Step finished.")).toBeLessThan(html.indexOf("Approved."));
+    expect(html).not.toContain("calendar.list");
+    expect(html).toContain("4 steps");
   });
 
   it("keeps per-turn sequence resets in their originating live turn", () => {
@@ -357,13 +359,20 @@ describe("chat drawer activity outcomes", () => {
         records: [
           { kind: "thinking", text: "Checking" },
           { kind: "reply", text: "I changed that." },
-          { kind: "action_result", text: "LinkedIn monitoring enabled", outcome: "executed" }
+          {
+            kind: "action_result",
+            text: "Executed: settings.write",
+            outcome: "executed",
+            decidedBy: "person",
+            summary: "Enable LinkedIn monitoring"
+          }
         ]
       })
     );
     expect(html).toContain("Thinking");
-    expect(html).toContain("LinkedIn monitoring enabled");
-    expect(html.indexOf("LinkedIn monitoring enabled")).toBeGreaterThan(
+    expect(html.replaceAll("<!-- -->", "")).toContain("Approved · Enable LinkedIn monitoring");
+    expect(html).not.toContain("settings.write");
+    expect(html.indexOf("Enable LinkedIn monitoring")).toBeGreaterThan(
       html.indexOf("I changed that.")
     );
   });
@@ -380,7 +389,7 @@ describe("chat drawer activity outcomes", () => {
     );
   });
 
-  it("shows the standalone chip's true outcome for allowed and failed actions", () => {
+  it("does not invent an approval decision from legacy execution-only metadata", () => {
     // #1784: the standalone line used to collapse four outcomes into a Changed/Not-changed guess,
     // wrongly calling "allowed" a change it never observed and calling "error" unchanged.
     const html = renderToString(
@@ -391,8 +400,9 @@ describe("chat drawer activity outcomes", () => {
         ]
       })
     );
-    expect(html).toContain(">Allowed<");
-    expect(html).toContain(">Failed<");
+    expect(html).not.toContain("Granted:");
+    expect(html).not.toContain("Broke:");
+    expect(html).not.toContain("Approved");
     expect(html).not.toContain("Changed");
     expect(html).not.toContain("Not changed");
   });

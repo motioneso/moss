@@ -129,6 +129,8 @@ export type GatewaySessionRecord =
       readonly actionRequestId: string;
       readonly toolName: string;
       readonly outcome: "executed" | "denied" | "error" | "allowed";
+      /** Server-resolved action title, independent of handler output and live card details. */
+      readonly summary?: string;
       /** Decision provenance; execution outcome is intentionally separate. */
       readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
       /** Time from the approval card becoming visible to its answer. */

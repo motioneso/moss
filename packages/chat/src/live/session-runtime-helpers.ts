@@ -207,8 +207,11 @@ export function injectActionResultRecord(
     options.actionResults.push({
       kind: "action_result",
       text: (record.text ?? "").slice(0, 200),
+      ...(record.actionRequestId ? { actionRequestId: record.actionRequestId } : {}),
       ...(record.toolName ? { toolName: record.toolName.slice(0, 120) } : {}),
-      outcome: record.outcome
+      ...(record.summary ? { summary: record.summary.slice(0, 200) } : {}),
+      outcome: record.outcome,
+      ...(record.decidedBy ? { decidedBy: record.decidedBy } : {})
     });
   }
 
@@ -249,8 +252,15 @@ export function injectActionResultRecord(
           sequence: approvalSequence
         });
   if (mappedRecord) {
-    if (options.turnRecords) upsertActivityRecord(options.turnRecords, mappedRecord);
-    options.emit(mappedRecord);
+    const approvalRecord = {
+      ...mappedRecord,
+      ...(record.actionRequestId ? { actionRequestId: record.actionRequestId } : {}),
+      ...(record.summary ? { summary: record.summary } : {}),
+      outcome: record.outcome,
+      ...(record.decidedBy ? { decidedBy: record.decidedBy } : {})
+    };
+    if (options.turnRecords) upsertActivityRecord(options.turnRecords, approvalRecord);
+    options.emit(approvalRecord);
   }
 }
 

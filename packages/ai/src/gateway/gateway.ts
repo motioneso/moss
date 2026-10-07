@@ -882,6 +882,7 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName: found.dto.name,
           outcome: "denied",
+          ...(found.resolution ? { summary: found.resolution.summary } : {}),
           decidedBy:
             outcome === "timeout" ? "timeout" : outcome === "cancelled" ? "cancelled" : "person",
           holdDurationMs: actionHoldDurationMs(holdStartedAt),
@@ -910,6 +911,7 @@ export class AssistantToolGateway {
         actionRequestId: action.id,
         toolName: found.dto.name,
         outcome: audit.errorClass === null ? "executed" : "error",
+        ...(found.resolution ? { summary: found.resolution.summary } : {}),
         decidedBy: "person",
         holdDurationMs: actionHoldDurationMs(holdStartedAt),
         ...(result.ok

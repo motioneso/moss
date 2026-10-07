@@ -1,4 +1,8 @@
-import type { ActionRequestDetails } from "@moss/shared";
+import {
+  actionApprovalOutcome,
+  type ActionRequestDetails,
+  type TranscriptRecord
+} from "@moss/shared";
 import { Button } from "@moss/ui";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle, LoaderCircle, XCircle } from "lucide-react";
@@ -15,6 +19,10 @@ interface ActionRequestCardProps {
   readonly preview?: ActionRequestPreview;
   readonly details?: ActionRequestDetails;
   readonly outsideContentNotice?: boolean;
+  readonly outcome?: TranscriptRecord["outcome"];
+  readonly decidedBy?: TranscriptRecord["decidedBy"];
+  /** Terminal server-owned title; pending summaries may contain technical request details. */
+  readonly outcomeTitle?: string;
   readonly focusRequested?: boolean;
   readonly onFocusComplete?: () => void;
 }
@@ -33,10 +41,10 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
   });
 
   useEffect(() => {
-    if (mutation.isSuccess || mutation.isError) {
+    if (mutation.isSuccess || mutation.isError || actionApprovalOutcome(props)) {
       rootRef.current?.focus();
     }
-  }, [mutation.isSuccess, mutation.isError]);
+  }, [mutation.isSuccess, mutation.isError, props.outcome, props.decidedBy]);
 
   useEffect(() => {
     if (!props.focusRequested) return;
@@ -52,7 +60,7 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
     mutation.mutate(next);
   }
 
-  // #1250 — server returns 409 for expired requests; card stays showing expiration message
+  // #1250 — only an owned, still-pending request with no live waiter returns 409.
   const isExpired =
     mutation.isError && mutation.error instanceof ApiError && mutation.error.status === 409;
   const errorMessage = mutation.isError
@@ -62,6 +70,26 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
         ? mutation.error.message
         : "Could not resolve"
     : null;
+
+  const outcome =
+    actionApprovalOutcome(props) ??
+    (mutation.isSuccess
+      ? mutation.data === "rejected"
+        ? "You declined"
+        : "Approved"
+      : isExpired
+        ? "Timed out"
+        : null);
+  if (outcome) {
+    return (
+      <div ref={rootRef} tabIndex={-1} data-action-request-id={props.actionRequestId}>
+        <p className="chatd-status" role="status">
+          {outcome}
+          {props.outcomeTitle ? ` · ${props.outcomeTitle}` : ""}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -79,15 +107,8 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
           the action does in plain words, so the eyebrow's real job here is to mark the card as a
           decision and then say how it went. `data-state` rather than a second class so the styling
           hook and the text stay derived from one value. */}
-      <div
-        className="action-request-preview__label"
-        data-state={mutation.isSuccess ? mutation.data : "pending"}
-      >
-        {mutation.isSuccess
-          ? mutation.data === "rejected"
-            ? "Not approved"
-            : "Approved"
-          : "Needs your approval"}
+      <div className="action-request-preview__label" data-state="pending">
+        Needs your approval
       </div>
       <p className="action-request-summary">{props.summary}</p>
 

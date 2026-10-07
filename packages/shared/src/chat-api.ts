@@ -24,6 +24,10 @@ export function normalizeChatSurface(value?: unknown): ChatSurface {
 }
 
 export interface ChatActivityEventDto {
+  /** Correlates a server approval decision without retaining its input preview. */
+  readonly actionRequestId?: string;
+  /** Server-owned action title, never model-authored text. */
+  readonly summary?: string;
   readonly kind: string;
   readonly text: string;
   readonly id?: string;
@@ -470,7 +474,17 @@ const chatActivityEventSchema = {
   required: ["kind", "text"],
   properties: {
     kind: { type: "string" },
-    text: { type: "string" }
+    text: { type: "string" },
+    id: { type: "string" },
+    sequence: { type: "number" },
+    actionRequestId: { type: "string" },
+    toolName: { type: "string" },
+    summary: { type: "string" },
+    outcome: { type: "string", enum: ["executed", "denied", "error", "allowed"] },
+    toolCallId: { type: "string" },
+    durationMs: { type: "number" },
+    decidedBy: { type: "string", enum: ["person", "policy", "timeout", "cancelled"] },
+    reason: { type: "string" }
   }
 } as const;
 

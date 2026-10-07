@@ -787,8 +787,9 @@ export function ChatDrawer(props: {
             <Thread
               records={effectiveRecords}
               working={isWaiting}
-              renderRecord={(record) => (
+              renderRecord={(record, _index, context) => (
                 <RecordRow
+                  approvalOutcomeShown={context.approvalOutcomeShown}
                   record={record}
                   meetingScoped={Boolean(props.meetingContext)}
                   focusActionRequestId={props.focusActionRequestId}

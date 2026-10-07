@@ -24,7 +24,7 @@ export {
   activityVerb,
   groupRecords
 } from "./chat-thread.js";
-export type { ThreadRenderRecord } from "./chat-thread.js";
+export type { ThreadRenderRecord, ThreadRecordContext } from "./chat-thread.js";
 export { Chip } from "./chip.js";
 export { Combobox } from "./combobox.js";
 export type { ComboboxOption, ComboboxProps } from "./combobox.js";

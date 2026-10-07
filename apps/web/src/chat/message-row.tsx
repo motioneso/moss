@@ -20,7 +20,8 @@ import type {
   UsefulnessFeedbackDto,
   UsefulnessFeedbackKind
 } from "@moss/shared";
-import { BrandMark, ChatFreshnessFooter, Menu, activityVerb } from "@moss/ui";
+import { actionApprovalOutcome } from "@moss/shared";
+import { BrandMark, ChatFreshnessFooter, Menu } from "@moss/ui";
 
 import { queryKeys } from "../api/query-keys";
 import {
@@ -43,6 +44,7 @@ import { WorkflowApprovalCard } from "./workflow-approval-card";
 
 export function RecordRow(props: {
   readonly record: TranscriptRecord;
+  readonly approvalOutcomeShown?: boolean;
   readonly meetingScoped?: boolean;
   readonly focusActionRequestId?: string | null;
   readonly onActionRequestFocused?: () => void;
@@ -58,6 +60,9 @@ export function RecordRow(props: {
         preview={props.record.preview}
         details={props.record.details}
         outsideContentNotice={props.record.outsideContentNotice}
+        outcome={props.record.outcome}
+        decidedBy={props.record.decidedBy}
+        outcomeTitle={props.record.outcome ? props.record.summary : undefined}
         focusRequested={props.record.actionRequestId === props.focusActionRequestId}
         onFocusComplete={props.onActionRequestFocused}
       />
@@ -107,12 +112,14 @@ export function RecordRow(props: {
       }
     }
 
-    return (
-      <div className="chatd-peek__line" role="status">
-        <span className="chatd-peek__kind">{activityVerb(props.record)}</span>
-        {text}
-      </div>
-    );
+    if (props.approvalOutcomeShown) return null;
+    const outcome = actionApprovalOutcome(props.record);
+    return outcome ? (
+      <p className="chatd-status" role="status">
+        {outcome}
+        {props.record.summary ? ` · ${props.record.summary}` : ""}
+      </p>
+    ) : null;
   }
 
   // reply (and any unforeseen non-activity kind) — assistant bubble, rendered as markdown.

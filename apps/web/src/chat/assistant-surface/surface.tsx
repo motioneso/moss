@@ -154,7 +154,12 @@ export function AssistantSurface(props: AssistantSurfaceViewProps) {
             <div className={`jds-bubble jds-bubble--${row.role}`}>{row.content}</div>
           </div>
         ))}
-        <Thread records={visibleRecords} renderRecord={(record) => <RecordRow record={record} />} />
+        <Thread
+          records={visibleRecords}
+          renderRecord={(record, _index, context) => (
+            <RecordRow record={record} approvalOutcomeShown={context.approvalOutcomeShown} />
+          )}
+        />
         {props.typing ? <TypingRow /> : null}
         {props.activeControl ? (
           <div className="assistant-surface__row assistant-surface__row--control">

@@ -501,6 +501,30 @@ Nothing reaches live user data until every item above lands. Phase 1 ships as on
 
 - New approval card per the agreed mockup.
 
+### Phase 2 cleanup, 2026-10-07
+
+The resolved-state cleanup implements the four quiet outcomes in the merged approval-card
+artifacts: Approved, You declined, Timed out and Cancelled. The outcome replaces the whole
+pending card, including its target, field rows, controls and outside-context notice. There is no
+separate execution row. Approved records the decision, not successful completion of the action.
+The Thinking summary, step count and expansion behavior remain; technical activity entries use
+fixed human-readable text instead of tool identifiers or payloads. New terminal records retain
+server-owned action titles and decision identity through streaming and history reload. Older
+execution-only history without a decision does not invent an approval outcome.
+
+The outside-content rule already applies to every write through the shared gateway policy on
+main. This cleanup adds manifest-driven coverage across shipped built-in and installable writes,
+connected-tool origins, ordinary and classifier calls, and clean/tainted controls; it does not
+expand the policy. No allow-for-this-chat permission is added.
+
+Pending-card styling and human-field presentation are **not implemented by this cleanup**. The
+existing server-read title, full target and exact field disclosure remain. Generic calls still
+show technical Method/Path/Query/Body rows while pending: removing these safely needs server-owned
+field labels and ID resolution, not filtering or guessing from model text. The mockup fixtures
+are not a runtime contract. The pending redesign remains subject to Ben's separate review in
+#3090. This cleanup does not claim completion of the earlier before-approval presentation request
+or the live-path gate.
+
 ### Kill gate after phase 1
 
 Owner: Ben.

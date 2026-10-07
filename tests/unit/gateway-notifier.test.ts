@@ -271,4 +271,43 @@ describe("ChatGatewayNotifier app-action SSE fields", () => {
       })
     );
   });
+
+  it("retains only the resolved title independently of handler text and execution failure", () => {
+    const manager = makeManager();
+    new ChatGatewayNotifier(manager).emit("u1", {
+      kind: "action_result",
+      actionRequestId: "app-1",
+      toolName: "app.callAction",
+      summary: "  Remove\n saved theme  ",
+      outcome: "error",
+      decidedBy: "person",
+      reason: "Action could not finish.",
+      result: { statusText: "Untrusted replacement title" }
+    });
+    expect(manager.injectRecord).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({
+        actionRequestId: "app-1",
+        summary: "Remove saved theme",
+        outcome: "error",
+        decidedBy: "person"
+      })
+    );
+  });
+
+  it("does not invent an action title from the handler status or tool name", () => {
+    const manager = makeManager();
+    new ChatGatewayNotifier(manager).emit("u1", {
+      kind: "action_result",
+      actionRequestId: "app-1",
+      toolName: "app.callAction",
+      outcome: "executed",
+      result: { statusText: "Untrusted replacement title" }
+    });
+    const [, record] = (manager.injectRecord as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      TranscriptRecord
+    ];
+    expect(record).not.toHaveProperty("summary");
+  });
 });

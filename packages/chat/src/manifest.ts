@@ -119,9 +119,15 @@ export const chatModuleManifest = {
     {
       id: "chat.conversation_write_confirmation",
       description:
-        "Writes ask when the bound conversation has outside or unknown history, even in YOLO. " +
-        "Outside content is recorded before admission and stored state survives restart. " +
-        "Native vault reads stop if their bound conversation cannot be recorded.",
+        "Every write, including installed and connected tools, asks on outside or unknown history, even in YOLO. " +
+        "Admission is recorded before exposure and survives restart. Native vault reads stop if their conversation cannot be recorded.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.approval_outcomes",
+      description:
+        "Decisions replace approval cards with one quiet outcome line, also after reload. " +
+        "Details and the execution row disappear; Thinking keeps its steps. Approved means permission, not success. Pending cards keep exact disclosure.",
       featureFlagId: "chat.module"
     },
     {

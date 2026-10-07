@@ -139,7 +139,14 @@ describe.each(["module", "native", "acp"] as const)("%s approval outcomes", (pat
     expect(displayed?.text).toBe(`Not changed — ${test.eventReason}`);
     expect(displayed).not.toBeNull();
     const html = renderToString(createElement(RecordRow, { record: displayed! }));
-    expect(html).toContain(test.eventReason);
+    expect(html).toContain(
+      test.outcome === "rejected"
+        ? "You declined"
+        : test.outcome === "timeout"
+          ? "Timed out"
+          : "Cancelled"
+    );
+    expect(html).not.toContain("Not changed");
     expect(html).not.toMatch(/The user declined|Do not try|let the user know|acknowledge/);
   });
 });

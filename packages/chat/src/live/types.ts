@@ -78,8 +78,11 @@ export interface TranscriptRecord {
 export interface ActionResultMetadata {
   readonly kind: "action_result";
   readonly text: string;
+  readonly actionRequestId?: string;
   readonly toolName?: string;
+  readonly summary?: string;
   readonly outcome: "executed" | "denied" | "error" | "allowed";
+  readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
 }
 
 export interface EngineKillOpts {

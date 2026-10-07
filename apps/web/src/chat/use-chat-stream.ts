@@ -264,6 +264,14 @@ export function upsertTranscriptRecord(
   records: readonly TranscriptRecord[],
   record: TranscriptRecord
 ): TranscriptRecord[] {
+  // Approval notifications may be replayed after reconnect. Their server request identity
+  // outlives the engine's per-turn sequence numbers, so do not append another card/outcome.
+  if (record.actionRequestId) {
+    const existing = records.findIndex(
+      (item) => item.kind === record.kind && item.actionRequestId === record.actionRequestId
+    );
+    if (existing >= 0) return records.map((item, index) => (index === existing ? record : item));
+  }
   // ACP sequence numbers restart for each user turn. Stable ids and ordering therefore
   // only apply inside the current turn; scanning older turns lets a later `sequence: 1`
   // activity record jump in front of the first turn's `sequence: 2` record.
@@ -336,6 +344,10 @@ function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
   return {
     kind: isChatRecordKind(activity.kind) ? activity.kind : "status",
     text: activity.text,
+    ...(activity.actionRequestId !== undefined
+      ? { actionRequestId: activity.actionRequestId }
+      : {}),
+    ...(activity.summary !== undefined ? { summary: activity.summary } : {}),
     ...(activity.id !== undefined ? { id: activity.id } : {}),
     ...(activity.sequence !== undefined ? { sequence: activity.sequence } : {}),
     ...(activity.toolName !== undefined ? { toolName: activity.toolName } : {}),

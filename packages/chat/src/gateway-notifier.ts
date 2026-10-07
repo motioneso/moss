@@ -69,6 +69,9 @@ function toTranscriptRecord(record: GatewaySessionRecord): TranscriptRecord | nu
       actionRequestId: record.actionRequestId,
       toolName: record.toolName,
       outcome: record.outcome,
+      ...(record.summary
+        ? { summary: record.summary.replace(/\s+/g, " ").trim().slice(0, 200) }
+        : {}),
       ...(record.decidedBy ? { decidedBy: record.decidedBy } : {}),
       ...(record.holdDurationMs != null ? { durationMs: record.holdDurationMs } : {}),
       ...(record.reason ? { reason: record.reason } : {}),
