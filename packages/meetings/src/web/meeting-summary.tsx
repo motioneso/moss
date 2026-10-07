@@ -276,9 +276,12 @@ export function MeetingSummary({
                 ? "Checking summary model availability…"
                 : generationAvailability === "subscription-unsupported"
                   ? summaryGenerationFailure("meeting_output_subscription_unsupported").message
-                  : generationAvailability === "model-unavailable"
-                    ? summaryGenerationFailure("meeting_output_route_unavailable").message
-                    : "Couldn’t check summary model availability. Refresh summaries to try again."}
+                  : generationAvailability === "subscription-isolation-unavailable"
+                    ? summaryGenerationFailure("meeting_output_subscription_isolation_unavailable")
+                        .message
+                    : generationAvailability === "model-unavailable"
+                      ? summaryGenerationFailure("meeting_output_route_unavailable").message
+                      : "Couldn’t check summary model availability. Refresh summaries to try again."}
             </p>
           ) : null}
           {unsavedNotes ? (

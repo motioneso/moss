@@ -665,13 +665,10 @@ export class CliChatEngineHost {
     });
   }
 
-  // ─── listLiveSessions (§4.6) — by mux, NOT the engine Map ──────────────────────
-
   async listLiveSessions(): Promise<string[]> {
     return listLiveMuxSessions(this.deps.io, this.deps.homeBase);
   }
 
-  // ─── probeProvider (§4.8) — no token, no replay ───────────────────────────────
   async probeProvider(
     provider: RpcProviderKind,
     userIdOrOpts?: string | Omit<RpcProbeProviderParams, "provider">,
@@ -679,7 +676,10 @@ export class CliChatEngineHost {
   ): Promise<RpcProbeProviderResult> {
     const userId = typeof userIdOrOpts === "string" ? userIdOrOpts : undefined;
     const opts = typeof userIdOrOpts === "string" ? maybeOpts : userIdOrOpts;
-    if (opts?.constrainedStructured) return probeConstrainedClaudeProvider(provider);
+    if (opts?.constrainedStructured)
+      return this.deps.perUserUid && this.deps.homeBase && userId
+        ? probeConstrainedClaudeProvider(provider)
+        : { status: "error", constrainedUnavailableReason: "per_user_isolation_required" };
     const cacheScope = provider === "openai-compatible" ? userId : undefined;
     const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;
     const homeBase = runtime?.homeBase ?? this.deps.homeBase;

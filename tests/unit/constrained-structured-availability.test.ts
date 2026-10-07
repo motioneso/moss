@@ -33,7 +33,7 @@ type Installation =
   | "wrong-package"
   | "malformed"
   | "not-executable";
-async function fixture(installation: Installation) {
+async function fixture(installation: Installation, perUserUid = true) {
   dir = await mkdtemp(join(tmpdir(), "constrained-probe-"));
   const root = dir;
   const executed = join(root, "executed");
@@ -72,6 +72,7 @@ async function fixture(installation: Installation) {
     neutralBase: join(root, "neutral"),
     homeBase: join(root, "credentials-must-not-be-read"),
     singleUser: true,
+    perUserUid,
     cliPresent,
     multiplexerUsable,
     resolveUserRuntime
@@ -142,6 +143,16 @@ class ProbeChannel implements ByteChannel {
 }
 
 describe("constrained structured availability is an advisory metadata-only probe", () => {
+  it("rejects shared-account runners even when the pinned binary is present", async () => {
+    const { host, assertReadOnly } = await fixture("ready", false);
+    await expect(
+      host.probeProvider("anthropic", "synthetic-owner", { constrainedStructured: true })
+    ).resolves.toEqual({
+      status: "error",
+      constrainedUnavailableReason: "per_user_isolation_required"
+    });
+    await assertReadOnly();
+  });
   it.each(["ready", "missing", "stale", "wrong-package", "malformed", "not-executable"] as const)(
     "reports %s without credentials, tmux or execution",
     async (installation) => {
@@ -167,10 +178,13 @@ describe("constrained structured availability is an advisory metadata-only probe
     }
   );
 
-  it.each(["ready", "stale"] as const)(
+  it.each(["ready", "stale", "shared-account"] as const)(
     "forwards the constrained marker through authenticated RPC for %s",
     async (installation) => {
-      const { host, root, assertReadOnly } = await fixture(installation);
+      const { host, root, assertReadOnly } = await fixture(
+        installation === "shared-account" ? "ready" : installation,
+        installation !== "shared-account"
+      );
       const probe = vi.spyOn(host, "probeProvider");
       const channel = new ProbeChannel();
       serveConnection(channel, {
@@ -196,7 +210,10 @@ describe("constrained structured availability is an advisory metadata-only probe
             t: "ok",
             id: 19,
             bootId: "synthetic-probe-boot",
-            result: { status: installation === "ready" ? "ready" : "not_installed" }
+            result:
+              installation === "shared-account"
+                ? { status: "error", constrainedUnavailableReason: "per_user_isolation_required" }
+                : { status: installation === "ready" ? "ready" : "not_installed" }
           });
         });
         expect(probe).toHaveBeenCalledExactlyOnceWith("anthropic", "synthetic-owner", {

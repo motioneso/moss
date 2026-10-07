@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GenerateStructuredProviderInput, ProviderKind } from "@moss/ai";
 import { createConstrainedCliStructuredAdapterFactory } from "./constrained-structured-adapter.js";
 import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
+
+afterEach(() => vi.restoreAllMocks());
 
 function input(kind: ProviderKind): GenerateStructuredProviderInput {
   return {
@@ -130,4 +132,61 @@ describe("explicit constrained adapter", () => {
     expect(f.submitStructured).not.toHaveBeenCalled();
     expect(f.kill).toHaveBeenCalled();
   });
+  it.each(["launch", "submit", "read"] as const)(
+    "reports its deadline as a timeout during %s, even if the engine returns successfully",
+    async (phase) => {
+      const f = fixture();
+      const deadline = new AbortController();
+      const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
+      const expire = () => deadline.abort(new DOMException("Timed out", "TimeoutError"));
+      if (phase === "launch")
+        f.launchStructured.mockImplementation(async () => {
+          expire();
+          return { offset: 0 };
+        });
+      if (phase === "submit") f.submitStructured.mockImplementation(async () => expire());
+      if (phase === "read")
+        f.readStructured.mockImplementation(async () => {
+          expire();
+          return { text: '{"overview":"late"}', offset: 1, complete: true };
+        });
+      await expect(
+        createConstrainedCliStructuredAdapterFactory(f.factory)("anthropic").generateStructured(
+          input("anthropic")
+        )
+      ).rejects.toMatchObject({ name: "ConstrainedProcessError", code: "timeout" });
+      expect(timeout).toHaveBeenCalledWith(105_000);
+      expect(f.kill).toHaveBeenCalled();
+      if (phase === "launch") expect(f.submitStructured).not.toHaveBeenCalled();
+    }
+  );
+  it.each(["caller", "deadline"] as const)(
+    "preserves the first abort when %s wins and both signals expire during launch",
+    async (first) => {
+      const f = fixture();
+      const caller = new AbortController();
+      const cancellationReason = new DOMException("User stopped", "AbortError");
+      const deadline = new AbortController();
+      vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
+      f.launchStructured.mockImplementation(async () => {
+        const expire = () => deadline.abort(new DOMException("Timed out", "TimeoutError"));
+        if (first === "caller") caller.abort(cancellationReason);
+        expire();
+        if (first === "deadline") caller.abort(cancellationReason);
+        throw new Error("Structured model process failed: cancelled");
+      });
+      await expect(
+        createConstrainedCliStructuredAdapterFactory(f.factory)("anthropic").generateStructured({
+          ...input("anthropic"),
+          signal: caller.signal
+        })
+      ).rejects.toMatchObject(
+        first === "caller"
+          ? { name: "AbortError", reason: cancellationReason }
+          : { name: "ConstrainedProcessError", code: "timeout" }
+      );
+      expect(f.submitStructured).not.toHaveBeenCalled();
+      expect(f.kill).toHaveBeenCalled();
+    }
+  );
 });

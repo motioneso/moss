@@ -96,7 +96,9 @@ function setup(createCliStructuredAdapter?: GenerateStructuredDeps["createCliStr
   const fetch = vi.fn<typeof globalThis.fetch>(async () => response());
   vi.stubGlobal("fetch", fetch);
   let activeTransactions = 0;
-  const probe = vi.fn(async () => true);
+  const probe = vi.fn<
+    () => Promise<"available" | "model-unavailable" | "subscription-isolation-unavailable">
+  >(async () => "available");
   const runtime = createMeetingOutputRuntime({
     probeConstrainedCli: probe,
     createConstrainedCliStructuredAdapter: createCliStructuredAdapter,
@@ -683,13 +685,72 @@ it("checks constrained binary presence outside actor transactions before enablin
   ]);
   h.probe.mockImplementation(async () => {
     expect(h.activeTransactions()).toBe(0);
-    return false;
+    return "model-unavailable";
   });
   expect(await h.generationAvailability(actor)).toBe("model-unavailable");
   expect(h.probe).toHaveBeenCalledExactlyOnceWith(actor.actorUserId);
-  h.probe.mockResolvedValue(true);
+  h.probe.mockResolvedValue("available");
   expect(await h.generationAvailability(actor)).toBe("available");
   expect(h.credential).not.toHaveBeenCalled();
+  expect(h.fetch).not.toHaveBeenCalled();
+  expect(generate).not.toHaveBeenCalled();
+});
+
+it("rejects shared-account Claude readiness before any model dispatch and preserves the specific reason", async () => {
+  const generate = vi.fn();
+  const h = setup(() => ({ generateStructured: generate }));
+  h.route.mockResolvedValue({
+    ...model,
+    provider_kind: "anthropic",
+    provider_auth_method: "cli",
+    provider_acp_agent_id: "claude-acp"
+  });
+  h.credential.mockResolvedValue({
+    ...provider,
+    provider_kind: "anthropic",
+    auth_method: "cli",
+    acp_agent_id: "claude-acp"
+  });
+  vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([
+    { ...provider, provider_kind: "anthropic", auth_method: "cli" }
+  ]);
+  h.probe.mockImplementation(async () => {
+    expect(h.activeTransactions()).toBe(0);
+    return "subscription-isolation-unavailable";
+  });
+  expect(await h.generationAvailability(actor)).toBe("subscription-isolation-unavailable");
+  expect(h.credential).not.toHaveBeenCalled();
+  await expect(h.generator(actor, input())).rejects.toMatchObject({
+    code: "meeting_output_subscription_isolation_unavailable"
+  });
+  expect(h.fetch).not.toHaveBeenCalled();
+  expect(generate).not.toHaveBeenCalled();
+});
+
+it("preserves user cancellation during the constrained readiness probe without dispatch", async () => {
+  const generate = vi.fn();
+  const h = setup(() => ({ generateStructured: generate }));
+  h.route.mockResolvedValue({
+    ...model,
+    provider_kind: "anthropic",
+    provider_auth_method: "cli",
+    provider_acp_agent_id: "claude-acp"
+  });
+  h.credential.mockResolvedValue({
+    ...provider,
+    provider_kind: "anthropic",
+    auth_method: "cli",
+    acp_agent_id: "claude-acp"
+  });
+  const controller = new AbortController();
+  h.probe.mockImplementation(async () => {
+    controller.abort();
+    throw new Error("probe cancelled");
+  });
+  await expect(h.generator(actor, { ...input(), signal: controller.signal })).rejects.toMatchObject(
+    { code: "meeting_output_interrupted" }
+  );
+  expect(h.probe).toHaveBeenCalledWith(actor.actorUserId, controller.signal);
   expect(h.fetch).not.toHaveBeenCalled();
   expect(generate).not.toHaveBeenCalled();
 });

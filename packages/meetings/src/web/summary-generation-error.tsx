@@ -15,6 +15,12 @@ export function summaryGenerationFailure(code?: string): {
         status: "failed",
         message: "Summaries on this subscription aren’t supported yet. No other model was used."
       };
+    case "meeting_output_subscription_isolation_unavailable":
+      return {
+        status: "failed",
+        message:
+          "Claude subscription summaries need separate per-user runner accounts. This runner uses a shared account, so summaries are unavailable. No other model was used."
+      };
     case "meeting_output_claude_subscription_unsupported":
       return {
         status: "failed",

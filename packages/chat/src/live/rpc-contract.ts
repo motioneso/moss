@@ -504,6 +504,8 @@ export interface RpcProbeProviderResult {
   /** EXISTING OnboardingProviderCheckResponse status set (onboarding-api.ts), reused verbatim. */
   readonly status: "ready" | "needs_login" | "not_installed" | "multiplexer_unavailable" | "error";
   readonly message?: string;
+  /** Constrained summaries require the existing per-user process identity. */
+  readonly constrainedUnavailableReason?: "per_user_isolation_required";
 }
 
 /**

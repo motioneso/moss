@@ -32,15 +32,31 @@ afterEach(async () => {
 });
 
 describe("constrained adapter real-child activity recording", () => {
-  it.each(["ok", "error", "aborted", "launch-aborted", "launch-rejected"] as const)(
+  it.each([
+    "ok",
+    "error",
+    "aborted",
+    "timeout",
+    "launch-aborted",
+    "launch-rejected",
+    "launch-timeout",
+    "launch-timeout-rejected"
+  ] as const)(
     "records exactly one owner-bound %s row without child content or credentials",
     async (scenario) => {
       const duringLaunch = scenario.startsWith("launch-");
-      const outcome = duringLaunch ? "aborted" : scenario;
+      const timedOut = scenario.includes("timeout");
+      const outcome = timedOut ? "error" : duringLaunch ? "aborted" : scenario;
       dir = await mkdtemp(join(tmpdir(), "constrained-activity-"));
       const cwd = dir;
       const ready = join(cwd, "ready");
       const controller = new AbortController();
+      const deadline = new AbortController();
+      const originalTimeout = AbortSignal.timeout;
+      vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) =>
+        ms === 105_000 ? deadline.signal : originalTimeout(ms)
+      );
+      const expire = () => deadline.abort(new DOMException("Timed out", "TimeoutError"));
       const logs = ["log", "info", "warn", "error", "debug"] as const;
       const spies = logs.map((level) => vi.spyOn(console, level).mockImplementation(() => {}));
       const rows: ModelActivityEntry[] = [];
@@ -60,15 +76,18 @@ describe("constrained adapter real-child activity recording", () => {
         process.stdin.on("end", () => {
           require("node:fs").writeFileSync(${JSON.stringify(ready)}, "ready");
           process.stderr.write(prompt + process.env.CLAUDE_CODE_OAUTH_TOKEN);
-          if (${JSON.stringify(outcome)} === "aborted") { setInterval(() => {}, 1000); return; }
+          if (${JSON.stringify(outcome)} === "aborted" || ${timedOut}) { setInterval(() => {}, 1000); return; }
           if (${JSON.stringify(outcome)} === "error") { process.exitCode = 1; return; }
           process.stdout.write(JSON.stringify({ type: "result", subtype: "success", is_error: false,
             structured_output: { overview: "done" } }));
         });
       `;
       vi.mocked(prepareConstrainedClaudeProfile).mockImplementation(async () => {
-        if (duringLaunch) controller.abort();
-        if (scenario === "launch-rejected")
+        if (duringLaunch) {
+          if (timedOut) expire();
+          else controller.abort();
+        }
+        if (scenario.endsWith("rejected"))
           throw new Error("Structured model process failed: cancelled");
         return {
           command: process.execPath,
@@ -122,7 +141,8 @@ describe("constrained adapter real-child activity recording", () => {
       );
       try {
         if (!duringLaunch) await vi.waitFor(() => access(ready));
-        if (outcome === "aborted") controller.abort();
+        if (timedOut) expire();
+        else if (outcome === "aborted") controller.abort();
         const actual = await settled;
         if (outcome === "ok")
           expect(actual).toEqual({
@@ -150,6 +170,10 @@ describe("constrained adapter real-child activity recording", () => {
           result: outcome === "ok" ? "completed" : outcome === "aborted" ? "stopped" : "failed"
         });
         if (outcome === "aborted") expect(rows[0]?.failureCode).toBe("cancelled");
+        if (timedOut) {
+          expect(actual).toHaveProperty("error.code", "timeout");
+          expect(rows[0]?.failureCode).toBe("timeout");
+        }
         const observable = JSON.stringify({
           rows,
           logs: spies.map((spy) => spy.mock.calls),

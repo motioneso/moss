@@ -97,6 +97,8 @@ import {
 } from "./rpc-contract.js";
 import type { CliChatEngine, EngineKillOpts, EngineLaunchOpts, TranscriptRecord } from "./types.js";
 
+import { callWithRpcDeadline, type PendingCall } from "./rpc-deadline.js";
+
 export { mapRpcError };
 
 /** The directory the socket MUST resolve under (§3.1 client-side realpath guard). */
@@ -123,7 +125,7 @@ const DEFAULT_RPC_TIMEOUT_MS = 45_000;
 /**
  * Deadline for `launch` — looser than the turn verbs because a launch spawns the CLI, writes the
  * persona, and submits + server-drains the replay batch before replying. Never below the turn
- * deadline. The long-running, server-budgeted verbs (installProvider, login*, probeProvider) get NO
+ * deadline. Long-running, server-budgeted verbs (installProvider, login*, ordinary probes) get NO
  * client deadline — they legitimately run for minutes and own their own server-side timeouts.
  */
 const LAUNCH_RPC_TIMEOUT_MS = 120_000;
@@ -188,19 +190,9 @@ export interface RpcConnectionOpts {
   /**
    * Per-call response deadline (ms) for the turn verbs (submit/readNew/isAlive/kill). Defaults to
    * JARVIS_CLI_RUNNER_RPC_TIMEOUT_MS, else {@link DEFAULT_RPC_TIMEOUT_MS}. Set to 0 to disable all
-   * per-call deadlines (test seam — leaves a hung RPC pending forever, as before this guard).
+   * turn/launch deadlines; constrained availability probes retain their separate fixed deadline.
    */
   readonly callTimeoutMs?: number;
-}
-
-interface PendingCall {
-  readonly method: RpcMethod;
-  readonly sessionKey?: string;
-  resolve(result: unknown): void;
-  reject(err: Error): void;
-  /** #456 — re-arm this call's response deadline (activity-aware reset). No-op if the call has no
-   *  deadline (turnTimeoutMs <= 0) or has already settled. */
-  resetDeadline?: () => void;
 }
 
 /** Internal connection state machine. */
@@ -259,7 +251,7 @@ export class RpcConnection {
    * (submit/readNew/isAlive/kill) use {@link turnTimeoutMs}; `launch` gets the looser of that and
    * {@link LAUNCH_RPC_TIMEOUT_MS}. The long-running, server-budgeted verbs (install, login*, probe)
    * and the reconciliation primitive get NO client deadline — they own their own server-side
-   * timeouts and can legitimately run for minutes. When `turnTimeoutMs <= 0`, all deadlines off.
+   * timeouts and can run for minutes. Constrained probes bypass this with a fixed deadline.
    */
   private callTimeoutMs(method: RpcMethod): number {
     if (this.turnTimeoutMs <= 0) return 0;
@@ -405,12 +397,19 @@ export class RpcConnection {
     return this.call<RpcListLiveSessionsResult>("listLiveSessions", undefined, {});
   }
 
-  /** Onboarding probe (§4.8), scoped to the authenticated actor when supplied. */
+  /** Actor-scoped probe (§4.8); constrained availability defaults to a five-second deadline. */
   probeProvider(
     params: RpcProbeProviderParams,
-    actorUserId?: string
+    actorUserId?: string,
+    options?: { timeoutMs: number; signal?: AbortSignal }
   ): Promise<RpcProbeProviderResult> {
-    return this.call<RpcProbeProviderResult>("probeProvider", actorUserId, params);
+    return this.call<RpcProbeProviderResult>(
+      "probeProvider",
+      actorUserId,
+      params,
+      false,
+      options ?? (params.constrainedStructured ? { timeoutMs: 5_000 } : undefined)
+    );
   }
 
   /** Relays a rejection learned here to the runner's user-scoped cache. */
@@ -506,8 +505,21 @@ export class RpcConnection {
     method: RpcMethod,
     sessionKey: string | undefined,
     params: unknown,
-    allowDuringReconcile = false
+    allowDuringReconcile = false,
+    deadline?: { timeoutMs: number; signal?: AbortSignal }
   ): Promise<T> {
+    if (deadline) {
+      return callWithRpcDeadline<T>(deadline, {
+        method,
+        sessionKey,
+        params,
+        pending: this.pending,
+        nextId: () => this.nextId++,
+        connect: () => this.ensureConnected(),
+        canDispatch: () => !this.reconciling || allowDuringReconcile,
+        write: (frame) => this.writeFrame(frame, method, frame.id, sessionKey)
+      });
+    }
     await this.ensureConnected();
     if (this.reconciling && !allowDuringReconcile) {
       // A bootId change / fresh reconnect is being reconciled; the chat surface is transiently

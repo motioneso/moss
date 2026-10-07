@@ -90,12 +90,20 @@ const usableProvider = (
   provider.has_credential;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
+export type ConstrainedCliReadiness =
+  | "available"
+  | "model-unavailable"
+  | "subscription-isolation-unavailable";
+
 /** Composition only. Uses bounded structured transports, without sorting or native search. */
 export function createMeetingOutputRuntime(deps: {
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   readonly resolveActiveModules: ActiveModulesResolver;
   readonly createConstrainedCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
-  readonly probeConstrainedCli?: (actorUserId: string) => Promise<boolean>;
+  readonly probeConstrainedCli?: (
+    actorUserId: string,
+    signal?: AbortSignal
+  ) => Promise<ConstrainedCliReadiness>;
 }) {
   const ai = new AiRepository();
   const tasks = new TasksRepository();
@@ -171,8 +179,8 @@ export function createMeetingOutputRuntime(deps: {
       });
       if (!selected.usable) return "model-unavailable";
       // Filesystem metadata only; no actor transaction remains open during the runner RPC.
-      if (selected.cli && !(await deps.probeConstrainedCli?.(actor.actorUserId)))
-        return "model-unavailable";
+      if (selected.cli)
+        return (await deps.probeConstrainedCli?.(actor.actorUserId)) ?? "model-unavailable";
       return "available";
     } catch (error) {
       // Keep retained summaries readable when configuration checks are temporarily unavailable.
@@ -207,6 +215,15 @@ export function createMeetingOutputRuntime(deps: {
       if (Buffer.byteLength(prompt, "utf8") > STRUCTURED_PROMPT_MAX_BYTES)
         throw new MeetingOutputError("meeting_output_input_too_large", 400);
       const selected = await deps.dataContext.withDataContext(actor, (db) => resolve(db));
+      if (selected.model.provider_auth_method === "cli") {
+        const readiness = await deps.probeConstrainedCli?.(actor.actorUserId, input.signal);
+        if (readiness !== "available")
+          throw new MeetingOutputError(
+            readiness === "subscription-isolation-unavailable"
+              ? "meeting_output_subscription_isolation_unavailable"
+              : "meeting_output_route_unavailable"
+          );
+      }
       const run = await deps.dataContext.withDataContext(actor, (db) =>
         prepareStructuredGeneration(
           db,
@@ -256,6 +273,7 @@ export function createMeetingOutputRuntime(deps: {
         modelRoute: selected.modelRoute
       };
     } catch (error) {
+      if (input.signal.aborted) throw new MeetingOutputError("meeting_output_interrupted");
       if (error instanceof MeetingOutputError) throw error;
       // Provider exceptions and malformed source/model content never become API error text.
       throw new MeetingOutputError("meeting_output_generation_failed");

@@ -176,26 +176,36 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("meeting summary owner review", () => {
-  it("shows unsupported subscription status without allowing generation or provider fallback", async () => {
-    vi.mocked(api.getMeetingOutputs).mockResolvedValue({
-      artifacts: [artifact],
-      candidates: [],
-      headVersion: 1,
-      generationAvailability: "subscription-unsupported",
-      templates: [{ id: "general", version: 1, name: "General meeting" }]
-    });
-    await mount();
-    await chooseTemplate();
-    expect(JSON.stringify(renderer.toJSON())).toContain(
+  it.each([
+    [
+      "subscription-unsupported",
       "Summaries on this subscription aren’t supported yet. No other model was used."
-    );
-    expect(
-      renderer.root
-        .findAllByType("button")
-        .find((node) => node.children.includes("Generate new version"))?.props.disabled
-    ).toBe(true);
-    expect(api.generateMeetingOutput).not.toHaveBeenCalled();
-  });
+    ],
+    [
+      "subscription-isolation-unavailable",
+      "Claude subscription summaries need separate per-user runner accounts. This runner uses a shared account"
+    ]
+  ] as const)(
+    "disables Generate with the specific subscription reason: %s",
+    async (generationAvailability, message) => {
+      vi.mocked(api.getMeetingOutputs).mockResolvedValue({
+        artifacts: [artifact],
+        candidates: [],
+        headVersion: 1,
+        generationAvailability,
+        templates: [{ id: "general", version: 1, name: "General meeting" }]
+      });
+      await mount();
+      await chooseTemplate();
+      expect(JSON.stringify(renderer.toJSON())).toContain(message);
+      expect(
+        renderer.root
+          .findAllByType("button")
+          .find((node) => node.children.includes("Generate new version"))?.props.disabled
+      ).toBe(true);
+      expect(api.generateMeetingOutput).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([true, false])(
     "blocks generation with no supported model and offers role-aware recovery: admin=%s",

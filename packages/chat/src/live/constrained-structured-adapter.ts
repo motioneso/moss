@@ -16,6 +16,7 @@ import {
 import type { ChatEngineFactory } from "./runtime.js";
 import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
 import { CliChatUnavailableError } from "./errors.js";
+import { ConstrainedProcessError } from "./constrained-structured-process.js";
 
 type StructuredEngine = CliChatEngine & {
   launchStructured(
@@ -83,16 +84,20 @@ async function generate(
     userId: input.actorUserId,
     acpAgentId: input.acpAgentId
   });
-  const signal = AbortSignal.any([
-    ...(input.signal ? [input.signal] : []),
-    AbortSignal.timeout(105_000)
-  ]);
+  const deadline = AbortSignal.timeout(105_000);
+  const signal = AbortSignal.any([...(input.signal ? [input.signal] : []), deadline]);
+  // Preserve the first abort source: our deadline is a failure, while caller aborts retain
+  // their cancellation (or classifier-gate) reason for the activity recorder.
+  const abortError = () =>
+    deadline.aborted && signal.reason === deadline.reason
+      ? new ConstrainedProcessError("timeout")
+      : abortErrorFor(signal);
   const aborted = () => {
     void engine.kill().catch(() => undefined);
   };
   signal.addEventListener("abort", aborted, { once: true });
   try {
-    if (signal.aborted) throw abortErrorFor(signal);
+    if (signal.aborted) throw abortError();
     if (!structured(engine)) throw unsupported();
     await engine.launchStructured({
       neutralDir: "",
@@ -101,12 +106,13 @@ async function generate(
       model: input.model.provider_model_id,
       schema: input.schema
     });
-    if (signal.aborted) throw abortErrorFor(signal);
+    if (signal.aborted) throw abortError();
     await engine.submitStructured(prompt);
     let offset = 0;
     let reply: string | undefined;
     while (!signal.aborted) {
       const result = await engine.readStructured(offset);
+      if (signal.aborted) throw abortError();
       offset = result.offset;
       if (result.text !== undefined) reply = result.text;
       if (result.complete) {
@@ -115,9 +121,9 @@ async function generate(
       }
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    throw abortErrorFor(signal);
+    throw abortError();
   } catch (error) {
-    if (signal.aborted) throw abortErrorFor(signal);
+    if (signal.aborted) throw abortError();
     // Fixed server-authored code survives RPC; never inspect or forward provider diagnostics.
     if (error instanceof Error && error.message === "Constrained Claude runtime is unsupported") {
       throw new StructuredTransportUnavailableError();

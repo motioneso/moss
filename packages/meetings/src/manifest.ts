@@ -309,7 +309,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.grounded_outputs",
       description:
-        "Generate evidence-checked summaries with your default model, without fallback. Claude availability checks its installed pinned CLI without model calls. Compare versions and exact sources; refresh to recheck availability.",
+        "Generate evidence-checked summaries with your default model, without fallback. Claude needs per-user runner accounts and the pinned CLI; readiness makes no model calls. Compare versions and exact sources; refresh to recheck availability.",
       errors: [
         {
           code: "meeting_output_unavailable",
@@ -322,6 +322,12 @@ export const meetingsModuleManifest = {
           class: "validation",
           description:
             "Codex and other unconstrained subscription profiles do not support summaries yet. No replacement model is used. API-key and supported Claude profiles remain available."
+        },
+        {
+          code: "meeting_output_subscription_isolation_unavailable",
+          class: "validation",
+          description:
+            "Claude subscription summaries need separate per-user runner accounts. Shared-account runners cannot generate summaries; no other model is used."
         },
         {
           code: "meeting_output_claude_subscription_unsupported",
@@ -369,7 +375,7 @@ export const meetingsModuleManifest = {
           code: "meeting_output_generation_failed",
           class: "transient",
           description:
-            "Generation failed or its result was invalid. Review provider settings, then explicitly start a new request; no fallback provider is used."
+            "Generation failed, timed out or returned invalid output. Claude’s 105-second deadline is recorded as a timeout, separate from user cancellation. Review settings and explicitly retry; no fallback is used."
         },
         {
           code: "meeting_output_busy",
