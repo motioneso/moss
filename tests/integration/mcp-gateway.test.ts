@@ -611,8 +611,19 @@ describe("AssistantToolGateway", () => {
 
     const card = firstActionRequest();
 
+    // The healthy timeout path awaits the expiry transaction before returning the denial.
+    // Read through a fresh data context now, before a late click can itself expire the row.
+    const timedOut = await runner.withDataContext(
+      { actorUserId: ids.userA, requestId: "r-timeout-before-late-approve" },
+      (scopedDb) => repository.getAssistantAction(scopedDb, card.actionRequestId)
+    );
+    expect(timedOut?.status).toBe("timed_out");
+    expect(timedOut?.resolved_at).toBeInstanceOf(Date);
+
     // Operator clicks Approve after the timeout — must be a no-op (fails closed).
-    await fastTimeoutGateway.resolveActionRequest(ids.userA, card.actionRequestId, "confirmed");
+    await expect(
+      fastTimeoutGateway.resolveActionRequest(ids.userA, card.actionRequestId, "confirmed")
+    ).resolves.toBe("expired");
 
     // The handler still never ran...
     expect(exampleToolCalls).toHaveLength(0);
@@ -622,7 +633,7 @@ describe("AssistantToolGateway", () => {
       (scopedDb) => repository.listAssistantActions(scopedDb)
     );
     const row = rows.find((r) => r.id === card.actionRequestId);
-    expect(row?.status).toBe("pending");
+    expect(row?.status).toBe("timed_out");
   });
 
   it("cancels stale pending assistant actions while leaving fresh pending actions pending", async () => {
