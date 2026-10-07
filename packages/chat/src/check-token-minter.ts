@@ -16,6 +16,7 @@ export function buildCheckTokenMinter(
     mint: (identity: {
       actorUserId: string;
       chatSessionId: string;
+      threadId: null;
       allowedToolNames: Set<string>;
     }) => string;
     revokeBySessionId: (chatSessionId: string) => void;
@@ -24,7 +25,13 @@ export function buildCheckTokenMinter(
 ): CheckTokenMinter {
   return {
     mint: (actorUserId, chatSessionId, toolNames) => ({
-      token: tokens.mint({ actorUserId, chatSessionId, allowedToolNames: new Set(toolNames) }),
+      token: tokens.mint({
+        actorUserId,
+        chatSessionId,
+        // Check sessions do not belong to a conversation; the gateway treats them as tainted.
+        threadId: null,
+        allowedToolNames: new Set(toolNames)
+      }),
       mcpServerUrl
     }),
     revoke: (chatSessionId) => tokens.revokeBySessionId(chatSessionId)

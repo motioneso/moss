@@ -34,15 +34,14 @@ function setup(stored: unknown = null, authError?: Error) {
 }
 describe("meeting capture defaults", () => {
   it.each([null, undefined, "unknown-mode", { mode: "computer-audio" }])(
-    "does not invent a default from %s",
+    "uses microphone and system audio for absent or invalid stored mode %s",
     async (value) => {
       const { app, preferences } = setup(value);
       expect((await app.inject("/api/meetings/preferences")).json()).toEqual({
-        defaultCaptureMode: null,
+        defaultCaptureMode: "computer-audio",
         rememberedSource: null,
         summarizeOnStop: true,
-        summaryTemplateId: "general",
-        setupCompletedAt: null
+        summaryTemplateId: "general"
       });
       expect(preferences.upsert).not.toHaveBeenCalled();
     }
@@ -55,8 +54,7 @@ describe("meeting capture defaults", () => {
         defaultCaptureMode: mode,
         rememberedSource: null,
         summarizeOnStop: true,
-        summaryTemplateId: "general",
-        setupCompletedAt: null
+        summaryTemplateId: "general"
       });
       expect(preferences.get).toHaveBeenCalledWith(scoped, MEETING_CAPTURE_DEFAULT_KEY);
     }
@@ -72,15 +70,14 @@ describe("meeting capture defaults", () => {
       });
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
-        defaultCaptureMode,
+        defaultCaptureMode: defaultCaptureMode ?? "computer-audio",
         summarizeOnStop: true,
-        summaryTemplateId: "general",
-        setupCompletedAt: null
+        summaryTemplateId: "general"
       });
       expect(preferences.upsert).toHaveBeenCalledExactlyOnceWith(
         scoped,
         MEETING_CAPTURE_DEFAULT_KEY,
-        defaultCaptureMode
+        defaultCaptureMode ?? "computer-audio"
       );
       expect(actors).toEqual([{ actorUserId: "owner", requestId: "preferences" }]);
     }
@@ -136,7 +133,7 @@ describe("remembered exact meeting source", () => {
     const cleared = await app.inject({
       method: "PUT",
       url: "/api/meetings/preferences",
-      payload: { defaultCaptureMode: null, rememberedSource: null }
+      payload: { defaultCaptureMode: "computer-audio", rememberedSource: null }
     });
     expect(cleared.json().rememberedSource).toBeNull();
   });

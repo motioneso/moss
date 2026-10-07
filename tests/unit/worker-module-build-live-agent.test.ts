@@ -56,7 +56,7 @@ describe("module build live-agent composition", () => {
         expect(opts.launchLine).toContain("--permission-mode acceptEdits");
         expect(opts.launchLine).toContain("--disallowedTools Bash");
         expect(opts.launchLine).not.toContain("--tools");
-        expect(opts.launchLine).not.toContain("--settings");
+        expect(opts.launchLine).toContain("--settings '/build/b1/.jarvis-claude-settings.json'");
         return "module-build-session";
       }),
       submit: vi.fn(async (_handle: string, prompt: string) => {
@@ -87,13 +87,27 @@ describe("module build live-agent composition", () => {
     expect(writes.get("/build/b1/.module-build-persona.md")).toContain(
       "Do not use Bash or shell commands"
     );
-    expect(writes.has("/build/b1/.jarvis-claude-permission-hook.mjs")).toBe(false);
+    expect(writes.has("/build/b1/.jarvis-claude-permission-hook.mjs")).toBe(true);
+    expect(writes.get("/build/b1/.jarvis-claude-settings.json")).toContain(
+      "/internal/vault-read-report"
+    );
+    expect(writes.get("/build/b1/.jarvis-claude-permission-token")).toBe("jst_test-token\n");
     expect(ensureProviderLaunchReady).toHaveBeenCalledWith("anthropic", "/build/b1");
     expect(ensureProviderLaunchReady.mock.invocationCallOrder[0]).toBeLessThan(
       mux.open.mock.invocationCallOrder[0] ?? 0
     );
     expect(mux.open).toHaveBeenCalledOnce();
     expect(mux.submit).toHaveBeenCalledOnce();
+    expect(io.run).toHaveBeenCalledWith("rm", [
+      "-f",
+      "/build/b1/.jarvis-claude-permission-hook.mjs",
+      "/build/b1/.jarvis-claude-settings.json",
+      "/build/b1/.jarvis-claude-permission-token",
+      "/build/b1/.jarvis-claude-mcp.json"
+    ]);
+    expect(io.run.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+      mux.kill.mock.invocationCallOrder[0] ?? 0
+    );
   });
 
   it("waits for the builder's completion marker and returns the files it actually wrote", async () => {
@@ -106,7 +120,8 @@ describe("module build live-agent composition", () => {
         if (command === "find") {
           return {
             code: 0,
-            stdout: "./jarvis.module.json\n./src/index.ts\n./.module-build-persona.md\n",
+            stdout:
+              "./jarvis.module.json\n./src/index.ts\n./.module-build-persona.md\n./.jarvis-claude-permission-hook.mjs\n./.jarvis-claude-settings.json\n./.jarvis-claude-permission-token\n./.jarvis-claude-mcp.json\n",
             stderr: ""
           };
         }
@@ -156,6 +171,50 @@ describe("module build live-agent composition", () => {
     );
     cwd.mockRestore();
   });
+
+  it.each(["launch", "cleanup"])(
+    "fails closed and removes only session files on %s failure",
+    async (failure) => {
+      const io = {
+        run: vi.fn(async (command: string) => ({
+          code: failure === "cleanup" && command === "rm" ? 1 : 0,
+          stdout: "",
+          stderr: "private failure detail"
+        })),
+        writeFile: vi.fn(async () => {}),
+        sleep: vi.fn(async () => {})
+      };
+      const mux = {
+        open: vi.fn(async () => {
+          if (failure === "launch") throw new Error("launch failed");
+          return "session";
+        }),
+        submit: vi.fn(async () => {}),
+        capturePane: vi.fn(async () => "❯\n"),
+        kill: vi.fn(async () => {})
+      };
+      const launch = createModuleBuildLiveAgent({
+        io: io as never,
+        mux: mux as never,
+        provider: "anthropic",
+        ensureProviderLaunchReady: vi.fn(async () => {}),
+        mcpToken: "jst_synthetic",
+        mcpServerUrl: "http://api:3000/api/mcp"
+      });
+      await expect(
+        launch({ workingDir: "/build/b1", step: "writing_spec", plan: null })
+      ).rejects.toThrow(
+        failure === "launch" ? "launch failed" : "module build session files could not be removed"
+      );
+      expect(io.run).toHaveBeenCalledWith("rm", [
+        "-f",
+        "/build/b1/.jarvis-claude-permission-hook.mjs",
+        "/build/b1/.jarvis-claude-settings.json",
+        "/build/b1/.jarvis-claude-permission-token",
+        "/build/b1/.jarvis-claude-mcp.json"
+      ]);
+    }
+  );
 
   // #2028 — google's flag is the real Gemini CLI's `--approval-mode auto_edit`, not the old
   // Antigravity `--mode accept-edits`. Same property under test: the builder may write inside its

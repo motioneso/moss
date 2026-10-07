@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import {
   ConnectorsRepository,
@@ -11,6 +11,7 @@ import { CalendarRepository } from "@moss/calendar";
 import { PreferencesRepository } from "@moss/structured-state";
 import type { Kysely } from "kysely";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 
 // ─── Section A: CalendarRepository.deleteById ────────────────────────────────
 
@@ -304,11 +305,16 @@ describe("Section C — manifest structure + gateway routing", () => {
   // Gateway routing tests (need a real DB)
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
 
   beforeAll(async () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     dataContext = new DataContextRunner(appDb);
+  });
+
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(dataContext, [ids.userA, ids.userB]);
   });
   afterAll(async () => {
     await appDb.destroy();
@@ -329,7 +335,7 @@ describe("Section C — manifest structure + gateway routing", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => modules,
       repository: new AiRepository(),
-      runner: dataContext,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations: new ConfirmationRegistry(),
       notifier,
@@ -375,7 +381,7 @@ describe("Section C — manifest structure + gateway routing", () => {
       calendarWrite: fakeDelete
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -450,7 +456,7 @@ describe("Section C — manifest structure + gateway routing", () => {
       })
     );
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -503,7 +509,7 @@ describe("Section C — manifest structure + gateway routing", () => {
       calendarWrite: fakeDelete
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });

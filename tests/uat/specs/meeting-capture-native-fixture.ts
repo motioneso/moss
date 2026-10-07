@@ -16,9 +16,12 @@ export const CAPTURE_INVENTORY: MeetingCaptureInventory = {
     { deviceId: "synthetic-device", sourceId: "synthetic-mic", label: "Generated PCM microphone" }
   ],
   applications: [],
-  computerAudio: { available: false, excludedProcessTreeIds: [] },
+  computerAudio: {
+    available: true,
+    excludedProcessTreeIds: ["synthetic-moss", "synthetic-trail-marker"]
+  },
   microphonePermission: "granted",
-  systemAudioPermission: "unknown"
+  systemAudioPermission: "granted"
 };
 export async function nativePost(
   baseURL: string,

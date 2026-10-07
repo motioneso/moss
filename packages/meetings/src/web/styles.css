@@ -34,8 +34,7 @@
 .meetings-capture {
   display: grid;
   gap: var(--space-3);
-  justify-items: end;
-  max-width: 28rem;
+  justify-items: stretch;
 }
 .meetings-capture p {
   margin: 0;
@@ -121,8 +120,8 @@
   .meetings-capture {
     max-width: 100%;
   }
-  .meetings-capture > .jds-btn,
-  .meetings-capture > .jds-control-pill {
+  .meetings-capture-heading > .jds-btn,
+  .meetings-capture-heading > .jds-control-pill {
     position: fixed;
     bottom: var(--space-4);
     right: var(--space-4);
@@ -131,4 +130,17 @@
   .meetings-notes {
     min-height: 20rem;
   }
+}
+
+.meetings-download {
+  margin-top: var(--space-5);
+}
+
+.meetings-capture-heading {
+  justify-content: flex-end;
+}
+.meetings-capture-title {
+  flex: 1;
+  min-width: 12rem;
+  margin-right: auto;
 }

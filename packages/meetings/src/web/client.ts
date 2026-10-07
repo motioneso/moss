@@ -44,7 +44,6 @@ export function discardMeetingPrivateState(client: QueryClient, id: string): voi
   clearSessionUnsavedChanges(client, `meetings:${id}:`);
   client.removeQueries({ queryKey: meetingKeys.editor(id), exact: true });
   client.removeQueries({ queryKey: ["meetings", "title", id], exact: true });
-  client.removeQueries({ queryKey: ["meetings", "notice-action", id], exact: true });
   client.removeQueries({ queryKey: ["meetings", "output-session", id] });
   client.removeQueries({ queryKey: ["meetings", "outputs", id] });
   client.removeQueries({ queryKey: ["meetings", "exports", id] });

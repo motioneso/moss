@@ -65,29 +65,34 @@ export async function tryGatedTurn(
       }
     | undefined,
   controller: AbortController
-): Promise<{ result: GateTurnResult | undefined; requestIncognito: boolean }> {
-  // #2934 — capture this turn's privacy BEFORE the gate-mode wait: a new chat landing inside
-  // that wait flips the thread, and the turn keeps its own privacy with the request. Captured
-  // here (not by the caller) so no call site can skip it. Never re-read below.
-  const requestIncognito =
-    (await host.deps.persistence.getCurrentThreadState?.(actorUserId, surface))?.incognito ?? false;
+): Promise<{
+  result: GateTurnResult | undefined;
+  requestIncognito: boolean;
+  requestThreadId: string | null;
+}> {
+  // Capture identity and privacy together BEFORE the gate-mode wait. A resume or new chat
+  // inside that wait cannot retarget this turn. Missing identity must stay null.
+  const threadState = await host.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
+  const requestIncognito = threadState?.incognito ?? false;
+  const requestThreadId = threadState?.id ?? null;
   const gate = host.deps.classifierGate;
-  if (!gate) return { result: undefined, requestIncognito };
+  if (!gate) return { result: undefined, requestIncognito, requestThreadId };
 
   let mode: GateMode;
   try {
     mode = await gate.mode(actorUserId);
   } catch {
     // A settings read failure behaves as `off`: chat must never break because the gate did.
-    return { result: undefined, requestIncognito };
+    return { result: undefined, requestIncognito, requestThreadId };
   }
-  if (mode !== "on") return { result: undefined, requestIncognito };
+  if (mode !== "on") return { result: undefined, requestIncognito, requestThreadId };
 
   // Ruling 9: private chats bypass the gate entirely — no classifier call and no record.
-  if (requestIncognito) return { result: undefined, requestIncognito };
+  if (requestIncognito) return { result: undefined, requestIncognito, requestThreadId };
 
   const request: GateRequest = {
     actorUserId,
+    threadId: requestThreadId,
     message: text,
     hasAttachment: (opts?.attachments?.length ?? 0) > 0,
     incognito: requestIncognito,
@@ -104,23 +109,36 @@ export async function tryGatedTurn(
     // Gate infrastructure failure is a decline: the default model still answers once — unless the
     // user already stopped the turn, in which case no fallback may run (checked below).
     if (controller.signal.aborted)
-      return { result: cancelledTurn(host, actorUserId, surface), requestIncognito };
-    return { result: undefined, requestIncognito };
+      return {
+        result: cancelledTurn(host, actorUserId, surface),
+        requestIncognito,
+        requestThreadId
+      };
+    return { result: undefined, requestIncognito, requestThreadId };
   }
 
   // A Stop that landed while the gate was deciding must stop the turn, not fall through to the
   // default model. The gate may still report `declined` (for example a read it dispatched failed
   // after the abort), so the signal is the authority here, checked before any decline branch.
   if (controller.signal.aborted)
-    return { result: cancelledTurn(host, actorUserId, surface), requestIncognito };
+    return { result: cancelledTurn(host, actorUserId, surface), requestIncognito, requestThreadId };
 
   if (outcome.kind === "declined" || outcome.kind === "would_handle")
-    return { result: undefined, requestIncognito };
+    return { result: undefined, requestIncognito, requestThreadId };
   if (outcome.kind === "cancelled")
-    return { result: cancelledTurn(host, actorUserId, surface), requestIncognito };
+    return { result: cancelledTurn(host, actorUserId, surface), requestIncognito, requestThreadId };
   return {
-    result: await persistGateOutcome(host, actorUserId, surface, text, opts, outcome),
-    requestIncognito
+    result: await persistGateOutcome(
+      host,
+      actorUserId,
+      surface,
+      requestThreadId,
+      text,
+      opts,
+      outcome
+    ),
+    requestIncognito,
+    requestThreadId
   };
 }
 
@@ -143,6 +161,7 @@ async function persistGateOutcome(
   host: GateLifecycleHost,
   actorUserId: string,
   surface: ChatSurface,
+  threadId: string | null,
   text: string,
   opts: { readonly attachments?: readonly StoredAttachmentMeta[] } | undefined,
   outcome: Extract<GateOutcome, { kind: "handled" | "terminal_failure" }>
@@ -160,6 +179,7 @@ async function persistGateOutcome(
     outcome: handled ? "executed-success" : "executed-failure-or-unknown"
   };
   const handledOpts: HandledTurnOptions = {
+    threadId,
     attachments:
       attachments.length > 0
         ? attachments.map((meta) => ({

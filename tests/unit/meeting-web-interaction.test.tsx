@@ -4,7 +4,6 @@ import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from "r
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, hasSessionUnsavedChanges } from "@moss/module-web-sdk";
 import {
-  MEETING_RECORDING_NOTICE,
   type MeetingHistoryPage,
   type MeetingRecord,
   type MeetingCapturePreferences
@@ -47,8 +46,7 @@ const preferences: MeetingCapturePreferences = {
   defaultCaptureMode: null,
   rememberedSource: null,
   summarizeOnStop: true,
-  summaryTemplateId: "general",
-  setupCompletedAt: "2026-10-06T00:00:00Z"
+  summaryTemplateId: "general"
 };
 let renderer: ReactTestRenderer;
 let client: QueryClient;
@@ -134,17 +132,19 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
         );
-      if (path === "/api/meetings/recording-notice")
+      if (path === "/api/me/sessions")
         return new Response(
           JSON.stringify({
-            currentNotice: MEETING_RECORDING_NOTICE,
-            acknowledgement: {
-              policyVersion: MEETING_RECORDING_NOTICE.policyVersion,
-              acknowledgedAt: "2026-10-06T00:00:00Z"
-            }
+            sessions: [
+              {
+                id: "linked-mac",
+                source: "companion",
+                deviceLabel: "Studio Mac",
+                lastSeenAt: meeting.createdAt
+              }
+            ]
           })
         );
-      if (path === "/api/me/sessions") return new Response(JSON.stringify({ sessions: [] }));
       if (path === "/api/companion/recording-capabilities")
         return new Response(JSON.stringify({ devices: [] }));
       if (path === "/api/meetings/output-availability")
@@ -321,11 +321,9 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(0);
     await act(async () => finishRead({ meeting }));
     await flush();
-    expect(
-      renderer.root
-        .findAllByType("label")
-        .find((node) => node.props.htmlFor === "meeting-personal-notes")?.children
-    ).toContain("Notes");
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props["aria-label"]).toBe(
+      "Notes"
+    );
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.disabled).not.toBe(
       true
     );
@@ -841,7 +839,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     expect(button("Retry opening meeting")).toBeDefined();
     expect(api.createMeeting).toHaveBeenCalledTimes(1);
   });
-  it("a delete finishing after navigation does not leave a newly opened one-time setup", async () => {
+  it("a delete finishing after navigation preserves a newly created meeting", async () => {
     let resolveDelete!: () => void;
     vi.mocked(api.deleteMeeting).mockReturnValue(
       new Promise((resolve) => {
@@ -851,17 +849,17 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     await mount();
     await click("Delete meeting");
     await click("Permanently delete meeting");
-    vi.mocked(api.getMeetingPreferences).mockResolvedValue({
-      ...preferences,
-      setupCompletedAt: null
-    });
+    const newMeeting = { ...meeting, id: "22334455-1122-4122-8122-112233445566" };
+    vi.mocked(api.createMeeting).mockResolvedValue({ meeting: newMeeting, created: true });
+    vi.mocked(api.getMeeting).mockResolvedValue({ meeting: newMeeting });
     await act(async () => navigate("/meetings"));
     await flush();
     await click("New meeting");
     await act(async () => resolveDelete());
     await flush();
-    expect(JSON.stringify(renderer.toJSON())).toContain("Set up Meetings");
-    expect(api.createMeeting).not.toHaveBeenCalled();
+    expect(new URLSearchParams(location).get("id")).toBe(newMeeting.id);
+    expect(api.createMeeting).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Set up Meetings");
   });
   it("blocks rapid duplicate note submissions before a render", async () => {
     let resolveSave!: (value: Awaited<ReturnType<typeof api.saveMeetingNotes>>) => void;

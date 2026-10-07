@@ -38,7 +38,6 @@ function fixture() {
   const prefs = vi.spyOn(preferences, "get").mockResolvedValue({
     defaultCaptureMode: null,
     rememberedSource: null,
-    setupCompletedAt: null,
     summarizeOnStop: true,
     summaryTemplateId: "general"
   });
@@ -130,7 +129,6 @@ describe("automatic summary finalization admission", () => {
       f.prefs.mockResolvedValue({
         defaultCaptureMode: null,
         rememberedSource: null,
-        setupCompletedAt: null,
         summarizeOnStop: false,
         summaryTemplateId: "general"
       });

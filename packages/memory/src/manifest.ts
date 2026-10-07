@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   getMemoryDashboardRouteSchema,
+  getMemoryPendingCandidatesRouteSchema,
   getMemoryGraphCoreRouteSchema,
   getMemoryGraphRecallRouteSchema,
   patchMemoryEntityDashboardRouteSchema,
@@ -19,6 +20,12 @@ import {
   postMemoryGraphStatusRouteSchema,
   postMemoryGraphSupersedeRouteSchema
 } from "@moss/shared";
+import {
+  memoryCandidateTarget,
+  memoryEntityTarget,
+  memoryFactTarget,
+  memoryFactResolutionTarget
+} from "./chat-targets.js";
 import { memoryForgetExecute, memoryRecallExecute, memoryRememberExecute } from "./graph-tools.js";
 
 const memoryRememberToolInputSchema = {
@@ -109,107 +116,203 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/memory/graph/recall",
+      chat: {
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
+        content: "outside",
+        coveredBy: "memory.recall"
+      },
       responseSchema: getMemoryGraphRecallRouteSchema.response[200],
       permissionId: "memory.view"
     },
     {
       method: "GET",
       path: "/api/memory/graph/core",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent", content: "outside" },
       responseSchema: getMemoryGraphCoreRouteSchema.response[200],
       permissionId: "memory.view"
     },
     {
       method: "POST",
       path: "/api/memory/graph/entities",
+      chat: { access: "write", title: "Add memory entity", content: "outside" },
       requestSchema: postMemoryGraphEntityRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts",
+      chat: {
+        access: "write",
+        title: "Remember a fact",
+        content: "outside",
+        coveredBy: "memory.remember"
+      },
       requestSchema: postMemoryGraphFactRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/pin",
+      chat: { access: "write", title: "Pin or unpin memory fact", content: "user_authored" },
       requestSchema: postMemoryGraphPinRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/confirm",
+      chat: {
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
+        title: "Confirm memory and supersede conflicts",
+        content: "outside",
+        target: memoryFactResolutionTarget
+      },
       requestSchema: postMemoryGraphConfirmRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/correct",
+      chat: {
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
+        title: "Replace memory and supersede conflicts",
+        content: "outside",
+        target: memoryFactResolutionTarget
+      },
       requestSchema: postMemoryGraphCorrectRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/status",
+      chat: {
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
+        title: "Change memory visibility",
+        content: "outside",
+        target: memoryFactTarget
+      },
       requestSchema: postMemoryGraphStatusRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/mark-stale",
+      chat: {
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
+        title: "Mark memory fact stale",
+        content: "outside"
+      },
       requestSchema: postMemoryGraphMarkStaleRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/supersede",
+      chat: {
+        access: "destructive",
+        title: "Supersede memory fact",
+        content: "outside",
+        target: memoryFactTarget
+      },
       requestSchema: postMemoryGraphSupersedeRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "DELETE",
       path: "/api/memory/graph/facts/:id",
+      chat: {
+        access: "destructive",
+        title: "Forget memory fact",
+        content: "outside",
+        target: memoryFactTarget,
+        coveredBy: "memory.forget"
+      },
       permissionId: "memory.manage"
     },
     {
       method: "GET",
       path: "/api/memory/dashboard",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent", content: "outside" },
       responseSchema: getMemoryDashboardRouteSchema.response[200],
+      permissionId: "memory.view"
+    },
+    {
+      method: "GET",
+      path: "/api/memory/candidates",
+      chat: { access: "read", title: "List pending memory suggestions", content: "outside" },
+      requestSchema: getMemoryPendingCandidatesRouteSchema.querystring,
+      responseSchema: getMemoryPendingCandidatesRouteSchema.response[200],
       permissionId: "memory.view"
     },
     {
       method: "POST",
       path: "/api/memory/candidates/:id/accept",
+      // Ben, 2026-10-06: accepting a suggestion from chat always shows an approval card.
+      chat: {
+        access: "destructive",
+        title: "Accept memory suggestion",
+        content: "user_authored",
+        target: memoryCandidateTarget
+      },
       requestSchema: postMemoryCandidateAcceptRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/candidates/:id/reject",
+      chat: {
+        access: "write",
+        title: "Reject memory suggestion",
+        content: "user_authored",
+        target: memoryCandidateTarget
+      },
       requestSchema: postMemoryCandidateRejectRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "POST",
       path: "/api/memory/candidates/:id/suppress",
+      chat: {
+        access: "write",
+        title: "Suppress memory suggestion",
+        content: "user_authored",
+        target: memoryCandidateTarget
+      },
       requestSchema: postMemoryCandidateSuppressRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "PATCH",
       path: "/api/memory/graph/facts/:id",
+      chat: {
+        access: "destructive",
+        title: "Change memory dates and recall visibility",
+        content: "outside",
+        target: memoryFactTarget
+      },
       requestSchema: patchMemoryFactDashboardRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "PATCH",
       path: "/api/memory/graph/entities/:id",
+      chat: { access: "write", title: "Update memory entity", content: "user_authored" },
       requestSchema: patchMemoryEntityDashboardRouteSchema.body,
       permissionId: "memory.manage"
     },
     {
       method: "DELETE",
       path: "/api/memory/graph/entities/:id",
+      chat: {
+        access: "destructive",
+        title: "Delete memory entity",
+        content: "outside",
+        target: memoryEntityTarget
+      },
       permissionId: "memory.manage"
     }
   ],
@@ -228,6 +331,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       description: "Recall source-backed graph memory owned by the active actor.",
       permissionId: "memory.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -245,6 +349,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       permissionId: "memory.manage",
       actionFamilyId: "memory_management",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: memoryRememberToolInputSchema,
@@ -252,9 +357,15 @@ export const memoryModuleManifest: MossModuleManifest = {
     },
     {
       name: "memory.forget",
-      description: "Forget a graph memory fact owned by the active actor.",
+      description:
+        "Forget a saved graph memory fact after the user approves its exact text. To reject a pending memory suggestion, find the suggestion action instead.",
       permissionId: "memory.manage",
       risk: "destructive",
+      // Receipt-only result; the per-call target is admitted as outside before its card.
+      content: "user_authored",
+      safeErrors: true,
+      requiresServices: ["memoryForget"],
+      requiresPerCallResolution: true,
       selfOperationGrant: "confirm_always",
       inputSchema: {
         type: "object",
@@ -269,6 +380,16 @@ export const memoryModuleManifest: MossModuleManifest = {
   ],
   features: [
     {
+      id: "memory.forget_approval",
+      description:
+        "Memory deletion asks first with full text, never IDs. Both chat paths check the exact version. Changed or reloaded requests need a new approval. Displayed targets count as outside content. Rejection tells Moss you declined."
+    },
+    {
+      id: "memory.chat_app_actions",
+      description:
+        "App actions create facts and entities and list or decide pending suggestions. Cards show plain memory text without IDs; hidden snapshots bind the target. Accepting, deleting and superseding ask first. Retained-source recall stays blocked."
+    },
+    {
       id: "memory.associative_graph",
       description:
         "Keep what Moss learns about you as a graph of people, things and facts, and recall the " +
@@ -278,8 +399,16 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.candidate_review",
       description:
-        "Moss proposes new memories as it learns; in Memory settings you review each candidate and " +
-        "accept, reject, or suppress it before it becomes a kept memory."
+        "Review pending suggestions in Memory settings or chat. Accepting in chat asks first and " +
+        "adds a memory, keeping older ones. Accept, reject and suppress only pending suggestions; " +
+        "repeat or conflicting decisions are refused."
+    },
+    {
+      id: "memory.pending_suggestion_counts",
+      description:
+        "Chat reads 5 pending suggestions per cursor page; decisions do not shift later pages. " +
+        "Total counts all pending, remaining counts after the page. Restart for newer arrivals. " +
+        "Text has excerpt flags; IDs and approval labels stay complete."
     },
     {
       id: "memory.notes_ingest",

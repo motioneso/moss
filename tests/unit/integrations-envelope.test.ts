@@ -81,6 +81,11 @@ async function buildExecute(baseUrl: string, tool: DiscoveredTool) {
   });
   const modules = await resolver("actor-1");
   const tools = modules[0]!.assistantTools ?? [];
+  expect(tools[0]).toMatchObject({
+    descriptorOwnerUserId: "owner",
+    isExternal: true,
+    externalContent: true
+  });
   return tools[0]!.execute!;
 }
 

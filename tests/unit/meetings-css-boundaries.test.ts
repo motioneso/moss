@@ -94,7 +94,7 @@ describe("Meetings CSS boundaries", () => {
     const phoneCss = meetingsCss.split("@media (max-width: 760px)")[1];
     expect(phoneCss).toBeDefined();
     const captureRule = phoneCss!.match(
-      /\.meetings-capture > \.jds-btn,\s*\.meetings-capture > \.jds-control-pill \{([^}]+)\}/
+      /\.meetings-capture-heading > \.jds-btn,\s*\.meetings-capture-heading > \.jds-control-pill \{([^}]+)\}/
     )?.[1];
     expect(captureRule).toContain("position: fixed;");
     const captureZ = Number(captureRule!.match(/z-index: (\d+);/)?.[1]);

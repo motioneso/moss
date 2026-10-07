@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
-import { act, type ReactNode } from "react";
+import { act, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -9,16 +9,14 @@ import type {
   ListMySessionsResponse,
   MeetingCaptureDevice,
   MeetingCapturePreferences,
-  MeetingOutputsResponse,
-  MeetingRecordingNoticeStatus,
   RecordingCapabilitiesResponse,
   UpdateMeetingCapturePreferences
 } from "@moss/shared";
-import { MeetingSetup } from "../../packages/meetings/src/web/meeting-setup.js";
 import MeetingSettings from "../../packages/meetings/src/web/meeting-settings.js";
 import { meetingSettingsKeys } from "../../packages/meetings/src/web/meeting-settings-state.js";
 import { meetingKeys } from "../../packages/meetings/src/web/client.js";
 import { captureKeys } from "../../packages/meetings/src/web/capture-client.js";
+import { meetingLinkKeys } from "../../packages/meetings/src/web/meeting-link-state.js";
 
 const now = "2026-10-06T12:00:00.000Z";
 const device: MeetingCaptureDevice = {
@@ -44,24 +42,15 @@ const device: MeetingCaptureDevice = {
   }
 };
 const newPreferences = (): MeetingCapturePreferences => ({
-  defaultCaptureMode: null,
+  defaultCaptureMode: "computer-audio",
   rememberedSource: null,
   summarizeOnStop: true,
-  summaryTemplateId: "general",
-  setupCompletedAt: null
+  summaryTemplateId: "general"
 });
 const savedPreferences = (): MeetingCapturePreferences => ({
   ...newPreferences(),
   defaultCaptureMode: "computer-audio",
-  rememberedSource: { deviceId: device.deviceId, microphoneId: "desk-mic", mode: "computer-audio" },
-  setupCompletedAt: now
-});
-const storedNotice = (): MeetingRecordingNoticeStatus => ({
-  currentNotice: {
-    policyVersion: "v1",
-    text: "Tell people when recording. Selected audio goes to your transcription service."
-  },
-  acknowledgement: { policyVersion: "v1", acknowledgedAt: now }
+  rememberedSource: { deviceId: device.deviceId, microphoneId: "desk-mic", mode: "computer-audio" }
 });
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 const preferencesPath = "/api/meetings/preferences";
@@ -69,11 +58,9 @@ let root: Root;
 let host: HTMLDivElement;
 let client: QueryClient;
 let preferences: MeetingCapturePreferences;
-let notice: MeetingRecordingNoticeStatus;
 let devices: readonly MeetingCaptureDevice[];
 let sessions: ListMySessionsResponse;
 let capabilities: RecordingCapabilitiesResponse;
-let availability: Pick<MeetingOutputsResponse, "generationAvailability" | "templates">;
 let processingReady: boolean;
 let calls: { path: string; method: string; body?: Record<string, unknown> }[];
 let transport: ReturnType<typeof vi.fn<(path: string, options?: RequestInit) => Promise<Response>>>;
@@ -82,7 +69,7 @@ async function settle() {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
 }
-async function mount(view: ReactNode = <MeetingSetup onCompleted={() => {}} />) {
+async function mount(view: ReactNode = <MeetingSettings />) {
   await act(async () =>
     root.render(
       <QueryClientProvider client={client}>
@@ -99,13 +86,6 @@ async function click(text: string) {
   await act(async () => button(text).click());
   await settle();
 }
-function checkbox(label: string) {
-  return host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
-}
-async function toggle(label: string) {
-  await act(async () => checkbox(label).click());
-  await settle();
-}
 async function select(id: string, value: string) {
   await act(async () => {
     const input = host.querySelector<HTMLSelectElement>(`#${id}`)!;
@@ -118,7 +98,6 @@ const writes = () => calls.filter((call) => call.path === preferencesPath && cal
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   preferences = newPreferences();
-  notice = { ...storedNotice(), acknowledgement: null };
   devices = [device];
   processingReady = true;
   sessions = {
@@ -157,13 +136,6 @@ beforeEach(() => {
       }
     ]
   };
-  availability = {
-    generationAvailability: "available",
-    templates: [
-      { id: "general", version: 1, name: "General meeting" },
-      { id: "project-review", version: 1, name: "Project review" }
-    ]
-  };
   calls = [];
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } }
@@ -185,24 +157,31 @@ beforeEach(() => {
             ? { rememberedSource: update.rememberedSource }
             : {}),
           summarizeOnStop: update.summarizeOnStop ?? preferences.summarizeOnStop,
-          summaryTemplateId: update.summaryTemplateId ?? preferences.summaryTemplateId,
-          setupCompletedAt: update.completeSetup ? now : preferences.setupCompletedAt
+          summaryTemplateId: update.summaryTemplateId ?? preferences.summaryTemplateId
         };
       }
       return json(preferences);
     }
-    if (path === "/api/meetings/recording-notice") {
-      if (body)
-        notice = {
-          ...notice,
-          acknowledgement: { policyVersion: String(body.policyVersion), acknowledgedAt: now }
-        };
-      return json(notice);
-    }
     if (path === "/api/meetings/capture/devices") return json({ devices, processingReady });
+    if (path.startsWith("/api/me/sessions/") && options?.method === "DELETE") {
+      const id = decodeURIComponent(path.split("/").at(-1)!);
+      sessions = { sessions: sessions.sessions.filter((item) => item.id !== id) };
+      capabilities = { devices: capabilities.devices.filter((item) => item.deviceId !== id) };
+      devices = devices.filter((item) => item.deviceId !== id);
+      return json({ success: true });
+    }
+    if (path === "/api/companion/recording-capability/revoke") {
+      const id = body?.deviceId;
+      capabilities = {
+        devices: capabilities.devices.map((item) =>
+          item.deviceId === id ? { ...item, state: "revoked" } : item
+        )
+      };
+      devices = devices.filter((item) => item.deviceId !== id);
+      return new Response(null, { status: 204 });
+    }
     if (path === "/api/me/sessions") return json(sessions);
     if (path === "/api/companion/recording-capabilities") return json(capabilities);
-    if (path === "/api/meetings/output-availability") return json(availability);
     if (path === "/api/me/locale")
       return json({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } });
     throw new Error(`Unexpected synthetic settings request ${path}`);
@@ -219,303 +198,88 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-describe("Meetings setup and settings (synthetic transport, not live Mac proof)", () => {
-  it("defaults summary on, completes setup after stored notice, and never creates or starts a meeting", async () => {
-    const onCompleted = vi.fn();
-    await mount(<MeetingSetup onCompleted={onCompleted} />);
-    expect(host.textContent).toContain("Set up Meetings");
-    expect(checkbox("Write a summary when I stop").checked).toBe(true);
-    expect(host.querySelector<HTMLSelectElement>("#meeting-settings-microphone")?.value).toBe(
-      "desk-mic"
+describe("minimal Meetings settings (synthetic transport, not live Mac proof)", () => {
+  it("shows only linked status, the default audio dropdown and Unlink Mac", async () => {
+    await mount();
+    expect(host.textContent).toContain("Studio Mac");
+    expect(host.textContent).toContain("Linked");
+    const source = host.querySelector<HTMLSelectElement>("#meeting-settings-audio-source")!;
+    expect(source.value).toBe("computer-audio");
+    expect([...source.options].map((option) => option.textContent)).toEqual([
+      "Microphone + system audio",
+      "Microphone only"
+    ]);
+    expect([...host.querySelectorAll("button")].map((item) => item.textContent)).toEqual([
+      "Unlink Mac"
+    ]);
+    expect(host.querySelectorAll("select")).toHaveLength(1);
+    expect(host.querySelectorAll('input[type="checkbox"], input[type="radio"]')).toHaveLength(0);
+    expect(host.textContent).not.toMatch(
+      /notice|acknowledge|Finish setup|summary style|Moss address|Choose a microphone|Run setup/i
     );
-    expect(host.querySelector<HTMLInputElement>('input[value="computer-audio"]')?.checked).toBe(
-      true
-    );
-    expect(button("Finish setup").disabled).toBe(true);
-    await toggle("Recording notice");
-    expect(button("Finish setup").disabled).toBe(false);
-    await click("Finish setup");
-    expect(onCompleted).toHaveBeenCalledTimes(1);
-    expect(writes()[0]?.body).toEqual({
-      defaultCaptureMode: "computer-audio",
-      rememberedSource: {
-        deviceId: device.deviceId,
-        microphoneId: "desk-mic",
-        mode: "computer-audio"
-      },
-      summarizeOnStop: true,
-      summaryTemplateId: "general",
-      completeSetup: true
+    expect(calls.every((call) => call.method === "GET")).toBe(true);
+    expect(calls.some((call) => /notice|output-availability/.test(call.path))).toBe(false);
+  });
+  it("saves only the chosen mode immediately, preserving exact legacy microphone and unrelated preferences", async () => {
+    preferences = savedPreferences();
+    await mount();
+    await select("meeting-settings-audio-source", "microphone-only");
+    expect(writes().map((call) => call.body)).toEqual([{ defaultCaptureMode: "microphone-only" }]);
+    expect(preferences.rememberedSource).toEqual({
+      deviceId: device.deviceId,
+      microphoneId: "desk-mic",
+      mode: "computer-audio"
     });
-    expect(client.getQueryData(meetingKeys.preferences)).toMatchObject({ setupCompletedAt: now });
-    expect(
-      calls.some(
-        (call) => call.path.endsWith("/capture/start") || call.path === "/api/meetings/records"
-      )
-    ).toBe(false);
-    expect(host.textContent).not.toContain("System default");
-  });
-  it("reuses the current account notice and makes it reviewable with its stored date", async () => {
-    notice = storedNotice();
-    await mount();
-    expect(checkbox("Recording notice")).toBeNull();
-    expect(host.textContent).toContain("Recording notice acknowledged");
-    expect(host.textContent).toContain("2026");
-    await click("Review recording notice");
-    expect(host.textContent).toContain(notice.currentNotice.text);
-    await click("Finish setup");
-    expect(
-      calls.filter(
-        (call) => call.path === "/api/meetings/recording-notice" && call.method === "PUT"
-      )
-    ).toHaveLength(0);
-  });
-  it("uses microphone-only only after explicitly skipping unavailable computer audio", async () => {
-    notice = storedNotice();
-    devices = [{ ...device, inventory: { ...device.inventory, systemAudioPermission: "denied" } }];
-    await mount();
-    expect(button("Finish setup").disabled).toBe(true);
-    expect(host.querySelector<HTMLInputElement>('input[value="computer-audio"]')?.checked).toBe(
-      true
+    expect(host.querySelector<HTMLSelectElement>("select")?.value).toBe("microphone-only");
+    expect(preferences.summarizeOnStop).toBe(true);
+    expect(calls.some((call) => /capture\/(start|control)$|\/records$/.test(call.path))).toBe(
+      false
     );
-    await click("Skip computer audio");
-    expect(host.textContent).toContain(
-      "Computer audio skipped. Meetings will use your microphone only."
-    );
-    expect(button("Finish setup").disabled).toBe(false);
-    await click("Finish setup");
-    expect(writes()[0]?.body?.rememberedSource).toMatchObject({ mode: "microphone-only" });
   });
-  it("does not replace a missing saved microphone with an available one", async () => {
-    notice = storedNotice();
-    preferences = {
-      ...savedPreferences(),
-      rememberedSource: {
-        deviceId: device.deviceId,
-        mode: "computer-audio",
-        microphoneId: "missing-mic"
-      }
-    };
-    await mount();
-    expect(host.querySelector<HTMLSelectElement>("#meeting-settings-microphone")?.value).toBe(
-      "missing-mic"
-    );
-    expect(host.textContent).toContain("Saved microphone is unavailable");
-    expect(button("Finish setup").disabled).toBe(true);
-    await select("meeting-settings-microphone", "desk-mic");
-    expect(button("Finish setup").disabled).toBe(false);
-  });
-  it("shows unavailable and ambiguous selected apps without falling back", async () => {
-    notice = storedNotice();
+  it("preserves a saved selected app until an explicit supported mode change", async () => {
     preferences = {
       ...savedPreferences(),
       defaultCaptureMode: "selected-app",
       rememberedSource: {
         deviceId: device.deviceId,
-        mode: "selected-app",
         microphoneId: "desk-mic",
-        applicationId: "missing-app"
+        mode: "selected-app",
+        applicationId: "com.example.meeting"
       }
     };
     await mount();
-    expect(host.textContent).toContain("Saved meeting app is unavailable");
-    expect(button("Finish setup").disabled).toBe(true);
-    await select("meeting-settings-app", "com.example.meeting");
-    expect(button("Finish setup").disabled).toBe(false);
-    devices = [
-      {
-        ...device,
-        inventory: {
-          ...device.inventory,
-          applications: [
-            ...device.inventory.applications,
-            { ...device.inventory.applications[0]!, appProcessTreeId: "another-process" }
-          ]
-        }
-      }
-    ];
-    await click("Check again");
-    expect(host.textContent).toContain("More than one instance of this app is open");
-    expect(button("Finish setup").disabled).toBe(true);
+    const source = host.querySelector<HTMLSelectElement>("#meeting-settings-audio-source")!;
+    expect(source.value).toBe("selected-app");
+    expect(source.selectedOptions[0]?.disabled).toBe(true);
+    expect(writes()).toHaveLength(0);
+    await select("meeting-settings-audio-source", "computer-audio");
+    expect(writes()[0]?.body).toEqual({ defaultCaptureMode: "computer-audio" });
+    expect(preferences.rememberedSource?.mode).toBe("selected-app");
+    expect(preferences.rememberedSource?.applicationId).toBe("com.example.meeting");
+    expect(source.value).toBe("computer-audio");
+    expect(source.querySelector('[value="selected-app"]')).toBeNull();
   });
-  it("shows genuine linked device, permissions and provider readiness without unsupported controls", async () => {
-    capabilities = { devices: [{ ...capabilities.devices[0]!, state: "revoked" }] };
+  it("keeps a linked offline Mac visible and lets mode changes save without selecting new hardware", async () => {
     devices = [];
-    processingReady = false;
-    availability = { ...availability, generationAvailability: "model-unavailable" };
+    preferences = savedPreferences();
     await mount();
     expect(host.textContent).toContain("Studio Mac");
-    expect(host.textContent).toContain("Trail Marker 1.4");
-    expect(host.textContent).toContain("Update recording access in Profile settings");
-    expect(host.textContent).toContain("Not confirmed yet");
-    expect(host.textContent).toContain("Needs a transcription route");
-    expect(host.textContent).toContain("Needs a summary-capable model");
-    expect(host.textContent).toContain("CLI models cannot write meeting summaries today");
-    expect(button("Unlink")).toBeUndefined();
-    expect(button("Open System Settings")).toBeUndefined();
-    expect(host.querySelector('a[href="/settings?section=profile"]')).not.toBeNull();
-    expect(button("Finish setup").disabled).toBe(true);
+    expect(host.textContent).toContain("Linked");
+    expect(button("Unlink Mac").disabled).toBe(false);
+    await select("meeting-settings-audio-source", "microphone-only");
+    expect(writes()[0]?.body).toEqual({ defaultCaptureMode: "microphone-only" });
   });
-  it("lets settings change summary defaults with an unchanged offline source and run setup again", async () => {
-    notice = storedNotice();
-    preferences = savedPreferences();
+  it("shows no linked Mac without inventing a download or address field in Settings", async () => {
+    sessions = { sessions: [] };
     devices = [];
-    await mount(<MeetingSettings />);
-    expect(host.textContent).toContain("Saved Mac is not connected");
-    await toggle("Write a summary when I stop");
-    await select("meeting-settings-summary-style", "project-review");
-    await click("Save settings");
-    expect(writes()[0]?.body).toEqual({
-      summarizeOnStop: false,
-      summaryTemplateId: "project-review"
-    });
-    expect(host.textContent).toContain("Meeting settings saved");
-    await click("Run setup again");
-    expect(host.textContent).toContain("Set up Meetings");
-    expect(button("Finish setup").disabled).toBe(true);
-    await click("Cancel");
-    expect(button("Run setup again")).toBeDefined();
-    expect(writes()).toHaveLength(1);
-  });
-  it("changes only the summary switch when inventory refresh fails, without replacing newer server defaults", async () => {
-    notice = storedNotice();
-    preferences = savedPreferences();
-    await mount(<MeetingSettings />);
-    const normal = transport.getMockImplementation()!;
-    transport.mockImplementation((path, options) =>
-      path === "/api/meetings/capture/devices"
-        ? Promise.resolve(json({ message: "Mac offline" }, 503))
-        : normal(path, options)
-    );
-    await click("Check again");
-    expect(host.textContent).toContain("Couldn’t confirm the latest Mac connection");
-    expect(host.textContent).toContain("Connection not confirmed");
-    preferences = {
-      ...preferences,
-      summaryTemplateId: "project-review",
-      rememberedSource: {
-        deviceId: "another-mac",
-        microphoneId: "another-mic",
-        mode: "microphone-only"
-      }
-    };
-    await toggle("Write a summary when I stop");
-    expect(button("Save settings").disabled).toBe(false);
-    await click("Save settings");
-    expect(writes()[0]?.body).toEqual({ summarizeOnStop: false });
-    expect(preferences.summaryTemplateId).toBe("project-review");
-    expect(preferences.rememberedSource?.microphoneId).toBe("another-mic");
-  });
-  it("requires notice for a source change while summary-only edits remain independent", async () => {
-    preferences = savedPreferences();
-    await mount(<MeetingSettings />);
-    await toggle("Write a summary when I stop");
-    expect(button("Save settings").disabled).toBe(false);
-    await click("Save settings");
-    expect(writes()[0]?.body).toEqual({ summarizeOnStop: false });
-    await act(async () =>
-      host.querySelector<HTMLInputElement>('input[value="microphone-only"]')!.click()
-    );
-    await settle();
-    expect(button("Save settings").disabled).toBe(true);
-    await toggle("Recording notice");
-    await click("Save settings");
-    expect(writes()[1]?.body).toEqual({
-      defaultCaptureMode: "microphone-only",
-      rememberedSource: {
-        deviceId: device.deviceId,
-        microphoneId: "desk-mic",
-        mode: "microphone-only"
-      }
-    });
-  });
-  it("keeps a completed setup receipt when a pre-save preferences read returns late", async () => {
-    notice = storedNotice();
-    let finish!: (response: Response) => void;
-    let delayRead = false;
-    const normal = transport.getMockImplementation()!;
-    transport.mockImplementation((path, options) =>
-      path === preferencesPath && !options?.method && delayRead
-        ? new Promise<Response>((resolve) => {
-            finish = resolve;
-          })
-        : normal(path, options)
-    );
+    capabilities = { devices: [] };
     await mount();
-    delayRead = true;
-    act(() => {
-      void client.invalidateQueries({ queryKey: meetingKeys.preferences });
-    });
-    await settle();
-    await click("Finish setup");
-    expect(client.getQueryData(meetingKeys.preferences)).toMatchObject({ setupCompletedAt: now });
-    await act(async () => finish(json(newPreferences())));
-    await settle();
-    expect(client.getQueryData(meetingKeys.preferences)).toMatchObject({ setupCompletedAt: now });
+    expect(host.textContent).toContain("No Mac linked");
+    expect(button("Unlink Mac")).toBeUndefined();
+    expect(host.querySelectorAll("a, input")).toHaveLength(0);
   });
-  it("refreshes the canonical notice when policy changes before Finish reaches the server", async () => {
-    notice = storedNotice();
-    const normal = transport.getMockImplementation()!;
-    transport.mockImplementation((path, options) =>
-      path === preferencesPath && options?.method === "PUT"
-        ? Promise.resolve(json({ code: "meeting_capture_notice_required" }, 409))
-        : normal(path, options)
-    );
-    const onCompleted = vi.fn();
-    await mount(<MeetingSetup onCompleted={onCompleted} />);
-    notice = {
-      ...notice,
-      currentNotice: { policyVersion: "v2", text: "Updated recording notice" }
-    };
-    await click("Finish setup");
-    expect(onCompleted).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("Updated recording notice");
-    expect(host.textContent).toContain("Review the current recording notice");
-    expect(button("Finish setup").disabled).toBe(true);
-  });
-  it("refreshes clean server defaults without replacing an unsaved explicit choice", async () => {
-    preferences = savedPreferences();
-    notice = storedNotice();
-    await mount(<MeetingSettings />);
-    preferences = { ...preferences, summaryTemplateId: "project-review" };
-    await click("Check again");
-    expect(host.querySelector<HTMLSelectElement>("#meeting-settings-summary-style")?.value).toBe(
-      "project-review"
-    );
-    await select("meeting-settings-summary-style", "general");
-    preferences = { ...preferences, summarizeOnStop: false };
-    await click("Check again");
-    expect(host.querySelector<HTMLSelectElement>("#meeting-settings-summary-style")?.value).toBe(
-      "general"
-    );
-    await click("Save settings");
-    expect(writes()[0]?.body).toEqual({ summaryTemplateId: "general" });
-    expect(preferences.summarizeOnStop).toBe(false);
-  });
-  it("shows loading and a retryable preferences error without replacing saved choices", async () => {
-    let finish!: (response: Response) => void;
-    const normal = transport.getMockImplementation()!;
-    transport.mockImplementation((path, options) =>
-      path === preferencesPath
-        ? new Promise<Response>((resolve) => {
-            finish = resolve;
-          })
-        : normal(path, options)
-    );
-    await mount();
-    expect(host.textContent).toContain("Loading your meeting settings");
-    expect(button("Finish setup")).toBeUndefined();
-    await act(async () => finish(json({ message: "Offline" }, 503)));
-    await settle();
-    expect(host.textContent).toContain("Couldn’t load your meeting settings");
-    transport.mockImplementation(normal);
-    await click("Retry loading settings");
-    expect(button("Finish setup")).toBeDefined();
-    expect(writes()).toHaveLength(0);
-  });
-  it("keeps selected defaults after save failure and retries once without duplicate concurrent saves", async () => {
-    notice = storedNotice();
-    let finish!: (response: Response) => void;
+  it("keeps a failed audio choice and retries without concurrent duplicate writes", async () => {
+    let finish!: (value: Response) => void;
     const normal = transport.getMockImplementation()!;
     transport.mockImplementation((path, options) =>
       path === preferencesPath && options?.method === "PUT"
@@ -526,131 +290,311 @@ describe("Meetings setup and settings (synthetic transport, not live Mac proof)"
         : normal(path, options)
     );
     await mount();
-    await toggle("Write a summary when I stop");
     act(() => {
-      button("Finish setup").click();
-      button("Finish setup").click();
+      const source = host.querySelector<HTMLSelectElement>("#meeting-settings-audio-source")!;
+      source.value = "microphone-only";
+      source.dispatchEvent(new Event("change", { bubbles: true }));
+      source.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    expect(writes()).toHaveLength(1);
-    await act(async () => finish(json({ message: "Temporary failure" }, 503)));
     await settle();
-    expect(host.textContent).toContain("Your choices are kept");
-    expect(checkbox("Write a summary when I stop").checked).toBe(false);
+    expect(writes()).toHaveLength(1);
+    expect(host.querySelector<HTMLSelectElement>("select")?.disabled).toBe(true);
+    await act(async () => finish(json({ message: "Unavailable" }, 503)));
+    await settle();
+    expect(host.querySelector<HTMLSelectElement>("select")?.value).toBe("microphone-only");
+    expect(host.textContent).toContain("Couldn’t save your audio source");
     transport.mockImplementation(normal);
-    await click("Finish setup");
+    await click("Retry");
     expect(writes()).toHaveLength(2);
     expect(writes()[1]?.body).toEqual(writes()[0]?.body);
+    expect(host.querySelector('[role="alert"]')).toBeNull();
   });
-  it.each([false, true])(
-    "ignores late settings responses after actual auth reset (success=%s)",
+  it("loads fresh server defaults without replacing an unsaved failed choice", async () => {
+    await mount();
+    preferences = { ...preferences, defaultCaptureMode: "microphone-only" };
+    await act(async () => {
+      await client.refetchQueries({ queryKey: meetingKeys.preferences });
+    });
+    await settle();
+    expect(host.querySelector<HTMLSelectElement>("select")?.value).toBe("microphone-only");
+    const normal = transport.getMockImplementation()!;
+    transport.mockImplementation((path, options) =>
+      path === preferencesPath && options?.method === "PUT"
+        ? Promise.resolve(json({ message: "Unavailable" }, 500))
+        : normal(path, options)
+    );
+    await select("meeting-settings-audio-source", "computer-audio");
+    await act(async () => {
+      await client.refetchQueries({ queryKey: meetingKeys.preferences });
+    });
+    await settle();
+    expect(host.querySelector<HTMLSelectElement>("select")?.value).toBe("computer-audio");
+  });
+  it("keeps a confirmed mode when an older preference read returns late", async () => {
+    await mount();
+    let finish!: (value: Response) => void;
+    const normal = transport.getMockImplementation()!;
+    transport.mockImplementation((path, options) =>
+      path === preferencesPath && options?.method !== "PUT"
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : normal(path, options)
+    );
+    act(() => {
+      void client.refetchQueries({ queryKey: meetingKeys.preferences });
+    });
+    await settle();
+    await select("meeting-settings-audio-source", "microphone-only");
+    await act(async () => finish(json(newPreferences())));
+    await settle();
+    expect(
+      client.getQueryData<MeetingCapturePreferences>(meetingKeys.preferences)?.defaultCaptureMode
+    ).toBe("microphone-only");
+    expect(host.querySelector<HTMLSelectElement>("select")?.value).toBe("microphone-only");
+  });
+  it("shows a retryable preference read error without writing defaults", async () => {
+    const normal = transport.getMockImplementation()!;
+    transport.mockImplementation((path, options) =>
+      path === preferencesPath
+        ? Promise.resolve(json({ message: "Unavailable" }, 503))
+        : normal(path, options)
+    );
+    await mount();
+    expect(host.textContent).toContain("Couldn’t load your meeting settings");
+    expect(host.querySelector("select")).toBeNull();
+    transport.mockImplementation(normal);
+    await click("Retry loading settings");
+    expect(host.querySelector<HTMLSelectElement>("select")?.value).toBe("computer-audio");
+    expect(writes()).toHaveLength(0);
+  });
+  it.each([
+    "/api/me/sessions",
+    "/api/companion/recording-capabilities",
+    "/api/meetings/capture/devices"
+  ])("masks private metadata and rejects stale actions after denial from %s", async (path) => {
+    await mount();
+    const source = host.querySelector<HTMLSelectElement>("select")!;
+    const unlink = button("Unlink Mac");
+    const normal = transport.getMockImplementation()!;
+    transport.mockImplementation((target, options) =>
+      target === path ? Promise.resolve(json({ message: "Denied" }, 403)) : normal(target, options)
+    );
+    await act(async () => {
+      await client.refetchQueries({
+        predicate: (query) =>
+          [meetingLinkKeys.sessions, meetingLinkKeys.capabilities, captureKeys.devices].some(
+            (key) => JSON.stringify(query.queryKey) === JSON.stringify(key)
+          )
+      });
+      source.value = "microphone-only";
+      source.dispatchEvent(new Event("change", { bubbles: true }));
+      unlink.click();
+    });
+    await settle();
+    expect(host.textContent).toContain("Mac access could not be verified");
+    expect(host.textContent).not.toContain("Studio Mac");
+    expect(host.querySelector("select")).toBeNull();
+    expect(calls.filter((call) => call.method !== "GET")).toHaveLength(0);
+  });
+  it.each([true, false])(
+    "ignores a late mode write after a mounted auth reset (success=%s)",
     async (success) => {
-      notice = storedNotice();
-      const pending: ((response: Response) => void)[] = [];
+      let finish!: (value: Response) => void;
       const normal = transport.getMockImplementation()!;
       transport.mockImplementation((path, options) =>
         path === preferencesPath && options?.method === "PUT"
           ? new Promise<Response>((resolve) => {
-              pending.push(resolve);
+              finish = resolve;
             })
           : normal(path, options)
       );
-      const onCompleted = vi.fn();
-      await mount(<MeetingSetup onCompleted={onCompleted} />);
-      act(() => button("Finish setup").click());
+      await mount();
+      await select("meeting-settings-audio-source", "microphone-only");
+      sessions = { sessions: [] };
+      devices = [];
+      capabilities = { devices: [] };
       await act(async () => {
-        root.unmount();
         await client.resetQueries();
       });
-      root = createRoot(host);
-      await mount(<MeetingSetup onCompleted={onCompleted} />);
-      await toggle("Write a summary when I stop");
-      act(() => button("Finish setup").click());
+      await settle();
       const newer = client.getQueryData(meetingSettingsKeys.draft);
       await act(async () =>
-        pending[0]!(success ? json(savedPreferences()) : json({ message: "Old failure" }, 400))
+        finish(
+          success
+            ? json({ ...newPreferences(), defaultCaptureMode: "microphone-only" })
+            : json({ message: "Old failure" }, 503)
+        )
       );
       await settle();
       expect(client.getQueryData(meetingSettingsKeys.draft)).toEqual(newer);
-      expect(onCompleted).not.toHaveBeenCalled();
-      preferences = { ...savedPreferences(), summarizeOnStop: false };
-      await act(async () => pending[1]!(json(preferences)));
-      await settle();
-      expect(onCompleted).toHaveBeenCalledTimes(1);
-      expect(client.getQueryData(meetingKeys.preferences)).toEqual(preferences);
-    }
-  );
-  it.each([
-    ["/api/me/sessions", 401],
-    ["/api/companion/recording-capabilities", 403],
-    ["/api/meetings/capture/devices", 403]
-  ] as const)(
-    "masks cached Mac/source metadata when %s denies access (%s)",
-    async (deniedPath, status) => {
-      notice = storedNotice();
-      preferences = savedPreferences();
-      await mount(<MeetingSettings />);
-      expect(host.textContent).toContain("Studio Mac");
-      expect(host.textContent).toContain("Desk microphone");
-      const normal = transport.getMockImplementation()!;
-      transport.mockImplementation((path, options) =>
-        path === deniedPath
-          ? Promise.resolve(json({ message: "Access denied" }, status))
-          : normal(path, options)
-      );
-      await click("Check again");
       expect(host.textContent).not.toContain("Studio Mac");
-      expect(host.textContent).toContain("Mac access could not be verified");
-      expect(host.textContent).not.toContain("Desk microphone");
-      expect(host.textContent).not.toContain("Meeting recording enabled");
-      expect(host.querySelector("#meeting-settings-microphone")).toBeNull();
-      await toggle("Write a summary when I stop");
-      await click("Save settings");
-      expect(writes()[0]?.body).toEqual({ summarizeOnStop: false });
+      expect(host.textContent).not.toContain("Couldn’t save");
     }
   );
-  it("does not render the previous account's linked Mac after actual auth reset", async () => {
-    notice = storedNotice();
+  it("unlinks the exact named Mac and retains preferences and saved content", async () => {
+    preferences = savedPreferences();
+    const original = structuredClone(preferences);
+    const second = {
+      ...sessions.sessions[0]!,
+      id: "33445566-1122-4122-8122-112233445566",
+      deviceLabel: "Other Mac",
+      companion: { ...sessions.sessions[0]!.companion!, displayName: "Other Mac" }
+    };
+    sessions = { sessions: [...sessions.sessions, second] };
+    const notes = { meeting: { personalNotes: "Keep these notes" } };
+    const transcript = { snapshot: { segments: [{ text: "Keep this transcript" }] } };
+    client.setQueryData(meetingKeys.record("meeting"), notes);
+    client.setQueryData(meetingKeys.transcript("meeting"), transcript);
     await mount();
-    expect(host.textContent).toContain("Studio Mac");
-    await act(async () => {
-      root.unmount();
-      await client.resetQueries();
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[aria-label="Unlink Studio Mac"]')!.click()
+    );
+    await settle();
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[role="dialog"] button.jds-btn--danger')!.click()
+    );
+    await settle();
+    expect(calls.filter((call) => call.method === "DELETE").map((call) => call.path)).toEqual([
+      `/api/me/sessions/${device.deviceId}`
+    ]);
+    expect(sessions.sessions).toEqual([second]);
+    expect(preferences).toEqual(original);
+    expect(writes()).toHaveLength(0);
+    expect(client.getQueryData(meetingKeys.record("meeting"))).toEqual(notes);
+    expect(client.getQueryData(meetingKeys.transcript("meeting"))).toEqual(transcript);
+  });
+  it("cancels Unlink by button, Escape or backdrop without making a request", async () => {
+    await mount();
+    for (const close of ["button", "escape", "backdrop"]) {
+      await click("Unlink Mac");
+      expect(document.activeElement?.textContent).toBe("Cancel");
+      await act(async () => {
+        if (close === "button") button("Cancel").click();
+        else if (close === "escape")
+          document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        else host.querySelector<HTMLElement>(".jds-dialog-scrim")!.click();
+      });
+      await settle();
+      expect(host.querySelector('[role="dialog"]')).toBeNull();
+    }
+    expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(0);
+  });
+  it("coalesces Unlink confirmations, leaves an uncertain result linked and permits retry", async () => {
+    let finish!: (value: Response) => void;
+    const normal = transport.getMockImplementation()!;
+    transport.mockImplementation((path, options) =>
+      options?.method === "DELETE"
+        ? new Promise<Response>((resolve) => {
+            calls.push({ path, method: "DELETE" });
+            finish = resolve;
+          })
+        : normal(path, options)
+    );
+    await mount();
+    await click("Unlink Mac");
+    act(() => {
+      const confirm = host.querySelector<HTMLButtonElement>(
+        '[role="dialog"] button.jds-btn--danger'
+      )!;
+      confirm.click();
+      confirm.click();
     });
-    root = createRoot(host);
+    await settle();
+    expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(1);
+    expect(button("Cancel").disabled).toBe(true);
+    await act(async () => finish(json({ message: "Unavailable" }, 503)));
+    await settle();
+    expect(host.textContent).toContain("Couldn’t confirm Unlink");
+    expect(sessions.sessions).toHaveLength(1);
+    transport.mockImplementation(normal);
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[role="dialog"] button.jds-btn--danger')!.click()
+    );
+    await settle();
+    expect(sessions.sessions).toHaveLength(0);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("rechecks the exact companion session before Unlink confirmation", async () => {
+    await mount();
+    await click("Unlink Mac");
+    const confirm = host.querySelector<HTMLButtonElement>(
+      '[role="dialog"] button.jds-btn--danger'
+    )!;
+    await act(async () => {
+      client.setQueryData(meetingLinkKeys.sessions, {
+        sessions: [{ ...sessions.sessions[0]!, source: "browser" }]
+      });
+      confirm.click();
+    });
+    await settle();
+    expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(0);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it.each(["auth reset", "navigation"])(
+    "ignores late Unlink results after %s",
+    async (boundary) => {
+      for (const success of [false, true]) {
+        let finish!: (value: Response) => void;
+        const normal = transport.getMockImplementation()!;
+        transport.mockImplementation((path, options) =>
+          options?.method === "DELETE"
+            ? new Promise<Response>((resolve) => {
+                finish = resolve;
+              })
+            : normal(path, options)
+        );
+        await mount();
+        await click("Unlink Mac");
+        act(() =>
+          host.querySelector<HTMLButtonElement>('[role="dialog"] button.jds-btn--danger')!.click()
+        );
+        await settle();
+        await act(async () => {
+          root.unmount();
+          if (boundary === "auth reset") await client.resetQueries();
+        });
+        root = createRoot(host);
+        transport.mockImplementation(normal);
+        await mount();
+        const newer = client.getQueryData(meetingLinkKeys.action);
+        await act(async () =>
+          finish(success ? json({ success: true }) : json({ message: "Old failure" }, 500))
+        );
+        await settle();
+        expect(client.getQueryData(meetingLinkKeys.action)).toEqual(newer);
+        expect(client.getQueryData(meetingLinkKeys.sessions)).toEqual(sessions);
+        expect(host.textContent).not.toContain("Couldn’t confirm Unlink");
+        expect(host.textContent).not.toContain("Studio Mac unlinked");
+      }
+    }
+  );
+  it("hides an old confirmation after auth resets to a different account", async () => {
+    await mount();
+    await click("Unlink Mac");
     sessions = { sessions: [] };
     capabilities = { devices: [] };
     devices = [];
-    preferences = newPreferences();
-    notice = { ...storedNotice(), acknowledgement: null };
-    await mount();
-    expect(host.textContent).not.toContain("Studio Mac");
-    expect(host.textContent).not.toContain("Desk microphone");
-    expect(host.textContent).toContain("No Mac is linked");
-    expect(button("Finish setup").disabled).toBe(true);
-  });
-  it("checks the latest cached source inventory at Finish before sending", async () => {
-    notice = storedNotice();
-    await mount();
-    act(() => {
-      client.setQueryData(captureKeys.devices, { devices: [], processingReady: true });
-      button("Finish setup").click();
+    await act(async () => {
+      await client.resetQueries();
     });
     await settle();
-    expect(writes()).toHaveLength(0);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(host.textContent).not.toContain("Studio Mac");
+    expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(0);
   });
-  it("limits the global navigation flex rule to its text label, not recording indicators", () => {
+  it("does not write preferences when effects replay under StrictMode", async () => {
+    await mount(
+      <StrictMode>
+        <MeetingSettings />
+      </StrictMode>
+    );
+    expect(writes()).toHaveLength(0);
+    expect(host.querySelector<HTMLSelectElement>("select")?.value).toBe("computer-audio");
+  });
+  it("keeps the navigation layout scoped to its label", () => {
     const css = readFileSync("apps/web/src/styles.css", "utf8");
     expect(css).not.toContain(".module-link span {");
     expect(css).toContain(".module-link > .module-link__label {");
-    const link = document.createElement("a");
-    link.className = "module-link";
-    const label = document.createElement("span");
-    label.className = "module-link__label";
-    const indicator = document.createElement("span");
-    indicator.className = "jds-indicator";
-    const dot = document.createElement("span");
-    indicator.appendChild(dot);
-    link.append(label, indicator);
-    expect([...link.querySelectorAll(".module-link > .module-link__label")]).toEqual([label]);
   });
 });

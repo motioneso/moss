@@ -136,13 +136,21 @@ capability in that approval; existing paired clients show a one-time upgrade in 
 recording proof is stored in this Mac's Keychain; the server holds its hash. Connecting or approving
 does not record. Backtrack keeps its separate existing consent and retention behavior.
 
-In Meetings, select this named Mac, a microphone and one of microphone-only, microphone + selected
-app, or microphone + computer audio, then choose **Start meeting**. Moss remembers the stable source
-identities; Change selects different ones. Missing or ambiguous sources require explicit selection
-and never widen capture. First use may request an OS microphone/system-audio permission. If Stop,
-revocation or expiry occurs while permission is pending, granting permission cannot start audio.
-There is no per-meeting Prepare, approval, notice checkbox or second Record button. Trail Marker
-keeps the current browser in place rather than launching the default browser for each meeting.
+In Moss, **New meeting** creates the meeting without recording. Press **Start recording** when
+ready. A fresh account uses the Mac's exact OS-default microphone and system audio, without
+source-selection questions. Existing exact saved sources remain scoped; a missing source never
+widens capture. Mode choices belong in Meetings Settings in the minimal workspace layer (#3079).
+First use may request an OS microphone/system-audio permission. If Stop, revocation or expiry
+occurs while permission is pending, granting permission cannot start audio. The app's existing
+connection flow handles linking; no per-meeting Prepare or second Record button is added.
+
+The native inventory reports the exact OS-default microphone UID independently of display-name
+ordering. This native build always sends `defaultMicrophoneId`: the exact UID or explicit `null`
+when the default is unknown, unavailable or ambiguous. Only omission by older clients permits
+the server's legacy single-microphone fallback. Changing the OS default does not retarget an
+existing exact source selection. A matching Moss server must accept the nullable field; older
+strict inventory schemas reject it. Screen Recording status is not a system-audio permission
+preflight: meeting computer audio may still ask for access when Start opens the selected tap.
 
 Viewing Moss from another computer controls the explicitly named recorder; it never switches to
 that browser's hardware or the server's hardware. Browser-only capture is not implemented.

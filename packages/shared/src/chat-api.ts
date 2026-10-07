@@ -171,6 +171,12 @@ export interface ActionRequestPreview {
   readonly body: string;
 }
 
+/** Live, server-derived app action preview; never interpreted as markup. */
+export interface ActionRequestDetails {
+  readonly target: string | null;
+  readonly fields: readonly { readonly label: string; readonly value: string }[];
+}
+
 export interface TranscriptRecord {
   readonly meetingContext?: MeetingChatCoverage;
   readonly kind: ChatRecordKind;
@@ -190,10 +196,14 @@ export interface TranscriptRecord {
   readonly result?: Record<string, unknown>;
   /** Dot-path tokens into the frontend `queryKeys` object, resolved by app-shell's generic invalidation effect. */
   readonly affectsQueryKeys?: readonly string[];
+  /** Module ids whose cached screens became stale after a successful action. */
+  readonly affectsModules?: readonly string[];
   readonly answerProvenance?: readonly AnswerSourceSupportCard[];
   readonly answerProvenanceCitedIds?: readonly string[];
   readonly sourceFreshness?: SourceFreshnessV1 | null;
   readonly preview?: ActionRequestPreview;
+  readonly details?: ActionRequestDetails;
+  readonly outsideContentNotice?: boolean;
   /** Chips shown on a sent user message (optimistic, post-response, and history rows). */
   readonly attachments?: readonly ChatAttachmentDto[];
   /** Elapsed time in milliseconds for the prompt turn (from submit to stop reason). */

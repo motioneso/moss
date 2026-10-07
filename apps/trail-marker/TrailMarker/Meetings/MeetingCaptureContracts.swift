@@ -22,6 +22,28 @@ struct MeetingCaptureInventory: Codable, Equatable {
     let computerAudio: ComputerAudio
     let microphonePermission: MeetingCapturePermission
     let systemAudioPermission: MeetingCapturePermission
+    /// Exact current OS-default input UID, when it is an unambiguous advertised microphone.
+    var defaultMicrophoneId: String? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case microphones, applications, computerAudio, microphonePermission, systemAudioPermission, defaultMicrophoneId
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(microphones, forKey: .microphones)
+        try values.encode(applications, forKey: .applications)
+        try values.encode(computerAudio, forKey: .computerAudio)
+        try values.encode(microphonePermission, forKey: .microphonePermission)
+        try values.encode(systemAudioPermission, forKey: .systemAudioPermission)
+        // Omission means an older client. An unresolved default on this client must never
+        // authorize the server's legacy single-microphone compatibility fallback.
+        if let defaultMicrophoneId {
+            try values.encode(defaultMicrophoneId, forKey: .defaultMicrophoneId)
+        } else {
+            try values.encodeNil(forKey: .defaultMicrophoneId)
+        }
+    }
 }
 struct MeetingCaptureChoice: Codable, Equatable {
     struct Microphone: Codable, Equatable { let deviceId: String; let sourceId: String }

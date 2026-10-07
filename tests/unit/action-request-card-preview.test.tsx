@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
@@ -5,6 +6,7 @@ import { renderToString } from "react-dom/server";
 
 import { ActionRequestCard } from "../../apps/web/src/chat/action-request-card.js";
 import { parseRecord } from "../../apps/web/src/chat/use-chat-stream.js";
+import { RecordRow } from "../../apps/web/src/chat/message-row.js";
 
 // `ActionRequestCard` reads `useMutation` (#1518), which requires a `QueryClient` in context even
 // for the initial idle render — a fresh client per call keeps these tests isolated from each other.
@@ -77,6 +79,48 @@ describe("ActionRequestCard email preview", () => {
   });
 });
 
+describe("memory deletion cards restored without live target details", () => {
+  it.each([undefined, { target: null, fields: [] }, { target: "   ", fields: [] }])(
+    "requires a fresh request when target details are %j",
+    (details) => {
+      const html = renderCard({
+        actionRequestId: "pending-memory",
+        toolName: "memory.forget",
+        summary: "Approve this action?",
+        details
+      });
+      const buttons = [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) =>
+        match[1]!.replace(/<[^>]*>/g, "")
+      );
+      expect(buttons).toEqual(["Reject"]);
+      expect(html).toContain("Memory details are unavailable. Reject this request and ask again.");
+      expect(html).toContain('role="status"');
+    }
+  );
+
+  it("preserves target whitespace and exposes approval only with the memory text", () => {
+    const html = renderCard({
+      actionRequestId: "live-memory",
+      toolName: "memory.forget",
+      summary: "Forget saved memory",
+      details: { target: "First line\n  indented text [fact 123]", fields: [] }
+    });
+    expect(html).toContain(
+      'class="action-request-preview__value action-request-preview__value--multiline"'
+    );
+    expect(html).toContain("First line\n  indented text [fact 123]");
+    const styles = readFileSync(
+      new URL("../../apps/web/src/styles/kit-chat.css", import.meta.url),
+      "utf8"
+    );
+    expect(styles).toMatch(
+      /\.action-request-preview__value--multiline\s*\{[^}]*white-space:\s*pre-wrap;/
+    );
+    expect(html).toContain("Approve");
+    expect(html).not.toContain("Memory details are unavailable");
+  });
+});
+
 describe("parseRecord preview parsing", () => {
   it("parses a well-formed preview object off the SSE chunk", () => {
     const record = parseRecord(
@@ -137,5 +181,110 @@ describe("parseRecord preview parsing", () => {
       summary: "Approve the seeded workflow action",
       status: "pending"
     });
+  });
+});
+
+describe("app action details", () => {
+  const details = {
+    target: "Weekend theme <script>no()</script>",
+    fields: [
+      { label: "Name", value: "**Evening**" },
+      { label: "Enabled", value: "false" }
+    ]
+  };
+
+  it("parses target, exact field rows and the outside-content flag from live SSE", () => {
+    const record = parseRecord(
+      JSON.stringify({
+        kind: "action_request",
+        text: "Change theme",
+        details,
+        outsideContentNotice: false
+      })
+    );
+    expect(record?.details).toEqual(details);
+    expect(record?.outsideContentNotice).toBe(false);
+  });
+
+  it.each([
+    [],
+    { fields: [] },
+    { target: 1, fields: [] },
+    { target: null, fields: [{ label: "Name", value: 42 }] },
+    { target: null, fields: [null] }
+  ])("drops malformed details without partially showing an approval: %j", (details) => {
+    const record = parseRecord(JSON.stringify({ kind: "action_request", text: "Change", details }));
+    expect(record?.details).toBeUndefined();
+  });
+
+  it("accepts a target-free create and rejects non-boolean notice values", () => {
+    const record = parseRecord(
+      JSON.stringify({
+        kind: "action_request",
+        text: "Create",
+        details: { target: null, fields: [] },
+        outsideContentNotice: "false"
+      })
+    );
+    expect(record?.details).toEqual({ target: null, fields: [] });
+    expect(record?.outsideContentNotice).toBeUndefined();
+  });
+
+  it("wires the parsed stream record through RecordRow into the actual card", () => {
+    const record = parseRecord(
+      JSON.stringify({
+        kind: "action_request",
+        text: "Change theme",
+        actionRequestId: "app-1",
+        toolName: "app.callAction",
+        details,
+        outsideContentNotice: true
+      })
+    );
+    expect(record).not.toBeNull();
+    if (!record) throw new Error("The app-action fixture did not parse");
+    const client = new QueryClient();
+    const html = renderToString(
+      createElement(QueryClientProvider, { client }, createElement(RecordRow, { record }))
+    );
+    expect(html).toContain("<q>Weekend theme &lt;script&gt;no()&lt;/script&gt;</q>");
+    expect(html).toContain("**Evening**");
+    expect(html).toContain("outside or unverified context");
+    client.clear();
+  });
+
+  it("renders target and fields as text, with no markup interpretation", () => {
+    const html = renderCard({
+      actionRequestId: "app-1",
+      toolName: "app.callAction",
+      summary: "Change theme",
+      details
+    });
+    expect(html).toContain("<q>Weekend theme &lt;script&gt;no()&lt;/script&gt;</q>");
+    expect(html).toContain("**Evening**");
+    expect(html).toContain(">false</dd>");
+    expect(html).not.toContain("<script>");
+    expect(html).not.toContain("outside or unverified context");
+  });
+
+  it("only shows an outside-content notice when the server explicitly supplies true", () => {
+    const html = renderCard({
+      actionRequestId: "app-1",
+      toolName: "app.callAction",
+      summary: "Change",
+      outsideContentNotice: true
+    });
+    expect(html).toContain("outside or unverified context");
+  });
+
+  it("preserves valid module refresh identifiers and discards malformed lists", () => {
+    const result = { kind: "action_result", text: "Changed", outcome: "executed" };
+    expect(
+      parseRecord(JSON.stringify({ ...result, affectsModules: ["settings", "jarvis.goals"] }))
+        ?.affectsModules
+    ).toEqual(["settings", "jarvis.goals"]);
+    expect(
+      parseRecord(JSON.stringify({ ...result, affectsModules: ["settings", 42] }))?.affectsModules
+    ).toBeUndefined();
   });
 });

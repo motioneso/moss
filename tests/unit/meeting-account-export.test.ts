@@ -37,7 +37,6 @@ const collections = [
   "capture_connections",
   "capture_start_cancellations",
   "stop_summaries",
-  "recording_notices",
   "capture_grants"
 ] as const;
 
@@ -162,7 +161,6 @@ describe("Meetings account-export collector", () => {
         "device_name",
         "status",
         "state_json",
-        "notice_policy_version",
         "created_at",
         "expires_at"
       ]
@@ -229,7 +227,7 @@ describe("Meetings account-export collector", () => {
       ]);
       expect(result.export_receipts).toEqual([{ receiptJson: '{"writeStatus":"saved"}' }]);
       expect(result.export_requests).toEqual([{ resultJson: null }]);
-      expect(queries).toHaveLength(13);
+      expect(queries).toHaveLength(12);
       expect(JSON.parse(JSON.stringify(result))).toEqual(result);
     } finally {
       await db.destroy();
@@ -252,10 +250,6 @@ describe("Meetings account-export collector", () => {
       ),
       "utf8"
     );
-    const noticeMigration = await readFile(
-      new URL("../../packages/meetings/sql/0290_meeting_recording_notice.sql", import.meta.url),
-      "utf8"
-    );
     const minimalMigration = await readFile(
       new URL("../../packages/meetings/sql/0292_meeting_minimal.sql", import.meta.url),
       "utf8"
@@ -271,8 +265,7 @@ describe("Meetings account-export collector", () => {
       minimalSelectGrants +
       originalMigration +
       (captureMigration.match(/-- Capture account export[\s\S]*$/)?.[0] ?? "") +
-      (connectionMigration.match(/-- Capture connection account export[\s\S]*$/)?.[0] ?? "") +
-      (noticeMigration.match(/-- Ordinary acknowledgement metadata[\s\S]*$/)?.[0] ?? "");
+      (connectionMigration.match(/-- Capture connection account export[\s\S]*$/)?.[0] ?? "");
     const { db, queries, scopedDb } = harness();
     try {
       await collectMeetingsExportSection(scopedDb, ctx);

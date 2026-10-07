@@ -48,7 +48,7 @@ describe("capture route credential boundaries", () => {
       expect(limits.get("/api/meetings/capture/connection")?.max).toBe(120);
       expect(limits.get("/api/meetings/capture/status")?.max).toBe(600);
       expect(limits.get("/api/meetings/capture/audio")?.max).toBe(120);
-      expect(limits.size).toBe(12);
+      expect(limits.size).toBe(11);
       for (const limiter of limits.values())
         expect(
           limiter.keyGenerator({
@@ -146,6 +146,44 @@ describe("capture route credential boundaries", () => {
   });
 });
 
+describe("native default microphone inventory", () => {
+  it.each([undefined, null, "os-default"])(
+    "accepts the optional exact default UID %s",
+    async (defaultMicrophoneId) => {
+      const server = Fastify();
+      const register = vi
+        .spyOn(MeetingCaptureConnectionService.prototype, "register")
+        .mockResolvedValue({
+          connectionId: meetingId,
+          revision: 1,
+          leaseMs: 30000,
+          expiresAt: "2027-01-01T00:00:00Z"
+        });
+      registerMeetingCaptureRoutes(server, dependencies());
+      const inventory = {
+        microphones: [{ deviceId: "os-default", sourceId: "mic", label: "Default microphone" }],
+        applications: [],
+        computerAudio: { available: true, excludedProcessTreeIds: ["moss"] },
+        microphonePermission: "granted",
+        systemAudioPermission: "granted",
+        ...(defaultMicrophoneId !== undefined ? { defaultMicrophoneId } : {})
+      };
+      try {
+        const response = await server.inject({
+          method: "POST",
+          url: "/api/meetings/capture/connection",
+          payload: { connectionId: meetingId, verifierHash: "a".repeat(64), inventory }
+        });
+        expect(response.statusCode).toBe(200);
+        expect(register.mock.calls[0]![2].inventory).toEqual(inventory);
+      } finally {
+        register.mockRestore();
+        await server.close();
+      }
+    }
+  );
+});
+
 describe("capture source envelope regression", () => {
   it.each([
     { mode: "microphone-only", microphone: { deviceId: "mic", sourceId: "mic" } },
@@ -181,7 +219,6 @@ describe("capture source envelope regression", () => {
           requestKey: meetingId,
           expectedGeneration: 0,
           command: "record",
-          noticeAcknowledged: true,
           selection
         }
       });
@@ -222,7 +259,6 @@ describe("exact capture source branch guards", () => {
           requestKey: meetingId,
           expectedGeneration: 0,
           command: "record",
-          noticeAcknowledged: true,
           selection
         }
       });
@@ -257,9 +293,9 @@ describe("exact capture source branch guards", () => {
   });
 });
 
-describe("recording notice route boundary", () => {
+describe("explicit recording route boundary", () => {
   it.each(["start", "control"])(
-    "allows %s without a per-request notice and leaves current account enforcement to the service",
+    "allows %s with valid capture metadata and rejects unknown fields",
     async (kind) => {
       const server = Fastify();
       const browser = vi.spyOn(MeetingCaptureService.prototype, "browser").mockResolvedValue({
@@ -283,14 +319,12 @@ describe("recording notice route boundary", () => {
           ? { ...common, deviceId: meetingId, connectionId: meetingId, expectedRevision: 1 }
           : { ...common, grantId: meetingId, expectedGeneration: 0, command: "record" };
       try {
-        for (const notice of [false, "true"]) {
-          const response = await server.inject({
-            method: "POST",
-            url: `/api/meetings/records/${meetingId}/capture/${kind}`,
-            payload: { ...payload, ...(notice === undefined ? {} : { noticeAcknowledged: notice }) }
-          });
-          expect(response.statusCode).toBe(400);
-        }
+        const response = await server.inject({
+          method: "POST",
+          url: `/api/meetings/records/${meetingId}/capture/${kind}`,
+          payload: { ...payload, unknownField: true }
+        });
+        expect(response.statusCode).toBe(400);
         expect(start).not.toHaveBeenCalled();
         expect(control).not.toHaveBeenCalled();
         const accepted = await server.inject({

@@ -6,8 +6,7 @@ import type {
   MeetingCaptureControlInput,
   MeetingCapturePreferences,
   MeetingCaptureState,
-  MeetingOutputsResponse,
-  MeetingRecordingNoticeStatus
+  MeetingOutputsResponse
 } from "@moss/shared";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { createCaptureBrowserFixture } from "./meeting-capture-browser-fixture.js";
@@ -113,12 +112,6 @@ test("Stop automatically writes one summary after finalization without a generat
     const paired = await pairCaptureFixture(page, baseURL);
     deviceId = paired.device.id;
     const connection = await connectCaptureFixture(baseURL, paired);
-    const noticeResponse = await page.request.get("/api/meetings/recording-notice");
-    expect(noticeResponse.status()).toBe(200);
-    const notice = (await noticeResponse.json()) as MeetingRecordingNoticeStatus;
-    expect(
-      (await browserFixture.acknowledgeNotice(notice.currentNotice.policyVersion)).status()
-    ).toBe(200);
     expect(
       (
         await page.request.put("/api/meetings/preferences", {
@@ -130,8 +123,7 @@ test("Stop automatically writes one summary after finalization without a generat
               microphoneId: "synthetic-device"
             },
             summarizeOnStop: true,
-            summaryTemplateId: "general",
-            completeSetup: true
+            summaryTemplateId: "general"
           }
         })
       ).status()
@@ -148,14 +140,14 @@ test("Stop automatically writes one summary after finalization without a generat
     const path = `/api/meetings/records/${meetingId}`;
     await expect(page).toHaveURL(new RegExp(`id=${meetingId}`));
     await expect(page.getByRole("button", { name: "Edit meeting title", exact: true })).toHaveText(
-      "Untitled meeting"
+      "New meeting"
     );
     const starting = page.waitForResponse(
       (response) =>
         response.url().endsWith(`${path}/capture/start`) && response.request().method() === "POST"
     );
     await connection.refresh();
-    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByRole("button", { name: "Start recording", exact: true }).click();
     const started = await starting;
     expect(started.status()).toBe(200);
     expect(started.request().postDataJSON()).toEqual({ requestKey: expect.any(String) });
@@ -292,8 +284,7 @@ test("Stop automatically writes one summary after finalization without a generat
           .toBe(204);
       if (deviceId)
         expect.soft((await page.request.delete(`/api/me/sessions/${deviceId}`)).status()).toBe(200);
-      // Restore editable defaults only. Completion and notice records belong to the
-      // isolated fixture and are removed by its teardown, never forged through PUT.
+      // Restore the saved preferences through the real API before isolated teardown.
       expect
         .soft(
           (

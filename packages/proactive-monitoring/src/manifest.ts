@@ -42,11 +42,13 @@ export const proactiveMonitoringModuleManifest = {
     {
       method: "GET",
       path: "/api/me/proactive-cards",
+      chat: { access: "read" },
       permissionId: "proactive-monitoring.view"
     },
     {
       method: "POST",
       path: "/api/me/proactive-cards/refresh",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       permissionId: "proactive-monitoring.refresh"
     }
   ]

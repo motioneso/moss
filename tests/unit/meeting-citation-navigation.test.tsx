@@ -130,23 +130,21 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
         );
+      if (url.pathname === "/api/me/sessions")
+        return new Response(JSON.stringify({ sessions: [] }));
+      if (url.pathname === "/api/companion/recording-capabilities")
+        return new Response(JSON.stringify({ devices: [] }));
       if (url.pathname === "/api/meetings/preferences")
         return new Response(
           JSON.stringify({
             defaultCaptureMode: null,
             rememberedSource: null,
             summarizeOnStop: true,
-            summaryTemplateId: "general",
-            setupCompletedAt: meeting.createdAt
+            summaryTemplateId: "general"
           })
         );
-      if (url.pathname === "/api/meetings/recording-notice")
-        return new Response(
-          JSON.stringify({
-            currentNotice: { policyVersion: "v1", text: "Notice" },
-            acknowledgement: null
-          })
-        );
+      if (url.pathname === "/api/meetings/capture/devices")
+        return new Response(JSON.stringify({ devices: [], processingReady: false }));
       if (url.pathname.endsWith("/capture"))
         return new Response(
           JSON.stringify({ capture: null, pendingLinks: [], processingReady: false })

@@ -37,6 +37,15 @@ describe("gateway computeConfirmOverride", () => {
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
+      // This fixture exercises ordinary policy on an explicitly clean conversation.
+      provenance: {
+        isTainted: async () => false,
+        recordAdmission: async () => {},
+        runAutomatic: async (_actor, _thread, callback) => ({
+          kind: "ran",
+          value: await callback()
+        })
+      },
       resolveActiveModules: async () => [module],
       repository: {
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
@@ -57,7 +66,12 @@ describe("gateway computeConfirmOverride", () => {
         getFamilyManifest: async () => familyManifest
       })
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      threadId: "clean-thread",
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
     return { gateway, token, confirmations };
   };
 
@@ -67,6 +81,8 @@ describe("gateway computeConfirmOverride", () => {
     permissionId: "mock.write",
     actionFamilyId: "mock_family",
     risk: "write" as const,
+    content: "user_authored" as const,
+    isExternal: false,
     executionPolicy: "auto" as const,
     inputSchema: { type: "object", properties: {} },
     execute: async () => ({ data: { ok: true } }),

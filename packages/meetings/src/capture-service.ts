@@ -1,6 +1,9 @@
 import type { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
-import { MeetingPreferencesRepository, savedCaptureSelection } from "./preferences.js";
-import { MeetingRecordingNoticeRepository } from "./recording-notice.js";
+import {
+  MeetingPreferencesRepository,
+  resolveCaptureSource,
+  savedCaptureSelection
+} from "./preferences.js";
 import { captureAuthorizationError } from "./capture-authorization.js";
 import { captureMetadataJson } from "./capture-metadata.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
@@ -127,7 +130,6 @@ export class MeetingCaptureService {
     private readonly repository = new MeetingCaptureRepository(),
     private readonly transcript = new MeetingTranscriptRepository(),
     private readonly connections = new MeetingCaptureConnectionRepository(),
-    private readonly notices = new MeetingRecordingNoticeRepository(),
     private readonly preferences = new MeetingPreferencesRepository()
   ) {
     this.now = deps.now ?? (() => new Date());
@@ -396,8 +398,6 @@ export class MeetingCaptureService {
     meetingId: string,
     input: MeetingCaptureControlInput
   ) {
-    if (input.command === "record")
-      await this.deps.dataContext.withDataContext(actor, (db) => this.notices.requireCurrent(db));
     const grant = await this.deps.dataContext.withDataContext(actor, (db) =>
       this.repository.grant(db, input.grantId)
     );
@@ -438,7 +438,6 @@ export class MeetingCaptureService {
       this.valid(grant, meetingId);
       await this.liveBinding(grant, actor);
     }
-    if (input.command === "record") await this.notices.requireCurrent(db);
     return grant;
   }
   private async control(
@@ -482,16 +481,9 @@ export class MeetingCaptureService {
       let command = input;
       if (input.command === "record") {
         // Legacy source-bearing controls can replay their receipt, but cannot create a new epoch.
-        if (input.selection) throw new MeetingCaptureError("meeting_capture_setup_required", 409);
+        if (input.selection)
+          throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
         const preferences = await this.preferences.get(db);
-        const source = preferences.rememberedSource;
-        if (
-          !preferences.setupCompletedAt ||
-          !source ||
-          source.deviceId !== grant.device_id ||
-          source.mode !== preferences.defaultCaptureMode
-        )
-          throw new MeetingCaptureError("meeting_capture_setup_required", 409);
         const connection = await this.connections.connection(db, grant.device_id);
         if (
           !connection ||
@@ -507,10 +499,11 @@ export class MeetingCaptureService {
         if (grant.status === "approved") state.lastSeenAt = connection.last_seen_at.toISOString();
         command = {
           ...input,
-          selection: savedCaptureSelection(source, state.inventory),
-          noticeAcknowledged: true
+          selection: savedCaptureSelection(
+            resolveCaptureSource(preferences, grant.device_id, state.inventory),
+            state.inventory
+          )
         };
-        await this.repository.bindNotice(db, grant, await this.notices.requireCurrent(db));
       }
       applyCaptureControl(state, command, this.now(), processing?.modelRoute ?? "");
       if (grant.status === "approved" && input.command === "record")

@@ -1,12 +1,12 @@
 import type {
   MeetingCaptureInventory,
+  MeetingCaptureMode,
   MeetingCaptureSelection,
   MeetingCaptureState
 } from "@moss/shared";
-import type { CaptureMode } from "./capture-modes.js";
 
 export interface CaptureChoice {
-  readonly mode: CaptureMode | null;
+  readonly mode: MeetingCaptureMode | null;
   readonly microphoneId: string;
   readonly applicationId: string;
 }
@@ -65,7 +65,10 @@ export function captureSelection(
   choice: CaptureChoice,
   inventory: MeetingCaptureInventory | null
 ): MeetingCaptureSelection | null {
-  const microphone = inventory?.microphones.find((item) => item.deviceId === choice.microphoneId);
+  const microphones = inventory?.microphones.filter(
+    (item) => item.deviceId === choice.microphoneId
+  );
+  const microphone = microphones?.length === 1 ? microphones[0] : undefined;
   if (!inventory || !microphone || !choice.mode || inventory.microphonePermission === "denied")
     return null;
   const input = { microphone: { deviceId: microphone.deviceId, sourceId: microphone.sourceId } };

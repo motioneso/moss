@@ -5,6 +5,7 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { buildUatComposeArgs } from "../provisioner.js";
 import {
   requireShadowReportProject,
+  SHADOW_REPORT_MODEL_TOOL,
   SHADOW_REPORT_MODEL_IDENTITY
 } from "../fixtures/shadow-report-connection.js";
 import {
@@ -117,7 +118,12 @@ async function openChat(page: Page): Promise<Locator> {
   return drawer;
 }
 
-async function sendMessage(page: Page, drawer: Locator, message: string): Promise<number> {
+async function sendMessage(
+  page: Page,
+  drawer: Locator,
+  message: string,
+  approveFixtureLightInProject?: string
+): Promise<number> {
   const turnResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
@@ -127,6 +133,29 @@ async function sendMessage(page: Page, drawer: Locator, message: string): Promis
   const composer = drawer.getByLabel("Message Moss");
   await composer.fill(message);
   await composer.press("Enter");
+  if (approveFixtureLightInProject) {
+    // Outside descriptors and ACP launch are admission paths. This one known synthetic write
+    // must ask; no unrelated tool or production device is approved by this test.
+    const card = drawer.getByRole("region", { name: "Action request" });
+    await expect(card.getByText(SHADOW_REPORT_MODEL_TOOL, { exact: true })).toBeVisible({
+      timeout: 60_000
+    });
+    await expect(
+      card.getByText("This chat has outside or unverified context, so changes need your approval.")
+    ).toBeVisible();
+    expect(await fixtureLightEvidence(approveFixtureLightInProject)).toEqual({
+      calls: 0,
+      totalCalls: 0,
+      kitchenOn: false
+    });
+    const resolved = page.waitForResponse(
+      (response) =>
+        /\/api\/chat\/action-requests\/[^/]+\/resolve$/.test(new URL(response.url()).pathname) &&
+        response.request().method() === "POST"
+    );
+    await card.getByRole("button", { name: "Approve", exact: true }).click();
+    expect((await resolved).status()).toBe(204);
+  }
   return (await turnResponse).status();
 }
 
@@ -181,7 +210,9 @@ test("the shadow report counts real shadow records and lists the disagreement (#
   // is intentionally unobserved after #3037, so it cannot prove a genuine disagreement.
   await page.goto(requireBaseURL());
   drawer = await openChat(page);
-  expect(await sendMessage(page, drawer, "uatmiss turn on the fixture Kitchen light")).toBe(200);
+  expect(
+    await sendMessage(page, drawer, "uatmiss turn on the fixture Kitchen light", project)
+  ).toBe(200);
   await expect(drawer.getByText("The fixture light is on.").last()).toBeVisible({
     timeout: 60_000
   });

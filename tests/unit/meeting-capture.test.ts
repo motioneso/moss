@@ -1,8 +1,6 @@
 import { MeetingStopSummaryRepository } from "../../packages/meetings/src/stop-summary-repository.js";
 import { makeRecordingDb } from "./helpers/recording-db.js";
 import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
-import { MEETING_RECORDING_NOTICE } from "@moss/shared";
-import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
 import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type {
@@ -69,7 +67,6 @@ function command(
     command,
     ...(command === "record"
       ? {
-          noticeAcknowledged: true as const,
           selection: {
             mode: "microphone-only" as const,
             microphone: { deviceId: "mic-device", sourceId: "mic" }
@@ -101,34 +98,6 @@ function audio(): MeetingCaptureAudioInput {
   };
 }
 describe("native capture bounded domain", () => {
-  it.each([undefined, false])(
-    "rejects an internal recording transition without its verified notice flag (%s)",
-    (notice) => {
-      const value = state();
-      const input = {
-        ...command("record", 0),
-        noticeAcknowledged: notice
-      } as MeetingCaptureControlInput;
-      expect(() => applyCaptureControl(value, input, origin, "route")).toThrow();
-      expect(value.desired).toBe("idle");
-      expect(value.epochs).toEqual([]);
-    }
-  );
-  it("requires an internally verified notice flag for Resume but not Pause/Stop", () => {
-    const value = recording();
-    applyCaptureControl(value, command("pause", 1), at(2000));
-    expect(() =>
-      applyCaptureControl(
-        value,
-        { ...command("record", 2), noticeAcknowledged: undefined },
-        at(3000),
-        "route"
-      )
-    ).toThrow();
-    expect(value.desired).toBe("paused");
-    applyCaptureControl(value, command("stop", 2), at(3000));
-    expect(value.desired).toBe("stopped");
-  });
   it("retains exact gap replay, rejects changed IDs, and pauses visibly at its bounded cap", () => {
     const value = recording();
     const gap = {
@@ -392,38 +361,19 @@ function fixture() {
     last_seen_at: at(2000),
     expires_at: at(7200000)
   }));
-  const notices = new MeetingRecordingNoticeRepository();
-  vi.spyOn(notices, "get").mockResolvedValue({
-    currentNotice: MEETING_RECORDING_NOTICE,
-    acknowledgement: {
-      policyVersion: MEETING_RECORDING_NOTICE.policyVersion,
-      acknowledgedAt: origin.toISOString()
-    }
-  });
-  vi.spyOn(repository, "bindNotice").mockImplementation(async (_db, row, version) => {
-    row.notice_policy_version = version;
-  });
   const preferences = new MeetingPreferencesRepository();
   vi.spyOn(preferences, "get").mockResolvedValue({
     rememberedSource: { deviceId, microphoneId: "mic-device", mode: "microphone-only" },
     defaultCaptureMode: "microphone-only",
     summarizeOnStop: true,
-    summaryTemplateId: "general",
-    setupCompletedAt: origin.toISOString()
+    summaryTemplateId: "general"
   });
   vi.spyOn(connections, "lockRequest").mockResolvedValue();
-  const service = new MeetingCaptureService(
-    deps,
-    repository,
-    transcript,
-    connections,
-    notices,
-    preferences
-  );
+  const service = new MeetingCaptureService(deps, repository, transcript, connections, preferences);
   return {
     deps,
     service,
-    notices,
+    preferences,
     grant,
     ingest,
     repository,
@@ -433,47 +383,52 @@ function fixture() {
   };
 }
 describe("capture service authorization and dispatch", () => {
-  it("rejects an unacknowledged record replay before reading its old receipt", async () => {
+  it("resumes and replays the same command without creating another epoch", async () => {
     const f = fixture();
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
     const resume = { ...command("record", 2), selection: undefined };
     await f.service.browserControl(f.browser, meetingId, resume);
-    const receiptReads = vi.mocked(f.repository.receipt).mock.calls.length;
-    vi.mocked(f.notices.get).mockResolvedValue({
-      currentNotice: MEETING_RECORDING_NOTICE,
-      acknowledgement: { policyVersion: "older-text", acknowledgedAt: origin.toISOString() }
-    });
-    await expect(f.service.browserControl(f.browser, meetingId, resume)).rejects.toMatchObject({
-      code: "meeting_capture_notice_required",
-      httpStatus: 409
-    });
-    expect(f.repository.receipt).toHaveBeenCalledTimes(receiptReads);
+    await f.service.browserControl(f.browser, meetingId, resume);
     expect(JSON.parse(f.grant.state_json!).generation).toBe(3);
   });
-  it("requires current stored acknowledgement for Resume but keeps Pause and Stop independent", async () => {
+  it("resumes a fresh default on the same grant Mac without saved hardware", async () => {
     const f = fixture();
-    vi.mocked(f.notices.get).mockResolvedValue({
-      currentNotice: MEETING_RECORDING_NOTICE,
-      acknowledgement: null
+    vi.mocked(f.preferences.get).mockResolvedValue({
+      rememberedSource: null,
+      defaultCaptureMode: "computer-audio",
+      summarizeOnStop: true,
+      summaryTemplateId: "general"
     });
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
-    expect(f.notices.get).not.toHaveBeenCalled();
-    await expect(
-      f.service.browserControl(f.browser, meetingId, command("record", 2))
-    ).rejects.toMatchObject({ code: "meeting_capture_notice_required" });
-    await f.service.browserControl(f.browser, meetingId, command("stop", 2));
-    expect(f.notices.get).toHaveBeenCalledOnce();
-  });
-  it("resumes without per-request notice after current account acknowledgement", async () => {
-    const f = fixture();
-    f.grant.notice_policy_version = null;
-    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
-    await f.service.browserControl(f.browser, meetingId, {
+    const result = await f.service.browserControl(f.browser, meetingId, {
       ...command("record", 2),
-      selection: undefined,
-      noticeAcknowledged: undefined
+      selection: undefined
     });
-    expect(f.grant.notice_policy_version).toBe(MEETING_RECORDING_NOTICE.policyVersion);
+    expect(result.capture).toMatchObject({
+      deviceId,
+      selection: { mode: "computer-audio", microphone: { deviceId: "mic-device" } }
+    });
+  });
+  it("never moves an existing grant to a newly remembered Mac", async () => {
+    const f = fixture();
+    vi.mocked(f.preferences.get).mockResolvedValue({
+      rememberedSource: {
+        deviceId: meetingId,
+        microphoneId: "mic-device",
+        mode: "microphone-only"
+      },
+      defaultCaptureMode: "microphone-only",
+      summarizeOnStop: true,
+      summaryTemplateId: "general"
+    });
+    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    await expect(
+      f.service.browserControl(f.browser, meetingId, {
+        ...command("record", 2),
+        selection: undefined
+      })
+    ).rejects.toMatchObject({ code: "meeting_capture_source_unavailable" });
+    expect(JSON.parse(f.grant.state_json!).desired).toBe("paused");
   });
   it("commits Stop if optional summary enqueue fails", async () => {
     const f = fixture();
@@ -496,8 +451,7 @@ describe("capture service authorization and dispatch", () => {
       defaultCaptureMode: null,
       rememberedSource: null,
       summarizeOnStop: true,
-      summaryTemplateId: "general",
-      setupCompletedAt: null
+      summaryTemplateId: "general"
     });
     const automatic = new MeetingStopSummaryRepository(preferences);
     vi.spyOn(automatic, "row").mockResolvedValue(null);

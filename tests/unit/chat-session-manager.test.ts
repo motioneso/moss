@@ -39,12 +39,8 @@ export function makeMinimalDeps(
   };
 }
 
-/**
- * A scriptable fake engine. `launchOffset` is what `launch` returns (§4.1.2): an in-process
- * engine returns 0 (the manager owns the drain); an RPC engine returns the post-drain offset.
- * `readNew` replays a queued script of results so a test can model the "replay drained
- * server-side, first real readNew returns the NEW reply" correctness case (§12).
- */
+/** Scripted engine: launchOffset models in-process versus post-replay RPC offsets (§4.1.2);
+ * readNew models the first fresh reply after server-side replay (§12). */
 export class FakeEngine {
   readonly provider = "anthropic" as const;
   startsToolClientPerTurn = false;
@@ -394,7 +390,9 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
       makeMinimalDeps({
         engineFactory: () => engine,
         pollMs: 0,
+        conversationProvenance: { recordAdmission: vi.fn().mockResolvedValue(undefined) },
         persistence: {
+          getCurrentThreadState: vi.fn().mockResolvedValue({ id: "thread-a", incognito: false }),
           resolveActiveProvider: vi
             .fn()
             .mockResolvedValue({ provider: "anthropic", model: "sonnet" }),
@@ -421,7 +419,15 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
 
   it("seeds a keyed context at most once per live engine session (#1194)", async () => {
     const engine = new FakeEngine(0);
-    const manager = new ChatSessionManager(depsWith(engine));
+    const deps = depsWith(engine);
+    const manager = new ChatSessionManager({
+      ...deps,
+      conversationProvenance: { recordAdmission: vi.fn().mockResolvedValue(undefined) },
+      persistence: {
+        ...deps.persistence,
+        getCurrentThreadState: vi.fn().mockResolvedValue({ id: "thread-a", incognito: false })
+      }
+    });
 
     await manager.seedContext("u1", "Ben", "seed", "module-context:demo-module");
     await manager.seedContext("u1", "Ben", "seed", "module-context:demo-module");
@@ -431,11 +437,8 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
 });
 
 describe("ChatSessionManager.submitTurn turn-lock release (#445)", () => {
-  // A FakeEngine whose submit() REJECTS — modelling the api-side per-RPC deadline firing on a
-  // cli-runner that ACCEPTED the frame but never replied (chat-engine-rpc-client §3.4). The #445
-  // bug: a hung submit/readNew left `turnsInFlight` set forever, so every later turn 409'd
-  // "a chat turn is already in progress" until the api restarted. The fix's contract is that a
-  // rejected engine call must flow through submitTurn's try/finally and CLEAR the per-user lock.
+  // A rejected RPC submit must release the per-user turn lock even when the runner accepted
+  // the frame but never replied (#445; chat-engine-rpc-client §3.4).
   class RejectingSubmitEngine extends FakeEngine {
     override async submit(): Promise<void> {
       throw new CliChatUnavailableError("cli-runner submit timed out after 45000ms");
@@ -542,7 +545,9 @@ describe("ChatSessionManager passive retrieval", () => {
         passiveRetrieval: {
           retrieve: vi.fn().mockResolvedValue("<retrieved_context>\n- memory\n</retrieved_context>")
         },
+        conversationProvenance: { recordAdmission: vi.fn().mockResolvedValue(undefined) },
         persistence: {
+          getCurrentThreadState: vi.fn().mockResolvedValue({ id: "thread-a", incognito: false }),
           resolveActiveProvider: vi
             .fn()
             .mockResolvedValue({ provider: "anthropic", model: "sonnet" }),

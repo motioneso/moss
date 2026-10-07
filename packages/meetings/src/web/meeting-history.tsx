@@ -9,12 +9,18 @@ import { useMeetingDate, useMeetingWeek } from "./locale.js";
 
 export interface MeetingHistoryProps {
   readonly search: string;
+  readonly hideWhenEmpty?: boolean;
   readonly onSearch: (value: string) => void;
   readonly onOpen: (id: string) => void;
 }
 
 /** A calendar-date grouping uses the owner's configured timezone, just like each row. */
-export function MeetingHistory({ search, onSearch, onOpen }: MeetingHistoryProps) {
+export function MeetingHistory({
+  search,
+  onSearch,
+  onOpen,
+  hideWhenEmpty = false
+}: MeetingHistoryProps) {
   const date = useMeetingDate({
     month: "short",
     day: "numeric",
@@ -49,6 +55,7 @@ export function MeetingHistory({ search, onSearch, onOpen }: MeetingHistoryProps
     const key = week(meeting.createdAt).label;
     groups.set(key, [...(groups.get(key) ?? []), meeting]);
   }
+  if (hideWhenEmpty && history.isSuccess && !meetings.length && !search) return null;
   return (
     <section className="meetings-section" aria-label="Your meetings">
       <Field>

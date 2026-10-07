@@ -1,4 +1,3 @@
-import { MeetingRecordingNoticeRepository } from "./recording-notice.js";
 import type { DataContextDb } from "@moss/db";
 import { PreferencesRepository } from "@moss/structured-state";
 import {
@@ -17,41 +16,33 @@ export const MEETING_CAPTURE_DEFAULT_KEY = "meetings.capture.default-mode";
 export const MEETING_CAPTURE_SOURCE_KEY = "meetings.capture.remembered-source";
 export const MEETING_SUMMARIZE_KEY = "meetings.summarize-on-stop";
 export const MEETING_TEMPLATE_KEY = "meetings.summary-template";
-export const MEETING_SETUP_KEY = "meetings.setup-completed-at";
 export type MeetingPreferenceStore = Pick<PreferencesRepository, "get" | "upsert">;
-function timestamp(value: unknown): string | null {
-  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
-}
 export class MeetingPreferencesRepository {
-  constructor(
-    private readonly store: MeetingPreferenceStore = new PreferencesRepository(),
-    private readonly notices = new MeetingRecordingNoticeRepository()
-  ) {}
+  constructor(private readonly store: MeetingPreferenceStore = new PreferencesRepository()) {}
   async get(db: DataContextDb): Promise<MeetingCapturePreferences> {
-    const [mode, source, summarize, template, completed] = await Promise.all(
+    const [mode, source, summarize, template] = await Promise.all(
       [
         MEETING_CAPTURE_DEFAULT_KEY,
         MEETING_CAPTURE_SOURCE_KEY,
         MEETING_SUMMARIZE_KEY,
-        MEETING_TEMPLATE_KEY,
-        MEETING_SETUP_KEY
+        MEETING_TEMPLATE_KEY
       ].map((key) => this.store.get(db, key))
     );
+    const rememberedSource = parseMeetingRememberedSource(source);
     return {
-      defaultCaptureMode: parseMeetingCaptureMode(mode),
-      rememberedSource: parseMeetingRememberedSource(source),
+      defaultCaptureMode:
+        parseMeetingCaptureMode(mode) ?? rememberedSource?.mode ?? "computer-audio",
+      rememberedSource,
       summarizeOnStop: typeof summarize === "boolean" ? summarize : true,
       summaryTemplateId:
         typeof template === "string"
           ? (getMeetingOutputTemplate(template, 1)?.id ?? "general")
-          : "general",
-      setupCompletedAt: timestamp(completed)
+          : "general"
     };
   }
   async update(
     db: DataContextDb,
-    input: UpdateMeetingCapturePreferences,
-    at = new Date()
+    input: UpdateMeetingCapturePreferences
   ): Promise<MeetingCapturePreferences> {
     const current = await this.get(db);
     const source =
@@ -70,16 +61,10 @@ export class MeetingPreferencesRepository {
       defaultCaptureMode:
         input.defaultCaptureMode === undefined
           ? current.defaultCaptureMode
-          : input.defaultCaptureMode,
+          : (input.defaultCaptureMode ?? source?.mode ?? "computer-audio"),
       summarizeOnStop: input.summarizeOnStop ?? current.summarizeOnStop,
-      summaryTemplateId: input.summaryTemplateId ?? current.summaryTemplateId,
-      setupCompletedAt: input.completeSetup ? at.toISOString() : current.setupCompletedAt
+      summaryTemplateId: input.summaryTemplateId ?? current.summaryTemplateId
     };
-    if (input.completeSetup) {
-      await this.notices.requireCurrent(db);
-      if (!source || source.mode !== next.defaultCaptureMode)
-        throw new MeetingCaptureError("meeting_capture_setup_required", 409);
-    }
     const writes: [string, unknown][] = [];
     if (input.defaultCaptureMode !== undefined)
       writes.push([MEETING_CAPTURE_DEFAULT_KEY, next.defaultCaptureMode]);
@@ -88,10 +73,28 @@ export class MeetingPreferencesRepository {
       writes.push([MEETING_SUMMARIZE_KEY, next.summarizeOnStop]);
     if (input.summaryTemplateId !== undefined)
       writes.push([MEETING_TEMPLATE_KEY, next.summaryTemplateId]);
-    if (input.completeSetup) writes.push([MEETING_SETUP_KEY, next.setupCompletedAt]);
     for (const [key, value] of writes) await this.store.upsert(db, key, value);
     return next;
   }
+}
+/** Resolve defaults without persisting hardware choices or broadening a saved exact source. */
+export function resolveCaptureSource(
+  preferences: MeetingCapturePreferences,
+  deviceId: string,
+  inventory: MeetingCaptureInventory
+): MeetingRememberedSource {
+  const remembered = preferences.rememberedSource;
+  if (remembered && remembered.deviceId !== deviceId)
+    throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
+  const mode = preferences.defaultCaptureMode ?? remembered?.mode ?? "computer-audio";
+  if (remembered) return { ...remembered, mode };
+  const defaults =
+    inventory.defaultMicrophoneId === undefined
+      ? inventory.microphones
+      : inventory.microphones.filter((mic) => mic.deviceId === inventory.defaultMicrophoneId);
+  if (defaults.length !== 1 || mode === "selected-app")
+    throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
+  return { deviceId, microphoneId: defaults[0]!.deviceId, mode };
 }
 export function savedCaptureSelection(
   source: MeetingRememberedSource,

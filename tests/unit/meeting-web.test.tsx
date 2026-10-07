@@ -7,6 +7,8 @@ import { historyItem } from "./fixtures/meeting-history.js";
 import { historyKeys } from "../../packages/meetings/src/web/history-client.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import { meetingKeys } from "../../packages/meetings/src/web/client.js";
+import { meetingLinkKeys } from "../../packages/meetings/src/web/meeting-link-state.js";
+import { captureKeys } from "../../packages/meetings/src/web/capture-client.js";
 import {
   beginNoteSave,
   finishNoteSave,
@@ -29,6 +31,20 @@ function render(path: string, seed?: (client: QueryClient) => void) {
     // SSR fixtures show settled data; query lifecycle/focus is covered separately.
     defaultOptions: { queries: { retry: false, gcTime: Infinity, refetchOnMount: false } }
   });
+  client.setQueryData(meetingLinkKeys.sessions, {
+    sessions: [
+      {
+        id: "linked-mac",
+        source: "companion",
+        deviceLabel: "Studio Mac",
+        lastSeenAt: meeting.createdAt
+      }
+    ]
+  });
+  client.setQueryData(meetingLinkKeys.capabilities, {
+    devices: [{ deviceId: "linked-mac", state: "approved", revision: 1, policyVersion: 1 }]
+  });
+  client.setQueryData(captureKeys.devices, { devices: [], processingReady: true });
   seed?.(client);
   return renderToString(
     <QueryClientProvider client={client}>
@@ -39,7 +55,7 @@ function render(path: string, seed?: (client: QueryClient) => void) {
   );
 }
 
-describe("Meetings draft screen", () => {
+describe("Meetings screen", () => {
   it("discovers its package-owned route", () => {
     const found = scanModuleWeb({ rootDir: process.cwd() });
     expect(found.routes).toContainEqual(

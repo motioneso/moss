@@ -65,7 +65,6 @@ describe("meetings composition", () => {
       "app.meeting_capture_receipts",
       "app.meeting_capture_connections",
       "app.meeting_capture_start_cancellations",
-      "app.meeting_recording_notices",
       "app.meeting_stop_summaries"
     ]);
     const chat = getBuiltInModuleManifests().find((manifest) => manifest.id === "chat");
@@ -86,8 +85,6 @@ describe("meetings composition", () => {
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
       "PUT /api/meetings/records/:id/title",
       "GET /api/meetings/output-availability",
-      "GET /api/meetings/recording-notice",
-      "PUT /api/meetings/recording-notice",
       "POST /api/meetings/capture/connection",
       "POST /api/meetings/capture/commands",
       "POST /api/meetings/capture/claim",
@@ -120,9 +117,9 @@ describe("meetings composition", () => {
       "PUT /api/meetings/records/:id/notes"
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
-      "meetings.setup",
+      "meetings.chat_app_actions",
+      "meetings.link_state",
       "meetings.automatic_summary",
-      "meetings.recording_notice",
       "transcribe.meeting",
       "meetings.native_capture",
       "meetings.account_export",

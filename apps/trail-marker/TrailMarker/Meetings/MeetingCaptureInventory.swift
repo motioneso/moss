@@ -103,6 +103,7 @@ struct MeetingInventorySnapshot {
 final class MeetingCaptureInventoryReader {
     func read() throws -> MeetingInventorySnapshot {
         let devices = try objectList(AudioObjectID(kAudioObjectSystemObject), selector: kAudioHardwarePropertyDevices)
+        let defaultInput = MeetingMicrophoneInventory.defaultInputDevice { try self.integer($0, selector: $1) }
         var microphones: [String: AudioObjectID] = [:]
         var wireMicrophones: [MeetingCaptureInventory.Microphone] = []
         for device in devices {
@@ -153,10 +154,12 @@ final class MeetingCaptureInventoryReader {
         let wireApps = applications.values.filter {
             MeetingProcessScope.members(of: $0, processes: processes).contains { audioObjects[$0.pid] != nil }
         }.map { MeetingCaptureInventory.Application(appProcessTreeId: $0.process.key, label: $0.label, applicationId: $0.applicationId) }
-        let wire = MeetingCaptureInventory(microphones: wireMicrophones.sorted { $0.label < $1.label },
+        let wire = MeetingCaptureInventory(microphones: MeetingMicrophoneInventory.ordered(wireMicrophones),
             applications: wireApps.sorted { $0.label < $1.label },
             computerAudio: .init(available: hasOwnExclusion, excludedProcessTreeIds: excluded.map(\.key)),
-            microphonePermission: MeetingCapturePermissions.microphone, systemAudioPermission: .unknown)
+            microphonePermission: MeetingCapturePermissions.microphone, systemAudioPermission: .unknown,
+            defaultMicrophoneId: MeetingMicrophoneInventory.defaultMicrophoneId(device: defaultInput,
+                devices: microphones, microphones: wireMicrophones))
         return MeetingInventorySnapshot(wire: wire, microphones: microphones, applications: applications,
             processes: processes, audioObjects: audioObjects, excluded: excluded, audioRoutes: audioRoutes)
     }

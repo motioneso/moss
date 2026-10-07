@@ -1,19 +1,20 @@
-import { useEffect, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
+import { Link, useLocation, useSearchParams } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { randomUuid } from "@moss/module-web-sdk";
-import { Button } from "@moss/ui";
-import { MeetingSetup } from "./meeting-setup.js";
+import { Button, SectionHead } from "@moss/ui";
+import { MeetingNotLinked } from "./meeting-not-linked.js";
+import { useMeetingConnection } from "./meeting-connection.js";
 import { MeetingHistory } from "./meeting-history.js";
 import { MeetingRecord } from "./meeting-record.js";
-import { createMeeting, getMeetingPreferences, meetingKeys } from "./client.js";
+import { createMeeting, meetingKeys } from "./client.js";
 import { historyKeys } from "./history-client.js";
 import { useSessionDraft } from "./session-draft.js";
 import "./styles.css";
 
 interface NewMeetingState {
   readonly requestKey?: string;
-  readonly phase: "idle" | "checking" | "setup" | "creating" | "failed";
+  readonly phase: "idle" | "creating" | "failed";
 }
 
 export function MeetingsPage() {
@@ -23,15 +24,17 @@ export function MeetingsPage() {
   const historyView = useSessionDraft(historyKeys.view, () => ({ query: "" }));
   const creationKey = ["meetings", "new-meeting"] as const;
   const creation = useSessionDraft<NewMeetingState>(creationKey, () => ({ phase: "idle" }));
-  const preferences = useQuery({
-    queryKey: meetingKeys.preferences,
-    queryFn: getMeetingPreferences,
-    retry: false
-  });
-  const [setup, setSetup] = useState(false);
+  const connection = useMeetingConnection();
   const navigation = useLocation().key;
   const locationRef = useRef(navigation);
   locationRef.current = navigation;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const hasReference = ["segmentId", "segmentRevision", "startCharacter", "endCharacter"].some(
     (field) => params.has(field)
   );
@@ -41,13 +44,13 @@ export function MeetingsPage() {
     void client.invalidateQueries({ queryKey: meetingKeys.transcript(id), exact: true });
   }, [client, id, hasReference, navigation]);
   const open = (meetingId: string) => {
-    setSetup(false);
     setParams({ id: meetingId });
   };
   const currentCreation = () => client.getQueryData<NewMeetingState>(creationKey);
   async function create() {
     const current = currentCreation();
-    if (!current || current.phase === "creating") return;
+    if (!mounted.current || !creation.currentSession() || !current || current.phase === "creating")
+      return;
     const requestKey = current.requestKey ?? randomUuid();
     const startingLocation = locationRef.current;
     creation.update(() => ({ requestKey, phase: "creating" }));
@@ -60,41 +63,11 @@ export function MeetingsPage() {
       if (!owns()) return;
       creation.update(() => ({ phase: "idle" }));
       void client.invalidateQueries({ queryKey: meetingKeys.history });
-      if (startingLocation === locationRef.current) open(result.meeting.id);
+      if (mounted.current && startingLocation === locationRef.current) open(result.meeting.id);
     } catch {
       if (owns()) creation.update(() => ({ requestKey, phase: "failed" }));
     }
   }
-  async function newMeeting() {
-    const current = currentCreation();
-    if (!current || current.phase === "creating" || current.phase === "checking") return;
-    if (current.phase === "failed") {
-      void create();
-      return;
-    }
-    const requestKey = current.requestKey ?? randomUuid();
-    const startingLocation = locationRef.current;
-    creation.update(() => ({ requestKey, phase: "checking" }));
-    const checked = await preferences.refetch();
-    if (
-      !creation.currentSession() ||
-      currentCreation()?.requestKey !== requestKey ||
-      currentCreation()?.phase !== "checking"
-    )
-      return;
-    if (checked.isError || !checked.data || startingLocation !== locationRef.current) {
-      creation.update(() => ({ phase: "idle" }));
-      return;
-    }
-    if (!checked.data.setupCompletedAt) {
-      creation.update(() => ({ requestKey, phase: "setup" }));
-      setSetup(true);
-    } else void create();
-  }
-  const cancelSetup = () => {
-    creation.update(() => ({ phase: "idle" }));
-    setSetup(false);
-  };
   return (
     <div className="meetings-page">
       {id ? (
@@ -104,40 +77,39 @@ export function MeetingsPage() {
           onBack={() => setParams({})}
           onDeleted={() => setParams({})}
         />
-      ) : setup ? (
-        <MeetingSetup
-          onCompleted={() => {
-            if (creation.currentSession() && currentCreation()?.phase === "setup") {
-              setSetup(false);
-              void create();
-            }
-          }}
-          onCancel={cancelSetup}
-          onNotesOnly={() => {
-            if (creation.currentSession() && currentCreation()?.phase === "setup") {
-              setSetup(false);
-              void create();
-            }
-          }}
-        />
       ) : (
         <>
           <div className="meetings-list-heading">
-            <h1>Meetings</h1>
-            <Button
-              disabled={creation.data.phase === "creating" || preferences.isFetching}
-              onClick={() => void newMeeting()}
-            >
-              {creation.data.phase === "creating" ? "Opening meeting…" : "New meeting"}
-            </Button>
+            <SectionHead title="Meetings" titleAs="h1" />
+            <Link to="/settings?section=modules&module=meetings">Settings</Link>
+            {connection.linked.length ? (
+              <Button
+                disabled={
+                  creation.data.phase === "creating" || connection.loading || connection.denied
+                }
+                onClick={() => void create()}
+              >
+                {creation.data.phase === "creating" ? "Opening meeting…" : "New meeting"}
+              </Button>
+            ) : null}
           </div>
-          {preferences.isError ? (
+          {connection.denied ? (
             <p role="alert" className="jds-hint jds-hint--error">
-              Couldn’t check your meeting setup.{" "}
-              <Button variant="link" onClick={() => void preferences.refetch()}>
-                Try again
+              Mac access could not be verified. Sign in again.
+            </p>
+          ) : connection.loading ? (
+            <p role="status" className="jds-hint">
+              Checking your linked Mac…
+            </p>
+          ) : connection.unavailable ? (
+            <p role="status" className="jds-hint">
+              Couldn’t confirm your Mac connection.{" "}
+              <Button variant="link" onClick={connection.refresh}>
+                Check again
               </Button>
             </p>
+          ) : !connection.linked.length ? (
+            <MeetingNotLinked />
           ) : null}
           {creation.data.phase === "failed" ? (
             <p role="alert" className="jds-hint jds-hint--error">
@@ -148,6 +120,7 @@ export function MeetingsPage() {
             </p>
           ) : null}
           <MeetingHistory
+            hideWhenEmpty={!connection.linked.length}
             search={historyView.data.query}
             onSearch={(query) => historyView.update(() => ({ query }))}
             onOpen={open}

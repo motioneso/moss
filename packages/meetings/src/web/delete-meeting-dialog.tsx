@@ -37,7 +37,6 @@ export function DeleteMeetingDialog({
       client.removeQueries({ queryKey: meetingKeys.record(meeting.id), exact: true });
       client.removeQueries({ queryKey: meetingKeys.editor(meeting.id), exact: true });
       client.removeQueries({ queryKey: ["meetings", "title", meeting.id], exact: true });
-      client.removeQueries({ queryKey: ["meetings", "notice-action", meeting.id], exact: true });
       client.removeQueries({ queryKey: ["meetings", "output-session", meeting.id] });
       client.removeQueries({ queryKey: ["meetings", "outputs", meeting.id] });
       client.removeQueries({ queryKey: ["meetings", "exports", meeting.id] });

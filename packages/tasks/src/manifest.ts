@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { taskListTarget, taskTagTarget, taskTagAssignmentTarget } from "./chat-targets.js";
 import { tasksMonitorProvider } from "./monitor-provider.js";
 import {
   addTaskActivityRequestSchema,
@@ -329,15 +330,19 @@ export const tasksModuleManifest = {
     }
   ],
   routes: [
+    // listFiltered rolls recurring series forward before returning the read.
     {
       method: "GET",
       path: "/api/tasks",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: listTasksResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "POST",
       path: "/api/tasks",
+      // Recurring creates reconcile the actor's pg-boss schedule.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: createTaskRequestSchema,
       responseSchema: createTaskResponseSchema,
       permissionId: "tasks.create"
@@ -345,6 +350,8 @@ export const tasksModuleManifest = {
     {
       method: "POST",
       path: "/api/tasks/search/interpret",
+      // Natural-language interpretation calls the actor's model provider.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: interpretTaskSearchRequestSchema,
       responseSchema: interpretTaskSearchResponseSchema,
       permissionId: "tasks.view"
@@ -352,12 +359,15 @@ export const tasksModuleManifest = {
     {
       method: "GET",
       path: "/api/tasks/:id",
+      chat: { access: "read", coveredBy: "tasks.get" },
       responseSchema: getTaskResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "PATCH",
       path: "/api/tasks/:id",
+      // Status changes also train email triage and can suppress future suggested tasks.
+      chat: { access: "blocked", blockedBecause: "external_effect", coveredBy: "tasks.update" },
       requestSchema: updateTaskRequestSchema,
       responseSchema: updateTaskResponseSchema,
       permissionId: "tasks.update"
@@ -365,6 +375,12 @@ export const tasksModuleManifest = {
     {
       method: "POST",
       path: "/api/tasks/:id/activity",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Add task activity",
+        coveredBy: "tasks.addActivity"
+      },
       requestSchema: addTaskActivityRequestSchema,
       responseSchema: addTaskActivityResponseSchema,
       permissionId: "tasks.update"
@@ -372,6 +388,7 @@ export const tasksModuleManifest = {
     {
       method: "POST",
       path: "/api/tasks/:id/deferred-status",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: deferredTaskStatusRequestSchema,
       responseSchema: deferredTaskStatusResponseSchema,
       permissionId: "tasks.update"
@@ -379,6 +396,7 @@ export const tasksModuleManifest = {
     {
       method: "POST",
       path: "/api/tasks/:id/tags",
+      chat: { access: "write", title: "Assign task tag", coveredBy: "tasks.assignTag" },
       requestSchema: assignTaskTagRequestSchema,
       responseSchema: assignTaskTagRouteSchema.response[200],
       permissionId: "tasks.update"
@@ -386,18 +404,32 @@ export const tasksModuleManifest = {
     {
       method: "DELETE",
       path: "/api/tasks/:id/tags/:tagId",
+      chat: {
+        access: "destructive",
+        title: "Remove tag from task",
+        coveredBy: "tasks.unassignTag",
+        target: taskTagAssignmentTarget
+      },
       responseSchema: unassignTaskTagRouteSchema.response[200],
       permissionId: "tasks.update"
     },
     {
       method: "GET",
       path: "/api/tasks/lists",
+      // The page-load read repairs recurrence schedules.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: listTaskListsResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "POST",
       path: "/api/tasks/lists",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Create task list",
+        coveredBy: "tasks.createList"
+      },
       requestSchema: createTaskListRequestSchema,
       responseSchema: createTaskListResponseSchema,
       permissionId: "tasks.create"
@@ -405,6 +437,12 @@ export const tasksModuleManifest = {
     {
       method: "PATCH",
       path: "/api/tasks/lists/:listId",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Rename task list",
+        coveredBy: "tasks.renameList"
+      },
       requestSchema: renameTaskListRequestSchema,
       responseSchema: renameTaskListRouteSchema.response[200],
       permissionId: "tasks.update"
@@ -412,6 +450,13 @@ export const tasksModuleManifest = {
     {
       method: "DELETE",
       path: "/api/tasks/lists/:listId",
+      chat: {
+        access: "destructive",
+        content: "user_authored",
+        title: "Delete task list",
+        coveredBy: "tasks.deleteList",
+        target: taskListTarget
+      },
       requestSchema: deleteTaskListRequestSchema,
       responseSchema: deleteTaskListRouteSchema.response[200],
       permissionId: "tasks.update"
@@ -419,12 +464,19 @@ export const tasksModuleManifest = {
     {
       method: "GET",
       path: "/api/tasks/lists/:listId/tags",
+      chat: { access: "read", content: "user_authored", coveredBy: "tasks.listTags" },
       responseSchema: listTaskTagsResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "POST",
       path: "/api/tasks/lists/:listId/tags",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Create task tag",
+        coveredBy: "tasks.createTag"
+      },
       requestSchema: createTaskTagRequestSchema,
       responseSchema: createTaskTagResponseSchema,
       permissionId: "tasks.create"
@@ -432,6 +484,12 @@ export const tasksModuleManifest = {
     {
       method: "PATCH",
       path: "/api/tasks/lists/:listId/tags/:tagId",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Rename task tag",
+        coveredBy: "tasks.renameTag"
+      },
       requestSchema: renameTaskTagRequestSchema,
       responseSchema: renameTaskTagRouteSchema.response[200],
       permissionId: "tasks.update"
@@ -439,12 +497,25 @@ export const tasksModuleManifest = {
     {
       method: "DELETE",
       path: "/api/tasks/lists/:listId/tags/:tagId",
+      chat: {
+        access: "destructive",
+        content: "user_authored",
+        title: "Delete task tag",
+        coveredBy: "tasks.deleteTag",
+        target: taskTagTarget
+      },
       responseSchema: deleteTaskTagRouteSchema.response[200],
       permissionId: "tasks.update"
     },
     {
       method: "POST",
       path: "/api/tasks/:id/breakdown",
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Break task into subtasks",
+        coveredBy: "tasks.breakDown"
+      },
       requestSchema: breakdownTaskRequestSchema,
       responseSchema: breakdownTaskResponseSchema,
       permissionId: "tasks.update"
@@ -452,49 +523,61 @@ export const tasksModuleManifest = {
     {
       method: "GET",
       path: "/api/tasks/focus",
+      // All three drift reads roll recurring series forward in the database.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: focusTasksResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "GET",
       path: "/api/tasks/at-risk",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: atRiskTasksResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "GET",
       path: "/api/tasks/overdue",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: overdueTasksResponseSchema,
       permissionId: "tasks.view"
     },
     {
       method: "GET",
       path: "/api/tasks/preferences",
+      // getOrCreate inserts a default preference row when missing.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       permissionId: "tasks.view"
     },
     {
       method: "PATCH",
       path: "/api/tasks/preferences",
+      chat: { access: "write", content: "user_authored", title: "Set task view preference" },
       permissionId: "tasks.update"
     },
     {
       method: "GET",
       path: "/api/tasks/agency-auto-execute",
+      // Reading the compatibility policy may heal a missing trusted_auto grant.
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "tasks.view"
     },
     {
       method: "PATCH",
       path: "/api/tasks/agency-auto-execute",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "tasks.update"
     },
     {
       method: "GET",
       path: "/api/tasks/:id/subtasks",
+      chat: { access: "read", coveredBy: "tasks.get" },
       permissionId: "tasks.view"
     },
     {
       method: "GET",
       path: "/api/tasks/:id/activity",
+      chat: { access: "read", coveredBy: "tasks.activity" },
       permissionId: "tasks.view"
     }
   ],
@@ -535,6 +618,7 @@ export const tasksModuleManifest = {
         "List tasks visible to the actor. Optional filters: listId, tagId, status (todo|done|archived), priority (1–5 integer), dueBefore/dueAfter (ISO 8601 date strings), quadrant (do|schedule|delegate|eliminate — Eisenhower matrix), completedAfter (ISO 8601 date-time — only tasks completed after this instant).",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {
@@ -557,6 +641,7 @@ export const tasksModuleManifest = {
         "Get a specific task by ID, including its subtasks and up to 10 most recent activity entries.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["taskId"],
@@ -572,6 +657,7 @@ export const tasksModuleManifest = {
         "Get the focus list — the highest-priority tasks to work on today: overdue tasks plus at-risk tasks (Medium+ priority, due within 48 h or do-date past), ranked by priority, urgency, and effort.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       outputSchema: taskItemsToolOutputSchema,
       execute: taskFocusExecute
@@ -582,6 +668,7 @@ export const tasksModuleManifest = {
         "Get tasks at risk of slipping: open, Medium+ priority, due within 48 hours or do-date passed, with no completed subtasks.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       outputSchema: taskItemsToolOutputSchema,
       execute: taskAtRiskExecute
@@ -592,6 +679,7 @@ export const tasksModuleManifest = {
         "Get all overdue tasks — open tasks whose due date is in the past, most overdue first.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       outputSchema: taskItemsToolOutputSchema,
       execute: taskOverdueExecute
@@ -601,6 +689,7 @@ export const tasksModuleManifest = {
       description: "List all task lists owned by the actor, ordered by position then name.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       outputSchema: taskListItemsToolOutputSchema,
       execute: taskListListsExecute
@@ -610,6 +699,7 @@ export const tasksModuleManifest = {
       description: "List all tags in a given task list.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["listId"],
@@ -625,6 +715,7 @@ export const tasksModuleManifest = {
       description: "Get the full activity stream for a task, in chronological order.",
       permissionId: "tasks.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["taskId"],
@@ -730,6 +821,7 @@ export const tasksModuleManifest = {
       description: "Create a task list owned by the active actor.",
       permissionId: "tasks.create",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_changes",
       selfOperationGrant: "granted_at_install",
@@ -742,6 +834,7 @@ export const tasksModuleManifest = {
       description: "Rename a task list owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_changes",
       selfOperationGrant: "granted_at_install",
@@ -754,6 +847,7 @@ export const tasksModuleManifest = {
       description: "Create a tag in a task list owned by the active actor.",
       permissionId: "tasks.create",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_changes",
       selfOperationGrant: "granted_at_install",
@@ -766,6 +860,7 @@ export const tasksModuleManifest = {
       description: "Rename a tag owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_changes",
       selfOperationGrant: "granted_at_install",
@@ -778,6 +873,7 @@ export const tasksModuleManifest = {
       description: "Delete a task list owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_cleanup",
       selfOperationGrant: "user_promotable",
@@ -798,6 +894,7 @@ export const tasksModuleManifest = {
       description: "Delete a task tag owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "task_cleanup",
       selfOperationGrant: "user_promotable",
@@ -811,6 +908,11 @@ export const tasksModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "tasks.chat_app_actions",
+      description:
+        "App actions read individual tasks and activity, manage lists and tags, and split tasks. Scheduling, email-triage updates and auto-execution controls remain blocked; dedicated task tools stay separate."
+    },
     {
       id: "tasks.lists_and_tags",
       description:

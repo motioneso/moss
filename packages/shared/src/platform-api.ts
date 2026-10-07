@@ -64,6 +64,8 @@ export interface ModuleDto {
   readonly lifecycle: "required" | "optional" | "user-toggleable" | "workspace-toggleable";
   readonly navigation: readonly ModuleNavigationEntryDto[];
   readonly settings: readonly ModuleSettingsSurfaceDto[];
+  /** Additional frontend query-key tokens invalidated after this module changes through chat. */
+  readonly chatRefreshTokens?: readonly string[];
   /** #917: true for active external (non-compiled) modules. Absent/false for built-ins. */
   readonly external?: boolean;
   /** #918: web contribution declaration. Absent for built-ins and modules without one. */
@@ -234,6 +236,7 @@ const moduleSchema = {
     },
     navigation: { type: "array", items: moduleNavigationEntrySchema },
     settings: { type: "array", items: moduleSettingsSurfaceSchema },
+    chatRefreshTokens: { type: "array", items: { type: "string" } },
     // #917: declared so fast-json-stringify does not strip it (undeclared fields are
     // silently dropped). NOT in `required` — built-ins emit external:false explicitly,
     // but existing producers/fixtures that omit it stay valid.
