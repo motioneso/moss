@@ -1,3 +1,4 @@
+import { settingsModuleManifest } from "../../packages/settings/src/manifest.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { dataContextBrand } from "@moss/db";
 import { PreferencesRepository } from "@moss/structured-state";
@@ -190,4 +191,11 @@ describe("AI model favorites disclosure", () => {
       await modelFavoritesPresentation(db, call({ modelIds: [], hidden: true }), ctx)
     ).toBeNull();
   });
+});
+
+it("names chat archive enablement and destination without claiming retention changes", () => {
+  const route = settingsModuleManifest.routes?.find(
+    (entry) => entry.method === "PUT" && entry.path === "/api/me/chat-archive"
+  );
+  expect(route?.chat?.title).toBe("Change chat archive settings");
 });

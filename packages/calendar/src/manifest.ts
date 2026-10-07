@@ -608,7 +608,7 @@ export const calendarModuleManifest = {
     {
       id: "calendar.saved_day_plan_draft",
       description:
-        "Save evening intent and draft blocks. Only this proposal changes; saves may fail if plan changed, task unavailable, or placed block omitted without pending removal. Drafts are not previewed, approved, scheduled, or written to a calendar.",
+        "Save evening intent and draft blocks. Approval lists every omitted block that the replacement removes from the draft. Placed blocks require pending removal. Draft saves never schedule or write calendar events.",
       errors: [
         {
           code: "day_plan_invalid",

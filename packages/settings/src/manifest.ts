@@ -1,3 +1,4 @@
+import { putWeatherUnitRouteSchema } from "@moss/shared";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -261,6 +262,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "PUT",
       path: "/api/me/weather-unit",
+      requestSchema: putWeatherUnitRouteSchema.body,
       chat: {
         presentation: weatherUnitPresentation,
         access: "write",
@@ -618,7 +620,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       chat: {
         presentation: chatRetentionPresentation,
         access: "write",
-        title: "Change how long chats are kept",
+        title: "Change chat archive settings",
         content: "user_authored"
       },
       permissionId: "settings.write"

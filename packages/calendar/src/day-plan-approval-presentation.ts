@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import {
+  ApprovalInputError,
   type ApprovalField,
   type HumanActionDetails,
   type RouteApprovalPresentation,
@@ -120,6 +121,27 @@ class PlanDisclosure {
   }
   async blocks(value: unknown, additions: boolean): Promise<void> {
     if (!Array.isArray(value)) throw new Error("Invalid blocks");
+    if (!additions) {
+      this.add(
+        "Draft blocks",
+        "Replace the current list; omitted blocks are removed from this draft only"
+      );
+      const retained = new Set(value.map((item) => object(item)?.id));
+      let removed = 0;
+      for (const [index, block] of (this.plan?.blocks ?? []).entries()) {
+        if (retained.has(block.id)) continue;
+        if (block.actualPlacement != null)
+          throw new ApprovalInputError(
+            "Placed calendar blocks must be kept in the draft with a pending removal; omitting them cannot save the plan."
+          );
+        const name =
+          block.title ??
+          (block.taskId
+            ? await this.task(block.taskId)
+            : `${choice(block.kind, "kind")} block ${index + 1}`);
+        this.add(`Removed block ${++removed}`, name);
+      }
+    }
     if (!value.length) this.add(additions ? "New tasks" : "Draft blocks", "None");
     for (const [index, item] of value.entries()) {
       const row = object(item);
@@ -225,7 +247,8 @@ async function present(
     const day = plan?.localDay ?? (typeof body.date === "string" ? body.date : null);
     const zone = plan?.timeZone ?? (typeof body.timeZone === "string" ? body.timeZone : null);
     return day && zone ? view.result(`Day plan · ${day} · ${zone}`) : null;
-  } catch {
+  } catch (error) {
+    if (error instanceof ApprovalInputError) throw error;
     return null;
   }
 }

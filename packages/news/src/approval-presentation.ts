@@ -65,7 +65,14 @@ export const newsRemoveSourcePresentation: ToolApprovalPresentation = async (db,
   return source
     ? {
         target: source.label,
-        fields: [{ label: "Domain", value: source.canonicalDomain }],
+        fields: [
+          { label: "Domain", value: source.canonicalDomain },
+          { label: "Saved credentials", value: "Delete any saved credentials for this publisher" },
+          {
+            label: "Saved briefings",
+            value: "Remove articles from this publisher and its subdomains"
+          }
+        ],
         version: version(source)
       }
     : null;

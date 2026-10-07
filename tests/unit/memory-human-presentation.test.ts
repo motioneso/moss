@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   configureMemoryApprovalReferences,
   memoryAcceptPresentation,
+  memorySupersedePresentation,
   memoryEditEntityPresentation,
   memoryRememberPresentation
 } from "../../packages/memory/src/action-presentations.js";
@@ -251,4 +252,39 @@ it("does not use retained memory to bypass a refused note-root or path scope", a
     )
   ).rejects.toThrow("Approval source unavailable");
   expect(queries).toEqual([]);
+});
+
+it.each([undefined, {}, { validTo: null }, { validTo: "" }])(
+  "discloses supersede's actual NOW default for %j",
+  async (body) => {
+    expect(
+      await memorySupersedePresentation(
+        {},
+        { target: "Remembered fact", params: { id: entityId }, body },
+        ctx
+      )
+    ).toMatchObject({
+      target: "Remembered fact",
+      fields: [{ label: "Valid until", value: "Now" }]
+    });
+  }
+);
+it("keeps an explicit supersede date exact and refuses unknown fields", async () => {
+  const validTo = "2026-11-01T09:30:00Z";
+  expect(
+    (
+      await memorySupersedePresentation(
+        {},
+        { target: "Remembered fact", params: { id: entityId }, body: { validTo } },
+        ctx
+      )
+    )?.fields
+  ).toEqual([{ label: "Valid until", value: validTo }]);
+  expect(
+    await memorySupersedePresentation(
+      {},
+      { target: "Remembered fact", params: { id: entityId }, body: { validTo, hidden: true } },
+      ctx
+    )
+  ).toBeNull();
 });

@@ -562,6 +562,11 @@ export const newsModuleManifest = {
   ],
   features: [
     {
+      id: "news.publisher_removal_approval",
+      description:
+        "Removing a publisher asks first and discloses deletion of any saved publisher credentials and removal of its articles, including subdomains, from saved briefings."
+    },
+    {
       id: "news.chat_app_actions",
       description:
         "App actions read the News catalog and saved preferences. Credentials, source previews, feed refreshes and scheduling changes remain unavailable through generic actions."

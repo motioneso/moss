@@ -135,6 +135,97 @@ describe("day-plan human disclosure", () => {
       )
     ).toBeNull();
   });
+  it("lists every omitted draft block, including empty replacement and same-title new blocks", async () => {
+    getById.mockResolvedValue({
+      ...plan,
+      blocks: [
+        { id: "retained-id", title: "Keep this", taskId: null, kind: "personal" },
+        {
+          id: "removed-id",
+          title: "Full omitted title\nincluding detail",
+          taskId: null,
+          kind: "break"
+        },
+        { id: "task-block-id", title: null, taskId: task.id, kind: "focus" }
+      ]
+    });
+    const base = { date: plan.localDay, timeZone: plan.timeZone, expectedRevision: 3 };
+    const view = await saveDayPlanPresentation(
+      db,
+      route({
+        ...base,
+        blocks: [{ id: "retained-id", title: "Keep this", taskId: null, kind: "personal" }]
+      }),
+      ctx
+    );
+    expect(view?.fields).toContainEqual({
+      label: "Draft blocks",
+      value: "Replace the current list; omitted blocks are removed from this draft only"
+    });
+    expect(view?.fields.filter((field) => field.label.startsWith("Removed block"))).toEqual([
+      { label: "Removed block 1", value: "Full omitted title\nincluding detail" },
+      { label: "Removed block 2", value: task.title }
+    ]);
+    const empty = await saveDayPlanPresentation(db, route({ ...base, blocks: [] }), ctx);
+    expect(empty?.fields.filter((field) => field.label.startsWith("Removed block"))).toHaveLength(
+      3
+    );
+    const sameTitle = await saveDayPlanPresentation(
+      db,
+      route({ ...base, blocks: [{ title: "Keep this", taskId: null, kind: "personal" }] }),
+      ctx
+    );
+    expect(sameTitle?.fields).toContainEqual({ label: "Removed block 1", value: "Keep this" });
+    const unchanged = await saveDayPlanPresentation(db, route(base), ctx);
+    expect(unchanged?.fields.some((field) => field.label.startsWith("Removed block"))).toBe(false);
+    expect(JSON.stringify(view)).not.toContain("removed-id");
+    const additions = await dayPlanDraftPresentation(
+      db,
+      { planId: plan.id, expectedRevision: 3, additions: [] },
+      ctx
+    );
+    expect(additions?.fields.some((field) => field.label.startsWith("Removed block"))).toBe(false);
+  });
+  it("returns corrective validation for omitted placed blocks instead of promising removal", async () => {
+    getById.mockResolvedValue({
+      ...plan,
+      blocks: [
+        {
+          id: "placed-id",
+          title: "Already on calendar",
+          taskId: null,
+          kind: "personal",
+          actualPlacement: { startsAt: "2026-10-08T10:00:00Z", durationMinutes: 30 }
+        }
+      ]
+    });
+    await expect(
+      saveDayPlanPresentation(
+        db,
+        route({ date: plan.localDay, timeZone: plan.timeZone, expectedRevision: 3, blocks: [] }),
+        ctx
+      )
+    ).rejects.toThrow(
+      "Placed calendar blocks must be kept in the draft with a pending removal; omitting them cannot save the plan."
+    );
+  });
+  it("names unlinked omitted blocks by kind and position and refuses unreadable linked names", async () => {
+    const body = { date: plan.localDay, timeZone: plan.timeZone, expectedRevision: 3, blocks: [] };
+    getById.mockResolvedValue({
+      ...plan,
+      blocks: [{ id: "unnamed-id", title: null, taskId: null, kind: "break" }]
+    });
+    expect((await saveDayPlanPresentation(db, route(body), ctx))?.fields).toContainEqual({
+      label: "Removed block 1",
+      value: "Break block 1"
+    });
+    getById.mockResolvedValue({
+      ...plan,
+      blocks: [{ id: "linked-id", title: null, taskId: "foreign-task", kind: "focus" }]
+    });
+    findTask.mockResolvedValue({ ...task, owner_user_id: "other" });
+    expect(await saveDayPlanPresentation(db, route(body), ctx)).toBeNull();
+  });
   it("versions authoritative changes without putting IDs in displayed values", async () => {
     const input = { planId: plan.id, expectedRevision: 3, additions: [{ taskId: task.id }] };
     const first = await dayPlanDraftPresentation(db, input, ctx);

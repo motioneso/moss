@@ -6,9 +6,9 @@
 // preview runs unconfirmed (read risk) and returns verified candidates; confirm
 // is gated by default (news_personalization family defaults to ask_each_time —
 // see Task 10 classification in packages/news/src/manifest.ts), nothing executes
-// until the owner resolves the pending action; a tampered resubmitted domain is a
-// security violation (execute throws, sanitized error, no row); a cross-owner
-// confirmationId replay dies as "expired" (preview store is owner-checked); and
+// until the owner resolves the pending action; tampered domains and cross-owner
+// confirmation replay are refused before an approval row exists. Separate executor
+// checks retain the original tamper error and owner-checked expired behavior; and
 // no tool output ever leaks provider/model fingerprint material.
 //
 // Task 8 (#975) write tools (removeSource/addTopic/removeTopic/addExclusion) are
@@ -35,6 +35,7 @@ import type {
 } from "../../packages/chat/src/live/types.js";
 
 import { ids } from "./test-database.js";
+import { newsConfirmSourceExecute } from "../../packages/news/src/chat-tools.js";
 import { parseToolOutputText } from "./fixtures/tool-output.js";
 import {
   NewsChatToolsHarness,
@@ -470,59 +471,88 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     });
   }, 30_000);
 
-  it("confirmSource with a tampered domain fails closed: sanitized error, no row", async () => {
+  it("confirmSource with a tampered domain fails before a card; the executor also refuses it", async () => {
     const { gateway, emitted, mint } = await harness.makeGateway();
     const token = mint(ids.userA, "news-chat-tamper");
     const preview = await harness.previewExampleFeed(gateway, token);
     const candidate = preview.candidates[0]!;
     const before = await harness.sourceRowCount();
-
-    // Resubmitted display fields must match the STORED candidate — a mismatch is
-    // a security violation (LLM/client tried to swap the write target).
-    const pending = gateway.callTool(token, "news.confirmSource", {
+    const actionCount = async () =>
+      (
+        await harness.bootstrap.query(
+          `SELECT count(*)::int AS count FROM app.ai_assistant_action_requests WHERE tool_name = 'news.confirmSource'`
+        )
+      ).rows[0].count as number;
+    const actionsBefore = await actionCount();
+    const input = {
       confirmationId: preview.confirmationId,
       candidateId: candidate.candidateId,
       label: candidate.label,
       domain: "evil.example.net"
-    });
-    const request = await harness.waitForActionRequest(emitted, 0);
-    await gateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
-    const result = await pending;
+    };
 
-    expect(result).toMatchObject({ ok: false });
-    expect(JSON.stringify(result)).toContain("Tool news.confirmSource failed");
+    // The human card must not offer a target that differs from the verified preview.
+    const result = await gateway.callTool(token, "news.confirmSource", input);
+    expect(result).toMatchObject({ ok: false, denied: true });
+    expect(JSON.stringify(result)).toContain("approval_unavailable");
+    expect(JSON.stringify(result)).not.toContain("evil.example.net");
+    expect(emitted.filter((record) => record.kind === "action_request")).toEqual([]);
+    expect(await actionCount()).toBe(actionsBefore);
     expect(await harness.sourceRowCount()).toBe(before);
-    expect(
-      await harness.waitForAudit({ toolName: "news.confirmSource", outcome: "failed" })
-    ).toMatchObject({
-      owner_user_id: ids.userA,
-      approval_mode: "confirmed",
-      outcome: "failed"
-    });
+
+    // Retain the original lower-layer tamper check independently of the earlier card guard.
+    await expect(
+      harness.appContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "news-direct-tamper" },
+        (db) =>
+          newsConfirmSourceExecute(db, input, {
+            actorUserId: ids.userA,
+            requestId: "news-direct-tamper",
+            chatSessionId: "news-chat-tamper"
+          })
+      )
+    ).rejects.toThrow("Confirmed source does not match the previewed candidate");
+    expect(await harness.sourceRowCount()).toBe(before);
   }, 30_000);
 
-  it("rejects a cross-owner confirmationId replay as expired without writing", async () => {
+  it("rejects cross-owner confirmation before a card; the executor still treats it as expired", async () => {
     const { gateway, emitted, mint } = await harness.makeGateway();
     const tokenA = mint(ids.userA, "news-chat-owner-a");
     const tokenB = mint(ids.userB, "news-chat-owner-b");
     const preview = await harness.previewExampleFeed(gateway, tokenA);
     const candidate = preview.candidates[0]!;
     const before = await harness.sourceRowCount();
-
-    const pending = gateway.callTool(tokenB, "news.confirmSource", {
+    const actionCount = async () =>
+      (
+        await harness.bootstrap.query(
+          `SELECT count(*)::int AS count FROM app.ai_assistant_action_requests WHERE tool_name = 'news.confirmSource'`
+        )
+      ).rows[0].count as number;
+    const actionsBefore = await actionCount();
+    const input = {
       confirmationId: preview.confirmationId,
       candidateId: candidate.candidateId,
       label: candidate.label,
       domain: candidate.domain
-    });
-    const request = await harness.waitForActionRequest(emitted, 0);
-    await gateway.resolveActionRequest(ids.userB, request.actionRequestId, "confirmed");
-    const result = await pending;
+    };
+    const result = await gateway.callTool(tokenB, "news.confirmSource", input);
+    expect(result).toMatchObject({ ok: false, denied: true });
+    expect(JSON.stringify(result)).toContain("approval_unavailable");
+    expect(emitted.filter((record) => record.kind === "action_request")).toEqual([]);
+    expect(await actionCount()).toBe(actionsBefore);
+    expect(await harness.sourceRowCount()).toBe(before);
 
-    // Benign failure: owner-checked preview store yields nothing for B, the
-    // tool reports "expired" as data (no throw), and nothing was written.
-    expect(result).toMatchObject({ ok: true });
-    expect(JSON.stringify(result)).toContain("expired");
+    // Direct execution retains its owner-checked benign expiry response, without a write.
+    const direct = await harness.appContext.withDataContext(
+      { actorUserId: ids.userB, requestId: "news-direct-replay" },
+      (db) =>
+        newsConfirmSourceExecute(db, input, {
+          actorUserId: ids.userB,
+          requestId: "news-direct-replay",
+          chatSessionId: "news-chat-owner-b"
+        })
+    );
+    expect(JSON.stringify(direct.data)).toContain("expired");
     expect(await harness.sourceRowCount()).toBe(before);
   }, 30_000);
 

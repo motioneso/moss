@@ -53,6 +53,8 @@ export interface RouteChatPolicy {
   readonly presentation?: RouteApprovalPresentation;
   /** Disclosure provenance is independent of response content; defaults to outside. */
   readonly presentationContent?: ChatContentClass;
+  /** Explicitly mirrors an owning route preValidation that replaces a nullish body with {}. */
+  readonly emptyBody?: "object";
   /** Name of a dedicated assistant tool that does the same job. */
   readonly coveredBy?: string;
   /** GET only: the route sends model-chosen input to a third party. */

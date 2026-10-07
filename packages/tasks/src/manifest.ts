@@ -808,6 +808,11 @@ export const tasksModuleManifest = {
   ],
   features: [
     {
+      id: "tasks.approval_effects",
+      description:
+        "Deleting a list keeps reassigned tasks but deletes its tags and assignments. Moving a task removes tags from other lists. Deleting a tag removes it from all tasks without deleting the tasks."
+    },
+    {
       id: "tasks.chat_app_actions",
       description:
         "App actions read individual tasks and activity, manage lists and tags, and split tasks. Scheduling, email-triage updates and auto-execution controls remain blocked; dedicated task tools stay separate."

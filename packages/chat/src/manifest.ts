@@ -122,6 +122,12 @@ export const chatModuleManifest = {
         "Native permissions keep exact commands or paths. Missing details keep Reject only. Outside content adds one notice.",
       errors: [
         {
+          code: "invalid_input",
+          class: "validation",
+          description:
+            "Invalid fields or impossible target changes return a correction before approval; nothing executes. Correct the fields or choose a specific target and ask again."
+        },
+        {
           code: "approval_unavailable",
           class: "prerequisite",
           description:

@@ -171,6 +171,17 @@ function scoped() {
             entry.wheres.push(args);
             return query;
           },
+          limit: () => query,
+          execute: async () =>
+            rows[table.split(" as ")[0]!]?.filter((row) =>
+              entry.wheres.every(([column, operator, value]) => {
+                if (typeof column !== "string" || (value !== null && typeof value === "object"))
+                  return true;
+                const key = column.split(".").at(-1)!;
+                if (!(key in row)) return true;
+                return operator === "!=" ? row[key] !== value : row[key] === value;
+              })
+            ),
           executeTakeFirst: async () =>
             rows[table.split(" as ")[0]!]?.find((row) =>
               entry.wheres.every(([column, operator, value]) => {

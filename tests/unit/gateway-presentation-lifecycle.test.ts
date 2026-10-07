@@ -1,3 +1,4 @@
+import { ApprovalInputError } from "@moss/module-sdk";
 import { describe, expect, it, vi } from "vitest";
 import {
   admissionFixture,
@@ -145,4 +146,53 @@ describe("approval preparation lifecycle", () => {
       expect.anything()
     );
   });
+});
+
+it("freezes a server-authored dynamic title and refuses a changed title before dispatch", async () => {
+  let title = "Overwrite note";
+  const execute = vi.fn(async () => ({ data: { changed: true } }));
+  const h = admissionFixture([
+    admissionTool("example.write", {
+      risk: "destructive",
+      actionLabel: "Create note",
+      approvalContent: "user_authored",
+      approvalPresentation: async () => ({ title, target: "today.md", fields: [] }),
+      execute
+    })
+  ]);
+  const pending = h.gateway.callTool(h.token, "example.write", {});
+  await vi.waitFor(() => expect(h.records).toHaveLength(1));
+  expect(h.records[0]).toMatchObject({ outcomeTitle: "Overwrite note" });
+  title = "Create note";
+  h.confirmations.resolve("action-1", "confirmed");
+  expect(await pending).toMatchObject({ ok: false });
+  expect(execute).not.toHaveBeenCalled();
+  expect(h.records[1]).toMatchObject({ outcome: "error", summary: "Overwrite note" });
+});
+
+it("returns dedicated typed state validation before any pending row or execution", async () => {
+  const execute = vi.fn(async () => ({ data: {} }));
+  const h = admissionFixture([
+    admissionTool("example.write", {
+      risk: "destructive",
+      actionLabel: "Save plan",
+      approvalPresentation: async () => {
+        throw new ApprovalInputError("Keep placed calendar blocks in the draft before saving.");
+      },
+      execute
+    })
+  ]);
+  expect(await h.gateway.callTool(h.token, "example.write", {})).toMatchObject({
+    ok: true,
+    structuredData: {
+      ok: false,
+      status: 400,
+      body: { error: "Keep placed calendar blocks in the draft before saving." }
+    }
+  });
+  expect(h.createPending).not.toHaveBeenCalled();
+  expect(execute).not.toHaveBeenCalled();
+  expect(h.records).toMatchObject([
+    { kind: "action_result", outcome: "error", summary: "Save plan", reason: "invalid_input" }
+  ]);
 });

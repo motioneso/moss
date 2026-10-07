@@ -89,7 +89,7 @@ export const backtrackModuleManifest: MossModuleManifest = {
     {
       id: "backtrack.delete_history",
       description:
-        "Delete stored Backtrack history in Settings or chat for an exact time range or everything. The approval shows the range and permanent effect. Works with no Mac linked, even when storage is off.",
+        "Delete stored Backtrack history in Settings or chat. Approval names either all history or the selected time range and explains permanent deletion. Works with no Mac linked, even when storage is off.",
       errors: []
     }
   ],
@@ -136,7 +136,7 @@ export const backtrackModuleManifest: MossModuleManifest = {
       path: "/api/backtrack/segments",
       chat: {
         access: "destructive",
-        title: "Delete part of your Backtrack history",
+        title: "Delete Backtrack history",
         presentation: backtrackDeletionPresentation,
         content: "user_authored"
       },

@@ -132,6 +132,11 @@ export const peopleModuleManifest: MossModuleManifest = {
   ],
   features: [
     {
+      id: "people.split_identity_approval",
+      description:
+        "Identity-split approval names the actual destination. An existing selection overrides a supplied name; otherwise Moss finds an exact-name match or creates one. Duplicate names require choosing a specific person."
+    },
+    {
       id: "people.chat_app_actions",
       description:
         "App actions read People and review matches. Note-backed writes, ingestion, merges and identity splits remain unavailable through this path."

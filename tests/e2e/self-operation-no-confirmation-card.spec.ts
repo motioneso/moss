@@ -68,7 +68,9 @@ for (const scenario of [
       text: "Delete this event?",
       actionRequestId: "action-1",
       toolName: "calendar.deleteEvent",
-      summary: "Delete this event?"
+      summary: "Delete this event?",
+      outcomeTitle: "Delete this event?",
+      details: { presentation: "human", target: "Planning review", fields: [] }
     });
 
     // Same one-shot-then-hold pattern as chat-drawer.spec.ts: EventSource replays a closed

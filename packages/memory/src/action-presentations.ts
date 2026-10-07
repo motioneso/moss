@@ -72,7 +72,18 @@ function routeFields(
   };
 }
 export const memoryPinPresentation = routeFields({ pinned: bool("Pinned") }, undefined, ["pinned"]);
-export const memorySupersedePresentation = routeFields({ validTo: dates.validTo! });
+export const memorySupersedePresentation: RouteApprovalPresentation = async (db, input, ctx) => {
+  const result = await routeFields({
+    validTo: {
+      label: "Valid until",
+      present: (value) => (value === null || value === "" ? "Now" : approvalText(value))
+    }
+  })(db, input, ctx);
+  if (!result) return null;
+  return result.fields.length
+    ? result
+    : { ...result, fields: [{ label: "Valid until", value: "Now" }] };
+};
 export const memoryDeleteEntityPresentation = routeFields({});
 export const memoryDatesPresentation = routeFields(dates);
 export const memoryRejectPresentation = routeFields({ reason: text("Reason") });

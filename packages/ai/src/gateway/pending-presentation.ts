@@ -1,3 +1,5 @@
+import { ApprovalInputError } from "@moss/module-sdk";
+import { inputValidationFailure } from "./validation-failure.js";
 import { isDeepStrictEqual } from "node:util";
 import type { AiRepository } from "../repository.js";
 import type { AccessContext, DataContextRunner } from "@moss/db";
@@ -17,6 +19,8 @@ import type {
 } from "./types.js";
 
 interface PendingPresentation {
+  readonly validationError?: string;
+  readonly title?: string;
   readonly disclosureExternalContent?: boolean;
   readonly externalTool?: true;
   readonly exactArguments?: string;
@@ -109,6 +113,7 @@ export async function preparePendingPresentation(
       )
         return {};
       return structuredClone({
+        ...(result.title !== undefined ? { title: result.title } : {}),
         details: { presentation: "human" as const, target: result.target, fields: result.fields },
         disclosureExternalContent:
           (result.content ?? found.tool.approvalContent) !== "user_authored",
@@ -121,7 +126,8 @@ export async function preparePendingPresentation(
       );
       return preview ? { preview: structuredClone(preview) } : {};
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof ApprovalInputError) return { validationError: error.message };
     /* Module errors can contain private text; incomplete disclosure is sufficient. */
   }
   const exactArguments = found.tool.isExternal === true ? exactArgumentText(input) : null;
@@ -188,7 +194,7 @@ export async function prepareApprovalCard(
   services: ToolServices,
   notice?: string
 ): Promise<
-  | { failure: GatewayToolResponse }
+  | { failure: GatewayToolResponse; validationTitle?: string }
   | {
       input: Record<string, unknown>;
       summary: string;
@@ -214,7 +220,7 @@ export async function prepareApprovalCard(
     return unavailable;
   }
   const summary = [notice, actionSummary].filter(Boolean).join(" ");
-  const outcomeTitle =
+  let outcomeTitle =
     found.resolution?.summary ??
     (found.tool.approvalPresentation
       ? found.tool.actionLabel
@@ -249,6 +255,9 @@ export async function prepareApprovalCard(
     );
   };
   const presentation: PendingPresentation = await readPresentation().catch(() => ({}));
+  if (presentation.title !== undefined) outcomeTitle = presentation.title;
+  if (presentation.validationError)
+    return inputValidationFailure(outcomeTitle ?? "Perform action", presentation.validationError);
   if (!completeActionPresentation({ summary, outcomeTitle, ...presentation })) return unavailable;
   if (
     !(await admitResolvedCard(deps.provenance, found, ctx, presentation.disclosureExternalContent))

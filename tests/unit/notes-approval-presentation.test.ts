@@ -36,6 +36,7 @@ describe("server-owned note approval presentations", () => {
       ctx
     );
     expect(result).toEqual({
+      title: "Overwrite note",
       target: "Next week.md",
       fields: [
         { label: "Folder 1", value: "Work" },
@@ -52,6 +53,22 @@ describe("server-owned note approval presentations", () => {
       true
     );
   });
+
+  it.each([undefined, false])(
+    "keeps the create heading when overwrite is %s",
+    async (overwrite) => {
+      const result = await notesCreatePresentation(
+        db,
+        {
+          path: "new.md",
+          content: "New content",
+          ...(overwrite === undefined ? {} : { overwrite })
+        },
+        ctx
+      );
+      expect(result?.title).toBe("Create note");
+    }
+  );
 
   it("discloses both exact edit strings, including an empty replacement", async () => {
     expect(

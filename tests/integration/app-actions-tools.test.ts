@@ -451,8 +451,13 @@ describe("app actions through the real gateway and app routes", () => {
   it("persists a forced-confirm read as read and completes the real approval round trip", async () => {
     callSpy.mockClear();
     // Force only the policy seam; keep the real resolver, read transport and SQL action repository.
+    // This read has complete disclosure, and an empty search returns without a provider request.
     const h = gateway({ autoApprove: false, forceConfirm: true });
-    const pending = h.call({ method: "GET", path: "/api/me/themes" });
+    const pending = h.call({
+      method: "GET",
+      path: "/api/me/weather-location/search",
+      query: { query: "" }
+    });
     await vi.waitFor(
       () => expect(h.events.some((event) => event.kind === "action_request")).toBe(true),
       { timeout: 5_000 }
@@ -561,7 +566,11 @@ describe("app actions through the real gateway and app routes", () => {
     for (const start of [
       () => h.call({ method: "PUT", path: "/api/me/weather-unit", body: { unit: "imperial" } }),
       () =>
-        h.call({ method: "GET", path: "/api/me/weather-location/search", query: { q: "Paris" } }),
+        h.call({
+          method: "GET",
+          path: "/api/me/weather-location/search",
+          query: { query: "Paris" }
+        }),
       () => h.theme("light")
     ]) {
       h.events.length = 0;

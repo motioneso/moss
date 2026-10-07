@@ -179,6 +179,41 @@ export const taskApprovalActions = {
 >;
 export type TaskApprovalAction = keyof typeof taskApprovalActions;
 
+/** Describe existing delete/move cascades without changing execution or approval authority. */
+function taskEffects(action: TaskApprovalAction, input: Readonly<Record<string, unknown>>) {
+  if (action === "deleteList")
+    return [
+      {
+        label: "Tasks",
+        value:
+          input.reassignToListId !== undefined
+            ? "Move all tasks to the selected destination list; the tasks are kept."
+            : "Only an empty list can be deleted. A list that still contains tasks is left unchanged."
+      },
+      {
+        label: "Tags",
+        value: "Delete every tag in this list and remove their assignments from tasks."
+      },
+      { label: "Restriction", value: "Your only remaining task list cannot be deleted." }
+    ];
+  if (action === "deleteTag")
+    return [
+      {
+        label: "Effect",
+        value: "Delete this tag and remove it from every task. The tasks are kept."
+      }
+    ];
+  if (action === "update" && input.listId !== undefined)
+    return [
+      {
+        label: "Tags",
+        value:
+          "Remove this task's tag assignments that do not belong to the selected destination list."
+      }
+    ];
+  return [];
+}
+
 export function taskApprovalPresentation(action: TaskApprovalAction): ToolApprovalPresentation {
   const declaration = taskApprovalActions[action];
   return async (db, input) => {
@@ -234,7 +269,7 @@ export function taskApprovalPresentation(action: TaskApprovalAction): ToolApprov
     return {
       content: versions.length ? "outside" : "user_authored",
       target: labels[declaration.target] ?? declaration.target,
-      fields: presented,
+      fields: [...presented, ...taskEffects(action, input)],
       version: JSON.stringify(versions)
     };
   };

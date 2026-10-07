@@ -1,6 +1,7 @@
 import {
   sportsPublicReadPresentation,
   sportsFollowPresentation,
+  sportsUnfollowPresentation,
   sportsFollowRoutePresentation,
   sportsResolveTeamPresentation,
   sportsRemovalPresentation,
@@ -135,6 +136,11 @@ export const sportsModuleManifest = {
     ]
   },
   features: [
+    {
+      id: "sports.approval_effects",
+      description:
+        "Sports approvals disclose source removal's coverage and photo loss, and unfollow's coverage removal. ESPN coverage replaces the whole list; an empty list turns headlines off."
+    },
     {
       id: "sports.chat_app_actions",
       description:
@@ -475,7 +481,7 @@ export const sportsModuleManifest = {
         title: "Forget sports source photo instructions",
         content: "outside",
         target: sportsSourceTarget,
-        presentation: sportsRemovalPresentation("source")
+        presentation: sportsRemovalPresentation("photo-instructions")
       },
       responseSchema: deleteSportsSourcePhotosSchema,
       permissionId: "sports.sources"
@@ -574,7 +580,7 @@ export const sportsModuleManifest = {
     {
       name: "sports.unfollowTeam",
       actionLabel: "Unfollow sports team or competition",
-      approvalPresentation: sportsFollowPresentation,
+      approvalPresentation: sportsUnfollowPresentation,
       description:
         "Stop following a team or competition previously followed. Requires the same competitionKey (and teamKey if a specific team) used to follow it.",
       permissionId: "sports.follow",

@@ -56,7 +56,9 @@ export interface CallCardDetails {
 export type PerCallResolution =
   | {
       readonly kind: "refuse";
-      readonly reason: "unknown_route" | "blocked" | "consent_off" | "not_ready";
+      readonly reason: "unknown_route" | "blocked" | "consent_off" | "not_ready" | "invalid_input";
+      /** Trusted server schema feedback; no target lookup, grant, approval or write occurred. */
+      readonly validationError?: { readonly title: string; readonly message: string };
       readonly category?: SelfOperationExclusionCategory;
     }
   | {

@@ -13,6 +13,7 @@ export const backtrackDeletionPresentation: RouteApprovalPresentation = async (_
   if (range.kind === "everything")
     return {
       content: "user_authored",
+      title: "Delete all your Backtrack history",
       target: "All your stored Backtrack history",
       fields: [
         { label: "Time range", value: "Everything stored up to the time this action runs" },
@@ -34,6 +35,7 @@ export const backtrackDeletionPresentation: RouteApprovalPresentation = async (_
   return fields
     ? {
         content: "user_authored",
+        title: "Delete Backtrack history in a time range",
         target: "Your Backtrack history in this time range",
         fields: [
           ...fields,

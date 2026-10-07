@@ -1,3 +1,4 @@
+import { emitInputValidationFailure } from "./validation-failure.js";
 import { randomUUID } from "node:crypto";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
@@ -452,6 +453,7 @@ export class AssistantToolGateway {
       exposeValidationError &&
       "failure" in prepared &&
       prepared.reason === "invalid_input" &&
+      !prepared.validationTitle &&
       found.tool.isExternal !== false
     ) {
       try {
@@ -463,6 +465,8 @@ export class AssistantToolGateway {
         };
       }
     }
+    if (exposeValidationError && "failure" in prepared && prepared.validationTitle)
+      emitInputValidationFailure(this.deps.notifier, ctx, found.dto.name, prepared.validationTitle);
     if (!("failure" in prepared)) progressTool = prepared.found;
     return "failure" in prepared ? prepared : { ...prepared, ctx };
   }
@@ -807,7 +811,16 @@ export class AssistantToolGateway {
       this.servicesFor(found),
       notice
     );
-    if ("failure" in prepared) return prepared.failure;
+    if ("failure" in prepared) {
+      if (prepared.validationTitle)
+        emitInputValidationFailure(
+          this.deps.notifier,
+          ctx,
+          found.dto.name,
+          prepared.validationTitle
+        );
+      return prepared.failure;
+    }
     const { summary, outcomeTitle, presentation, readPresentation, outsideContentNotice } =
       prepared;
     input = prepared.input;

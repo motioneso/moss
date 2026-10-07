@@ -140,6 +140,17 @@ describe("News approval presentations", () => {
     expect(previews.peek("owner", id)?.candidates[0]?.label).toBe(candidate.label);
     expect(previews.peek("other", id)).toBeNull();
   });
+  it("discloses publisher credential deletion and saved briefing pruning", async () => {
+    const view = await newsRemoveSourcePresentation(db, { sourceId: source.id }, ctx);
+    expect(view?.fields).toContainEqual({
+      label: "Saved credentials",
+      value: "Delete any saved credentials for this publisher"
+    });
+    expect(view?.fields).toContainEqual({
+      label: "Saved briefings",
+      value: "Remove articles from this publisher and its subdomains"
+    });
+  });
   it("resolves source/topic references from the same scoped store as execution", async () => {
     expect((await newsRemoveSourcePresentation(db, { sourceId: source.id }, ctx))?.target).toBe(
       source.label

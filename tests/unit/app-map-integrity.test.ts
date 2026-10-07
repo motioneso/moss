@@ -15,13 +15,38 @@ describe("app-map integrity and truthfulness", () => {
     narrative: ""
   });
 
-  it("describes memory-card path omissions and distinct person-facing approval outcomes", () => {
-    const provider = CORE_APP_SETTINGS.find((screen) => screen.id === "assistant");
-    expect(provider?.description).toContain("requested changes as plain text");
-    expect(provider?.description).toContain(
-      "Memory cards with a resolved target show its text and omit the technical Path row"
+  it("distinguishes corrective input failures from unavailable approval details", () => {
+    const feature = getBuiltInModuleManifests()
+      .find((module) => module.id === "chat")
+      ?.features?.find((entry) => entry.id === "chat.pending_action_disclosure");
+    expect(feature?.errors).toContainEqual(
+      expect.objectContaining({
+        code: "invalid_input",
+        class: "validation"
+      })
     );
-    expect(provider?.description).not.toContain("the exact field values");
+    expect(feature?.errors).toContainEqual(
+      expect.objectContaining({ code: "approval_unavailable", class: "prerequisite" })
+    );
+    expect(feature?.errors?.find((entry) => entry.code === "invalid_input")?.description).toContain(
+      "Correct the fields"
+    );
+  });
+
+  it("describes exact server disclosure, raw permission exceptions and quiet outcomes", () => {
+    const provider = CORE_APP_SETTINGS.find((screen) => screen.id === "assistant");
+    for (const text of [
+      "server-owned action title",
+      "full resolved target",
+      "exact requested changes as readable label and value rows",
+      "saved memory, which uses red",
+      "exact path or command",
+      "complete validated arguments without truncation",
+      "Approve is unavailable and Reject remains available",
+      "without a selected-box outline"
+    ])
+      expect(provider?.description).toContain(text);
+    expect(provider?.description).not.toContain("a reloaded pending card keeps its saved summary");
     const outcome = CORE_APP_ERRORS.find((error) => error.code === "core.ai.action_not_approved");
     for (const text of ["You declined", "Timed out", "Cancelled"]) {
       expect(outcome?.description).toContain(`"${text}"`);

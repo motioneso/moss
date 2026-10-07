@@ -17,7 +17,41 @@ import { catalogEntry } from "./source/catalog.js";
 import { SPORTS_SPORT_LABELS } from "./source/scope.js";
 import { buildViews } from "./standings-views.js";
 
-type Resolved = { label: string; version: unknown };
+// These describe the existing repository cascades and service cleanup, not extra operations.
+const removalEffects = {
+  source: [
+    {
+      label: "Source and coverage",
+      value: "Remove this sports news source and all its coverage assignments."
+    },
+    {
+      label: "Stored photos",
+      value:
+        "Delete stored photos for this source. Any copies left after a cleanup failure are removed during later cleanup."
+    }
+  ],
+  follow: [
+    {
+      label: "Follow and coverage",
+      value:
+        "Stop following this team or competition and remove its custom-source and ESPN headline coverage assignments."
+    },
+    {
+      label: "ESPN fallback",
+      value:
+        "If this removes the last ESPN coverage assignment while headlines are enabled, ESPN returns to its default coverage."
+    }
+  ],
+  "photo-instructions": [
+    {
+      label: "Effect",
+      value:
+        "Forget Moss's saved photo-finding instructions for this source. Use photos already provided by the publisher's feed and article pages."
+    }
+  ]
+} as const;
+
+type Resolved = { label: string; version: unknown; sourceTeamId?: string };
 function object(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -36,7 +70,11 @@ async function teamLabel(
   );
   const team = matches.length === 1 ? matches[0] : undefined;
   return team?.sourceTeamId
-    ? { label: team.name, version: [competition, team.sourceTeamId, team.name] }
+    ? {
+        label: team.name,
+        version: [competition, team.sourceTeamId, team.name],
+        sourceTeamId: team.sourceTeamId
+      }
     : null;
 }
 async function followLabel(
@@ -102,7 +140,7 @@ async function assignmentLabel(
   return followLabel(db, owner, target.followId);
 }
 
-export const sportsFollowPresentation: ToolApprovalPresentation = async (_db, input) => {
+async function followDisclosure(input: Record<string, unknown>) {
   const competition = competitionLabel(input.competitionKey);
   if (!competition || typeof input.competitionKey !== "string") return null;
   const team =
@@ -127,13 +165,54 @@ export const sportsFollowPresentation: ToolApprovalPresentation = async (_db, in
   );
   return fields
     ? {
-        content: team ? "outside" : "user_authored",
-        target: team ? `${team.label} (${competition})` : competition,
-        fields,
-        version: JSON.stringify([input.competitionKey, team?.version ?? null])
+        sourceTeamId: team?.sourceTeamId,
+        details: {
+          content: team ? ("outside" as const) : ("user_authored" as const),
+          target: team ? `${team.label} (${competition})` : competition,
+          fields,
+          version: JSON.stringify([input.competitionKey, team?.version ?? null])
+        }
       }
     : null;
+}
+export const sportsFollowPresentation: ToolApprovalPresentation = async (_db, input) =>
+  (await followDisclosure(input))?.details ?? null;
+export const sportsUnfollowPresentation: ToolApprovalPresentation = async (db, input, ctx) => {
+  assertDataContextDb(db);
+  const disclosure = await followDisclosure(input);
+  if (!disclosure || typeof input.competitionKey !== "string") return null;
+  const { details, sourceTeamId } = disclosure;
+  // The tool executes by catalog key, but consent belongs to this exact saved follow.
+  // Bind absence too: a follow created while the card waits must require a fresh decision.
+  let query = db.db
+    .selectFrom("app.sports_follows")
+    .select(["id", "competition_key", "team_key", "source_team_id", "created_at"])
+    .where("owner_user_id", "=", ctx.actorUserId)
+    .where("competition_key", "=", input.competitionKey);
+  if (input.teamKey == null) query = query.where("team_key", "is", null);
+  else {
+    if (!sourceTeamId) return null;
+    query = query.where("source_team_id", "=", sourceTeamId);
+  }
+  const saved = (await query.executeTakeFirst()) ?? null;
+  return {
+    ...details,
+    fields: [
+      ...details.fields,
+      ...(saved
+        ? removalEffects.follow
+        : [
+            {
+              label: "Effect",
+              value:
+                "This team or competition is not currently followed; no saved follow or coverage will be removed."
+            }
+          ])
+    ],
+    version: JSON.stringify([details.version, saved])
+  };
 };
+
 export const sportsFollowRoutePresentation: RouteApprovalPresentation = async (db, input, ctx) => {
   if (Object.keys(input.params).length || (input.query && Object.keys(input.query).length))
     return null;
@@ -173,7 +252,9 @@ export const sportsResolveTeamPresentation: RouteApprovalPresentation = async (d
   };
 };
 
-export function sportsRemovalPresentation(kind: "follow" | "source"): RouteApprovalPresentation {
+export function sportsRemovalPresentation(
+  kind: keyof typeof removalEffects
+): RouteApprovalPresentation {
   return async (db, input, ctx) => {
     assertDataContextDb(db);
     if (
@@ -188,7 +269,11 @@ export function sportsRemovalPresentation(kind: "follow" | "source"): RouteAppro
       input.params.id
     );
     return target
-      ? { target: target.label, fields: [], version: JSON.stringify(target.version) }
+      ? {
+          target: target.label,
+          fields: removalEffects[kind],
+          version: JSON.stringify(target.version)
+        }
       : null;
   };
 }
@@ -208,9 +293,21 @@ export const sportsCoveragePresentation: RouteApprovalPresentation = async (db, 
       ? "user_authored"
       : "outside",
     target: "Your ESPN sports coverage",
-    fields: assignments.length
-      ? assignments.map((value, index) => ({ label: `Coverage ${index + 1}`, value: value!.label }))
-      : [{ label: "Coverage", value: "No assignments" }],
+    fields: [
+      {
+        label: "Effect",
+        value: assignments.length
+          ? "Replace all current ESPN headline coverage assignments with the complete list below. Any assignment not listed will be removed."
+          : "Remove all ESPN headline coverage assignments and turn ESPN headlines off."
+      },
+      { label: "ESPN headlines", value: assignments.length ? "Turn on" : "Turn off" },
+      ...(assignments.length
+        ? assignments.map((value, index) => ({
+            label: `New coverage ${index + 1}`,
+            value: value!.label
+          }))
+        : [{ label: "New coverage", value: "None" }])
+    ],
     version: JSON.stringify(assignments.map((value) => value!.version))
   };
 };
@@ -308,7 +405,11 @@ export function sportsSourcePresentation(
         ["sourceId"]
       );
       return fields
-        ? { target: source!.label, fields, version: JSON.stringify(source!.version) }
+        ? {
+            target: source!.label,
+            fields: [...fields, ...(action === "remove" ? removalEffects.source : [])],
+            version: JSON.stringify(source!.version)
+          }
         : null;
     }
     if (typeof input.confirmationId !== "string") return null;
@@ -402,7 +503,19 @@ export function sportsSourcePresentation(
     return fields
       ? {
           target: source?.label ?? expected.label,
-          fields,
+          fields: [
+            ...fields,
+            ...(action === "assignment-replacement"
+              ? [
+                  {
+                    label: "Effect",
+                    value: input.targets.length
+                      ? "Replace all coverage assignments for this source with the complete list shown. Any assignment not listed will be removed."
+                      : "Remove all coverage assignments for this source."
+                  }
+                ]
+              : [])
+          ],
           version: JSON.stringify([input.confirmationId, preview, source?.version, targetVersions])
         }
       : null;

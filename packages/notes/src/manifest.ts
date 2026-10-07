@@ -215,7 +215,7 @@ export const notesModuleManifest = {
       id: "notes.assistant_authoring",
       description:
         "Ask the assistant to create, edit, or delete Markdown notes in your linked notes folder. " +
-        "Deleting is immediate and permanent; there is no trash."
+        "Overwriting is named explicitly in approval. Deleting is immediate and permanent; there is no trash."
     }
   ],
   proactiveMonitor: notesMonitorProvider

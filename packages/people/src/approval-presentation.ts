@@ -1,5 +1,6 @@
 import { assertDataContextDb, isUuid, type DataContextDb } from "@moss/db";
 import {
+  ApprovalInputError,
   approvalText,
   presentApprovalFields,
   type ApprovalField,
@@ -121,13 +122,20 @@ export const peopleSplitPresentation: ToolApprovalPresentation = async (db, inpu
   assertDataContextDb(db);
   const { identityId, targetPersonId, ...rest } = input;
   const presented = presentApprovalFields(rest, {
-    newPersonDisplayName: { label: "Name for a new person", present: approvalText }
+    newPersonDisplayName: {
+      label:
+        targetPersonId !== undefined
+          ? "Unused name (existing person selected)"
+          : "Person name to find or create",
+      present: approvalText
+    }
   });
   if (!presented) return null;
   const fields = [...presented];
   const source = await identity(db, ctx.actorUserId, identityId);
   if (!source) return null;
   const versions: unknown[] = [source];
+  let effect: string;
   if (source.person_id) {
     const from = await person(db, ctx.actorUserId, source.person_id);
     if (!from) return null;
@@ -139,24 +147,36 @@ export const peopleSplitPresentation: ToolApprovalPresentation = async (db, inpu
     if (!to) return null;
     fields.push({ label: "Move to", value: to.display_name });
     versions.push(to);
+    effect = Object.hasOwn(rest, "newPersonDisplayName")
+      ? "Move this identity to the selected existing person. The supplied new-person name is unused; no person is created or renamed. This cannot be undone."
+      : "Move this identity to the selected existing person. No person is created or renamed. This cannot be undone.";
   } else {
     const name =
       typeof rest.newPersonDisplayName === "string"
         ? rest.newPersonDisplayName
         : source.display_value;
     // Match the execution's read-only get-or-create lookup and bind whether this name exists.
-    const existing = await db.db
+    const matches = await db.db
       .selectFrom("app.person_context_people")
       .select(["id", "display_name", "updated_at"])
       .where("owner_user_id", "=", ctx.actorUserId)
       .where("display_name", "=", name)
       .where("status", "!=", "merged")
-      .executeTakeFirst();
+      .limit(2)
+      .execute();
+    if (matches.length > 1)
+      throw new ApprovalInputError(
+        "More than one person has this name. Choose the specific existing person before moving the identity."
+      );
+    const existing = matches[0];
     fields.push({
       label: existing ? "Move to existing person" : "Create person named",
       value: name
     });
     versions.push(existing ?? null);
+    effect = existing
+      ? "Move this identity to the existing person with this exact name. No person is created. This cannot be undone."
+      : "Create a person with this name and move this identity to that person. This cannot be undone.";
   }
   return {
     target: source.display_value,
@@ -164,7 +184,7 @@ export const peopleSplitPresentation: ToolApprovalPresentation = async (db, inpu
       ...fields,
       {
         label: "Effect",
-        value: "Move this identity to the selected person. This cannot be undone."
+        value: effect
       }
     ],
     version: JSON.stringify(versions)

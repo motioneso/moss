@@ -280,6 +280,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       chat: {
         access: "destructive",
         title: "Accept memory suggestion",
+        emptyBody: "object",
         presentation: memoryAcceptPresentation,
         content: "user_authored",
         target: memoryCandidateTarget

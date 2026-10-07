@@ -23,6 +23,7 @@ function notePresentation(
     const segments = target.relative.split("/");
     const name = segments.pop()!;
     return {
+      ...(allowNew ? { title: changes.overwrite === true ? "Overwrite note" : "Create note" } : {}),
       target: name,
       // Each component stays exact, even if a folder name itself contains a breadcrumb glyph.
       fields: [
