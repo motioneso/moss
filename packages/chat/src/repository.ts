@@ -88,7 +88,7 @@ export class ChatRepository {
           // the message the preview should show.
           .orderBy("created_at", "desc")
           .orderBy(sql<number>`CASE WHEN role = 'user' THEN 0 ELSE 1 END`, "desc")
-          .orderBy("id")
+          .orderBy("id", "desc")
           .limit(1)
           .as("lastMessageBody")
       )
@@ -187,6 +187,7 @@ export class ChatRepository {
         sql<number>`CASE WHEN tool_metadata->>'actionOutcomeOnly' = 'true' THEN 1 ELSE 0 END`
       )
       .orderBy("created_at", "desc")
+      .orderBy("id", "desc")
       .limit(1)
       .forUpdate()
       .executeTakeFirst();
@@ -682,6 +683,8 @@ export class ChatRepository {
       .where("m.created_at", "<=", new Date(rangeEndUtcIso))
       .orderBy("threadFirstMessageAt")
       .orderBy("m.created_at")
+      .orderBy(sql<number>`CASE WHEN m.role = 'user' THEN 0 ELSE 1 END`)
+      .orderBy("m.id")
       .execute();
 
     return rows.map((row) => ({

@@ -341,7 +341,7 @@ export function chatMessagesQuery(userId: string) {
         AND tool_metadata->'actionOutcomeHidden' = 'true'::jsonb,
         false
       )
-    ORDER BY created_at, id
+    ORDER BY created_at, CASE WHEN role = 'user' THEN 0 ELSE 1 END, id
   `;
 }
 

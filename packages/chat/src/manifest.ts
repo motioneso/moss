@@ -292,6 +292,13 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     {
+      id: "chat.message_order",
+      description:
+        "Saved messages keep your question before Moss's reply when they share a timestamp, " +
+        "including reloaded history, conversation archives and account exports.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.thread_history",
       description:
         "Keep previous conversations so you can go back to them: pick an older thread from the " +
