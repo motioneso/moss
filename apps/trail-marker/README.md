@@ -161,7 +161,7 @@ that browser's hardware or the server's hardware. Browser-only capture is not im
 Transcription is configured only through AI providers in Moss.
 
 Each accepted Start shows a small draggable pill above ordinary windows on every Space, including
-alongside full-screen apps. The 250 × 80-point pure-white capsule (including dark mode) shows a red three-bar level meter,
+alongside full-screen apps. The 200 × 64-point pure-white capsule (including dark mode) shows a red three-bar level meter,
 a grey-ringed round Pause button and a solid red Stop button, without visible status text, elapsed time,
 meeting title or close button. Its accessibility value still describes Recording, Paused,
 No audio or Reconnecting. Each 250 ms display tick flattens all three bars for silence and treats a

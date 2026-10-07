@@ -1,4 +1,4 @@
-> Current design authority: the [minimal Meetings spec](../specs/2026-10-06-meetings-minimal-design.md) and its [canonical corrected screens in #3087](https://github.com/motioneso/moss/tree/0d3291c2ae0a3fa89126970cbe4bab08bffb0688/docs/superpowers/specs/meetings-setup-wizard), including the owner's latest linking and native-control corrections. The #3087/#3089 screen approvals were given in owner chat on 2026-10-06. Historical R/T identifiers below remain traceability labels.
+> Current design authority: the [minimal Meetings spec](../specs/2026-10-06-meetings-minimal-design.md) and its [canonical corrected screens in #3087](https://github.com/motioneso/moss/tree/4f70a20893ca88c99a00c55fdf7be70723667e11/docs/superpowers/specs/meetings-setup-wizard), including the owner's latest linking and native-control corrections. The #3087/#3089 screen approvals were given in owner chat on 2026-10-06. Historical R/T identifiers below remain traceability labels.
 
 # Meetings Mac link: Part B (#2981)
 
@@ -38,7 +38,7 @@ consent, toggles and buffer policy. The native first screen's Moss address input
 the existing linking flow and is explicitly out of scope. The browser's not-linked Meetings
 screen still omits the Moss address and copy control.
 
-The current approved design requires a draggable native **250 × 80 pure-white capsule**, including
+The current approved design requires a draggable native **200 × 64 pure-white capsule**, including
 in dark appearance, above windows on every Space. It contains exactly **three red bars** driven by
 actual captured audio, a circular Pause control with a grey ring, and a solid semantic-red Stop
 control with a filled white square (`stop.fill`). No zigzag waveform, visible text, elapsed timer,
@@ -128,7 +128,7 @@ owner denial after restoration. T11 temporarily grants forbidden export columns,
 denial after rollback. These are authored database proofs, not local execution claims.
 
 The earlier recording-pill concept is superseded. Use the approved #3087 recording state linked
-from the updated minimal Meetings spec: 250 × 80 pure white, three red level bars, grey-ring Pause
+from the updated minimal Meetings spec: 200 × 64 pure white, three red level bars, grey-ring Pause
 and filled-square Stop. Direct native Resume is bounded as above. Neither mockup is installed-app
 or live-capture proof. Hardware binding remains deferred at the
 credential storage/server verifier boundary.

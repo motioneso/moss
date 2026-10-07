@@ -415,7 +415,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.mac_recording_status",
       description:
-        "White 250 × 80 native pill: three red captured-level bars, grey-ringed Pause and solid Stop. Play resumes only the same paused recording. Silence/stale audio flattens the bars. Stop clears pill and menu dot; no notification."
+        "White 200 × 64 native pill: three red captured-level bars, grey-ringed Pause and solid Stop. Play resumes only the same paused recording. Silence/stale audio flattens the bars. Stop clears pill and menu dot; no notification."
     },
     {
       id: "meetings.account_export",

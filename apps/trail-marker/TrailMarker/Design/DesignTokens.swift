@@ -41,18 +41,19 @@ enum TrailMarkerTokens {
         static let settingsSidebarWidth: CGFloat = 196
         static let menuPopoverWidth: CGFloat = 320
         static let brandPanelRadius: CGFloat = 12
-        static let recordingPillWidth: CGFloat = 250
-        static let recordingPillHeight: CGFloat = 80
-        static let recordingPillHorizontalInset: CGFloat = 30
-        static let recordingPillBorderWidth: CGFloat = 2
-        static let recordingControlDiameter: CGFloat = 54
-        static let recordingControlIconSize: CGFloat = 20
-        static let recordingControlBorderWidth: CGFloat = 3
-        static let recordingMeterWidth: CGFloat = 32
-        static let recordingMeterHeight: CGFloat = 24
-        static let recordingMeterBarWidth: CGFloat = 6
-        static let recordingMeterBarSpacing: CGFloat = 7
-        static let recordingMeterBarCornerRadius: CGFloat = 1
-        static let recordingMeterSilentHeight: CGFloat = 2
+        static let recordingPillWidth: CGFloat = 200
+        static let recordingPillHeight: CGFloat = 64
+        static let recordingPillHorizontalInset: CGFloat = 24
+        static let recordingPillBorderWidth: CGFloat = 1.6
+        static let recordingControlDiameter: CGFloat = 43.2
+        static let recordingControlMinimumGap: CGFloat = 6.4
+        static let recordingControlIconSize: CGFloat = 16
+        static let recordingControlBorderWidth: CGFloat = 2.4
+        static let recordingMeterWidth: CGFloat = 25.6
+        static let recordingMeterHeight: CGFloat = 19.2
+        static let recordingMeterBarWidth: CGFloat = 4.8
+        static let recordingMeterBarSpacing: CGFloat = 5.6
+        static let recordingMeterBarCornerRadius: CGFloat = 0.8
+        static let recordingMeterSilentHeight: CGFloat = 1.6
     }
 }

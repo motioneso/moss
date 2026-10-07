@@ -11,7 +11,7 @@ struct MeetingRecordingPill: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Captured audio level")
                 .accessibilityValue(host.recordingPresentation.meterLevels.allSatisfy { $0 == 0 } ? "Silent" : "Audio arriving")
-            Spacer(minLength: TrailMarkerTokens.Spacing.related)
+            Spacer(minLength: TrailMarkerTokens.Layout.recordingControlMinimumGap)
             Button {
                 if host.phase == .paused { host.resumeFromUserClick() }
                 else { host.pauseFromUserClick() }
@@ -29,7 +29,7 @@ struct MeetingRecordingPill: View {
             .disabled(host.phase != .recording && !host.canResumeFromUserClick)
             .help(host.phase == .paused ? "Resume recording" : "Pause recording")
             .accessibilityLabel(host.phase == .paused ? "Resume recording" : "Pause recording")
-            Spacer(minLength: TrailMarkerTokens.Spacing.related)
+            Spacer(minLength: TrailMarkerTokens.Layout.recordingControlMinimumGap)
             Button(action: host.stopFromUserClick) {
                 Image(systemName: "stop.fill")
                     .font(.system(size: TrailMarkerTokens.Layout.recordingControlIconSize, weight: .regular))
