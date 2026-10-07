@@ -1,3 +1,5 @@
+// Legacy mutation helpers remain for isolated compatibility fixtures; public attempt/decide
+// routes are retired. New recording authority is issued only by initial companion pairing.
 import { createHash } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import type pg from "pg";
@@ -235,7 +237,7 @@ export function createRecordingCapabilitiesService(deps: {
           !digestsMatch(active.proof_hash, row.proof_hash)
         )
           return view(row, true);
-        // Attempt expiry bounds consent, not the lifetime of an already approved proof.
+        // Attempt expiry bounds approval, not the lifetime of an already approved proof.
         return view(row, false);
       }
       return view(row);

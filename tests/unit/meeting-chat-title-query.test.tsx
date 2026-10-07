@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { MeetingChatSelection } from "@moss/shared";
+import { MEETING_CHAT_TITLE_QUERY_KEY, type MeetingChatSelection } from "@moss/shared";
 import type * as ApiClientModule from "../../apps/web/src/api/client.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
@@ -76,6 +76,20 @@ async function mount(currentSelection = selection) {
 function readCount(prefix: string) {
   return fetchMock.mock.calls.filter(([url]) => String(url).startsWith(prefix)).length;
 }
+
+it("keeps the public title-query namespace and per-meeting prefix semantics", async () => {
+  expect(MEETING_CHAT_TITLE_QUERY_KEY).toBe("meeting-chat-title");
+  const first = [MEETING_CHAT_TITLE_QUERY_KEY, meetingId, "first"];
+  const second = [MEETING_CHAT_TITLE_QUERY_KEY, meetingId, "second"];
+  const other = [MEETING_CHAT_TITLE_QUERY_KEY, "other-meeting", "first"];
+  client.setQueryData(first, "First title");
+  client.setQueryData(second, "Second title");
+  client.setQueryData(other, "Other title");
+  await client.invalidateQueries({ queryKey: [MEETING_CHAT_TITLE_QUERY_KEY, meetingId] });
+  expect(client.getQueryState(first)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(second)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(other)?.isInvalidated).toBe(false);
+});
 
 it("polls access every five seconds without downloading records or notes on each poll", async () => {
   await mount();

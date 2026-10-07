@@ -74,7 +74,7 @@ export const meetingsModuleManifest = {
       icon: "mic",
       order: 36,
       description:
-        "Create meetings, edit personal notes, and review transcripts. Explicit recording needs a connected Mac recorder with one-time recording approval and configured transcription.",
+        "Create meetings, edit personal notes, and review transcripts. Explicit recording needs a connected Mac recorder authorized by initial linking and configured transcription.",
       permissionId: "meetings.read"
     }
   ],
@@ -322,7 +322,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_capture",
       description:
-        "Link your Mac once. Start uses its default microphone and system audio unless Settings has an override. Only Start or Resume records. Pause and Stop remain available; a nav dot shows recording elsewhere. Mac only.",
+        "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Only Start or Resume records. Pause and Stop remain available; a nav dot shows recording elsewhere. Mac only.",
       errors: [
         {
           code: "meeting_capture_source_unavailable",
@@ -348,7 +348,7 @@ export const meetingsModuleManifest = {
           class: "prerequisite",
           remediationRef: "meetings.connect_recorder",
           description:
-            "The recording connection is unavailable, expired or revoked. Check the companion connection in Settings and complete its one-time recording upgrade if requested."
+            "The recording connection is unavailable, expired or revoked. Check the companion connection. For missing or revoked recording access, sign the Mac out under Settings → Active sessions and reconnect through Trail Marker."
         },
         {
           code: "meeting_capture_processing_unavailable",
@@ -387,7 +387,7 @@ export const meetingsModuleManifest = {
           id: "meetings.connect_recorder",
           path: "/meetings",
           description:
-            "Open Settings → Meetings to check the linked Mac and audio mode. Link or restore recording access from Profile settings if needed and check macOS audio permissions. Open New meeting and explicitly press Start."
+            "Check the linked Mac and audio mode in Settings → Meetings. For missing or revoked recording access, sign the Mac out under Active sessions and relink through Trail Marker. Check macOS audio permissions, then press Start in New meeting."
         },
         {
           id: "meetings.configure_transcription",

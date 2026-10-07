@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import Fastify from "fastify";
+import { CORE_APP_SCREENS, CORE_APP_SETTINGS } from "@moss/shared";
 import {
   getBuiltInModuleManifests,
   getBuiltInModuleRegistrations,
@@ -11,6 +12,23 @@ import {
 // Importing the actual composition root runs its compatibility gate. A default-disabled
 // built-in prevents API/worker startup because this repository has deny-only enablement.
 describe("meetings composition", () => {
+  it("keeps single-link approval consistent with the newer minimal meeting surfaces", () => {
+    const meeting = getBuiltInModuleManifests().find((item) => item.id === "meetings")!;
+    const native = meeting.features!.find((item) => item.id === "meetings.native_capture")!;
+    const profile = CORE_APP_SETTINGS.find((item) => item.id === "profile")!.description;
+    const link = CORE_APP_SCREENS.find((item) => item.id === "link-trail-marker")!.description;
+    expect(meeting.navigation![0]!.description).toContain("authorized by initial linking");
+    expect(native.description).toContain("nav dot");
+    expect(native.remediations![0]!.description).toContain("relink through Trail Marker");
+    expect(JSON.stringify(native)).not.toMatch(/one-time recording|recording upgrade/);
+    expect(profile).toContain("single initial linking approval");
+    expect(profile).toContain("Summarize automatically after Stop (on by default)");
+    expect(profile).toContain("existing exact source choices stay in effect");
+    expect(profile).toContain("Meetings navigation dot and top-bar duration");
+    expect(profile).not.toMatch(/one-time connection upgrade|persistent recording strip/);
+    expect(link).toContain("Record meetings when you choose Start");
+  });
+
   it("describes the actual passage exit, removable chat context and automatic title", () => {
     const features = getBuiltInModuleManifests().find((item) => item.id === "meetings")!.features!;
     const description = (id: string) => features.find((item) => item.id === id)!.description;

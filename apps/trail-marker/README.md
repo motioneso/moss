@@ -132,7 +132,11 @@ not the same computer. Unencrypted HTTP is accepted only for loopback developmen
 transport does not follow redirects or support path-prefix deployments.
 
 Connect Trail Marker through its existing one-time flow. New clients include meeting-recording
-capability in that approval; existing paired clients show a one-time upgrade in Moss. The independent
+capability in that single approval, with no separate recording approval. A linked Mac without
+recording authorization, or with revoked access, must sign out under Settings → Active
+sessions and explicitly relink through Trail Marker. Already-approved Macs remain linked. A saved
+candidate from an older build can only recover the same already-approved proof through read-only
+status; it cannot request new approval. The independent
 recording proof is stored in this Mac's Keychain; the server holds its hash. Connecting or approving
 does not record. Backtrack keeps its separate existing consent and retention behavior.
 

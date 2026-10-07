@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, requestJson, randomUuid, setSessionUnsavedChanges } from "@moss/module-web-sdk";
 import { Button, RowButton, SectionHead } from "@moss/ui";
-import type { MeetingRecord } from "@moss/shared";
+import { MEETING_CHAT_TITLE_QUERY_KEY, type MeetingRecord } from "@moss/shared";
 import { getMeeting, isMeetingAccessDenied, meetingKeys } from "./client.js";
 import { useSessionDraft } from "./session-draft.js";
 interface TitleState {
@@ -81,7 +81,7 @@ export function MeetingTitle({ meeting }: { readonly meeting: MeetingRecord }) {
       if (!current()) return;
       // An initial title read has no cached data for invalidation to replace. Cancel it first
       // so its old response cannot become fresh after this confirmed save.
-      await client.cancelQueries({ queryKey: ["meeting-chat-title", meeting.id] });
+      await client.cancelQueries({ queryKey: [MEETING_CHAT_TITLE_QUERY_KEY, meeting.id] });
       if (!current()) return;
       client.setQueryData<{ meeting: MeetingRecord }>(meetingKeys.record(meeting.id), (cached) => ({
         meeting: {
@@ -104,7 +104,7 @@ export function MeetingTitle({ meeting }: { readonly meeting: MeetingRecord }) {
       }));
       void client.invalidateQueries({ queryKey: meetingKeys.record(meeting.id), exact: true });
       void client.invalidateQueries({ queryKey: meetingKeys.history });
-      void client.invalidateQueries({ queryKey: ["meeting-chat-title", meeting.id] });
+      void client.invalidateQueries({ queryKey: [MEETING_CHAT_TITLE_QUERY_KEY, meeting.id] });
       setEditing(false);
     } catch (error) {
       if (!current()) return;

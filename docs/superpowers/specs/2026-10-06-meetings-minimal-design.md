@@ -24,8 +24,10 @@ creating a meeting never begin capture. The page is a transcript and a place for
 available width. Moss chat stays the ordinary docked drawer, scoped to the open meeting.
 
 No source question or separate linking wizard precedes a meeting. The native app's existing
-connect-in-browser flow owns linking. Authentication, recording capability approval and operating
-system permissions remain independent prerequisites.
+connect-in-browser flow owns the single initial approval, including recording on supported Macs.
+Recording still requires separate capability proof and operating system permissions; there is no
+second recording-approval screen or notice. Macs missing recording authority must sign out under
+Active sessions and explicitly relink. Already-approved Macs remain linked.
 
 ## Four states
 
@@ -161,7 +163,8 @@ These requirements survive the simpler screens and must be verified against impl
 Existing code descriptions alone are not live security proof.
 
 - Device linking uses the app's current browser approval and Keychain-backed credentials.
-  No new credential type or browser-to-Mac inbound connection is introduced.
+  Its capabilities list says “Record meetings when you choose Start”. No separate
+  recording approval is shown, and no browser-to-Mac inbound connection is introduced.
 - The recording capability is separate from ordinary device authority. A device token alone is
   insufficient for capture. Capability revision and owner binding remain enforced.
 - Start creates a per-meeting grant bound to the starting browser session, exact device,
