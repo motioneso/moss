@@ -512,7 +512,25 @@ export class MeetingCaptureService {
                 )
         };
       }
-      applyCaptureControl(state, command, this.now(), processing?.modelRoute ?? "");
+      const resumingPausedSelection =
+        input.command === "record" &&
+        !input.selection &&
+        state.desired === "paused" &&
+        command.selection &&
+        state.inventory;
+      try {
+        applyCaptureControl(state, command, this.now(), processing?.modelRoute ?? "");
+      } catch (error) {
+        // Only a previously valid, retained source becoming unavailable gets recovery guidance.
+        if (
+          resumingPausedSelection &&
+          error instanceof MeetingCaptureError &&
+          error.code === "meeting_capture_invalid_input" &&
+          error.httpStatus === 400
+        )
+          throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
+        throw error;
+      }
       if (grant.status === "approved" && input.command === "record")
         await this.repository.renewClaim(
           db,
