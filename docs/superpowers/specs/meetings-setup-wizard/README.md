@@ -1,42 +1,53 @@
 # Meetings mockups
 
-Four states. Open `index.html` locally at **1440px**.
+Open `index.html` locally. The current pill proposal is **248 × 32px**, with three red audio-level
+bars, a microphone/menu control, Pause, solid red Stop, and a separate far-right X. The X is
+revealed on hover or keyboard focus and only means Hide recording pill.
 
-- `01-not-linked.html`: Download app; one line points to Trail Marker’s linking instructions.
-- `02-ready.html`: connected Mac, ready for an explicit Start recording.
-- `03-recording.html`: transcript, notes and the **200 × 64px** recording pill.
-- `03-recording-hover.html`: the same recording screen with the small close X exposed for review.
-- `04-settings.html`: link status, audio source, automatic-summary switch and Unlink Mac.
+- `01-not-linked.html`: Download app and the Trail Marker linking instruction.
+- `02-ready.html`: connected Mac, ready for an explicit Start.
+- `03-recording.html`: closed source menu and the compact pill.
+- `03-recording-hover.html`: the same pill with its close X exposed.
+- `03-recording-sources.html`: the source menu open for review.
+- `04-settings.html`: existing link, audio, automatic-summary and Unlink controls.
 
-Microphone + system audio is the default. Audio source can be changed in Settings.
-Linking and permissions stay in the Mac app’s existing flow. Connecting never starts recording.
-The native pill stays pure white in every theme, with exactly three red audio-level bars, a grey
-Pause ring and a solid red Stop button with a filled white square. No visible text. The meter
-is a static illustration; implementation must use actual captured audio and flatten on silence
-or stale input. No decorative animation.
+Click the microphone/chevron to open the design-preview menu. It uses Moss menu styles and
+matches the visible reference choices:
 
-The Settings switch matches the built #3082 Settings form: “Summarize automatically after Stop”.
-It is shown on, matching the product default, and its helper text matches the shipped component.
-The original four states were approved in owner chat on 2026-10-06. These later owner-requested
-corrections are not a claim of a fresh rendered visual review.
+- Microphone: None or MacBook Air Microphone.
+- System Audio: No computer audio or Record computer audio.
 
-`build.tsx` renders shipped `@moss/ui` primitives. `moss-ui.css` retains the bundled repository
-tokens, shared styles and embedded Archivo fonts; `FONT-LICENSE.txt` covers the font.
-`screens.json` lists the four states. All assets are local; controls are illustrative and
-Download app is inert until a supported release destination is wired in product code.
+The menu is a capture-source picker, not a speaker output-device router. The checked device is an
+illustration, not a live device inventory. The small preview script changes only local menu/check
+states and uses no network, device, permission or capture APIs. Pause, Stop and Hide remain inert
+illustrations. Closing the real pill must only hide it; the red meeting menu item, Pause and Stop
+remain available, Show recording pill restores it, and the next recording shows it automatically.
 
-Design artifacts only. Ben renders locally; no PNGs, hosted renderer or visual-fit claims.
+## Proposal status and implementation gaps
 
-Regenerate from the repository root with:
+This shorter pill and source menu are a new proposal pending owner approval. The visible menu
+reference supplies the option layout. The owner later specified approximately
+half the prior 64px pill height, so this proposal is **32px high and 248px wide**. The extra width
+accommodates the source menu and inline X. Native code and the spec have not adopted this proposal.
+
+The built recorder currently requires a microphone source. Selecting None with Record computer
+audio would require an explicit system-audio-only mode, plus source validation, permissions and
+recording-epoch handling. The prototype does not implement that mode or silently hide the option.
+A both-off selection also needs a defined product behavior before implementation. Changing sources
+in an active recording must retain its owner/device/session/capability bounds and explicit intent.
+
+The Settings summary switch and helper text still match current product behavior; the separate
+planned default-model change is not included. Original four-state approval was recorded in owner
+chat on 2026-10-06; that date does not approve this later source-menu proposal.
+
+## Build and checks
+
+`build.tsx` renders shipped Moss primitives and existing menu classes. The original CSS/font
+bundle and index stay unchanged; `pill.css` adds layout and hover/focus behavior only.
+All assets are local. No PNGs, hosted renderer, production feature, or visual-fit claim is included.
 
     TSX_TSCONFIG_PATH=docs/superpowers/specs/meetings-setup-wizard/render-tsconfig.json node --import tsx docs/superpowers/specs/meetings-setup-wizard/build.tsx
     node node_modules/typescript/bin/tsc -p docs/superpowers/specs/meetings-setup-wizard/typecheck-tsconfig.json --noEmit
 
-The two configurations separate runtime package entry points from declaration-file paths.
-The existing CSS bundle and font license are unchanged; tokens.css contains the fixed native-overlay colours.
-
-The small top-left close X appears on pointer hover or keyboard focus. Its accessible name is
-“Hide recording pill”. It only hides the native overlay: recording continues, the red meeting
-menu item remains, and menu Pause/Stop stay available. “Show recording pill” restores it;
-the next recording shows it automatically. The HTML controls remain illustrative. Open
-`03-recording-hover.html` to inspect the visible-X state without needing pointer interaction.
+Open the explicit menu and hover previews for visual review. Keyboard Escape closes the preview
+menu and returns focus to its trigger; clicking outside also closes it.
