@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { parsePositiveIntEnv } from "@moss/shared";
+import {
+  decisionModelDialect,
+  isCloudflareDecisionBaseUrl,
+  parsePositiveIntEnv
+} from "@moss/shared";
 
 import {
   resolveMossEnv,
@@ -205,6 +209,7 @@ export function registerAiRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const body = parseCreateProviderBody(request.body);
         const authMethod = body.authMethod ?? "api_key";
+        assertDecisionModelBaseUrl(body.providerKind, body.baseUrl ?? null);
         const encryptedCredential =
           authMethod === "cli"
             ? secretCipher.encryptJson({ cli: true })
@@ -316,6 +321,10 @@ export function registerAiRoutes(
             if (!existing) return undefined;
             const providerKind = body.providerKind ?? existing.provider_kind;
             const authMethod = body.authMethod ?? existing.auth_method;
+            assertDecisionModelBaseUrl(
+              providerKind,
+              body.baseUrl !== undefined ? body.baseUrl : existing.base_url
+            );
             // A kind change cannot inherit an agent from the old protocol family. Select the
             // established CLI for the new family unless the admin explicitly chose an agent.
             const priorAgentId =
@@ -1015,6 +1024,22 @@ function cleanCredentialPayload(payload: Record<string, unknown>): Record<string
   return typeof payload.apiKey === "string"
     ? { ...payload, apiKey: payload.apiKey.trim() }
     : payload;
+}
+
+/**
+ * #3057: a Cloudflare decision-model address must be the exact account-ai shape. The account id
+ * becomes a URL path segment, so a loose value could steer the request to another host or path.
+ * Any non-Cloudflare address (including a blank one) is the standard dialect and is left alone.
+ */
+function assertDecisionModelBaseUrl(providerKind: AiProviderKind, baseUrl: string | null): void {
+  if (providerKind !== "system-one") return;
+  if (decisionModelDialect(baseUrl) !== "cloudflare") return;
+  if (!isCloudflareDecisionBaseUrl(baseUrl ?? "")) {
+    throw new HttpError(
+      400,
+      "A Cloudflare decision model address must use a 32-character account id."
+    );
+  }
 }
 
 function parseCreateProviderBody(body: unknown): CreateAiProviderConfigRequest {

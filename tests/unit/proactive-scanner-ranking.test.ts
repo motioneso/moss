@@ -77,12 +77,18 @@ describe("ProactiveScanner: priority band assignment after ranking", () => {
       })
     };
 
-    // Ranker returns them REVERSED: Beta=critical, Alpha=high.
-    // Index-based lookup would assign critical to Alpha (position 0 = first ranked result)
-    // and high to Beta — wrong. Title-based lookup must give critical to Beta, high to Alpha.
+    // Ranker returns them REVERSED: Beta=critical, Alpha=high. The keys ride along, so
+    // each result still reaches its own signal whatever the order.
     vi.mocked(rankPriorityCandidates).mockReturnValue([
-      { source: "calendar", title: "Signal Beta", score: 100, band: "critical", reasons: [] },
-      { source: "calendar", title: "Signal Alpha", score: 80, band: "high", reasons: [] }
+      {
+        source: "calendar",
+        title: "Signal Beta",
+        score: 100,
+        band: "critical",
+        reasons: [],
+        key: "1"
+      },
+      { source: "calendar", title: "Signal Alpha", score: 80, band: "high", reasons: [], key: "0" }
     ]);
 
     const mockPrefsRepo = {
@@ -141,5 +147,121 @@ describe("ProactiveScanner: priority band assignment after ranking", () => {
     expect(upsertCalls[0]?.[1]).toMatchObject({ title: "Signal Beta", priorityBand: "critical" });
     // Second ranked result (Alpha=high) must produce a card for "Signal Alpha" with band "high".
     expect(upsertCalls[1]?.[1]).toMatchObject({ title: "Signal Alpha", priorityBand: "high" });
+  });
+
+  // Two allowed signals from one source share a title (recurring Standup events).
+  // Monday is first, Tuesday second; the ranker mock decides who scores what.
+  async function scanStandups(
+    ranked: {
+      source: "calendar";
+      title: string;
+      score: number;
+      band: "critical" | "high" | "normal" | "low";
+      reasons: string[];
+      key: string;
+    }[]
+  ) {
+    const provider: ProactiveMonitorProvider = {
+      source: "calendar",
+      moduleId: "calendar",
+      collectSignals: vi.fn().mockResolvedValue({
+        signals: [signalMon, signalTue],
+        nextCursor: {}
+      })
+    };
+    vi.mocked(rankPriorityCandidates).mockReturnValue(ranked);
+
+    const mockCardRepo = {
+      findByStableKey: vi.fn().mockResolvedValue(null),
+      upsertCard: vi.fn().mockResolvedValue(undefined),
+      getActiveCounts: vi.fn().mockResolvedValue({
+        dailyGlobal: 0,
+        dailySource: 0,
+        hourlySource: 0
+      })
+    } as unknown as CardRepository;
+
+    const scanner = new ProactiveScanner({
+      preferencesRepository: {
+        get: vi.fn().mockResolvedValue(enabledCalendarPref)
+      } as unknown as ProactiveMonitoringPreferencesRepository,
+      priorityPreferencesRepository: {
+        get: vi.fn().mockReturnValue({ anchors: [] })
+      } as unknown as PriorityPreferencesRepository,
+      monitorStateRepository: {
+        get: vi.fn().mockResolvedValue(null),
+        advanceCursor: vi.fn().mockResolvedValue(undefined),
+        recordFailure: vi.fn().mockResolvedValue(undefined)
+      } as unknown as MonitorStateRepository,
+      cardRepository: mockCardRepo,
+      antiSpamPolicy: {
+        check: vi.fn().mockResolvedValue({ allow: true, deferredUntil: null })
+      } as unknown as AntiSpamPolicy,
+      getLocalePreference: vi.fn().mockResolvedValue({ timezone: "UTC" })
+    });
+
+    const result = await scanner.scan(
+      fakeScopedDb,
+      "00000000-0000-4000-8000-000000000001",
+      "calendar",
+      provider,
+      "source-sync",
+      new Date("2026-09-29T12:00:00.000Z")
+    );
+    return { result, upsertCalls: vi.mocked(mockCardRepo.upsertCard).mock.calls };
+  }
+
+  const signalMon = {
+    source: "calendar" as const,
+    stableKey: "mon",
+    sourceRefHash: "hash-mon",
+    signalType: "event_changed_soon", // allowed for calendar
+    title: "Standup",
+    summary: "Monday standup moved an hour later",
+    occurredAt: "2026-09-28T09:00:00.000Z",
+    priorityCandidate: {}
+  };
+  const signalTue = {
+    source: "calendar" as const,
+    stableKey: "tue",
+    sourceRefHash: "hash-tue",
+    signalType: "event_changed_soon", // allowed for calendar
+    title: "Standup",
+    summary: "Tuesday standup has a new video link",
+    occurredAt: "2026-09-29T09:00:00.000Z",
+    priorityCandidate: {}
+  };
+
+  it("gives the card to Monday when Monday scores high and Tuesday does not — #2609", async () => {
+    // The old title match kept the last signal, so Monday's card went to Tuesday.
+    const { result, upsertCalls } = await scanStandups([
+      { source: "calendar", title: "Standup", score: 80, band: "high", reasons: [], key: "0" },
+      { source: "calendar", title: "Standup", score: 30, band: "normal", reasons: [], key: "1" }
+    ]);
+
+    expect(result.skipped).toBe(false);
+    expect(result.cardsCreated).toBe(1);
+    expect(upsertCalls).toHaveLength(1);
+    expect(upsertCalls[0]?.[1]).toMatchObject({
+      stableKey: "mon",
+      title: "Standup",
+      summary: "Monday standup moved an hour later",
+      priorityBand: "high"
+    });
+  });
+
+  it("writes one card per signal when both score high — the issue's probe", async () => {
+    // Old code wrote Tuesday's card twice and Monday vanished.
+    const { result, upsertCalls } = await scanStandups([
+      { source: "calendar", title: "Standup", score: 100, band: "critical", reasons: [], key: "0" },
+      { source: "calendar", title: "Standup", score: 80, band: "high", reasons: [], key: "1" }
+    ]);
+
+    expect(result.skipped).toBe(false);
+    expect(result.cardsCreated).toBe(2);
+    expect(upsertCalls.map((call) => (call[1] as { stableKey: string }).stableKey)).toEqual([
+      "mon",
+      "tue"
+    ]);
   });
 });

@@ -138,7 +138,7 @@ function childStepFacts(
   facts.push(["Tokens", tokens.length > 0 ? tokens.join(", ") : "None used"]);
   const confidence = child.factCounts?.confidence;
   if (child.actionCode === "chat.tool_check" && typeof confidence === "number") {
-    facts.push(["Jev confidence", `${Math.round(confidence * 100)}% sure`]);
+    facts.push(["Confidence", `${Math.round(confidence * 100)}% sure`]);
   }
   return facts;
 }
@@ -204,7 +204,7 @@ function buildDialog(row: ActivityRow, locale: LocaleSettingsDto): ActivityDialo
     const tokens = tokensText(line, formatInt);
     selfFacts.push(["Tokens", tokens ?? "None used"]);
     return {
-      title: activityTitle(line.actionCode, line.action),
+      title: activityTitle(line.actionCode, line.modelName),
       statusText: failed ? "Did not work" : line.outcome === "aborted" ? "Stopped" : "Done",
       statusTone: failed ? "red" : line.outcome === "aborted" ? "neutral" : "forest",
       badges: activityBadges(line),
@@ -222,7 +222,7 @@ function buildDialog(row: ActivityRow, locale: LocaleSettingsDto): ActivityDialo
         {
           key: line.id,
           kindLabel: "model call",
-          title: activityTitle(line.actionCode, line.action),
+          title: activityTitle(line.actionCode, line.modelName),
           result: activitySubline(line),
           meta: duration ? `${line.modelName} - ${duration}` : line.modelName,
           failed,
@@ -250,8 +250,8 @@ function buildDialog(row: ActivityRow, locale: LocaleSettingsDto): ActivityDialo
 
   const childSteps = row.children.map((child) => ({
     key: child.id,
-    kindLabel: child.actionCode === "chat.tool_check" ? "Jev check" : "model call",
-    title: activityTitle(child.actionCode, child.action),
+    kindLabel: child.actionCode === "chat.tool_check" ? "classifier check" : "model call",
+    title: activityTitle(child.actionCode, child.modelName),
     result: child.detail?.resultLine ?? activitySubline(child),
     meta:
       child.durationMs !== null && child.durationMs !== undefined
@@ -327,7 +327,7 @@ function buildDialog(row: ActivityRow, locale: LocaleSettingsDto): ActivityDialo
   ];
 
   return {
-    title: activityTitle(line.actionCode, line.action),
+    title: activityTitle(line.actionCode, line.modelName),
     statusText: failed ? "Did not work" : line.outcome === "aborted" ? "Stopped" : "Done",
     statusTone: failed ? "red" : line.outcome === "aborted" ? "neutral" : "forest",
     badges: activityBadges(line),
@@ -663,7 +663,7 @@ function ActivityLineRow(props: {
       className="act-line"
       role="button"
       tabIndex={0}
-      aria-label={activityTitle(line.actionCode, line.action)}
+      aria-label={activityTitle(line.actionCode, line.modelName)}
       onClick={onOpen}
       onKeyDown={openOnKey(onOpen)}
     >
@@ -671,7 +671,7 @@ function ActivityLineRow(props: {
         {formatTime(line.occurredAt, locale)}
       </span>
       <div className="act-line__text">
-        <span className="act-line__title">{activityTitle(line.actionCode, line.action)}</span>
+        <span className="act-line__title">{activityTitle(line.actionCode, line.modelName)}</span>
         {quote && <span className="act-line__quote">{quote}</span>}
         <span className="act-line__result">{activitySubline(line)}</span>
         <span className="act-line__meta">{activityMeta(line, stepCount)}</span>

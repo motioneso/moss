@@ -1,4 +1,5 @@
 import {
+  GATE_TIMEOUT_ABORT_REASON,
   validateToolInput,
   type ClassifierChoiceQuestion,
   type ClassifierChoiceResult,
@@ -140,6 +141,19 @@ export interface ClassifierGatePorts {
   };
   /** Whether this tool is released for live use. Only consulted in `on` mode. */
   isReleased(tool: GateTool): boolean;
+  /**
+   * #3064: the attempt ran past the gate deadline. The gate calls this once per such
+   * attempt (never on a user-cancelled turn) and owns the timeout line: every recording
+   * layer skips its own abort line when the signal carries the gate's reason, so the log
+   * shows this line exactly once. Optional so test doubles keep working.
+   */
+  noteTimeout?(activity: {
+    readonly actorUserId: string;
+    readonly modelName: string;
+    readonly turnId?: string;
+    readonly parentId?: string;
+    readonly latencyMs: number;
+  }): void;
   now(): number;
 }
 
@@ -227,13 +241,25 @@ export class ClassifierGate {
     const onCancel = () => deadline.abort();
     request.signal?.addEventListener("abort", onCancel, { once: true });
     if (request.signal?.aborted) deadline.abort();
-    const timer = setTimeout(() => deadline.abort(), GATE_LIMITS.deadlineMs);
+    const timer = setTimeout(
+      () => deadline.abort(GATE_TIMEOUT_ABORT_REASON),
+      GATE_LIMITS.deadlineMs
+    );
     let coolKey: string | null = null;
+    let checkModel: string | undefined;
 
     try {
-      const picked = await this.classify(request, deadline.signal, trace, (key) => {
-        coolKey = key;
-      });
+      const picked = await this.classify(
+        request,
+        deadline.signal,
+        trace,
+        (key) => {
+          coolKey = key;
+        },
+        (modelName) => {
+          checkModel = modelName;
+        }
+      );
       clearTimeout(timer);
       if (picked instanceof Stop) return decline(picked.reason, picked.detail);
       return await this.dispatch(request, picked, trace, finish, decline);
@@ -241,6 +267,18 @@ export class ClassifierGate {
       if (error instanceof AbortedError) {
         if (request.signal?.aborted) return finish({ kind: "cancelled", trace });
         if (coolKey) this.startCooldown(coolKey);
+        // #3064: one owner for the timeout line — the gate. It always files on a gate
+        // deadline, because it alone knows the turn, the model and the elapsed time.
+        // Every recording layer skips its own abort line when the signal carries the
+        // gate's reason, so the log shows this line exactly once. Before any model was
+        // resolved there is no model to name, so the line says so.
+        this.ports.noteTimeout?.({
+          actorUserId: request.actorUserId,
+          modelName: checkModel ?? "none",
+          ...(request.turnId ? { turnId: request.turnId } : {}),
+          ...(request.parentId ? { parentId: request.parentId } : {}),
+          latencyMs: Math.max(0, this.ports.now() - startedAt)
+        });
         return decline("timeout");
       }
       if (error instanceof FailedError) {
@@ -273,7 +311,8 @@ export class ClassifierGate {
     request: GateRequest,
     signal: AbortSignal,
     trace: { -readonly [K in keyof GateTrace]: GateTrace[K] },
-    setCoolKey: (key: string) => void
+    setCoolKey: (key: string) => void,
+    noteModel?: (modelName: string) => void
   ): Promise<Pick | Stop> {
     const listed = await this.run(this.ports.listTools(), signal);
     const declared = listed.filter(
@@ -285,6 +324,7 @@ export class ClassifierGate {
 
     const handle = await this.run(this.ports.classifier.resolve(), signal);
     if (!handle) return new Stop("no_classifier");
+    noteModel?.(handle.model.provider_model_id);
     const coolKey = `${request.actorUserId}|${handle.model.id}`;
     if ((this.coolingUntil.get(coolKey) ?? 0) > this.ports.now()) return new Stop("cooling_off");
     setCoolKey(coolKey);

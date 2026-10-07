@@ -494,6 +494,74 @@ describe("classifier failure, deadline and cooldown", () => {
     expect(h.choose).toHaveBeenCalledTimes(2);
   });
 
+  it("files the single timeout line when a started check times out — #3064", async () => {
+    // The hanging choose call files nothing itself (it skips its abort line on the gate
+    // reason); the gate owns the one line.
+    vi.useFakeTimers();
+    const h = harness();
+    const noteTimeout = vi.fn();
+    h.ports.noteTimeout = noteTimeout;
+    h.choose.mockImplementationOnce(() => new Promise(() => undefined));
+    const pending = h.gate.evaluate(request({ turnId: "turn-1", parentId: "line-9" }));
+    await vi.advanceTimersByTimeAsync(GATE_LIMITS.deadlineMs);
+    expect(await pending).toMatchObject({ kind: "declined", reason: "timeout" });
+    expect(noteTimeout).toHaveBeenCalledTimes(1);
+    expect(noteTimeout).toHaveBeenCalledWith({
+      actorUserId: "user-1",
+      modelName: "m",
+      turnId: "turn-1",
+      parentId: "line-9",
+      latencyMs: expect.any(Number)
+    });
+  });
+
+  it("files the skipped check when the timeout lands before any model resolved — #3064", async () => {
+    // Nothing downstream could have recorded a line: no model, no call.
+    vi.useFakeTimers();
+    const h = harness();
+    const noteTimeout = vi.fn();
+    h.ports.noteTimeout = noteTimeout;
+    h.ports.classifier.resolve = () => new Promise(() => undefined);
+    const pending = h.gate.evaluate(request({ turnId: "turn-1" }));
+    await vi.advanceTimersByTimeAsync(GATE_LIMITS.deadlineMs);
+    expect(await pending).toMatchObject({ kind: "declined", reason: "timeout" });
+    expect(noteTimeout).toHaveBeenCalledTimes(1);
+    expect(noteTimeout).toHaveBeenCalledWith({
+      actorUserId: "user-1",
+      modelName: "none",
+      turnId: "turn-1",
+      latencyMs: expect.any(Number)
+    });
+  });
+
+  it("files a line when the deadline lands while candidates load after two checks — #3064", async () => {
+    vi.useFakeTimers();
+    const h = harness({ tools: [switchTool()], answers: [pick("home"), pick("home.setSwitch")] });
+    const noteTimeout = vi.fn();
+    h.ports.noteTimeout = noteTimeout;
+    h.loadCandidates.mockImplementationOnce(() => new Promise(() => undefined));
+    const pending = h.gate.evaluate(request({ turnId: "turn-1" }));
+    await vi.advanceTimersByTimeAsync(GATE_LIMITS.deadlineMs);
+    expect(await pending).toMatchObject({ kind: "declined", reason: "timeout" });
+    expect(h.choose).toHaveBeenCalledTimes(2);
+    expect(noteTimeout).toHaveBeenCalledTimes(1);
+  });
+
+  it("records nothing when the turn is cancelled", async () => {
+    const controller = new AbortController();
+    const h = harness();
+    const noteTimeout = vi.fn();
+    h.ports.noteTimeout = noteTimeout;
+    h.choose.mockImplementationOnce(async () => {
+      controller.abort();
+      return pick("calendar");
+    });
+    expect(await h.gate.evaluate(request({ signal: controller.signal }))).toMatchObject({
+      kind: "cancelled"
+    });
+    expect(noteTimeout).not.toHaveBeenCalled();
+  });
+
   it("stops without a fallback when the turn is cancelled", async () => {
     const controller = new AbortController();
     const h = harness();

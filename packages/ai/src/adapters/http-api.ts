@@ -6,6 +6,8 @@
 
 import type { ChatSource, GenerateChatInput, ChatProviderAdapter } from "../chat-adapter.js";
 import {
+  abortErrorFor,
+  isGateTimeoutAbort,
   modelActivityAction,
   modelActivityStructuredCode,
   recordModelActivity,
@@ -113,22 +115,30 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         ...(input.parentId ? { parentId: input.parentId } : {})
       },
       async () => {
-        const request = buildStructuredRequest(
-          this.providerKind,
-          this.apiKey,
-          this._baseUrl ?? null,
-          input
-        );
-        const response = await this._fetch(request.url, {
-          method: "POST",
-          headers: request.headers,
-          body: JSON.stringify(request.body),
-          signal: input.signal
-        });
-        if (!response.ok) {
-          throw new Error(`AI provider request failed: HTTP ${response.status}`);
+        try {
+          const request = buildStructuredRequest(
+            this.providerKind,
+            this.apiKey,
+            this._baseUrl ?? null,
+            input
+          );
+          const response = await this._fetch(request.url, {
+            method: "POST",
+            headers: request.headers,
+            body: JSON.stringify(request.body),
+            signal: input.signal
+          });
+          if (!response.ok) {
+            throw new Error(`AI provider request failed: HTTP ${response.status}`);
+          }
+          return extractStructuredResult(this.providerKind, await response.json());
+        } catch (error) {
+          // #3064: fetch rejects with a bare abort error that drops the signal's reason.
+          // Hand the gate's reason to the recorder skip below; anything else rethrows
+          // untouched. Upstream only checks the abort shape, which this keeps.
+          if (isGateTimeoutAbort(input.signal)) throw abortErrorFor(input.signal);
+          throw error;
         }
-        return extractStructuredResult(this.providerKind, await response.json());
       },
       { usageOf: structuredUsageOrUndefined }
     );

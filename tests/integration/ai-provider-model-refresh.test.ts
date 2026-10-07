@@ -495,6 +495,47 @@ describe("AI provider model refresh (#2208)", () => {
       globalThis.fetch = realFetch;
     }
   });
+
+  describe("Cloudflare decision-model providers (#3057)", () => {
+    const CLOUDFLARE_BASE_URL = `https://api.cloudflare.com/client/v4/accounts/${"0123456789abcdef0123456789abcdef"}/ai`;
+
+    async function createProvider(payload: Record<string, unknown>) {
+      return server.inject({
+        method: "POST",
+        url: "/api/ai/providers",
+        headers: { authorization: `Bearer ${ids.sessionA}`, "content-type": "application/json" },
+        payload
+      });
+    }
+
+    it("saves both Clef models when a Cloudflare provider is created", async () => {
+      const response = await createProvider({
+        providerKind: "system-one",
+        displayName: "Clef (Cloudflare)",
+        baseUrl: CLOUDFLARE_BASE_URL,
+        authMethod: "api_key",
+        credentialPayload: { apiKey: "cf-token" }
+      });
+
+      expect(response.statusCode).toBe(201);
+      const providerId = response.json<{ provider: { id: string } }>().provider.id;
+      expect(await storedModelIds(providerId)).toEqual(["clef", "clef-flash"]);
+      expect(response.body).not.toContain("cf-token");
+    });
+
+    it("refuses a malformed Cloudflare address with 400", async () => {
+      const response = await createProvider({
+        providerKind: "system-one",
+        displayName: "Bad Clef",
+        baseUrl: "https://api.cloudflare.com/client/v4/accounts/not-a-real-id/ai",
+        authMethod: "api_key",
+        credentialPayload: { apiKey: "cf-token" }
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.body).not.toContain("cf-token");
+    });
+  });
 });
 
 function userContext(actorUserId: string): AccessContext {

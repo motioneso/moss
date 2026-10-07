@@ -41,12 +41,12 @@ export const STRUCTURED_ACTIVITY_TITLES: Record<string, string> = {
 };
 
 /** Title vocabulary (spec section 4): a fixed sentence per action code. */
-export function activityTitle(actionCode: string | null, action: string): string {
+export function activityTitle(actionCode: string | null, modelName: string): string {
   switch (actionCode) {
     case "chat.answer":
       return "Answered a chat message";
     case "chat.tool_check":
-      return "Jev guessed which tool to use";
+      return `${modelName} guessed which tool to use`;
     case "transcribe.voice_note":
       return "Transcribed a voice note";
     case "module.build":
@@ -62,7 +62,6 @@ export function activityTitle(actionCode: string | null, action: string): string
     return STRUCTURED_ACTIVITY_TITLES[actionCode] ?? "Ran a structured task";
   }
   if (actionCode.startsWith("task.")) return humanize(actionCode.slice("task.".length));
-  void action;
   return "Model activity";
 }
 
@@ -95,12 +94,14 @@ export function activitySubline(line: ActivityLineDto): string {
     const tools = num(facts.tools);
     if (tools === null) return "Answered.";
     const agreed = bool(facts.jev_agreed);
-    return `Used ${tools} tool${tools === 1 ? "" : "s"}.${agreed === true ? " Jev agreed." : agreed === false ? " Jev disagreed." : ""}`;
+    return `Used ${tools} tool${tools === 1 ? "" : "s"}.${agreed === true ? " The classifier agreed." : agreed === false ? " The classifier disagreed." : ""}`;
   }
   if (line.actionCode === "chat.tool_check") {
     const confidence = num(facts.confidence);
     const agreed = bool(facts.jev_agreed);
     const sure = confidence === null ? "" : `, ${Math.round(confidence * 100)}% sure`;
+    // On the classifier's own line, `jev_agreed` records whether the chat model agreed with the
+    // guess, so the verdict is "Chat agreed", not the classifier agreeing with itself.
     const verdict = agreed === true ? " Chat agreed." : agreed === false ? " Chat disagreed." : "";
     return `Picked a tool${sure}.${verdict}`;
   }
@@ -142,7 +143,7 @@ export function activityBadges(line: ActivityLineDto): ActivityBadge[] {
     badges.push({ text: `${failed} step${failed === 1 ? "" : "s"} failed`, tone: "amber" });
   }
   if (bool(line.factCounts?.jev_agreed) === false) {
-    badges.push({ text: "Jev disagreed", tone: "amber" });
+    badges.push({ text: "Classifier disagreed", tone: "amber" });
   }
   return badges;
 }
