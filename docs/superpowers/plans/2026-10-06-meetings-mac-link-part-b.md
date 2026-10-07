@@ -1,4 +1,4 @@
-> Current design authority: the [minimal Meetings spec](../specs/2026-10-06-meetings-minimal-design.md) and its [local approved screens](../specs/meetings-minimal/index.html), including the owner's latest linking and native-control corrections. The #3087/#3089 screen approvals were given in owner chat on 2026-10-06. Historical R/T identifiers below remain traceability labels.
+> Current design authority: the [minimal Meetings spec](../specs/2026-10-06-meetings-minimal-design.md) and its [screen corrections in design PR #3077](https://github.com/motioneso/moss/pull/3077), including the owner's latest linking and native-control corrections. The #3087/#3089 screen approvals were given in owner chat on 2026-10-06. Historical R/T identifiers below remain traceability labels.
 
 # Meetings Mac link: Part B (#2981)
 

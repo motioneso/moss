@@ -3,9 +3,9 @@
 The earlier seven-screen design is superseded. Its critique is preserved only as historical
 context, including proposals that the owner subsequently removed. It is not a build specification.
 
-Build against the [current spec](../../specs/2026-10-06-meetings-minimal-design.md) and open its
-[local approved screens](../../specs/meetings-minimal/index.html). The current source carries the
-four Meetings states from #3087, the relevant approval-card references from merged #3089, and the
-owner's corrections. No extra setup screen or recording approval is authorized by this history.
+Build against the [current requirements](../../specs/2026-10-06-meetings-minimal-design.md).
+The corrected four-state screens and provenance belong to [design PR #3077](https://github.com/motioneso/moss/pull/3077).
+Ordinary approval references stay in their [existing shared folder](https://github.com/motioneso/moss/blob/main/docs/superpowers/specs/approval-card/index.html).
+No extra setup screen or recording approval is authorized by this history.
 
 The obsolete pointer page, stylesheet copies and unused font files have been removed.

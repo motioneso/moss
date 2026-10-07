@@ -6,32 +6,24 @@ Design PR: #3077. Owner-approved screen sources: #3087 and merged #3089.
 
 ## Approved source
 
-Ben approved the screens in #3087 and #3089 in owner chat on **2026-10-06** (owner-local date),
-and reaffirmed that approval when requesting the fixes to [review 6034226446](https://github.com/motioneso/moss/pull/3077#issuecomment-6034226446).
-This records owner-chat approval, not a GitHub review. #3087 remains a design-source PR;
-#3089 is merged. Neither status is a prerequisite for opening this spec's self-contained screens.
+Ben approved #3087 and #3089 in owner chat on **2026-10-06** (owner-local date),
+and reaffirmed that approval in [review 6034226446](https://github.com/motioneso/moss/pull/3077#issuecomment-6034226446).
+This records owner-chat approval, not a GitHub review.
 
-The four local HTML states are the source of truth for linking, readiness, recording and Settings:
+The corrected four-state mockups and their provenance belong to the
+[design PR #3077](https://github.com/motioneso/moss/pull/3077), rather than being duplicated
+in this implementation PR. The original approved four-state source is
+[#3087 at 5bca8dfb](https://github.com/motioneso/moss/tree/5bca8dfb88cc6f436f599345fdf66e0150b89fac/docs/superpowers/specs/meetings-setup-wizard).
+The requirements below supersede its old meter treatment and preserve the automatic-summary switch.
 
-- [Not linked](meetings-minimal/01-not-linked.html)
-- [Ready](meetings-minimal/02-ready.html)
-- [Recording](meetings-minimal/03-recording.html)
-- [Settings](meetings-minimal/04-settings.html)
+Ordinary approval presentation is maintained separately in
+[approval-card](https://github.com/motioneso/moss/blob/main/docs/superpowers/specs/approval-card/index.html), approved in #3089 and refined by merged
+[#3090](https://github.com/motioneso/moss/pull/3090). Those settings examples are not a
+Meetings screen or a second recording approval. The existing browser linking flow remains
+the sole initial approval surface.
 
-Open the [local index](meetings-minimal/index.html). These carry #3087 commit
-`5bca8dfb88cc6f436f599345fdf66e0150b89fac`, with the owner's corrections below and the
-automatic-summary switch retained from #3079. The [source record](meetings-minimal/README.md)
-lists the exact provenance and changes.
-
-The same folder carries #3089's approved [record-backed card](meetings-minimal/approval-card/02-change-settings.html),
-[approved result](meetings-minimal/approval-card/04-approved.html) and
-[declined result](meetings-minimal/approval-card/05-declined.html) as visual references for ordinary
-approval presentation. They are unchanged synthetic examples, not an additional Meetings screen
-or a second recording approval. The existing browser linking flow remains the sole initial
-approval surface; do not transplant a settings-change card into it.
-
-The [earlier critique](../mockups/meetings-minimal/critique.md) is explicitly historical and
-does not authorize its old setup controls.
+The [earlier critique](../mockups/meetings-minimal/critique.md) is historical and does not
+authorize its old setup controls.
 
 ## Direction
 
