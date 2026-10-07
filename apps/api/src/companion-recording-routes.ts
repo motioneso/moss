@@ -23,7 +23,7 @@ const limit = (max: number) => ({
   }
 });
 
-/** Capability consent and its independent proof are auth-owned, not meeting-content APIs. */
+/** Recording authorization and its independent proof are auth-owned, not meeting-content APIs. */
 export function registerCompanionRecordingRoutes(
   server: FastifyInstance,
   auth: MossAuthRuntime
@@ -76,7 +76,7 @@ export function registerCompanionRecordingRoutes(
           headers: request.headers,
           requestId: request.id
         });
-        // A linked device cannot open a second recording-consent flow.
+        // A linked device cannot open a second recording-approval flow.
         return reply.code(410).send({ code: "recording_relink_required" });
       } catch (error) {
         return failure(error, reply);

@@ -126,10 +126,7 @@ export function LinkTrailMarkerPage() {
                     <li key={capability}>{capability}</li>
                   ))}
                   {attemptQuery.data?.recordingPolicyVersion === 1 ? (
-                    <li>
-                      record your selected microphone and app or computer audio for your configured
-                      transcription service when you choose Start
-                    </li>
+                    <li>Record meetings when you choose Start</li>
                   ) : null}
                 </ul>
                 <span>It never gets your password or your browser session.</span>

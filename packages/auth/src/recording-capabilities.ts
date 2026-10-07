@@ -237,7 +237,7 @@ export function createRecordingCapabilitiesService(deps: {
           !digestsMatch(active.proof_hash, row.proof_hash)
         )
           return view(row, true);
-        // Attempt expiry bounds consent, not the lifetime of an already approved proof.
+        // Attempt expiry bounds approval, not the lifetime of an already approved proof.
         return view(row, false);
       }
       return view(row);

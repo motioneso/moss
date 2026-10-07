@@ -65,12 +65,12 @@ Do not overstate these findings:
 
 ### One connection, explicit recording capability
 
-Auth owns a versioned owner/device `meeting-recording` capability with consent time, expiry and
+Auth owns a versioned owner/device `meeting-recording` capability with approval time, expiry and
 revocation. Fresh supported pairing presents that capability as part of the single connection
-approval. Already paired devices without authoritative recording consent must explicitly sign out
+approval. Already paired devices without recording authorization must explicitly sign out
 under Settings → Active sessions and relink through Trail Marker; already-approved Macs remain
 linked. Do not show a second recording approval or a separate recording disclosure paragraph.
-Legacy attempt/decide routes return 410. Read-only recovery can restore only an exact previously
+Legacy attempt/decide routes retain authentication/origin checks and return authenticated 410. Read-only recovery can restore only an exact previously
 approved candidate whose live capability, proof and revision still match.
 No background migration grants recording access; Backtrack's existing consent and buffer policy
 remain unchanged. Keep independent native-held recording-capability proof in the Keychain, granted
@@ -184,7 +184,7 @@ typing, not only test-renderer callbacks with an `act` flush between every keyst
 - Slow status alongside slow ASR; a single 429/5xx/parser/persistence failure; backoff; pending vs
   processed receipts; recovery within memory bounds; explicit gaps/paused state after exhaustion.
 - Start retries/lost claim, wrong device/owner/admin, old connection generation, revoked capability,
-  legacy device without consent, expired session, and explicit relinking. No auto-start on connect.
+  legacy device without recording authorization, expired session, and explicit relinking. No auto-start on connect.
 - Stop → finalized → New → Start, plus new meeting while prior bounded processing is finishing,
   if supported. No hidden active grant or permanently disabled Stop.
 - Real DOM rapid typing, transient failures, repeated clicks, tab/list navigation, browser stayed

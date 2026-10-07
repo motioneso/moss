@@ -30,7 +30,7 @@ def control(name, test, edits, suite=UNIT, marker=""):
 CONTROLS = [
     control("single-link-no-second-attempt", "retires the separate attempt", [
         mutation("apps/api/src/companion-recording-routes.ts",
-            '        await auth.companionDevices.resolve({\n          headers: request.headers,\n          requestId: request.id\n        });\n        // A linked device cannot open a second recording-consent flow.\n        return reply.code(410).send({ code: "recording_relink_required" });',
+            '        await auth.companionDevices.resolve({\n          headers: request.headers,\n          requestId: request.id\n        });\n        // A linked device cannot open a second recording-approval flow.\n        return reply.code(410).send({ code: "recording_relink_required" });',
             '        const actor = await auth.companionDevices.resolve({ headers: request.headers, requestId: request.id });\n        return await service.createAttempt(actor, request.body);')
     ], "tests/unit/recording-capabilities.test.ts"),
     control("single-link-no-second-decision", "retires the separate decision", [

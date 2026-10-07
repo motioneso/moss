@@ -133,7 +133,7 @@ transport does not follow redirects or support path-prefix deployments.
 
 Connect Trail Marker through its existing one-time flow. New clients include meeting-recording
 capability in that single approval, with no separate recording approval. A linked Mac without
-authoritative recording consent, or with revoked access, must sign out under Settings → Active
+recording authorization, or with revoked access, must sign out under Settings → Active
 sessions and explicitly relink through Trail Marker. Already-approved Macs remain linked. A saved
 candidate from an older build can only recover the same already-approved proof through read-only
 status; it cannot request new approval. The independent

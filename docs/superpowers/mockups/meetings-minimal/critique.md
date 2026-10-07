@@ -1,4 +1,4 @@
-> Historical critique of the earlier interface. The approved four-state design in #3087 supersedes these proposed controls.
+> Historical critique of the earlier interface, preserved as design history only. The [current spec](../../specs/2026-10-06-meetings-minimal-design.md) and its local approved screens supersede every proposed setup control below, including the old capture-mode and device-approval steps.
 
 # Meetings screens: critique (#2981)
 
