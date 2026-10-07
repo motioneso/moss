@@ -145,7 +145,7 @@ export async function runConstrainedStructuredProcess(
         let recoveryTimer: ReturnType<typeof setTimeout>;
         const work = (async () => {
           let confirmedSignal = false;
-          // Never send a signal after observing leader exit: that PID may have been reused.
+          // A later recovery never re-signals an exited leader: that PID may have been reused.
           if (!closed && child.exitCode === null && child.signalCode === null && child.pid) {
             try {
               if (identity) await identity.signalGroup(child.pid, "SIGKILL");
@@ -292,7 +292,8 @@ export async function runConstrainedStructuredProcess(
       child.stdout.on("error", () => fail("protocol"));
       child.stderr.on("error", () => fail("protocol"));
       child.on("error", () => fail("launch"));
-      // Stop descendants still in this process group, including inherited pipes.
+      // The original exit handler immediately stops the current group, including inherited pipes.
+      // Later recovery only probes after exit rather than re-signalling a potentially reused PID.
       // This is not containment for descendants that deliberately create a new session/group.
       child.on("exit", () => {
         void terminate();

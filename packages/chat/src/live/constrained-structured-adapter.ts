@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   assertBoundedStructuredPrompt,
+  abortErrorFor,
   StructuredTransportUnavailableError,
   assertBoundedStructuredSchema,
   modelActivityAction,
@@ -91,7 +92,8 @@ async function generate(
   };
   signal.addEventListener("abort", aborted, { once: true });
   try {
-    if (signal.aborted || !structured(engine)) throw unsupported();
+    if (signal.aborted) throw abortErrorFor(signal);
+    if (!structured(engine)) throw unsupported();
     await engine.launchStructured({
       neutralDir: "",
       personaPath: "",
@@ -99,7 +101,7 @@ async function generate(
       model: input.model.provider_model_id,
       schema: input.schema
     });
-    if (signal.aborted) throw unsupported();
+    if (signal.aborted) throw abortErrorFor(signal);
     await engine.submitStructured(prompt);
     let offset = 0;
     let reply: string | undefined;
@@ -113,10 +115,9 @@ async function generate(
       }
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    const error = new Error("aborted");
-    error.name = "AbortError";
-    throw error;
+    throw abortErrorFor(signal);
   } catch (error) {
+    if (signal.aborted) throw abortErrorFor(signal);
     // Fixed server-authored code survives RPC; never inspect or forward provider diagnostics.
     if (error instanceof Error && error.message === "Constrained Claude runtime is unsupported") {
       throw new StructuredTransportUnavailableError();

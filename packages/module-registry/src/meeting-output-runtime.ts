@@ -95,6 +95,7 @@ export function createMeetingOutputRuntime(deps: {
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   readonly resolveActiveModules: ActiveModulesResolver;
   readonly createConstrainedCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"];
+  readonly probeConstrainedCli?: (actorUserId: string) => Promise<boolean>;
 }) {
   const ai = new AiRepository();
   const tasks = new TasksRepository();
@@ -157,14 +158,22 @@ export function createMeetingOutputRuntime(deps: {
     actor: AccessContext
   ): Promise<MeetingOutputGenerationAvailability> => {
     try {
-      return await deps.dataContext.withDataContext(actor, async (db) => {
+      const selected = await deps.dataContext.withDataContext(actor, async (db) => {
         const model = await resolveModel(db);
         // Safe metadata only: this advisory read never loads or decrypts credentials.
         const provider = (await ai.listProviders(db)).find(
           (item) => item.id === model.provider_config_id
         );
-        return usableProvider(model, provider) ? "available" : "model-unavailable";
+        return {
+          usable: usableProvider(model, provider),
+          cli: model.provider_auth_method === "cli"
+        };
       });
+      if (!selected.usable) return "model-unavailable";
+      // Filesystem metadata only; no actor transaction remains open during the runner RPC.
+      if (selected.cli && !(await deps.probeConstrainedCli?.(actor.actorUserId)))
+        return "model-unavailable";
+      return "available";
     } catch (error) {
       // Keep retained summaries readable when configuration checks are temporarily unavailable.
       if (

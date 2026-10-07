@@ -309,7 +309,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.grounded_outputs",
       description:
-        "Generate evidence-checked summaries, decisions and actions using your default model, including the constrained Claude subscription runner. No model fallback. Compare versions and exact sources; refresh summaries to recheck availability.",
+        "Generate evidence-checked summaries with your default model, without fallback. Claude availability checks its installed pinned CLI without model calls. Compare versions and exact sources; refresh to recheck availability.",
       errors: [
         {
           code: "meeting_output_unavailable",

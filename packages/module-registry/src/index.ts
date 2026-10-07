@@ -742,6 +742,7 @@ export interface BuiltInRouteDependencies {
   readonly createConstrainedCliStructuredAdapter?: ReturnType<
     typeof createConstrainedCliStructuredAdapterFactory
   >;
+  readonly probeConstrainedCli?: (actorUserId: string) => Promise<boolean>;
   /**
    * Bounded, live onboarding probes (Phase 2). Built inside registerBuiltInApiRoutes (sync,
    * no boot-time probing) and forwarded to the settings module so it keeps no @moss/ai /
@@ -3682,6 +3683,18 @@ export function registerBuiltInApiRoutes(
     createConstrainedCliStructuredAdapter: createConstrainedCliStructuredAdapterFactory(
       structuredChatEngineFactory
     ),
+    probeConstrainedCli: async (actorUserId) => {
+      const connection = getRpcConnection();
+      if (!connection) return false;
+      return (
+        (
+          await connection.probeProvider(
+            { provider: "anthropic", constrainedStructured: true },
+            actorUserId
+          )
+        ).status === "ready"
+      );
+    },
     personaPreview:
       dependencies.personaPreview ??
       createDefaultPersonaPreview(dependencies.dataContext, {

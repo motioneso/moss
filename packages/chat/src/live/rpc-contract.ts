@@ -490,6 +490,8 @@ export interface RpcListLiveSessionsResult {
 /** params for method "probeProvider" (§4.8) — instance-wide query, no sessionKey. */
 export interface RpcProbeProviderParams {
   readonly provider: RpcProviderKind;
+  /** Metadata-only constrained binary check; never runs auth/model probes. */
+  readonly constrainedStructured?: boolean;
   /**
    * #2242: skip any saved answer and run the real check now. Used by the periodic install-state
    * reconciliation so a login that quietly expired is caught on its own within a bounded time,

@@ -15,6 +15,7 @@ import {
   CliChatUnavailableError,
   VerifiedSubmitError,
   createStructuredEngine,
+  probeConstrainedClaudeProvider,
   deriveNeutralDir,
   invalidateProviderProbeCache,
   killMuxSessionByName,
@@ -41,6 +42,7 @@ import {
   type RpcListProviderModelsResult,
   type RpcPollLoginResult,
   type RpcProbeProviderResult,
+  type RpcProbeProviderParams,
   type RpcProviderKind,
   type RpcReadNewResult,
   type RpcReadStructuredResult,
@@ -672,11 +674,12 @@ export class CliChatEngineHost {
   // ─── probeProvider (§4.8) — no token, no replay ───────────────────────────────
   async probeProvider(
     provider: RpcProviderKind,
-    userIdOrOpts?: string | { readonly forceFresh?: boolean },
-    maybeOpts?: { readonly forceFresh?: boolean }
+    userIdOrOpts?: string | Omit<RpcProbeProviderParams, "provider">,
+    maybeOpts?: Omit<RpcProbeProviderParams, "provider">
   ): Promise<RpcProbeProviderResult> {
     const userId = typeof userIdOrOpts === "string" ? userIdOrOpts : undefined;
     const opts = typeof userIdOrOpts === "string" ? maybeOpts : userIdOrOpts;
+    if (opts?.constrainedStructured) return probeConstrainedClaudeProvider(provider);
     const cacheScope = provider === "openai-compatible" ? userId : undefined;
     const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;
     const homeBase = runtime?.homeBase ?? this.deps.homeBase;

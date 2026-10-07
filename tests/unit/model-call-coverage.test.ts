@@ -25,7 +25,8 @@ import { describe, expect, it } from "vitest";
  *    the quote-anchored check above cannot see.
  *  - EVERY file that names a shared command-runner helper (`createRealTmuxIo`,
  *    `createSanitizedTmuxIo`, `createOwnerIo`, `runBounded`, `perUserSessionIo`,
- *    `createModuleBuildIo`, `AcpExecManager`, `preparePerUserStructuredLaunch`) must be in the
+ *    `createModuleBuildIo`, `AcpExecManager`, `preparePerUserStructuredLaunch`,
+ *    `runConstrainedStructuredProcess`) must be in the
  *    runner allow-list, with a reason. The
  *    names match as bare identifiers, so a call, an import, a renamed import, a dynamic-import
  *    destructure and a variable that stores the helper all match. A rename through a value
@@ -52,7 +53,7 @@ import { describe, expect, it } from "vitest";
  *    allow-listed with a reason, and a reviewer weighing that reason is the safety net.
  *  - The process-start check is anchored on import syntax. These routes to the library are NOT
  *    caught: `createRequire(...)` followed by a require, and `process.getBuiltinModule(...)`.
- *  - The runner check matches only the eight names above. A new runner helper is not caught until
+ *  - The runner check matches only the names above. A new runner helper is not caught until
  *    its name is added to the pattern.
  *  - A runner passed in as a parameter or a dependency (for example a `createSlotIo` dependency)
  *    is not caught in the file that receives it. Only the file that names the helper is checked.
@@ -86,6 +87,7 @@ const ADAPTER_CONSTRUCTION_ALLOWLIST = new Set([
   "packages/briefings/src/compose-shared.ts",
   "packages/module-registry/src/built-in-module-helpers.ts",
   "packages/chat/src/live/cli-structured-adapter.ts",
+  "packages/chat/src/live/constrained-structured-adapter.ts",
   "packages/module-registry/src/index.ts",
   // Chat composition root: builds the classifier gate's structured adapter factory. The classifier
   // calls go through generateStructured, so the adapter records them.
@@ -105,6 +107,10 @@ const MODEL_SPAWN_ALLOWLIST = new Set([
   "packages/chat/src/live/module-build-codex-exec-session.ts",
   // CLI structured engine command builders (the calls are recorded by the adapter around them).
   "packages/chat/src/live/structured-claude-engine.ts",
+  // Constrained executable selection and child launch are recorded once by the API-side
+  // constrained structured adapter. The cli-runner has no DB recorder; do not record again.
+  "packages/chat/src/live/constrained-structured-engine.ts",
+  "packages/chat/src/live/constrained-structured-process.ts",
   "packages/chat/src/live/structured-gemini-engine.ts",
   "packages/chat/src/live/module-build-launch-commands.ts",
   "packages/chat/src/live/claude-persistent-runtime.ts",
@@ -193,6 +199,10 @@ const PROCESS_START_ALLOWLIST = new Map<string, string>([
  */
 const RUNNER_CALL_ALLOWLIST = new Map<string, string>([
   [
+    "packages/chat/src/live/constrained-structured-engine.ts",
+    "calls the bounded child helper for constrained structured turns; the API-side constrained adapter records exactly one owner-bound activity entry"
+  ],
+  [
     "apps/worker/src/worker.ts",
     "builds the sanitized runner for module-build CLI turns, which the module-build engine records"
   ],
@@ -232,6 +242,10 @@ const RUNNER_CALL_ALLOWLIST = new Map<string, string>([
  * adapter. A new engine built anywhere else fails until its file is added here with a reason.
  */
 const CHAT_ENGINE_ALLOWLIST = new Map<string, string>([
+  [
+    "packages/chat/src/live/constrained-structured-adapter.ts",
+    "defines the constrained structured adapter factory and records each settled call"
+  ],
   [
     "apps/api/src/focus-service.ts",
     "builds the structured adapter factory for the server; recorded"
@@ -288,7 +302,7 @@ const CHAT_ENGINE_ALLOWLIST = new Map<string, string>([
 ]);
 
 const ADAPTER_CONSTRUCTION_RE =
-  /(?:new\s+HttpApiAdapter\s*\(|new\s+CliStructuredAdapter\s*\(|createCliStructuredAdapterFactory\s*\()/g;
+  /(?:new\s+HttpApiAdapter\s*\(|new\s+CliStructuredAdapter\s*\(|(?:createCliStructuredAdapterFactory|createConstrainedCliStructuredAdapterFactory)\s*\()/g;
 
 /** A model-binary spawn, however wrapped: `.run(...)`, `spawn(...)`, `exec(...)`. */
 const MODEL_BINARY_RE = /["'`](claude|codex|gemini)["'`]/g;
@@ -418,7 +432,8 @@ const RUNNER_NAMES = [
   "perUserSessionIo",
   "createModuleBuildIo",
   "AcpExecManager",
-  "preparePerUserStructuredLaunch"
+  "preparePerUserStructuredLaunch",
+  "runConstrainedStructuredProcess"
 ] as const;
 
 const RUNNER_NAME_RE = new RegExp(
@@ -454,7 +469,7 @@ function escapeRegExp(value: string): string {
 
 /** Known chat-engine constructors. A new one outside the allow-list fails the guard. */
 const CHAT_ENGINE_RE =
-  /(?:new\s+(?:AcpChatEngine|CliChatEngineImpl|CodexExecSession|ClaudePersistentRuntime|CodexPersistentRuntime|ModuleBuildCliEngine)|createStructuredEngine|createRpcAcpEngine|createCliStructuredAdapterFactory)\s*\(/g;
+  /(?:new\s+(?:AcpChatEngine|CliChatEngineImpl|CodexExecSession|ClaudePersistentRuntime|CodexPersistentRuntime|ModuleBuildCliEngine|ConstrainedStructuredEngine)|createStructuredEngine|createRpcAcpEngine|createCliStructuredAdapterFactory|createConstrainedCliStructuredAdapterFactory)\s*\(/g;
 
 function findProcessStarts(files: readonly SourceFile[]): Hit[] {
   const hits: Hit[] = [];
@@ -564,6 +579,7 @@ const EXPLICIT_RECORDING_FILES = [
   "packages/ai/src/structured/generate-choices.ts",
   "packages/ai/src/model-activity.ts",
   "packages/chat/src/live/cli-structured-adapter.ts",
+  "packages/chat/src/live/constrained-structured-adapter.ts",
   "packages/chat/src/live/provider-probe.ts",
   "packages/chat/src/live/cli-check-turn.ts",
   "packages/chat/src/live/chat-session-manager.ts",
@@ -699,6 +715,11 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
       "the tmux runner with a variable command",
       `import { createRealTmuxIo } from "./adapters/tmux-bridge.js";\nexport const go = (bin: string, p: string) => createRealTmuxIo().run(bin, ["--print", p]);`
     ],
+    ["the constrained child helper", `await runConstrainedStructuredProcess(options);`],
+    [
+      "a renamed constrained child import",
+      `import { runConstrainedStructuredProcess as run } from "./constrained-structured-process.js"; run(options);`
+    ],
     ["the sanitized runner", `const io = createSanitizedTmuxIo(env);\nawait io.run(bin, []);`],
     ["the owner runner", `const io = createOwnerIo(identity);`],
     ["the shell-command manager", `const m = new AcpExecManager(deps);`],
@@ -746,6 +767,41 @@ describe("model call coverage guard (plan 3.6b, #2890)", () => {
       "packages/example/renamed-use.ts:1 — runner use rb (re-export of runBounded)",
       "packages/example/renamed-use.ts:2 — runner use rb (re-export of runBounded)"
     ]);
+  });
+
+  it("flags a renamed constrained child re-export consumer", () => {
+    const hits = findRunnerCalls([
+      {
+        file: "packages/example/barrel.ts",
+        text: 'export { runConstrainedStructuredProcess as execute } from "./process.js";'
+      },
+      { file: "packages/example/use.ts", text: "execute(options);" }
+    ]);
+    expect(uncovered(hits, RUNNER_CALL_ALLOWLIST).map((hit) => hit.file)).toEqual([
+      "packages/example/use.ts"
+    ]);
+  });
+
+  it.each([
+    "new ConstrainedStructuredEngine(provider, io, home, identity)",
+    "createConstrainedCliStructuredAdapterFactory(factory)"
+  ])("flags a new constrained construction: %s", (text) => {
+    const file = "packages/example/constrained.ts";
+    expect(
+      uncovered(findChatEngineConstructions([{ file, text }]), CHAT_ENGINE_ALLOWLIST)
+    ).toHaveLength(1);
+    if (text.startsWith("create")) {
+      expect(
+        uncovered(findAdapterConstructions([{ file, text }]), ADAPTER_CONSTRUCTION_ALLOWLIST)
+      ).toHaveLength(1);
+    }
+  });
+
+  it("requires the constrained adapter recording boundary", () => {
+    const file = "packages/chat/src/live/constrained-structured-adapter.ts";
+    expect(
+      missingRecorderRefs(files.map((entry) => (entry.file === file ? { file, text: "" } : entry)))
+    ).toContain(file);
   });
 
   it("scans .mjs, .cjs and .js files, not only TypeScript", () => {

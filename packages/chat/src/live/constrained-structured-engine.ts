@@ -1,6 +1,4 @@
-import { access, realpath } from "node:fs/promises";
-import { constants } from "node:fs";
-import { delimiter, isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import { DEFAULT_MODEL_SENTINEL, type ProviderKind, type TmuxIo } from "@moss/ai";
 import type { CliChatEngine, EngineLaunchOpts, TranscriptRecord } from "./types.js";
 import type { StructuredChildIdentity } from "./structured-claude-engine.js";
@@ -11,6 +9,8 @@ import {
 } from "./constrained-structured-process.js";
 import {
   prepareConstrainedClaudeProfile,
+  findConstrainedClaudeExecutable,
+  ConstrainedClaudeUnsupportedError,
   parseConstrainedClaudeOutput
 } from "./constrained-claude-profile.js";
 
@@ -19,20 +19,6 @@ const MAX_PROMPT_BYTES = 65_536;
 const MAX_OUTPUT_BYTES = 524_288;
 const unavailable = () =>
   new CliChatUnavailableError("Constrained subscription summaries are unavailable");
-
-async function executable(candidates: readonly string[]): Promise<string> {
-  for (const candidate of candidates) {
-    if (!isAbsolute(candidate)) continue;
-    try {
-      const resolved = await realpath(candidate);
-      await access(resolved, constants.X_OK);
-      return resolved;
-    } catch {
-      /* Try the next deployment location, never another provider. */
-    }
-  }
-  throw unavailable();
-}
 
 /** Separate profile: ordinary chat and background structured callers never select this engine. */
 export class ConstrainedStructuredEngine implements CliChatEngine {
@@ -86,9 +72,8 @@ export class ConstrainedStructuredEngine implements CliChatEngine {
     const privateHome = join(opts.neutralDir, "constrained-home");
     const made = await this.io.run("mkdir", ["-m", "700", privateHome]);
     if (made.code !== 0) throw unavailable();
-    const command = await executable(
-      (process.env.PATH ?? "").split(delimiter).map((path) => join(path, "claude"))
-    );
+    const command = await findConstrainedClaudeExecutable();
+    if (!command) throw new ConstrainedClaudeUnsupportedError();
     const token = this.identity.env?.CLAUDE_CODE_OAUTH_TOKEN;
     if (!token) throw unavailable();
     this.launchProfile = await prepareConstrainedClaudeProfile({

@@ -18,6 +18,8 @@ vi.mock("./constrained-structured-process.js", async (original) => ({
 }));
 vi.mock("./constrained-claude-profile.js", () => ({
   prepareConstrainedClaudeProfile: vi.fn(),
+  findConstrainedClaudeExecutable: vi.fn(async () => "/managed/claude"),
+  ConstrainedClaudeUnsupportedError: class extends Error {},
   parseConstrainedClaudeOutput: (value: string) => JSON.parse(value).result
 }));
 const opts = {

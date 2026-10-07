@@ -96,7 +96,9 @@ function setup(createCliStructuredAdapter?: GenerateStructuredDeps["createCliStr
   const fetch = vi.fn<typeof globalThis.fetch>(async () => response());
   vi.stubGlobal("fetch", fetch);
   let activeTransactions = 0;
+  const probe = vi.fn(async () => true);
   const runtime = createMeetingOutputRuntime({
+    probeConstrainedCli: probe,
     createConstrainedCliStructuredAdapter: createCliStructuredAdapter,
     resolveActiveModules: modules,
     dataContext: {
@@ -115,6 +117,7 @@ function setup(createCliStructuredAdapter?: GenerateStructuredDeps["createCliStr
   });
   return {
     ...runtime,
+    probe,
     route,
     credential,
     serviceRoute,
@@ -663,5 +666,30 @@ it("fails unsupported subscriptions before credential lookup or any provider dis
   expect(h.credential).not.toHaveBeenCalled();
   expect(h.fetch).not.toHaveBeenCalled();
   expect(adapter).not.toHaveBeenCalled();
+  expect(generate).not.toHaveBeenCalled();
+});
+
+it("checks constrained binary presence outside actor transactions before enabling Generate", async () => {
+  const generate = vi.fn();
+  const h = setup(() => ({ generateStructured: generate }));
+  const cliModel = {
+    ...model,
+    provider_kind: "anthropic" as const,
+    provider_auth_method: "cli" as const
+  };
+  h.route.mockResolvedValue(cliModel);
+  vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([
+    { ...provider, provider_kind: "anthropic", auth_method: "cli" }
+  ]);
+  h.probe.mockImplementation(async () => {
+    expect(h.activeTransactions()).toBe(0);
+    return false;
+  });
+  expect(await h.generationAvailability(actor)).toBe("model-unavailable");
+  expect(h.probe).toHaveBeenCalledExactlyOnceWith(actor.actorUserId);
+  h.probe.mockResolvedValue(true);
+  expect(await h.generationAvailability(actor)).toBe("available");
+  expect(h.credential).not.toHaveBeenCalled();
+  expect(h.fetch).not.toHaveBeenCalled();
   expect(generate).not.toHaveBeenCalled();
 });
