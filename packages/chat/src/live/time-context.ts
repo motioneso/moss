@@ -47,7 +47,7 @@ export function renderCurrentTimeContext(instant: Date, timezone: string | null)
     "Stay consistent with the authoritative time for each turn: let the date and weekday move forward when the current time does, and do not flip-flop about the known time zone."
   );
   lines.push(
-    "Use supplied account-local timestamp references when present; keep their date and timezone."
+    "Use supplied account-local timestamp references; convert uncovered zoned ISO timestamps using the known account zone and their date-specific offset, or retain the source zone if unknown. Never relabel the raw UTC clock as local."
   );
   lines.push("</current_time_context>");
   return lines.join("\n");

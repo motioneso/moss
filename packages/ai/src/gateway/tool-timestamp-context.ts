@@ -5,17 +5,15 @@ const ISO_INSTANT =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
 const PRIVATE_OR_ID_KEY =
   /(?:^|[_-])(?:id|ids|token|secret|password|cursor|url)(?:$|[_-])|(?:Id|Ids|Token|Secret|Password|Cursor|Url)$/;
-export const MAX_TIMESTAMP_CONTEXT_CHARS = 4_000;
+export const MAX_TIMESTAMP_CONTEXT_CHARS = 16_000;
 const MAX_VISITED = 4_096;
 const MAX_DEPTH = 24;
-const MAX_REFERENCES = 64;
+const MAX_REFERENCES = 512;
 
 interface TimestampReference {
   source: string;
-  utcInstant: string;
   localDate: string;
   localTime: string;
-  timezone: string;
   utcOffsetMinutes: number;
 }
 
@@ -108,10 +106,8 @@ export function renderToolTimestampContext(
       if (references.length < MAX_REFERENCES)
         references.push({
           source: value,
-          utcInstant: instant.toISOString(),
           localDate: localDayKey(instant, timezone),
           localTime: clock.format(instant),
-          timezone,
           utcOffsetMinutes: timeZoneOffsetMinutes(instant, timezone)
         });
       return;
@@ -133,19 +129,28 @@ export function renderToolTimestampContext(
   };
   walk(data);
   if (eligible === 0 && !scanLimited) return undefined;
+  const offset = (minutes: number) => {
+    const absolute = Math.abs(minutes);
+    return `${minutes < 0 ? "-" : "+"}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")}`;
+  };
+  // Generated lines contain only validated timestamps, computed fields and a validated zone.
+  // Keep the outside-content wrapper, without JSON quotes repeated/escaped for every field.
   const encode = () =>
     render(
-      JSON.stringify({
-        note: "Computed account-local timestamp references. Original tool values are unchanged.",
-        references,
-        omittedCount: eligible - references.length,
-        scanLimited
-      })
+      [
+        `Account-local timestamp references: ${timezone}`,
+        ...references.map(
+          (ref) =>
+            `${ref.source} = ${ref.localDate} ${ref.localTime} (UTC${offset(ref.utcOffsetMinutes)})`
+        ),
+        `Omitted references: ${eligible - references.length}; scan limited: ${scanLimited ? "yes" : "no"}.`
+      ].join("\n")
     );
+  const wireLength = (text: string) => JSON.stringify({ type: "text", text }).length;
   let text = encode();
-  while (text.length > maxChars && references.length > 0) {
+  while (wireLength(text) > maxChars && references.length > 0) {
     references.pop();
     text = encode();
   }
-  return text.length <= maxChars ? text : undefined;
+  return wireLength(text) <= maxChars ? text : undefined;
 }

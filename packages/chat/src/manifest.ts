@@ -110,7 +110,7 @@ export const chatModuleManifest = {
     {
       id: "chat.time_context",
       description:
-        "Chat tool results can include deterministic account-local timestamp references alongside unchanged original values. References use each instant's date and daylight-saving offset; large results may have limited references.",
+        "Chat tool results include compact account-local timestamp references for normal full pages. Larger results report omissions; uncovered times keep conversion guidance. Original timestamps stay unchanged.",
       featureFlagId: "chat.module"
     },
     {

@@ -10,16 +10,32 @@ const stamp = "2026-10-07T01:15:00.000Z";
 const zone = "America/Los_Angeles";
 function unpack(text: unknown) {
   expect(typeof text).toBe("string");
-  return JSON.parse(
-    String(text)
-      .replace(/^<tool_result[^>]*>\n/, "")
-      .replace(/\n<\/tool_result>$/, "")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&amp;/g, "&")
-  );
+  const decoded = String(text)
+    .replace(/^<tool_result[^>]*>\n/, "")
+    .replace(/\n<\/tool_result>$/, "")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+  if (!decoded.startsWith("Account-local timestamp references: ")) return JSON.parse(decoded);
+  const lines = decoded.split("\n");
+  const timezone = lines[0]!.slice("Account-local timestamp references: ".length);
+  const footer = /^Omitted references: (\d+); scan limited: (yes|no)\.$/.exec(lines.at(-1)!);
+  expect(footer).not.toBeNull();
+  const references = lines.slice(1, -1).map((line) => {
+    const match =
+      /^(\S+) = (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) \(UTC([+-])(\d{2}):(\d{2})\)$/.exec(line);
+    expect(match).not.toBeNull();
+    return {
+      source: match![1],
+      localDate: match![2],
+      localTime: match![3],
+      timezone,
+      utcOffsetMinutes: (match![4] === "-" ? -1 : 1) * (Number(match![5]) * 60 + Number(match![6]))
+    };
+  });
+  return { references, omittedCount: Number(footer![1]), scanLimited: footer![2] === "yes" };
 }
 function render(data: Record<string, unknown>, timezone: string | undefined = zone) {
   return renderAndCap(undefined, { data }, "example.read", timezone);
@@ -33,7 +49,6 @@ describe("deterministic model tool timestamp references", () => {
     expect(unpack(result.timestampContext).references).toEqual([
       {
         source: stamp,
-        utcInstant: stamp,
         localDate: "2026-10-06",
         localTime: "18:15:00",
         timezone: zone,
@@ -58,7 +73,6 @@ describe("deterministic model tool timestamp references", () => {
     const source = "2026-10-06T18:15:00.123456-07:00";
     expect(unpack(render({ when: source }, "Asia/Tokyo").timestampContext).references[0]).toEqual({
       source,
-      utcInstant: "2026-10-07T01:15:00.123Z",
       localDate: "2026-10-07",
       localTime: "10:15:00",
       timezone: "Asia/Tokyo",
@@ -182,6 +196,23 @@ describe("deterministic model tool timestamp references", () => {
     });
   });
 
+  it("reports real omissions beyond the full-page budget without truncating source data", () => {
+    const sources = Array.from({ length: 500 }, (_, i) =>
+      new Date(Date.UTC(2026, 9, 7, 0, i)).toISOString()
+    );
+    const data = { rows: sources.map((at) => ({ at })) };
+    const result = render(data);
+    const original = renderAndCap(undefined, { data }, "example.read").text;
+    expect(result.text).toBe(original);
+    const referenceBlock = { type: "text", text: result.timestampContext };
+    expect(JSON.stringify(referenceBlock).length).toBeLessThanOrEqual(MAX_TIMESTAMP_CONTEXT_CHARS);
+    const references = unpack(result.timestampContext);
+    expect(references.omittedCount).toBeGreaterThan(0);
+    expect(references.references.length + references.omittedCount).toBe(
+      sources.filter((value) => String(original).includes(value)).length
+    );
+  });
+
   it("bounds added references, reports omissions and leaves page counts/content intact", () => {
     const rows = Array.from({ length: 100 }, (_, i) => ({
       when: `2026-10-07T01:${String(Math.floor(i / 60)).padStart(2, "0")}:${String(i % 60).padStart(2, "0")}Z`
@@ -198,7 +229,10 @@ describe("deterministic model tool timestamp references", () => {
   });
 });
 
-function gateway(tokens: SessionTokenRegistry) {
+function gateway(
+  tokens: SessionTokenRegistry,
+  data: Record<string, unknown> = { createdAt: stamp }
+) {
   const module = {
     id: "example",
     name: "Example",
@@ -217,7 +251,7 @@ function gateway(tokens: SessionTokenRegistry) {
         isExternal: false,
         externalContent: true,
         inputSchema: { type: "object", properties: {} },
-        execute: async () => ({ data: { createdAt: stamp } })
+        execute: async () => ({ data })
       }
     ]
   } as MossModuleManifest;
@@ -236,6 +270,84 @@ function gateway(tokens: SessionTokenRegistry) {
 }
 
 describe("real gateway through both model transports", () => {
+  it.each([false, true])(
+    "covers every timestamp on a full 50-row page through the final wire (SSE=%s)",
+    async (sse) => {
+      const source = (i: number) =>
+        new Date(Date.UTC(2026, 9, 7, 1, 15 + i))
+          .toISOString()
+          .replace(".000Z", ".123456789+00:00");
+      const rows = Array.from({ length: 50 }, (_, i) => ({
+        startsAt: source(i * 4),
+        endsAt: source(i * 4 + 1),
+        createdAt: source(i * 4 + 2),
+        updatedAt: source(i * 4 + 3)
+      }));
+      const data = { rows, total: 50, remainingCount: 0 };
+      const tokens = new SessionTokenRegistry();
+      const app = Fastify();
+      registerMcpTransportRoute(app, { gateway: gateway(tokens, data), tokens });
+      try {
+        const token = tokens.mint({
+          actorUserId: "pacific",
+          chatSessionId: "page",
+          allowedToolNames: null
+        });
+        const response = await app.inject({
+          method: "POST",
+          url: "/api/mcp",
+          headers: {
+            authorization: `Bearer ${token}`,
+            ...(sse ? { accept: "text/event-stream" } : {})
+          },
+          body: {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: {
+              name: "example.read",
+              arguments: {},
+              ...(sse ? { _meta: { progressToken: 1 } } : {})
+            }
+          }
+        });
+        expect(response.statusCode).toBe(200);
+        const frame = sse
+          ? JSON.parse(
+              response.body
+                .split("\n")
+                .find((line) => line.startsWith("data: ") && line.includes('"result"'))!
+                .slice(6)
+            )
+          : response.json();
+        const original = frame.result.content[0].text;
+        expect(unpack(original)).toEqual(data);
+        expect(original).toBe(renderAndCap(undefined, { data }, "example.read").text);
+        const referenceBlock = frame.result.content[1];
+        const references = unpack(referenceBlock.text);
+        expect(references.references).toHaveLength(200);
+        expect(references.omittedCount).toBe(0);
+        expect(references.scanLimited).toBe(false);
+        expect(references.references.at(-1)).toMatchObject({
+          source: source(199),
+          localDate: "2026-10-06",
+          localTime: "21:34:00",
+          utcOffsetMinutes: -420
+        });
+        expect(JSON.stringify(referenceBlock).length).toBeLessThanOrEqual(
+          MAX_TIMESTAMP_CONTEXT_CHARS
+        );
+        for (const row of rows)
+          for (const value of Object.values(row))
+            expect(
+              references.references.some((ref: { source: string }) => ref.source === value)
+            ).toBe(true);
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
   it.each([false, true])(
     "sends wrapped account-specific references (SSE=%s) without changing original data",
     async (sse) => {

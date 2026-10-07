@@ -1,3 +1,4 @@
+import { renderCurrentTimeContext } from "../../packages/chat/src/live/time-context.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildEngineText } from "../../packages/chat/src/live/engine-text.js";
@@ -74,4 +75,12 @@ describe("current account-local time supplied to chat", () => {
     expect(result.text).toContain("Current UTC time: 2026-10-07T01:15:00.000Z");
     expect(result.text).not.toContain("User's local time:");
   });
+});
+
+it("keeps a conversion fallback for zoned ISO timestamps without a reference", () => {
+  const context = renderCurrentTimeContext(new Date("2026-10-07T01:15:00Z"), "America/Los_Angeles");
+  expect(context).toContain("convert uncovered zoned ISO timestamps");
+  expect(context).toContain("their date-specific offset");
+  expect(context).toContain("retain the source zone if unknown");
+  expect(context).toContain("Never relabel the raw UTC clock as local");
 });
