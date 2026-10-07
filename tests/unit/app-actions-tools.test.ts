@@ -123,6 +123,33 @@ function expectRefusal(result: unknown, reason: string) {
 }
 
 describe("app actions: real gateway/manifest boundary with fake persistence and transport", () => {
+  it("never binds the memory executor for a blocked route, even with a supplied proceed snapshot", async () => {
+    const h = harness();
+    const input = {
+      method: "DELETE" as const,
+      path: "/api/chat/memory/facts/11111111-1111-4111-8111-111111111111"
+    };
+    const bind = vi.fn(() => ({ memoryForget: { forget: vi.fn() } }));
+    const resolution = {
+      kind: "proceed" as const,
+      risk: "destructive" as const,
+      externalContent: true,
+      forceConfirm: true,
+      confirmWhenTainted: false,
+      summary: "unused",
+      details: { target: "unused", fields: [] },
+      affectsModules: ["memory"]
+    };
+    const services = createAppActionCallServices({
+      appActions: { catalog: () => appActionCatalog, call: h.callSpy },
+      resolver: h.resolver,
+      memoryForgetServices: bind
+    })(input, appActionContext, resolution);
+    expect(bind).not.toHaveBeenCalled();
+    await expect(services.appActions.call(input, appActionContext)).rejects.toThrow(/^blocked:/);
+    expect(h.callSpy).not.toHaveBeenCalled();
+  });
+
   it("blocks legacy chat-memory deletion before target lookup, approval or dispatch", async () => {
     const h = harness();
     const before = h.scopeCount();

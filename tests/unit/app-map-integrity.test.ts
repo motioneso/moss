@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { webRoutes } from "../../apps/web/src/app-route-metadata.js";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
-import { CORE_APP_SCREENS, CORE_APP_SETTINGS } from "@moss/shared";
+import { CORE_APP_ERRORS, CORE_APP_SCREENS, CORE_APP_SETTINGS } from "@moss/shared";
 import { buildAppMap } from "../../scripts/build-app-map.js";
 
 describe("app-map integrity and truthfulness", () => {
@@ -13,6 +13,20 @@ describe("app-map integrity and truthfulness", () => {
     version: "test",
     buildId: "test",
     narrative: ""
+  });
+
+  it("describes memory-card path omissions and distinct person-facing approval outcomes", () => {
+    const provider = CORE_APP_SETTINGS.find((screen) => screen.id === "assistant");
+    expect(provider?.description).toContain("requested changes as plain text");
+    expect(provider?.description).toContain(
+      "Memory cards with a resolved target show its text and omit the technical Path row"
+    );
+    expect(provider?.description).not.toContain("the exact field values");
+    const outcome = CORE_APP_ERRORS.find((error) => error.code === "core.ai.action_not_approved");
+    for (const text of ["You declined this action.", "Action timed out.", "Action cancelled."]) {
+      expect(outcome?.description).toContain(text);
+    }
+    expect(outcome?.description).toContain("separate from the visible message");
   });
 
   it("every app map screen has a truthful route in webRoutes", () => {

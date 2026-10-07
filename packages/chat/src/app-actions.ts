@@ -196,7 +196,10 @@ export function createAppActionCallServices(deps: {
   ) => {
     const request = actionInput(input);
     const match = request ? deps.appActions.catalog()?.resolve(request.method, request.path) : null;
-    const factId = match?.route.policy.coveredBy === "memory.forget" ? match.params.id : null;
+    const factId =
+      match?.route.policy.access !== "blocked" && match?.route.policy.coveredBy === "memory.forget"
+        ? match.params.id
+        : null;
     const memoryService =
       factId && deps.memoryForgetServices
         ? (deps.memoryForgetServices({ factId }, ctx, resolution).memoryForget as {
