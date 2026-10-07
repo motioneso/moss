@@ -92,8 +92,18 @@ export const meetingsModuleManifest = {
   ],
   jobs: [{ queueName: "meetings.stop-summary", metadataOnly: true }],
   routes: [
-    { method: "PUT", path: "/api/meetings/records/:id/title", permissionId: "meetings.write" },
-    { method: "GET", path: "/api/meetings/output-availability", permissionId: "meetings.read" },
+    {
+      method: "PUT",
+      path: "/api/meetings/records/:id/title",
+      chat: { access: "write", title: "Rename your meeting", content: "user_authored" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/output-availability",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
     {
       method: "POST",
       path: "/api/meetings/capture/connection",
@@ -292,7 +302,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.chat_app_actions",
       description:
-        "App actions read retained meetings and save drafts, notes, transcript corrections and summaries. Generation and export stay in Meetings; deleting a meeting and linked Moss chats asks first."
+        "App actions read retained meetings and your output availability, and save drafts, titles, notes, transcripts and summaries. Generation, export and capture stay in Meetings; deleting a meeting and linked chats asks first."
     },
     {
       id: "meetings.link_state",

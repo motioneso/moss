@@ -3,10 +3,12 @@ import { makeRecordingDb } from "./helpers/recording-db.js";
 import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import type {
-  MeetingCaptureAudioInput,
-  MeetingCaptureControlInput,
-  MeetingCaptureInventory
+import {
+  MEETING_CAPTURE_LEASE_MS,
+  type MeetingCaptureAudioInput,
+  type MeetingCaptureControlInput,
+  type MeetingCaptureInventory,
+  type MeetingCaptureSelection
 } from "@moss/shared";
 import {
   applyCaptureControl,
@@ -75,9 +77,9 @@ function command(
       : {})
   };
 }
-function recording() {
+function recording(selection = command("record", 0).selection) {
   const value = state();
-  applyCaptureControl(value, command("record", 0), origin, "route");
+  applyCaptureControl(value, { ...command("record", 0), selection }, origin, "route");
   value.observed = { generation: 1, phase: "recording" };
   value.lastSeenAt = at(2000).toISOString();
   return value;
@@ -246,9 +248,9 @@ describe("native capture bounded domain", () => {
     ).toThrow();
   });
 });
-function fixture() {
+function fixture(selection?: MeetingCaptureSelection) {
   let active = 0;
-  const value = recording();
+  const value = recording(selection);
   const credential = `mm1_${owner}.${grantId}.${"s".repeat(43)}`;
   const grant: CaptureGrant = {
     id: grantId,
@@ -349,7 +351,7 @@ function fixture() {
   };
   const connections = new MeetingCaptureConnectionRepository();
   vi.spyOn(connections, "lock").mockResolvedValue();
-  vi.spyOn(connections, "connection").mockImplementation(async () => ({
+  const connection = {
     owner_user_id: owner,
     device_id: deviceId,
     connection_id: deviceId,
@@ -360,7 +362,8 @@ function fixture() {
     inventory_json: JSON.stringify(inventory),
     last_seen_at: at(2000),
     expires_at: at(7200000)
-  }));
+  };
+  vi.spyOn(connections, "connection").mockImplementation(async () => connection);
   const preferences = new MeetingPreferencesRepository();
   vi.spyOn(preferences, "get").mockResolvedValue({
     rememberedSource: { deviceId, microphoneId: "mic-device", mode: "microphone-only" },
@@ -374,6 +377,8 @@ function fixture() {
     deps,
     service,
     preferences,
+    connection,
+    connections,
     grant,
     ingest,
     repository,
@@ -391,25 +396,39 @@ describe("capture service authorization and dispatch", () => {
     await f.service.browserControl(f.browser, meetingId, resume);
     expect(JSON.parse(f.grant.state_json!).generation).toBe(3);
   });
-  it("resumes a fresh default on the same grant Mac without saved hardware", async () => {
-    const f = fixture();
-    vi.mocked(f.preferences.get).mockResolvedValue({
-      rememberedSource: null,
-      defaultCaptureMode: "computer-audio",
-      summarizeOnStop: true,
-      summaryTemplateId: "general"
-    });
-    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
-    const result = await f.service.browserControl(f.browser, meetingId, {
-      ...command("record", 2),
-      selection: undefined
-    });
-    expect(result.capture).toMatchObject({
-      deviceId,
-      selection: { mode: "computer-audio", microphone: { deviceId: "mic-device" } }
-    });
-  });
-  it("never moves an existing grant to a newly remembered Mac", async () => {
+  it.each<MeetingCaptureSelection>([
+    { mode: "microphone-only", microphone: { deviceId: "mic-device", sourceId: "mic" } },
+    {
+      mode: "selected-app",
+      microphone: { deviceId: "mic-device", sourceId: "mic" },
+      outputSourceId: "selected-output",
+      appProcessTreeId: "selected-app"
+    },
+    {
+      mode: "computer-audio",
+      microphone: { deviceId: "mic-device", sourceId: "mic" },
+      outputSourceId: "computer-output",
+      scope: { kind: "process-exclusion", excludedProcessTreeIds: ["moss"] }
+    }
+  ])(
+    "resumes the paused $mode selection without rereading defaults and replays once",
+    async (selection) => {
+      const f = fixture(selection);
+      await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+      const resume = { ...command("record", 2), selection: undefined };
+      const result = await f.service.browserControl(f.browser, meetingId, resume);
+      expect(result.capture).toMatchObject({ deviceId, selection });
+      expect(result.capture.selection).toEqual(selection);
+      expect(f.preferences.get).not.toHaveBeenCalled();
+      vi.mocked(f.preferences.get).mockRejectedValue(new Error("Preferences unavailable"));
+      vi.mocked(f.connections.connection).mockResolvedValue(null);
+      vi.mocked(f.deps.processingAvailability).mockRejectedValue(new Error("Provider unavailable"));
+      expect(await f.service.browserControl(f.browser, meetingId, resume)).toEqual(result);
+      expect(JSON.parse(f.grant.state_json!).generation).toBe(3);
+      expect(JSON.parse(f.grant.state_json!).epochs).toHaveLength(2);
+    }
+  );
+  it("keeps the paused source when preferences now remember a different Mac", async () => {
     const f = fixture();
     vi.mocked(f.preferences.get).mockResolvedValue({
       rememberedSource: {
@@ -422,14 +441,86 @@ describe("capture service authorization and dispatch", () => {
       summaryTemplateId: "general"
     });
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    const result = await f.service.browserControl(f.browser, meetingId, {
+      ...command("record", 2),
+      selection: undefined
+    });
+    expect(result.capture).toMatchObject({
+      deviceId,
+      desired: "recording",
+      selection: {
+        mode: "microphone-only",
+        microphone: { deviceId: "mic-device", sourceId: "mic" }
+      }
+    });
+    expect(f.preferences.get).not.toHaveBeenCalled();
+  });
+  it.each([
+    {
+      label: "replaced microphone",
+      change: {
+        microphones: [{ deviceId: "replacement", sourceId: "replacement", label: "Replacement" }]
+      }
+    },
+    { label: "denied microphone permission", change: { microphonePermission: "denied" } },
+    { label: "missing app", change: { applications: [] } },
+    { label: "denied system audio permission", change: { systemAudioPermission: "denied" } }
+  ])("revalidates the paused source against live inventory: $label", async ({ change }) => {
+    const f = fixture({
+      mode: "selected-app",
+      microphone: { deviceId: "mic-device", sourceId: "mic" },
+      outputSourceId: "selected-output",
+      appProcessTreeId: "selected-app"
+    });
+    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    f.connection.inventory_json = JSON.stringify({ ...inventory, ...change });
+    const paused = f.grant.state_json;
     await expect(
       f.service.browserControl(f.browser, meetingId, {
         ...command("record", 2),
         selection: undefined
       })
-    ).rejects.toMatchObject({ code: "meeting_capture_source_unavailable" });
-    expect(JSON.parse(f.grant.state_json!).desired).toBe("paused");
+    ).rejects.toMatchObject({ code: "meeting_capture_invalid_input" });
+    expect(f.grant.state_json).toBe(paused);
   });
+  it("does not refresh a paused recording's computer-audio exclusions from new defaults", async () => {
+    const f = fixture({
+      mode: "computer-audio",
+      microphone: { deviceId: "mic-device", sourceId: "mic" },
+      outputSourceId: "computer-output",
+      scope: { kind: "process-exclusion", excludedProcessTreeIds: ["moss"] }
+    });
+    await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+    f.connection.inventory_json = JSON.stringify({
+      ...inventory,
+      computerAudio: { available: true, excludedProcessTreeIds: ["other-process"] }
+    });
+    const paused = f.grant.state_json;
+    await expect(
+      f.service.browserControl(f.browser, meetingId, {
+        ...command("record", 2),
+        selection: undefined
+      })
+    ).rejects.toMatchObject({ code: "meeting_capture_invalid_input" });
+    expect(f.grant.state_json).toBe(paused);
+  });
+  it.each(["stale", "expired"])(
+    "requires a %s connection to recover before resuming",
+    async (reason) => {
+      const f = fixture();
+      await f.service.browserControl(f.browser, meetingId, command("pause", 1));
+      if (reason === "stale") f.connection.last_seen_at = at(2000 - MEETING_CAPTURE_LEASE_MS - 1);
+      else f.connection.expires_at = at(2000);
+      const paused = f.grant.state_json;
+      await expect(
+        f.service.browserControl(f.browser, meetingId, {
+          ...command("record", 2),
+          selection: undefined
+        })
+      ).rejects.toMatchObject({ code: "meeting_capture_source_unavailable" });
+      expect(f.grant.state_json).toBe(paused);
+    }
+  );
   it("commits Stop if optional summary enqueue fails", async () => {
     const f = fixture();
     const row = {
