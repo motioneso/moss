@@ -204,6 +204,11 @@ export class SportsSourceService {
     };
   }
 
+  /** Read-only, actor-bound approval lookup; consuming the token belongs to execution. */
+  approvalPreview(ownerUserId: string, confirmationId: string) {
+    return this.dependencies.previews.peek(ownerUserId, confirmationId);
+  }
+
   async confirmNewSource(
     scopedDb: DataContextDb,
     ownerUserId: string,

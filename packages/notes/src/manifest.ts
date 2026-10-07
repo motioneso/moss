@@ -14,6 +14,11 @@ import {
 
 import { notesSearchExecute } from "./tools.js";
 import { notesCreateExecute, notesDeleteExecute, notesEditExecute } from "./write-tools.js";
+import {
+  notesCreatePresentation,
+  notesDeletePresentation,
+  notesEditPresentation
+} from "./approval-presentation.js";
 
 export const NOTES_MODULE_ID = "notes";
 export const NOTES_SYNC_QUEUE = "notes.sync";
@@ -112,6 +117,8 @@ export const notesModuleManifest = {
     },
     {
       name: "notes.create",
+      approvalPresentation: notesCreatePresentation,
+      approvalContent: "user_authored",
       actionLabel: "Create note",
       description: "Create a Markdown note in the linked notes source.",
       permissionId: "notes.create",
@@ -137,6 +144,8 @@ export const notesModuleManifest = {
     },
     {
       name: "notes.edit",
+      approvalPresentation: notesEditPresentation,
+      approvalContent: "user_authored",
       actionLabel: "Edit note",
       description: "Edit a Markdown note in the linked notes source.",
       permissionId: "notes.edit",
@@ -154,6 +163,8 @@ export const notesModuleManifest = {
     },
     {
       name: "notes.delete",
+      approvalPresentation: notesDeletePresentation,
+      approvalContent: "user_authored",
       actionLabel: "Delete note",
       description:
         "Delete a Markdown note from the linked notes source immediately and permanently. There is " +

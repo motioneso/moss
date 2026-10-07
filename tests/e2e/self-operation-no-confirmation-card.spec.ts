@@ -19,7 +19,7 @@ import { createMockConnectorProviders, mockApi } from "./mock-api.js";
 // confirmation) ride the SAME transcript. The reply and pending card prove the stream was
 // consumed; only the pending request gets a card, and self-operation outcomes stay visible as
 // plain status lines without technical result payloads.
-// The separate #1310 test in app-shell.spec.ts proves action_result still invalidates queries.
+// The separate #1310 test in chat-action-cards.spec.ts proves action_result still invalidates queries.
 //
 // See tests/uat/specs/self-operation-content-commands.uat.spec.ts for the harness-side fixmes
 // that cite this file as their real proof, matching the tests/e2e/chat-drawer.spec.ts precedent

@@ -10,6 +10,7 @@ import {
   type FileHandle
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize } from "node:path";
+import { createHash } from "node:crypto";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import { HttpError, type ToolExecute, type ToolResult, type ToolServices } from "@moss/module-sdk";
@@ -119,6 +120,32 @@ async function resolveExistingFile(root: string, rel: string): Promise<string> {
   const resolvedFile = await realpath(absolutePath);
   assertInside(root, resolvedFile);
   return resolvedFile;
+}
+
+/** Read-only disclosure uses the same source and path checks as the eventual write. */
+export async function resolveNoteApprovalTarget(
+  scopedDb: DataContextDb,
+  path: unknown,
+  allowNew: boolean
+): Promise<{ readonly relative: string; readonly version: string }> {
+  const root = await resolveSource(scopedDb);
+  const relative = requireMarkdownPath(coerceToRelativePath(path, root));
+  await rejectSymlinkParent(root, relative);
+  let content: string | null;
+  try {
+    const file = await resolveExistingFile(root, relative);
+    await recheckInside(root, file);
+    content = await readFile(file, "utf-8");
+  } catch (error) {
+    if (!allowNew || (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    content = null;
+  }
+  return {
+    relative,
+    version: createHash("sha256")
+      .update(JSON.stringify([root, relative, content]))
+      .digest("hex")
+  };
 }
 
 async function rejectSymlinkParent(root: string, rel: string): Promise<void> {

@@ -14,11 +14,14 @@ import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./cur
 import { chatReadAttachmentExecute } from "./attachment-tool.js";
 import {
   chatSetResponseStyleExecute,
+  chatResponseStylePresentation,
   chatSetResponseStyleInputSchema,
   chatSetResponseStyleOutputSchema
 } from "./response-style-tool.js";
 import {
   chatDeleteClassifierShadowRecordsExecute,
+  shadowDeletePresentation,
+  shadowDeleteRoutePresentation,
   chatDeleteClassifierShadowRecordsInputSchema,
   chatDeleteClassifierShadowRecordsOutputSchema
 } from "./classifier-shadow-tool.js";
@@ -113,6 +116,29 @@ export const chatModuleManifest = {
   ],
   features: [
     {
+      id: "chat.pending_action_disclosure",
+      description:
+        "App cards show exact server targets and human-readable changes. Only memory deletion has red Approve. " +
+        "Native permissions keep exact commands or paths. Missing details keep Reject only. Outside content adds one notice.",
+      errors: [
+        {
+          code: "approval_unavailable",
+          class: "prerequisite",
+          description:
+            "Complete server details are unavailable, so this request cannot be approved.",
+          remediationRef: "chat.request_fresh_action"
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.request_fresh_action",
+          description: "Reject the request and ask again, or make the change in its app screen.",
+          path: "/today"
+        }
+      ],
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.legacy_memory_delete",
       description:
         "Chat cannot call the old memory-store delete endpoint. Use saved-memory forgetting, which shows the exact memory for approval. Existing screen actions are unchanged."
@@ -127,8 +153,8 @@ export const chatModuleManifest = {
     {
       id: "chat.approval_outcomes",
       description:
-        "Decided cards become quiet outcomes in their original conversation, also after reload. " +
-        "Details disappear; Thinking stays unchanged. Failures are explicit. Pending cards keep exact disclosure. Unknown origins stay out of chat.",
+        "Decided cards become quiet outcomes in their original chat, also after reload. Thinking stays unchanged. " +
+        "Failures are explicit. Quiet results retain focus and announcements without a box outline; controls retain visible keyboard focus.",
       featureFlagId: "chat.module"
     },
     {
@@ -464,7 +490,9 @@ export const chatModuleManifest = {
         access: "destructive",
         title: "Delete the tool-picking trial records",
         content: "user_authored",
-        coveredBy: "chat.deleteClassifierShadowRecords"
+        coveredBy: "chat.deleteClassifierShadowRecords",
+        presentation: shadowDeleteRoutePresentation,
+        presentationContent: "user_authored"
       },
       permissionId: "chat.message"
     },
@@ -633,6 +661,9 @@ export const chatModuleManifest = {
     },
     {
       name: "chat.setResponseStyle",
+      actionLabel: "Change answer length",
+      approvalPresentation: chatResponseStylePresentation,
+      approvalContent: "user_authored",
       description: "Set the assistant's default response style (concise, balanced, or detailed).",
       permissionId: "chat.message",
       risk: "write",
@@ -649,6 +680,9 @@ export const chatModuleManifest = {
       // and confirm_always, so nothing is removed before an approval card. RLS scopes the delete
       // to the caller, and there is no admin or cross-user variant.
       name: "chat.deleteClassifierShadowRecords",
+      actionLabel: "Delete tool-picking trial records",
+      approvalPresentation: shadowDeletePresentation,
+      approvalContent: "user_authored",
       description:
         "Delete all of the current user's classifier shadow records - the private trial records " +
         "kept while the classifier gate runs in shadow mode. Use only when the user asks to " +

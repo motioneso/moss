@@ -1,3 +1,5 @@
+import { freezeSnapshot } from "./per-call-resolution.js";
+import { exactArgumentText } from "./pending-presentation.js";
 /**
  * Outside-agent built-in permission asks (#2380, spec 6.3/6.4).
  *
@@ -97,8 +99,6 @@ const ACP_TOOL_MODULE_NAME = "Agent Built-in Tools";
 /** Bounds on what the saved record carries about a request: identifiers only. */
 const MAX_SUMMARY_PATHS = 5;
 const MAX_SUMMARY_PATH_LENGTH = 200;
-/** The card shows the agent's own description at most this long. */
-const MAX_CARD_TEXT = 200;
 
 type AcpAuditMode = "auto" | "yolo" | "confirmed" | "rejected" | "cancelled" | "timeout";
 type AcpActionKind = "write" | "outbound" | "destructive";
@@ -150,28 +150,25 @@ function acpAgentSummary(
 /**
  * What the person reads on the card: the real name, then the thing decided
  * on — the paths for a file tool, the address for a fetch, the command for a
- * shell run (it rides the live stream only, never the row). Anything else
- * shows the agent's own description, labelled as such.
+ * shell run (it rides the live stream only, never the row). Otherwise show
+ * the exact input rather than trusting the agent's description. No display truncation.
  */
 export function acpCardText(request: AcpBuiltInRequest): string {
   const lead = `The agent wants to use ${request.toolName ?? "an unnamed tool"}`;
   const family = acpRequestFamily(request);
   if (family === "read" || family === "write") {
     const paths = extractAcpPaths(request);
-    if (paths.length > 0) return `${lead}: ${paths.join(", ").slice(0, MAX_CARD_TEXT)}`;
+    if (paths.length > 0) return `${lead}: ${paths.join(", ")}`;
   }
   if (family === "web") {
     const address = extractAcpWebAddress(request);
-    if (address !== null) return `${lead}: ${address.slice(0, MAX_CARD_TEXT)}`;
+    if (address !== null) return `${lead}: ${address}`;
   }
   if (family === "shell") {
     const command = extractAcpCommand(request);
-    if (command !== null) return `${lead}: ${command.slice(0, MAX_CARD_TEXT)}`;
+    if (command !== null) return `${lead}: ${command}`;
   }
-  const title = request.title.trim();
-  return title === ""
-    ? `${lead}.`
-    : `${lead} (its own description: "${title.slice(0, MAX_CARD_TEXT)}").`;
+  return `${lead}:\n${JSON.stringify(request.rawInput, null, 2)}`;
 }
 
 /**
@@ -244,7 +241,9 @@ export async function requestAcpBuiltInPermission(
   request: AcpBuiltInPermissionRequest
 ): Promise<AcpBuiltInPermissionResponse> {
   const { actorUserId, chatSessionId, threadId } = deps.tokens.verify(token);
-  const input = request.toolInput;
+  const input = freezeSnapshot(request.toolInput);
+  if (exactArgumentText(input) === null)
+    return { decision: "deny", reason: "Complete native tool details are unavailable." };
   const requestId = `acp_${randomUUID()}`;
   const access: AccessContext = { actorUserId, requestId };
   // #2956: the ask below can pend on approval past the turn's end; the turn is
@@ -259,7 +258,7 @@ export async function requestAcpBuiltInPermission(
     rawInput: input,
     toolName: request.toolName,
     kind: request.kind ?? null,
-    locations: request.locations ?? null
+    locations: request.locations ? freezeSnapshot(request.locations) : null
   };
   const actionKind = acpActionKind(builtIn);
   const summarize = (decision: ActionAuditAgentSummary["decision"], reason: string | null) => ({
@@ -401,6 +400,7 @@ export async function requestAcpBuiltInPermission(
 
     emitPendingActionRequest(deps, actorUserId, chatSessionId, action, {
       kind: "action_request",
+      nativePermission: true,
       actionRequestId: action.id,
       ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
       toolName,

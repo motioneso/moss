@@ -43,10 +43,21 @@ function parseDetails(value: unknown): ActionRequestDetails | undefined {
   const fields: { label: string; value: string }[] = [];
   for (const field of candidate.fields) {
     if (!field || typeof field !== "object" || Array.isArray(field)) return undefined;
-    if (typeof field.label !== "string" || typeof field.value !== "string") return undefined;
+    if (typeof field.label !== "string" || !field.label.trim() || typeof field.value !== "string")
+      return undefined;
     fields.push({ label: field.label, value: field.value });
   }
-  return { target: candidate.target, fields };
+  if (candidate.presentation !== undefined && candidate.presentation !== "human") return undefined;
+  if (candidate.approvalKind !== undefined && candidate.approvalKind !== "memory_delete")
+    return undefined;
+  return {
+    target: candidate.target,
+    fields,
+    ...(candidate.presentation === "human" ? { presentation: "human" as const } : {}),
+    ...(candidate.approvalKind === "memory_delete"
+      ? { approvalKind: "memory_delete" as const }
+      : {})
+  };
 }
 
 function parseStringList(value: unknown): readonly string[] | undefined {
@@ -236,6 +247,9 @@ export function useChatStream(
             ...(action.presentation
               ? {
                   summary: action.presentation.summary,
+                  nativePermission: action.presentation.nativePermission,
+                  externalTool: action.presentation.externalTool,
+                  exactArguments: action.presentation.exactArguments,
                   outcomeTitle: action.presentation.outcomeTitle,
                   details: action.presentation.details,
                   preview: action.presentation.preview,
@@ -450,6 +464,9 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       toolName: typeof parsed.toolName === "string" ? parsed.toolName : undefined,
       toolCallId: typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined,
       summary: typeof parsed.summary === "string" ? parsed.summary : undefined,
+      nativePermission: parsed.nativePermission === true ? true : undefined,
+      externalTool: parsed.externalTool === true ? true : undefined,
+      exactArguments: typeof parsed.exactArguments === "string" ? parsed.exactArguments : undefined,
       outcomeTitle: typeof parsed.outcomeTitle === "string" ? parsed.outcomeTitle : undefined,
       status:
         parsed.status === "pending" ||

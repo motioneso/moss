@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type {
-  ActionRequestPreview,
   ModuleAssistantToolManifest,
   MossModuleManifest,
   ToolContext,
@@ -24,14 +23,18 @@ import {
   emitPendingActionRequest,
   resolvePersistedActionRequest
 } from "./action-request-lifecycle.js";
-import { approvalOutcomeTitle, captureActionOutcomeTitle } from "./approval-outcome-title.js";
+import { captureActionOutcomeTitle } from "./approval-outcome-title.js";
+import {
+  cancelFailedPresentation,
+  prepareApprovalCard,
+  runPresentedAction
+} from "./pending-presentation.js";
 import { ActionRequestRecovery } from "./action-request-recovery.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import { isConversationTainted } from "./conversation-policy.js";
 import {
   admitToolOutcome,
-  admitResolvedCard,
   recordContextAdmission,
   runAutomaticAction,
   toolHasOutsideContent,
@@ -45,8 +48,7 @@ import {
   createEffectivePolicyLookup,
   familyAllowsAutoRun,
   resolveFirstRunNotice,
-  resolvePolicy,
-  summarizeToolAction
+  resolvePolicy
 } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
 import { approvalRefusalReason, gatewayFailureReason } from "./native-tool-guard.js";
@@ -797,8 +799,18 @@ export class AssistantToolGateway {
     // captured at arrival and handed to each audit write explicitly.
     const arrivalTurnId = this.deps.tokens.readCurrentTurnId(ctx.chatSessionId);
 
-    if (!(await admitResolvedCard(this.deps.provenance, found, ctx)))
-      return { ok: false, error: CONTEXT_ADMISSION_UNAVAILABLE };
+    const prepared = await prepareApprovalCard(
+      this.deps,
+      found,
+      input,
+      ctx,
+      this.servicesFor(found),
+      notice
+    );
+    if ("failure" in prepared) return prepared.failure;
+    const { summary, outcomeTitle, presentation, readPresentation, outsideContentNotice } =
+      prepared;
+    input = prepared.input;
 
     const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       this.deps.repository.createPendingAssistantAction(scopedDb, {
@@ -817,50 +829,28 @@ export class AssistantToolGateway {
 
     const pendingResolution = awaitActionResolution(this.deps, access, action.id);
 
-    const actionSummary = summarizeToolAction(found.tool, input, ctx);
-    const summary = [notice, actionSummary].filter(Boolean).join(" ");
-    const outcomeTitle = approvalOutcomeTitle(found.tool, actionSummary);
-
-    // Optional rich, server-derived card preview (e.g. email reply recipient/subject/body),
-    // computed under the actor's DataContextDb. It rides the live stream ONLY — the persisted
-    // row's `inputSummary` above stays key-names-only (metadata-only persistence). A preview
-    // hook that throws must NOT block the card: guard and fall back to summary-only (never let
-    // a thrown message, which could carry sensitive detail, reach the emit).
-    let preview: ActionRequestPreview | undefined;
-    const previewHook = found.tool.preview;
-    if (previewHook) {
-      try {
-        preview = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-          previewHook(scopedDb, input, ctx, this.servicesFor(found))
-        );
-      } catch {
-        preview = undefined;
-      }
-    }
-
-    emitPendingActionRequest(this.deps, ctx.actorUserId, ctx.chatSessionId, action, {
-      kind: "action_request",
-      ...(found.resolution?.requiresTarget ? { requiresTarget: true } : {}),
-      actionRequestId: action.id,
-      ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
-      toolName: found.dto.name,
-      summary,
-      ...(outcomeTitle ? { outcomeTitle } : {}),
-      outsideContentNotice: await isConversationTainted(this.deps.provenance, ctx),
-      ...(found.resolution ? { details: found.resolution.details } : {}),
-      ...(preview ? { preview } : {})
-    });
-    const holdStartedAt = Date.now();
-
-    const outcome = await pendingResolution;
-
-    // #2149: markDone unblocks resolveAndAwaitCompletion, which the Approve/Deny HTTP route
-    // awaits before responding — must fire once this call has fully finished handling the
-    // outcome (both branches below), on every exit path, so the caller never observes
-    // "confirmed" before the handler run below has actually happened. Deliberately outside the
-    // fire-and-forget `recordGatewayAudit` calls (`void recordGatewayAudit(...)`) — those stay
-    // unawaited on purpose and must not reopen the same kind of delay on the audit write.
     try {
+      emitPendingActionRequest(this.deps, ctx.actorUserId, ctx.chatSessionId, action, {
+        kind: "action_request",
+        ...(found.resolution?.requiresTarget ? { requiresTarget: true } : {}),
+        actionRequestId: action.id,
+        ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
+        toolName: found.dto.name,
+        summary,
+        ...(outcomeTitle ? { outcomeTitle } : {}),
+        outsideContentNotice,
+        ...(presentation.externalTool
+          ? { externalTool: true, exactArguments: presentation.exactArguments }
+          : {}),
+        ...(presentation.details ? { details: presentation.details } : {}),
+        ...(presentation.preview ? { preview: presentation.preview } : {})
+      });
+      const holdStartedAt = Date.now();
+
+      const outcome = await pendingResolution;
+
+      // #2149: markDone in finally releases HTTP resolution only after this outcome is handled.
+      // Audit writes stay fire-and-forget; they do not delay the request completion.
       if (outcome !== "confirmed") {
         emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
           actionRequestId: action.id,
@@ -891,7 +881,12 @@ export class AssistantToolGateway {
         return { ok: false, denied: true, reason };
       }
 
-      const { response: result, audit } = await this.runHandler(found, input, ctx);
+      const { response: result, audit } = await runPresentedAction(
+        presentation,
+        outcomeTitle,
+        readPresentation,
+        () => this.runHandler(found, input, ctx)
+      );
       emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
         actionRequestId: action.id,
         ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
@@ -920,7 +915,10 @@ export class AssistantToolGateway {
         ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
       });
       return result;
+    } catch {
+      return cancelFailedPresentation(this.deps, access, action.id);
     } finally {
+      this.deps.confirmations.resolve(action.id, "cancelled");
       this.deps.confirmations.markDone(action.id);
     }
   }

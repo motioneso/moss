@@ -1,7 +1,33 @@
+import {
+  taskItemsToolOutputSchema,
+  taskListItemsToolOutputSchema,
+  taskTagItemsToolOutputSchema,
+  taskMutationToolOutputSchema,
+  taskBreakdownToolOutputSchema,
+  taskActivityToolOutputSchema,
+  taskListMutationToolOutputSchema,
+  taskTagMutationToolOutputSchema,
+  taskUpdateToolInputSchema,
+  taskBreakdownToolInputSchema,
+  taskActivityToolInputSchema,
+  taskTagAssignmentToolInputSchema,
+  taskListRenameToolInputSchema,
+  taskTagCreateToolInputSchema,
+  taskTagRenameToolInputSchema,
+  taskDeleteListToolInputSchema,
+  taskDeleteTagToolInputSchema,
+  taskDeleteToolOutputSchema
+} from "./tool-schemas.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
 import { taskListTarget, taskTagTarget, taskTagAssignmentTarget } from "./chat-targets.js";
+import {
+  taskApprovalActions,
+  taskApprovalPresentation,
+  taskRoutePresentation,
+  taskPreferencesPresentation
+} from "./approval-presentation.js";
 import { tasksMonitorProvider } from "./monitor-provider.js";
 import {
   addTaskActivityRequestSchema,
@@ -35,10 +61,7 @@ import {
   renameTaskListRouteSchema,
   renameTaskTagRequestSchema,
   renameTaskTagRouteSchema,
-  taskDtoSchema,
-  taskListDtoSchema,
   taskStatusSchema,
-  taskTagDtoSchema,
   unassignTaskTagRouteSchema,
   updateTaskRequestSchema,
   updateTaskResponseSchema
@@ -72,175 +95,6 @@ export const TASKS_MODULE_ID = "tasks";
 export const TASKS_DEFERRED_STATUS_QUEUE = "tasks-deferred-status";
 export const TASKS_RECURRENCE_QUEUE = "tasks-recurrence-materialize";
 export const tasksModuleSqlMigrationDirectory = fileURLToPath(new URL("../sql", import.meta.url));
-
-const taskItemsToolOutputSchema = {
-  type: "object",
-  required: ["items"],
-  properties: {
-    items: { type: "array", items: taskDtoSchema }
-  }
-} as const;
-
-const taskListItemsToolOutputSchema = {
-  type: "object",
-  required: ["items"],
-  properties: {
-    items: { type: "array", items: taskListDtoSchema }
-  }
-} as const;
-
-const taskTagItemsToolOutputSchema = {
-  type: "object",
-  required: ["items"],
-  properties: {
-    items: { type: "array", items: taskTagDtoSchema }
-  }
-} as const;
-
-const taskMutationToolOutputSchema = {
-  type: "object",
-  properties: {
-    summary: { type: "string" },
-    task: taskDtoSchema,
-    error: { type: "string" }
-  }
-} as const;
-
-const taskBreakdownToolOutputSchema = {
-  type: "object",
-  properties: {
-    summary: { type: "string" },
-    tasks: { type: "array", items: taskDtoSchema },
-    error: { type: "string" }
-  }
-} as const;
-
-const taskActivityToolOutputSchema = {
-  type: "object",
-  properties: {
-    summary: { type: "string" },
-    activity: addTaskActivityResponseSchema.properties.activity,
-    error: { type: "string" }
-  }
-} as const;
-
-const taskListMutationToolOutputSchema = {
-  type: "object",
-  properties: {
-    summary: { type: "string" },
-    list: taskListDtoSchema,
-    error: { type: "string" }
-  }
-} as const;
-
-const taskTagMutationToolOutputSchema = {
-  type: "object",
-  properties: {
-    summary: { type: "string" },
-    tag: taskTagDtoSchema,
-    error: { type: "string" }
-  }
-} as const;
-
-const taskUpdateToolInputSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["taskId"],
-  properties: {
-    taskId: { type: "string" },
-    ...updateTaskRequestSchema.properties
-  }
-} as const;
-
-const taskBreakdownToolInputSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["taskId", "steps"],
-  properties: {
-    taskId: { type: "string" },
-    steps: breakdownTaskRequestSchema.properties.steps
-  }
-} as const;
-
-const taskActivityToolInputSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["taskId"],
-  properties: {
-    taskId: { type: "string" },
-    ...addTaskActivityRequestSchema.properties
-  }
-} as const;
-
-const taskTagAssignmentToolInputSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["taskId", "tagId"],
-  properties: {
-    taskId: { type: "string" },
-    tagId: { type: "string" }
-  }
-} as const;
-
-const taskListRenameToolInputSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["listId", "name"],
-  properties: {
-    listId: { type: "string" },
-    name: { type: "string" }
-  }
-} as const;
-
-const taskTagCreateToolInputSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["listId", "name"],
-  properties: {
-    listId: { type: "string" },
-    name: { type: "string" }
-  }
-} as const;
-
-const taskTagRenameToolInputSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["listId", "tagId", "name"],
-  properties: {
-    listId: { type: "string" },
-    tagId: { type: "string" },
-    name: { type: "string" }
-  }
-} as const;
-
-const taskDeleteListToolInputSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["listId"],
-  properties: {
-    listId: { type: "string" },
-    reassignToListId: { type: "string" }
-  }
-} as const;
-
-const taskDeleteTagToolInputSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["listId", "tagId"],
-  properties: {
-    listId: { type: "string" },
-    tagId: { type: "string" }
-  }
-} as const;
-
-const taskDeleteToolOutputSchema = {
-  type: "object",
-  properties: {
-    summary: { type: "string" },
-    deleted: { type: "boolean" },
-    error: { type: "string" }
-  }
-} as const;
 
 export const tasksModuleManifest = {
   id: TASKS_MODULE_ID,
@@ -379,6 +233,7 @@ export const tasksModuleManifest = {
         access: "write",
         content: "user_authored",
         title: "Add task activity",
+        presentation: taskRoutePresentation("addActivity", { id: "taskId" }),
         coveredBy: "tasks.addActivity"
       },
       requestSchema: addTaskActivityRequestSchema,
@@ -396,7 +251,12 @@ export const tasksModuleManifest = {
     {
       method: "POST",
       path: "/api/tasks/:id/tags",
-      chat: { access: "write", title: "Assign task tag", coveredBy: "tasks.assignTag" },
+      chat: {
+        access: "write",
+        title: "Assign task tag",
+        presentation: taskRoutePresentation("assignTag", { id: "taskId" }),
+        coveredBy: "tasks.assignTag"
+      },
       requestSchema: assignTaskTagRequestSchema,
       responseSchema: assignTaskTagRouteSchema.response[200],
       permissionId: "tasks.update"
@@ -407,6 +267,7 @@ export const tasksModuleManifest = {
       chat: {
         access: "destructive",
         title: "Remove tag from task",
+        presentation: taskRoutePresentation("unassignTag", { id: "taskId", tagId: "tagId" }),
         coveredBy: "tasks.unassignTag",
         target: taskTagAssignmentTarget
       },
@@ -428,6 +289,7 @@ export const tasksModuleManifest = {
         access: "write",
         content: "user_authored",
         title: "Create task list",
+        presentation: taskRoutePresentation("createList", {}),
         coveredBy: "tasks.createList"
       },
       requestSchema: createTaskListRequestSchema,
@@ -441,6 +303,7 @@ export const tasksModuleManifest = {
         access: "write",
         content: "user_authored",
         title: "Rename task list",
+        presentation: taskRoutePresentation("renameList", { listId: "listId" }),
         coveredBy: "tasks.renameList"
       },
       requestSchema: renameTaskListRequestSchema,
@@ -454,6 +317,7 @@ export const tasksModuleManifest = {
         access: "destructive",
         content: "user_authored",
         title: "Delete task list",
+        presentation: taskRoutePresentation("deleteList", { listId: "listId" }),
         coveredBy: "tasks.deleteList",
         target: taskListTarget
       },
@@ -475,6 +339,7 @@ export const tasksModuleManifest = {
         access: "write",
         content: "user_authored",
         title: "Create task tag",
+        presentation: taskRoutePresentation("createTag", { listId: "listId" }),
         coveredBy: "tasks.createTag"
       },
       requestSchema: createTaskTagRequestSchema,
@@ -488,6 +353,7 @@ export const tasksModuleManifest = {
         access: "write",
         content: "user_authored",
         title: "Rename task tag",
+        presentation: taskRoutePresentation("renameTag", { listId: "listId", tagId: "tagId" }),
         coveredBy: "tasks.renameTag"
       },
       requestSchema: renameTaskTagRequestSchema,
@@ -501,6 +367,7 @@ export const tasksModuleManifest = {
         access: "destructive",
         content: "user_authored",
         title: "Delete task tag",
+        presentation: taskRoutePresentation("deleteTag", { listId: "listId", tagId: "tagId" }),
         coveredBy: "tasks.deleteTag",
         target: taskTagTarget
       },
@@ -514,6 +381,7 @@ export const tasksModuleManifest = {
         access: "write",
         content: "user_authored",
         title: "Break task into subtasks",
+        presentation: taskRoutePresentation("breakDown", { id: "taskId" }),
         coveredBy: "tasks.breakDown"
       },
       requestSchema: breakdownTaskRequestSchema,
@@ -552,7 +420,12 @@ export const tasksModuleManifest = {
     {
       method: "PATCH",
       path: "/api/tasks/preferences",
-      chat: { access: "write", content: "user_authored", title: "Set task view preference" },
+      chat: {
+        access: "write",
+        content: "user_authored",
+        title: "Set task view preference",
+        presentation: taskPreferencesPresentation
+      },
       permissionId: "tasks.update"
     },
     {
@@ -727,6 +600,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.create",
+      actionLabel: taskApprovalActions.create.label,
+      approvalPresentation: taskApprovalPresentation("create"),
       description: "Create a task owned by the active actor.",
       permissionId: "tasks.create",
       risk: "write",
@@ -739,6 +614,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.update",
+      actionLabel: taskApprovalActions.update.label,
+      approvalPresentation: taskApprovalPresentation("update"),
       description: "Update non-destructive fields on a task visible to the active actor.",
       permissionId: "tasks.update",
       risk: "write",
@@ -751,6 +628,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.updateStatus",
+      actionLabel: taskApprovalActions.updateStatus.label,
+      approvalPresentation: taskApprovalPresentation("updateStatus"),
       description: "Update the status of a task visible to the active actor.",
       permissionId: "tasks.update",
       risk: "write",
@@ -770,6 +649,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.breakDown",
+      actionLabel: taskApprovalActions.breakDown.label,
+      approvalPresentation: taskApprovalPresentation("breakDown"),
       description: "Break a task into ordered subtasks.",
       permissionId: "tasks.update",
       risk: "write",
@@ -782,6 +663,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.addActivity",
+      actionLabel: taskApprovalActions.addActivity.label,
+      approvalPresentation: taskApprovalPresentation("addActivity"),
       description: "Add a note or activity entry to a task.",
       permissionId: "tasks.update",
       risk: "write",
@@ -794,6 +677,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.assignTag",
+      actionLabel: taskApprovalActions.assignTag.label,
+      approvalPresentation: taskApprovalPresentation("assignTag"),
       description: "Assign a tag to a task.",
       permissionId: "tasks.update",
       risk: "write",
@@ -806,6 +691,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.unassignTag",
+      actionLabel: taskApprovalActions.unassignTag.label,
+      approvalPresentation: taskApprovalPresentation("unassignTag"),
       description: "Remove a tag from a task.",
       permissionId: "tasks.update",
       risk: "write",
@@ -818,6 +705,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.createList",
+      actionLabel: taskApprovalActions.createList.label,
+      approvalPresentation: taskApprovalPresentation("createList"),
       description: "Create a task list owned by the active actor.",
       permissionId: "tasks.create",
       risk: "write",
@@ -831,6 +720,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.renameList",
+      actionLabel: taskApprovalActions.renameList.label,
+      approvalPresentation: taskApprovalPresentation("renameList"),
       description: "Rename a task list owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
@@ -844,6 +735,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.createTag",
+      actionLabel: taskApprovalActions.createTag.label,
+      approvalPresentation: taskApprovalPresentation("createTag"),
       description: "Create a tag in a task list owned by the active actor.",
       permissionId: "tasks.create",
       risk: "write",
@@ -857,6 +750,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.renameTag",
+      actionLabel: taskApprovalActions.renameTag.label,
+      approvalPresentation: taskApprovalPresentation("renameTag"),
       description: "Rename a tag owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
@@ -870,6 +765,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.deleteList",
+      actionLabel: taskApprovalActions.deleteList.label,
+      approvalPresentation: taskApprovalPresentation("deleteList"),
       description: "Delete a task list owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",
@@ -891,6 +788,8 @@ export const tasksModuleManifest = {
     },
     {
       name: "tasks.deleteTag",
+      actionLabel: taskApprovalActions.deleteTag.label,
+      approvalPresentation: taskApprovalPresentation("deleteTag"),
       description: "Delete a task tag owned by the active actor.",
       permissionId: "tasks.update",
       risk: "write",

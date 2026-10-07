@@ -154,7 +154,7 @@ function jobStatus(state: "pending" | "failed" | "not_found", runId: string | nu
   };
 }
 
-async function resolveOwnedDefinition(
+export async function resolveOwnedDefinition(
   scopedDb: DataContextDb,
   input: ToolInput,
   actorUserId: string

@@ -10,6 +10,7 @@ import type {
 
 import {
   canonicalAppPath,
+  presentApprovalFields,
   HttpError,
   type RouteCatalog,
   type RouteCatalogHolder,
@@ -73,6 +74,8 @@ export class AppActionRefusedError extends HttpError {
 const METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
 function actionInput(input: Record<string, unknown>): AppActionCallInput | null {
+  if (Object.keys(input).some((key) => !["method", "path", "query", "body"].includes(key)))
+    return null;
   if (typeof input.method !== "string" || !METHODS.has(input.method)) return null;
   if (typeof input.path !== "string" || canonicalAppPath(input.path) === null) return null;
   if (
@@ -84,27 +87,6 @@ function actionInput(input: Record<string, unknown>): AppActionCallInput | null 
   )
     return null;
   return input as unknown as AppActionCallInput;
-}
-
-/** Exact JSON values are shown as text; never truncate a value the person is approving. */
-function callFields(input: AppActionCallInput) {
-  const fields = [
-    { label: "Method", value: input.method },
-    { label: "Path", value: input.path }
-  ];
-  for (const [key, value] of Object.entries(input.query ?? {})) {
-    fields.push({ label: `Query: ${key}`, value: JSON.stringify(value) });
-  }
-  if (input.body !== undefined) {
-    if (input.body !== null && typeof input.body === "object" && !Array.isArray(input.body)) {
-      for (const [key, value] of Object.entries(input.body)) {
-        fields.push({ label: `Body: ${key}`, value: JSON.stringify(value) });
-      }
-    } else {
-      fields.push({ label: "Body", value: JSON.stringify(input.body) });
-    }
-  }
-  return fields;
 }
 
 /** Resolve before policy planning, target disclosure, capability binding or grant minting. */
@@ -125,9 +107,8 @@ export function createAppActionResolver(deps: {
     if (policy.access === "blocked") {
       return { kind: "refuse", reason: "blocked", category: policy.blockedBecause };
     }
-    const module = (await deps.resolveActiveModules(ctx.actorUserId)).find(
-      (manifest) => manifest.id === route.moduleId
-    );
+    const modules = await deps.resolveActiveModules(ctx.actorUserId);
+    const module = modules.find((manifest) => manifest.id === route.moduleId);
     if (!module) return { kind: "refuse", reason: "unknown_route" };
     // A dedicated executor must not bypass a malformed route consent declaration.
     if (
@@ -139,6 +120,8 @@ export function createAppActionResolver(deps: {
     // The generic entry point must share the same atomic version-bound deletion as
     // memory.forget, rather than injecting the unversioned browser DELETE route.
     if (policy.coveredBy === "memory.forget") {
+      if (!presentApprovalFields(input.body, {}) || Object.keys(input.query ?? {}).length > 0)
+        return { kind: "refuse", reason: "not_ready" };
       return deps.memoryForgetResolver
         ? deps.memoryForgetResolver({ factId: params.id }, ctx)
         : { kind: "refuse", reason: "not_ready" };
@@ -158,22 +141,49 @@ export function createAppActionResolver(deps: {
       }
       const target = policy.target ? await policy.target(scopedDb, params) : null;
       if (policy.target && target === null) return { kind: "refuse", reason: "unknown_route" };
+      const label = typeof target === "object" && target ? target.label : target;
+      const presented = policy.presentation
+        ? await policy.presentation(
+            scopedDb,
+            {
+              params,
+              query: input.query,
+              body: input.body,
+              target: label,
+              modules: modules.map((entry) => ({
+                id: entry.id,
+                name: entry.name,
+                notificationsSupported: entry.notifications?.supported === true
+              }))
+            },
+            ctx
+          )
+        : null;
+      const complete =
+        presented &&
+        presented.target.trim() &&
+        presented.fields.every((field) => field.label.trim() && typeof field.value === "string");
       return {
         kind: "proceed",
         risk,
         externalContent: policy.content === "outside",
-        forceConfirm: risk === "destructive",
+        disclosureExternalContent:
+          Boolean(policy.target || policy.presentation) &&
+          (presented?.content ?? policy.presentationContent) !== "user_authored",
+        forceConfirm: risk === "destructive" || (risk !== "read" && !complete),
         confirmWhenTainted: policy.outbound === true,
         summary: policy.title ?? `Read ${route.moduleId}`,
-        ...(typeof target === "object" && target ? { targetVersion: target.version } : {}),
-        details: {
-          target: typeof target === "object" && target ? target.label : target,
-          // Memory cards identify targets by their resolved text, not routing IDs.
-          // The full frozen input remains bound to the execution capability.
-          fields: callFields(input).filter(
-            (field) => !(route.moduleId === "memory" && target !== null && field.label === "Path")
-          )
-        },
+        ...((typeof target === "object" && target) || presented?.version
+          ? {
+              targetVersion: JSON.stringify([
+                typeof target === "object" && target ? target.version : null,
+                presented?.version ?? null
+              ])
+            }
+          : {}),
+        details: complete
+          ? { presentation: "human", target: presented.target, fields: presented.fields }
+          : { target: null, fields: [] },
         affectsModules: risk === "read" ? [] : [route.moduleId]
       };
     });

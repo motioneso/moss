@@ -31,6 +31,12 @@ describe("ordinary module approval titles", () => {
     const tool = admissionTool(example.name, {
       risk: "destructive",
       summarize,
+      actionLabel:
+        example.name === "calendar.deleteEvent" ? "Delete calendar event" : "Move calendar event",
+      approvalPresentation: async () => ({
+        target: example.input.displayTitle,
+        fields: [{ label: "When", value: example.input.displayWhen }]
+      }),
       inputSchema: {
         type: "object",
         properties: { displayTitle: { type: "string" }, displayWhen: { type: "string" } }
@@ -43,7 +49,8 @@ describe("ordinary module approval titles", () => {
     expect(request?.kind).toBe("action_request");
     if (request?.kind !== "action_request") throw new Error("Expected an approval card");
     expect(request.summary).toContain(`**"${example.input.displayTitle}"**`);
-    expect(request.outcomeTitle).toContain(example.title);
+    expect(request.outcomeTitle).toBe(tool.actionLabel);
+    expect(request.details?.target).toBe(example.input.displayTitle);
     expect(request.outcomeTitle).not.toContain("**");
     summarize.mockReturnValue("A later summary must not replace the approved title");
     h.confirmations.resolve("action-1", "confirmed");
@@ -67,6 +74,8 @@ describe("ordinary module approval titles", () => {
     const execute = vi.fn(async () => ({ data: { changed: true } }));
     const tool = admissionTool("calendar.renameMeeting", {
       risk: "destructive",
+      actionLabel: "Rename meeting",
+      approvalPresentation: async () => ({ target: "Your meeting", fields: [] }),
       summarize,
       execute
     });
@@ -83,13 +92,13 @@ describe("ordinary module approval titles", () => {
         kind: "action_request",
         actionRequestId: "action-1",
         summary: "Rename your morning meeting",
-        outcomeTitle: "Rename your morning meeting"
+        outcomeTitle: "Rename meeting"
       },
       {
         kind: "action_request",
         actionRequestId: "action-2",
         summary: "Rename your afternoon meeting",
-        outcomeTitle: "Rename your afternoon meeting"
+        outcomeTitle: "Rename meeting"
       }
     ]);
 
@@ -105,14 +114,14 @@ describe("ordinary module approval titles", () => {
       {
         kind: "action_result",
         actionRequestId: "action-1",
-        summary: "Rename your morning meeting",
+        summary: "Rename meeting",
         outcome: "executed",
         decidedBy: "person"
       },
       {
         kind: "action_result",
         actionRequestId: "action-2",
-        summary: "Rename your afternoon meeting",
+        summary: "Rename meeting",
         outcome: "denied",
         decidedBy: "person",
         reason: "You declined this action."
@@ -125,6 +134,7 @@ describe("ordinary module approval titles", () => {
   it("uses an explicit human action label without requiring a summarize hook", async () => {
     const tool = admissionTool("calendar.renameMeeting", {
       risk: "destructive",
+      approvalPresentation: async () => ({ target: "Your meeting", fields: [] }),
       actionLabel: "Rename your meeting"
     });
     const h = admissionFixture([tool]);
@@ -137,6 +147,7 @@ describe("ordinary module approval titles", () => {
   it("uses an explicit plain label when the summary contains technical disclosure", async () => {
     const tool = admissionTool("notes.edit", {
       risk: "destructive",
+      approvalPresentation: async () => ({ target: "plans.md", fields: [] }),
       actionLabel: "Edit note",
       summarize: () => "Edit note projects/plans.md."
     });
@@ -159,21 +170,21 @@ describe("ordinary module approval titles", () => {
     "Update https://example.test/calendar",
     "Run rm -rf",
     "Move **your meeting"
-  ])("omits unsuitable outcome title %s without changing pending disclosure", async (summary) => {
+  ])("refuses a fresh card with unsuitable title and no readable contract %s", async (summary) => {
     const tool = admissionTool("calendar.renameMeeting", {
       risk: "destructive",
+      actionLabel: undefined,
+      approvalPresentation: undefined,
       ...(summary === undefined ? {} : { summarize: () => summary })
     });
     const h = admissionFixture([tool]);
-    const pending = h.gateway.callTool(h.token, tool.name, {});
-    await rejectAdmissionCard(h, pending);
-    expect(h.records[0]).toMatchObject({
-      kind: "action_request",
-      summary: summary ?? tool.name
+    expect(await h.gateway.callTool(h.token, tool.name, {})).toMatchObject({
+      ok: false,
+      denied: true,
+      reason: expect.stringContaining("approval_unavailable")
     });
-    expect(h.records[0]).not.toHaveProperty("outcomeTitle");
-    expect(h.records[1]).not.toHaveProperty("summary");
-    expect(h.records[1]).toMatchObject({ outcome: "denied", decidedBy: "person" });
+    expect(h.records).toEqual([]);
+    expect(h.createPending).not.toHaveBeenCalled();
     expect(tool.execute).not.toHaveBeenCalled();
   });
 });

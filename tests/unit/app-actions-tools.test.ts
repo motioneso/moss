@@ -396,7 +396,15 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
       )
     ).toMatchObject({
       kind: "proceed",
-      details: { fields: expect.arrayContaining([{ label: "Body: unit", value: '"metric"' }]) }
+      details: {
+        presentation: "human",
+        target: "Weather",
+        fields: [
+          { label: "Temperature", value: "Celsius" },
+          { label: "Wind speed", value: "Kilometres per hour" },
+          { label: "Rainfall", value: "Millimetres" }
+        ]
+      }
     });
     expect(h.events).toContainEqual(
       expect.objectContaining({
@@ -413,7 +421,7 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
     const response = await h.call({
       method: "PUT",
       path: "/api/me/weather-unit",
-      body: { unit: "invalid" }
+      body: { unit: "metric" }
     });
     expect(response).toMatchObject({ ok: true, structuredData: { ok: false, status: 400 } });
     expect(h.events).toContainEqual(
@@ -456,7 +464,11 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
 
   it("rechecks consent after approval rather than using the pre-card decision", async () => {
     const h = harness({ autoApprove: false, forceConfirm: true });
-    const pending = h.call({ method: "PATCH", path: "/api/wellness/checkins/one", body: {} });
+    const pending = h.call({
+      method: "POST",
+      path: "/api/wellness/checkins",
+      body: { feelingCore: "happy" }
+    });
     await vi.waitFor(() =>
       expect(h.events.some((event) => event.kind === "action_request")).toBe(true)
     );

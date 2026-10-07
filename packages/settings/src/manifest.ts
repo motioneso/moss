@@ -1,6 +1,27 @@
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
+import {
+  localeRoutePresentation,
+  quietRoutePresentation,
+  modeRoutePresentation,
+  weatherUnitPresentation,
+  weatherLocationPresentation,
+  weatherSearchPresentation,
+  weatherReversePresentation,
+  deleteThemePresentation,
+  activeThemePresentation,
+  saveThemePresentation,
+  chatRetentionPresentation,
+  themeModePresentation,
+  timezonePresentation,
+  regionPresentation,
+  quietHoursPresentation,
+  weatherPlacePresentation,
+  notificationRoutePresentation,
+  notificationToolPresentation,
+  undoSettingsPresentation
+} from "./action-presentations.js";
 import { customThemeTarget } from "./chat-targets.js";
 import {
   appCallActionExecute,
@@ -65,6 +86,7 @@ export const SETTINGS_MODULE_ID = "settings";
 export const settingsModuleManifest: MossModuleManifest = {
   id: SETTINGS_MODULE_ID,
   name: "Settings",
+  chatDefaults: { presentationContent: "user_authored" },
   version: "0.0.0",
   publisher: "Moss",
   lifecycle: "required",
@@ -135,6 +157,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       method: "PUT",
       path: "/api/me/locale",
       chat: {
+        presentation: localeRoutePresentation,
         access: "write",
         title: "Change your language, region and time zone",
         content: "user_authored"
@@ -151,6 +174,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       method: "PUT",
       path: "/api/me/quiet-hours",
       chat: {
+        presentation: quietRoutePresentation,
         access: "write",
         title: "Change your quiet hours",
         content: "user_authored",
@@ -170,6 +194,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       chat: {
         access: "write",
         title: "Turn a module's notifications on or off",
+        presentation: notificationRoutePresentation,
         content: "user_authored",
         coveredBy: "settings.notificationPreference.setEnabled"
       },
@@ -197,6 +222,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       method: "PUT",
       path: "/api/me/weather-location",
       chat: {
+        presentation: weatherLocationPresentation,
         access: "write",
         title: "Change your weather location",
         content: "user_authored",
@@ -207,13 +233,23 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/me/weather-location/search",
-      chat: { access: "read", outbound: true },
+      chat: {
+        access: "read",
+        outbound: true,
+        title: "Find weather location",
+        presentation: weatherSearchPresentation
+      },
       permissionId: "settings.view"
     },
     {
       method: "GET",
       path: "/api/me/weather-location/reverse",
-      chat: { access: "read", outbound: true },
+      chat: {
+        access: "read",
+        outbound: true,
+        title: "Find weather location",
+        presentation: weatherReversePresentation
+      },
       permissionId: "settings.view"
     },
     {
@@ -225,7 +261,12 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "PUT",
       path: "/api/me/weather-unit",
-      chat: { access: "write", title: "Change your weather units", content: "user_authored" },
+      chat: {
+        presentation: weatherUnitPresentation,
+        access: "write",
+        title: "Change your weather units",
+        content: "user_authored"
+      },
       permissionId: "settings.write"
     },
     {
@@ -237,13 +278,19 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "PUT",
       path: "/api/me/themes/active",
-      chat: { access: "write", title: "Switch your theme", content: "user_authored" },
+      chat: {
+        presentation: activeThemePresentation,
+        access: "write",
+        title: "Switch your theme",
+        content: "user_authored"
+      },
       permissionId: "settings.write"
     },
     {
       method: "PUT",
       path: "/api/me/themes/mode",
       chat: {
+        presentation: modeRoutePresentation,
         access: "write",
         title: "Switch between light and dark mode",
         content: "user_authored",
@@ -254,7 +301,12 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "PUT",
       path: "/api/me/themes/:id",
-      chat: { access: "write", title: "Save a custom theme", content: "user_authored" },
+      chat: {
+        presentation: saveThemePresentation,
+        access: "write",
+        title: "Save a custom theme",
+        content: "user_authored"
+      },
       permissionId: "settings.write"
     },
     {
@@ -264,7 +316,8 @@ export const settingsModuleManifest: MossModuleManifest = {
         access: "destructive",
         title: "Delete a custom theme",
         content: "user_authored",
-        target: customThemeTarget
+        target: customThemeTarget,
+        presentation: deleteThemePresentation
       },
       permissionId: "settings.write"
     },
@@ -556,13 +609,18 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/me/chat-archive",
-      chat: { access: "read", content: "user_authored" },
+      chat: { presentation: chatRetentionPresentation, access: "read", content: "user_authored" },
       permissionId: "settings.view"
     },
     {
       method: "PUT",
       path: "/api/me/chat-archive",
-      chat: { access: "write", title: "Change how long chats are kept", content: "user_authored" },
+      chat: {
+        presentation: chatRetentionPresentation,
+        access: "write",
+        title: "Change how long chats are kept",
+        content: "user_authored"
+      },
       permissionId: "settings.write"
     }
   ],
@@ -782,6 +840,9 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       name: "settings.themeMode.set",
+      actionLabel: "Change appearance",
+      approvalPresentation: themeModePresentation,
+      approvalContent: "user_authored",
       description: "Set the app's color mode (light or dark) for this user.",
       permissionId: "settings.write",
       risk: "write",
@@ -796,6 +857,9 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       name: "settings.locale.setTimezone",
+      actionLabel: "Change time zone",
+      approvalPresentation: timezonePresentation,
+      approvalContent: "user_authored",
       description: "Set the user's IANA time zone.",
       permissionId: "settings.write",
       risk: "write",
@@ -809,6 +873,9 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       name: "settings.locale.setRegionAndDateFormat",
+      actionLabel: "Change language and time format",
+      approvalPresentation: regionPresentation,
+      approvalContent: "user_authored",
       description: "Set the user's language/region and date format (12h or 24h).",
       permissionId: "settings.write",
       risk: "write",
@@ -822,6 +889,9 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       name: "settings.quietHours.set",
+      actionLabel: "Change quiet hours",
+      approvalPresentation: quietHoursPresentation,
+      approvalContent: "user_authored",
       description: "Set the user's quiet hours (enabled, start/end time, and time zone).",
       permissionId: "settings.write",
       risk: "write",
@@ -835,6 +905,9 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       name: "settings.weatherLocation.set",
+      actionLabel: "Change weather location",
+      approvalPresentation: weatherPlacePresentation,
+      approvalContent: "user_authored",
       description: "Save the user's weather location by resolving a place name.",
       permissionId: "settings.write",
       risk: "write",
@@ -847,6 +920,9 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       name: "settings.notificationPreference.setEnabled",
+      actionLabel: "Change notifications",
+      approvalPresentation: notificationToolPresentation,
+      approvalContent: "user_authored",
       description:
         "Turn a module's notifications on or off for this user, optionally clearing its unread count.",
       permissionId: "settings.write",
@@ -862,6 +938,9 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       name: "settings.undoLast",
+      actionLabel: "Undo last settings change",
+      approvalPresentation: undoSettingsPresentation,
+      approvalContent: "user_authored",
       description:
         'Undo the user\'s most recent settings preference change in this conversation (e.g. "change that back"). No-op if nothing tracked, or if the setting changed again since. Only remembers changes made earlier in this same chat session since the app last restarted — it does not track changes made in the settings UI, in a different conversation, or before a restart.',
       permissionId: "settings.write",

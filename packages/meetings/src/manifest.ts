@@ -1,4 +1,12 @@
 import { meetingRecordTarget } from "./chat-targets.js";
+import {
+  createMeetingPresentation,
+  deleteMeetingPresentation,
+  meetingNotesPresentation,
+  meetingPreferencesPresentation,
+  meetingSummaryPresentation,
+  meetingTranscriptPresentation
+} from "./action-presentations.js";
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import { collectMeetingsExportSection } from "./data-lifecycle.js";
@@ -115,7 +123,11 @@ export const meetingsModuleManifest = {
     {
       method: "PUT",
       path: "/api/meetings/records/:id/outputs",
-      chat: { access: "write", title: "Edit a meeting summary" },
+      chat: {
+        access: "write",
+        title: "Edit a meeting summary",
+        presentation: meetingSummaryPresentation
+      },
       permissionId: "meetings.write"
     },
     {
@@ -130,7 +142,8 @@ export const meetingsModuleManifest = {
       chat: {
         access: "write",
         title: "Add or correct retained meeting transcript text",
-        content: "user_authored"
+        content: "user_authored",
+        presentation: meetingTranscriptPresentation
       },
       permissionId: "meetings.write"
     },
@@ -158,7 +171,8 @@ export const meetingsModuleManifest = {
       chat: {
         access: "write",
         title: "Change your default meeting capture source",
-        content: "user_authored"
+        content: "user_authored",
+        presentation: meetingPreferencesPresentation
       },
       permissionId: "meetings.write"
     },
@@ -169,7 +183,8 @@ export const meetingsModuleManifest = {
         access: "destructive",
         title: "Delete meeting, retained records and linked Moss chats",
         content: "user_authored",
-        target: meetingRecordTarget
+        target: meetingRecordTarget,
+        presentation: deleteMeetingPresentation
       },
       permissionId: "meetings.write"
     },
@@ -188,13 +203,22 @@ export const meetingsModuleManifest = {
     {
       method: "POST",
       path: "/api/meetings/records",
-      chat: { access: "write", title: "Create a meeting draft", content: "user_authored" },
+      chat: {
+        access: "write",
+        title: "Create a meeting draft",
+        content: "user_authored",
+        presentation: createMeetingPresentation
+      },
       permissionId: "meetings.write"
     },
     {
       method: "PUT",
       path: "/api/meetings/records/:id/notes",
-      chat: { access: "write", title: "Save your meeting notes" },
+      chat: {
+        access: "write",
+        title: "Save your meeting notes",
+        presentation: meetingNotesPresentation
+      },
       permissionId: "meetings.write"
     }
   ],
@@ -202,7 +226,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.chat_app_actions",
       description:
-        "App actions read retained meetings and save drafts, notes, transcript corrections and summaries. Generation and export stay in Meetings; deleting a meeting and linked Moss chats asks first."
+        "App actions read meetings and save drafts, notes, transcripts and summaries. Approval cards show full targets, content and evidence. Generation and export stay in Meetings; deleting a meeting and linked Moss chats asks first."
     },
     {
       id: "meetings.account_export",

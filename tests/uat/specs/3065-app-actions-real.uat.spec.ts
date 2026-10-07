@@ -37,7 +37,7 @@ if (process.env.MOSS_APP_ACTIONS_REQUIRE_REAL_PROOF === "1" && !REAL_CHAT_CONFIG
       "a skipped spec must not make this requested real run green."
   );
 }
-const NOTICE = "This chat has outside or unverified context, so changes need your approval.";
+const NOTICE = "Moss read something from outside your account before asking this.";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VAULT_ROOT = `/data/vaults/${UAT_ADMIN_ID}`;
 const TURN_TIMEOUT = 180_000;
@@ -208,10 +208,9 @@ async function approveThemeChange(
   await expect(card).toHaveCount(1, { timeout: TURN_TIMEOUT });
   await expect(card.getByText(NOTICE, { exact: true })).toBeVisible();
   expect(await cardTool(card)).toBe(tool);
-  if (tool === "app.callAction") {
-    await expect(card.getByText("/api/me/themes/mode", { exact: true })).toBeVisible();
-    await expect(card.getByText(JSON.stringify(mode), { exact: true })).toBeVisible();
-  }
+  await expect(card.getByText(mode === "dark" ? "Dark" : "Light", { exact: true })).toBeVisible();
+  await expect(card).not.toContainText("/api/me/themes/mode");
+  await expect(card).not.toContainText("app.callAction");
   expect((await themes(page)).mode, "must remain unchanged before approval").toBe(before.mode);
   await expect(page.locator("html")).toHaveAttribute("data-color-mode", before.mode);
   await card.getByRole("button", { name: "Approve", exact: true }).click();
@@ -458,7 +457,7 @@ test.describe("#3065 real-model app approval paths (owner opt-in)", () => {
         const card = pendingCard(drawer);
         await expect(card).toHaveCount(1, { timeout: TURN_TIMEOUT });
         expect(await cardTool(card)).toBe("app.callAction");
-        await expect(card.locator("q")).toHaveText(theme.name);
+        await expect(card.locator(".action-request-target")).toHaveText(theme.name);
         await expect(card.getByText(NOTICE, { exact: true })).toBeVisible();
         expect((await themes(page)).custom.some((item) => item.id === theme.id)).toBe(true);
         await card.getByRole("button", { name: "Approve", exact: true }).click();

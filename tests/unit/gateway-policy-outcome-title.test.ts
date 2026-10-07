@@ -46,6 +46,8 @@ describe("rate-limit refusal titles", () => {
       vi.spyOn(AutoRunRateLimiter.prototype, "consume").mockReturnValue(false);
       const tool = admissionTool("calendar.renameMeeting", {
         risk: "write",
+        actionLabel: undefined,
+        approvalPresentation: undefined,
         ...(summary ? { summarize: () => summary } : {})
       });
       const h = admissionFixture([tool]);

@@ -15,7 +15,7 @@ export type PreparedToolCall =
   | { readonly failure: GatewayToolResponse; readonly reason: GatewayDeclineReason };
 
 /** Snapshot per-call inputs before resolver lookups, policy planning and approval holds. */
-function freezeSnapshot<T>(value: T): T {
+export function freezeSnapshot<T>(value: T): T {
   const snapshot: T = structuredClone(value);
   const seen = new WeakSet<object>();
   const freeze = (entry: unknown): void => {
@@ -40,7 +40,7 @@ export async function prepareToolCall(
   try {
     input = await validateToolInput(
       found.tool.inputSchema,
-      resolver ? freezeSnapshot(rawInput) : rawInput,
+      resolver ? freezeSnapshot(rawInput) : structuredClone(rawInput),
       { external: found.tool.isExternal !== false, toolName: found.tool.name }
     );
   } catch (error) {

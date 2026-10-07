@@ -26,6 +26,18 @@ import {
   memoryFactTarget,
   memoryFactResolutionTarget
 } from "./chat-targets.js";
+import {
+  memoryPinPresentation,
+  memorySupersedePresentation,
+  memoryDeleteEntityPresentation,
+  memoryDatesPresentation,
+  memoryRejectPresentation,
+  memoryAcceptPresentation,
+  memoryEditEntityPresentation,
+  memoryCreateEntityPresentation,
+  memoryRememberPresentation,
+  memoryRememberRoutePresentation
+} from "./action-presentations.js";
 import { memoryForgetExecute, memoryRecallExecute, memoryRememberExecute } from "./graph-tools.js";
 
 const memoryRememberToolInputSchema = {
@@ -135,7 +147,12 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       method: "POST",
       path: "/api/memory/graph/entities",
-      chat: { access: "write", title: "Add memory entity", content: "outside" },
+      chat: {
+        presentation: memoryCreateEntityPresentation,
+        access: "write",
+        title: "Add memory entity",
+        content: "outside"
+      },
       requestSchema: postMemoryGraphEntityRouteSchema.body,
       permissionId: "memory.manage"
     },
@@ -146,7 +163,8 @@ export const memoryModuleManifest: MossModuleManifest = {
         access: "write",
         title: "Remember a fact",
         content: "outside",
-        coveredBy: "memory.remember"
+        coveredBy: "memory.remember",
+        presentation: memoryRememberRoutePresentation
       },
       requestSchema: postMemoryGraphFactRouteSchema.body,
       permissionId: "memory.manage"
@@ -154,7 +172,13 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       method: "POST",
       path: "/api/memory/graph/facts/:id/pin",
-      chat: { access: "write", title: "Pin or unpin memory fact", content: "user_authored" },
+      chat: {
+        target: memoryFactTarget,
+        presentation: memoryPinPresentation,
+        access: "write",
+        title: "Pin or unpin memory fact",
+        content: "user_authored"
+      },
       requestSchema: postMemoryGraphPinRouteSchema.body,
       permissionId: "memory.manage"
     },
@@ -215,6 +239,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       chat: {
         access: "destructive",
         title: "Supersede memory fact",
+        presentation: memorySupersedePresentation,
         content: "outside",
         target: memoryFactTarget
       },
@@ -255,6 +280,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       chat: {
         access: "destructive",
         title: "Accept memory suggestion",
+        presentation: memoryAcceptPresentation,
         content: "user_authored",
         target: memoryCandidateTarget
       },
@@ -267,6 +293,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       chat: {
         access: "write",
         title: "Reject memory suggestion",
+        presentation: memoryRejectPresentation,
         content: "user_authored",
         target: memoryCandidateTarget
       },
@@ -279,6 +306,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       chat: {
         access: "write",
         title: "Suppress memory suggestion",
+        presentation: memoryRejectPresentation,
         content: "user_authored",
         target: memoryCandidateTarget
       },
@@ -291,6 +319,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       chat: {
         access: "destructive",
         title: "Change memory dates and recall visibility",
+        presentation: memoryDatesPresentation,
         content: "outside",
         target: memoryFactTarget
       },
@@ -300,7 +329,13 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       method: "PATCH",
       path: "/api/memory/graph/entities/:id",
-      chat: { access: "write", title: "Update memory entity", content: "user_authored" },
+      chat: {
+        target: memoryEntityTarget,
+        presentation: memoryEditEntityPresentation,
+        access: "write",
+        title: "Update memory entity",
+        content: "user_authored"
+      },
       requestSchema: patchMemoryEntityDashboardRouteSchema.body,
       permissionId: "memory.manage"
     },
@@ -310,6 +345,7 @@ export const memoryModuleManifest: MossModuleManifest = {
       chat: {
         access: "destructive",
         title: "Delete memory entity",
+        presentation: memoryDeleteEntityPresentation,
         content: "outside",
         target: memoryEntityTarget
       },
@@ -345,6 +381,8 @@ export const memoryModuleManifest: MossModuleManifest = {
     },
     {
       name: "memory.remember",
+      actionLabel: "Remember a fact",
+      approvalPresentation: memoryRememberPresentation,
       description: "Create a source-backed graph memory fact for the active actor.",
       permissionId: "memory.manage",
       actionFamilyId: "memory_management",

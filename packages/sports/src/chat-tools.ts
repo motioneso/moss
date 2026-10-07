@@ -288,3 +288,14 @@ export const summarizeSportsRetrySource: ToolSummarize = (input) =>
 
 export const summarizeSportsRemoveSource: ToolSummarize = (input) =>
   `Remove sports source ${stringField(input, "sourceId") ?? "unknown id"}`;
+
+/** Read-only approval helpers use the same catalog and provider identity as execution. */
+export async function sportsApprovalTeams(competitionKey: string) {
+  return requireService().getLeagueTeams(competitionKey);
+}
+export async function sportsApprovalStandings(competitionKey: string) {
+  return requireService().getStandings(competitionKey);
+}
+export function sportsApprovalPreview(ownerUserId: string, confirmationId: string) {
+  return requireSourceService().approvalPreview(ownerUserId, confirmationId);
+}
