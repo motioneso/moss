@@ -38,8 +38,12 @@ describe("meetings composition", () => {
       }
     ]);
     expect(questions.description).not.toContain("Ask Moss");
+    expect(description("meetings.automatic_summary")).not.toContain("summarizeOnStop");
+    expect(description("meetings.draft_records")).toContain(
+      "Untitled meeting has the same title in its page, list and chat chip."
+    );
     expect(description("meetings.automatic_summary")).toBe(
-      "Automatic summaries default on. Turn off Summarize automatically after Stop in Settings → Meetings (summarizeOnStop=false). Only this automatic path renames Untitled meeting. Rewrite summary remains available."
+      "Automatic summaries default on. Turn off Summarize automatically after Stop in Settings → Meetings. Only automatic summaries rename Untitled meeting. Rewrite summary remains available."
     );
   });
 

@@ -109,7 +109,8 @@ surfaces and APIs; simplifying this Settings screen does not remove that protect
 The four states do not delete existing history or post-meeting features.
 
 - The Meetings list retains search, week grouping, title, short summary and recorded duration.
-- Titles edit inline and automatic summaries may rename an untouched title.
+- Titles edit inline and automatic summaries may rename an untouched title. An existing
+  untitled meeting is labelled Untitled meeting in its page heading, list and chat chip.
 - Transcript labels, timestamps, source attribution and evidence navigation remain.
 - Notes autosave with conflict recovery; deleting a meeting retains confirmation.
 - After Stop, Summary remains beside Notes; task creation requires the owner's review.
@@ -122,7 +123,9 @@ The four states do not delete existing history or post-meeting features.
   switching it off saves `summarizeOnStop=false` without resetting other preferences.
   Only the automatic path renames an untouched Untitled meeting; manual Rewrite preserves its title.
 - The ordinary chat drawer can use the open meeting's transcript and notes, including notes-only
-  meetings. Its context chip is removable; timestamp citations scroll to the transcript.
+  meetings. Its context chip is removable; timestamp citations scroll to the transcript. Failed
+  questions stay above their error in the open chat. Access checks remain live; title refreshes
+  do not refetch the full meeting record on every access poll.
 - Preserve useful persistent recording navigation and recovery controls away from the meeting.
 
 Use `@moss/ui` components and semantic Moss tokens. Headings use Archivo; no serif. Module CSS owns

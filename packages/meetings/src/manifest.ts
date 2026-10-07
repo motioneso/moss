@@ -327,7 +327,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.automatic_summary",
       description:
-        "Automatic summaries default on. Turn off Summarize automatically after Stop in Settings → Meetings (summarizeOnStop=false). Only this automatic path renames Untitled meeting. Rewrite summary remains available."
+        "Automatic summaries default on. Turn off Summarize automatically after Stop in Settings → Meetings. Only automatic summaries rename Untitled meeting. Rewrite summary remains available."
     },
     {
       id: "transcribe.meeting",
@@ -720,7 +720,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.draft_records",
       description:
-        "Rename meetings inline; Notes and Summary sit beside the transcript. Overflow offers search, rewrite, versions, vault export, Markdown copy and deletion. Add to Tasks is owner review; possible duplicates appear inline.",
+        "Untitled meeting has the same title in its page, list and chat chip. Rename inline; Notes and Summary sit beside the transcript. Overflow has search, rewrite, versions, export, copy and deletion. Add to Tasks requires owner review.",
       errors: [
         {
           code: "meeting_request_conflict",
