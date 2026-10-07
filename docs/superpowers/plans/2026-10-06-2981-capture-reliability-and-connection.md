@@ -4,23 +4,16 @@ Approved product direction: 6 October 2026. Implementation issue: [#2981](https:
 Continue draft [PR #3056](https://github.com/motioneso/moss/pull/3056) from
 `28a5a6beb4bfb728566682fb59885ddc1686528e`; do not merge or deploy.
 The [specification](../specs/2026-10-03-meeting-companion.md) governs this repair.
-The [6 October review](https://github.com/motioneso/moss/pull/3056#issuecomment-6014073490)
-clarifies that account-scoped versioned notice belongs in #3056, before the minimal-screen redesign.
 
 ## Outcome and scope
 
 Connect the companion once, shared by its connection UI, Backtrack and Meetings. Thereafter:
-New meeting → remembered named device/microphone/source → Start meeting. Change is available,
-but Prepare and per-meeting device approval are removed. The recording notice is shown once per
-account, stored on the server against its text-policy version, and checked before Start and record/Resume, including command replays. New meetings
-and browsers reuse it; only a notice-version change asks again. The recording grant binds that
-version. Pause, Stop and cancellation never depend on notice acknowledgement. An optional
-title must not delay Start or lose typing. Connection completes in the existing browser tab.
+New meeting → ready transcript-and-notes workspace → explicit Start recording. Fresh accounts use microphone + system audio and the Mac’s OS-default microphone. Audio changes live only in Meetings Settings. Existing exact selections remain scoped. The native app’s existing connect-in-browser flow owns linking; no extra linking wizard is added. An optional title must not delay Start or lose typing.
 
 Keep recording through ordinary jitter, unchanged format notifications, brief network gaps and
 individual transcription failures. Display capture, connectivity and transcription separately.
 Keep local Pause/Stop and a persistent browser recording control available during navigation.
-Remember only explicitly selected sources; missing sources never authorize a broader fallback.
+Honor existing exact saved sources; missing sources never authorize a broader fallback.
 
 Moss may remain on a remote/headless server; the chosen client owns the audio hardware. Windows
 native capture and diarization remain separate unfinished work. No real credentials, OS grants,
@@ -144,8 +137,9 @@ requires explicit Resume. Local Pause/Stop must work even when a web command or 
 
 ### UI and state distribution
 
-Use the existing design system and shared controls: a concise source summary, optional Change,
-one Start, and persistent Recording/Paused/Stopped controls. Show Transcription delayed separately
+Use the approved ready workspace and shared controls: connected Mac, transcript, notes and one
+Start recording action. Audio changes belong only in Meetings Settings. Preserve browser recovery
+controls and the native text-free recording pill. Show Transcription delayed separately
 from actual capture. Freeze the recording duration on acknowledged pause/error or stale status;
 show zero before successful Start. Do not turn authorization age into a recording timer.
 

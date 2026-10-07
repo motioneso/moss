@@ -22,6 +22,7 @@ export const notesModuleSqlMigrationDirectory = fileURLToPath(new URL("../sql", 
 
 export const notesModuleManifest = {
   id: NOTES_MODULE_ID,
+  chatRefreshTokens: ["settings.notesLastSync", "settings.notesSource"],
   name: "Notes",
   version: "0.0.0",
   publisher: "Moss",
@@ -91,6 +92,7 @@ export const notesModuleManifest = {
     {
       method: "POST",
       path: "/api/notes/sync",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: postNotesSyncRouteSchema.response[202],
       permissionId: "notes.sync"
     }
@@ -102,6 +104,7 @@ export const notesModuleManifest = {
         "Search the user's own ingested notes (Obsidian vault) by meaning. Returns matching note excerpts with file path and line range for citation.",
       permissionId: "notes.search",
       risk: "read",
+      content: "outside",
       inputSchema: notesSearchInputSchema,
       outputSchema: notesSearchResponseSchema,
       externalContent: true,
@@ -113,6 +116,7 @@ export const notesModuleManifest = {
       permissionId: "notes.create",
       actionFamilyId: "note_changes",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       safeErrors: true,
@@ -136,6 +140,7 @@ export const notesModuleManifest = {
       permissionId: "notes.edit",
       actionFamilyId: "note_changes",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       safeErrors: true,
@@ -153,6 +158,7 @@ export const notesModuleManifest = {
       permissionId: "notes.delete",
       actionFamilyId: "note_changes",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       safeErrors: true,

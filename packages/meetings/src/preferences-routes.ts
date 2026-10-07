@@ -2,14 +2,17 @@ import type { FastifyInstance } from "fastify";
 import { handleRouteError } from "@moss/module-sdk";
 import {
   meetingCapturePreferencesSchema,
-  parseMeetingCaptureMode,
   parseMeetingRememberedSource,
   type MeetingCapturePreferences
 } from "@moss/shared";
 import { PreferencesRepository } from "@moss/structured-state";
 import type { MeetingRecordRoutesDependencies } from "./routes.js";
-export const MEETING_CAPTURE_DEFAULT_KEY = "meetings.capture.default-mode";
-export const MEETING_CAPTURE_SOURCE_KEY = "meetings.capture.remembered-source";
+import {
+  readMeetingCapturePreferences,
+  MEETING_CAPTURE_DEFAULT_KEY,
+  MEETING_CAPTURE_SOURCE_KEY
+} from "./capture-defaults.js";
+export { MEETING_CAPTURE_DEFAULT_KEY, MEETING_CAPTURE_SOURCE_KEY } from "./capture-defaults.js";
 export function registerMeetingPreferenceRoutes(
   server: FastifyInstance,
   dependencies: MeetingRecordRoutesDependencies
@@ -21,17 +24,9 @@ export function registerMeetingPreferenceRoutes(
     async (request, reply) => {
       try {
         const actor = await dependencies.resolveAccessContext(request);
-        return await dependencies.dataContext.withDataContext(actor, async (db) => {
-          const [mode, source] = await Promise.all([
-            preferences.get(db, MEETING_CAPTURE_DEFAULT_KEY),
-            preferences.get(db, MEETING_CAPTURE_SOURCE_KEY)
-          ]);
-          const rememberedSource = parseMeetingRememberedSource(source);
-          return {
-            defaultCaptureMode: parseMeetingCaptureMode(mode),
-            ...(rememberedSource ? { rememberedSource } : {})
-          };
-        });
+        return await dependencies.dataContext.withDataContext(actor, (db) =>
+          readMeetingCapturePreferences(db, preferences)
+        );
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -48,7 +43,7 @@ export function registerMeetingPreferenceRoutes(
     async (request, reply) => {
       try {
         const actor = await dependencies.resolveAccessContext(request),
-          defaultCaptureMode = request.body.defaultCaptureMode;
+          defaultCaptureMode = request.body.defaultCaptureMode ?? "computer-audio";
         const rememberedSource = parseMeetingRememberedSource(request.body.rememberedSource);
         if (
           request.body.rememberedSource !== undefined &&

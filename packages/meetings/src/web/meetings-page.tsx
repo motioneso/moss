@@ -66,7 +66,7 @@ export function MeetingsPage() {
               : undefined
             : history
               ? "Find a conversation, revisit its notes, or ask Moss what happened."
-              : "Choose your sources, start a meeting, and keep a useful record."
+              : "Open a meeting, then start recording when you’re ready."
         }
         aside={
           <Button

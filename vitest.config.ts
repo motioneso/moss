@@ -442,6 +442,8 @@ export default defineConfig({
       "packages/chat/src/live/*.test.ts",
       "packages/chat/src/*.test.ts",
       "packages/calendar/src/*.test.ts",
+      "packages/settings/src/app-action-tools.test.ts",
+      "packages/ai/src/gateway/per-call-resolver.test.ts",
       "packages/focus-judgment/src/*.test.ts",
       "packages/ai/src/structured/*.test.ts"
     ],

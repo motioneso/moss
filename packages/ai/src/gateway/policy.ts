@@ -30,19 +30,27 @@ export interface AgencyPrefLookup {
  * `sortedSafe` is the connected tool's `runsWithoutAsking` result for this call (#2984, spec 8.3),
  * also computed by the caller. It runs an external tool unless a confirmation override applies,
  * so a first-party outbound tool still confirms.
+ * A composition-owned per-call resolver has already authorized an ordinary app write when
+ * `perCallResolved` is true; it needs no mutable action-family tier. All confirmation floors
+ * above that ordinary-write rule still apply.
  */
 export async function resolvePolicy(
   tool: ModuleAssistantToolManifest,
   moduleId: string,
   confirmOverride: boolean,
   lookup: ActionPolicyLookup,
-  sortedSafe = false
+  sortedSafe = false,
+  perCallResolved = false,
+  conversationTainted = false,
+  confirmWhenTainted = false
 ): Promise<PolicyDecision> {
+  if (conversationTainted && (tool.risk !== "read" || confirmWhenTainted)) return "confirm";
   if (tool.risk === "read") return "run";
   if (tool.risk === "destructive") return "confirm";
   if (sortedSafe && tool.isExternal === true) return confirmOverride ? "confirm" : "run";
   if (tool.risk === "outbound") return "confirm";
   if (confirmOverride) return "confirm";
+  if (perCallResolved) return "run";
 
   const familyId = tool.actionFamilyId;
   if (!familyId) {
@@ -69,16 +77,19 @@ export async function resolvePolicy(
  * could have promoted the tool's family to run automatically (#2418, #2419).
  * Reads off the family's allowed tiers, never the stored tier, and fails closed —
  * destructive tools, outbound tools, missing family, non-auto tool, or an unreadable
- * manifest means the card.
+ * manifest means the card. A server-resolved ordinary app write needs no family promotion;
+ * its route-level authorization has already been checked before reaching this helper.
  */
 export async function familyAllowsAutoRun(
   tool: ModuleAssistantToolManifest,
   moduleId: string,
-  lookup: ActionPolicyLookup
+  lookup: ActionPolicyLookup,
+  perCallResolved = false
 ): Promise<boolean> {
   if (tool.risk === "destructive") return false;
   if (tool.isExternal === true) return true;
   if (tool.risk === "outbound") return false;
+  if (perCallResolved) return true;
   const familyId = tool.actionFamilyId;
   if (!familyId || tool.executionPolicy !== "auto") return false;
   const manifest = await lookup.getFamilyManifest(moduleId, familyId);

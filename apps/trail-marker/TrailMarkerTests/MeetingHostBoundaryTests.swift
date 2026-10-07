@@ -145,7 +145,7 @@ final class MeetingHostBoundaryTests: XCTestCase {
         let device = Device()
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: device] })
         let ready = MeetingNativeReadiness(permissionsGranted: true, processingReady: true,
-            noticeAcknowledged: true, meetingDeviceAuthorized: true)
+            meetingDeviceAuthorized: true)
         try runtime.prepare(selection: .init(microphoneDeviceID: 1, output: nil), readiness: ready, at: 1)
         try runtime.start(readiness: ready, at: 2)
         let host = MeetingCaptureHost(connection: ConnectionRuntime(), runtime: runtime)
@@ -204,7 +204,7 @@ final class MeetingHostBoundaryTests: XCTestCase {
         let device = Device()
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: device] })
         let ready = MeetingNativeReadiness(permissionsGranted: true, processingReady: true,
-            noticeAcknowledged: true, meetingDeviceAuthorized: true)
+            meetingDeviceAuthorized: true)
         try runtime.prepare(selection: .init(microphoneDeviceID: 1, output: nil), readiness: ready, at: 0)
         try runtime.start(readiness: ready, at: 0)
         device.receiver?.receive(hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 8000, sampleAt: { _ in 0.25 })

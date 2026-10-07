@@ -12,13 +12,22 @@ import type {
 
 export const CAPTURE_DEVICE_NAME = "Synthetic capture UAT Mac";
 export const CAPTURE_INVENTORY: MeetingCaptureInventory = {
+  defaultMicrophoneId: "synthetic-device",
   microphones: [
+    {
+      deviceId: "synthetic-other-device",
+      sourceId: "synthetic-other-mic",
+      label: "Unused synthetic microphone"
+    },
     { deviceId: "synthetic-device", sourceId: "synthetic-mic", label: "Generated PCM microphone" }
   ],
   applications: [],
-  computerAudio: { available: false, excludedProcessTreeIds: [] },
+  computerAudio: {
+    available: true,
+    excludedProcessTreeIds: ["synthetic-moss", "synthetic-trail-marker"]
+  },
   microphonePermission: "granted",
-  systemAudioPermission: "unknown"
+  systemAudioPermission: "granted"
 };
 export async function nativePost(
   baseURL: string,

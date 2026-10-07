@@ -16,6 +16,7 @@ describe("ChatGatewayNotifier", () => {
 
     notifier.emit(surfaceSessionKey("u:1", "demo-module"), {
       kind: "action_request",
+      outsideContentNotice: false,
       actionRequestId: "ar_surface",
       toolName: "example.read",
       summary: "Read the value"
@@ -34,6 +35,7 @@ describe("ChatGatewayNotifier", () => {
 
     notifier.emit("u1", {
       kind: "action_request",
+      outsideContentNotice: false,
       actionRequestId: "ar_1",
       toolName: "example.write",
       summary: "Write the value 'hello'"
@@ -58,6 +60,7 @@ describe("ChatGatewayNotifier", () => {
 
     notifier.emit("u1", {
       kind: "action_request",
+      outsideContentNotice: false,
       actionRequestId: "ar_2",
       toolName: "email.draftReply",
       summary: "Draft a reply",
@@ -81,6 +84,7 @@ describe("ChatGatewayNotifier", () => {
 
     notifier.emit("u1", {
       kind: "action_request",
+      outsideContentNotice: false,
       actionRequestId: "ar_3",
       toolName: "example.write",
       summary: "Write the value 'hello'"
@@ -223,5 +227,48 @@ describe("ChatGatewayNotifier", () => {
       TranscriptRecord
     ];
     expect(record.text).toBe("Not changed — Example refused.");
+  });
+});
+
+describe("ChatGatewayNotifier app-action SSE fields", () => {
+  it("carries server details and false outside-content notice unchanged", () => {
+    const manager = makeManager();
+    const details = { target: "Theme <b>name</b>", fields: [{ label: "Name", value: "Evening" }] };
+    new ChatGatewayNotifier(manager).emit("u1", {
+      kind: "action_request",
+      actionRequestId: "app-1",
+      toolName: "app.callAction",
+      summary: "Change theme",
+      details,
+      outsideContentNotice: false
+    });
+    expect(manager.injectRecord).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({
+        kind: "action_request",
+        text: "Approve or deny: Change theme",
+        details,
+        outsideContentNotice: false
+      })
+    );
+  });
+
+  it("carries module refresh identifiers on successful action results", () => {
+    const manager = makeManager();
+    new ChatGatewayNotifier(manager).emit("u1", {
+      kind: "action_result",
+      actionRequestId: "app-1",
+      toolName: "app.callAction",
+      outcome: "executed",
+      affectsModules: ["settings"],
+      affectsQueryKeys: ["settings.themes"]
+    });
+    expect(manager.injectRecord).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({
+        affectsModules: ["settings"],
+        affectsQueryKeys: ["settings.themes"]
+      })
+    );
   });
 });

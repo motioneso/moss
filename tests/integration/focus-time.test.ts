@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   AiRepository,
   AssistantToolGateway,
@@ -29,6 +29,7 @@ import { registerMcpTransportRoute } from "../../packages/chat/src/mcp-transport
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import type { Kysely } from "kysely";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import {
   captureFetch,
@@ -40,11 +41,16 @@ import {
 describe("Group C — calendar.createEvent tool wiring", () => {
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
 
   beforeAll(async () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     dataContext = new DataContextRunner(appDb);
+  });
+
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(dataContext, [ids.userA, ids.userB]);
   });
   afterAll(async () => {
     await appDb.destroy();
@@ -138,7 +144,7 @@ describe("Group C — calendar.createEvent tool wiring", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [calendarModuleManifest],
       repository: new AiRepository(),
-      runner: dataContext,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier,
@@ -146,7 +152,7 @@ describe("Group C — calendar.createEvent tool wiring", () => {
       toolServices: { calendarWrite: fakeService }
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -587,12 +593,17 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
 describe("Group D — buildChatToolServices wires calendarWrite into the gateway (MCP path)", () => {
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
 
   beforeAll(async () => {
     process.env.JARVIS_CONNECTOR_SECRET_KEY = "test-connector-secret-key";
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     dataContext = new DataContextRunner(appDb);
+  });
+
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(dataContext, [ids.userA, ids.userB]);
   });
   afterAll(async () => {
     await appDb.destroy();
@@ -650,7 +661,7 @@ describe("Group D — buildChatToolServices wires calendarWrite into the gateway
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [calendarModuleManifest],
       repository: new AiRepository(),
-      runner: dataContext,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations: new ConfirmationRegistry(),
       notifier: { emit() {} },
@@ -705,7 +716,7 @@ describe("Group D — buildChatToolServices wires calendarWrite into the gateway
     });
     await app.ready();
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -734,7 +745,7 @@ describe("Group D — buildChatToolServices wires calendarWrite into the gateway
     const { app, tokens } = buildGatewayAppFromFactory({}); // factory returns {}
     await app.ready();
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -791,11 +802,16 @@ describe("Group D — buildChatToolServices wires calendarWrite into the gateway
 describe("Group D — no write without approval (safety property)", () => {
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
 
   beforeAll(async () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     dataContext = new DataContextRunner(appDb);
+  });
+
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(dataContext, [ids.userA, ids.userB]);
   });
   afterAll(async () => {
     await appDb.destroy();
@@ -863,7 +879,7 @@ describe("Group D — no write without approval (safety property)", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [calendarModuleManifest],
       repository: new AiRepository(),
-      runner: dataContext,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations: new ConfirmationRegistry(),
       notifier: { emit() {} },
@@ -876,7 +892,7 @@ describe("Group D — no write without approval (safety property)", () => {
   it("a denied proposal performs no insert", async () => {
     const { gateway, tokens, getInserts } = gatewayWithCountingService(150_000);
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -894,7 +910,7 @@ describe("Group D — no write without approval (safety property)", () => {
   it("a timed-out proposal performs no insert", async () => {
     const { gateway, tokens, getInserts } = gatewayWithCountingService(50); // 50ms timeout
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -908,7 +924,7 @@ describe("Group D — no write without approval (safety property)", () => {
   it("an approved proposal performs exactly one insert", async () => {
     const { gateway, tokens, getInserts } = gatewayWithCountingService(150_000);
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });

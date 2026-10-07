@@ -69,6 +69,15 @@ export {
 } from "./companion-pairing.js";
 export type { CompanionPairingService } from "./companion-pairing.js";
 export {
+  ACT_AS_GRANT_HEADER,
+  ACT_AS_GRANT_TTL_MS,
+  createActAsGrantRegistry,
+  withActAsGrantsAndRequestCache,
+  type ActAsBinding,
+  type ActAsGrantRegistry,
+  type ActAsRequestAuth
+} from "./act-as-grants.js";
+export {
   CompanionAuthError,
   createCompanionDevicesService,
   type CompanionContext,

@@ -139,13 +139,25 @@ describe("external-module admin routes (#917)", () => {
     });
     expect(enableRes.statusCode).toBe(200);
     expect(enableRes.json().module).toMatchObject({ status: "enabled", active: true });
+    for (const key of [
+      "descriptorApprovedByUserId",
+      "descriptor_approved_by",
+      "manifestHash",
+      "packageHash"
+    ]) {
+      expect(enableRes.json().module).not.toHaveProperty(key);
+    }
 
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     const controls = await client.query<{ data: Record<string, unknown> }>(
       `SELECT data FROM pgboss.job_common WHERE name = 'platform.module-control' ORDER BY created_on DESC LIMIT 1`
     );
+    const approval = await client.query(
+      "SELECT descriptor_approved_by FROM app.external_modules WHERE id = 'acme-widgets'"
+    );
     await client.end();
+    expect(approval.rows[0]?.descriptor_approved_by).toBe(adminUserId);
     expect(controls.rows[0]?.data).toEqual({ moduleId: "acme-widgets", action: "reconcile" });
 
     const modulesRes = await server.inject({
@@ -154,6 +166,8 @@ describe("external-module admin routes (#917)", () => {
       headers: { cookie: adminCookie }
     });
     const listed = modulesRes.json().modules.find((m: { id: string }) => m.id === "acme-widgets");
+    expect(listed).not.toHaveProperty("descriptorApprovedByUserId");
+    expect(listed).not.toHaveProperty("descriptor_approved_by");
     expect(listed).toMatchObject({
       id: "acme-widgets",
       external: true,

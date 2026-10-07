@@ -29,6 +29,12 @@ const STEP_TIMEOUT_MS = 30 * 60 * 1000;
 const STEP_POLL_MS = 1000;
 const READY_TIMEOUT_MS = 30 * 1000;
 const WORKSPACE_ROOT = join(import.meta.dirname, "../../..");
+const CLAUDE_SESSION_FILES = [
+  ".jarvis-claude-permission-hook.mjs",
+  ".jarvis-claude-settings.json",
+  ".jarvis-claude-permission-token",
+  ".jarvis-claude-mcp.json"
+];
 
 export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
   return async (input: {
@@ -73,20 +79,21 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
       executionMode: "interactive",
       codexTokenEnvPath: null
     };
-    const launchLine = await buildLaunchCommand(
-      commandContext,
-      launchOptions,
-      sessionId,
-      personaPath
-    );
-    const handle = await deps.mux.open({
-      name: `jarvis-module-build-${sessionId}`,
-      cols: 220,
-      rows: 50,
-      launchLine
-    });
-
+    let handle: string | undefined;
     try {
+      const launchLine = await buildLaunchCommand(
+        commandContext,
+        launchOptions,
+        sessionId,
+        personaPath
+      );
+      handle = await deps.mux.open({
+        name: `jarvis-module-build-${sessionId}`,
+        cols: 220,
+        rows: 50,
+        launchLine
+      });
+
       const readyDeadline = Date.now() + READY_TIMEOUT_MS;
       while (!isComposerEmpty(deps.provider, await deps.mux.capturePane(handle))) {
         if (!(await deps.mux.isAlive(handle)) || Date.now() >= readyDeadline) {
@@ -133,8 +140,7 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
       const internalFiles = new Set([
         completionMarker,
         ".module-build-persona.md",
-        ".jarvis-claude-permission-hook.mjs",
-        ".jarvis-claude-settings.json"
+        ...CLAUDE_SESSION_FILES
       ]);
       const wroteFiles = listed.stdout
         .split("\n")
@@ -146,9 +152,24 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
       recordBuildTurn(deps, input.step, "error");
       throw error;
     } finally {
-      await deps.mux.kill(handle);
+      try {
+        if (handle !== undefined) await deps.mux.kill(handle);
+      } finally {
+        // finishBuild stages the whole directory. Never return it with a live session token.
+        if (deps.provider === "anthropic" && deps.mcpToken && deps.mcpServerUrl) {
+          await removeClaudeSessionFiles(deps.io, input.workingDir);
+        }
+      }
     }
   };
+}
+
+async function removeClaudeSessionFiles(io: TmuxIo, workingDir: string): Promise<void> {
+  const cleanup = await io.run("rm", [
+    "-f",
+    ...CLAUDE_SESSION_FILES.map((file) => join(workingDir, file))
+  ]);
+  if (cleanup.code !== 0) throw new Error("module build session files could not be removed");
 }
 
 /**

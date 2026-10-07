@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Change settings · Moss mockup</title>
+    <link rel="stylesheet" href="moss-ui.css" />
+    <link rel="stylesheet" href="mockup.css" />
+  </head>
+  <body>
+    <header class="mock-app-head">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+        <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor"></rect>
+        <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)"></rect>
+        <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor"></rect></svg
+      ><strong>moss</strong><span class="jds-hint">Today</span>
+    </header>
+    <aside class="chatd" role="dialog" aria-label="Chat with Moss">
+      <div class="chatd__head">
+        <span class="chatd__mark"
+          ><svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+            <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor"></rect>
+            <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)"></rect>
+            <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor"></rect></svg
+        ></span>
+        <div class="chatd__id">
+          <div class="chatd__name">Moss</div>
+          <div class="chatd__status">Here when you need me</div>
+        </div>
+        <button type="button" class="jds-iconbtn" aria-label="New chat">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-square-pen"
+          >
+            <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path
+              d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"
+            ></path>
+          </svg></button
+        ><button type="button" class="jds-iconbtn" aria-label="More chat options">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-ellipsis"
+          >
+            <circle cx="12" cy="12" r="1"></circle>
+            <circle cx="19" cy="12" r="1"></circle>
+            <circle cx="5" cy="12" r="1"></circle>
+          </svg></button
+        ><button type="button" class="jds-iconbtn" aria-label="Close chat">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="lucide lucide-x"
+          >
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="chatd__body-wrap">
+        <div class="chatd__body">
+          <div class="chatd-msg chatd-msg--me">
+            <div class="chatd-bubble">Use metric units for the weather.</div>
+          </div>
+          <div class="jds-card jds-card--pad-sm" aria-label="Change settings">
+            <div class="approval-stack">
+              <h2 class="approval-title">Change settings</h2>
+              <!-- prettier-ignore -->
+              <p class="approval-target">Weather</p>
+              <dl class="approval-fields">
+                <div class="approval-field">
+                  <dt>Temperature</dt>
+                  <dd>Celsius</dd>
+                </div>
+                <div class="approval-field">
+                  <dt>Wind speed</dt>
+                  <dd>Kilometres per hour</dd>
+                </div>
+                <div class="approval-field">
+                  <dt>Rainfall</dt>
+                  <dd>Millimetres</dd>
+                </div>
+              </dl>
+              <div class="approval-actions">
+                <button type="button" class="jds-btn jds-btn--primary">Approve</button
+                ><button type="button" class="jds-btn jds-btn--secondary">Reject</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chatd__composer">
+        <div class="chatd-input">
+          <textarea
+            aria-label="Message Moss"
+            placeholder="Message Moss…"
+            rows="1"
+            readonly=""
+          ></textarea
+          ><button type="button" class="jds-iconbtn" aria-label="Send message" disabled="">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-arrow-up"
+            >
+              <path d="m5 12 7-7 7 7"></path>
+              <path d="M12 19V5"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+  </body>
+</html>

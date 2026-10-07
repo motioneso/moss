@@ -603,25 +603,18 @@ test("reviewed summary versions create independent Tasks and private vault copie
           "action_candidates",
           "export_receipts",
           "export_requests",
-          "recording_notices",
           "capture_grants",
           "capture_connections",
           "capture_start_cancellations"
         ].sort()
       );
       // This notes-only UAT does not create recording connections, cancellations or grants.
-      expect(exported.recording_notices).toEqual([]);
       expect(exported.capture_grants).toEqual([]);
       expect(exported.capture_connections).toEqual([]);
       expect(exported.capture_start_cancellations).toEqual([]);
       for (const [name, rows] of Object.entries(exported)) {
         if (
-          ![
-            "recording_notices",
-            "capture_grants",
-            "capture_connections",
-            "capture_start_cancellations"
-          ].includes(name)
+          !["capture_grants", "capture_connections", "capture_start_cancellations"].includes(name)
         )
           expect(rows.length).toBeGreaterThan(0);
         for (const row of rows) expect(row.ownerUserId).toBe(UAT_ADMIN_ID);

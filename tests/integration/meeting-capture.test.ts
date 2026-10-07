@@ -1,5 +1,8 @@
-import { MEETING_RECORDING_NOTICE } from "@moss/shared";
-import { MeetingRecordingNoticeRepository } from "../../packages/meetings/src/recording-notice.js";
+import { PreferencesRepository } from "@moss/structured-state";
+import {
+  MEETING_CAPTURE_DEFAULT_KEY,
+  MEETING_CAPTURE_SOURCE_KEY
+} from "../../packages/meetings/src/preferences-routes.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql, type Kysely } from "kysely";
@@ -43,13 +46,13 @@ const inventory = {
   systemAudioPermission: "unknown" as const
 };
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
-async function fixture(acknowledgeNotice = true) {
+async function fixture(fresh = false) {
   let now = new Date(),
     revision = 1;
   const deviceId = randomUUID(),
     connectionId = randomUUID(),
     verifier = "v".repeat(43);
-  const owner = { actorUserId: ids.userA },
+  const owner = { actorUserId: fresh ? ids.userD : ids.userA },
     browser = { ...owner, sessionId: randomUUID(), expiresAt: new Date(now.getTime() + 7200000) };
   const createMeeting = async () =>
     (
@@ -61,10 +64,6 @@ async function fixture(acknowledgeNotice = true) {
       )
     ).meeting;
   const meeting = await createMeeting();
-  if (acknowledgeNotice)
-    await context.withDataContext(owner, (db) =>
-      new MeetingRecordingNoticeRepository().acknowledge(db, MEETING_RECORDING_NOTICE.policyVersion)
-    );
   // Auth and provider ports are synthetic. Storage, RLS, locks, receipts and transcript are real.
   const deps: MeetingCaptureDependencies = {
     dataContext: context,
@@ -105,11 +104,21 @@ async function fixture(acknowledgeNotice = true) {
     connections.register(native, "connection", {
       connectionId,
       verifierHash: hash(verifier),
-      inventory
+      inventory: fresh
+        ? {
+            ...inventory,
+            defaultMicrophoneId: "os-default",
+            microphones: [
+              ...inventory.microphones,
+              { deviceId: "os-default", sourceId: "os-default-mic", label: "OS default microphone" }
+            ],
+            computerAudio: { available: true, excludedProcessTreeIds: ["moss"] },
+            systemAudioPermission: "granted"
+          }
+        : inventory
     });
   await register();
   const startInput = {
-    noticeAcknowledged: true as true | undefined,
     deviceId,
     connectionId,
     expectedRevision: 1,
@@ -150,82 +159,45 @@ async function fixture(acknowledgeNotice = true) {
   };
 }
 describe("shared meeting recording protocol (isolated gate only)", () => {
-  it("stores account notice across meetings and browser sessions, binds grants, and gates stale Start/Resume replays", async () => {
-    const f = await fixture(false);
-    const notices = new MeetingRecordingNoticeRepository();
-    await expect(f.start()).rejects.toMatchObject({ code: "meeting_capture_notice_required" });
-    const acknowledgement = await context.withDataContext(f.owner, (db) =>
-      notices.acknowledge(db, MEETING_RECORDING_NOTICE.policyVersion)
-    );
-    const started = await f.start(f.meeting.id, { ...f.startInput, noticeAcknowledged: undefined });
-    expect(
-      await context.withDataContext(f.owner, (db) =>
-        new MeetingCaptureRepository().grant(db, started.capture.grantId)
-      )
-    ).toMatchObject({ notice_policy_version: MEETING_RECORDING_NOTICE.policyVersion });
-    await f.service.cancelStart(f.browser, f.meeting.id, {
+  it("starts and resumes a fresh account using its OS default microphone and system audio", async () => {
+    const f = await fixture(true);
+    const preferences = new PreferencesRepository();
+    const readPreferences = () =>
+      context.withDataContext(f.owner, async (db) =>
+        Promise.all([
+          preferences.get(db, MEETING_CAPTURE_DEFAULT_KEY),
+          preferences.get(db, MEETING_CAPTURE_SOURCE_KEY)
+        ])
+      );
+    expect(await readPreferences()).toEqual([null, null]);
+    const request = {
       deviceId: f.deviceId,
       connectionId: f.connectionId,
-      requestKey: f.startInput.requestKey
+      expectedRevision: 1,
+      requestKey: randomUUID()
+    };
+    const started = await f.connections.start(f.browser, f.meeting.id, request);
+    expect(started.capture.selection).toMatchObject({
+      mode: "computer-audio",
+      microphone: { deviceId: "os-default", sourceId: "os-default-mic" }
     });
-    const secondMeeting = await f.createMeeting();
-    const nextBrowser = { ...f.browser, sessionId: randomUUID() };
-    expect(
-      await context.withDataContext(nextBrowser, (db) =>
-        new MeetingRecordingNoticeRepository().get(db)
-      )
-    ).toEqual(acknowledgement);
-    const request = { ...f.startInput, requestKey: randomUUID(), noticeAcknowledged: undefined };
-    const second = await f.connections.start(nextBrowser, secondMeeting.id, request);
-    await context.withDataContext(f.owner, (db) =>
-      sql`UPDATE app.meeting_recording_notices SET policy_version='previous-text'`.execute(db.db)
-    );
-    await expect(f.connections.start(nextBrowser, secondMeeting.id, request)).rejects.toMatchObject(
-      { code: "meeting_capture_notice_required" }
-    );
-    await f.service.browserControl(nextBrowser, secondMeeting.id, {
-      grantId: second.capture.grantId,
+    expect(await f.connections.start(f.browser, f.meeting.id, request)).toEqual(started);
+    await f.service.browserControl(f.browser, f.meeting.id, {
+      grantId: started.capture.grantId,
       requestKey: randomUUID(),
       expectedGeneration: 1,
       command: "pause"
     });
     const resume = {
-      grantId: second.capture.grantId,
+      grantId: started.capture.grantId,
       requestKey: randomUUID(),
       expectedGeneration: 2,
-      command: "record" as const,
-      selection: request.selection
+      command: "record" as const
     };
-    await expect(
-      f.service.browserControl(nextBrowser, secondMeeting.id, resume)
-    ).rejects.toMatchObject({ code: "meeting_capture_notice_required" });
-    // Simulate an existing grant migrated with NULL policy binding; safe controls remain available.
-    await context.withDataContext(f.owner, (db) =>
-      sql`UPDATE app.meeting_capture_grants SET notice_policy_version=NULL WHERE id=${second.capture.grantId}::uuid`.execute(
-        db.db
-      )
-    );
-    await context.withDataContext(f.owner, (db) =>
-      notices.acknowledge(db, MEETING_RECORDING_NOTICE.policyVersion)
-    );
-    await f.service.browserControl(nextBrowser, secondMeeting.id, resume);
-    expect(
-      await context.withDataContext(f.owner, (db) =>
-        new MeetingCaptureRepository().grant(db, second.capture.grantId)
-      )
-    ).toMatchObject({ notice_policy_version: MEETING_RECORDING_NOTICE.policyVersion });
-    await context.withDataContext(f.owner, (db) =>
-      sql`UPDATE app.meeting_recording_notices SET policy_version='previous-text'`.execute(db.db)
-    );
-    await expect(
-      f.service.browserControl(nextBrowser, secondMeeting.id, resume)
-    ).rejects.toMatchObject({ code: "meeting_capture_notice_required" });
-    await f.service.browserControl(nextBrowser, secondMeeting.id, {
-      grantId: second.capture.grantId,
-      requestKey: randomUUID(),
-      expectedGeneration: 3,
-      command: "stop"
-    });
+    const resumed = await f.service.browserControl(f.browser, f.meeting.id, resume);
+    expect(resumed.capture.selection).toEqual(started.capture.selection);
+    expect(await f.service.browserControl(f.browser, f.meeting.id, resume)).toEqual(resumed);
+    expect(await readPreferences()).toEqual([null, null]);
   });
   it("connection registration does not create meeting authority; Start enforces owner RLS", async () => {
     const f = await fixture();
@@ -401,7 +373,6 @@ describe("shared meeting recording protocol (isolated gate only)", () => {
       requestKey: randomUUID(),
       expectedGeneration: 2,
       command: "record",
-      noticeAcknowledged: true,
       selection: f.startInput.selection
     });
     const claim = {

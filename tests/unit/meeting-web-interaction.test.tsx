@@ -397,20 +397,24 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
         .findByProps({ id: "meeting-title" })
         .props.onChange({ target: { value: "Design review" } })
     );
-    await click("Create draft");
-    await click("Retry creating draft");
+    await click("New meeting");
+    await click("Retry opening meeting");
     expect(vi.mocked(api.createMeeting).mock.calls[1]?.[0]).toEqual(
       vi.mocked(api.createMeeting).mock.calls[0]?.[0]
     );
   });
-  it("carries a remembered mode into a notes draft without starting capture", async () => {
+  it("opens a meeting without selecting sources or starting capture", async () => {
     vi.mocked(api.getMeetingPreferences).mockResolvedValue({ defaultCaptureMode: "selected-app" });
     vi.mocked(api.createMeeting).mockResolvedValue({ meeting, created: true });
     await mount("/meetings");
-    await click("Create draft");
-    expect(client.getQueryData<CaptureSession>(captureKeys.session(meeting.id))?.choice.mode).toBe(
-      "selected-app"
-    );
+    await click("New meeting");
+    expect(
+      client.getQueryData<CaptureSession>(captureKeys.session(meeting.id))?.choice.mode
+    ).toBeNull();
+    expect(client.getQueryData(captureKeys.active)).toBeUndefined();
+    expect(
+      vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith("/capture/start"))
+    ).toBe(false);
     expect(api.putMeetingPreferences).not.toHaveBeenCalled();
   });
   it("remounts with edits retained only in the authenticated query client", async () => {
@@ -437,11 +441,11 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
         .findByProps({ id: "meeting-title" })
         .props.onChange({ target: { value: "Design review" } })
     );
-    await click("Create draft");
+    await click("New meeting");
     await click("View meeting history");
     await click("New meeting draft");
     expect(renderer.root.findByProps({ id: "meeting-title" }).props.value).toBe("Design review");
-    await click("Retry creating draft");
+    await click("Retry opening meeting");
     expect(vi.mocked(api.createMeeting).mock.calls[1]?.[0]).toEqual(
       vi.mocked(api.createMeeting).mock.calls[0]?.[0]
     );
@@ -734,7 +738,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
         .props.onChange({ target: { value: "Design review" } })
     );
     await flush();
-    await click("Create draft");
+    await click("New meeting");
     await click("View meeting history");
     await click("New meeting draft");
     expect(renderer.root.findByProps({ id: "meeting-title" }).props.disabled).toBe(true);

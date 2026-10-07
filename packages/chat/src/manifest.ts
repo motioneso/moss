@@ -60,7 +60,9 @@ export const chatModuleManifest = {
       "sql/0255_chat_classifier_shadow_retention.sql",
       "sql/0271_chat_classifier_shadow_reviews.sql",
       "sql/0276_meeting_chat_cleanup.sql",
-      "sql/0277_chat_surface_immutable.sql"
+      "sql/0277_chat_surface_immutable.sql",
+      "sql/0291_chat_conversation_provenance.sql",
+      "sql/0293_chat_automatic_action_reservations.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -70,7 +72,9 @@ export const chatModuleManifest = {
       "app.chat_skills",
       "app.chat_classifier_shadow_records",
       "app.chat_classifier_release_eligibility",
-      "app.chat_classifier_shadow_reviews"
+      "app.chat_classifier_shadow_reviews",
+      "app.chat_conversation_provenance",
+      "app.chat_automatic_action_reservations"
     ]
   },
   permissions: [
@@ -108,9 +112,22 @@ export const chatModuleManifest = {
   ],
   features: [
     {
+      id: "chat.legacy_memory_delete",
+      description:
+        "Chat cannot call the old memory-store delete endpoint. Use saved-memory forgetting, which shows the exact memory for approval. Existing screen actions are unchanged."
+    },
+    {
+      id: "chat.conversation_write_confirmation",
+      description:
+        "Writes ask when the bound conversation has outside or unknown history, even in YOLO. " +
+        "Outside content is recorded before admission and stored state survives restart. " +
+        "Native vault reads stop if their bound conversation cannot be recorded.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.acp_answers",
       description:
-        "General chat answers through the agent protocol. Selected-meeting questions use the configured API-key chat model without tools.",
+        "Outside-agent chats require approval for Moss changes from launch because not all native reads can be observed. Selected-meeting questions use the configured API-key model without tools.",
       featureFlagId: "chat.module"
     },
     {
@@ -257,86 +274,269 @@ export const chatModuleManifest = {
     {
       method: "GET",
       path: "/api/chat/threads",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listChatThreadsResponseSchema,
       permissionId: "chat.view"
     },
     {
       method: "GET",
       path: "/api/chat/threads/:id/messages",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listChatThreadMessagesResponseSchema,
       permissionId: "chat.view"
     },
-    { method: "GET", path: "/api/chat/meeting-context", permissionId: "chat.view" },
-    { method: "POST", path: "/api/chat/turn", permissionId: "chat.message" },
+    {
+      method: "GET",
+      path: "/api/chat/meeting-context",
+      chat: { access: "read" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/turn",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
     // #1133 — file/image upload staged for the next turn; sending is what needs the
     // message permission, so the upload shares it.
-    { method: "POST", path: "/api/chat/attachments", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/evening-interview", permissionId: "chat.message" },
+    {
+      method: "POST",
+      path: "/api/chat/attachments",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/evening-interview",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
     // #1284 — the generic seed seam (evening-interview above is one dedicated caller).
     // `chat.message` because a seed carries exactly the authority of a user turn: it frames
     // what the assistant sees before the first message, so it is a write to the conversation,
     // not a read of it. Missing this entry does not fail a unit test — it fails
     // assertRouteCoverage at server BOOT, taking down every integration test that stands the
     // API up. tests/unit/chat-route-coverage.test.ts now catches it here instead.
-    { method: "POST", path: "/api/chat/seed", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/turn/cancel", permissionId: "chat.message" },
-    { method: "GET", path: "/api/chat/stream", permissionId: "chat.view" },
-    { method: "POST", path: "/api/chat/clear", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/private/end", permissionId: "chat.message" },
+    {
+      method: "POST",
+      path: "/api/chat/seed",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/turn/cancel",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/stream",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/clear",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/private/end",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
     {
       method: "GET",
       path: "/api/chat/privacy",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: getChatPrivacyStateResponseSchema,
       permissionId: "chat.view"
     },
-    { method: "POST", path: "/api/chat/switch", permissionId: "chat.message" },
-    { method: "PUT", path: "/api/chat/page-context", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/threads/:id/resume", permissionId: "chat.message" },
-    { method: "GET", path: "/api/chat/settings", permissionId: "chat.view" },
-    { method: "PUT", path: "/api/chat/settings", permissionId: "chat.message" },
-    { method: "GET", path: "/api/chat/memory/settings", permissionId: "chat.view" },
-    { method: "PATCH", path: "/api/chat/memory/settings", permissionId: "chat.message" },
-    { method: "GET", path: "/api/chat/memory/facts", permissionId: "chat.view" },
+    {
+      method: "POST",
+      path: "/api/chat/switch",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "PUT",
+      path: "/api/chat/page-context",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/threads/:id/resume",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/settings",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "PUT",
+      path: "/api/chat/settings",
+      chat: { access: "blocked", blockedBecause: "assistant_brain" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/memory/settings",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "PATCH",
+      path: "/api/chat/memory/settings",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/memory/facts",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
+      permissionId: "chat.view"
+    },
     {
       method: "GET",
       path: "/api/chat/memory/corrections",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listMemoryCorrectionsResponseSchema,
       permissionId: "chat.view"
     },
-    { method: "DELETE", path: "/api/chat/memory/facts/:id", permissionId: "chat.message" },
+    {
+      method: "DELETE",
+      path: "/api/chat/memory/facts/:id",
+      chat: {
+        access: "blocked",
+        blockedBecause: "data_scope_consent",
+        title: "Use memory.forget for saved memory",
+        coveredBy: "memory.forget"
+      },
+      permissionId: "chat.message"
+    },
     // #2908 — the owner deletes their own classifier shadow records on request. RLS scopes the
     // delete; there is no admin path and no separate verb for another actor.
-    { method: "DELETE", path: "/api/chat/classifier/shadow-records", permissionId: "chat.message" },
+    {
+      method: "DELETE",
+      path: "/api/chat/classifier/shadow-records",
+      chat: {
+        access: "destructive",
+        title: "Delete the tool-picking trial records",
+        content: "user_authored",
+        coveredBy: "chat.deleteClassifierShadowRecords"
+      },
+      permissionId: "chat.message"
+    },
     // #2957 — temporary shadow report: the viewer's own classifier shadow counts and
     // disagreements. Owner-only through row security, including for admins.
-    { method: "GET", path: "/api/chat/classifier/shadow-report", permissionId: "chat.view" },
-    { method: "PATCH", path: "/api/chat/memory/facts/:id", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/memory/facts/:id/confirm", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/memory/facts/:id/reject", permissionId: "chat.message" },
+    {
+      method: "GET",
+      path: "/api/chat/classifier/shadow-report",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "PATCH",
+      path: "/api/chat/memory/facts/:id",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/memory/facts/:id/confirm",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/memory/facts/:id/reject",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
     {
       method: "POST",
       path: "/api/chat/action-requests/:id/resolve",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "chat.message"
     },
     {
       method: "GET",
       path: "/api/chat/messages/:messageId/provenance",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       permissionId: "chat.view"
     },
     {
       method: "GET",
       path: "/api/chat/messages/:messageId/provenance/:supportId/dereference",
+      chat: { access: "read" },
       permissionId: "chat.view"
     },
-    { method: "POST", path: "/api/mcp", permissionId: "chat.message" },
-    { method: "POST", path: "/internal/permission", permissionId: "chat.message" },
-    { method: "GET", path: "/api/chat/skills", permissionId: "chat.view" },
-    { method: "GET", path: "/api/chat/skills/:id", permissionId: "chat.view" },
-    { method: "POST", path: "/api/chat/skills", permissionId: "chat.message" },
-    { method: "PATCH", path: "/api/chat/skills/:id", permissionId: "chat.message" },
-    { method: "PATCH", path: "/api/chat/skills/:id/enabled", permissionId: "chat.message" },
-    { method: "DELETE", path: "/api/chat/skills/:id", permissionId: "chat.message" },
-    { method: "POST", path: "/api/chat/skills/import", permissionId: "chat.message" }
+    {
+      method: "POST",
+      path: "/api/mcp",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/internal/permission",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/internal/vault-read-report",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/skills",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "GET",
+      path: "/api/chat/skills/:id",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.view"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/skills",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "PATCH",
+      path: "/api/chat/skills/:id",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "PATCH",
+      path: "/api/chat/skills/:id/enabled",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "DELETE",
+      path: "/api/chat/skills/:id",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    },
+    {
+      method: "POST",
+      path: "/api/chat/skills/import",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" },
+      permissionId: "chat.message"
+    }
   ],
   assistantActionFamilies: [
     {
@@ -353,6 +553,7 @@ export const chatModuleManifest = {
       description: "List today's non-incognito chat turns for the active actor.",
       permissionId: "chat.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: chatListTodaysTurnsExecute
     },
@@ -362,6 +563,7 @@ export const chatModuleManifest = {
         "Read the active actor's latest bounded, redacted Moss web view and capability-level server facts.",
       permissionId: "chat.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", additionalProperties: false, properties: {} },
       outputSchema: chatGetCurrentViewOutputSchema,
       execute: chatGetCurrentViewExecute
@@ -372,6 +574,7 @@ export const chatModuleManifest = {
         "Read the server's current time and the user's timezone as of right now. Use when unsure of the current date or time.",
       permissionId: "chat.view",
       risk: "read",
+      content: "user_authored",
       inputSchema: { type: "object", additionalProperties: false, properties: {} },
       outputSchema: chatGetCurrentTimeOutputSchema,
       execute: chatGetCurrentTimeExecute
@@ -382,6 +585,7 @@ export const chatModuleManifest = {
         "Read a file the user attached to the current chat turn, by attachmentId from the turn's <attachments> manifest. Images return as viewable images; PDFs and text files return extracted text.",
       permissionId: "chat.view",
       risk: "read",
+      content: "outside",
       // #1133 — no outputSchema: the image case returns a `media` payload that schema
       // projection would drop (see gateway.runHandler media pass-through).
       inputSchema: {
@@ -397,6 +601,7 @@ export const chatModuleManifest = {
       description: "Set the assistant's default response style (concise, balanced, or detailed).",
       permissionId: "chat.message",
       risk: "write",
+      content: "user_authored",
       selfOperationGrant: "granted_at_install",
       actionFamilyId: "chat.preference-write",
       executionPolicy: "auto",
@@ -415,6 +620,7 @@ export const chatModuleManifest = {
         "delete that trial data.",
       permissionId: "chat.message",
       risk: "destructive",
+      content: "user_authored",
       selfOperationGrant: "confirm_always",
       inputSchema: chatDeleteClassifierShadowRecordsInputSchema,
       outputSchema: chatDeleteClassifierShadowRecordsOutputSchema,

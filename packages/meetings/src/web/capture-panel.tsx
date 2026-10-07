@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, SectionHead } from "@moss/ui";
@@ -7,20 +7,11 @@ import type { MeetingCaptureState, MeetingRecord } from "@moss/shared";
 import { captureKeys } from "./capture-client.js";
 import { CAPTURE_MODES } from "./capture-modes.js";
 import { captureAcknowledged, captureStopped } from "./capture-presentation.js";
-import {
-  effectiveCaptureChoice,
-  useCaptureSession,
-  startMeetingCapture,
-  type ActiveCapture
-} from "./capture-session.js";
+import { useCaptureSession, startMeetingCapture, type ActiveCapture } from "./capture-session.js";
 import { CaptureGaps } from "./capture-gaps.js";
-import { CaptureSources } from "./capture-sources.js";
 import { isMeetingAccessDenied } from "./client.js";
 import { useCaptureStatus } from "./capture-status.js";
 import { CaptureControls } from "./capture-controls.js";
-import { CaptureNotice } from "./capture-notice.js";
-import { isRecordingNoticeAcknowledged, useRecordingNotice } from "./recording-notice.js";
-import { CaptureReady } from "./capture-ready.js";
 import { useReadyCapture } from "./capture-choice.js";
 export { captureQueryOptions } from "./capture-status.js";
 
@@ -54,51 +45,54 @@ function CaptureScope({ capture }: { readonly capture: MeetingCaptureState }) {
 }
 function StartExistingMeeting({ meeting }: { readonly meeting: MeetingRecord }) {
   const ready = useReadyCapture();
-  const notice = useRecordingNotice();
   const client = useQueryClient();
   const session = useCaptureSession(meeting.id);
   const canStart =
-    notice.acknowledged &&
     !!ready.device &&
     !ready.device.busy &&
     !!ready.selection &&
     ready.devices.data?.processingReady === true &&
     !ready.devices.isError &&
+    !ready.preferences.isError &&
+    !ready.preferences.isPending &&
     !session.state.operation;
   return (
     <>
-      <CaptureReady
-        devices={ready.devices.data?.devices ?? []}
-        deviceId={ready.deviceId}
-        choice={ready.choice}
-        onDevice={ready.onDevice}
-        onChoice={ready.onChoice}
-        unavailable={ready.devices.isError}
-      />
-      <CaptureNotice disabled={session.state.operation?.phase === "sending"} />
+      <p className="jds-hint">
+        {ready.device
+          ? `${ready.device.deviceName} · Connected`
+          : "Open Trail Marker and follow its linking instructions."}
+      </p>
+      {ready.device?.busy ? (
+        <p role="status" className="jds-hint">
+          {ready.device.capturePhase === "finalizing"
+            ? "This Mac is finishing the previous transcript. Start will be available when it finishes."
+            : "This Mac already has a meeting in progress. Use its recording controls to pause or stop."}
+        </p>
+      ) : ready.device && !ready.selection ? (
+        <p role="status" className="jds-hint">
+          Check your Mac’s default microphone and audio permissions in Trail Marker.
+        </p>
+      ) : null}
       <Button
         disabled={!canStart}
         onClick={() => {
-          if (
-            !canStart ||
-            !isRecordingNoticeAcknowledged(client) ||
-            !ready.device ||
-            !ready.selection
-          )
-            return;
-          session.updateChoice(ready.choice);
-          void startMeetingCapture(client, meeting.id, meeting.title, {
-            deviceId: ready.device.deviceId,
-            connectionId: ready.device.connectionId,
-            expectedRevision: ready.device.revision,
-            selection: ready.selection,
-            requestKey: randomUuid()
-          }).then((started) => {
-            if (started) void ready.remember().catch(() => undefined);
-          });
+          if (!canStart || !session.currentSession() || !ready.device || !ready.selection) return;
+          void startMeetingCapture(
+            client,
+            meeting.id,
+            meeting.title,
+            {
+              deviceId: ready.device.deviceId,
+              connectionId: ready.device.connectionId,
+              expectedRevision: ready.device.revision,
+              requestKey: randomUuid()
+            },
+            session.currentSession
+          );
         }}
       >
-        Start meeting
+        Start recording
       </Button>
     </>
   );
@@ -113,7 +107,6 @@ export function CapturePanel({
   const query = useCaptureStatus(meeting.id);
   const session = useCaptureSession(meeting.id);
   const client = useQueryClient();
-  const [changing, setChanging] = useState(false);
   const accessDenied = isMeetingAccessDenied(query.error);
   const capture = accessDenied ? undefined : query.data?.capture;
   const stopped = captureStopped(capture);
@@ -134,7 +127,7 @@ export function CapturePanel({
     <section className="meetings-section" aria-label="Meeting capture">
       <SectionHead
         number="01"
-        title={live ? "Live meeting" : stopped ? "Meeting ended" : "Your recording sources"}
+        title={live ? "Live meeting" : stopped ? "Meeting ended" : "Ready to record"}
         rule
       />
       {query.isPending ? (
@@ -161,28 +154,6 @@ export function CapturePanel({
       {capture ? (
         <>
           <CaptureScope capture={capture} />
-          <Button variant="link" onClick={() => setChanging((value) => !value)}>
-            {changing ? "Done changing sources" : "Change"}
-          </Button>
-          {changing && capture.inventory ? (
-            <>
-              {(capture.desired === "paused" || capture.desired === "idle") &&
-              captureAcknowledged(capture) ? (
-                <CaptureSources
-                  inventory={capture.inventory}
-                  choice={effectiveCaptureChoice(session.state, capture)}
-                  onChange={session.updateChoice}
-                />
-              ) : null}
-              <p className="jds-hint">
-                {capture.desired === "paused"
-                  ? "Choose sources, then explicitly resume recording."
-                  : stopped
-                    ? "Start a new meeting to choose different sources."
-                    : "Pause recording before changing sources."}
-              </p>
-            </>
-          ) : null}
           <CaptureGaps capture={capture} />
         </>
       ) : null}

@@ -1,7 +1,6 @@
 import { act } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { expect, it, vi, type Mock } from "vitest";
-import { meetingKeys } from "../../packages/meetings/src/web/client.js";
 
 type Transport = (path: string, options?: RequestInit) => Promise<Response>;
 interface DraftHarness {
@@ -50,33 +49,25 @@ export function registerDraftInputRegressions(h: DraftHarness) {
     await h.settle();
     expect(input.value).toBe(title);
   });
-  it("retains the focused title through delayed preferences and draft-creation responses", async () => {
+  it("retains the focused title through delayed meeting-creation responses", async () => {
     await h.mount();
     const normal = h.transport().getMockImplementation()!;
-    let releasePreferences!: () => void;
     let releaseCreate!: () => void;
     h.transport().mockImplementation(async (path, options) => {
-      if (path === "/api/meetings/preferences")
-        await new Promise<void>((resolve) => {
-          releasePreferences = resolve;
-        });
       if (path === "/api/meetings/records")
         await new Promise<void>((resolve) => {
           releaseCreate = resolve;
         });
       return normal(path, options);
     });
-    act(() => {
-      void h.client().invalidateQueries({ queryKey: meetingKeys.preferences });
-    });
     const input = h.host().querySelector<HTMLInputElement>("#meeting-title")!;
     input.focus();
     expect(typeWithoutEffectFlush(input, title.slice(0, 30))).toEqual([]);
-    await act(async () => releasePreferences());
+    await h.settle();
     expect(document.activeElement).toBe(input);
     expect(typeWithoutEffectFlush(input, title.slice(30))).toEqual([]);
     expect(input.value).toBe(title);
-    await h.click("Create draft");
+    await h.click("New meeting");
     expect(input.disabled).toBe(true);
     expect(input.value).toBe(title);
     await act(async () => releaseCreate());

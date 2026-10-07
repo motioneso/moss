@@ -1,4 +1,8 @@
-import { MeetingRecordingNoticeRepository } from "./recording-notice.js";
+import {
+  readMeetingCapturePreferences,
+  resolveCaptureSource,
+  savedCaptureSelection
+} from "./capture-defaults.js";
 import { captureAuthorizationError } from "./capture-authorization.js";
 import { captureMetadataJson } from "./capture-metadata.js";
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -48,8 +52,7 @@ export class MeetingCaptureConnectionService {
   constructor(
     private readonly deps: MeetingCaptureDependencies,
     private readonly grants = new MeetingCaptureRepository(),
-    readonly connections = new MeetingCaptureConnectionRepository(),
-    private readonly notices = new MeetingRecordingNoticeRepository()
+    readonly connections = new MeetingCaptureConnectionRepository()
   ) {
     this.now = deps.now ?? (() => new Date());
   }
@@ -193,6 +196,44 @@ export class MeetingCaptureConnectionService {
       throw captureAuthorizationError(error);
     }
   }
+  private async defaultConnection(
+    db: DataContextDb,
+    actor: CaptureBrowserBinding,
+    deviceId?: string
+  ) {
+    const candidates = deviceId
+      ? [await this.connections.connection(db, deviceId)].filter(
+          (item): item is CaptureConnection => item !== null
+        )
+      : await this.connections.connections(db);
+    // A full bounded page cannot prove that no additional eligible Mac exists.
+    if (!deviceId && candidates.length >= 32)
+      throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
+    const eligible: CaptureConnection[] = [];
+    for (const connection of candidates) {
+      if (
+        connection.expires_at <= this.now() ||
+        this.now().getTime() - connection.last_seen_at.getTime() > MEETING_CAPTURE_LEASE_MS ||
+        !this.deps.assertRecordingBinding
+      )
+        continue;
+      try {
+        await this.deps.assertRecordingBinding({
+          actorUserId: actor.actorUserId,
+          deviceId: connection.device_id,
+          capabilityRevision: connection.capability_revision
+        });
+      } catch (error) {
+        const failure = captureAuthorizationError(error);
+        if (failure.httpStatus === 401) continue;
+        throw failure;
+      }
+      eligible.push(connection);
+    }
+    if (eligible.length !== 1)
+      throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
+    return eligible[0]!;
+  }
   private async replayStart(
     db: DataContextDb,
     actor: CaptureBrowserBinding,
@@ -200,7 +241,6 @@ export class MeetingCaptureConnectionService {
     input: MeetingCaptureStartInput,
     fingerprint: string
   ) {
-    await this.notices.requireCurrent(db);
     if (await this.connections.cancelled(db, input.requestKey))
       throw new MeetingCaptureError("meeting_capture_conflict", 409);
     const previous = await this.connections.byRequest(db, input.requestKey);
@@ -221,7 +261,6 @@ export class MeetingCaptureConnectionService {
     return null;
   }
   async start(actor: CaptureBrowserBinding, meetingId: string, input: MeetingCaptureStartInput) {
-    await this.deps.dataContext.withDataContext(actor, (db) => this.notices.requireCurrent(db));
     await this.deps.assertBinding({
       actorUserId: actor.actorUserId,
       sessionId: actor.sessionId,
@@ -240,7 +279,6 @@ export class MeetingCaptureConnectionService {
     return this.deps.dataContext.withDataContext(actor, async (db) => {
       await this.connections.lock(db, input.deviceId);
       await this.grants.lockMeeting(db, meetingId);
-      const noticePolicyVersion = await this.notices.requireCurrent(db);
       const raced = await this.replayStart(db, actor, meetingId, input, fingerprint);
       if (raced) return raced;
       if (!processing?.ready || !processing.modelRoute)
@@ -266,7 +304,22 @@ export class MeetingCaptureConnectionService {
         capabilityRevision: connection.capability_revision
       });
       const inventory = JSON.parse(connection.inventory_json) as MeetingCaptureInventory;
-      validateCaptureSelection(input.selection, inventory);
+      let selection = input.selection;
+      if (!selection) {
+        const preferences = await readMeetingCapturePreferences(db);
+        const selected = await this.defaultConnection(
+          db,
+          actor,
+          preferences.rememberedSource?.deviceId
+        );
+        if (selected.device_id !== input.deviceId)
+          throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
+        selection = savedCaptureSelection(
+          resolveCaptureSource(preferences, input.deviceId, inventory),
+          inventory
+        );
+      }
+      validateCaptureSelection(selection, inventory);
       await this.connections.retire(db, input.deviceId, this.now());
       if (
         (await this.connections.occupied(db, input.deviceId, input.connectionId)) ||
@@ -307,8 +360,7 @@ export class MeetingCaptureConnectionService {
           requestKey: input.requestKey,
           expectedGeneration: 0,
           command: "record",
-          noticeAcknowledged: true,
-          selection: input.selection
+          selection
         },
         this.now(),
         processing.modelRoute!
@@ -319,7 +371,6 @@ export class MeetingCaptureConnectionService {
         connection,
         requestKey: input.requestKey,
         fingerprint,
-        noticePolicyVersion,
         expiresAt: new Date(
           Math.min(
             this.now().getTime() + 7200000,

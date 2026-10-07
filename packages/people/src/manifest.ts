@@ -30,24 +30,104 @@ export const peopleModuleManifest: MossModuleManifest = {
       "app.person_context_indexing_state"
     ]
   },
+  // Canonical-note writes enqueue ingest. Identity merge/split cannot preview all targets
+  // through the current path-parameter-only target contract, so both remain unavailable here.
   routes: [
-    { method: "GET", path: "/api/people" },
-    { method: "POST", path: "/api/people" },
-    { method: "GET", path: "/api/people/resolve" },
-    { method: "GET", path: "/api/people/match-candidates" },
-    { method: "POST", path: "/api/people/match-candidates/:id/accept" },
-    { method: "POST", path: "/api/people/match-candidates/:id/reject" },
-    { method: "POST", path: "/api/people/match-candidates/:id/suppress" },
-    { method: "POST", path: "/api/people/index/refresh" },
-    { method: "GET", path: "/api/people/notes-settings" },
-    { method: "PUT", path: "/api/people/notes-settings" },
-    { method: "POST", path: "/api/people/notes/refresh" },
-    { method: "GET", path: "/api/people/:id" },
-    { method: "GET", path: "/api/people/:id/links" },
-    { method: "PATCH", path: "/api/people/:id" },
-    { method: "POST", path: "/api/people/:id/archive" },
-    { method: "POST", path: "/api/people/:id/merge" },
-    { method: "POST", path: "/api/people/:id/split-identity" }
+    { method: "GET", path: "/api/people/notes-directories", chat: { access: "read" } },
+    { method: "GET", path: "/api/people", chat: { access: "read", content: "outside" } },
+    {
+      method: "POST",
+      path: "/api/people",
+      chat: { access: "blocked", blockedBecause: "external_effect" }
+    },
+    {
+      method: "GET",
+      path: "/api/people/resolve",
+      chat: { access: "read", content: "outside", coveredBy: "people.resolve" }
+    },
+    {
+      method: "GET",
+      path: "/api/people/match-candidates",
+      chat: { access: "read", content: "outside" }
+    },
+    {
+      method: "POST",
+      path: "/api/people/match-candidates/:id/accept",
+      chat: {
+        access: "write",
+        title: "Accept People match",
+        content: "user_authored",
+        coveredBy: "people.acceptMatch"
+      }
+    },
+    {
+      method: "POST",
+      path: "/api/people/match-candidates/:id/reject",
+      chat: {
+        access: "write",
+        title: "Reject People match",
+        content: "user_authored",
+        coveredBy: "people.rejectMatch"
+      }
+    },
+    {
+      method: "POST",
+      path: "/api/people/match-candidates/:id/suppress",
+      chat: { access: "write", title: "Suppress People match", content: "user_authored" }
+    },
+    {
+      method: "POST",
+      path: "/api/people/index/refresh",
+      chat: { access: "blocked", blockedBecause: "external_effect" }
+    },
+    {
+      method: "GET",
+      path: "/api/people/notes-settings",
+      chat: { access: "read", content: "user_authored" }
+    },
+    {
+      method: "PUT",
+      path: "/api/people/notes-settings",
+      chat: { access: "blocked", blockedBecause: "prompt_shaping" }
+    },
+    {
+      method: "POST",
+      path: "/api/people/notes/refresh",
+      chat: { access: "blocked", blockedBecause: "external_effect" }
+    },
+    {
+      method: "GET",
+      path: "/api/people/:id",
+      chat: { access: "read", content: "outside", coveredBy: "people.getContext" }
+    },
+    { method: "GET", path: "/api/people/:id/links", chat: { access: "read", content: "outside" } },
+    {
+      method: "PATCH",
+      path: "/api/people/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect" }
+    },
+    {
+      method: "POST",
+      path: "/api/people/:id/archive",
+      chat: { access: "blocked", blockedBecause: "external_effect" }
+    },
+    {
+      method: "POST",
+      path: "/api/people/:id/merge",
+      chat: { access: "blocked", blockedBecause: "module_promise" }
+    },
+    {
+      method: "POST",
+      path: "/api/people/:id/split-identity",
+      chat: { access: "blocked", blockedBecause: "module_promise" }
+    }
+  ],
+  features: [
+    {
+      id: "people.chat_app_actions",
+      description:
+        "App actions read People and review matches. Note-backed writes, ingestion, merges and identity splits remain unavailable through this path."
+    }
   ],
   sourceBehaviors: [
     {

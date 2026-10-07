@@ -100,6 +100,11 @@ export type { MemoryGraphRouteDependencies } from "./graph-routes.js";
 export { registerMemoryDashboardRoutes } from "./dashboard-routes.js";
 export type { MemoryDashboardRouteDependencies } from "./dashboard-routes.js";
 export { memoryForgetExecute, memoryRecallExecute, memoryRememberExecute } from "./graph-tools.js";
+export {
+  MemoryForgetService,
+  type MemoryForgetTarget,
+  type MemoryForgetToolService
+} from "./forget-service.js";
 export { createMemoryFactSignature, normalizeMemoryFactContent } from "./fact-signature.js";
 export type {
   AcceptMemoryCandidateRequest,

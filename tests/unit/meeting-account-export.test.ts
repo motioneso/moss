@@ -36,7 +36,6 @@ const collections = [
   "export_requests",
   "capture_connections",
   "capture_start_cancellations",
-  "recording_notices",
   "capture_grants"
 ] as const;
 
@@ -113,7 +112,7 @@ describe("Meetings account-export collector", () => {
     );
   });
 
-  it("reads exactly twelve source tables with explicit columns, actor predicates and stable order", async () => {
+  it("reads exactly eleven source tables with explicit columns, actor predicates and stable order", async () => {
     const { db, queries, scopedDb } = harness();
     try {
       const section = await collectMeetingsExportSection(scopedDb, ctx);
@@ -161,7 +160,6 @@ describe("Meetings account-export collector", () => {
         "device_name",
         "status",
         "state_json",
-        "notice_policy_version",
         "created_at",
         "expires_at"
       ]
@@ -228,7 +226,7 @@ describe("Meetings account-export collector", () => {
       ]);
       expect(result.export_receipts).toEqual([{ receiptJson: '{"writeStatus":"saved"}' }]);
       expect(result.export_requests).toEqual([{ resultJson: null }]);
-      expect(queries).toHaveLength(12);
+      expect(queries).toHaveLength(11);
       expect(JSON.parse(JSON.stringify(result))).toEqual(result);
     } finally {
       await db.destroy();
@@ -251,15 +249,10 @@ describe("Meetings account-export collector", () => {
       ),
       "utf8"
     );
-    const noticeMigration = await readFile(
-      new URL("../../packages/meetings/sql/0290_meeting_recording_notice.sql", import.meta.url),
-      "utf8"
-    );
     const migration =
       originalMigration +
       (captureMigration.match(/-- Capture account export[\s\S]*$/)?.[0] ?? "") +
-      (connectionMigration.match(/-- Capture connection account export[\s\S]*$/)?.[0] ?? "") +
-      (noticeMigration.match(/-- Ordinary acknowledgement metadata[\s\S]*$/)?.[0] ?? "");
+      (connectionMigration.match(/-- Capture connection account export[\s\S]*$/)?.[0] ?? "");
     const { db, queries, scopedDb } = harness();
     try {
       await collectMeetingsExportSection(scopedDb, ctx);

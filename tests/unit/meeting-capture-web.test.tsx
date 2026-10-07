@@ -9,11 +9,10 @@ import type {
   MeetingCaptureDevice,
   MeetingCaptureState,
   MeetingCapturePreferences,
-  MeetingRecordingNoticeStatus,
   MeetingRecord
 } from "@moss/shared";
 import { registerDraftInputRegressions } from "./meeting-draft-input-cases.js";
-import { registerCaptureNoticeRegressions } from "./meeting-capture-notice-web-cases.js";
+import { registerCaptureSessionRegressions } from "./meeting-capture-session-web-cases.js";
 import { MeetingSetup } from "../../packages/meetings/src/web/meeting-setup.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import { CapturePanel } from "../../packages/meetings/src/web/capture-panel.js";
@@ -89,7 +88,6 @@ let root: Root;
 let host: HTMLDivElement;
 let client: QueryClient;
 let preferences: MeetingCapturePreferences;
-let recordingNotice: MeetingRecordingNoticeStatus;
 let devices: readonly MeetingCaptureDevice[];
 let status: Omit<MeetingCaptureBrowserStatus, "capture"> & { capture: MeetingCaptureState | null };
 let calls: { path: string; body: Record<string, unknown> | undefined }[];
@@ -99,13 +97,6 @@ const json = (value: unknown, code = 200, headers?: HeadersInit) =>
   new Response(JSON.stringify(value), { status: code, headers });
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  recordingNotice = {
-    currentNotice: {
-      policyVersion: "2026-10-06",
-      text: "Tell people when recording. Selected audio goes to your transcription service."
-    },
-    acknowledgement: null
-  };
   preferences = {
     defaultCaptureMode: "microphone-only",
     rememberedSource: {
@@ -129,17 +120,6 @@ beforeEach(() => {
       ? (JSON.parse(String(options.body)) as Record<string, unknown>)
       : undefined;
     calls.push({ path, body });
-    if (path === "/api/meetings/recording-notice") {
-      if (body)
-        recordingNotice = {
-          ...recordingNotice,
-          acknowledgement: {
-            policyVersion: String(body.policyVersion),
-            acknowledgedAt: new Date().toISOString()
-          }
-        };
-      return json(recordingNotice);
-    }
     if (path === "/api/meetings/preferences") {
       if (body) preferences = body as unknown as MeetingCapturePreferences;
       return json(preferences);
@@ -152,7 +132,7 @@ beforeEach(() => {
         ...status,
         revision: "1",
         capture: capture({
-          selection: body?.selection as MeetingCaptureState["selection"],
+          selection: (body?.selection as MeetingCaptureState["selection"]) ?? capture().selection,
           observed: { generation: 0, phase: "idle" }
         })
       };
@@ -228,16 +208,6 @@ async function click(text: string) {
   await act(async () => button(text).click());
   await settle();
 }
-async function acknowledgeNotice(scope: ParentNode = host) {
-  const notice = scope.querySelector<HTMLInputElement>('input[aria-label="Recording notice"]');
-  if (!notice) {
-    expect(scope.textContent).toContain("Recording notice acknowledged");
-    return;
-  }
-  if (!notice.checked) await act(async () => notice.click());
-  if (vi.isFakeTimers()) await act(async () => vi.advanceTimersByTimeAsync(1));
-  else await settle();
-}
 function type(input: HTMLInputElement | HTMLTextAreaElement, text: string) {
   const prototype =
     input instanceof HTMLTextAreaElement
@@ -265,12 +235,11 @@ function Shell() {
 }
 
 describe("capture browser DOM regressions (synthetic unit transport; not live Mac proof)", () => {
-  registerCaptureNoticeRegressions({
+  registerCaptureSessionRegressions({
     capture,
     meeting,
     json,
     mount,
-    acknowledgeNotice,
     click,
     button,
     settle,
@@ -285,11 +254,7 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
       status.capture = value;
     },
     getCapture: () => status.capture,
-    calls: () => calls,
-    getNotice: () => recordingNotice,
-    setNotice: (value) => {
-      recordingNotice = value;
-    }
+    calls: () => calls
   });
   it("keeps every rapidly typed title character before deferred query notifications", async () => {
     await mount(<MeetingSetup onCreated={() => {}} />);
@@ -320,8 +285,28 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
     type(search, "quick search");
     expect(search.value).toBe("quick search");
   });
+  it("creates a meeting without recording or asking for audio sources", async () => {
+    preferences = { defaultCaptureMode: null };
+    devices = [];
+    const opened = vi.spyOn(window, "open").mockImplementation(() => null);
+    await mount(<Shell />);
+    expect(button("New meeting").disabled).toBe(false);
+    expect(host.querySelector("select")).toBeNull();
+    expect(host.querySelector('input[type="radio"]')).toBeNull();
+    expect(calls.filter((call) => call.path.startsWith("/api/meetings/"))).toEqual([]);
+    await click("New meeting");
+    expect(calls.filter((call) => call.path === "/api/meetings/records")).toEqual([
+      {
+        path: "/api/meetings/records",
+        body: { title: "New meeting", requestKey: expect.any(String) }
+      }
+    ]);
+    expect(calls.some((call) => call.path.endsWith("/capture/start"))).toBe(false);
+    expect(button("Start recording").disabled).toBe(true);
+    expect(opened).not.toHaveBeenCalled();
+  });
   it.each(["microphone-only", "selected-app", "computer-audio"] as const)(
-    "one Start uses remembered %s sources in this tab",
+    "an explicit Start preserves device identity and leaves remembered %s resolution to the server",
     async (mode) => {
       preferences = {
         defaultCaptureMode: mode,
@@ -332,40 +317,26 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
           ...(mode === "selected-app" ? { applicationId: "com.example.meeting" } : {})
         }
       };
-      const opened = vi.spyOn(window, "open").mockImplementation(() => null);
-      const onCreated = vi.fn();
-      await mount(<MeetingSetup onCreated={onCreated} />);
+      await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
       expect(host.textContent).toContain("Studio Mac");
-      expect(host.textContent).toContain("Desk microphone");
-      expect(host.querySelector('[role="switch"]')).toBeNull();
-      expect(button("Start meeting").disabled).toBe(true);
+      expect(host.querySelector("select")).toBeNull();
+      expect(host.querySelector('input[type="radio"]')).toBeNull();
+      expect(button("Start recording").disabled).toBe(false);
       expect(calls.some((call) => call.path.endsWith("/capture/start"))).toBe(false);
-      const notice = host.querySelector<HTMLInputElement>('input[aria-label="Recording notice"]')!;
-      expect(notice).not.toBeNull();
-      expect(notice.checked).toBe(false);
-      await act(async () => notice.click());
-      await settle();
-      expect(button("Start meeting").disabled).toBe(false);
-      await acknowledgeNotice();
-      await click("Start meeting");
+      await click("Start recording");
       const starts = calls.filter((call) => call.path.endsWith("/capture/start"));
-      expect(starts).toHaveLength(1);
-      expect(starts[0]!.body).not.toHaveProperty("noticeAcknowledged");
-      expect(starts[0]!.body?.selection).toMatchObject({
-        mode,
-        microphone: { deviceId: "stable-mic", sourceId: "mic" }
-      });
-      if (mode === "selected-app")
-        expect(starts[0]!.body?.selection).toMatchObject({
-          applicationId: "com.example.meeting",
-          appProcessTreeId: "current-process"
-        });
-      expect(calls.find((call) => call.path === "/api/meetings/records")?.body?.title).toBe(
-        "New meeting"
-      );
-      expect(onCreated).toHaveBeenCalledWith(meeting.id);
-      expect(opened).not.toHaveBeenCalled();
-      opened.mockRestore();
+      expect(starts).toEqual([
+        {
+          path: `/api/meetings/records/${meeting.id}/capture/start`,
+          body: {
+            deviceId: device.deviceId,
+            connectionId: device.connectionId,
+            expectedRevision: device.revision,
+            requestKey: expect.any(String)
+          }
+        }
+      ]);
+      expect(calls.some((call) => call.path === "/api/meetings/records")).toBe(false);
     }
   );
   it.each(["device", "microphone", "application"])(
@@ -398,22 +369,105 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
                 }
               }
             ];
-      await mount(<MeetingSetup onCreated={() => {}} />);
-      expect(button("Start meeting").disabled).toBe(true);
-      expect(host.textContent).toContain("unavailable");
-      expect(button("Change") || button("Done changing sources")).toBeDefined();
+      await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
+      expect(button("Start recording").disabled).toBe(true);
+      expect(host.querySelector("select")).toBeNull();
       expect(calls.some((call) => call.path.endsWith("/capture/start"))).toBe(false);
     }
   );
 
-  it("never starts on connection and never chooses a first device or source", async () => {
+  it("requires an explicit Start after connecting a single compatible Mac", async () => {
     preferences = { defaultCaptureMode: null };
-    await mount(<MeetingSetup onCreated={() => {}} />);
-    expect(button("Start meeting").disabled).toBe(true);
-    expect(host.querySelector<HTMLSelectElement>("#meeting-capture-device")!.value).toBe("");
+    await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
+    expect(button("Start recording").disabled).toBe(false);
+    expect(calls.some((call) => call.path.endsWith("/capture/start"))).toBe(false);
+    await click("Start recording");
+    expect(calls.find((call) => call.path.endsWith("/capture/start"))?.body).toEqual({
+      deviceId: device.deviceId,
+      connectionId: device.connectionId,
+      expectedRevision: device.revision,
+      requestKey: expect.any(String)
+    });
+  });
+  it.each([
+    {
+      label: "exact OS default among multiple microphones",
+      defaultMicrophoneId: "stable-mic",
+      multiple: true,
+      enabled: true
+    },
+    {
+      label: "explicitly unavailable OS default",
+      defaultMicrophoneId: null,
+      multiple: false,
+      enabled: false
+    },
+    {
+      label: "stale OS default identity",
+      defaultMicrophoneId: "missing",
+      multiple: false,
+      enabled: false
+    },
+    {
+      label: "legacy single microphone",
+      defaultMicrophoneId: undefined,
+      multiple: false,
+      enabled: true
+    },
+    {
+      label: "ambiguous legacy microphones",
+      defaultMicrophoneId: undefined,
+      multiple: true,
+      enabled: false
+    }
+  ])(
+    "preflights $label without a source picker",
+    async ({ defaultMicrophoneId, multiple, enabled }) => {
+      preferences = { defaultCaptureMode: null };
+      devices = [
+        {
+          ...device,
+          inventory: {
+            ...device.inventory,
+            defaultMicrophoneId,
+            microphones: multiple
+              ? [
+                  { deviceId: "other", sourceId: "other", label: "Other microphone" },
+                  ...device.inventory.microphones
+                ]
+              : device.inventory.microphones
+          }
+        }
+      ];
+      await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
+      expect(button("Start recording").disabled).toBe(!enabled);
+      expect(host.querySelector("select")).toBeNull();
+      expect(calls.some((call) => call.path.endsWith("/capture/start"))).toBe(false);
+    }
+  );
+  it("does not silently reduce fresh default capture to microphone-only", async () => {
+    preferences = { defaultCaptureMode: null };
+    devices = [
+      {
+        ...device,
+        inventory: {
+          ...device.inventory,
+          computerAudio: { available: false, excludedProcessTreeIds: [] }
+        }
+      }
+    ];
+    await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
+    expect(button("Start recording").disabled).toBe(true);
     expect(calls.some((call) => call.path.endsWith("/capture/start"))).toBe(false);
   });
-  it("coalesces repeated Start clicks before the draft response", async () => {
+  it("does not choose between multiple connected Macs for fresh capture", async () => {
+    preferences = { defaultCaptureMode: null };
+    devices = [device, { ...device, deviceId: "other-mac" }];
+    await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
+    expect(button("Start recording").disabled).toBe(true);
+    expect(calls.some((call) => call.path.endsWith("/capture/start"))).toBe(false);
+  });
+  it("coalesces repeated New meeting clicks before the creation response", async () => {
     let finish!: (value: Response) => void;
     const normal = transport.getMockImplementation()!;
     transport.mockImplementation((path: string, options?: RequestInit) =>
@@ -425,15 +479,14 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
         : normal(path, options)
     );
     await mount(<MeetingSetup onCreated={() => {}} />);
-    await acknowledgeNotice();
     act(() => {
-      button("Start meeting").click();
-      button("Start meeting").click();
+      button("New meeting").click();
+      button("New meeting").click();
     });
     expect(calls.filter((call) => call.path === "/api/meetings/records")).toHaveLength(1);
     await act(async () => finish(json({ meeting, created: true })));
     await settle();
-    expect(calls.filter((call) => call.path.endsWith("/capture/start"))).toHaveLength(1);
+    expect(calls.filter((call) => call.path.endsWith("/capture/start"))).toHaveLength(0);
   });
   it("does not restore another signed-in session after a late draft response", async () => {
     let finish!: (value: Response) => void;
@@ -447,8 +500,7 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
     );
     const created = vi.fn();
     await mount(<MeetingSetup onCreated={created} />);
-    await acknowledgeNotice();
-    act(() => button("Start meeting").click());
+    act(() => button("New meeting").click());
     await act(async () => {
       root.unmount();
       client.clear();
@@ -461,7 +513,7 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
     expect(calls.some((call) => call.path.endsWith("/capture/start"))).toBe(false);
   });
 
-  it("retries a transient Start automatically with the exact same key and source", async () => {
+  it("retries a transient Start automatically with the exact same request identity", async () => {
     const normal = transport.getMockImplementation()!;
     let attempts = 0;
     transport.mockImplementation((path: string, options?: RequestInit) => {
@@ -471,10 +523,9 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
       }
       return normal(path, options);
     });
-    await mount(<MeetingSetup onCreated={() => {}} />);
+    await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
     vi.useFakeTimers();
-    await acknowledgeNotice();
-    act(() => button("Start meeting").click());
+    act(() => button("Start recording").click());
     await act(async () => vi.advanceTimersByTimeAsync(2000));
     const starts = calls.filter((call) => call.path.endsWith("/capture/start"));
     expect(starts).toHaveLength(3);
@@ -493,9 +544,8 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
             })
           : normal(path, options)
       );
-      await mount(<MeetingSetup onCreated={() => {}} />);
-      await acknowledgeNotice();
-      await click("Start meeting");
+      await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
+      await click("Start recording");
       await act(async () => {
         root.unmount();
         if (reset === "clear") client.clear();
@@ -540,7 +590,7 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
     expect(host.querySelector('[aria-label="Recorded duration"]')!.textContent).toBe("0:04");
     expect(button("Stop and review").disabled).toBe(false);
     expect(host.textContent).not.toContain("1:20");
-    expect(button("Change")).toBeDefined();
+    expect(host.querySelector("select")).toBeNull();
   });
   it("Stop supersedes a lost Pause response using the current generation", async () => {
     status.capture = capture();
@@ -636,8 +686,8 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
         finalizationDeadline: new Date(Date.now() + 60000).toISOString()
       }
     ];
-    await mount(<MeetingSetup onCreated={() => {}} />);
-    expect(button("Start meeting").disabled).toBe(true);
+    await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
+    expect(button("Start recording").disabled).toBe(true);
     expect(host.textContent).toContain("finishing the previous transcript");
   });
   it("advances only an acknowledged recording clock and freezes it across slow snapshots and Pause", async () => {
@@ -682,9 +732,10 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
           })
         : normal(path, options)
     );
-    await mount(<MeetingSetup onCreated={() => {}} />);
-    await acknowledgeNotice();
-    await click("Start meeting");
+    await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
+    await click("Start recording");
+    // Hold background reads so they cannot hide a stale response overwriting the newer grant.
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
     const newer = capture({ grantId: "newer-grant", deviceName: "Other Mac" });
     act(() => client.setQueryData(captureKeys.status(meeting.id), { ...status, capture: newer }));
     await act(async () => finish(json({ capture: capture() })));
@@ -720,12 +771,16 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
       }
       return normal(path, options);
     });
-    await mount(<Shell />);
-    await acknowledgeNotice();
-    await click("Start meeting");
+    await mount(<Shell />, `/meetings?id=${meeting.id}`);
+    await click("Start recording");
     await click("Stop and review");
     expect(calls.filter((call) => call.path.endsWith("/capture/cancel-start"))).toHaveLength(1);
     expect(cancelled.has(String(sentStart?.requestKey))).toBe(true);
+    expect(calls.find((call) => call.path.endsWith("/capture/cancel-start"))?.body).toEqual({
+      requestKey: sentStart?.requestKey,
+      deviceId: device.deviceId,
+      connectionId: device.connectionId
+    });
     expect(startRequests).toBe(1);
     await act(async () => finishLate(json({ code: "meeting_capture_conflict" }, 409)));
     await settle();
@@ -766,28 +821,18 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
     await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
     await click("Pause");
     expect(host.textContent).toContain("Paused");
-    expect(button("Resume").disabled).toBe(true);
-    await acknowledgeNotice();
     expect(button("Resume").disabled).toBe(false);
     expect(
       calls.filter((call) => call.path.endsWith("/control")).map((call) => call.body?.command)
     ).toEqual(["pause"]);
-    await acknowledgeNotice();
     await click("Resume");
     expect(
       calls.filter((call) => call.path.endsWith("/control")).map((call) => call.body?.command)
     ).toEqual(["pause", "record"]);
   });
   it.each(["panel", "strip"] as const)(
-    "a second browser narrowing the same grant cannot make stale %s Resume broaden capture",
+    "a newer narrowed grant cannot make stale %s Resume broaden capture",
     async (surface) => {
-      recordingNotice = {
-        ...recordingNotice,
-        acknowledgement: {
-          policyVersion: recordingNotice.currentNotice.policyVersion,
-          acknowledgedAt: new Date().toISOString()
-        }
-      };
       status.capture = capture({
         selection: {
           mode: "computer-audio",
@@ -797,86 +842,40 @@ describe("capture browser DOM regressions (synthetic unit transport; not live Ma
         }
       });
       await mount(<Shell />, `/meetings?id=${meeting.id}`);
-      const secondClient = new QueryClient({
-        defaultOptions: { queries: { retry: false, gcTime: Infinity } }
+      // Another authorized controller narrows the same grant. No source picker is exposed here.
+      status.capture = capture({
+        generation: 3,
+        observed: { generation: 3, phase: "recording" }
       });
-      const secondHost = document.createElement("div");
-      document.body.appendChild(secondHost);
-      const secondRoot = createRoot(secondHost);
-      const secondButton = (label: string) =>
-        [...secondHost.querySelectorAll("button")].find((item) => item.textContent === label)!;
-      try {
-        await act(async () =>
-          secondRoot.render(
-            <QueryClientProvider client={secondClient}>
-              <MemoryRouter>
-                <CapturePanel meeting={meeting} onLiveChange={() => {}} />
-              </MemoryRouter>
-            </QueryClientProvider>
-          )
-        );
-        await settle();
-        await act(async () => secondButton("Pause").click());
-        await settle();
-        await act(async () => secondButton("Change").click());
-        await settle();
-        act(() =>
-          secondHost.querySelector<HTMLInputElement>('input[value="microphone-only"]')!.click()
-        );
-        await settle();
-        await acknowledgeNotice(secondHost);
-        await act(async () => secondButton("Resume").click());
-        await settle();
-        expect(status.capture?.selection?.mode).toBe("microphone-only");
-        if (surface === "strip") await click("Other module");
-        act(() => refreshCaptureStatus(client, meeting.id));
-        await settle();
-        await click("Pause");
-        expect(host.querySelector('input[aria-label="Recording notice"]')).toBeNull();
-        await click("Resume");
-        const resumed = calls.filter(
-          (call) => call.path.endsWith("/capture/control") && call.body?.command === "record"
-        );
-        expect(resumed).toHaveLength(2);
-        expect(resumed[1]!.body?.selection).toMatchObject({ mode: "microphone-only" });
-      } finally {
-        await act(async () => secondRoot.unmount());
-        secondClient.clear();
-        secondHost.remove();
-      }
+      if (surface === "strip") await click("Other module");
+      act(() => refreshCaptureStatus(client, meeting.id));
+      await settle();
+      await click("Pause");
+      await click("Resume");
+      const resumed = calls.filter(
+        (call) => call.path.endsWith("/capture/control") && call.body?.command === "record"
+      );
+      expect(resumed).toHaveLength(1);
+      expect(resumed[0]!.body?.selection).toMatchObject({ mode: "microphone-only" });
     }
   );
-  it("keeps notice acknowledgement on the meeting page while strip Stop remains available", async () => {
+  it("keeps explicit Resume and Stop available from the recording strip", async () => {
     status.capture = capture({
       desired: "paused",
       generation: 2,
       observed: { generation: 2, phase: "paused" }
     });
     client.setQueryData(captureKeys.active, { meetingId: meeting.id, title: meeting.title });
-    await mount(<Shell />, "/other");
-    expect(host.querySelector('input[aria-label="Recording notice"]')).toBeNull();
-    expect(host.textContent).not.toContain(recordingNotice.currentNotice.text);
-    expect(button("Resume").disabled).toBe(true);
+    await mount(<Shell />, "/settings");
+    expect(button("Resume").disabled).toBe(false);
     expect(button("Stop and review").disabled).toBe(false);
-    const link = [...host.querySelectorAll("a")].find(
-      (item) => item.textContent === "Review the recording notice on the meeting page"
-    );
-    expect(link?.getAttribute("href")).toBe(`/meetings?id=${meeting.id}`);
-  });
-  it("preserves a visible unsent source Change within the same paused generation", async () => {
-    status.capture = capture();
-    await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
-    await click("Pause");
-    await click("Change");
-    act(() => host.querySelector<HTMLInputElement>('input[value="computer-audio"]')!.click());
-    await settle();
-    act(() => refreshCaptureStatus(client, meeting.id));
-    await settle();
-    await acknowledgeNotice();
+    expect(calls.some((call) => call.path.endsWith("/capture/control"))).toBe(false);
     await click("Resume");
     expect(
-      calls.filter((call) => call.path.endsWith("/capture/control")).at(-1)?.body?.selection
-    ).toMatchObject({ mode: "computer-audio" });
+      calls
+        .filter((call) => call.path.endsWith("/capture/control"))
+        .map((call) => call.body?.command)
+    ).toEqual(["record"]);
   });
 
   it("coalesces repeated Stop clicks and keeps its cutoff unchanged", async () => {

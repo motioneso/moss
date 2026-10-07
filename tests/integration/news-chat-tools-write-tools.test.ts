@@ -53,7 +53,7 @@ describe("topic/exclusion/removal write tools (#975 Task 8)", () => {
   }
 
   it("addTopic is confirm-gated: no row while pending, then row + confirmed audit", async () => {
-    const { gateway, emitted, mint } = harness.makeGateway();
+    const { gateway, emitted, mint } = await harness.makeGateway();
     const token = mint(ids.userA, "news-chat-add-topic");
     const before = await topicRowCount(ids.userA);
 
@@ -110,7 +110,7 @@ describe("topic/exclusion/removal write tools (#975 Task 8)", () => {
       }
     );
 
-    const { gateway, emitted, mint } = harness.makeGateway();
+    const { gateway, emitted, mint } = await harness.makeGateway();
     const token = mint(ids.userB, "news-chat-topic-limit");
     const pending = gateway.callTool(token, "news.addTopic", { label: "One too many" });
     const request = await harness.waitForActionRequest(emitted, 0);
@@ -137,7 +137,7 @@ describe("topic/exclusion/removal write tools (#975 Task 8)", () => {
     );
     const before = await topicRowCount(ids.userA);
 
-    const { gateway, emitted, mint } = harness.makeGateway();
+    const { gateway, emitted, mint } = await harness.makeGateway();
     const token = mint(ids.userA, "news-chat-remove-topic");
     const pending = gateway.callTool(token, "news.removeTopic", { topicId: seeded.id });
     const request = await harness.waitForActionRequest(emitted, 0);
@@ -154,7 +154,7 @@ describe("topic/exclusion/removal write tools (#975 Task 8)", () => {
   }, 30_000);
 
   it("addExclusion is confirm-gated and stores the normalized domain", async () => {
-    const { gateway, emitted, mint } = harness.makeGateway();
+    const { gateway, emitted, mint } = await harness.makeGateway();
     const token = mint(ids.userA, "news-chat-add-exclusion");
 
     // Mixed-case input proves the tool routes through normalizePublisherDomain.
@@ -178,7 +178,7 @@ describe("topic/exclusion/removal write tools (#975 Task 8)", () => {
 
   it("removeSource treats a cross-owner id as not-found and removes own sources after confirm", async () => {
     // B follows example.com through the existing chat preview/confirm flow.
-    const { gateway, emitted, mint } = harness.makeGateway();
+    const { gateway, emitted, mint } = await harness.makeGateway();
     const tokenB = mint(ids.userB, "news-chat-b-source");
     const preview = await harness.previewExampleFeed(gateway, tokenB);
     const candidate = preview.candidates[0]!;

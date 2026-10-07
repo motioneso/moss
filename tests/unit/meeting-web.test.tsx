@@ -47,17 +47,13 @@ describe("Meetings draft screen", () => {
     );
     expect(found.contributions.meetings).toContain("@moss/meetings/web");
   });
-  it("offers an optional title and one Start with a shared connection remedy", () => {
-    const html = render("/meetings", (client) =>
-      client.setQueryData(meetingKeys.preferences, { defaultCaptureMode: null })
-    );
+  it("offers optional-title creation without capture setup", () => {
+    const html = render("/meetings");
     expect(html).toContain("Meeting title (optional)");
-    expect(html).toContain("Connect Trail Marker once for Meetings and Backtrack");
-    expect(html).toContain("Connecting doesn’t start recording");
-    expect(html).toContain("/settings?section=profile");
-    expect(html).toMatch(/disabled=""[^>]*>Start meeting/);
-    expect(html).not.toContain("Prepare this meeting");
-    expect(html).toContain("Checking the recording notice");
+    expect(html).toMatch(/<button[^>]*>New meeting<\/button>/);
+    expect(html).not.toContain("Start recording");
+    expect(html).not.toContain("Recording device");
+    expect(html).not.toContain("Microphone only");
   });
   it("distinguishes loading from empty history", () => {
     const loading = render("/meetings?view=history");
