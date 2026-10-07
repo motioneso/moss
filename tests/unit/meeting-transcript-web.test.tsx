@@ -58,9 +58,14 @@ const fixture: MeetingTranscriptView = {
 };
 afterEach(() => vi.unstubAllGlobals());
 describe("retained transcript review", () => {
-  it.each([11, 12, 249])(
-    "hides a %i ms missing range without changing retained diagnostics",
-    (durationMs) => {
+  it.each([
+    [11, "interrupted"],
+    [12, "interrupted"],
+    [249, "interrupted"],
+    [12, "processing-failed"]
+  ] as const)(
+    "hides a %i ms %s range without changing retained diagnostics",
+    (durationMs, reason) => {
       // Cross a displayed second: visibility depends on exact duration, not timestamp labels.
       const gaps = Object.freeze([
         Object.freeze({
@@ -69,7 +74,7 @@ describe("retained transcript review", () => {
           epoch: 1,
           startMs: 3995,
           endMs: 3995 + durationMs,
-          reason: "interrupted" as const
+          reason
         })
       ]);
       const original = JSON.stringify(gaps);
@@ -80,33 +85,40 @@ describe("retained transcript review", () => {
       expect(JSON.stringify(gaps)).toBe(original);
     }
   );
-  it.each([250, 1000])("shows a %i ms missing range alongside hidden tiny gaps", (durationMs) => {
-    const gaps: MeetingCaptureGap[] = [
-      {
-        id: "tiny-gap",
-        sourceId: "mic",
-        epoch: 1,
-        startMs: 2500,
-        endMs: 2512,
-        reason: "interrupted"
-      },
-      {
-        id: "real-gap",
-        sourceId: "mic",
-        epoch: 1,
-        startMs: 3000,
-        endMs: 3000 + durationMs,
-        reason: "interrupted"
+  it.each([250, 900, 1000])(
+    "shows a %i ms missing range alongside hidden tiny gaps",
+    (durationMs) => {
+      const gaps: MeetingCaptureGap[] = [
+        {
+          id: "tiny-gap",
+          sourceId: "mic",
+          epoch: 1,
+          startMs: 2500,
+          endMs: 2512,
+          reason: "interrupted"
+        },
+        {
+          id: "real-gap",
+          sourceId: "mic",
+          epoch: 1,
+          startMs: 3000,
+          endMs: 3000 + durationMs,
+          reason: "interrupted"
+        }
+      ];
+      const html = renderToString(<TranscriptTimeline {...fixture} gaps={gaps} />).replaceAll(
+        "<!-- -->",
+        ""
+      );
+      expect(html.match(/meetings-transcript-gap/g)).toHaveLength(1);
+      if (durationMs < 1000) {
+        expect(html).toContain("Under a second missing at 0:03");
+        expect(html).not.toContain("0:03 to 0:03 missing");
+      } else {
+        expect(html).toContain("0:03 to 0:04 missing");
       }
-    ];
-    const html = renderToString(<TranscriptTimeline {...fixture} gaps={gaps} />).replaceAll(
-      "<!-- -->",
-      ""
-    );
-    // A 250 ms range still shows even when its whole-second timestamp labels are identical.
-    expect(html.match(/meetings-transcript-gap/g)).toHaveLength(1);
-    expect(html).toContain(`0:03 to ${transcriptTime(3000 + durationMs)} missing`);
-  });
+    }
+  );
   it("shows one missing range for duplicate reports of a failed clip without changing diagnostics", () => {
     const gap: MeetingCaptureGap = {
       id: "failed-upload-request",

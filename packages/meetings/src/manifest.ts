@@ -225,7 +225,7 @@ export const meetingsModuleManifest = {
           code: "meeting_capture_processing_failed",
           class: "transient",
           description:
-            "Capture continues while transient transcription failures retry. A terminal failed clip leaves one gap. Provider end rounding up to 100ms is clamped to the clip; other invalid intervals are rejected."
+            "Transient transcription failures retry while capture continues. Terminal failed clips retain one gap, shown at 250ms or longer. Provider end rounding up to 100ms is clamped to the clip; other invalid intervals are rejected."
         },
         {
           code: "meeting_capture_rate_limited",
@@ -558,7 +558,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.transcript_review",
       description:
-        "Read transcript timestamps and sources beside notes or in phone tabs. Missing-audio lines hide gaps under 250ms and exact duplicates; retained diagnostics stay intact. Chat links scroll to cited evidence, including older text."
+        "Transcript timestamps and sources sit beside notes or in phone tabs. Gaps under 250ms and exact duplicates hide; same-second gaps say under a second. Diagnostics stay intact. Chat links scroll to cited evidence, including older text."
     },
     {
       id: "meetings.capture_default",

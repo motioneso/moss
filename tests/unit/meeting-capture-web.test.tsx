@@ -707,6 +707,43 @@ describe("minimal capture browser regressions (synthetic transport, not live pro
     ).toEqual(["pause", "record"]);
   });
 
+  it("keeps Resume disabled after an error-only report until a current-generation pause acknowledgement", async () => {
+    // These protocol states are exercised through the real APIs in meeting-capture-auto-pause.
+    // This synthetic UI test guards the button, not the server's acknowledgement transition.
+    status.capture = capture({
+      desired: "paused",
+      generation: 2,
+      observed: { generation: 1, phase: "error", errorCode: "capture_failed" }
+    });
+    await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);
+    expect(button("Resume").disabled).toBe(true);
+    await click("Resume");
+    expect(calls.filter((call) => call.body?.command === "record")).toHaveLength(0);
+    for (const observed of [
+      { generation: 1, phase: "paused" },
+      { generation: 2, phase: "error", errorCode: "capture_failed" }
+    ] as const) {
+      status.capture = capture({ ...status.capture!, observed });
+      act(() => client.setQueryData(captureKeys.status(meeting.id), { ...status }));
+      await settle();
+      expect(button("Resume").disabled).toBe(true);
+    }
+    status.capture = capture({
+      ...status.capture!,
+      observed: { generation: 2, phase: "paused" }
+    });
+    act(() => client.setQueryData(captureKeys.status(meeting.id), { ...status }));
+    await settle();
+    expect(button("Resume").disabled).toBe(false);
+    expect(calls.filter((call) => call.body?.command === "record")).toHaveLength(0);
+    await click("Resume");
+    expect(calls.filter((call) => call.body?.command === "record")).toHaveLength(1);
+    expect(calls.find((call) => call.body?.command === "record")?.body).toMatchObject({
+      expectedGeneration: 2,
+      command: "record"
+    });
+  });
+
   it("coalesces repeated Stop clicks and keeps its cutoff unchanged", async () => {
     status.capture = capture();
     await mount(<CapturePanel meeting={meeting} onLiveChange={() => {}} />);

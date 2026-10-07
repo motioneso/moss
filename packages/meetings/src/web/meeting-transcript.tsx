@@ -31,6 +31,7 @@ export function TranscriptTimeline({
   // Keep the retained diagnostics intact and collapse only exact coverage duplicates.
   // Hide sub-quarter-second interruptions in this view only, using precise duration
   // rather than rounded timestamp labels. Capture metadata and warnings stay intact.
+  // This also hides processing-failed fragments under 250ms; their failure metadata is retained.
   const distinctGaps = new Map(
     gaps
       .filter((gap) => gap.endMs - gap.startMs >= MIN_TRANSCRIPT_GAP_MS)
@@ -68,7 +69,9 @@ export function TranscriptTimeline({
         {rows.map((row) =>
           row.kind === "gap" ? (
             <p className="jds-hint meetings-transcript-gap" key={`gap:${row.gap.id}`}>
-              {transcriptTime(row.gap.startMs)} to {transcriptTime(row.gap.endMs)} missing
+              {transcriptTime(row.gap.startMs) === transcriptTime(row.gap.endMs)
+                ? `Under a second missing at ${transcriptTime(row.gap.startMs)}`
+                : `${transcriptTime(row.gap.startMs)} to ${transcriptTime(row.gap.endMs)} missing`}
             </p>
           ) : (
             (() => {
