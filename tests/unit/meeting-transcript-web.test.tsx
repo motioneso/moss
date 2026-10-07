@@ -58,6 +58,55 @@ const fixture: MeetingTranscriptView = {
 };
 afterEach(() => vi.unstubAllGlobals());
 describe("retained transcript review", () => {
+  it.each([11, 12, 249])(
+    "hides a %i ms missing range without changing retained diagnostics",
+    (durationMs) => {
+      // Cross a displayed second: visibility depends on exact duration, not timestamp labels.
+      const gaps = Object.freeze([
+        Object.freeze({
+          id: "tiny-gap",
+          sourceId: "mic",
+          epoch: 1,
+          startMs: 3995,
+          endMs: 3995 + durationMs,
+          reason: "interrupted" as const
+        })
+      ]);
+      const original = JSON.stringify(gaps);
+      const html = renderToString(<TranscriptTimeline {...fixture} gaps={gaps} />);
+      expect(html).not.toContain("meetings-transcript-gap");
+      expect(html).not.toContain(" missing");
+      expect(html).toContain("A correction");
+      expect(JSON.stringify(gaps)).toBe(original);
+    }
+  );
+  it.each([250, 1000])("shows a %i ms missing range alongside hidden tiny gaps", (durationMs) => {
+    const gaps: MeetingCaptureGap[] = [
+      {
+        id: "tiny-gap",
+        sourceId: "mic",
+        epoch: 1,
+        startMs: 2500,
+        endMs: 2512,
+        reason: "interrupted"
+      },
+      {
+        id: "real-gap",
+        sourceId: "mic",
+        epoch: 1,
+        startMs: 3000,
+        endMs: 3000 + durationMs,
+        reason: "interrupted"
+      }
+    ];
+    const html = renderToString(<TranscriptTimeline {...fixture} gaps={gaps} />).replaceAll(
+      "<!-- -->",
+      ""
+    );
+    // A 250 ms range still shows even when its whole-second timestamp labels are identical.
+    expect(html.match(/meetings-transcript-gap/g)).toHaveLength(1);
+    expect(html).toContain(`0:03 to ${transcriptTime(3000 + durationMs)} missing`);
+  });
   it("shows one missing range for duplicate reports of a failed clip without changing diagnostics", () => {
     const gap: MeetingCaptureGap = {
       id: "failed-upload-request",

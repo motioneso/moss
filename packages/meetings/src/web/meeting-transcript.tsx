@@ -14,6 +14,8 @@ import { captureKeys } from "./capture-client.js";
 import { evidenceQueryOptions, parseTranscriptEvidence } from "./transcript-evidence.js";
 import { transcriptTime } from "./transcript-time.js";
 
+const MIN_TRANSCRIPT_GAP_MS = 250;
+
 export function TranscriptTimeline({
   snapshot,
   sources,
@@ -27,11 +29,15 @@ export function TranscriptTimeline({
 }) {
   // Native and server reports can describe the same lost clip under different IDs.
   // Keep the retained diagnostics intact and collapse only exact coverage duplicates.
+  // Hide sub-quarter-second interruptions in this view only, using precise duration
+  // rather than rounded timestamp labels. Capture metadata and warnings stay intact.
   const distinctGaps = new Map(
-    gaps.map((gap) => [
-      JSON.stringify([gap.sourceId, gap.epoch, gap.startMs, gap.endMs, gap.reason]),
-      gap
-    ])
+    gaps
+      .filter((gap) => gap.endMs - gap.startMs >= MIN_TRANSCRIPT_GAP_MS)
+      .map((gap) => [
+        JSON.stringify([gap.sourceId, gap.epoch, gap.startMs, gap.endMs, gap.reason]),
+        gap
+      ])
   );
   const rows: (
     | { kind: "segment"; start: number; segment: MeetingTranscriptSegment }

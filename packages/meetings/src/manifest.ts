@@ -558,7 +558,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.transcript_review",
       description:
-        "Read transcript timestamps and sources beside notes, or in phone tabs. Exact duplicate missing-audio ranges appear once; distinct gaps remain. Chat links scroll to cited evidence, including older text."
+        "Read transcript timestamps and sources beside notes or in phone tabs. Missing-audio lines hide gaps under 250ms and exact duplicates; retained diagnostics stay intact. Chat links scroll to cited evidence, including older text."
     },
     {
       id: "meetings.capture_default",
