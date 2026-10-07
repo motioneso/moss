@@ -40,6 +40,8 @@ final class FixtureServer {
     private var statusRequests = 0
     private var epochStartMs: UInt64 = 0
     private var nextStatusDelay: TimeInterval = 0
+    private var heldRecordingGeneration: Int?
+    private var heldRecordingReplies: [() -> Void] = []
     private var strictGapBounds = false
     private var epochStarts: [Int: UInt64] = [1: 0]
     private var epochEnds: [Int: UInt64] = [:]
@@ -72,6 +74,26 @@ final class FixtureServer {
         lock.lock(); defer { lock.unlock() }
         guard path.hasSuffix("/status") else { return 0 }
         let result = nextStatusDelay; nextStatusDelay = 0; return result
+    }
+    func holdRecordingStatusReplies(forGeneration generation: Int) {
+        lock.lock(); heldRecordingGeneration = generation; lock.unlock()
+    }
+    var heldRecordingStatusCount: Int { lock.lock(); defer { lock.unlock() }; return heldRecordingReplies.count }
+    func holdRecordingStatusReply(path: String, body: [String: Any], deliver: @escaping () -> Void) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard path.hasSuffix("/status"), let generation = heldRecordingGeneration,
+              let observed = body["observed"] as? [String: Any], observed["phase"] as? String == "recording",
+              observed["generation"] as? Int == generation else { return false }
+        heldRecordingReplies.append(deliver)
+        return true
+    }
+    func releaseRecordingStatusReplies() {
+        lock.lock()
+        heldRecordingGeneration = nil
+        let replies = heldRecordingReplies
+        heldRecordingReplies.removeAll()
+        lock.unlock()
+        for reply in replies { reply() }
     }
     var loseFirstClaim = false
     var resumeKeys: [String] { lock.lock(); defer { lock.unlock() }; return resumes }
@@ -257,6 +279,7 @@ final class HostLifecycleProtocol: URLProtocol {
                 self.client?.urlProtocol(self, didLoad: data)
                 self.client?.urlProtocolDidFinishLoading(self)
             }
+            if server.holdRecordingStatusReply(path: request.url!.path, body: body, deliver: deliver) { return }
             let delay = server.takeStatusDelay(path: request.url!.path)
             if delay > 0 { DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: deliver) }
             else { deliver() }

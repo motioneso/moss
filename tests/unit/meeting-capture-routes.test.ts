@@ -187,6 +187,73 @@ describe("native default microphone inventory", () => {
 });
 
 describe("capture source envelope regression", () => {
+  const computerOnly = {
+    mode: "computer-audio",
+    microphone: null,
+    outputSourceId: "output",
+    scope: { kind: "process-exclusion", excludedProcessTreeIds: ["moss"] }
+  };
+  it.each([
+    {
+      name: "explicit computer audio without a microphone",
+      command: "change-sources",
+      selection: computerOnly,
+      status: 200
+    },
+    {
+      name: "microphone-only without a microphone",
+      command: "change-sources",
+      selection: { mode: "microphone-only", microphone: null },
+      status: 400
+    },
+    {
+      name: "Resume carrying a source selection",
+      command: "record",
+      selection: computerOnly,
+      status: 400
+    },
+    {
+      name: "computer audio with the microphone field omitted",
+      command: "change-sources",
+      selection: { mode: "computer-audio", outputSourceId: "output", scope: computerOnly.scope },
+      status: 400
+    }
+  ])("validates $name at native route ingress", async ({ command, selection, status }) => {
+    const server = Fastify();
+    const deps = dependencies();
+    const control = vi
+      .spyOn(MeetingCaptureService.prototype, "nativeControl")
+      .mockImplementation(async (_headers, _requestId, input) => ({ capture: input as never }));
+    registerMeetingCaptureRoutes(server, deps);
+    const payload = {
+      meetingId,
+      grantId: meetingId,
+      requestKey: meetingId,
+      expectedGeneration: 2,
+      command,
+      ...(command === "change-sources" ? { expectedEpoch: 1 } : {}),
+      selection
+    };
+    try {
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/meetings/capture/control",
+        payload
+      });
+      expect(response.statusCode).toBe(status);
+      if (status === 200) {
+        expect(control).toHaveBeenCalledOnce();
+        expect(control.mock.calls[0]?.[2]).toEqual(payload);
+      } else {
+        expect(control).not.toHaveBeenCalled();
+        expect(deps.resolveCompanion).not.toHaveBeenCalled();
+        expect(deps.dataContext.withDataContext).not.toHaveBeenCalled();
+      }
+    } finally {
+      control.mockRestore();
+      await server.close();
+    }
+  });
   it.each([
     { mode: "microphone-only", microphone: { deviceId: "mic", sourceId: "mic" } },
     {

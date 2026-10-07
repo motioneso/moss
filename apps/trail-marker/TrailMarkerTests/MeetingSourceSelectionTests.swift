@@ -63,7 +63,7 @@ final class MeetingSourceSelectionTests: XCTestCase {
         XCTAssertEqual(host.sourceDescription, "Computer audio")
         host.pauseFromUserClick()
         XCTAssertEqual(output.stops, 1)
-        XCTAssertTrue(try host.runtime.service(at: fixture.monotonic).allSatisfy { $0.source == .output })
+        XCTAssertTrue(try fixture.runtime.service(at: fixture.monotonic).allSatisfy { $0.source == .output })
     }
 
     func testBothOffRejectsBeforeDeviceCloseOrNetworkAndKeepsPriorSelection() async throws {
@@ -97,7 +97,10 @@ final class MeetingSourceSelectionTests: XCTestCase {
             }
             return [.microphone: fixture.device]
         }) { false }
-        defer { host.shutdown(reason: "Synthetic source cutover test") }
+        defer {
+            host.shutdown(reason: "Synthetic source cutover test")
+            fixture.server.releaseRecordingStatusReplies()
+        }
         try await start(host, fixture)
         let old = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
         fixture.server.configureSource(holdStatus: true)
@@ -107,30 +110,53 @@ final class MeetingSourceSelectionTests: XCTestCase {
         XCTAssertEqual(host.phase, .paused)
         old.receive(hostTimeNanoseconds: fixture.monotonic, sampleRate: 8000, frameCount: 800, sampleAt: { _ in 1 })
         XCTAssertNil(old.peek(), "Old callbacks must be fenced at source cutover")
-        try await waitUntil { host.sourceChangeIntent?.acknowledged == true }
+        try await waitUntil { host.sourceChangeAcknowledged }
         XCTAssertEqual(fixture.server.sourceBodies.count, 1)
         XCTAssertEqual(replacement.starts, 0, "Control acknowledgment alone must never open replacement hardware")
         guard replacement.starts == 0 else { return }
         XCTAssertEqual(fixture.server.audioCount, 0)
+        // The opening status must already cover the complete replacement chunk. Updating
+        // elapsed afterward leaves the independent server-time fence masking a bad ack.
+        fixture.server.advanceElapsed(to: 8000)
+        fixture.server.holdRecordingStatusReplies(forGeneration: 2)
         fixture.server.configureSource()
         try await waitUntil(timeout: 5) { host.phase == .recording }
         XCTAssertEqual(replacement.starts, 1)
         XCTAssertEqual(host.currentSourceChoice?.microphone, second)
         XCTAssertEqual(fixture.server.captureGeneration, 2)
         XCTAssertEqual(fixture.server.lastObservation?.generation, 1, "Source change keeps the previous-generation paused observation")
-        guard host.phase == .recording, replacement.starts == 1, let fresh = replacement.receiver else { return }
+        guard host.phase == .recording, replacement.starts == 1 else { return }
+        let fresh = try XCTUnwrap(replacement.receiver as? MeetingAudioBuffer)
         for index in 0..<5 {
             fresh.receive(hostTimeNanoseconds: fixture.monotonic + UInt64(index) * 1_000_000_000,
                 sampleRate: 8000, frameCount: 8000, sampleAt: { _ in 0.25 })
         }
-        fixture.server.advanceElapsed(to: 8000)
         fixture.monotonic += 6_000_000_000
+        let packet = try XCTUnwrap(fresh.peekChunk(targetDurationNanoseconds: 5_000_000_000,
+            cutoffNanoseconds: nil, allowPartial: false)?.packet)
+        XCTAssertEqual(packet.samples.count, 40_000, "The acknowledgment proof must queue a complete five-second chunk")
+        let capture = try XCTUnwrap(host.remote)
+        let bounds = try MeetingWireAudioBoundary(packet: packet, originNanoseconds: 9_000_000_000)
+        XCTAssertLessThanOrEqual(bounds.endMs, capture.elapsedMs,
+            "The server-time fence must already permit the replacement chunk before its recording acknowledgment")
+        XCTAssertTrue(fixture.runtime.snapshot.permitsSend(epoch: packet.epoch,
+            endNanoseconds: packet.endNanoseconds, now: fixture.monotonic),
+            "The runtime must already permit the replacement chunk before its recording acknowledgment")
         host.service()
-        XCTAssertTrue(host.uploadTasks.isEmpty, "Replacement uploads wait for exact recording-epoch acknowledgment")
+        XCTAssertFalse(host.uploadsInFlight, "Replacement uploads wait for exact recording-epoch acknowledgment")
         XCTAssertEqual(fixture.server.audioCount, 0, "Replacement uploads wait for exact recording-epoch acknowledgment")
-        try await waitUntil(timeout: 5) { fixture.server.lastObservation?.generation == 2 && fixture.server.lastObservation?.phase == "recording" }
+        guard !host.uploadsInFlight, fixture.server.audioCount == 0 else { return }
+        // Hold an actual recording-status response so neither a retry error nor a fast
+        // successful response can hide the distinction between submission and acknowledgment.
+        try await waitUntil(timeout: 5) { fixture.server.heldRecordingStatusCount == 1 }
         host.service()
-        try await waitUntil { fixture.server.audioCount == 1 }
+        XCTAssertFalse(host.uploadsInFlight, "Replacement uploads wait for exact recording-epoch acknowledgment")
+        XCTAssertEqual(fixture.server.audioCount, 0, "Replacement uploads wait for exact recording-epoch acknowledgment")
+        fixture.server.releaseRecordingStatusReplies()
+        try await waitUntil {
+            host.service()
+            return fixture.server.audioCount == 1
+        }
     }
 
     func testPausedSourceChangeRetainsNewChoiceWithoutOpeningUntilNormalResume() async throws {
@@ -201,7 +227,7 @@ final class MeetingSourceSelectionTests: XCTestCase {
         fixture.server.advanceElapsed(to: 3000)
         fixture.server.configureSource(loseReplies: 1, holdStatus: true)
         host.selectMicrophoneFromUserClick(second)
-        try await waitUntil { fixture.server.sourceBodies.count == 1 && host.sourceChangeTask == nil }
+        try await waitUntil { fixture.server.sourceBodies.count == 1 && !host.sourceChangeInFlight }
         XCTAssertEqual(fixture.server.captureEpoch, 2)
         fixture.monotonic = 14_000_000_000
         fixture.server.advanceElapsed(to: 5000)
@@ -218,13 +244,12 @@ final class MeetingSourceSelectionTests: XCTestCase {
         XCTAssertFalse(gaps.contains { $0.epoch == 1 && $0.endMs > 3000 },
             "Lost source acknowledgment Stop must never report a gap across epochs")
         fixture.monotonic += 2_000_000_000
-        host.retryPendingControl()
         try await waitUntil(timeout: 5) { fixture.server.stopCount == 1 }
         try await waitUntil(timeout: 5) { fixture.server.reportedGaps.count >= 2 }
         XCTAssertEqual(fixture.server.rejectedGapCount, 0, "Strict status must accept lost-ack Stop gap identities and bounds")
         XCTAssertEqual(fixture.device.starts, 1, "Lost source acknowledgment Stop must never reopen capture")
         XCTAssertEqual(fixture.server.sourceBodies.count, 1)
-        XCTAssertNil(host.sourceChangeIntent)
+        XCTAssertFalse(host.sourceChangePending)
     }
 
     func testMismatchedSourceControlAcknowledgmentNeverReopensHardware() async throws {
@@ -237,7 +262,7 @@ final class MeetingSourceSelectionTests: XCTestCase {
         fixture.server.configureSource()
         fixture.server.mismatchSourceReplies(control: true)
         host.selectMicrophoneFromUserClick(second)
-        try await waitUntil(timeout: 5) { host.sourceChangeIntent == nil }
+        try await waitUntil(timeout: 5) { !host.sourceChangePending }
         XCTAssertEqual(fixture.device.starts, 1, "Mismatched source control acknowledgment must never reopen hardware")
         XCTAssertTrue(host.sourceSelectionError?.contains("recording changed") == true,
             "Mismatched source control acknowledgment must reject the intent")
@@ -252,10 +277,10 @@ final class MeetingSourceSelectionTests: XCTestCase {
         try await start(host, fixture)
         fixture.server.configureSource(holdStatus: true)
         host.selectMicrophoneFromUserClick(second)
-        try await waitUntil { host.sourceChangeIntent?.acknowledged == true }
+        try await waitUntil { host.sourceChangeAcknowledged }
         fixture.server.mismatchSourceReplies(status: true)
         fixture.server.configureSource()
-        try await waitUntil(timeout: 5) { host.sourceChangeIntent == nil }
+        try await waitUntil(timeout: 5) { !host.sourceChangePending }
         XCTAssertEqual(fixture.device.starts, 1, "Mismatched source status acknowledgment must never reopen hardware")
         XCTAssertTrue(host.sourceSelectionError?.contains("recording changed") == true,
             "Mismatched source status acknowledgment must reject the intent")
@@ -270,14 +295,13 @@ final class MeetingSourceSelectionTests: XCTestCase {
         try await start(host, fixture)
         fixture.server.configureSource(loseReplies: 1, holdStatus: true)
         host.selectMicrophoneFromUserClick(second)
-        try await waitUntil { host.sourceChangeTask == nil && fixture.server.sourceBodies.count == 1 }
+        try await waitUntil { !host.sourceChangeInFlight && fixture.server.sourceBodies.count == 1 }
         let statusCount = fixture.server.statusCount
         host.selectMicrophoneFromUserClick(nil)
         try await Task.sleep(nanoseconds: 2_100_000_000)
         XCTAssertEqual(fixture.server.statusCount, statusCount, "No ordinary paused status while source outcome is pending")
         fixture.monotonic += 2_000_000_000
-        host.retrySourceChange()
-        try await waitUntil { host.sourceChangeIntent?.acknowledged == true }
+        try await waitUntil(timeout: 5) { host.sourceChangeAcknowledged }
         XCTAssertEqual(fixture.server.sourceBodies.count, 2)
         XCTAssertEqual(fixture.server.sourceBodies.first, fixture.server.sourceBodies.last, "Retry must preserve complete source body and UUID")
         XCTAssertEqual(fixture.server.captureEpoch, 2, "Lost reply must not create a second source epoch")
@@ -297,10 +321,10 @@ final class MeetingSourceSelectionTests: XCTestCase {
         fixture.server.configureSource(unavailable: true)
         host.selectMicrophoneFromUserClick(second)
         for expected in 1...3 {
-            try await waitUntil { fixture.server.sourceBodies.count == expected && host.sourceChangeTask == nil }
-            if expected < 3 { fixture.monotonic += 2_000_000_000; host.retrySourceChange() }
+            try await waitUntil(timeout: 5) { fixture.server.sourceBodies.count == expected && !host.sourceChangeInFlight }
+            if expected < 3 { fixture.monotonic += 2_000_000_000 }
         }
-        XCTAssertNil(host.sourceChangeIntent)
+        XCTAssertFalse(host.sourceChangePending)
         XCTAssertEqual(Set(fixture.server.sourceBodies).count, 1, "All bounded attempts must reuse identical bytes")
         XCTAssertEqual(host.phase, .paused)
         XCTAssertEqual(fixture.device.starts, 1, "Network uncertainty must never reopen old or new hardware")
@@ -315,12 +339,12 @@ final class MeetingSourceSelectionTests: XCTestCase {
         defer { host.shutdown(reason: "Synthetic source Stop test") }
         try await start(host, fixture)
         host.selectMicrophoneFromUserClick(second)
-        let task = try XCTUnwrap(host.sourceChangeTask)
+        let completion = try XCTUnwrap(host.sourceChangeCompletion)
         host.stopFromUserClick()
-        await task.value
+        await completion()
         try await waitUntil { fixture.server.stopCount == 1 }
         XCTAssertEqual(fixture.server.sourceBodies.count, 0, "Stop must cancel queued source change before transport")
-        XCTAssertNil(host.sourceChangeIntent)
+        XCTAssertFalse(host.sourceChangePending)
         XCTAssertEqual(fixture.device.starts, 1, "Stop must never open replacement devices")
     }
 
@@ -333,7 +357,7 @@ final class MeetingSourceSelectionTests: XCTestCase {
         try await start(host, fixture)
         fixture.device.failStop = true
         host.selectMicrophoneFromUserClick(second)
-        if let task = host.sourceChangeTask { await task.value }
+        if let completion = host.sourceChangeCompletion { await completion() }
         XCTAssertTrue(host.cleanupBlocked)
         XCTAssertTrue(host.canStop, "Source cleanup failure must preserve Stop recovery")
         XCTAssertEqual(fixture.server.sourceBodies.count, 0, "Cleanup failure must never send a source control")
@@ -358,10 +382,10 @@ final class MeetingSourceSelectionTests: XCTestCase {
         let prior = fixture.server.statusCount
         try await waitUntil(timeout: 3) { fixture.server.statusCount > prior }
         host.selectMicrophoneFromUserClick(second)
-        try await waitUntil { host.sourceChangeIntent?.acknowledged == true }
+        try await waitUntil { host.sourceChangeAcknowledged }
         try await Task.sleep(nanoseconds: 600_000_000)
         XCTAssertEqual(host.remote?.generation, 2, "Pre-cutover status reply must not overwrite newer source authority")
-        XCTAssertEqual(host.sourceChangeIntent?.acknowledged, true, "Pre-cutover status must preserve the newer source intent")
+        XCTAssertTrue(host.sourceChangeAcknowledged, "Pre-cutover status must preserve the newer source intent")
         XCTAssertEqual(replacement.starts, 0)
         try await waitUntil(timeout: 5) { host.phase == .recording }
         XCTAssertEqual(fixture.device.starts, 1)
@@ -377,7 +401,7 @@ final class MeetingSourceSelectionTests: XCTestCase {
         try await start(host, fixture)
         fixture.server.browserState("paused", generation: 4)
         host.selectMicrophoneFromUserClick(second)
-        try await waitUntil { host.sourceChangeIntent == nil }
+        try await waitUntil { !host.sourceChangePending }
         XCTAssertEqual(fixture.server.sourceBodies.count, 1, "Stale source intent must not rebase onto newer authority")
         XCTAssertEqual(fixture.device.starts, 1)
         XCTAssertEqual(host.phase, .paused)
@@ -394,14 +418,14 @@ final class MeetingSourceSelectionTests: XCTestCase {
             try await start(host, fixture)
             fixture.server.configureSource(unavailable: true)
             host.selectMicrophoneFromUserClick(second)
-            try await waitUntil { host.sourceChangeTask == nil }
+            try await waitUntil { !host.sourceChangeInFlight }
             if expire { fixture.monotonic += 31_000_000_000; host.service() }
             else { XCTAssertTrue(host.beforeConnectionEvent(.userLogout)) }
-            XCTAssertNil(host.sourceChangeIntent, "Unlink and lease expiry must cancel the source intent")
+            XCTAssertFalse(host.sourceChangePending, "Unlink and lease expiry must cancel the source intent")
             XCTAssertEqual(host.phase, .stopped)
             XCTAssertEqual(fixture.device.starts, 1)
             let count = fixture.server.sourceBodies.count
-            host.retrySourceChange()
+            host.selectMicrophoneFromUserClick(second)
             XCTAssertEqual(fixture.server.sourceBodies.count, count)
         }
     }

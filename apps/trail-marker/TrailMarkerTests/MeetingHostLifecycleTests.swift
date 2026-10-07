@@ -117,10 +117,10 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try await waitUntil(timeout: 4) { host.phase == .recording }
         XCTAssertEqual(permissionRequests, 1)
         XCTAssertEqual(fixture.device.starts, 1)
-        let resumedPoll = try XCTUnwrap(host.pollTask)
+        let resumedPoll = try XCTUnwrap(host.pollCompletion)
         XCTAssertTrue(host.shutdown(reason: "Explicit Resume regression finished"))
-        await resumedPoll.value
-        XCTAssertNil(host.pollTask)
+        await resumedPoll()
+        XCTAssertNil(host.pollCompletion)
         XCTAssertEqual(fixture.device.starts, 1, "Closing the resumed session must not acquire the source again")
     }
 
@@ -206,7 +206,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         let status = MeetingCaptureStatusItem(host: host, showControls: {})
         try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
         try await waitUntil { host.phase == .recording }
-        let poll = try XCTUnwrap(host.pollTask)
+        let poll = try XCTUnwrap(host.pollCompletion)
         let buffer = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
         let closeActions: [() -> Void] = [host.hideRecordingPill, { pill.panel.performClose(nil) }, { pill.panel.close() }]
         for close in closeActions {
@@ -342,15 +342,15 @@ final class MeetingHostLifecycleTests: XCTestCase {
         let buffer = try XCTUnwrap(fixture.device.receiver as? MeetingAudioBuffer)
         buffer.receive(hostTimeNanoseconds: fixture.monotonic, sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.5 })
         host.pauseFromUserClick()
-        let queuedControl = try XCTUnwrap(host.controlTask)
+        let queuedControl = try XCTUnwrap(host.controlCompletion)
         XCTAssertTrue(host.recordingPresentation.showsRedDot)
         fixture.monotonic += 30_000_000_000
         host.service()
         // Pause queued its Task on this actor, but expiry closed the client before that
         // Task could start. Await it here so no failed request can leak into another test.
-        await queuedControl.value
+        await queuedControl()
         XCTAssertEqual(fixture.server.controlCount, 0, "Expired queued controls must not reach transport")
-        XCTAssertNil(host.controlTask)
+        XCTAssertNil(host.controlCompletion)
         XCTAssertFalse(host.recordingPresentation.showsPill)
         XCTAssertFalse(host.recordingPresentation.showsRedDot)
         XCTAssertNil(buffer.peek())
@@ -386,7 +386,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         defer { host.shutdown(reason: "Synthetic test finished") }
         try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
         await fulfillment(of: [entered], timeout: 2)
-        let suspendedPoll = try XCTUnwrap(host.pollTask)
+        let suspendedPoll = try XCTUnwrap(host.pollCompletion)
         let requestsBeforeExpiry = fixture.server.requestCount
         fixture.monotonic += 30_000_000_000
         host.service()
@@ -394,9 +394,9 @@ final class MeetingHostLifecycleTests: XCTestCase {
         permission = nil
         // Wait for the actual permission continuation and poll to exit, not one
         // scheduler yield that can leave old work running in the next XCTest.
-        await suspendedPoll.value
+        await suspendedPoll()
         XCTAssertEqual(fixture.server.requestCount, requestsBeforeExpiry, "Late permission must not revalidate or restart expired authority")
-        XCTAssertNil(host.pollTask)
+        XCTAssertNil(host.pollCompletion)
         XCTAssertEqual(host.phase, .stopped)
         XCTAssertFalse(host.recordingPresentation.showsPill)
         XCTAssertFalse(host.recordingPresentation.showsRedDot)
@@ -481,7 +481,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         fixture.server.configureResume(holdStatus: true)
         host.resumeFromUserClick()
         host.resumeFromUserClick()
-        try await waitUntil { host.controlTask == nil }
+        try await waitUntil { host.controlCompletion == nil }
         XCTAssertEqual(fixture.server.resumeKeys.count, 1, "Repeated click must stage only one Resume")
         XCTAssertEqual(host.phase, .paused)
         XCTAssertEqual(fixture.device.starts, 1, "Resume receipt alone must never open hardware")
@@ -520,7 +520,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try await waitUntil { host.canResumeFromUserClick }
         fixture.server.configureResume(holdStatus: true, loseReply: true)
         host.resumeFromUserClick()
-        try await waitUntil { host.controlTask == nil }
+        try await waitUntil { host.controlCompletion == nil }
         XCTAssertEqual(host.phase, .paused)
         XCTAssertEqual(fixture.device.starts, 1, "Uncertain Resume cannot open hardware")
         fixture.server.configureResume(holdStatus: false)
@@ -542,7 +542,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try await waitUntil { host.canResumeFromUserClick }
         fixture.server.configureResume(holdStatus: true, rejectRequest: true)
         host.resumeFromUserClick()
-        try await waitUntil { host.controlTask == nil }
+        try await waitUntil { host.controlCompletion == nil }
         fixture.server.browserState("paused", generation: 4)
         fixture.monotonic += 2_000_000_000
         fixture.server.configureResume(holdStatus: false)
@@ -567,8 +567,8 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try await waitUntil { host.canResumeFromUserClick }
         host.resumeFromUserClick()
         host.stopFromUserClick()
-        let queued = try XCTUnwrap(host.controlTask)
-        await queued.value
+        let queued = try XCTUnwrap(host.controlCompletion)
+        await queued()
         XCTAssertEqual(fixture.server.resumeKeys.count, 0, "Stop must cancel queued Resume before transport")
         try await waitUntil(timeout: 5) { fixture.server.stopCount == 1 }
         XCTAssertEqual(fixture.device.starts, 1)
@@ -587,7 +587,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try await waitUntil { host.canResumeFromUserClick }
         fixture.server.configureResume(holdStatus: false, denyRequest: true)
         host.resumeFromUserClick()
-        try await waitUntil { host.controlTask == nil }
+        try await waitUntil { host.controlCompletion == nil }
         XCTAssertTrue(host.canResumeFromUserClick, "Definitive rejection must clear Resume intent")
         XCTAssertTrue(host.message.contains("press Resume again"), "Definitive rejection needs actionable source guidance")
         fixture.server.configureResume(holdStatus: false)
@@ -615,8 +615,8 @@ final class MeetingHostLifecycleTests: XCTestCase {
             host.resumeFromUserClick()
             if stopFirst { host.stopFromUserClick() }
             host.sourceChanged()
-            let queued = try XCTUnwrap(host.controlTask)
-            await queued.value
+            let queued = try XCTUnwrap(host.controlCompletion)
+            await queued()
             XCTAssertEqual(fixture.server.resumeKeys.count, 0, "Source change must cancel queued Resume before transport")
             if stopFirst {
                 try await waitUntil(timeout: 5) { fixture.server.stopCount == 1 }
@@ -640,7 +640,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try await waitUntil { host.canResumeFromUserClick }
         fixture.server.configureResume(holdStatus: true, loseReply: true)
         host.resumeFromUserClick()
-        try await waitUntil { host.controlTask == nil }
+        try await waitUntil { host.controlCompletion == nil }
         XCTAssertEqual(fixture.server.captureGeneration, 3)
         host.sourceChanged()
         fixture.server.configureResume(holdStatus: false)
@@ -669,6 +669,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
     final class Fixture {
         let server = FixtureServer()
         let device = Device()
+        private(set) var runtime: MeetingCaptureRuntime!
         let client: MeetingCaptureClient
         let pending: MeetingPendingStart
         let instance: InstanceURL
@@ -713,7 +714,8 @@ final class MeetingHostLifecycleTests: XCTestCase {
                 makeClient: Self.client, now: { self.monotonic }, wallNow: { self.wall })
             let defaults = UserDefaults(suiteName: defaultsName)!
             let connection = ConnectionRuntime(keychain: KeychainStore(service: defaultsName), preferences: PreferencesStore(defaults: defaults))
-            return MeetingCaptureHost(connection: connection, ports: ports, factory: customFactory ?? { _ in [.microphone: self.device] })
+            runtime = MeetingCaptureRuntime(factory: customFactory ?? { _ in [.microphone: self.device] })
+            return MeetingCaptureHost(connection: connection, runtime: runtime, ports: ports)
         }
         func close() {
             client.close()

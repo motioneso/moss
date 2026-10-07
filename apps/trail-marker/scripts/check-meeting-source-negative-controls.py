@@ -22,13 +22,13 @@ SPEC.loader.exec_module(RUNNER)
 TEST_CLASS = "MeetingSourceSelectionTests"
 LIVE_TEST = "testLiveSourceChangeClosesOldReceiverBeforeControlAndWaitsForExactStatus"
 CONTROLS = [
-    ("MeetingSourceChange.swift", {
+    ("MeetingCaptureHost.swift", {
         "name": "source-synchronous-old-device-close", "test": LIVE_TEST,
         "before": "                try runtime.pause(at: boundary)",
         "after": "                // Mutation: leave the previous capture device and receiver open.",
         "assertion": "Old device must close before source control transport",
     }),
-    ("MeetingSourceChange.swift", {
+    ("MeetingCaptureHost.swift", {
         "name": "source-control-ack-keeps-hardware-closed", "test": LIVE_TEST,
         "before": "                self.sourceChangeIntent?.acknowledged = true",
         "after": "                self.sourceChangeIntent?.acknowledged = true\n"
@@ -38,21 +38,22 @@ CONTROLS = [
                  "                    permitRetainedAudio: true, at: self.now())",
         "assertion": "Control acknowledgment alone must never open replacement hardware",
     }),
-    ("MeetingSourceChange.swift", {
+    ("MeetingCaptureHost.swift", {
         "name": "source-previous-paused-observation", "test": LIVE_TEST,
-        "before": "                self.remote = reply.capture",
+        "before": "                self.remote = reply.capture\n                self.uploadAdmitted = false\n            } catch {",
         "after": "                self.remote = reply.capture\n"
-                 '                self.observed = .init(generation: reply.capture.generation, phase: "paused", errorCode: nil)',
+                 '                self.observed = .init(generation: reply.capture.generation, phase: "paused", errorCode: nil)\n'
+                 "                self.uploadAdmitted = false\n            } catch {",
         "assertion": "Source change keeps the previous-generation paused observation",
     }),
-    ("MeetingSourceChange.swift", {
+    ("MeetingCaptureHost.swift", {
         "name": "source-exact-control-acknowledgment",
         "test": "testMismatchedSourceControlAcknowledgmentNeverReopensHardware",
         "before": "                guard intent.matches(reply.capture) else { throw MeetingHostError.rejected }",
         "after": "                // Mutation: accept a control receipt for a different source choice.",
         "assertion": "Mismatched source control acknowledgment must reject the intent",
     }),
-    ("MeetingSourceChange.swift", {
+    ("MeetingCaptureHost.swift", {
         "name": "source-exact-status-acknowledgment",
         "test": "testMismatchedSourceStatusAcknowledgmentNeverReopensHardware",
         "before": "        guard intent.acknowledged, intent.matches(capture) else {",
@@ -81,7 +82,7 @@ CONTROLS = [
         "after": "submitted: observed, current: observed)",
         "assertion": "Replacement uploads wait for exact recording-epoch acknowledgment",
     }),
-    ("MeetingSourceChange.swift", {
+    ("MeetingCaptureHost.swift", {
         "name": "source-queued-stop-dominance",
         "test": "testStopCancelsQueuedSourceChangeBeforeTransportAndCannotReopen",
         "before": "                guard !Task.isCancelled, self.sourceChangeIntent?.body.requestKey == body.requestKey else { return }",
@@ -95,7 +96,7 @@ CONTROLS = [
         "after": "var canStop: Bool { [.recording, .paused, .stopping].contains(phase) || (phase == .ready && grantId != nil) }",
         "assertion": "Source cleanup failure must preserve Stop recovery",
     }),
-    ("MeetingSourceChange.swift", {
+    ("MeetingCaptureHost.swift", {
         "name": "source-cleanup-failure-blocks-control",
         "test": "testCleanupFailureKeepsStopRecoveryAndSendsNoSourceChange",
         "before": "                try runtime.pause(at: boundary)",
@@ -116,17 +117,17 @@ CONTROLS = [
         "after": "        if ports.microphonePermission() != .granted, selection.microphone != nil {",
         "assertion": "System-only capture must not consult microphone permission",
     }),
-    ("MeetingSourceChange.swift", {
+    ("MeetingCaptureHost.swift", {
         "name": "source-pause-gap-authoritative-boundary",
         "test": "testNormalResumeSplitsPauseGapAtAuthoritativeEpochStart",
-        "before": "        let boundary = try nativeTime(capture.epochStartMs)",
+        "before": "        let boundary = try timeline.nativeTime(capture.epochStartMs)",
         "after": "        let boundary = now()",
         "assertion": "Resume must end the old pause gap at the authoritative epoch start",
     }),
-    ("MeetingSourceChange.swift", {
+    ("MeetingCaptureHost.swift", {
         "name": "source-lost-ack-stop-reconciles-gap-boundary",
         "test": "testStopAfterLostSourceReplySplitsQueuedGapBeforeStatus",
-        "before": "              capture.epoch > max(oldEpoch, sourceBoundaryEpoch) else { return }",
+        "before": "              capture.epoch > max(oldEpoch, timeline.sourceBoundaryEpoch) else { return }",
         "after": "              false else { return }",
         "assertion": "Lost source acknowledgment Stop must never report a gap across epochs",
     }),

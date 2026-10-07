@@ -35,19 +35,19 @@ CONTROLS = [
         "after": '        if let pending = controlOutbox.pending, false {',
         "assertion": "Source change must cancel queued Resume before transport",
     }),
-    ("MeetingCaptureHostControls.swift", LIFECYCLE, {
+    ("MeetingCaptureHost.swift", LIFECYCLE, {
         "name": "resume-definitive-rejection-requires-click", "test": "testRejectedResumeRequiresAnotherExplicitClickInsteadOfRetryingLater",
         "before": '                } else if body.command == "record", (error as? MeetingHostError) == .rejected {',
         "after": '                } else if false {',
         "assertion": "Definitive rejection must clear Resume intent",
     }),
-    ("MeetingCaptureHostControls.swift", LIFECYCLE, {
+    ("MeetingCaptureHost.swift", LIFECYCLE, {
         "name": "resume-status-applies-recording-fence", "test": RESUME_TEST,
         "before": '                if body.command != "record" {',
         "after": '                _ = self.fence.shouldStart(generation: reply.capture.generation, desired: reply.capture.desired)\n                if body.command != "record" {',
         "assertion": "Authoritative status must open exactly one resumed epoch",
     }),
-    ("MeetingCaptureHostControls.swift", LIFECYCLE, {
+    ("MeetingCaptureHost.swift", LIFECYCLE, {
         "name": "resume-previous-paused-observation", "test": RESUME_TEST,
         "before": '                if body.command != "record" {',
         "after": '                self.observed = .init(generation: reply.capture.generation, phase: "paused", errorCode: nil)\n                if body.command != "record" {',
@@ -55,11 +55,11 @@ CONTROLS = [
     }),
     ("MeetingCaptureHost.swift", LIFECYCLE, {
         "name": "resume-disabled-unconfirmed-pause", "test": RESUME_TEST,
-        "before": 'sourceChangeIntent == nil && phase == .paused && remote?.desired == "paused" && remote?.selection == choice &&\n            !epochs.isEmpty && !stoppedByUser && !cleanupBlocked && !gapCoverageIncomplete &&\n            controlOutbox.pending == nil && !controlInFlight && credential != nil &&',
-        "after": 'phase == .paused && remote?.selection == choice &&\n            !epochs.isEmpty && !stoppedByUser && !cleanupBlocked && !gapCoverageIncomplete &&\n            credential != nil &&',
+        "before": 'sourceChangeIntent == nil && phase == .paused && remote?.desired == "paused" && remote?.selection == choice &&\n            !timeline.epochs.isEmpty && !stoppedByUser && !cleanupBlocked && !gapCoverageIncomplete &&\n            controlOutbox.pending == nil && !controlInFlight && credential != nil &&',
+        "after": 'phase == .paused && remote?.selection == choice &&\n            !timeline.epochs.isEmpty && !stoppedByUser && !cleanupBlocked && !gapCoverageIncomplete &&\n            credential != nil &&',
         "assertion": "Resume is disabled until server Pause acknowledgment",
     }),
-    ("MeetingCaptureHostControls.swift", LIFECYCLE, {
+    ("MeetingCaptureHost.swift", LIFECYCLE, {
         "name": "resume-queued-stop-dominance", "test": "testStopCancelsQueuedResumeBeforeTransportAndKeepsHardwareClosed",
         "before": '                guard body.command != "record" || self.controlOutbox.pending?.requestKey == body.requestKey else { return }',
         "after": '                // Mutation: send superseded Resume.',
