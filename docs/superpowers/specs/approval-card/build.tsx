@@ -3,14 +3,7 @@ import React, { type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import {
-  BrandMark,
-  Button,
-  ButtonLink,
-  Card,
-  IconButton,
-  SectionHead,
-} from "@moss/ui";
+import { BrandMark, Button, ButtonLink, Card, IconButton, SectionHead } from "@moss/ui";
 import { ArrowUp, MoreHorizontal, SquarePen, X } from "lucide-react";
 Object.assign(globalThis, { React });
 const out = resolve("docs/superpowers/specs/approval-card");
@@ -26,10 +19,9 @@ type ApprovalRecord = Readonly<{
 }>;
 const memory: ApprovalRecord = {
   title: "Delete memory",
-  target:
-    "I prefer morning meetings, and I keep Friday afternoons free for focused work.",
+  target: "I prefer morning meetings, and I keep Friday afternoons free for focused work.",
   fields: [],
-  outsideContent: false,
+  outsideContent: false
 };
 const settings: ApprovalRecord = {
   title: "Change settings",
@@ -37,15 +29,15 @@ const settings: ApprovalRecord = {
   fields: [
     ["Temperature", "Celsius"],
     ["Wind speed", "Kilometres per hour"],
-    ["Rainfall", "Millimetres"],
+    ["Rainfall", "Millimetres"]
   ],
-  outsideContent: false,
+  outsideContent: false
 };
 const theme: ApprovalRecord = {
   title: "Delete custom theme",
   target: "Canyon after rain",
   fields: [],
-  outsideContent: true,
+  outsideContent: true
 };
 function Approval({ record }: { record: ApprovalRecord }) {
   return (
@@ -64,14 +56,10 @@ function Approval({ record }: { record: ApprovalRecord }) {
           </dl>
         )}
         {record.outsideContent && (
-          <p className="jds-hint approval-notice">
-            Outside content read; approval needed.
-          </p>
+          <p className="jds-hint approval-notice">Outside content read; approval needed.</p>
         )}
         <div className="approval-actions">
-          <Button
-            variant={record.title.startsWith("Delete") ? "danger" : "primary"}
-          >
+          <Button variant={record.title.startsWith("Delete") ? "danger" : "primary"}>
             Approve
           </Button>
           <Button variant="secondary">Reject</Button>
@@ -117,12 +105,7 @@ function Drawer({ prompt, children }: { prompt: string; children: ReactNode }) {
         </div>
         <div className="chatd__composer">
           <div className="chatd-input">
-            <textarea
-              aria-label="Message Moss"
-              placeholder="Message Moss…"
-              rows={1}
-              readOnly
-            />
+            <textarea aria-label="Message Moss" placeholder="Message Moss…" rows={1} readOnly />
             <IconButton aria-label="Send message" disabled>
               <ArrowUp />
             </IconButton>
@@ -137,38 +120,38 @@ const pending = [
     file: "01-delete-memory",
     title: "Delete memory",
     prompt: "Forget my meeting preference.",
-    record: memory,
+    record: memory
   },
   {
     file: "02-change-settings",
     title: "Change settings",
     prompt: "Use metric units for the weather.",
-    record: settings,
+    record: settings
   },
   {
     file: "03-outside-content",
     title: "Outside content",
     prompt: "Delete my Canyon after rain theme.",
-    record: theme,
-  },
+    record: theme
+  }
 ];
 const outcomes = [
   { file: "04-approved", title: "Approved", text: "Approved · Delete memory" },
   {
     file: "05-declined",
     title: "You declined",
-    text: "You declined · Delete memory",
+    text: "You declined · Delete memory"
   },
   {
     file: "06-timed-out",
     title: "Timed out",
-    text: "Timed out · Delete memory",
+    text: "Timed out · Delete memory"
   },
   {
     file: "07-cancelled",
     title: "Cancelled",
-    text: "Cancelled · Delete memory",
-  },
+    text: "Cancelled · Delete memory"
+  }
 ];
 const screens = [
   ...pending.map((p) => ({
@@ -177,7 +160,7 @@ const screens = [
       <Drawer prompt={p.prompt}>
         <Approval record={p.record} />
       </Drawer>
-    ),
+    )
   })),
   ...outcomes.map((p) => ({
     ...p,
@@ -187,8 +170,8 @@ const screens = [
           {p.text}
         </p>
       </Drawer>
-    ),
-  })),
+    )
+  }))
 ];
 function document(title: string, content: ReactNode) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Moss mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="mockup.css"></head><body>${renderToStaticMarkup(content)}</body></html>\n`;
@@ -200,8 +183,8 @@ writeFileSync(
   JSON.stringify(
     screens.map(({ file, title }) => ({ file, title })),
     null,
-    2,
-  ) + "\n",
+    2
+  ) + "\n"
 );
 writeFileSync(
   resolve(out, "index.html"),
@@ -209,9 +192,7 @@ writeFileSync(
     "Approval cards",
     <main className="mock-index">
       <SectionHead title="Approval cards" titleAs="h1" />
-      <p className="jds-hint">
-        Static design review · open a state at desktop or phone width.
-      </p>
+      <p className="jds-hint">Static design review · open a state at desktop or phone width.</p>
       <nav aria-label="Mockup states">
         {screens.map((p) => (
           <ButtonLink key={p.file} variant="quiet" href={p.file + ".html"}>
@@ -222,10 +203,7 @@ writeFileSync(
       <div className="mock-review-pair">
         <section>
           <h2>Desktop · 404px drawer</h2>
-          <iframe
-            title="Delete memory at desktop width"
-            src="01-delete-memory.html"
-          />
+          <iframe title="Delete memory at desktop width" src="01-delete-memory.html" />
         </section>
         <section>
           <h2>Phone · 390px</h2>
@@ -236,8 +214,8 @@ writeFileSync(
           />
         </section>
       </div>
-    </main>,
-  ),
+    </main>
+  )
 );
 readFileSync(resolve(out, "moss-ui.css"));
 console.log(`Built ${screens.length} static states.`);

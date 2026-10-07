@@ -87,9 +87,7 @@
     --scrim
   ); /* Design-fidelity plan V0: study alias of --scrim, themed (light + dark). */
   --white: #ffffff;
-  --bone: var(
-    --paper
-  ); /* Design-fidelity plan V0: study alias of --paper, themed. */
+  --bone: var(--paper); /* Design-fidelity plan V0: study alias of --paper, themed. */
 
   --line-subtle: #e6dfd0;
   --line: #c6cbbc; /* VP-P0: study value. */
@@ -134,11 +132,7 @@
   --news-art-world-ink: color-mix(in srgb, var(--forest) 45%, #405a58);
   --news-art-culture-plate: color-mix(in srgb, var(--forest-soft) 35%, #ede0c5);
   --news-art-culture-ink: color-mix(in srgb, var(--forest) 35%, #655337);
-  --news-art-technology-plate: color-mix(
-    in srgb,
-    var(--forest-soft) 45%,
-    #dce1de
-  );
+  --news-art-technology-plate: color-mix(in srgb, var(--forest-soft) 45%, #dce1de);
   --news-art-technology-ink: color-mix(in srgb, var(--forest) 45%, #39554f);
 
   /* Amber — drift / at-risk / recovery (anti-shame) */
@@ -147,17 +141,13 @@
   --amber-soft: #f8edd7;
   --amber-soft-2: #f0dfbc;
   --amber-ink: #5c3d0d;
-  --amber-bg: var(
-    --amber-soft-2
-  ); /* Design-fidelity plan V0: study alias of --amber-soft-2. */
+  --amber-bg: var(--amber-soft-2); /* Design-fidelity plan V0: study alias of --amber-soft-2. */
   --hero-bg: color-mix(
     in srgb,
     var(--forest) 78%,
     #000
   ); /* Design-fidelity plan V0: study forest-deep; follows the accent under named, dark and custom themes. */
-  --hero-fg: var(
-    --text-on-accent
-  ); /* Design-fidelity plan V0: bone text on the hero, themed. */
+  --hero-fg: var(--text-on-accent); /* Design-fidelity plan V0: bone text on the hero, themed. */
   --hero-fg-muted: color-mix(
     in srgb,
     var(--text-on-accent) 78%,
@@ -234,9 +224,7 @@
   /* Body text keeps the system stack. Display headings use self-hosted Archivo
      (see the @font-face rules at the top of this file) with that same stack
      as its fallback, so the two can never drift apart. */
-  --font-sans:
-    "Helvetica Neue", Helvetica, system-ui, -apple-system, "Segoe UI", Arial,
-    sans-serif;
+  --font-sans: "Helvetica Neue", Helvetica, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   /* Display MUST share the exact fallback chain of --font-sans (Ben 2026-07-08, /sports
      annotations #1 + #4). The two tokens previously DIVERGED in fallback; on any
      device lacking the first-choice faces — e.g. Ben QA'ing over LAN from a
@@ -323,12 +311,9 @@
      now keyline rings; only md/lg/xl remain real elevation. */
   --shadow-xs: 0 0 0 1px var(--line);
   --shadow-sm: 0 0 0 1px var(--line-strong);
-  --shadow-md:
-    0 8px 24px rgba(38, 34, 28, 0.05), 0 2px 6px rgba(38, 34, 28, 0.04);
-  --shadow-lg:
-    0 16px 40px rgba(38, 34, 28, 0.06), 0 4px 12px rgba(38, 34, 28, 0.05);
-  --shadow-xl:
-    0 32px 64px rgba(38, 34, 28, 0.1), 0 8px 24px rgba(38, 34, 28, 0.08);
+  --shadow-md: 0 8px 24px rgba(38, 34, 28, 0.05), 0 2px 6px rgba(38, 34, 28, 0.04);
+  --shadow-lg: 0 16px 40px rgba(38, 34, 28, 0.06), 0 4px 12px rgba(38, 34, 28, 0.05);
+  --shadow-xl: 0 32px 64px rgba(38, 34, 28, 0.1), 0 8px 24px rgba(38, 34, 28, 0.08);
 
   --measure: 66ch;
   --measure-narrow: 48ch;
@@ -348,16 +333,12 @@
   --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-quiet: cubic-bezier(0.33, 0, 0.3, 1);
   --transition-control:
-    color var(--dur-fast) var(--ease-out),
-    background-color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out),
-    opacity var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+    color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
   --transition-transform: transform var(--dur-fast) var(--ease-out);
   --transition-governor:
-    opacity var(--dur-deliberate) var(--ease-out),
-    transform var(--dur-deliberate) var(--ease-out);
+    opacity var(--dur-deliberate) var(--ease-out), transform var(--dur-deliberate) var(--ease-out);
 
   /* ============================================================ */
   /* APP BRIDGE — legacy web-shell aliases mapped onto DS tokens.  */
@@ -570,11 +551,7 @@
   --news-art-world-ink: color-mix(in srgb, var(--forest-ink) 45%, #aebbb7);
   --news-art-culture-plate: color-mix(in srgb, var(--forest-soft) 55%, #372f22);
   --news-art-culture-ink: color-mix(in srgb, var(--forest-ink) 40%, #cdb994);
-  --news-art-technology-plate: color-mix(
-    in srgb,
-    var(--forest-soft) 65%,
-    #233230
-  );
+  --news-art-technology-plate: color-mix(in srgb, var(--forest-soft) 65%, #233230);
   --news-art-technology-ink: color-mix(in srgb, var(--forest-ink) 45%, #a4bdb6);
 
   /* Dark masthead keeps the real accent field (root --masthead-bg); the eyebrow
@@ -1075,15 +1052,13 @@
   max-width: min(76ch, 88%);
   padding: var(--space-3) var(--space-4);
   border: var(--border-w) solid var(--border);
-  border-radius: var(--radius-xs) var(--radius-card) var(--radius-card)
-    var(--radius-card);
+  border-radius: var(--radius-xs) var(--radius-card) var(--radius-card) var(--radius-card);
   background: var(--surface-2);
   color: var(--text);
 }
 .jds-bubble--user {
   border-color: var(--accent);
-  border-radius: var(--radius-card) var(--radius-xs) var(--radius-card)
-    var(--radius-card);
+  border-radius: var(--radius-card) var(--radius-xs) var(--radius-card) var(--radius-card);
   background: var(--accent);
   color: var(--text-on-accent);
 }
@@ -2600,19 +2575,11 @@
 }
 .np-photo {
   border-radius: var(--radius-lg);
-  background: linear-gradient(
-    135deg,
-    var(--forest-soft) 0%,
-    var(--surface-2) 78%
-  );
+  background: linear-gradient(135deg, var(--forest-soft) 0%, var(--surface-2) 78%);
   border: 1px solid var(--border-subtle);
 }
 .np-photo--news {
-  background: linear-gradient(
-    135deg,
-    var(--steel-soft) 0%,
-    var(--surface-2) 78%
-  );
+  background: linear-gradient(135deg, var(--steel-soft) 0%, var(--surface-2) 78%);
 }
 .np-photo__ph {
   color: var(--text-faint);
