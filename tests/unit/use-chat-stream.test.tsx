@@ -268,7 +268,7 @@ describe("useChatStream", () => {
       await Promise.resolve();
     });
 
-    expect(listPendingActionRequests).toHaveBeenCalled();
+    expect(listPendingActionRequests).toHaveBeenCalledWith("thread-1");
     expect(JSON.stringify(renderer!.toJSON())).toContain("Approve this note?");
   });
 

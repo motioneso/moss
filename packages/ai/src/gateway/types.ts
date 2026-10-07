@@ -109,6 +109,8 @@ export type ActiveModulesResolver = (actorUserId: string) => Promise<readonly Mo
 export type GatewaySessionRecord =
   | {
       readonly kind: "action_request";
+      /** Server token's frozen conversation binding; never supplied by model tool input. */
+      readonly originThreadId?: string;
       readonly actionRequestId: string;
       readonly toolName: string;
       readonly summary: string;
@@ -128,6 +130,10 @@ export type GatewaySessionRecord =
     }
   | {
       readonly kind: "action_result";
+      /** Recovery replay persists the original thread without broadcasting an old live outcome. */
+      readonly historyOnly?: boolean;
+      /** Server token's frozen conversation binding, for results with no pending request row. */
+      readonly originThreadId?: string;
       readonly actionRequestId: string;
       readonly toolName: string;
       readonly outcome: "executed" | "denied" | "error" | "allowed";
@@ -152,6 +158,8 @@ export type GatewaySessionRecord =
 
 export interface SessionNotifier {
   emit(chatSessionId: string, record: GatewaySessionRecord): void;
+  /** Wait only for this server session's queued notification persistence. */
+  flush?(chatSessionId: string): Promise<void>;
 }
 
 export type GatewayToolResponse =

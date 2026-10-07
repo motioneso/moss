@@ -7,12 +7,13 @@ import {
 import { Button } from "@moss/ui";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle, LoaderCircle, XCircle } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ApiError, resolveActionRequest } from "../api/client";
 import type { ActionRequestPreview } from "./use-chat-stream";
 
 interface ActionRequestCardProps {
+  readonly approvalAvailable?: boolean;
   readonly actionRequestId: string;
   readonly toolName: string;
   readonly summary: string;
@@ -33,10 +34,18 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
   const admittedRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   // Pending cards restored after reload have metadata only. Never approve a memory blind.
+  const [unavailableRequestId, setUnavailableRequestId] = useState<string | null>(null);
+  const missingDisclosure =
+    props.approvalAvailable === false || unavailableRequestId === props.actionRequestId;
   const missingMemoryTarget = props.toolName === "memory.forget" && !props.details?.target?.trim();
 
   const mutation = useMutation<"confirmed" | "rejected", unknown, "confirmed" | "rejected">({
     mutationFn: (next) => resolveActionRequest(props.actionRequestId, next).then(() => next),
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "approval_unavailable") {
+        setUnavailableRequestId(props.actionRequestId);
+      }
+    },
     onSettled: () => {
       admittedRef.current = false;
     }
@@ -58,21 +67,26 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
   }, [props.focusRequested, props.onFocusComplete]);
 
   function handleResolve(next: "confirmed" | "rejected") {
-    if (next === "confirmed" && missingMemoryTarget) return;
+    if (next === "confirmed" && (missingMemoryTarget || missingDisclosure)) return;
     if (admittedRef.current) return;
     admittedRef.current = true;
     mutation.mutate(next);
   }
 
-  // #1250 — only an owned, still-pending request with no live waiter returns 409.
+  // A missing live disclosure is not a durable timeout; keep its decline control.
   const isExpired =
-    mutation.isError && mutation.error instanceof ApiError && mutation.error.status === 409;
+    mutation.isError &&
+    mutation.error instanceof ApiError &&
+    mutation.error.status === 409 &&
+    mutation.error.code !== "approval_unavailable";
   const errorMessage = mutation.isError
-    ? isExpired
-      ? "This request expired — ask again."
-      : mutation.error instanceof Error
-        ? mutation.error.message
-        : "Could not resolve"
+    ? mutation.error instanceof ApiError && mutation.error.code === "approval_unavailable"
+      ? null
+      : isExpired
+        ? "This request expired — ask again."
+        : mutation.error instanceof Error
+          ? mutation.error.message
+          : "Could not resolve"
     : null;
 
   const outcome =
@@ -115,9 +129,17 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
       <div className="action-request-preview__label" data-state="pending">
         Needs your approval
       </div>
-      <p className="action-request-summary">{props.summary}</p>
+      {missingDisclosure ? (
+        <p className="muted-text">
+          Details for this request aren’t available. Ask Moss again if you still want it.
+        </p>
+      ) : (
+        <p className="action-request-summary">{props.summary}</p>
+      )}
 
-      {props.details && (props.details.target !== null || props.details.fields.length > 0) ? (
+      {!missingDisclosure &&
+      props.details &&
+      (props.details.target !== null || props.details.fields.length > 0) ? (
         <dl className="action-request-preview__meta">
           {props.details.target !== null ? (
             <div className="action-request-preview__row">
@@ -138,19 +160,19 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
         </dl>
       ) : null}
 
-      {missingMemoryTarget && !mutation.isSuccess ? (
+      {missingMemoryTarget && !missingDisclosure && !mutation.isSuccess ? (
         <p className="muted-text" role="status">
           Memory details are unavailable. Reject this request and ask again.
         </p>
       ) : null}
 
-      {props.outsideContentNotice ? (
+      {!missingDisclosure && props.outsideContentNotice ? (
         <p className="muted-text">
           This chat has outside or unverified context, so changes need your approval.
         </p>
       ) : null}
 
-      {props.preview ? (
+      {!missingDisclosure && props.preview ? (
         <div className="action-request-preview">
           <dl className="action-request-preview__meta">
             <div className="action-request-preview__row">
@@ -174,7 +196,7 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
         <p className="form-error">{errorMessage}</p>
       ) : (
         <div className="action-request-actions">
-          {!missingMemoryTarget ? (
+          {!missingMemoryTarget && !missingDisclosure ? (
             <Button
               icon={<CheckCircle size={16} aria-hidden="true" />}
               onClick={() => handleResolve("confirmed")}

@@ -602,7 +602,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0289", name: "0289_ai_read_action_approval.sql" },
         { version: "0291", name: "0291_chat_conversation_provenance.sql" },
         { version: "0293", name: "0293_chat_automatic_action_reservations.sql" },
-        { version: "0294", name: "0294_external_module_descriptor_approval.sql" }
+        { version: "0294", name: "0294_external_module_descriptor_approval.sql" },
+        { version: "0296", name: "0296_ai_action_origin_and_timeout.sql" }
       ]);
     } finally {
       await client.end();

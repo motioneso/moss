@@ -23,6 +23,7 @@ export function emitNativePermissionResult(
   chatSessionId: string,
   input: {
     readonly actionRequestId: string;
+    readonly originThreadId?: string;
     readonly toolName: string;
     readonly outcome: "allowed" | "denied";
     readonly decidedBy: "person" | "timeout" | "cancelled" | "policy";

@@ -19,7 +19,13 @@ import {
   type AcpBuiltInPermissionResponse
 } from "./acp-permission.js";
 import { actionHoldDurationMs, emitActionResultRecord } from "./action-result-record.js";
+import {
+  awaitActionResolution,
+  emitPendingActionRequest,
+  resolvePersistedActionRequest
+} from "./action-request-lifecycle.js";
 import { approvalOutcomeTitle, captureActionOutcomeTitle } from "./approval-outcome-title.js";
+import { ActionRequestRecovery } from "./action-request-recovery.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import { isConversationTainted } from "./conversation-policy.js";
@@ -152,8 +158,11 @@ const defaultPolicyLookup: ActionPolicyLookup = {
  */
 export class AssistantToolGateway {
   private readonly autoRunLimiter = new AutoRunRateLimiter();
+  private readonly actionRecovery: ActionRequestRecovery;
 
-  constructor(private readonly deps: AssistantToolGatewayDependencies) {}
+  constructor(private readonly deps: AssistantToolGatewayDependencies) {
+    this.actionRecovery = new ActionRequestRecovery(deps);
+  }
 
   /** Returns only tools executable by this actor (via resolveActiveModules). */
   async listToolsForActor(actorUserId: string): Promise<AiAssistantToolDto[]> {
@@ -513,6 +522,7 @@ export class AssistantToolGateway {
     const summary = captureActionOutcomeTitle(found.tool, input, ctx) ?? "Perform action";
     emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
       actionRequestId: ctx.requestId,
+      ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
       toolName: found.dto.name,
       outcome: "denied",
       decidedBy: "policy",
@@ -630,43 +640,24 @@ export class AssistantToolGateway {
     actorUserId: string,
     actionRequestId: string,
     status: "confirmed" | "rejected" | "cancelled"
-  ): Promise<"resolved" | "expired" | "not_found"> {
-    const access: AccessContext = { actorUserId, requestId: `mcp_${randomUUID()}` };
+  ): Promise<"resolved" | "expired" | "unavailable" | "not_found"> {
+    return resolvePersistedActionRequest(this.deps, actorUserId, actionRequestId, status);
+  }
 
-    // #1591: ownership before liveness. isAwaiting is a process-local, unscoped map keyed only by
-    // actionRequestId — it can't tell "not mine" from "mine but expired", so checking it first let a
-    // guessed/foreign ID's response (expired vs not_found) leak which state another user's row was
-    // in. Confirm the row is owned-and-pending via the owner-scoped repository read first; only a
-    // legitimate owner reaches the liveness check below, so both outcomes fold into "not_found" for
-    // everyone else.
-    if (status === "confirmed") {
-      const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-        this.deps.repository.getAssistantAction(scopedDb, actionRequestId)
-      );
-      if (!action || action.status !== "pending") {
-        return "not_found";
-      }
-    }
+  isActionRequestAwaiting(actionRequestId: string): boolean {
+    return this.deps.confirmations.isAwaiting(actionRequestId);
+  }
 
-    // Confirm-after-timeout guard (fail-closed): a "confirmed" only means anything while the
-    // blocked call is still awaiting. After the confirm timeout the waiter is gone, the call
-    // already returned "timed out", and the tool can NEVER execute — so persisting 'confirmed'
-    // would leave a row claiming a write happened when none did (DB/drawer divergence). When no
-    // live waiter exists, treat an Approve as a no-op so the row stays pending (the operator sees
-    // an honest "still pending" rather than a phantom success). A reject/cancel stays terminal
-    // regardless: declining a no-longer-runnable action is always safe and correct.
-    if (status === "confirmed" && !this.deps.confirmations.isAwaiting(actionRequestId)) {
-      return "expired";
-    }
+  getActionRequestPresentation(actorUserId: string, actionRequestId: string) {
+    return this.deps.confirmations.getPresentation(actorUserId, actionRequestId);
+  }
 
-    const resolved = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-      this.deps.repository.resolveAssistantAction(scopedDb, actionRequestId, { status })
-    );
-    // Only unblock the pending call if the DB row was actually updated (owner matches + still pending).
-    // Without this guard a logged-in user could unblock another user's tool call via a guessed ID.
-    if (!resolved) return "not_found";
-    await this.deps.confirmations.resolveAndAwaitCompletion(actionRequestId, status);
-    return "resolved";
+  recoverActionRequests(actorUserId: string): Promise<void> {
+    return this.actionRecovery.recover(actorUserId);
+  }
+
+  disposeActionRecovery(): void {
+    this.actionRecovery.dispose();
   }
 
   private servicesFor(found: ExecutableTool): ToolServices {
@@ -811,6 +802,9 @@ export class AssistantToolGateway {
 
     const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       this.deps.repository.createPendingAssistantAction(scopedDb, {
+        chatThreadId: ctx.threadId,
+        chatSessionId: ctx.chatSessionId,
+        expiresAt: new Date(Date.now() + this.deps.confirmTimeoutMs),
         toolModuleId: found.dto.moduleId,
         toolModuleName: found.dto.moduleName,
         toolName: found.dto.name,
@@ -821,10 +815,7 @@ export class AssistantToolGateway {
       })
     );
 
-    const pendingResolution = this.deps.confirmations.awaitResolution(
-      action.id,
-      this.deps.confirmTimeoutMs
-    );
+    const pendingResolution = awaitActionResolution(this.deps, access, action.id);
 
     const actionSummary = summarizeToolAction(found.tool, input, ctx);
     const summary = [notice, actionSummary].filter(Boolean).join(" ");
@@ -847,9 +838,10 @@ export class AssistantToolGateway {
       }
     }
 
-    this.deps.notifier.emit(ctx.chatSessionId, {
+    emitPendingActionRequest(this.deps, ctx.actorUserId, ctx.chatSessionId, {
       kind: "action_request",
       actionRequestId: action.id,
+      ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
       toolName: found.dto.name,
       summary,
       ...(outcomeTitle ? { outcomeTitle } : {}),
@@ -871,6 +863,7 @@ export class AssistantToolGateway {
       if (outcome !== "confirmed") {
         emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
           actionRequestId: action.id,
+          ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
           toolName: found.dto.name,
           outcome: "denied",
           ...(outcomeTitle ? { summary: outcomeTitle } : {}),
@@ -900,6 +893,7 @@ export class AssistantToolGateway {
       const { response: result, audit } = await this.runHandler(found, input, ctx);
       emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
         actionRequestId: action.id,
+        ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
         toolName: found.dto.name,
         outcome: audit.errorClass === null ? "executed" : "error",
         ...(outcomeTitle ? { summary: outcomeTitle } : {}),

@@ -126,8 +126,15 @@ export const chatModuleManifest = {
     {
       id: "chat.approval_outcomes",
       description:
-        "Approval decisions replace cards with one quiet outcome before the reply, including after reload. " +
-        "Details and execution rows disappear; Thinking stays unchanged. Failures are explicit. Pending cards keep exact disclosure.",
+        "Decided cards become quiet outcomes in their original conversation, also after reload. " +
+        "Details disappear; Thinking stays unchanged. Failures are explicit. Pending cards keep exact disclosure. Unknown origins stay out of chat.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.restored_action_details",
+      description:
+        "Restored requests use full server details when available. Without them, approval is hidden and decline remains available. " +
+        "Expired requests become timed out; outcomes stay with their original conversation.",
       featureFlagId: "chat.module"
     },
     {

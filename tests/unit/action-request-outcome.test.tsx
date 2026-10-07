@@ -394,6 +394,67 @@ describe("quiet resolved approvals", () => {
     expect(host.textContent).not.toContain("Bash");
   });
 
+  it("keeps incomplete restored requests decline-only", async () => {
+    vi.mocked(resolveActionRequest).mockResolvedValue(undefined);
+    mount([{ ...pending, approvalAvailable: false }]);
+    expect(host.textContent).toContain(
+      "Details for this request aren’t available. Ask Moss again if you still want it."
+    );
+    expect([...host.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+      "Reject"
+    ]);
+    expect(host.querySelector("dl")).toBeNull();
+    expect(resolveActionRequest).not.toHaveBeenCalled();
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() =>
+      expect(resolveActionRequest).toHaveBeenCalledWith("request-1", "rejected")
+    );
+    await vi.waitFor(() =>
+      expect(host.querySelector('[role="status"]')?.textContent).toBe("You declined")
+    );
+  });
+
+  it("does not call missing disclosure a timeout and keeps Approve hidden after a failed decline", async () => {
+    vi.mocked(resolveActionRequest)
+      .mockRejectedValueOnce(new ApiError(409, "Details unavailable", "approval_unavailable"))
+      .mockRejectedValueOnce(new ApiError(503, "Try declining again"))
+      .mockResolvedValueOnce(undefined);
+    mount([pending]);
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() =>
+      expect(host.textContent).toContain("Details for this request aren’t available.")
+    );
+    expect(host.textContent).not.toContain("Timed out");
+    expect([...host.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+      "Reject"
+    ]);
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() => expect(host.textContent).toContain("Try declining again"));
+    expect([...host.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+      "Reject"
+    ]);
+    expect(host.querySelector(".action-request-card")).not.toBeNull();
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() =>
+      expect(host.querySelector('[role="status"]')?.textContent).toBe("You declined")
+    );
+    expect(vi.mocked(resolveActionRequest).mock.calls).toEqual([
+      ["request-1", "confirmed"],
+      ["request-1", "rejected"],
+      ["request-1", "rejected"]
+    ]);
+  });
+
+  it("keeps a restored request with full server disclosure normally approvable", () => {
+    mount([{ ...pending, approvalAvailable: true }]);
+    expect([...host.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+      "Approve",
+      "Reject"
+    ]);
+    expect(host.textContent).toContain("Full theme");
+    expect(host.querySelector("dl")).not.toBeNull();
+  });
+
   it.each([false, true])(
     "settles a policy refusal after a pending card (local approval %s)",
     async (clicked) => {

@@ -54,6 +54,7 @@ export function RecordRow(props: {
   if (kind === "action_request" && props.record.actionRequestId) {
     return (
       <ActionRequestCard
+        approvalAvailable={props.record.approvalAvailable}
         actionRequestId={props.record.actionRequestId}
         summary={props.record.summary ?? text}
         toolName={props.record.toolName ?? kind}

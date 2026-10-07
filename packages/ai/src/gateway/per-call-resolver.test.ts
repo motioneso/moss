@@ -94,6 +94,7 @@ function build(
     } as never,
     repository: {
       createPendingAssistantAction: createPending,
+      expireAssistantAction: async () => ({ id: "action-1", status: "timed_out" }),
       insertActionAuditLog: audit
     } as never,
     tokens,

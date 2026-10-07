@@ -1,10 +1,18 @@
+import type { GatewaySessionRecord } from "./types.js";
+
 export type ResolutionStatus = "confirmed" | "rejected" | "cancelled";
 export type AwaitOutcome = ResolutionStatus | "timeout";
+
+interface Completion {
+  readonly promise: Promise<void>;
+  readonly resolve: () => void;
+}
 
 interface Waiter {
   readonly sessionId?: string;
   readonly turnId?: string;
   readonly settle: (outcome: AwaitOutcome) => void;
+  readonly cancel: () => void;
 }
 
 /**
@@ -13,36 +21,91 @@ interface Waiter {
  */
 export class ConfirmationRegistry {
   private readonly waiters = new Map<string, Waiter>();
-  private readonly completions = new Map<string, () => void>();
+  private readonly completions = new Map<string, Completion>();
   private readonly activeTurns = new Map<string, string>();
   private readonly cancelledTurns = new Set<string>();
+  private readonly presentations = new Map<
+    string,
+    { actorUserId: string; record: Extract<GatewaySessionRecord, { kind: "action_request" }> }
+  >();
+
+  storePresentation(
+    actorUserId: string,
+    record: Extract<GatewaySessionRecord, { kind: "action_request" }>
+  ): void {
+    if (this.isAwaiting(record.actionRequestId))
+      this.presentations.set(record.actionRequestId, {
+        actorUserId,
+        record: structuredClone(record)
+      });
+  }
+
+  getPresentation(
+    actorUserId: string,
+    actionRequestId: string
+  ): Extract<GatewaySessionRecord, { kind: "action_request" }> | undefined {
+    const saved = this.presentations.get(actionRequestId);
+    const complete =
+      typeof saved?.record.summary === "string" &&
+      saved.record.summary.trim() &&
+      (saved.record.toolName !== "memory.forget" || saved.record.details?.target?.trim());
+    return saved?.actorUserId === actorUserId && complete && this.isAwaiting(actionRequestId)
+      ? structuredClone(saved.record)
+      : undefined;
+  }
 
   awaitResolution(
     actionRequestId: string,
     timeoutMs: number,
     sessionId?: string,
-    turnId?: string
+    turnId?: string,
+    persistTerminal?: (outcome: "timeout" | "cancelled") => Promise<AwaitOutcome>
   ): Promise<AwaitOutcome> {
     return new Promise<AwaitOutcome>((resolve) => {
-      if (turnId && this.cancelledTurns.has(turnId)) {
-        resolve("cancelled");
-        return;
-      }
-
-      const timer = setTimeout(() => {
-        this.waiters.delete(actionRequestId);
-        resolve("timeout");
-      }, timeoutMs);
-
-      this.waiters.set(actionRequestId, {
+      let timer: ReturnType<typeof setTimeout>;
+      let writing = false;
+      let cancelling = false;
+      const persist = (outcome: "timeout" | "cancelled") => {
+        if (outcome === "cancelled") cancelling = true;
+        clearTimeout(timer);
+        if (writing || this.waiters.get(actionRequestId) !== waiter) return;
+        if (!persistTerminal) {
+          waiter.settle(outcome);
+          return;
+        }
+        writing = true;
+        void Promise.resolve()
+          .then(() => persistTerminal(outcome))
+          .then(
+            (terminal) => {
+              writing = false;
+              if (this.waiters.get(actionRequestId) === waiter) waiter.settle(terminal);
+            },
+            () => {
+              writing = false;
+              if (this.waiters.get(actionRequestId) !== waiter) return;
+              // Persistence failure cannot discard a live decision or strand its HTTP
+              // completion observer. Retry the terminal write without granting execution.
+              timer = setTimeout(() => persist(cancelling ? "cancelled" : "timeout"), 1000);
+              timer.unref?.();
+            }
+          );
+      };
+      const waiter: Waiter = {
         sessionId,
         turnId,
         settle: (outcome) => {
           clearTimeout(timer);
           this.waiters.delete(actionRequestId);
+          this.presentations.delete(actionRequestId);
           resolve(outcome);
-        }
-      });
+        },
+        cancel: () => persist("cancelled")
+      };
+      this.waiters.set(actionRequestId, waiter);
+      timer = setTimeout(() => persist("timeout"), timeoutMs);
+      timer.unref?.();
+      if (turnId && this.cancelledTurns.has(turnId)) waiter.cancel();
     });
   }
 
@@ -54,7 +117,7 @@ export class ConfirmationRegistry {
     let cancelled = 0;
     for (const waiter of this.waiters.values()) {
       if (waiter.turnId !== turnId) continue;
-      waiter.settle("cancelled");
+      waiter.cancel();
       cancelled += 1;
     }
     return cancelled;
@@ -89,16 +152,26 @@ export class ConfirmationRegistry {
    */
   async resolveAndAwaitCompletion(
     actionRequestId: string,
-    status: ResolutionStatus
+    status: ResolutionStatus,
+    persist?: () => Promise<boolean>
   ): Promise<boolean> {
     const waiter = this.waiters.get(actionRequestId);
-    if (!waiter) return false;
+    if (!waiter) return persist ? persist() : false;
 
-    const completion = new Promise<void>((resolveCompletion) => {
-      this.completions.set(actionRequestId, resolveCompletion);
-    });
-    waiter.settle(status);
-    await completion;
+    let completion = this.completions.get(actionRequestId);
+    if (!completion) {
+      let complete!: () => void;
+      const promise = new Promise<void>((resolve) => {
+        complete = resolve;
+      });
+      completion = { promise, resolve: complete };
+      this.completions.set(actionRequestId, completion);
+    }
+    // Register the completion observer before awaiting the write: a timer that
+    // observes our committed decision must not let this HTTP call return early.
+    if (persist && !(await persist())) return false;
+    this.resolve(actionRequestId, status);
+    await completion.promise;
     return true;
   }
 
@@ -107,10 +180,10 @@ export class ConfirmationRegistry {
    * confirmed-and-executed path). A no-op if nothing is waiting on this id.
    */
   markDone(actionRequestId: string): void {
-    const resolveCompletion = this.completions.get(actionRequestId);
-    if (!resolveCompletion) return;
+    const completion = this.completions.get(actionRequestId);
+    if (!completion) return;
     this.completions.delete(actionRequestId);
-    resolveCompletion();
+    completion.resolve();
   }
 
   /** True while a call is still blocked awaiting resolution for this action. */

@@ -1292,9 +1292,13 @@ export async function listAiModels(): Promise<ListAiConfiguredModelsResponse> {
   return requestJson<ListAiConfiguredModelsResponse>("/api/ai/models");
 }
 
-// #1253 — fetch pending action requests for re-hydration on page reload
-export async function listPendingActionRequests(): Promise<{ actions: AiAssistantActionDto[] }> {
-  return requestJson<{ actions: AiAssistantActionDto[] }>("/api/ai/assistant-actions");
+// Pending chat cards belong only to the persisted thread that originally requested them.
+export async function listPendingActionRequests(
+  threadId: string
+): Promise<{ actions: AiAssistantActionDto[] }> {
+  return requestJson<{ actions: AiAssistantActionDto[] }>(
+    `/api/ai/assistant-actions?threadId=${encodeURIComponent(threadId)}`
+  );
 }
 
 export async function createAiModel(

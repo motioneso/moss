@@ -113,7 +113,13 @@ export function admissionFixture(
     repository: {
       createPendingAssistantAction: createPending,
       insertActionAuditLog: audit,
-      resolveAssistantAction: vi.fn(async () => ({ id: "action-1", status: "confirmed" }))
+      resolveAssistantAction: vi.fn(
+        async (_db: unknown, id: string, input: { status: string }) => ({
+          id,
+          status: input.status
+        })
+      ),
+      expireAssistantAction: vi.fn(async () => ({ id: "action-1", status: "timed_out" }))
     } as never,
     tokens,
     confirmations,

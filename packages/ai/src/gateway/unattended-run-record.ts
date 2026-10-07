@@ -19,6 +19,7 @@ export function recordUnattendedRun(
   const { response: result, audit } = completed;
   emitActionResultRecord(deps.notifier, ctx.chatSessionId, {
     actionRequestId: ctx.requestId,
+    ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
     toolName: found.dto.name,
     outcome: audit.errorClass === null ? "executed" : "error",
     decidedBy: "policy",

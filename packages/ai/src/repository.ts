@@ -6,7 +6,6 @@ import {
   assertDataContextDb,
   type AiAssistantActionRequest,
   type AiAssistantActionRisk,
-  type AiAssistantActionStatus,
   type AiAuthMethod,
   type AiConfiguredModelOrigin,
   type AiConfiguredModelsTable,
@@ -217,6 +216,9 @@ export interface UpdateAiModelInput {
 }
 
 export interface CreateAiAssistantActionInput {
+  readonly chatThreadId?: string | null;
+  readonly chatSessionId?: string | null;
+  readonly expiresAt?: Date | null;
   readonly toolModuleId: string;
   readonly toolModuleName: string;
   readonly toolName: string;
@@ -318,7 +320,7 @@ export interface ListRecentErrorsOptions {
 }
 
 export interface ResolveAiAssistantActionInput {
-  readonly status: Exclude<AiAssistantActionStatus, "pending">;
+  readonly status: "confirmed" | "rejected" | "cancelled";
 }
 
 export interface ChatModelOverrideSettings {
@@ -2098,10 +2100,13 @@ export class AiRepository {
       .executeTakeFirst() as Promise<AiProviderWithSealedCredential | undefined>;
   }
 
-  async listAssistantActions(scopedDb: DataContextDb): Promise<AiAssistantActionRequestSafeRow[]> {
+  async listAssistantActions(
+    scopedDb: DataContextDb,
+    threadId?: string
+  ): Promise<AiAssistantActionRequestSafeRow[]> {
     assertDataContextDb(scopedDb);
-
-    return this.safeAssistantActionQuery(scopedDb).execute();
+    const query = this.safeAssistantActionQuery(scopedDb);
+    return (threadId ? query.where("chat_thread_id", "=", threadId) : query).execute();
   }
 
   async getAssistantAction(
@@ -2125,6 +2130,9 @@ export class AiRepository {
       .values({
         id: randomUUID(),
         owner_user_id: sql<string>`app.current_actor_user_id()`,
+        chat_thread_id: input.chatThreadId ?? null,
+        chat_session_id: input.chatSessionId ?? null,
+        expires_at: input.expiresAt ?? null,
         tool_module_id: input.toolModuleId,
         tool_module_name: input.toolModuleName,
         tool_name: input.toolName,
@@ -2150,7 +2158,7 @@ export class AiRepository {
 
     const now = new Date();
 
-    return scopedDb.db
+    let query = scopedDb.db
       .updateTable("app.ai_assistant_action_requests")
       .set({
         status: input.status,
@@ -2159,6 +2167,26 @@ export class AiRepository {
       })
       .where("id", "=", actionId)
       .where("status", "=", "pending")
+      .returningAll();
+    if (input.status === "confirmed") {
+      query = query.where((eb) =>
+        eb.or([eb("expires_at", "is", null), eb("expires_at", ">", sql<Date>`now()`)])
+      );
+    }
+    return query.executeTakeFirst();
+  }
+
+  async expireAssistantAction(
+    scopedDb: DataContextDb,
+    actionId: string
+  ): Promise<AiAssistantActionRequestSafeRow | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .updateTable("app.ai_assistant_action_requests")
+      .set({ status: "timed_out", resolved_at: sql<Date>`now()`, updated_at: sql<Date>`now()` })
+      .where("id", "=", actionId)
+      .where("status", "=", "pending")
+      .where("expires_at", "<=", sql<Date>`now()`)
       .returningAll()
       .executeTakeFirst();
   }

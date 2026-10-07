@@ -476,6 +476,7 @@ export function unavailableEngineFactory(reason: string): ChatEngineFactory {
 export const realEngineFactory: ChatEngineFactory = createRealEngineFactory();
 
 export interface CreateChatSessionRuntimeDeps {
+  readonly flushActionRecords?: (chatSessionId: string) => Promise<void>;
   readonly rootDb?: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
   /** Override the engine factory (tests inject a fake); defaults to the real tmux engine. */
@@ -722,6 +723,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     engineFactory(provider, sessionKey, options);
 
   manager = new ChatSessionManager({
+    flushActionRecords: deps.flushActionRecords,
     engineFactory: managerEngineFactory,
     persistence,
     conversationProvenance: deps.conversationProvenance,

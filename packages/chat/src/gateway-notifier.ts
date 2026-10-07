@@ -1,26 +1,68 @@
-import type { GatewaySessionRecord, SessionNotifier } from "@moss/ai";
+import type { DataContextRunner } from "@moss/db";
+import type { AiRepository, GatewaySessionRecord, SessionNotifier } from "@moss/ai";
 import type { ChatSessionManager } from "./live/chat-session-manager.js";
 import { parseSurfaceSessionKey } from "./live/chat-surface.js";
 import type { TranscriptRecord } from "./live/types.js";
 
-/**
- * Bridges the AssistantToolGateway's SessionNotifier to ChatSessionManager's
- * subscriber fan-out. Composite session IDs carry the actor and surface;
- * bare actor IDs remain supported for existing callers.
- */
+export type ActionOriginLookup = (
+  actorUserId: string,
+  actionRequestId: string,
+  chatSessionId: string
+) => Promise<{ readonly found: boolean; readonly threadId?: string | null }>;
+
+/** Route action records by their durable request origin, never by the selected surface. */
 export class ChatGatewayNotifier implements SessionNotifier {
-  constructor(private readonly manager: ChatSessionManager) {}
+  private readonly pending = new Map<string, Promise<void>>();
+
+  constructor(
+    private readonly manager: ChatSessionManager,
+    private readonly lookupOrigin?: ActionOriginLookup
+  ) {}
 
   emit(chatSessionId: string, record: GatewaySessionRecord): void {
-    const transcriptRecord = toTranscriptRecord(record);
-    if (transcriptRecord) {
-      try {
-        const { actorUserId, surface } = parseSurfaceSessionKey(chatSessionId);
-        this.manager.injectRecord(actorUserId, transcriptRecord, surface);
-      } catch {
-        this.manager.injectRecord(chatSessionId, transcriptRecord);
-      }
-    }
+    const queued = (this.pending.get(chatSessionId) ?? Promise.resolve())
+      .then(async () => {
+        const transcriptRecord = toTranscriptRecord(record);
+        if (!transcriptRecord || !this.lookupOrigin) return;
+        let actorUserId = chatSessionId;
+        let surface: string | undefined;
+        try {
+          ({ actorUserId, surface } = parseSurfaceSessionKey(chatSessionId));
+        } catch {
+          // Bare actor keys are legacy transport identities, never conversation identities.
+        }
+        const origin = await this.lookupOrigin(actorUserId, record.actionRequestId, chatSessionId);
+        const threadId = origin.found
+          ? origin.threadId
+          : record.kind === "action_result" && record.decidedBy === "policy"
+            ? record.originThreadId
+            : undefined;
+        if (!threadId) return;
+        if (record.kind === "action_result" && record.historyOnly) {
+          await this.manager.injectOriginRecord(
+            actorUserId,
+            threadId,
+            transcriptRecord,
+            surface,
+            true
+          );
+        } else {
+          await this.manager.injectOriginRecord(actorUserId, threadId, transcriptRecord, surface);
+        }
+      })
+      .catch(() => {
+        // Unknown or unavailable ownership/origin must never redirect into another chat.
+      });
+    this.pending.set(chatSessionId, queued);
+    void queued.then(() => {
+      if (this.pending.get(chatSessionId) === queued) this.pending.delete(chatSessionId);
+    });
+  }
+
+  /** Wait for admitted notifications before a controlled shutdown or a route-level test. */
+  async flush(chatSessionId?: string): Promise<void> {
+    if (chatSessionId) await this.pending.get(chatSessionId);
+    else await Promise.all(this.pending.values());
   }
 }
 
@@ -82,4 +124,26 @@ function toTranscriptRecord(record: GatewaySessionRecord): TranscriptRecord | nu
     };
   }
   return null;
+}
+
+export function createChatGatewayNotifier(
+  manager: ChatSessionManager,
+  runner: DataContextRunner,
+  repository: AiRepository | undefined
+): ChatGatewayNotifier {
+  return new ChatGatewayNotifier(manager, async (actorUserId, actionRequestId, chatSessionId) => {
+    if (!repository) return { found: false };
+    return runner.withDataContext({ actorUserId }, async (scopedDb) => {
+      const action = await repository.getAssistantAction(scopedDb, actionRequestId);
+      return action
+        ? {
+            found: true,
+            threadId:
+              action.owner_user_id === actorUserId && action.chat_session_id === chatSessionId
+                ? action.chat_thread_id
+                : null
+          }
+        : { found: false };
+    });
+  });
 }

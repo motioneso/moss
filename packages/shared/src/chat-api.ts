@@ -182,6 +182,7 @@ export interface ActionRequestDetails {
 }
 
 export interface TranscriptRecord {
+  readonly approvalAvailable?: boolean;
   readonly meetingContext?: MeetingChatCoverage;
   readonly kind: ChatRecordKind;
   readonly text: string;

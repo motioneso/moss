@@ -21,6 +21,12 @@ import type {
 import type { StoredMeetingChatContext } from "@moss/shared";
 import { normalizeChatSurface } from "./live/chat-surface.js";
 import { toIsoString } from "./memory-serializers.js";
+import {
+  actionRecordId,
+  actionRecords,
+  mergeTerminalAction,
+  type TerminalActionRecord
+} from "./action-record-history.js";
 
 export interface CreateChatThreadInput {
   readonly title: string;
@@ -117,6 +123,96 @@ export class ChatRepository {
       .where("id", "=", threadId)
       .where("surface", "=", chatSurface)
       .executeTakeFirst();
+  }
+
+  /** Exact owner identity with no surface/current-thread default. */
+  async getOwnedThreadById(
+    scopedDb: DataContextDb,
+    actorUserId: string,
+    threadId: string
+  ): Promise<ChatThread | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("id", "=", threadId)
+      .where("owner_user_id", "=", actorUserId)
+      .executeTakeFirst();
+  }
+
+  /** A late outcome never selects its old thread or creates a synthetic user turn. */
+  async persistActionRecord(
+    scopedDb: DataContextDb,
+    actorUserId: string,
+    threadId: string,
+    record: TerminalActionRecord
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await this.lockActionHistory(scopedDb, threadId);
+    const thread = await this.getOwnedThreadById(scopedDb, actorUserId, threadId);
+    if (!thread || thread.owner_user_id !== actorUserId || thread.incognito) return;
+    const matching = JSON.stringify([{ actionRequestId: record.actionRequestId }]);
+    const message = await scopedDb.db
+      .selectFrom("app.chat_messages")
+      .selectAll()
+      .where("thread_id", "=", thread.id)
+      .where("owner_user_id", "=", actorUserId)
+      .where("role", "=", "assistant")
+      .where(
+        sql<boolean>`(tool_metadata->'activity' @> ${matching}::jsonb OR tool_metadata->'actionResults' @> ${matching}::jsonb)`
+      )
+      .orderBy(
+        sql<number>`CASE WHEN tool_metadata->>'actionOutcomeOnly' = 'true' THEN 1 ELSE 0 END`
+      )
+      .orderBy("created_at", "desc")
+      .limit(1)
+      .executeTakeFirst();
+    if (message) {
+      const metadata = message.tool_metadata;
+      const activity = actionRecords(metadata.activity ?? metadata.actionResults);
+      const updatedMetadata = {
+        ...metadata,
+        activity: mergeTerminalAction(activity, record),
+        actionResults: mergeTerminalAction(actionRecords(metadata.actionResults), record).slice(
+          0,
+          20
+        )
+      };
+      await scopedDb.db
+        .updateTable("app.chat_messages")
+        .set({
+          tool_metadata: updatedMetadata,
+          updated_at: new Date()
+        })
+        .where("id", "=", message.id)
+        .where("thread_id", "=", threadId)
+        .where("owner_user_id", "=", actorUserId)
+        .where(
+          sql<boolean>`tool_metadata IS DISTINCT FROM ${JSON.stringify(updatedMetadata)}::jsonb`
+        )
+        .execute();
+      return;
+    }
+    await this.insertMessage(scopedDb, {
+      thread,
+      role: "assistant",
+      status: "stored",
+      body: "",
+      modelMetadata: {},
+      toolMetadata: {
+        selectedTools: [],
+        actionOutcomeOnly: true,
+        activity: [record],
+        actionResults: [record]
+      },
+      now: new Date()
+    });
+  }
+
+  private async lockActionHistory(scopedDb: DataContextDb, threadId: string): Promise<void> {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(
+      'chat:action-history:' || app.current_actor_user_id()::text || ':' || ${threadId}, 0
+    ))`.execute(scopedDb.db);
   }
 
   async listMessages(scopedDb: DataContextDb, threadId: string): Promise<ChatMessage[]> {
@@ -304,6 +400,67 @@ export class ChatRepository {
       return undefined;
     }
 
+    await this.lockActionHistory(scopedDb, threadId);
+    let activity = [...(opts?.activityRecords ?? opts?.actionResults ?? [])];
+    let actionResults: readonly unknown[] = [...(opts?.actionResults ?? [])];
+    const actionIds = new Set(activity.map(actionRecordId).filter((id): id is string => !!id));
+    if (actionIds.size > 0) {
+      const existing = await scopedDb.db
+        .selectFrom("app.chat_messages")
+        .selectAll()
+        .where("thread_id", "=", threadId)
+        .where("owner_user_id", "=", thread.owner_user_id)
+        .where("role", "=", "assistant")
+        .where((eb) =>
+          eb.or(
+            [...actionIds].map((id) => {
+              const matching = JSON.stringify([{ actionRequestId: id }]);
+              return sql<boolean>`(tool_metadata->'activity' @> ${matching}::jsonb OR tool_metadata->'actionResults' @> ${matching}::jsonb)`;
+            })
+          )
+        )
+        .execute();
+      // A delayed result may also enter a newer live turn in the same conversation. Its
+      // already-stored originating message keeps ownership; do not duplicate it on this reply.
+      const alreadyStored = new Set(
+        existing
+          .filter((message) => message.tool_metadata.actionOutcomeOnly !== true)
+          .flatMap((message) => [
+            ...actionRecords(message.tool_metadata.activity),
+            ...actionRecords(message.tool_metadata.actionResults)
+          ])
+          .map(actionRecordId)
+          .filter((id): id is string => !!id && actionIds.has(id))
+      );
+      activity = activity.filter((entry) => !alreadyStored.has(actionRecordId(entry) ?? ""));
+      actionResults = actionResults.filter(
+        (entry) => !alreadyStored.has(actionRecordId(entry) ?? "")
+      );
+      for (const message of existing.filter(
+        (entry) => entry.tool_metadata.actionOutcomeOnly === true
+      )) {
+        const records = actionRecords(message.tool_metadata.activity);
+        if (
+          records.length === 0 ||
+          !records.every((entry) => actionIds.has(actionRecordId(entry) ?? ""))
+        )
+          continue;
+        for (const entry of records) {
+          // Only this repository creates these metadata-only terminal rows.
+          const terminal = entry as TerminalActionRecord;
+          if (!alreadyStored.has(terminal.actionRequestId)) {
+            activity = mergeTerminalAction(activity, terminal);
+            actionResults = mergeTerminalAction(actionResults, terminal).slice(0, 20);
+          }
+        }
+        await scopedDb.db
+          .deleteFrom("app.chat_messages")
+          .where("id", "=", message.id)
+          .where("thread_id", "=", threadId)
+          .where("owner_user_id", "=", thread.owner_user_id)
+          .execute();
+      }
+    }
     const now = new Date();
     const userMessage = await this.insertMessage(scopedDb, {
       thread,
@@ -332,12 +489,8 @@ export class ChatRepository {
         ...(opts?.answerProvenance !== undefined
           ? { answerProvenanceV1: opts.answerProvenance }
           : {}),
-        ...(opts?.actionResults?.length ? { actionResults: opts.actionResults } : {}),
-        ...(opts?.activityRecords?.length
-          ? { activity: opts.activityRecords }
-          : opts?.actionResults?.length
-            ? { activity: opts.actionResults }
-            : {}),
+        ...(actionResults.length ? { actionResults } : {}),
+        ...(activity.length ? { activity } : {}),
         ...(opts?.elapsedMs !== undefined ? { elapsedMs: opts.elapsedMs } : {}),
         ...(opts?.usage !== undefined ? { usage: opts.usage } : {})
       },

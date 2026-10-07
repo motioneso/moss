@@ -113,6 +113,19 @@ export interface ChatPersistencePort {
     actorUserId: string,
     surface?: ChatSurface
   ): Promise<{ readonly id: string; readonly incognito: boolean } | undefined>;
+  /** Exact owner-scoped lookup; never substitutes the active conversation. */
+  getOwnedThreadState?(
+    actorUserId: string,
+    threadId: string
+  ): Promise<
+    { readonly id: string; readonly surface: ChatSurface; readonly incognito: boolean } | undefined
+  >;
+  /** Idempotently persist a terminal record in its exact owned origin; private threads are excluded. */
+  persistActionRecord?(
+    actorUserId: string,
+    threadId: string,
+    record: TranscriptRecord
+  ): Promise<void>;
   listIncognitoThreadStates?(): Promise<readonly PrivateThreadState[]>;
   deleteThread?(actorUserId: string, threadId: string, surface?: ChatSurface): Promise<void>;
   /** Return the current thread title and the user's persisted timezone (null if unset). */
@@ -221,6 +234,8 @@ export interface ChatSessionManagerDeps {
   /** Refresh the session token's TTL on activity, so a live session's token never
    *  expires under the registry backstop (mirrors lastActivity / idle reaping). */
   readonly touchMcpToken?: (chatSessionId: string) => void;
+  /** Wait for origin-bound gateway notifications before completing their model/gate turn. */
+  readonly flushActionRecords?: (chatSessionId: string) => Promise<void>;
   /**
    * #2956: file this session's tool rows under the running turn. Set when a
    * turn starts, cleared in the same finally that releases the turn. Absent

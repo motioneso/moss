@@ -43,7 +43,6 @@ import {
   healAndRelaunchSession,
   resumeChatThread,
   stopSessionTurn,
-  injectActionResultRecord,
   type PendingActionResult,
   type SessionRecoveryHost,
   schedulePrivateDetachTimer,
@@ -73,6 +72,11 @@ import type {
   PrivateThreadState
 } from "./chat-session-ports.js";
 import { tryGatedTurn } from "./classifier-gate-lifecycle.js";
+import {
+  routeOriginRecord,
+  withOriginThreadTransition,
+  type OriginThreadTransition
+} from "./origin-record-routing.js";
 export type {
   ChatPersistencePort,
   ChatSessionManagerDeps,
@@ -88,6 +92,7 @@ const MAX_SUBSCRIBERS_TOTAL_PER_ACTOR = MAX_SUBSCRIBERS_PER_ACTOR * 2;
 
 export class ChatSessionManager {
   private readonly sessions = new Map<string, UserSession>();
+  private readonly originTransitions = new Map<string, OriginThreadTransition>();
   private readonly subscribers = new Map<string, Set<Subscriber>>();
   private readonly privateDetachTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** In-flight ensureSession promises, keyed by actor + surface, to serialize launches. */
@@ -244,9 +249,7 @@ export class ChatSessionManager {
     sourceFreshness?: SourceFreshnessV1 | null;
   }> {
     const sessionKey = surfaceSessionKey(actorUserId, surface);
-    // #2956: one id for the turn, the shadow record, the audit rows and the
-    // answer line. Minted once here, so a launch retry or a replayed submit in
-    // this same turn reuses it and the answer line is written exactly once.
+    // #2956: one turn id files shadow, audit and answer rows across launch/replay retries.
     const turnId = randomUUID();
     // File this session's tool rows under the turn; cleared in the finally below.
     this.deps.setCurrentTurnId?.(sessionKey, turnId);
@@ -269,6 +272,14 @@ export class ChatSessionManager {
     const flushPending = (beforeSequence?: number) => {
       lastDeliveredSequence = flushPendingInOrder(lastDeliveredSequence, beforeSequence);
     };
+    const flushActions = async () => {
+      await this.deps.flushActionRecords?.(sessionKey);
+      flushPending();
+      return {
+        activityRecords: turnActivityRecords,
+        actionResults: this.actionResultsBySession.get(sessionKey)
+      };
+    };
     // #1157: a failed launch (dead tmux server, stale daemon state) gets one retry before surfacing.
     let session: UserSession;
     let turnElapsedMs: number | undefined;
@@ -276,8 +287,7 @@ export class ChatSessionManager {
     // #2907 (plan 3.5) — the turn's shadow tracker; created once its own session is resolved.
     let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
     try {
-      // Task 4.1 (#2901) — the classifier gate runs before any engine launch (`on` only). A
-      // handled turn returns here; a decline falls through to the default model path unchanged.
+      // #2901: the gate may handle the turn before engine launch; decline keeps the model path.
       // #2934 — the gate captures this turn's privacy before its mode wait and returns it.
       const {
         result: gated,
@@ -289,7 +299,8 @@ export class ChatSessionManager {
         surface,
         text,
         { ...opts, turnId, parentId: turnId },
-        controller
+        controller,
+        flushActions
       );
       if (gated) return gated;
       // #2934 finding 1 — a stop during the gate attempt stops the turn pre-emit.
@@ -543,7 +554,8 @@ export class ChatSessionManager {
         }
       }
 
-      // #2934 — a stop after the read loop still stops the save under a flipped thread.
+      await flushActions();
+      // #2934: a stop during reads or notification lookup still prevents the turn save.
       if (controller.signal.aborted)
         return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
 
@@ -578,11 +590,8 @@ export class ChatSessionManager {
       session.lastActivity = this.deps.clock.now();
       this.deps.touchMcpToken?.(sessionKey);
 
-      // #2956: the turn's answer line, with the turn-start id. Only a stored
-      // turn writes one — refused, stopped and private turns persist nothing,
-      // so their steps reference a missing parent, by design. Jev agreement
-      // settles in the shadow record after this write; the bare line carries
-      // tool counts, and agreement attaches to the detail row separately.
+      // #2956: only stored turns get an answer line; refused/stopped/private steps have no
+      // parent. The line holds tool counts; later Jev agreement joins its shadow detail row.
       if (stored) {
         this.recordAnswerLine(actorUserId, turnId, {
           modelName: session.model,
@@ -707,28 +716,38 @@ export class ChatSessionManager {
     options?: { incognito?: boolean },
     surface?: string
   ): Promise<void> {
-    await clearChatSession({
-      actorUserId,
-      surface,
-      options,
-      persistence: this.deps.persistence,
-      sessions: this.sessions,
-      stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface),
-      endPrivateSession: (userId, chatSurface) => this.endPrivateSession(userId, chatSurface),
-      revokeMcpToken: this.deps.revokeMcpToken
-    });
+    await withOriginThreadTransition(
+      this.originTransitions,
+      surfaceSessionKey(actorUserId, normalizeChatSurface(surface)),
+      () =>
+        clearChatSession({
+          actorUserId,
+          surface,
+          options,
+          persistence: this.deps.persistence,
+          sessions: this.sessions,
+          stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface),
+          endPrivateSession: (userId, chatSurface) => this.endPrivateSession(userId, chatSurface),
+          revokeMcpToken: this.deps.revokeMcpToken
+        })
+    );
   }
 
   async endPrivateSession(actorUserId: string, surface?: string): Promise<void> {
-    await endPrivateChatSession({
-      actorUserId,
-      surface,
-      persistence: this.deps.persistence,
-      sessions: this.sessions,
-      deps: this.deps,
-      clearDetachTimer: (k) => clearPrivateDetachTimer(this.privateDetachTimers, k),
-      stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface)
-    });
+    await withOriginThreadTransition(
+      this.originTransitions,
+      surfaceSessionKey(actorUserId, normalizeChatSurface(surface)),
+      () =>
+        endPrivateChatSession({
+          actorUserId,
+          surface,
+          persistence: this.deps.persistence,
+          sessions: this.sessions,
+          deps: this.deps,
+          clearDetachTimer: (k) => clearPrivateDetachTimer(this.privateDetachTimers, k),
+          stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface)
+        })
+    );
   }
 
   async getPrivacyState(
@@ -744,16 +763,21 @@ export class ChatSessionManager {
 
   /** Resume an owned thread for this actor + surface. */
   async resumeThread(actorUserId: string, threadId: string, surface?: string): Promise<void> {
-    await resumeChatThread({
-      actorUserId,
-      threadId,
-      surface,
-      persistence: this.deps.persistence,
-      sessions: this.sessions,
-      stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface),
-      revokeMcpToken: this.deps.revokeMcpToken,
-      pendingForcedReplay: this.pendingForcedReplay
-    });
+    await withOriginThreadTransition(
+      this.originTransitions,
+      surfaceSessionKey(actorUserId, normalizeChatSurface(surface)),
+      () =>
+        resumeChatThread({
+          actorUserId,
+          threadId,
+          surface,
+          persistence: this.deps.persistence,
+          sessions: this.sessions,
+          stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface),
+          revokeMcpToken: this.deps.revokeMcpToken,
+          pendingForcedReplay: this.pendingForcedReplay
+        })
+    );
   }
 
   /** Switch provider without resetting the surface's conversation. */
@@ -811,38 +835,34 @@ export class ChatSessionManager {
     };
   }
 
-  /**
-   * Inject a synthetic record into the fan-out for the given user. Used by the
-   * MCP gateway notifier (Phase 2) to push action_request and action_result
-   * records into the live transcript stream without going through the engine.
-   */
+  // Non-action notifications may target a surface; actions require injectOriginRecord.
   injectRecord(actorUserId: string, record: TranscriptRecord, surface?: string): void {
-    const chatSurface = normalizeChatSurface(surface);
-    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    if (record.kind === "action_result" && record.outcome) {
-      const currentSequence = this.sequenceBySession.get(sessionKey) ?? 0;
-      if (this.turnsInFlight.has(sessionKey)) {
-        const recordSequence = record.sequence ?? currentSequence + 1;
-        const approvalSequence = Math.max(currentSequence, recordSequence) + 1;
-        this.sequenceBySession.set(sessionKey, approvalSequence);
-        let pending = this.pendingActionResultsBySession.get(sessionKey);
-        if (!pending) {
-          pending = [];
-          this.pendingActionResultsBySession.set(sessionKey, pending);
-        }
-        pending.push({ record, recordSequence, approvalSequence });
-        return;
-      }
-      injectActionResultRecord(record, {
-        sessionKey,
-        sequenceBySession: this.sequenceBySession,
-        turnRecords: this.turnActivityBySession.get(sessionKey),
-        actionResults: this.actionResultsBySession.get(sessionKey),
-        emit: (next) => this.emit(actorUserId, chatSurface, next)
-      });
-      return;
-    }
-    this.emit(actorUserId, chatSurface, record);
+    if (record.kind === "action_request" || record.kind === "action_result") return;
+    this.emit(actorUserId, normalizeChatSurface(surface), record);
+  }
+
+  async injectOriginRecord(
+    actorUserId: string,
+    originThreadId: string | null | undefined,
+    record: TranscriptRecord,
+    _surface?: string,
+    historyOnly = false
+  ): Promise<void> {
+    await routeOriginRecord({
+      actorUserId,
+      originThreadId,
+      record,
+      historyOnly,
+      persistence: this.deps.persistence,
+      sessions: this.sessions,
+      transitions: this.originTransitions,
+      turnsInFlight: this.turnsInFlight,
+      sequenceBySession: this.sequenceBySession,
+      pendingBySession: this.pendingActionResultsBySession,
+      turnRecords: this.turnActivityBySession,
+      actionResults: this.actionResultsBySession,
+      emit: (surface, next) => this.emit(actorUserId, surface, next)
+    });
   }
 
   /**

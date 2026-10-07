@@ -103,7 +103,8 @@ export const aiModuleManifest = {
       // #2956 — turn link on the action audit log for the per-turn step join.
       "sql/0259_audit_log_turn_id.sql",
       // #3065: a server-resolved read can require confirmation without becoming a write.
-      "sql/0289_ai_read_action_approval.sql"
+      "sql/0289_ai_read_action_approval.sql",
+      "sql/0296_ai_action_origin_and_timeout.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [
