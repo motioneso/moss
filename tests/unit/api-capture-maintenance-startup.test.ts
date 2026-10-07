@@ -15,6 +15,10 @@ const lifecycle = vi.hoisted(() => ({
 // opening database/network connections. Full Fastify/real-DB startup stays in integration.
 vi.mock("fastify", () => ({
   default: () => ({
+    decorate(name: string | symbol, value: unknown) {
+      Object.defineProperty(this, name, { value, configurable: true });
+      return this;
+    },
     register: () => {},
     after: () => {},
     setErrorHandler: () => {},

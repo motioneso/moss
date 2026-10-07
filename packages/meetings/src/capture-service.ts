@@ -11,6 +11,7 @@ import { captureMetadataJson } from "./capture-metadata.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import { isUuid, type AccessContext, type DataContextDb, type DataContextRunner } from "@moss/db";
+import { MEETING_CAPTURE_LEASE_MS } from "@moss/shared";
 import type {
   MeetingCaptureAudioInput,
   MeetingCaptureAudioReceipt,
@@ -543,14 +544,13 @@ export class MeetingCaptureService {
           // Legacy source-bearing controls can replay their receipt, but cannot create a new epoch.
           if (input.selection)
             throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
-          const preferences = await this.preferences.get(db);
           const connection = await this.connections.connection(db, grant.device_id);
           if (
             !connection ||
             connection.connection_id !== grant.connection_id ||
             connection.capability_revision !== grant.capability_revision ||
             connection.expires_at <= this.now() ||
-            this.now().getTime() - connection.last_seen_at.getTime() > 30000
+            this.now().getTime() - connection.last_seen_at.getTime() > MEETING_CAPTURE_LEASE_MS
           )
             throw new MeetingCaptureError("meeting_capture_source_unavailable", 409);
           state.inventory = JSON.parse(connection.inventory_json) as NonNullable<
@@ -559,10 +559,17 @@ export class MeetingCaptureService {
           if (grant.status === "approved") state.lastSeenAt = connection.last_seen_at.toISOString();
           command = {
             ...input,
-            selection: savedCaptureSelection(
-              resolveCaptureSource(preferences, grant.device_id, state.inventory),
-              state.inventory
-            )
+            selection:
+              state.desired === "paused"
+                ? state.epochs.at(-1)?.selection
+                : savedCaptureSelection(
+                    resolveCaptureSource(
+                      await this.preferences.get(db),
+                      grant.device_id,
+                      state.inventory
+                    ),
+                    state.inventory
+                  )
           };
         }
         applyCaptureControl(state, command, this.now(), processing?.modelRoute ?? "");
