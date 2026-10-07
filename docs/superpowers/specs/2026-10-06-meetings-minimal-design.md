@@ -8,17 +8,17 @@ and its approved, merged follow-up #3090 on main.
 ## Approved source
 
 Ben approved #3087 and #3089 in owner chat on **2026-10-06** (owner-local date),
-and reaffirmed that approval in [review 6034226446](https://github.com/motioneso/moss/pull/3077#issuecomment-6034226446).
+and reaffirmed that approval in [comment 6034226446](https://github.com/motioneso/moss/pull/3077#issuecomment-6034226446).
 This records owner-chat approval, not a GitHub review.
 
 [#3087](https://github.com/motioneso/moss/pull/3087) owns the four Meetings mockup states.
 The original approval covered `5bca8dfb88cc6f436f599345fdf66e0150b89fac`. The owner-requested
-corrections now live at `0d3291c2ae0a3fa89126970cbe4bab08bffb0688`:
+corrections now live at `4f70a20893ca88c99a00c55fdf7be70723667e11`:
 
-- [Not linked](https://github.com/motioneso/moss/blob/0d3291c2ae0a3fa89126970cbe4bab08bffb0688/docs/superpowers/specs/meetings-setup-wizard/01-not-linked.html)
-- [Ready](https://github.com/motioneso/moss/blob/0d3291c2ae0a3fa89126970cbe4bab08bffb0688/docs/superpowers/specs/meetings-setup-wizard/02-ready.html)
-- [Recording](https://github.com/motioneso/moss/blob/0d3291c2ae0a3fa89126970cbe4bab08bffb0688/docs/superpowers/specs/meetings-setup-wizard/03-recording.html)
-- [Settings](https://github.com/motioneso/moss/blob/0d3291c2ae0a3fa89126970cbe4bab08bffb0688/docs/superpowers/specs/meetings-setup-wizard/04-settings.html)
+- [Not linked](https://github.com/motioneso/moss/blob/4f70a20893ca88c99a00c55fdf7be70723667e11/docs/superpowers/specs/meetings-setup-wizard/01-not-linked.html)
+- [Ready](https://github.com/motioneso/moss/blob/4f70a20893ca88c99a00c55fdf7be70723667e11/docs/superpowers/specs/meetings-setup-wizard/02-ready.html)
+- [Recording](https://github.com/motioneso/moss/blob/4f70a20893ca88c99a00c55fdf7be70723667e11/docs/superpowers/specs/meetings-setup-wizard/03-recording.html)
+- [Settings](https://github.com/motioneso/moss/blob/4f70a20893ca88c99a00c55fdf7be70723667e11/docs/superpowers/specs/meetings-setup-wizard/04-settings.html)
 
 The latest owner ruling keeps those screens in #3087 and this PR focused on the spec.
 No screen or stylesheet bundle is duplicated here. The original source folder name is retained
@@ -90,13 +90,13 @@ The compact pill illustrated over the browser scene is Trail Marker's floating n
 It is not a second browser level meter or a new audio-level transport. Existing browser controls
 remain usable for capture recovery and safe Pause/Resume/Stop.
 
-The native pill is approximately 250 × 80 points, with a **pure white surface in every appearance,
+The native pill is approximately 200 × 64 points, with a **pure white surface in every appearance,
 including dark mode**, a light border, pill radius and soft floating shadow. Its surface must not
 follow the app's light/dark background token. It contains:
 
-- A small red **three-bar level meter**, approximately 32 × 24 points; never a zigzag waveform
-- A 54-point circular Pause control with a grey ring and grey pause icon
-- A 54-point solid semantic-red Stop control with a filled white square
+- A small red **three-bar level meter**, approximately 25.6 × 19.2 points; never a zigzag waveform
+- A 43.2-point circular Pause control with a grey ring and grey pause icon
+- A 43.2-point solid semantic-red Stop control with a filled white square
 
 There is no visible status text, meeting name, elapsed timer or close button. Accessible names,
 status descriptions and tooltips remain. The three bars reflect actual captured audio levels;
@@ -200,10 +200,10 @@ Existing code descriptions alone are not live security proof.
 - The server may store and enforce the recording capability separately from ordinary device
   authority. A device token alone remains insufficient for capture. Keep capability revision,
   owner/device binding, session checks, exact source scope, expiry and revocation enforcement.
-- Previously linked Macs without authoritative prior recording consent must explicitly relink
+- Previously linked Macs without authoritative prior recording approval must explicitly relink
   through the existing browser approval. Never silently upgrade an ordinary device token into
   recording authority. An existing authoritative recording grant may be preserved only within its
-  original owner, device and scope; no migration may broaden it or replace evidence of consent
+  original owner, device and scope; no migration may broaden it or replace evidence of approval
   with an inferred preference. Until eligible, show a concise relink recovery action, not a new
   Approve recording card. Retired attempt/decide mutations retain authentication and origin checks
   and return 410 to authenticated callers; they cannot issue recording authority. Read-only recovery
@@ -277,7 +277,7 @@ and permission boundaries even when adjacent explanatory copy becomes shorter.
 3. Creating/opening/linking does not record. One explicit Start does. Repeated clicks, interrupted
    navigation, late replies, account changes and denied access preserve existing fences.
    One initial linking approval grants the exact Mac's recording capability without a second
-   card or disclosure paragraph. Legacy linked devices without authoritative consent fail closed
+   card or disclosure paragraph. Legacy linked devices without authoritative approval fail closed
    with explicit relink recovery; existing eligible grants are not silently widened.
 4. Settings includes its four controls. Audio and automatic-summary saves handle failure, retry,
    navigation, stale replies and account-reset fencing.
@@ -285,7 +285,7 @@ and permission boundaries even when adjacent explanatory copy becomes shorter.
 5. Pause/Resume/Stop, cancellation, superseded generations, missing sources and permissions are
    covered independently. UI simplification does not bypass a server guard.
 6. Native actual audio moves exactly three red bars. Silence, absent/stale samples, Pause and every
-   terminal path flatten all bars. Geometry is 250 × 80, controls are 54 points, Pause has a grey
+   terminal path flatten all bars. Geometry is 200 × 64, controls are 43.2 points, Pause has a grey
    ring, visible text is absent and the capsule stays pure white in light and dark appearances.
 7. Unlink from browser and Mac, capability revoke, session logout, expiry, cross-owner access,
    grant replay and rate limits retain positive and guard-removal negative controls.
