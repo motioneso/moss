@@ -94,6 +94,7 @@ function build(
     } as never,
     repository: {
       createPendingAssistantAction: createPending,
+      expireAssistantAction: async () => ({ id: "action-1", status: "timed_out" }),
       insertActionAuditLog: audit
     } as never,
     tokens,
@@ -178,7 +179,11 @@ describe("per-call policy", () => {
       outsideContentNotice: false,
       details: { target: "Ocean", fields: [{ label: "Name", value: "Ocean" }] }
     });
-    expect(h.records[1]).toMatchObject({ kind: "action_result", affectsModules: ["settings"] });
+    expect(h.records[1]).toMatchObject({
+      kind: "action_result",
+      summary: "Change Ocean theme",
+      affectsModules: ["settings"]
+    });
     expect(h.audit).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ actionKind: "destructive", approvalMode: "confirmed" })
@@ -273,7 +278,11 @@ describe("per-call policy", () => {
     mutable.path = "/api/settings/themes/other";
     mutable.body.name = "Other";
     if (resolution.kind === "proceed")
-      Object.assign(resolution, { risk: "read", affectsModules: ["other"] });
+      Object.assign(resolution, {
+        risk: "read",
+        summary: "Change another theme",
+        affectsModules: ["other"]
+      });
     h.confirmations.resolve("action-1", "confirmed");
     await pending;
     expect(h.handler).toHaveBeenCalledWith(
@@ -290,6 +299,49 @@ describe("per-call policy", () => {
       expect.objectContaining({ actionKind: "destructive" })
     );
     expect(h.records[1]).toHaveProperty("affectsModules", ["settings"]);
+    expect(h.records[1]).toHaveProperty("summary", "Change Ocean theme");
+  });
+
+  it.each(["rejected", "timeout", "cancelled"] as const)(
+    "preserves the resolved title on %s without executing or retrying",
+    async (resolution) => {
+      const h = build({ resolution: proceed({ risk: "destructive" }) });
+      const pending = h.gateway.callTool(h.token, "app.callAction", input);
+      await vi.waitFor(() => expect(h.records[0]?.kind).toBe("action_request"));
+      if (resolution !== "timeout") h.confirmations.resolve("action-1", resolution);
+      expect(await pending).toMatchObject({ ok: false, denied: true });
+      expect(h.handler).not.toHaveBeenCalled();
+      expect(h.records[1]).toMatchObject({
+        kind: "action_result",
+        actionRequestId: "action-1",
+        summary: "Change Ocean theme",
+        outcome: "denied",
+        decidedBy: resolution === "rejected" ? "person" : resolution
+      });
+      expect(h.records[1]).not.toHaveProperty("affectsModules");
+    }
+  );
+
+  it("retains the resolved title and actual error after a person approved", async () => {
+    const execute = vi.fn<ToolExecute>(async () => {
+      throw new Error("handler failed");
+    });
+    const h = build({
+      resolution: proceed({ risk: "destructive" }),
+      tool: { execute },
+      deps: { logger: { error: vi.fn() } }
+    });
+    const pending = h.gateway.callTool(h.token, "app.callAction", input);
+    await approve(h);
+    expect(await pending).toMatchObject({ ok: false });
+    expect(execute).toHaveBeenCalledOnce();
+    expect(h.records[1]).toMatchObject({
+      kind: "action_result",
+      summary: "Change Ocean theme",
+      decidedBy: "person",
+      outcome: "error"
+    });
+    expect(h.records[1]).not.toHaveProperty("affectsModules");
   });
 });
 

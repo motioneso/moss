@@ -357,13 +357,20 @@ describe("chat drawer activity outcomes", () => {
         records: [
           { kind: "thinking", text: "Checking" },
           { kind: "reply", text: "I changed that." },
-          { kind: "action_result", text: "LinkedIn monitoring enabled", outcome: "executed" }
+          {
+            kind: "action_result",
+            text: "Executed: settings.write",
+            outcome: "executed",
+            decidedBy: "person",
+            summary: "Enable LinkedIn monitoring"
+          }
         ]
       })
     );
     expect(html).toContain("Thinking");
-    expect(html).toContain("LinkedIn monitoring enabled");
-    expect(html.indexOf("LinkedIn monitoring enabled")).toBeGreaterThan(
+    expect(html.replaceAll("<!-- -->", "")).toContain("Approved · Enable LinkedIn monitoring");
+    expect(html).not.toContain("settings.write");
+    expect(html.indexOf("Enable LinkedIn monitoring")).toBeGreaterThan(
       html.indexOf("I changed that.")
     );
   });
@@ -380,7 +387,7 @@ describe("chat drawer activity outcomes", () => {
     );
   });
 
-  it("shows the standalone chip's true outcome for allowed and failed actions", () => {
+  it("shows plain permission and failure outcomes without inventing approval or success", () => {
     // #1784: the standalone line used to collapse four outcomes into a Changed/Not-changed guess,
     // wrongly calling "allowed" a change it never observed and calling "error" unchanged.
     const html = renderToString(
@@ -391,8 +398,12 @@ describe("chat drawer activity outcomes", () => {
         ]
       })
     );
-    expect(html).toContain(">Allowed<");
-    expect(html).toContain(">Failed<");
+    expect(html).toContain(">Allowed</p>");
+    expect(html).toContain("The action didn’t go through");
+    expect(html).toContain("The app reported a problem.");
+    expect(html).not.toContain("Granted:");
+    expect(html).not.toContain("Broke:");
+    expect(html).not.toContain("Approved");
     expect(html).not.toContain("Changed");
     expect(html).not.toContain("Not changed");
   });
@@ -423,6 +434,12 @@ describe("chat drawer activity outcomes", () => {
     expect(recordsFromMessages([message])).toEqual([
       { kind: "thinking", text: "Checking" },
       {
+        kind: "action_result",
+        text: "LinkedIn monitoring enabled",
+        toolName: "job-search.portal.set-enabled",
+        outcome: "executed"
+      },
+      {
         kind: "reply",
         text: "I changed that.",
         messageId: "m1",
@@ -430,12 +447,6 @@ describe("chat drawer activity outcomes", () => {
         answerProvenance: undefined,
         answerProvenanceCitedIds: undefined,
         sourceFreshness: undefined
-      },
-      {
-        kind: "action_result",
-        text: "LinkedIn monitoring enabled",
-        toolName: "job-search.portal.set-enabled",
-        outcome: "executed"
       }
     ]);
   });

@@ -37,6 +37,8 @@ import {
   runAutomaticAction
 } from "./content-admission.js";
 import { actionResultRecord } from "./action-result-record.js";
+import { awaitActionResolution, emitPendingActionRequest } from "./action-request-lifecycle.js";
+import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
 import { APPROVAL_REFUSED_REASON, approvalRefusalReason } from "./native-tool-guard.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type { AdmissionPath, ConversationProvenancePort, SessionNotifier } from "./types.js";
@@ -73,7 +75,14 @@ export interface AcpBuiltInPermissionResponse {
 
 /** Narrow view of the gateway dependencies this ask needs. */
 export interface AcpPermissionGatewayDeps {
-  readonly repository: Pick<AiRepository, "createPendingAssistantAction" | "insertActionAuditLog">;
+  readonly repository: Pick<
+    AiRepository,
+    | "createPendingAssistantAction"
+    | "insertActionAuditLog"
+    | "getAssistantAction"
+    | "resolveAssistantAction"
+    | "expireAssistantAction"
+  >;
   readonly runner: DataContextRunner;
   readonly tokens: SessionTokenRegistry;
   readonly confirmations: ConfirmationRegistry;
@@ -260,6 +269,7 @@ export async function requestAcpBuiltInPermission(
 
   const startedAt = Date.now();
   const family = acpRequestFamily(builtIn);
+  const outcomeTitle = nativePolicyOutcomeTitle(builtIn.toolName);
   const ctx: ToolContext = {
     actorUserId,
     requestId,
@@ -345,9 +355,11 @@ export async function requestAcpBuiltInPermission(
           chatSessionId,
           actionResultRecord({
             actionRequestId: builtIn.toolCallId,
+            ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
             toolName: builtIn.toolName ?? "(unnamed)",
             outcome: "denied",
             decidedBy: "policy",
+            ...(outcomeTitle ? { summary: outcomeTitle } : {}),
             holdDurationMs: null,
             reason: CONTEXT_ADMISSION_UNAVAILABLE
           })
@@ -366,6 +378,9 @@ export async function requestAcpBuiltInPermission(
     const toolName = builtIn.toolName ?? "";
     const action = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       deps.repository.createPendingAssistantAction(scopedDb, {
+        chatThreadId: ctx.threadId,
+        chatSessionId: ctx.chatSessionId,
+        expiresAt: new Date(Date.now() + deps.confirmTimeoutMs),
         toolModuleId: ACP_TOOL_MODULE_ID,
         toolModuleName: ACP_TOOL_MODULE_NAME,
         toolName,
@@ -376,16 +391,18 @@ export async function requestAcpBuiltInPermission(
       })
     );
 
-    const pendingResolution = deps.confirmations.awaitResolution(
+    const pendingResolution = awaitActionResolution(
+      deps,
+      access,
       action.id,
-      deps.confirmTimeoutMs,
       request.sessionId,
       request.turnId
     );
 
-    deps.notifier.emit(chatSessionId, {
+    emitPendingActionRequest(deps, actorUserId, chatSessionId, action, {
       kind: "action_request",
       actionRequestId: action.id,
+      ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
       toolName,
       outsideContentNotice: await isConversationTainted(deps.provenance, ctx),
       summary: acpCardText(builtIn)
@@ -405,6 +422,7 @@ export async function requestAcpBuiltInPermission(
           outcome === "confirmed"
             ? {
                 actionRequestId: action.id,
+                ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
                 toolName,
                 outcome: "allowed",
                 decidedBy: "person",
@@ -412,8 +430,12 @@ export async function requestAcpBuiltInPermission(
               }
             : {
                 actionRequestId: action.id,
+                ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
                 toolName,
                 outcome: "denied",
+                ...(outcome === "admission_failed" && outcomeTitle
+                  ? { summary: outcomeTitle }
+                  : {}),
                 decidedBy:
                   outcome === "admission_failed"
                     ? "policy"
@@ -492,9 +514,11 @@ export async function requestAcpBuiltInPermission(
       chatSessionId,
       actionResultRecord({
         actionRequestId: builtIn.toolCallId,
+        ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
         toolName: builtIn.toolName ?? "(unnamed)",
         outcome: "denied",
         decidedBy: "policy",
+        ...(outcomeTitle ? { summary: outcomeTitle } : {}),
         holdDurationMs: null,
         ...(result.reason ? { reason: result.reason } : {})
       })

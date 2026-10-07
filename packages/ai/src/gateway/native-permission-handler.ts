@@ -5,6 +5,8 @@ import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AssistantToolGatewayDependencies } from "./gateway.js";
 import { actionHoldDurationMs } from "./action-result-record.js";
 import { isConversationTainted } from "./conversation-policy.js";
+import { awaitActionResolution, emitPendingActionRequest } from "./action-request-lifecycle.js";
+import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
 import {
   CONTEXT_ADMISSION_UNAVAILABLE,
   recordContextAdmission,
@@ -33,6 +35,7 @@ export async function requestNativeToolPermission(
 ): Promise<NativeToolPermissionResponse> {
   const { actorUserId, chatSessionId, threadId } = deps.tokens.verify(token);
   const toolName = safeNativeToolName(request.toolName);
+  const outcomeTitle = nativePolicyOutcomeTitle(toolName);
   if (toolName.startsWith("mcp__jarvis__") && toolName.length > "mcp__jarvis__".length) {
     return { decision: "allow", reason: "First-party Moss MCP transport." };
   }
@@ -69,6 +72,9 @@ export async function requestNativeToolPermission(
     const automatic = await runAutomaticAction(deps.provenance, ctx, () =>
       deps.runner.withDataContext(access, async (scopedDb: DataContextDb) => {
         const pending = await deps.repository.createPendingAssistantAction(scopedDb, {
+          chatThreadId: ctx.threadId,
+          chatSessionId: ctx.chatSessionId,
+          expiresAt: new Date(Date.now() + deps.confirmTimeoutMs),
           toolModuleId: NATIVE_TOOL_MODULE_ID,
           toolModuleName: NATIVE_TOOL_MODULE_NAME,
           toolName,
@@ -99,9 +105,11 @@ export async function requestNativeToolPermission(
       if (!admitted || !resolved) {
         emitNativePermissionResult(deps.notifier, chatSessionId, {
           actionRequestId: automatic.value.id,
+          ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
           toolName,
           outcome: "denied",
           decidedBy: "policy",
+          ...(outcomeTitle ? { summary: outcomeTitle } : {}),
           holdDurationMs: null,
           reason: CONTEXT_ADMISSION_UNAVAILABLE
         });
@@ -113,6 +121,9 @@ export async function requestNativeToolPermission(
 
   const action = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
     deps.repository.createPendingAssistantAction(scopedDb, {
+      chatThreadId: ctx.threadId,
+      chatSessionId: ctx.chatSessionId,
+      expiresAt: new Date(Date.now() + deps.confirmTimeoutMs),
       toolModuleId: NATIVE_TOOL_MODULE_ID,
       toolModuleName: NATIVE_TOOL_MODULE_NAME,
       toolName,
@@ -122,11 +133,12 @@ export async function requestNativeToolPermission(
       requestId
     })
   );
-  const pendingResolution = deps.confirmations.awaitResolution(action.id, deps.confirmTimeoutMs);
+  const pendingResolution = awaitActionResolution(deps, access, action.id);
 
-  deps.notifier.emit(chatSessionId, {
+  emitPendingActionRequest(deps, actorUserId, chatSessionId, action, {
     kind: "action_request",
     actionRequestId: action.id,
+    ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
     toolName,
     outsideContentNotice: await isConversationTainted(deps.provenance, ctx),
     summary: nativeToolSummary(toolName, input)
@@ -144,6 +156,7 @@ export async function requestNativeToolPermission(
     if (outcome !== "confirmed") {
       emitNativePermissionResult(deps.notifier, chatSessionId, {
         actionRequestId: action.id,
+        ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
         toolName,
         outcome: "denied",
         decidedBy:
@@ -162,9 +175,11 @@ export async function requestNativeToolPermission(
     if (!(await admitNativeResult(deps, ctx))) {
       emitNativePermissionResult(deps.notifier, chatSessionId, {
         actionRequestId: action.id,
+        ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
         toolName,
         outcome: "denied",
         decidedBy: "policy",
+        ...(outcomeTitle ? { summary: outcomeTitle } : {}),
         holdDurationMs,
         reason: CONTEXT_ADMISSION_UNAVAILABLE
       });
@@ -178,6 +193,7 @@ export async function requestNativeToolPermission(
     // branch, forty lines down and doing the identical thing, was missed.
     emitNativePermissionResult(deps.notifier, chatSessionId, {
       actionRequestId: action.id,
+      ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
       toolName,
       outcome: "allowed",
       decidedBy: "person",

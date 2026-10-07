@@ -9,7 +9,7 @@ import {
 } from "./chat-session-manager.js";
 import { AcpChatEngine, formatResultRecord, formatToolRecord } from "./acp-chat-engine.js";
 import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
-import type { ChatAttachmentDto, ChatTurnUsageDto } from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE, type ChatAttachmentDto, type ChatTurnUsageDto } from "@moss/shared";
 import type { PersonaFs } from "./persona.js";
 import {
   SECRET_SHAPE_CORPUS,
@@ -52,6 +52,19 @@ class FakePersistence implements ChatPersistencePort {
   }
 
   async openNewConversation(): Promise<void> {}
+
+  async getCurrentThreadState() {
+    return { id: "thread-1", incognito: false };
+  }
+
+  async getOwnedThreadState(actorUserId: string, threadId: string) {
+    if (actorUserId !== "user-1" || threadId !== "thread-1") return undefined;
+    return { id: "thread-1", surface: DEFAULT_CHAT_SURFACE, incognito: false };
+  }
+
+  async persistActionRecord(): Promise<boolean> {
+    return false;
+  }
 
   async getThreadContext(): Promise<{
     threadTitle: string | null;
@@ -97,7 +110,7 @@ class EmptyThenErrorEngine implements CliChatEngine {
   readonly provider = "anthropic" as ProviderKind;
   private reads = 0;
 
-  constructor(private readonly injectResult: () => void) {}
+  constructor(private readonly injectResult: () => Promise<void>) {}
 
   async launch(): Promise<{ offset: number }> {
     return { offset: 0 };
@@ -107,7 +120,7 @@ class EmptyThenErrorEngine implements CliChatEngine {
 
   async readNew(): Promise<{ records: TranscriptRecord[]; offset: number; complete: boolean }> {
     if (++this.reads === 1) return { records: [], offset: 0, complete: false };
-    this.injectResult();
+    await this.injectResult();
     throw new Error("provider failed");
   }
 
@@ -127,7 +140,7 @@ class MockTunnel implements AcpTunnel {
   private killed = false;
   private waiting: (() => void) | null = null;
   usageToReturn: Record<string, unknown> | null = null;
-  onPrompt?: (tunnel: MockTunnel, id: number) => void;
+  onPrompt?: (tunnel: MockTunnel, id: number) => void | Promise<void>;
 
   async spawn() {
     return { cwd: "/tmp/acp", home: "/tmp/home", pid: 1, uid: 1, gid: 1 };
@@ -156,7 +169,7 @@ class MockTunnel implements AcpTunnel {
       this.emit({ jsonrpc: "2.0", id: message.id, result: { sessionId: "session-1" } });
     } else if (message.method === "session/prompt") {
       if (this.onPrompt) {
-        this.onPrompt(this, message.id!);
+        await this.onPrompt(this, message.id!);
       } else {
         this.emitUpdate({
           sessionUpdate: "agent_message_chunk",
@@ -285,7 +298,7 @@ describe("task 8a Architect regressions", () => {
       result: { eventId: "event-1" },
       affectsQueryKeys: ["calendar.events"]
     };
-    manager.injectRecord("user-1", result);
+    await manager.injectOriginRecord("user-1", "thread-1", result);
     rejectStartup(new Error("provider resolution failed"));
 
     await expect(turn).rejects.toThrow("provider resolution failed");
@@ -308,7 +321,7 @@ describe("task 8a Architect regressions", () => {
   it("Regression 0: Completed action results survive an empty poll followed by a provider error", async () => {
     const persistence = new FakePersistence();
     const clock = new FakeClock();
-    let injectResult = (): void => undefined;
+    let injectResult = async (): Promise<void> => {};
     const result: TranscriptRecord = {
       kind: "action_result",
       actionRequestId: "req-error-1",
@@ -330,7 +343,9 @@ describe("task 8a Architect regressions", () => {
       persona: "persona",
       pollMs: 0
     });
-    injectResult = () => manager.injectRecord("user-1", result);
+    injectResult = async () => {
+      await manager.injectOriginRecord("user-1", "thread-1", result);
+    };
     manager.subscribe("user-1", (record) => seen.push(serializeSubscriberRecord(record)));
 
     await expect(manager.submitTurn("user-1", "Ben", "Run action")).rejects.toThrow(
@@ -368,6 +383,7 @@ describe("task 8a Architect regressions", () => {
         });
         return engineRef;
       },
+      conversationProvenance: { recordAdmission: async () => {} },
       persistence,
       personaFs: noopPersonaFs,
       clock,
@@ -383,7 +399,7 @@ describe("task 8a Architect regressions", () => {
       serializedSeen.push(snapshot);
     });
 
-    tunnel.onPrompt = (t, promptId) => {
+    tunnel.onPrompt = async (t, promptId) => {
       // 1. Thought
       engineRef!.handleSessionUpdate({
         update: {
@@ -411,10 +427,11 @@ describe("task 8a Architect regressions", () => {
         }
       });
       // The approval arrives while these engine records are still buffered.
-      manager.injectRecord("user-1", {
+      await manager.injectOriginRecord("user-1", "thread-1", {
         kind: "action_result",
         actionRequestId: "tc-1",
         toolName: "calendar.list",
+        summary: "List calendar events",
         outcome: "executed",
         decidedBy: "person",
         durationMs: 1500,
@@ -463,6 +480,14 @@ describe("task 8a Architect regressions", () => {
     expect(activity[1]?.text).toBe("calendar.list, today");
     expect(activity[2]?.text).toBe("Found 2 events");
     expect(activity[4]?.text).toMatch(/calendar\.list, approved by you at \d\d:\d\d after 2 s/);
+    for (const record of [activity[3], activity[4], recorded.opts?.actionResults?.[0]]) {
+      expect(record).toMatchObject({
+        actionRequestId: "tc-1",
+        summary: "List calendar events",
+        outcome: "executed",
+        decidedBy: "person"
+      });
+    }
 
     // Elapsed alone when usage absent
     const tunnel2 = new MockTunnel();
@@ -484,9 +509,9 @@ describe("task 8a Architect regressions", () => {
     manager2.subscribe("user-1", (record) =>
       serializedMirror.push(serializeSubscriberRecord(record))
     );
-    tunnel2.onPrompt = (t, promptId) => {
+    tunnel2.onPrompt = async (t, promptId) => {
       // Mirror case: the approval is created first, then the engine announces the tool.
-      manager2.injectRecord("user-1", {
+      await manager2.injectOriginRecord("user-1", "thread-1", {
         kind: "action_result",
         actionRequestId: "mirror-1",
         toolName: "calendar.list",
@@ -545,6 +570,7 @@ describe("task 8a Architect regressions", () => {
         });
         return engineRef;
       },
+      conversationProvenance: { recordAdmission: async () => {} },
       persistence,
       personaFs: noopPersonaFs,
       clock,
@@ -664,7 +690,7 @@ describe("task 8a Architect regressions", () => {
     expect(records.filter((r) => r.kind === "not_approved")).toHaveLength(0);
   });
 
-  it("Regression 4: Moss tool approval maps injected action_result into Approved/Not approved line with hold time", () => {
+  it("Regression 4: Moss tool approval maps injected action_result into Approved/Not approved line with hold time", async () => {
     const clock = new FakeClock();
     const persistence = new FakePersistence();
     const deps: ChatSessionManagerDeps = {
@@ -684,7 +710,7 @@ describe("task 8a Architect regressions", () => {
     manager.subscribe("user-1", (r) => seen.push(serializeSubscriberRecord(r)));
 
     // Request at T=0
-    manager.injectRecord("user-1", {
+    await manager.injectOriginRecord("user-1", "thread-1", {
       kind: "action_request",
       actionRequestId: "req-cal-1",
       text: ""
@@ -694,7 +720,7 @@ describe("task 8a Architect regressions", () => {
     clock.advance(2400);
 
     // Completed result
-    manager.injectRecord("user-1", {
+    await manager.injectOriginRecord("user-1", "thread-1", {
       kind: "action_result",
       actionRequestId: "req-cal-1",
       toolName: "calendar.createEvent",
@@ -727,13 +753,13 @@ describe("task 8a Architect regressions", () => {
     );
 
     // Denied result
-    manager.injectRecord("user-1", {
+    await manager.injectOriginRecord("user-1", "thread-1", {
       kind: "action_request",
       actionRequestId: "req-cal-2",
       text: ""
     });
     clock.advance(4100);
-    manager.injectRecord("user-1", {
+    await manager.injectOriginRecord("user-1", "thread-1", {
       kind: "action_result",
       actionRequestId: "req-cal-2",
       toolName: "calendar.deleteEvent",
@@ -750,7 +776,7 @@ describe("task 8a Architect regressions", () => {
     );
 
     // Every gateway decision has explicit provenance; policy allow is intentionally silent.
-    manager.injectRecord("user-1", {
+    await manager.injectOriginRecord("user-1", "thread-1", {
       kind: "action_result",
       actionRequestId: "req-person-allow",
       toolName: "tasks.create",
@@ -759,7 +785,7 @@ describe("task 8a Architect regressions", () => {
       durationMs: 1200,
       text: "executed"
     });
-    manager.injectRecord("user-1", {
+    await manager.injectOriginRecord("user-1", "thread-1", {
       kind: "action_result",
       actionRequestId: "req-policy-deny",
       toolName: "tasks.delete",
@@ -768,7 +794,7 @@ describe("task 8a Architect regressions", () => {
       reason: "rate limited",
       text: "denied"
     });
-    manager.injectRecord("user-1", {
+    await manager.injectOriginRecord("user-1", "thread-1", {
       kind: "action_result",
       actionRequestId: "req-policy-allow",
       toolName: "tasks.list",
@@ -776,7 +802,7 @@ describe("task 8a Architect regressions", () => {
       decidedBy: "policy",
       text: "allowed"
     });
-    manager.injectRecord("user-1", {
+    await manager.injectOriginRecord("user-1", "thread-1", {
       kind: "action_result",
       actionRequestId: "req-timeout",
       toolName: "tasks.update",
@@ -786,7 +812,7 @@ describe("task 8a Architect regressions", () => {
       durationMs: 3000,
       text: "denied"
     });
-    manager.injectRecord("user-1", {
+    await manager.injectOriginRecord("user-1", "thread-1", {
       kind: "action_result",
       actionRequestId: "req-cancel",
       toolName: "tasks.update",

@@ -6,7 +6,6 @@ import {
   assertDataContextDb,
   type AiAssistantActionRequest,
   type AiAssistantActionRisk,
-  type AiAssistantActionStatus,
   type AiAuthMethod,
   type AiConfiguredModelOrigin,
   type AiConfiguredModelsTable,
@@ -217,6 +216,9 @@ export interface UpdateAiModelInput {
 }
 
 export interface CreateAiAssistantActionInput {
+  readonly chatThreadId?: string | null;
+  readonly chatSessionId?: string | null;
+  readonly expiresAt?: Date | null;
   readonly toolModuleId: string;
   readonly toolModuleName: string;
   readonly toolName: string;
@@ -318,7 +320,7 @@ export interface ListRecentErrorsOptions {
 }
 
 export interface ResolveAiAssistantActionInput {
-  readonly status: Exclude<AiAssistantActionStatus, "pending">;
+  readonly status: "confirmed" | "rejected" | "cancelled";
 }
 
 export interface ChatModelOverrideSettings {
@@ -2098,10 +2100,13 @@ export class AiRepository {
       .executeTakeFirst() as Promise<AiProviderWithSealedCredential | undefined>;
   }
 
-  async listAssistantActions(scopedDb: DataContextDb): Promise<AiAssistantActionRequestSafeRow[]> {
+  async listAssistantActions(
+    scopedDb: DataContextDb,
+    threadId?: string
+  ): Promise<AiAssistantActionRequestSafeRow[]> {
     assertDataContextDb(scopedDb);
-
-    return this.safeAssistantActionQuery(scopedDb).execute();
+    const query = this.safeAssistantActionQuery(scopedDb);
+    return (threadId ? query.where("chat_thread_id", "=", threadId) : query).execute();
   }
 
   async getAssistantAction(
@@ -2110,6 +2115,82 @@ export class AiRepository {
   ): Promise<AiAssistantActionRequestSafeRow | undefined> {
     assertDataContextDb(scopedDb);
     return this.safeAssistantActionQuery(scopedDb).where("id", "=", actionId).executeTakeFirst();
+  }
+
+  /** A bounded owner-only work queue, not the owner's full action history. */
+  async listRecoverableAssistantActions(
+    scopedDb: DataContextDb,
+    limit = 50,
+    afterTimeoutId?: string
+  ): Promise<AiAssistantActionRequestSafeRow[]> {
+    assertDataContextDb(scopedDb);
+    const pageSize = Math.max(1, Math.min(Math.floor(limit / 2), 25));
+    const pending = await scopedDb.db
+      .selectFrom("app.ai_assistant_action_requests")
+      .selectAll()
+      .where("status", "=", "pending")
+      .where("expires_at", "<=", sql<Date>`now()`)
+      .orderBy("expires_at")
+      .orderBy("id")
+      .limit(pageSize)
+      .execute();
+    let timeouts = scopedDb.db
+      .selectFrom("app.ai_assistant_action_requests")
+      .selectAll()
+      .where("status", "=", "timed_out")
+      .where("outcome_recorded_at", "is", null)
+      .where("outcome_ignored_at", "is", null)
+      .where("chat_thread_id", "is not", null)
+      .where("chat_session_id", "is not", null)
+      .orderBy("id")
+      .limit(pageSize);
+    if (afterTimeoutId) timeouts = timeouts.where("id", ">", afterTimeoutId);
+    return [...pending, ...(await timeouts.execute())];
+  }
+
+  async nextAssistantActionExpiry(scopedDb: DataContextDb): Promise<Date | string | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.ai_assistant_action_requests")
+      .select("expires_at")
+      .where("status", "=", "pending")
+      .where("expires_at", ">", sql<Date>`now()`)
+      .orderBy("expires_at")
+      .limit(1)
+      .executeTakeFirst();
+    return row?.expires_at ?? null;
+  }
+
+  /** Called only after the bound chat outcome has actually been written. */
+  async markAssistantActionOutcomeRecorded(
+    scopedDb: DataContextDb,
+    actionId: string
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .updateTable("app.ai_assistant_action_requests")
+      .set({ outcome_recorded_at: sql<Date>`now()` })
+      .where("id", "=", actionId)
+      .where("status", "=", "timed_out")
+      .where("outcome_recorded_at", "is", null)
+      .where("outcome_ignored_at", "is", null)
+      .execute();
+  }
+
+  /** Only a positive, chat-owned permanent-drop receipt may call this; exceptions never do. */
+  async markAssistantActionOutcomeIgnored(
+    scopedDb: DataContextDb,
+    actionId: string
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .updateTable("app.ai_assistant_action_requests")
+      .set({ outcome_ignored_at: sql<Date>`now()` })
+      .where("id", "=", actionId)
+      .where("status", "=", "timed_out")
+      .where("outcome_recorded_at", "is", null)
+      .where("outcome_ignored_at", "is", null)
+      .execute();
   }
 
   async createPendingAssistantAction(
@@ -2125,6 +2206,9 @@ export class AiRepository {
       .values({
         id: randomUUID(),
         owner_user_id: sql<string>`app.current_actor_user_id()`,
+        chat_thread_id: input.chatThreadId ?? null,
+        chat_session_id: input.chatSessionId ?? null,
+        expires_at: input.expiresAt ?? null,
         tool_module_id: input.toolModuleId,
         tool_module_name: input.toolModuleName,
         tool_name: input.toolName,
@@ -2150,7 +2234,7 @@ export class AiRepository {
 
     const now = new Date();
 
-    return scopedDb.db
+    let query = scopedDb.db
       .updateTable("app.ai_assistant_action_requests")
       .set({
         status: input.status,
@@ -2159,6 +2243,26 @@ export class AiRepository {
       })
       .where("id", "=", actionId)
       .where("status", "=", "pending")
+      .returningAll();
+    if (input.status === "confirmed") {
+      query = query.where((eb) =>
+        eb.or([eb("expires_at", "is", null), eb("expires_at", ">", sql<Date>`now()`)])
+      );
+    }
+    return query.executeTakeFirst();
+  }
+
+  async expireAssistantAction(
+    scopedDb: DataContextDb,
+    actionId: string
+  ): Promise<AiAssistantActionRequestSafeRow | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .updateTable("app.ai_assistant_action_requests")
+      .set({ status: "timed_out", resolved_at: sql<Date>`now()`, updated_at: sql<Date>`now()` })
+      .where("id", "=", actionId)
+      .where("status", "=", "pending")
+      .where("expires_at", "<=", sql<Date>`now()`)
       .returningAll()
       .executeTakeFirst();
   }

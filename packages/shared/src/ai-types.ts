@@ -1,3 +1,5 @@
+import type { ActionRequestDetails } from "./chat-api.js";
+
 export type AiProviderKind =
   | "openai-compatible"
   | "anthropic"
@@ -283,8 +285,13 @@ export type AiAssistantToolBlockedReason =
   | "non_read_risk"
   | "unsupported_tool";
 export type AiAssistantActionRisk = "read" | "write" | "outbound" | "destructive";
-export type AiAssistantActionStatus = "pending" | "confirmed" | "rejected" | "cancelled";
-export type ResolveAiAssistantActionStatus = Exclude<AiAssistantActionStatus, "pending">;
+export type AiAssistantActionStatus =
+  | "pending"
+  | "confirmed"
+  | "rejected"
+  | "cancelled"
+  | "timed_out";
+export type ResolveAiAssistantActionStatus = "confirmed" | "rejected" | "cancelled";
 
 export interface InvokeAiAssistantToolRequest {
   readonly input?: Record<string, unknown>;
@@ -303,7 +310,17 @@ export interface AiAssistantToolInvocationDto {
   readonly result: Record<string, unknown> | null;
 }
 
+export interface AiAssistantActionPresentation {
+  readonly summary: string;
+  readonly outcomeTitle?: string;
+  readonly outsideContentNotice: boolean;
+  readonly details?: ActionRequestDetails;
+  readonly preview?: { readonly to: string; readonly subject: string; readonly body: string };
+}
+
 export interface AiAssistantActionDto {
+  readonly approvalAvailable?: boolean;
+  readonly presentation?: AiAssistantActionPresentation;
   readonly id: string;
   readonly ownerUserId: string;
   readonly toolModuleId: string;

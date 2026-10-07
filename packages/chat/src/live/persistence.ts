@@ -50,6 +50,7 @@ import type { ChatPersistencePort } from "./chat-session-manager.js";
 import type { HandledTurnOptions } from "./chat-session-ports.js";
 import type { ChatRepository } from "../repository.js";
 import { normalizeChatSurface } from "./chat-surface.js";
+import { terminalActionRecord } from "../action-record-history.js";
 import { estimateTokens } from "./recall-seed.js";
 import { UnsupportedLegacyCliProviderError } from "./errors.js";
 import {
@@ -521,6 +522,37 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       const thread = await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface);
       return thread ? { id: thread.id, incognito: thread.incognito } : undefined;
     });
+  }
+
+  async getOwnedThreadState(
+    actorUserId: string,
+    threadId: string
+  ): Promise<
+    { readonly id: string; readonly surface: ChatSurface; readonly incognito: boolean } | undefined
+  > {
+    if (!threadId) return undefined;
+    return this.run(actorUserId, "get-owned-thread-state", async (scopedDb) => {
+      const thread = await this.chat.getOwnedThreadById(scopedDb, actorUserId, threadId);
+      return thread?.owner_user_id === actorUserId
+        ? {
+            id: thread.id,
+            surface: normalizeChatSurface(thread.surface),
+            incognito: thread.incognito
+          }
+        : undefined;
+    });
+  }
+
+  async persistActionRecord(
+    actorUserId: string,
+    threadId: string,
+    record: TranscriptRecord
+  ): Promise<boolean> {
+    const terminal = terminalActionRecord(record);
+    if (!threadId || !terminal) return false;
+    return this.run(actorUserId, "persist-action-record", (scopedDb) =>
+      this.chat.persistActionRecord(scopedDb, actorUserId, threadId, terminal)
+    );
   }
 
   async deleteThread(actorUserId: string, threadId: string, _surface?: ChatSurface): Promise<void> {

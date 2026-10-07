@@ -55,7 +55,35 @@ describe("first-party Moss MCP transport", () => {
     "Bash"
   ])("keeps non-Jarvis transport name %j behind native confirmation", async (toolName) => {
     const tokens = new SessionTokenRegistry();
-    const createPendingAssistantAction = vi.fn(async () => ({ id: "native-not-transport" }));
+    let action:
+      | { id: string; status: "pending" | "timed_out"; expires_at: Date; resolved_at: Date | null }
+      | undefined;
+    let transitions = 0;
+    const createPendingAssistantAction = vi.fn(
+      async (_db: unknown, input: { expiresAt?: Date }) => {
+        expect(input.expiresAt).toBeInstanceOf(Date);
+        action = {
+          id: "native-not-transport",
+          status: "pending",
+          expires_at: input.expiresAt!,
+          resolved_at: null
+        };
+        return { ...action };
+      }
+    );
+    const expireAssistantAction = vi.fn(async (_db: unknown, id: string) => {
+      if (
+        !action ||
+        action.id !== id ||
+        action.status !== "pending" ||
+        action.expires_at.getTime() > Date.now()
+      )
+        return undefined;
+      action.status = "timed_out";
+      action.resolved_at = new Date();
+      transitions += 1;
+      return { ...action };
+    });
     const resolveLocalTimezone = vi.fn(async () => null);
     const gateway = new AssistantToolGateway({
       // This fixture exercises ordinary policy on an explicitly clean conversation.
@@ -68,7 +96,12 @@ describe("first-party Moss MCP transport", () => {
         })
       },
       resolveActiveModules: async () => [],
-      repository: { createPendingAssistantAction } as never,
+      repository: {
+        createPendingAssistantAction,
+        expireAssistantAction,
+        getAssistantAction: async (_db: unknown, id: string) =>
+          action?.id === id ? { ...action } : undefined
+      } as never,
       runner: {
         withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
           work({})
@@ -94,6 +127,9 @@ describe("first-party Moss MCP transport", () => {
         "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
     expect(createPendingAssistantAction).toHaveBeenCalledOnce();
+    expect(expireAssistantAction).toHaveBeenCalled();
+    expect(transitions).toBe(1);
+    expect(action?.status).toBe("timed_out");
     expect(resolveLocalTimezone).toHaveBeenCalledOnce();
   });
 });

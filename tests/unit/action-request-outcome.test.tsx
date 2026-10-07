@@ -1,0 +1,549 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Thread } from "@moss/ui";
+import type { ChatMessageDto, TranscriptRecord } from "@moss/shared";
+import { RecordRow } from "../../apps/web/src/chat/message-row.js";
+import type * as ApiClient from "../../apps/web/src/api/client.js";
+import { ApiError, resolveActionRequest } from "../../apps/web/src/api/client.js";
+import {
+  parseRecord,
+  recordsFromMessages,
+  upsertTranscriptRecord
+} from "../../apps/web/src/chat/use-chat-stream.js";
+
+vi.mock("../../apps/web/src/api/client.js", async (original) => ({
+  ...(await original<typeof ApiClient>()),
+  resolveActionRequest: vi.fn()
+}));
+
+const pending: TranscriptRecord = {
+  kind: "action_request",
+  text: "Delete custom theme",
+  summary: "Delete custom theme",
+  actionRequestId: "request-1",
+  toolName: "app.callAction",
+  outsideContentNotice: true,
+  details: {
+    target: "Full theme\n  name",
+    fields: [
+      { label: "Method", value: "DELETE" },
+      { label: "Path", value: "/api/themes/raw-id" },
+      { label: "Body: enabled", value: "false" }
+    ]
+  }
+};
+const steps: TranscriptRecord[] = [
+  { kind: "thought", text: "Checking the theme." },
+  { kind: "tool", text: "app.callAction DELETE /api/themes/raw-id" }
+];
+let root: Root | undefined;
+let host: HTMLDivElement;
+let client: QueryClient;
+function mount(records: readonly TranscriptRecord[]) {
+  if (!root) {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  }
+  act(() =>
+    root!.render(
+      <QueryClientProvider client={client}>
+        <Thread
+          records={records}
+          working={false}
+          renderRecord={(record, _index, context) => (
+            <RecordRow record={record} approvalOutcomeShown={context.approvalOutcomeShown} />
+          )}
+        />
+      </QueryClientProvider>
+    )
+  );
+}
+afterEach(() => {
+  act(() => root?.unmount());
+  host?.remove();
+  client?.clear();
+  root = undefined;
+  vi.resetAllMocks();
+});
+function expectQuiet(
+  label: string,
+  count = 2,
+  title: string | null = "Delete custom theme",
+  reason?: string
+) {
+  expect(host.querySelector('[role="status"]')?.textContent).toBe(
+    [label, title, reason].filter(Boolean).join(" · ")
+  );
+  expect(host.querySelectorAll('[role="status"]')).toHaveLength(1);
+  expect(host.querySelectorAll("button")).toHaveLength(0);
+  expect(host.querySelector("dl")).toBeNull();
+  const standalone = host.cloneNode(true) as HTMLElement;
+  standalone.querySelectorAll("details").forEach((fold) => fold.remove());
+  expect(standalone.textContent).not.toMatch(
+    /Method|DELETE|Path|Body|raw-id|app\.callAction|Executed|outside or unverified|Full theme/
+  );
+  expect(host.textContent).toContain(`Thinking${count} steps`);
+}
+
+describe("quiet resolved approvals", () => {
+  it.each([
+    ["confirmed", "Approved"],
+    ["rejected", "You declined"]
+  ] as const)(
+    "collapses immediately after %s, before an execution event arrives",
+    async (decision, label) => {
+      let finish!: () => void;
+      vi.mocked(resolveActionRequest).mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          })
+      );
+      mount([...steps, pending]);
+      // The pending presentation deliberately retains exact disclosure until the separate card work.
+      expect(host.textContent).toContain("Full theme\n  name");
+      expect(host.textContent).toContain("Body: enabledfalse");
+      const button = [...host.querySelectorAll("button")].find(
+        (item) => item.textContent === (decision === "confirmed" ? "Approve" : "Reject")
+      )!;
+      act(() => {
+        button.click();
+        button.click();
+      });
+      await vi.waitFor(() => expect(resolveActionRequest).toHaveBeenCalledTimes(1));
+      expect(resolveActionRequest).toHaveBeenCalledWith("request-1", decision);
+      await act(async () => {
+        finish();
+      });
+      await vi.waitFor(() => expectQuiet(label, 2, null));
+      expect(document.activeElement?.getAttribute("data-action-request-id")).toBe("request-1");
+    }
+  );
+
+  it.each([
+    ["person", "executed", "Approved"],
+    ["person", "denied", "You declined"],
+    ["timeout", "denied", "Timed out"],
+    ["cancelled", "denied", "Cancelled"],
+    ["person", "error", "Approved, but it didn’t go through"]
+  ] as const)(
+    "collapses from a streamed %s/%s decision without claiming execution success",
+    (decidedBy, outcome, label) => {
+      mount([...steps, pending]);
+      const fold = host.querySelector("details")!;
+      fold.open = true;
+      const result = parseRecord(
+        JSON.stringify({
+          kind: "action_result",
+          actionRequestId: "request-1",
+          text: "Executed: app.callAction",
+          toolName: "app.callAction",
+          outcome,
+          decidedBy,
+          summary: "Delete custom theme",
+          affectsModules: ["settings"]
+        })
+      )!;
+      mount([...steps, pending, result]);
+      expectQuiet(
+        label,
+        2,
+        "Delete custom theme",
+        outcome === "error" ? "The app reported a problem." : undefined
+      );
+      expect(host.querySelector("details")).toBe(fold);
+      expect(fold.open).toBe(true);
+      // Execution metadata is retained for refresh and audit; only its chat presentation changes.
+      expect(result.outcome).toBe(outcome);
+      expect(result.affectsModules).toEqual(["settings"]);
+    }
+  );
+
+  it("collapses an owned expired request even when its timeout stream event was missed", async () => {
+    vi.mocked(resolveActionRequest).mockRejectedValue(
+      new ApiError(409, "This request expired — ask again.")
+    );
+    mount([...steps, { ...pending, summary: "app.callAction DELETE /api/themes/raw-id" }]);
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() => expectQuiet("Timed out", 2, null));
+    expect(host.textContent).not.toContain("ask again");
+  });
+
+  it("keeps a transport failure actionable and never reports approval", async () => {
+    vi.mocked(resolveActionRequest).mockRejectedValue(new ApiError(503, "Connection unavailable"));
+    mount([...steps, pending]);
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() => expect(host.textContent).toContain("Connection unavailable"));
+    expect(host.textContent).toContain("Needs your approval");
+    expect(host.querySelectorAll("button")).toHaveLength(2);
+  });
+
+  it("restores a terminal decision without replaying a card or technical result", () => {
+    const message: ChatMessageDto = {
+      id: "message",
+      threadId: "thread",
+      ownerUserId: "owner",
+      modelRoute: null,
+      role: "assistant",
+      status: "stored",
+      body: "",
+      tools: [],
+      activity: [
+        ...steps,
+        {
+          kind: "action_result",
+          text: "Executed: app.callAction",
+          toolName: "app.callAction",
+          actionRequestId: "request-1",
+          summary: "Delete custom theme",
+          outcome: "denied",
+          decidedBy: "cancelled"
+        }
+      ],
+      createdAt: "2026-10-07T00:00:00Z",
+      updatedAt: "2026-10-07T00:00:00Z"
+    };
+    mount(recordsFromMessages([message]).filter((record) => record.kind !== "reply"));
+    expectQuiet("Cancelled");
+  });
+
+  it("restores an approved action failure with a plain reason and no technical payload", () => {
+    const message: ChatMessageDto = {
+      id: "failed-message",
+      threadId: "thread",
+      ownerUserId: "owner",
+      role: "assistant",
+      status: "stored",
+      body: "",
+      modelRoute: null,
+      tools: [],
+      activity: [
+        ...steps,
+        {
+          kind: "action_result",
+          text: "Failed: app.callAction",
+          actionRequestId: "request-1",
+          summary: "Delete custom theme",
+          outcome: "error",
+          decidedBy: "person",
+          reason: "approval_changed: /api/themes/raw-id {body: secret}"
+        }
+      ],
+      createdAt: "2026-10-07T00:00:00Z",
+      updatedAt: "2026-10-07T00:00:00Z"
+    };
+    mount(recordsFromMessages([message]).filter((record) => record.kind !== "reply"));
+    expectQuiet(
+      "Approved, but it didn’t go through",
+      2,
+      "Delete custom theme",
+      "The item changed before the action could finish."
+    );
+  });
+
+  it("retains a plain server outcome title when local confirmation finishes", async () => {
+    vi.mocked(resolveActionRequest).mockResolvedValue(undefined);
+    mount([...steps, { ...pending, outcomeTitle: "Delete custom theme" }]);
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() => expectQuiet("Approved"));
+  });
+
+  it("updates the live card with a fixed reason when execution fails after approval", () => {
+    mount([
+      ...steps,
+      { ...pending, outcomeTitle: "Delete custom theme" },
+      {
+        kind: "action_result",
+        text: "Failed: app.callAction",
+        actionRequestId: "request-1",
+        summary: "Delete custom theme",
+        outcome: "error",
+        decidedBy: "person",
+        reason: "approval_changed: https://private.test/api/raw-id {body: secret}"
+      }
+    ]);
+    expectQuiet(
+      "Approved, but it didn’t go through",
+      2,
+      "Delete custom theme",
+      "The item changed before the action could finish."
+    );
+    expect(host.querySelector('[role="status"]')?.textContent).not.toMatch(
+      /https|private|body|secret|approval_changed/
+    );
+  });
+
+  it("correlates exact requests even when the terminal event precedes a stale pending card", () => {
+    mount([
+      ...steps,
+      {
+        kind: "action_result",
+        text: "Executed: app.callAction",
+        actionRequestId: "request-1",
+        decidedBy: "person",
+        outcome: "executed"
+      },
+      pending
+    ]);
+    expectQuiet("Approved", 2, null);
+  });
+
+  it("does not duplicate replayed cards or decisions after reconnect", () => {
+    const emitted: TranscriptRecord[] = [
+      {
+        kind: "action_result",
+        text: "Executed: app.callAction",
+        actionRequestId: "request-1",
+        summary: "Delete custom theme",
+        decidedBy: "person",
+        outcome: "executed"
+      },
+      {
+        kind: "approved",
+        text: "app.callAction approved",
+        actionRequestId: "request-1",
+        decidedBy: "person",
+        outcome: "executed"
+      }
+    ];
+    let records = [...steps];
+    for (const record of [pending, ...emitted, pending, ...emitted])
+      records = upsertTranscriptRecord(records, record);
+    expect(records).toHaveLength(5);
+    expect(records.filter((record) => record.kind === "approved")).toHaveLength(1);
+    mount(records);
+    expectQuiet("Approved", 3);
+  });
+
+  it("keeps a saved-project handoff alongside its single quiet approval outcome", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    mount([
+      { ...pending, toolName: "workshop.buildModule", summary: "Create project" },
+      {
+        kind: "action_result",
+        text: "Executed: workshop.buildModule",
+        toolName: "workshop.buildModule",
+        actionRequestId: "request-1",
+        outcome: "executed",
+        decidedBy: "person",
+        result: {
+          project: { id, title: "Garden planner" },
+          created: true,
+          destination: `/workshop/${id}`
+        }
+      }
+    ]);
+    expect(host.querySelector("a")?.getAttribute("href")).toBe(`/workshop/${id}`);
+    expect(host.textContent).toContain("Open project");
+    expect(host.textContent?.match(/Approved/g)).toHaveLength(1);
+    expect(host.textContent).not.toContain("workshop.buildModule");
+    expect(host.textContent).not.toContain("Executed");
+  });
+
+  it("never carries a previous card's local decision into a new request at the same position", async () => {
+    vi.mocked(resolveActionRequest).mockResolvedValue(undefined);
+    mount([...steps, pending]);
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() => expectQuiet("Approved", 2, null));
+    mount([...steps, { ...pending, actionRequestId: "request-2" }]);
+    expect(host.textContent).toContain("Needs your approval");
+    expect(host.querySelectorAll("button")).toHaveLength(2);
+    expect(host.querySelector('[data-action-request-id="request-2"]')).not.toBeNull();
+  });
+
+  it("never reuses a technical pending summary as the resolved outcome title", async () => {
+    vi.mocked(resolveActionRequest).mockResolvedValue(undefined);
+    const request = { ...pending, summary: "app.callAction DELETE /api/themes/raw-id" };
+    mount([...steps, request]);
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() => expectQuiet("Approved", 2, null));
+    mount([
+      ...steps,
+      request,
+      {
+        kind: "action_result",
+        text: "Executed: app.callAction",
+        actionRequestId: "request-1",
+        decidedBy: "person",
+        outcome: "executed",
+        summary: "Delete custom theme"
+      }
+    ]);
+    expectQuiet("Approved");
+  });
+
+  it("drops native pending command details when a streamed decision has no server title", () => {
+    mount([
+      ...steps,
+      { ...pending, toolName: "Bash", summary: "Bash: DELETE /api/themes/raw-id" },
+      {
+        kind: "action_result",
+        text: "Executed: Bash",
+        toolName: "Bash",
+        actionRequestId: "request-1",
+        decidedBy: "person",
+        outcome: "allowed"
+      }
+    ]);
+    expectQuiet("Approved", 2, null);
+    expect(host.textContent).not.toContain("Bash");
+  });
+
+  it("keeps incomplete restored requests decline-only", async () => {
+    vi.mocked(resolveActionRequest).mockResolvedValue(undefined);
+    mount([{ ...pending, approvalAvailable: false }]);
+    expect(host.textContent).toContain(
+      "Details for this request aren’t available. Ask Moss again if you still want it."
+    );
+    expect([...host.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+      "Reject"
+    ]);
+    expect(host.querySelector("dl")).toBeNull();
+    expect(resolveActionRequest).not.toHaveBeenCalled();
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() =>
+      expect(resolveActionRequest).toHaveBeenCalledWith("request-1", "rejected")
+    );
+    await vi.waitFor(() =>
+      expect(host.querySelector('[role="status"]')?.textContent).toBe("You declined")
+    );
+  });
+
+  it("does not call missing disclosure a timeout and keeps Approve hidden after a failed decline", async () => {
+    vi.mocked(resolveActionRequest)
+      .mockRejectedValueOnce(new ApiError(409, "Details unavailable", "approval_unavailable"))
+      .mockRejectedValueOnce(new ApiError(503, "Try declining again"))
+      .mockResolvedValueOnce(undefined);
+    mount([pending]);
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() =>
+      expect(host.textContent).toContain("Details for this request aren’t available.")
+    );
+    expect(host.textContent).not.toContain("Timed out");
+    expect([...host.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+      "Reject"
+    ]);
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() => expect(host.textContent).toContain("Try declining again"));
+    expect([...host.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+      "Reject"
+    ]);
+    expect(host.querySelector(".action-request-card")).not.toBeNull();
+    act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() =>
+      expect(host.querySelector('[role="status"]')?.textContent).toBe("You declined")
+    );
+    expect(vi.mocked(resolveActionRequest).mock.calls).toEqual([
+      ["request-1", "confirmed"],
+      ["request-1", "rejected"],
+      ["request-1", "rejected"]
+    ]);
+  });
+
+  it("keeps a restored request with full server disclosure normally approvable", () => {
+    mount([{ ...pending, approvalAvailable: true }]);
+    expect([...host.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+      "Approve",
+      "Reject"
+    ]);
+    expect(host.textContent).toContain("Full theme");
+    expect(host.querySelector("dl")).not.toBeNull();
+  });
+
+  it.each([false, true])(
+    "settles a policy refusal after a pending card (local approval %s)",
+    async (clicked) => {
+      vi.mocked(resolveActionRequest).mockResolvedValue(undefined);
+      mount([...steps, pending]);
+      if (clicked) {
+        act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+        await vi.waitFor(() => expectQuiet("Approved", 2, null));
+      }
+      const result: TranscriptRecord = {
+        kind: "action_result",
+        text: "Denied: app.callAction",
+        actionRequestId: "request-1",
+        outcome: "denied",
+        decidedBy: "policy",
+        summary: "Change files",
+        reason: "raw /api/private {body: secret}"
+      };
+      mount([...steps, pending, result]);
+      expectQuiet("Not allowed: Change files", 2, null);
+      expect(host.textContent).not.toMatch(/Approved|secret|raw \/api/);
+      mount([...steps, { ...pending, actionRequestId: "fresh-request" }, result]);
+      expect(host.querySelector(".action-request-card")).not.toBeNull();
+      expect(host.querySelector('[role="status"]')?.textContent).toBe("Not allowed: Change files");
+    }
+  );
+
+  it.each([
+    ["executed", "Done: Rename your meeting"],
+    ["error", "Rename your meeting didn’t go through · The app reported a problem."]
+  ] as const)(
+    "shows a visible plain unattended %s result without an approval card",
+    (outcome, text) => {
+      mount([
+        {
+          kind: "action_result",
+          text: "Executed: app.callAction",
+          outcome,
+          decidedBy: "policy",
+          summary: "Rename your meeting",
+          reason: "raw /api/private {body: secret}"
+        }
+      ]);
+      expect(host.querySelector('[role="status"]')?.textContent).toBe(text);
+      expect(host.querySelector(".action-request-card")).toBeNull();
+      expect(host.querySelectorAll("button")).toHaveLength(0);
+      expect(host.textContent).not.toMatch(/Approved|app\.callAction|\/api\/|secret|body/);
+    }
+  );
+
+  it.each([
+    ["person", "executed"],
+    ["person", "denied"],
+    ["person", "error"],
+    ["timeout", "denied"],
+    ["cancelled", "denied"],
+    ["policy", "executed"],
+    ["policy", "error"],
+    ["policy", "denied"]
+  ] as const)("keeps the %s/%s outcome before Moss’s reply after reload", (decidedBy, outcome) => {
+    const result: TranscriptRecord = {
+      kind: "action_result",
+      text: "Technical result",
+      actionRequestId: "request-1",
+      summary: "Delete custom theme",
+      outcome,
+      decidedBy
+    };
+    const reply: TranscriptRecord = { kind: "reply", text: "Moss’s final reply." };
+    mount([...steps, ...(decidedBy === "policy" ? [] : [pending]), result, reply]);
+    const before = host.querySelector('[role="status"]')!.textContent!;
+    expect(host.textContent!.indexOf(before)).toBeLessThan(host.textContent!.indexOf(reply.text));
+    const history: ChatMessageDto = {
+      id: "saved",
+      threadId: "thread",
+      ownerUserId: "owner",
+      role: "assistant",
+      status: "stored",
+      body: reply.text,
+      modelRoute: null,
+      tools: [],
+      activity: [...steps, result],
+      createdAt: "2026-10-07T00:00:00Z",
+      updatedAt: "2026-10-07T00:00:00Z"
+    };
+    mount(recordsFromMessages([history]));
+    expect(host.querySelector('[role="status"]')?.textContent).toBe(before);
+    expect(host.textContent!.indexOf(before)).toBeLessThan(host.textContent!.indexOf(reply.text));
+    expect(host.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(host.textContent).toContain("Thinking2 steps");
+  });
+});
