@@ -1,3 +1,4 @@
+import { meetingsModuleManifest } from "../../packages/meetings/src/manifest.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreferencesRepository } from "@moss/structured-state";
@@ -228,7 +229,7 @@ describe("native capture bounded domain", () => {
         },
         origin
       )
-    ).toThrow();
+    ).toThrow(expect.objectContaining({ code: "meeting_capture_invalid_input", httpStatus: 400 }));
     expect(() =>
       applyCaptureControl(
         value,
@@ -243,7 +244,7 @@ describe("native capture bounded domain", () => {
         },
         origin
       )
-    ).toThrow();
+    ).toThrow(expect.objectContaining({ code: "meeting_capture_invalid_input", httpStatus: 400 }));
   });
 });
 afterEach(() => vi.restoreAllMocks());
@@ -380,6 +381,16 @@ function fixture(selection?: MeetingCaptureSelection) {
   };
 }
 describe("capture service authorization and dispatch", () => {
+  it("keeps actionable help for an unavailable capture source", () => {
+    const error = meetingsModuleManifest.features
+      .find((feature) => feature.id === "meetings.native_capture")
+      ?.errors?.find((error) => error.code === "meeting_capture_source_unavailable");
+    expect(error).toMatchObject({
+      class: "prerequisite",
+      remediationRef: "meetings.connect_recorder",
+      description: expect.stringContaining("Restore the saved source")
+    });
+  });
   it("resumes and replays an explicit command without creating another epoch", async () => {
     const f = fixture();
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
@@ -493,8 +504,9 @@ describe("capture service authorization and dispatch", () => {
         ...command("record", 2),
         selection: undefined
       })
-    ).rejects.toMatchObject({ code: "meeting_capture_invalid_input" });
+    ).rejects.toMatchObject({ code: "meeting_capture_source_unavailable", httpStatus: 409 });
     expect(f.grant.state_json).toBe(paused);
+    expect(f.repository.reserve).toHaveBeenCalledTimes(1);
   });
   it("does not refresh a paused recording's computer-audio exclusions from new defaults", async () => {
     const f = fixture({
@@ -514,8 +526,9 @@ describe("capture service authorization and dispatch", () => {
         ...command("record", 2),
         selection: undefined
       })
-    ).rejects.toMatchObject({ code: "meeting_capture_invalid_input" });
+    ).rejects.toMatchObject({ code: "meeting_capture_source_unavailable", httpStatus: 409 });
     expect(f.grant.state_json).toBe(paused);
+    expect(f.repository.reserve).toHaveBeenCalledTimes(1);
   });
   it.each(["stale", "expired"])(
     "requires a %s connection to recover before resuming",
