@@ -95,6 +95,16 @@ function Prototype() {
   const [pending, setPending] = useState(0);
   const [note, setNote] = useState("Ready. No sample work run.");
   const [status, setStatus] = useState("");
+  const [emailStatus, setEmailStatus] = useState("");
+  const dirty =
+    editing.enabled !== quiet.enabled ||
+    editing.start !== quiet.start ||
+    editing.end !== quiet.end ||
+    editing.zone !== quiet.zone;
+  function editQuiet(patch: Partial<Quiet>) {
+    setEditing((previous) => ({ ...previous, ...patch }));
+    setStatus("");
+  }
   const unavailable = example === "disconnected" || example === "revoked";
   const busy = example === "loading" || example === "error";
   const isQuiet =
@@ -150,6 +160,7 @@ function Prototype() {
     setUrgent(false);
     setSample("email");
     setStatus("");
+    setEmailStatus("");
     setNote("Ready. No sample work run.");
     setRecords([
       {
@@ -230,7 +241,7 @@ function Prototype() {
   }
   return (
     <div className="proto-preview interruptions-preview">
-      <div className="proto-toolbar">
+      <div className="proto-toolbar" inert={(chat && modal) || undefined}>
         <div className="proto-preview-label">
           <Eyebrow tone="accent">Alerts & quiet hours design</Eyebrow>
           <span>Fictional examples · browser-only state</span>
@@ -254,7 +265,11 @@ function Prototype() {
           </Select>
         </div>
       </div>
-      <div className="interruptions-review" aria-label="Fictional examples">
+      <div
+        className="interruptions-review"
+        aria-label="Fictional examples"
+        inert={(chat && modal) || undefined}
+      >
         <Field>
           <FormLabel htmlFor="example">Try a situation</FormLabel>
           <Select id="example" value={example} onChange={(e) => load(e.target.value as Situation)}>
@@ -337,7 +352,7 @@ function Prototype() {
             >
               <div className="set2__mast">
                 <h1 className="set2__masttitle">Settings</h1>
-                <Eyebrow tone="muted">Personal</Eyebrow>
+                <Eyebrow tone="accent">Personal</Eyebrow>
               </div>
               <div className="interruptions-settings-grid">
                 <NavIndex ariaLabel="Personal settings">
@@ -356,10 +371,7 @@ function Prototype() {
                   {page === "notifications" ? (
                     <>
                       <SectionHead title="Notifications" />
-                      <p>
-                        Choose how notifications reach you. These choices also apply to alerts and
-                        task exceptions.
-                      </p>
+                      <p>Choose how you receive notifications.</p>
                       <div className="set-row">
                         <div className="set-row__main">
                           <strong>App notifications</strong>
@@ -395,14 +407,15 @@ function Prototype() {
                       <Note variant="practical">
                         Messages remain readable in Moss when device notifications are off.
                       </Note>
-                      <Button variant="link" onClick={() => setPage("alerts")}>
-                        Back to alerts & quiet hours
-                      </Button>
+                      <div className="interruptions-actions">
+                        <Button variant="link" onClick={() => setPage("alerts")}>
+                          Back to alerts & quiet hours
+                        </Button>
+                      </div>
                     </>
                   ) : (
                     <>
                       <SectionHead title="Alerts & quiet hours" />
-                      <p>Stay informed without being interrupted all the time.</p>
                       {busy ? (
                         <EmptyState
                           title={
@@ -423,276 +436,282 @@ function Prototype() {
                         />
                       ) : (
                         <>
-                          <section aria-labelledby="email-heading">
-                            <SectionHead
-                              title="Email alerts"
-                              titleId="email-heading"
-                              titleAs="h3"
-                            />
-                            <div className="set-row">
-                              <div className="set-row__main">
-                                <strong>Automatic email alerts</strong>
-                                <p>
-                                  Moss checks your connected inbox for useful updates, even when you
-                                  haven’t asked it to watch for something.
-                                </p>
-                              </div>
-                              <Switch
-                                ariaLabel="Automatic email alerts"
-                                checked={email}
-                                onChange={(enabled) => {
-                                  setEmail(enabled);
-                                  setStatus("Email alert preference saved.");
-                                }}
-                              />
-                            </div>
-                            <p>
-                              Your requested watches, reminders and other scheduled work keep
-                              running when this is off.
-                            </p>
-                            {example === "saved" && (
-                              <p>
-                                Your previous choice is kept. Automatic email alerts are{" "}
-                                {email ? "on" : "off"}.
-                              </p>
-                            )}
-                            {unavailable ? (
-                              <Note variant="practical">
-                                {example === "revoked"
-                                  ? "Email access is turned off. Your alert preference is kept, but Moss can’t check this inbox."
-                                  : "No email account is connected. Your alert preference is kept until you connect one."}
-                                <div className="interruptions-actions">
-                                  <Button variant="link" onClick={() => setPage("connectors")}>
-                                    Go to Connectors
-                                  </Button>
-                                </div>
-                              </Note>
-                            ) : (
-                              <p className="interruptions-meta">
-                                <Mail size={15} /> Gmail connected · alex@example.com
-                              </p>
-                            )}
-                          </section>
-                          {page === "connectors" && (
-                            <EmptyState
-                              title="Connect an email account"
-                              description="Connect your email to receive inbox alerts and run your requested email watches."
-                              children={
-                                <Button
-                                  onClick={() => {
-                                    load("fresh");
-                                    setPage("alerts");
-                                  }}
-                                >
-                                  Connect Gmail
-                                </Button>
-                              }
-                            />
-                          )}
-                          <section aria-labelledby="quiet-heading">
-                            <SectionHead title="Quiet hours" titleId="quiet-heading" titleAs="h3" />
-                            <p>
-                              Work continues. Useful updates appear in chat straight away; device
-                              interruptions wait.
-                            </p>
-                            {reconcile ? (
-                              <Note variant="practical">
-                                <strong>Your saved quiet hours differ</strong>
-                                <p>
-                                  Choose which schedule to use for future interruptions. Nothing
-                                  changes until you choose.
-                                </p>
-                                <div className="interruptions-actions">
-                                  <Button
-                                    variant="secondary"
-                                    onClick={() => {
-                                      const next = { ...initialQuiet, enabled: false };
-                                      setQuiet(next);
-                                      setEditing(next);
-                                      setReconcile(false);
-                                      setStatus("Kept your saved quiet hours: off.");
-                                    }}
-                                  >
-                                    Keep quiet hours off
-                                  </Button>
-                                  <Button
-                                    variant="secondary"
-                                    onClick={() => {
-                                      const next = { ...initialQuiet, end: "08:00" };
-                                      setQuiet(next);
-                                      setEditing(next);
-                                      setReconcile(false);
-                                      setStatus(
-                                        "Using your saved email-check schedule: 10 PM–8 AM."
-                                      );
-                                    }}
-                                  >
-                                    Use 10 PM–8 AM
-                                  </Button>
-                                </div>
-                              </Note>
-                            ) : (
-                              <form
-                                onSubmit={(e) => {
-                                  e.preventDefault();
-                                  if (
-                                    !editing.start ||
-                                    !editing.end ||
-                                    editing.start === editing.end
-                                  ) {
-                                    setStatus("Choose different start and end times.");
-                                    return;
-                                  }
-                                  if (example === "saveError") {
-                                    setStatus(
-                                      "Quiet hours couldn’t save. Your previous schedule still applies. Try again."
-                                    );
-                                    return;
-                                  }
-                                  setQuiet(editing);
-                                  setStatus("Quiet hours saved.");
-                                }}
-                              >
+                          <div className="interruptions-groups">
+                            <div className="interruptions-column">
+                              {" "}
+                              <section aria-labelledby="email-heading">
+                                <SectionHead
+                                  title="Email alerts"
+                                  titleId="email-heading"
+                                  titleAs="h3"
+                                  rule
+                                />
                                 <div className="set-row">
                                   <div className="set-row__main">
-                                    <strong>Enable quiet hours</strong>
-                                    <p>
-                                      {quiet.enabled
-                                        ? `Every day, ${clockLabel(quiet.start)}–${clockLabel(quiet.end)}`
-                                        : "Quiet hours are off"}
-                                    </p>
+                                    <strong>Automatic email alerts</strong>
+                                    <p>Receive automatic alerts from your connected inbox.</p>
                                   </div>
                                   <Switch
-                                    ariaLabel="Enable quiet hours"
-                                    checked={editing.enabled}
-                                    onChange={(enabled) => setEditing({ ...editing, enabled })}
+                                    ariaLabel="Automatic email alerts"
+                                    checked={email}
+                                    onChange={(enabled) => {
+                                      setEmail(enabled);
+                                      setEmailStatus("Email alert preference saved.");
+                                    }}
                                   />
                                 </div>
-                                <div className="interruptions-time-fields">
-                                  <Field>
-                                    <FormLabel htmlFor="from">From</FormLabel>
-                                    <input
-                                      className="jds-input"
-                                      id="from"
-                                      type="time"
-                                      required
-                                      value={editing.start}
-                                      onChange={(e) =>
-                                        setEditing({ ...editing, start: e.target.value })
+                                {emailStatus && (
+                                  <p role="status" className="interruptions-email-status">
+                                    {emailStatus}
+                                  </p>
+                                )}
+                                {example === "saved" && (
+                                  <p>
+                                    Your previous choice is kept. Automatic email alerts are{" "}
+                                    {email ? "on" : "off"}.
+                                  </p>
+                                )}
+                                {unavailable ? (
+                                  <Note variant="practical">
+                                    {example === "revoked"
+                                      ? "Email access is turned off. Your alert preference is kept, but Moss can’t check this inbox."
+                                      : "No email account is connected. Your alert preference is kept until you connect one."}
+                                    <div className="interruptions-actions">
+                                      <Button variant="link" onClick={() => setPage("connectors")}>
+                                        Go to Connectors
+                                      </Button>
+                                    </div>
+                                  </Note>
+                                ) : (
+                                  <p className="interruptions-meta">
+                                    <Mail size={15} /> Gmail connected · alex@example.com
+                                  </p>
+                                )}
+                              </section>
+                              {page === "connectors" && (
+                                <EmptyState
+                                  title="Connect an email account"
+                                  description="Connect your email to receive inbox alerts and run your requested email watches."
+                                  children={
+                                    <Button
+                                      onClick={() => {
+                                        load("fresh");
+                                        setPage("alerts");
+                                      }}
+                                    >
+                                      Connect Gmail
+                                    </Button>
+                                  }
+                                />
+                              )}
+                              <section>
+                                <SectionHead title="How updates reach you" titleAs="h3" rule />
+                                <p>
+                                  Always readable in Moss · Device notifications{" "}
+                                  {notify && push ? "on" : "off"} · Email digest{" "}
+                                  {digest ? "on" : "off"}
+                                </p>
+                                <Button variant="link" onClick={() => setPage("notifications")}>
+                                  Manage notification preferences
+                                </Button>
+                              </section>
+                            </div>
+                            <div className="interruptions-column">
+                              {" "}
+                              <section aria-labelledby="quiet-heading">
+                                <SectionHead
+                                  title="Quiet hours"
+                                  titleId="quiet-heading"
+                                  titleAs="h3"
+                                  rule
+                                  meta={
+                                    dirty && !reconcile ? <Badge>Unsaved changes</Badge> : undefined
+                                  }
+                                />
+                                {reconcile ? (
+                                  <Note variant="practical">
+                                    <strong>Your saved quiet hours differ</strong>
+                                    <p>
+                                      Choose which schedule to use for future interruptions. Nothing
+                                      changes until you choose.
+                                    </p>
+                                    <div className="interruptions-actions">
+                                      <Button
+                                        variant="secondary"
+                                        onClick={() => {
+                                          const next = { ...initialQuiet, enabled: false };
+                                          setQuiet(next);
+                                          setEditing(next);
+                                          setReconcile(false);
+                                          setStatus("Kept your saved quiet hours: off.");
+                                        }}
+                                      >
+                                        Keep quiet hours off
+                                      </Button>
+                                      <Button
+                                        variant="secondary"
+                                        onClick={() => {
+                                          const next = { ...initialQuiet, end: "08:00" };
+                                          setQuiet(next);
+                                          setEditing(next);
+                                          setReconcile(false);
+                                          setStatus(
+                                            "Using your saved email-check schedule: 10 PM–8 AM."
+                                          );
+                                        }}
+                                      >
+                                        Use 10 PM–8 AM
+                                      </Button>
+                                    </div>
+                                  </Note>
+                                ) : (
+                                  <form
+                                    onSubmit={(e) => {
+                                      e.preventDefault();
+                                      if (
+                                        !editing.start ||
+                                        !editing.end ||
+                                        editing.start === editing.end
+                                      ) {
+                                        setStatus("Choose different start and end times.");
+                                        return;
                                       }
-                                    />
-                                  </Field>
-                                  <Field>
-                                    <FormLabel htmlFor="until">Until</FormLabel>
-                                    <input
-                                      className="jds-input"
-                                      id="until"
-                                      type="time"
-                                      required
-                                      value={editing.end}
-                                      onChange={(e) =>
-                                        setEditing({ ...editing, end: e.target.value })
+                                      if (example === "saveError") {
+                                        setStatus(
+                                          "Quiet hours couldn’t save. Your previous schedule still applies. Try again."
+                                        );
+                                        return;
                                       }
-                                    />
-                                  </Field>
-                                </div>
-                                <Field>
-                                  <FormLabel htmlFor="zone">Time zone</FormLabel>
-                                  <Select
-                                    id="zone"
-                                    value={editing.zone}
-                                    onChange={(e) =>
-                                      setEditing({ ...editing, zone: e.target.value })
-                                    }
+                                      setQuiet(editing);
+                                      setStatus("Quiet hours saved.");
+                                    }}
                                   >
-                                    <option value="America/Los_Angeles">
-                                      Pacific · Los Angeles
-                                    </option>
-                                    <option value="America/New_York">Eastern · New York</option>
-                                    <option value="Europe/London">London</option>
-                                  </Select>
-                                </Field>
-                                <div className="interruptions-actions">
-                                  <Button type="submit" variant="secondary">
-                                    Save quiet hours
-                                  </Button>
-                                  {example === "saveError" && status.includes("couldn’t save") && (
+                                    <div className="set-row">
+                                      <div className="set-row__main">
+                                        <strong>Enable quiet hours</strong>
+                                        <p>
+                                          {quiet.enabled
+                                            ? `Saved schedule: Every day, ${clockLabel(quiet.start)}–${clockLabel(quiet.end)}`
+                                            : "Saved schedule: Quiet hours are off"}
+                                        </p>
+                                      </div>
+                                      <Switch
+                                        ariaLabel="Enable quiet hours"
+                                        checked={editing.enabled}
+                                        onChange={(enabled) => editQuiet({ enabled })}
+                                      />
+                                    </div>
+                                    <div className="interruptions-time-fields">
+                                      <Field>
+                                        <FormLabel htmlFor="from">From</FormLabel>
+                                        <input
+                                          className="jds-input"
+                                          id="from"
+                                          type="time"
+                                          required
+                                          value={editing.start}
+                                          onChange={(e) => editQuiet({ start: e.target.value })}
+                                        />
+                                      </Field>
+                                      <Field>
+                                        <FormLabel htmlFor="until">Until</FormLabel>
+                                        <input
+                                          className="jds-input"
+                                          id="until"
+                                          type="time"
+                                          required
+                                          value={editing.end}
+                                          onChange={(e) => editQuiet({ end: e.target.value })}
+                                        />
+                                      </Field>
+                                    </div>
+                                    <Field>
+                                      <FormLabel htmlFor="zone">Time zone</FormLabel>
+                                      <Select
+                                        id="zone"
+                                        value={editing.zone}
+                                        onChange={(e) => editQuiet({ zone: e.target.value })}
+                                      >
+                                        <option value="America/Los_Angeles">
+                                          Pacific · Los Angeles
+                                        </option>
+                                        <option value="America/New_York">Eastern · New York</option>
+                                        <option value="Europe/London">London</option>
+                                      </Select>
+                                    </Field>
+                                    <div className="interruptions-actions">
+                                      <Button type="submit" variant="secondary">
+                                        Save quiet hours
+                                      </Button>
+                                      {example === "saveError" &&
+                                        status.includes("couldn’t save") && (
+                                          <Button
+                                            variant="link"
+                                            onClick={() => {
+                                              setExample("fresh");
+                                              setQuiet(editing);
+                                              setStatus("Quiet hours saved.");
+                                            }}
+                                          >
+                                            Try again
+                                          </Button>
+                                        )}
+                                    </div>
+                                    {status && (
+                                      <p role="status" className="interruptions-save-status">
+                                        {status}
+                                      </p>
+                                    )}
+                                  </form>
+                                )}
+                                <p>Device notifications wait until quiet hours end.</p>
+                              </section>
+                              <section aria-labelledby="exceptions-heading">
+                                <SectionHead
+                                  title="Allowed during quiet hours"
+                                  titleId="exceptions-heading"
+                                  titleAs="h3"
+                                  rule
+                                />
+                                {example === "empty" ? (
+                                  <p role="status">
+                                    No requested tasks yet. Ask Moss to set up a reminder or watch.
+                                  </p>
+                                ) : (
+                                  <div className="set-row">
+                                    <div className="set-row__main">
+                                      <strong>Watch for Maya’s reply</strong>
+                                      <p>
+                                        {exception
+                                          ? "You asked for this reply to interrupt you during quiet hours."
+                                          : "Its update is readable in chat. Interruptions wait during quiet hours."}
+                                      </p>
+                                      <Badge tone={exception ? "forest" : "neutral"}>
+                                        {exception ? "Exception requested" : "No exception"}
+                                      </Badge>
+                                    </div>
                                     <Button
                                       variant="link"
                                       onClick={() => {
-                                        setExample("fresh");
-                                        setQuiet(editing);
-                                        setStatus("Quiet hours saved.");
+                                        openChat();
+                                        append(
+                                          exception
+                                            ? "To remove this exception, say: ‘Stop Maya’s reply interrupting me during quiet hours’."
+                                            : "If you want this watch to interrupt you, say: ‘Let Maya’s reply interrupt me during quiet hours’. This applies only to Maya’s reply."
+                                        );
                                       }}
                                     >
-                                      Try again
+                                      Change in chat
                                     </Button>
-                                  )}
-                                </div>
-                              </form>
-                            )}
-                            <p>
-                              Only an exception you request for a particular task can interrupt you
-                              during quiet hours. Moss deciding something is urgent doesn’t override
-                              them.
-                            </p>
-                          </section>
-                          <section aria-labelledby="exceptions-heading">
-                            <SectionHead
-                              title="Task exceptions"
-                              titleId="exceptions-heading"
-                              titleAs="h3"
-                            />
-                            {example === "empty" ? (
-                              <p role="status">
-                                No requested tasks yet. Ask Moss to set up a reminder or watch.
-                              </p>
-                            ) : (
-                              <div className="set-row">
-                                <div className="set-row__main">
-                                  <strong>Watch for Maya’s reply</strong>
-                                  <p>
-                                    {exception
-                                      ? "You asked for this reply to interrupt you during quiet hours."
-                                      : "Its update is readable in chat. Interruptions wait during quiet hours."}
-                                  </p>
-                                  <Badge tone={exception ? "forest" : "neutral"}>
-                                    {exception ? "Exception requested" : "No exception"}
-                                  </Badge>
-                                </div>
-                                <Button
-                                  variant="link"
-                                  onClick={() => {
-                                    openChat();
-                                    append(
-                                      exception
-                                        ? "To remove this exception, say: ‘Stop Maya’s reply interrupting me during quiet hours’."
-                                        : "If you want this watch to interrupt you, say: ‘Let Maya’s reply interrupt me during quiet hours’. This applies only to Maya’s reply."
-                                    );
-                                  }}
-                                >
-                                  Change in chat
-                                </Button>
-                              </div>
-                            )}
-                            <p>
-                              Other tasks follow quiet hours. Exceptions still respect your
-                              notification choices.
-                            </p>
-                          </section>
-                          <section>
-                            <SectionHead title="How updates reach you" titleAs="h3" />
-                            <p>
-                              Always readable in Moss · Device notifications{" "}
-                              {notify && push ? "on" : "off"} · Email digest {digest ? "on" : "off"}
-                            </p>
-                            <Button variant="link" onClick={() => setPage("notifications")}>
-                              Manage notification preferences
-                            </Button>
-                          </section>
-                          <p role="status" className="interruptions-save-status">
-                            {status}
-                          </p>
+                                  </div>
+                                )}
+                                <p>
+                                  Allow a specific task in chat. Disabled notification channels stay
+                                  off.
+                                </p>
+                              </section>
+                            </div>
+                          </div>
                         </>
                       )}
                     </>

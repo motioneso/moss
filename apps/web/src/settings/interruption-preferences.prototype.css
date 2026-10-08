@@ -43,6 +43,26 @@
 }
 .interruptions-pane {
   min-width: 0;
+  container-type: inline-size;
+}
+.interruptions-groups,
+.interruptions-column {
+  display: grid;
+  gap: var(--space-7);
+  align-content: start;
+  min-width: 0;
+}
+.interruptions-groups {
+  margin-top: var(--space-6);
+}
+@container (min-width: 680px) {
+  .interruptions-groups {
+    grid-template-columns: 1fr 1fr;
+  }
+  .interruptions-column + .interruptions-column {
+    border-inline-start: 1px solid var(--border-strong);
+    padding-inline-start: var(--space-6);
+  }
 }
 .interruptions-pane > p,
 .interruptions-pane section > p,
@@ -55,14 +75,38 @@
 .interruptions-pane .set-row {
   gap: var(--space-4);
 }
+.interruptions-pane .set-row p {
+  margin: var(--space-1) 0 0;
+}
+.interruptions-pane p {
+  max-width: var(--measure);
+}
+.interruptions-pane > .jds-note {
+  margin-top: var(--space-3);
+}
+.interruptions-column section > .jds-section-head + .set-row {
+  border-top: none;
+}
 .interruptions-pane .set-row strong {
   font-size: var(--text-md);
 }
 .interruptions-pane .set-row .jds-switch {
   flex: none;
+  min-width: var(--space-9);
+  min-height: var(--space-9);
+  justify-content: center;
+}
+.interruptions-pane .jds-btn,
+.interruptions-pane .jds-input,
+.interruptions-pane .jds-select {
+  min-height: var(--space-9);
+}
+.interruptions-preview .proto-chat .jds-iconbtn {
+  min-width: var(--space-9);
+  min-height: var(--space-9);
 }
 .interruptions-pane section {
-  margin-top: var(--space-7);
+  margin-top: 0;
 }
 .interruptions-pane .jds-section-head__title {
   font-size: var(--text-2xl);
@@ -94,7 +138,9 @@
   gap: var(--space-2);
 }
 .interruptions-save-status {
-  min-height: var(--space-5);
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
 }
 .interruptions-preview [data-view="phone"] .interruptions-settings-grid {
   grid-template-columns: 1fr;
@@ -146,7 +192,9 @@
   .interruptions-pane .set-row__main {
     flex-basis: 65%;
   }
-  .interruptions-preview .proto-chat {
+  .interruptions-preview .proto-chat,
+  .interruptions-preview [data-view="phone"] .proto-chat {
+    position: fixed;
     inset: var(--space-2);
   }
 }

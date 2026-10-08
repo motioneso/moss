@@ -5,6 +5,9 @@ Design-only preview for [#3103](https://github.com/motioneso/moss/issues/3103), 
 revision `13cd364fe`. Branch: `prototype/email-alerts-quiet-hours`.
 
 One clickable desktop/phone Settings flow, with fictional data and browser-memory state.
+Ben requested the current two-column revision after rejecting the first layout: email alerts
+and delivery sit together, alongside quiet hours and task-specific allowances. Ruled headings and a
+vertical divider separate the groups. Narrow panes and phones stack them.
 The earlier chat layout is preserved: 380px dock, closed three-line overlay, direct typing
 in new side chats, automatic titles, and no main-chat update banners. The controls above the
 app are review tools, separate from product UI. One presentation is intentional: this is the
@@ -99,6 +102,22 @@ how legacy proactive-card deferral and caps coexist with immediate chat delivery
 per-source caps also govern unsolicited chat updates; conflict detection for old preferences;
 and where user-requested exceptions are stored/enforced. These are review decisions, not
 implemented migrations. The preview shows the proposed behavior without changing saved data.
+
+## Independent critique and revision
+
+Impeccable's independent design and detector/browser assessments reviewed the first version.
+The initial design score was 29/40 (Good). The correction pass moves save/error feedback next
+to its controls, distinguishes the saved schedule from unsaved edits, expands touch areas to
+48px, improves Notifications spacing, bounds prose measure, and uses an accent role for the
+Personal label. Phone chat is contained within the viewport so its composer remains reachable.
+The original detector findings include intentional Park Press cream/nav treatments and inert
+Settings behind the phone drawer; those are not reasons to change the approved visual identity.
+The independent bounded confirmation scored the two-column revision 34/40 (Good), up from
+29/40. It verified the spacing, touch areas, local feedback, responsive stacking, contrast,
+and reachable phone composer. A final hosted check confirmed removal of the duplicate Email
+rule and Ben's latest copy changes: both work-continues sentences and the promotional tagline
+are removed; Task exceptions is renamed Allowed during quiet hours. The 34/40 score predates
+those final copy edits. Detailed critique and evidence stay in the Moss vault.
 
 ## Review and verification
 
