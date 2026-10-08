@@ -287,6 +287,7 @@ export function ChatDrawer(props: {
     queryFn: () => listChatThreadMessages(reviewThreadId ?? "", props.surface),
     enabled: props.open && reviewThreadId !== null
   });
+  const sendPending = isSending || transition.pending || Boolean(props.selectionPending);
   const historyActivationPending =
     reviewThreadId !== null && (resumeMutation.isPending || !messagesQuery.isSuccess);
 
@@ -301,11 +302,9 @@ export function ChatDrawer(props: {
       // #1133: attachment-only turns (chips, no text) are legal — block only when BOTH are empty.
       if (
         (!trimmed && !attachments?.length) ||
-        isSending ||
+        sendPending ||
         privateEnded ||
         activatingPrivate ||
-        transition.pending ||
-        props.selectionPending ||
         historyActivationPending ||
         (Boolean(props.meetingContext) && reviewThreadId !== null)
       ) {
@@ -409,35 +408,25 @@ export function ChatDrawer(props: {
     },
     [
       activatingPrivate,
-      transition.pending,
       historyActivationPending,
-      isSending,
+      sendPending,
       messagesQuery.data?.messages,
       privateEnded,
       queryClient,
       reviewThreadId,
       props.surface,
-      props.selectionPending,
       props.meetingContext,
       props.onMeetingUnavailable
     ]
   );
 
   useEffect(() => {
-    if (isSending || transition.pending || props.selectionPending || queuedSendText === null)
-      return;
+    if (sendPending || queuedSendText === null) return;
     const queued = queuedSendText;
     setQueuedSendText(null);
     if (queued.surface !== props.surface) return;
     sendMessage(queued.text);
-  }, [
-    queuedSendText,
-    isSending,
-    transition.pending,
-    props.selectionPending,
-    props.surface,
-    sendMessage
-  ]);
+  }, [queuedSendText, sendPending, props.surface, sendMessage]);
 
   const reviewing = reviewThreadId !== null;
   const displayRecords = reviewing
