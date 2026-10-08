@@ -353,9 +353,8 @@ export const chatModuleManifest = {
     {
       id: "chat.thread_history",
       description:
-        "Keep your own Main chat when you reopen Moss while preserving older conversations as side " +
-        "chats: pick an older thread from drawer history, start a new one anywhere, and see " +
-        "threads ordered by recent activity. Shared histories do not replace your Main chat."
+        "Reopen your own Main chat, keep older side chats, pick history or start a new chat, " +
+        "and see conversations ordered by recent activity. Shared histories never replace your Main."
     }
   ],
   routes: [
