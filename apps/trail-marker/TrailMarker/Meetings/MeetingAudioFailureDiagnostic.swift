@@ -19,6 +19,7 @@ struct MeetingAudioFailureDiagnostic: Equatable {
         case voiceComponent, voiceInputEnable, voiceOutputEnable, voiceBypass, voiceAGC
         case voiceDucking, voiceRenderCallback, voiceReferenceSelection, voiceDeviceSelection
         case voiceEndpointReadback, voiceChannelMap, voiceClientFormat, voiceInitialize, voiceStart
+        case voiceDefaultOutputChanged
     }
     let code: Code
     let status: Int32?
@@ -63,7 +64,12 @@ struct MeetingAudioFailureDiagnostic: Equatable {
     }
 
     private static let logger = Logger(subsystem: "com.moss.trailmarker", category: "meeting-capture")
-    static func log(_ message: String) { logger.error("\(message, privacy: .public)") }
+    static func logLevel(for message: String) -> OSLogType {
+        message == "microphone-echo-cancellation=on" ? .info : .error
+    }
+    static func log(_ message: String) {
+        logger.log(level: logLevel(for: message), "\(message, privacy: .public)")
+    }
 }
 
 /// Preallocated lock-free packed publication; callbacks never log, format, allocate or dispatch.
@@ -79,7 +85,8 @@ final class MeetingAudioFailureDiagnosticSlot {
     deinit { MeetingAudioDeadlineDestroy(value) }
 }
 
-/// Created only for direct voice-processing setup failures, never semantic admission guards.
+/// VPIO setup incompatibility, including explicitly allowed format/route surprises before admission.
+/// Permission, device-loss, cleanup, and post-admission failures never use this marker.
 struct MeetingVoiceProcessingUnavailable: Error {
     let diagnostic: MeetingAudioFailureDiagnostic.Code
     let status: Int32?

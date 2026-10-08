@@ -82,7 +82,8 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
             (.voiceChannelMap, "voiceChannelMap"),
             (.voiceClientFormat, "voiceClientFormat"),
             (.voiceInitialize, "voiceInitialize"),
-            (.voiceStart, "voiceStart")
+            (.voiceStart, "voiceStart"),
+            (.voiceDefaultOutputChanged, "voiceDefaultOutputChanged")
         ]
         let statuses: [Int32?] = [nil, 0, -1, -10863, Int32.min, Int32.max]
         for (code, label) in labels {
@@ -99,6 +100,20 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
                           MeetingAudioFailureDiagnostic(.microphoneRender, status: 0).packed)
         XCTAssertNil(MeetingAudioFailureDiagnostic(packed: 0))
         XCTAssertNil(MeetingAudioFailureDiagnostic(packed: UInt64.max))
+    }
+
+    func testOnlyExactEchoCancellationOnDiagnosticUsesInfoLogLevel() {
+        XCTAssertEqual(MeetingAudioFailureDiagnostic.logLevel(for: "microphone-echo-cancellation=on"), .info)
+        for message in [
+            "microphone-echo-cancellation=off reason=microphoneOnly",
+            "microphone-echo-cancellation=off reason=voiceStart status=-10863",
+            "microphone-echo-cancellation=on extra",
+            "prefix microphone-echo-cancellation=on",
+            "capture-failure source=microphone callback=microphoneRender reason=deviceFailure status=-50",
+            ""
+        ] {
+            XCTAssertEqual(MeetingAudioFailureDiagnostic.logLevel(for: message), .error, message)
+        }
     }
 
     func testDiagnosticSlotPublishesCodeAndStatusTogetherAndStartsEmpty() {

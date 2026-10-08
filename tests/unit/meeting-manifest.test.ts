@@ -29,13 +29,13 @@ describe("meetings composition", () => {
     expect(link).toContain("Record meetings when you choose Start");
   });
 
-  it("bounds the echo experiment and describes same-mic plain-HAL fallback truthfully", () => {
+  it("bounds the echo experiment and describes same-mic fallback in plain words", () => {
     const meeting = getBuiltInModuleManifests().find((item) => item.id === "meetings")!;
     const echo = meeting.features!.find((item) => item.id === "meetings.speaker_echo_control")!;
     expect(echo.description).toContain("tries voice processing");
     expect(echo.description).toContain("minimum playback ducking");
     expect(echo.description).toContain(
-      "unsupported startup falls back to plain HAL on the same mic after full cleanup"
+      "unsupported startup uses the standard microphone path on the same mic after full cleanup"
     );
     expect(echo.description).toContain("explicit Resume");
     expect(echo.description).toContain("Real-speaker live validation pending");

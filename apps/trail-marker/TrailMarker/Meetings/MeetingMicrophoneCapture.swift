@@ -64,17 +64,21 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
             try startUnit(processing: voiceProcessing, into: receiver)
             startupDiagnostic = voiceProcessing ? "microphone-echo-cancellation=on" : "microphone-echo-cancellation=off reason=microphoneOnly"
         } catch {
-            let startupError = error
+            var startupError = error
             let failedContext = context
             if voiceProcessing { failedContext?.verifyFormatIfNeeded() }
             // Disposal is a hard boundary: never open another unit while callbacks or
             // native resources from the failed attempt might still exist.
             do { try stop() } catch { throw MeetingAudioFailure.cleanupFailed }
-            guard failedContext?.startupIsUnsafeForFallback != true else { throw MeetingAudioFailure.invalidFormat }
+            if voiceProcessing, failedContext?.startupIsUnsafeForFallback == true { throw MeetingAudioFailure.invalidFormat }
+            if (startupError as? MeetingAudioFailure) == .invalidFormat,
+               let compatibility = failedContext?.startupCompatibilityFailure {
+                startupError = compatibility
+            }
             guard voiceProcessing, let unavailable = startupError as? MeetingVoiceProcessingUnavailable else { throw startupError }
             do {
                 try startUnit(processing: false, into: receiver)
-                startupDiagnostic = "microphone-echo-cancellation=off reason=\(unavailable.diagnostic)"
+                startupDiagnostic = "microphone-echo-cancellation=off reason=\(unavailable.diagnostic) status=\(unavailable.status.map { String($0) } ?? "unavailable")"
             } catch {
                 let fallbackError = error
                 do { try stop() } catch { throw MeetingAudioFailure.cleanupFailed }
@@ -90,7 +94,10 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
         try acquired.configureOutput()
         try acquired.selectDevice(selectedDeviceID)
         let format = try acquired.inputFormat()
-        guard Self.isUsable(format) else { throw MeetingAudioFailure.invalidFormat }
+        guard Self.isUsable(format) else {
+            if processing { throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceClientFormat, status: nil) }
+            throw MeetingAudioFailure.invalidFormat
+        }
         try acquired.configureMonoOutput(sampleRate: format.mSampleRate)
         let capacity = try acquired.maximumFramesPerSlice()
         guard capacity > 0, capacity <= Self.maximumBufferedFrames else {
@@ -110,6 +117,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
         try acquired.installDeviceListener(renderContext)
         let verifiedFormat = try acquired.inputFormat()
         guard Self.matches(verifiedFormat, format) else {
+            if processing { throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceClientFormat, status: nil) }
             throw MeetingAudioFailure.invalidFormat
         }
         let verifiedCapacity = try acquired.maximumFramesPerSlice()
@@ -186,6 +194,9 @@ final class MeetingMicrophoneRenderContext {
     private let renderLock = NSLock()
     // Bits: 1 = opened, 2 = invalidated, 4 = closed permanently. Only value 1 admits audio.
     private let admission = MeetingAudioAtomicState()
+    // Startup-only failure kinds: 1 = format, 2 = default speaker changed, 4 = other.
+    // Published by callbacks and read only after complete teardown before fallback.
+    private let startupFailureKinds = MeetingAudioAtomicState()
 
     init(
         unit: MeetingMicrophoneUnit, receiver: MeetingAudioReceiving, format: AudioStreamBasicDescription,
@@ -208,7 +219,19 @@ final class MeetingMicrophoneRenderContext {
     }
 
     var startupIsUnsafeForFallback: Bool {
-        admission.value & 2 != 0 || formatNotice.value != 0 || referenceNotice.value != 0
+        let state = admission.value
+        let kinds = startupFailureKinds.value
+        return state & 1 != 0 || kinds & 4 != 0 ||
+            (state & 2 != 0 && kinds & 3 == 0) ||
+            formatNotice.value != 0 || referenceNotice.value != 0
+    }
+
+    var startupCompatibilityFailure: MeetingVoiceProcessingUnavailable? {
+        guard hasVoiceReference, !startupIsUnsafeForFallback else { return nil }
+        let kinds = startupFailureKinds.value
+        if kinds & 1 != 0 { return .init(diagnostic: .voiceClientFormat, status: nil) }
+        if kinds & 2 != 0 { return .init(diagnostic: .voiceDefaultOutputChanged, status: nil) }
+        return nil
     }
 
     func validateBeforeStart() throws {
@@ -251,7 +274,7 @@ final class MeetingMicrophoneRenderContext {
                   output.mFormatFlags == kAudioFormatFlagsNativeFloatPacked,
                   output.mChannelsPerFrame == 1, output.mBitsPerChannel == 32,
                   output.mBytesPerFrame == 4, output.mBytesPerPacket == 4,
-                  output.mFramesPerPacket == 1 else { failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatVerification)); return }
+                  output.mFramesPerPacket == 1 else { failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatVerification), startupCompatibility: 1); return }
             let currentCapacity = try unit.maximumFramesPerSlice()
             guard currentCapacity > 0, currentCapacity <= capacity else { failFromRender(.bufferFull, diagnostic: .init(.microphoneCapacityVerification)); return }
         } catch { failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatRead, status: MeetingAudioFailureDiagnostic.status(error))) }
@@ -270,7 +293,7 @@ final class MeetingMicrophoneRenderContext {
                   current.mChannelsPerFrame == 1, current.mBitsPerChannel == 32,
                   current.mBytesPerFrame == 4, current.mBytesPerPacket == 4,
                   current.mFramesPerPacket == 1 else {
-                failFromRender(.invalidFormat, diagnostic: .init(.voiceReferenceFormatVerification)); return
+                failFromRender(.invalidFormat, diagnostic: .init(.voiceReferenceFormatVerification), startupCompatibility: 1); return
             }
         } catch {
             failFromRender(.invalidFormat, diagnostic: .init(.voiceReferenceFormatRead, status: MeetingAudioFailureDiagnostic.status(error)))
@@ -286,6 +309,11 @@ final class MeetingMicrophoneRenderContext {
         } else if element == 1, scope == kAudioUnitScope_Input || scope == kAudioUnitScope_Output {
             formatDidChange()
         }
+    }
+
+    func defaultOutputDidChange() {
+        guard admission.value & 4 == 0 else { return }
+        failFromRender(.invalidSelection, diagnostic: .init(.voiceDefaultOutputChanged), startupCompatibility: 2)
     }
 
     func referenceDidDisappear() { failFromRender(.invalidSelection, diagnostic: .init(.voiceReferenceRoute)) }
@@ -356,8 +384,13 @@ final class MeetingMicrophoneRenderContext {
         return noErr
     }
 
-    private func failFromRender(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic) {
-        if admission.insert(2) == 1 { receiver.fail(failure, diagnostic: diagnostic) }
+    private func failFromRender(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic,
+                                startupCompatibility: UInt32 = 0) {
+        let previous = admission.insert(2)
+        if previous == 1 { receiver.fail(failure, diagnostic: diagnostic) }
+        else if previous == 0 || previous == 2 {
+            startupFailureKinds.insert(hasVoiceReference && startupCompatibility != 0 ? startupCompatibility : 4)
+        }
     }
 
     deinit {
@@ -527,8 +560,10 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
         guard let selectedDevice, deviceListener == nil else { throw MeetingAudioFailure.invalidTransition }
         guard Self.deviceIsAlive(selectedDevice) else { throw MeetingAudioFailure.invalidSelection }
         if voiceProcessing {
-            guard let referenceDevice, Self.deviceIsAlive(referenceDevice),
-                  try Self.defaultOutputDevice() == referenceDevice else { throw MeetingAudioFailure.invalidSelection }
+            guard let referenceDevice, Self.deviceIsAlive(referenceDevice) else { throw MeetingAudioFailure.invalidSelection }
+            if try Self.defaultOutputDevice() != referenceDevice {
+                throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceDefaultOutputChanged, status: nil)
+            }
             // VPIO may construct its own private aggregate. Verify the selected physical
             // endpoints through its documented per-bus CurrentDevice properties.
             guard try currentDevice(bus: 1) == selectedDevice,
@@ -551,14 +586,20 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
             let routeListener: AudioObjectPropertyListenerBlock = { _, _ in
                 // Do not retarget a running unit. Existing host recovery rebuilds both
                 // sources on explicit Resume after checking the exact capture grant.
-                MeetingVoiceProcessing.verifyReference(expected: reference,
-                    current: try? Self.defaultOutputDevice(), alive: Self.deviceIsAlive(reference), context: context)
+                let current = try? Self.defaultOutputDevice()
+                if Self.deviceIsAlive(reference), let current, current != reference {
+                    context.defaultOutputDidChange()
+                } else {
+                    MeetingVoiceProcessing.verifyReference(expected: reference,
+                        current: current, alive: Self.deviceIsAlive(reference), context: context)
+                }
             }
             try check(AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
                 &routeAddress, deviceQueue, routeListener), "observe voice reference route")
             referenceListener = routeListener
-            guard try Self.defaultOutputDevice() == reference, Self.deviceIsAlive(reference) else {
-                throw MeetingAudioFailure.invalidSelection
+            guard Self.deviceIsAlive(reference) else { throw MeetingAudioFailure.invalidSelection }
+            if try Self.defaultOutputDevice() != reference {
+                throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceDefaultOutputChanged, status: nil)
             }
         }
     }
