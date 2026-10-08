@@ -88,6 +88,7 @@ final class MeetingCaptureHost: ObservableObject {
 
     // Read-only progress and completion waits never expose a task cancellation handle.
     var sourceChangePending: Bool { sourceChangeIntent != nil }
+    var sourceRecoveryPending: Bool { recoveryIntent != nil }
     var sourceChangeAcknowledged: Bool { sourceChangeIntent?.acknowledged == true }
     var sourceChangeInFlight: Bool { sourceChangeTask != nil }
     var pendingGaps: [MeetingCaptureGap] { timeline.pendingGaps }
@@ -241,6 +242,7 @@ final class MeetingCaptureHost: ObservableObject {
                 retryPendingControl()
                 if recoveryIntent?.started == true, sentObservation == observed,
                    observed.phase == "recording", reply.capture.generation == observed.generation {
+                    recoveryBudget?.acknowledgeRecording(at: now)
                     recoveryIntent = nil
                     recoveryTask = nil
                     runtime.updateCaptureLease(until: leaseDeadlineNanoseconds)
@@ -360,8 +362,8 @@ final class MeetingCaptureHost: ObservableObject {
         let resolved = try sourceSnapshot.resolve(selection)
         if let recoveryIntent {
             guard recoveryIntent.acknowledged, recoveryIntent.matches(next),
-                  resolved == recoveryIntent.original, runtime.canRecoverSources,
-                  (recoveryBudget?.remaining(at: now) ?? 0) > 0 else { throw MeetingHostError.sourceChanged }
+                  resolved == recoveryIntent.original, runtime.canRecoverSources else { throw MeetingHostError.sourceChanged }
+            try requireRecoveryBudget(at: now)
         }
         let readiness = MeetingNativeReadiness(permissionsGranted: true, processingReady: true,
             meetingDeviceAuthorized: true)
@@ -451,11 +453,15 @@ final class MeetingCaptureHost: ObservableObject {
             }
             if recoveryIntent != nil {
                 try validateRecoverySources()
-                guard (recoveryBudget?.remaining(at: now) ?? 0) > 0 else { throw MeetingHostError.network }
+                try requireRecoveryBudget(at: now)
                 retrySourceRecovery()
             }
             if phase == .recording {
                 validateCurrentSources(try ports.readInventory())
+                // Expire only a completed, acknowledged episode before evaluating a later
+                // fault. Pending control, acquisition and recording acknowledgment never age out.
+                if phase == .recording, recoveryIntent == nil, !acquisitionPending,
+                   recoveryBudget?.completedCooldownElapsed(at: now) == true { recoveryBudget = nil }
             }
             let gaps = try runtime.service(at: now)
             recordingDuration.observeCaptureState(runtime.snapshot.state, at: now)
@@ -593,8 +599,17 @@ final class MeetingCaptureHost: ObservableObject {
         return admitted ? .started : .deferred
     }
 
-    func interrupt(error: Error) {
+    func interrupt(error originalError: Error) {
         let interruptedRecovery = recoveryIntent
+        // A staged deadline may surface as a native leaseExpired or transport timeout.
+        // Keep genuine authorization expiry and hard source/permission faults distinct.
+        let error: Error
+        if interruptedRecovery != nil, now() < leaseDeadlineNanoseconds,
+           (recoveryBudget?.remaining(at: now()) ?? 0) == 0,
+           (originalError as? MeetingAudioFailure) == .leaseExpired || (originalError as? MeetingHostError) == .network {
+            error = MeetingHostError.recoveryExhausted
+        } else { error = originalError }
+        if (error as? MeetingHostError) == .recoveryExhausted { connectivityMessage = nil }
         cancelSourceRecovery()
         let reason = MeetingCaptureDiagnostics.interruptionReason(error)
         captureLog.error("Capture paused: \(reason, privacy: .public)")
@@ -1164,7 +1179,7 @@ final class MeetingCaptureHost: ObservableObject {
                 faultedSources: runtime.recoveryFaultSources)
         }
         recoveryBudget?.requireHealth(from: runtime.recoveryFaultSources)
-        guard (recoveryBudget?.remaining(at: now) ?? 0) > 0 else { throw MeetingHostError.network }
+        try requireRecoveryBudget(at: now)
         runtime.updateCaptureLease(until: leaseDeadlineNanoseconds)
         uploadAdmitted = false
         sourceChangeRevision += 1
@@ -1217,7 +1232,7 @@ final class MeetingCaptureHost: ObservableObject {
                   intent.acknowledged, intent.matches(capture), !stoppedByUser,
                   controlOutbox.pending == nil, !controlInFlight, !cleanupBlocked,
                   credential != nil, grantExpiry.map({ ports.wallNow() < $0 }) == true,
-                  now() < leaseDeadlineNanoseconds, (recoveryBudget?.remaining(at: now()) ?? 0) > 0,
+                  now() < leaseDeadlineNanoseconds,
                   let selection = intent.body.selection else {
                 runtime.cancelRecoveryAcquisition(ticket)
                 if session == sessionGeneration, recoveryIntent != nil { interrupt(error: MeetingHostError.rejected) }
@@ -1233,6 +1248,7 @@ final class MeetingCaptureHost: ObservableObject {
                     throw MeetingHostError.sourceChanged
                 }
                 let committedAt = now()
+                try requireRecoveryBudget(at: committedAt)
                 try runtime.commitRecoveryAcquisition(ticket, at: committedAt)
                 acquisitionPending = false
                 recoveryAcquisition = nil
@@ -1302,7 +1318,7 @@ final class MeetingCaptureHost: ObservableObject {
               now() >= intent.retryAtNanoseconds, let client, let credential else { return }
         do { try validateRecoverySources() } catch { interrupt(error: error); return }
         guard recoveryBudget?.beginAttempt(at: now()) == true else {
-            interrupt(error: MeetingHostError.network)
+            interrupt(error: MeetingHostError.recoveryExhausted)
             return
         }
         let generation = sessionGeneration
@@ -1320,7 +1336,7 @@ final class MeetingCaptureHost: ObservableObject {
                 guard generation == self.sessionGeneration, !Task.isCancelled,
                       self.recoveryIntent?.body.requestKey == body.requestKey else { return }
                 try self.validateRecoverySources()
-                guard (self.recoveryBudget?.remaining(at: self.now()) ?? 0) > 0 else { throw MeetingHostError.network }
+                try self.requireRecoveryBudget(at: self.now())
                 guard reply.capture.grantId == self.grantId, reply.capture.deviceId == self.ports.identity()?.deviceId else {
                     throw MeetingHostError.authorizationExpired
                 }
@@ -1351,11 +1367,15 @@ final class MeetingCaptureHost: ObservableObject {
             cancelSourceRecovery()
             return
         }
-        guard intent.acknowledged, intent.matches(capture),
-              (recoveryBudget?.remaining(at: now()) ?? 0) > 0 else { throw MeetingHostError.rejected }
+        guard intent.acknowledged, intent.matches(capture) else { throw MeetingHostError.rejected }
         try validateRecoverySources()
+        try requireRecoveryBudget(at: now())
         // apply() uses the ordinary new-generation fence and status admission, but retains
         // the original physical route/process snapshot until after hardware revalidation.
+    }
+
+    private func requireRecoveryBudget(at now: UInt64) throws {
+        guard (recoveryBudget?.remaining(at: now) ?? 0) > 0 else { throw MeetingHostError.recoveryExhausted }
     }
 
     private func cancelSourceRecovery() {

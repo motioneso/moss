@@ -36,3 +36,15 @@ The owner approved automatic recovery that may show macOS’s own system-audio c
 The review requires a late-adoption/status-ack deadline regression, recording-wide automatic recovery limits with manual segment headroom, explicit source-edit cancellation, single pause diagnostics, user-facing dialog metadata, and server-first release guidance. Hosted checks and the installed-Mac cases must cover the amended head. In particular, answering an OS dialog near the deadline must not end the recording grant; refusal must be tested rather than inferred from a successful device start.
 
 Review follow-up local checks passed: 27 capture/manifest/link unit files (416 tests), root and test TypeScript, scoped ESLint/Prettier, and the actual app-map build. Three additional server limit/count guard removals failed the intended assertions, then were restored and passed. The independent reviewer separately reran 48 limit/source/receipt tests. Native portable harness checks include 9 acquisition and 13 reconfiguration controls; hosted Swift execution remains required. A lock-reentrant diagnostic getter found while investigating hung native CI now has a bounded regression and mutation, so the test reports failure rather than hanging.
+
+## Hosted evidence at 7255ff759
+
+The exact head passed all four isolated database shards, static/TypeScript, unit, browser, compose smoke, security/guard-removal, revocation, UI acceptance and audio-proxy workflows. All five real-storage recovery cases passed, including retained-receipt expiry and the persisted automatic-recovery cap. Native Release compilation passed, but baseline XCTest found two diagnostic/gap regressions; this head is not native-green.
+
+- [Recovery database tests](https://github.com/motioneso/moss/actions/runs/37851696891/job/113567133626)
+- [Source-boundary guard-removal checks](https://github.com/motioneso/moss/actions/runs/37851696778/job/113565889066)
+- [Native baseline failures](https://github.com/motioneso/moss/actions/runs/37851696843/job/113565889484)
+
+The continuity fixture's finite 0-to-2 sample skip with advancing host time should now classify as source reconfiguration. Nonfinite, arithmetic-invalid and independently reversed timing remain hard failures. The scope-loss fixture also exposed duplicated output gap coverage alongside the correctly discarded microphone tail; the follow-up preserves both source gaps while subtracting identical already-reported coverage. Any changed head still requires its own hosted native run and installed-Mac proof.
+
+The follow-up also distinguishes recovery exhaustion from network loss and retires a completed local episode 30 seconds after recording-status acknowledgment, evaluated on the service tick. Active recovery never receives a fresh deadline from this cooldown; the server cap remains recording-wide. Independent review found no production blocker. Local cap tests cover both 3-second and 32-second episode spacing; 18 native reconfiguration and 9 acquisition mutation anchors pass portable validation. These are not substitutes for hosted Swift execution.

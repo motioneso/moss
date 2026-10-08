@@ -171,7 +171,7 @@ struct MeetingCaptureAudioBody: Encodable {
 
 enum MeetingHostError: Error, Equatable {
     case invalidActivation, wrongInstance, unavailable, permissionDenied, sourceChanged
-    case authorizationExpired, rejected, network, invalidResponse, cleanupFailed, bufferExhausted
+    case authorizationExpired, rejected, network, invalidResponse, cleanupFailed, bufferExhausted, recoveryExhausted
     case retryAfter(milliseconds: UInt64)
     var retryDelayMilliseconds: UInt64? {
         if case .retryAfter(let milliseconds) = self { return milliseconds }
@@ -187,6 +187,7 @@ enum MeetingHostError: Error, Equatable {
         case .authorizationExpired: return "Meeting access ended. Check the meeting and Mac connection in Moss before recording again."
         case .rejected: return "Moss did not accept the capture request. Check this meeting in Moss."
         case .network: return "Moss is unreachable. Capture is paused. Reconnect and press Resume in Moss."
+        case .recoveryExhausted: return "Audio recovery could not finish. Capture is paused. Press Resume in Moss to try again."
         case .invalidResponse: return "Moss returned an incompatible meeting response. Update both apps before trying again."
         case .bufferExhausted: return "Audio memory reached its limit. Capture is paused. Reconnect and press Resume in Moss."
         case .retryAfter: return "Moss is temporarily busy. Capture continues only within its current connection lease."

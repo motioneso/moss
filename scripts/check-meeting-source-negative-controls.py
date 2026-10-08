@@ -60,7 +60,7 @@ CONTROLS = [
         SERVICE,
         'if (grant.status !== "active" || !grant.credential_hash)\n          throw new MeetingCaptureError("meeting_capture_conflict", 409);',
         'if (grant.status !== "active" || !grant.credential_hash) throw new MeetingCaptureError();')], CHANGES, "source-stop-finalization-conflict"),
-    control("S10-automatic-recovery-budget", "caps repeated healthy recoveries at eight", [mutation(
+    control("S10-automatic-recovery-budget", "caps repeated completed episodes", [mutation(
         DOMAIN,
         "recoveryCount >= MAX_AUTOMATIC_RECOVERIES ||",
         "false ||")], RECOVERY_LIMITS),

@@ -2,9 +2,12 @@ import Foundation
 
 /// One monotonic budget spans control retries and immediately recurring device faults.
 /// Sustained callbacks from every faulted source finish the episode; a quiet, unchanged
-/// peer need not produce audio. The server separately caps recoveries across the recording.
+/// peer need not produce audio. Service also retires an acknowledged episode after 30 seconds
+/// with no intervening recovery attempt. The server's recording-wide cap is separate.
 struct MeetingSourceRecoveryBudget {
+    static let completedCooldownNanoseconds: UInt64 = 30_000_000_000
     let deadline: UInt64
+    private var recordingAcknowledgedAt: UInt64?
     private(set) var attempts = 0
     var healthySince: UInt64?
     private var requiredHealth: Set<MeetingAudioSource>
@@ -26,9 +29,21 @@ struct MeetingSourceRecoveryBudget {
     mutating func beginAttempt(at now: UInt64) -> Bool {
         guard now < deadline, attempts < 3 else { return false }
         attempts += 1
+        recordingAcknowledgedAt = nil
         healthySince = nil
         priorCallbacks = [:]
         return true
+    }
+
+    /// Acquisition/control success is insufficient: only the ordinary recording status
+    /// acknowledgment starts this cooldown. It never extends the active episode deadline.
+    mutating func acknowledgeRecording(at now: UInt64) {
+        if recordingAcknowledgedAt == nil { recordingAcknowledgedAt = now }
+    }
+
+    func completedCooldownElapsed(at now: UInt64) -> Bool {
+        guard let completedAt = recordingAcknowledgedAt, now >= completedAt else { return false }
+        return now - completedAt >= Self.completedCooldownNanoseconds
     }
 
     func remaining(at now: UInt64) -> TimeInterval {

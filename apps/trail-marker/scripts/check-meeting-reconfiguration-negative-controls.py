@@ -20,6 +20,46 @@ SPEC.loader.exec_module(SHARED)
 RUNNER = SHARED.RUNNER
 MEETINGS = RUNNER.APP / "TrailMarker/Meetings"
 CONTROLS = [
+    ("MeetingSourceRecoveryTests", {
+        "name": "recovery-cooldown-requires-recording-acknowledgment",
+        "source": MEETINGS / "MeetingSourceRecovery.swift",
+        "test": "testCompletedRecoveryCooldownRequiresRecordingAcknowledgmentAndThirtySeconds",
+        "before": "guard let completedAt = recordingAcknowledgedAt, now >= completedAt else { return false }",
+        "after": "let completedAt = recordingAcknowledgedAt ?? 0; guard now >= completedAt else { return false }",
+        "assertion": "Control, acquisition and unacknowledged recording cannot start the completed cooldown",
+    }),
+    ("MeetingSourceRecoveryTests", {
+        "name": "recovery-cooldown-preserves-active-episode",
+        "source": MEETINGS / "MeetingSourceRecovery.swift",
+        "test": "testImmediateRecurringRecoveryRetainsDeadlineAndCancelsCompletedCooldown",
+        "before": "        recordingAcknowledgedAt = nil",
+        "after": "        // Mutation: retain a completed cooldown during a new active attempt.",
+        "assertion": "A fresh in-progress attempt must never inherit an earlier completed cooldown",
+    }),
+    ("MeetingRecoveryAcquisitionHostTests", {
+        "name": "recovery-exhaustion-message-is-not-network",
+        "source": MEETINGS / "MeetingCaptureContracts.swift",
+        "test": "testRecoveryDeadlineCancelsBlockedAcquisitionWithoutWaitingForHardware",
+        "before": 'case .recoveryExhausted: return "Audio recovery could not finish. Capture is paused. Press Resume in Moss to try again."',
+        "after": 'case .recoveryExhausted: return "Moss is unreachable. Capture is paused. Reconnect and press Resume in Moss."',
+        "assertion": "A slow native or permission answer must pause with a recovery-specific explanation",
+    }),
+    ("MeetingCaptureFailureDiagnosticTests", {
+        "name": "scope-discard-does-not-duplicate-coverage",
+        "source": MEETINGS / "MeetingCaptureRuntime.swift",
+        "test": "testRuntimeReportsOnceBeforeDiscardingFailedOutputScopeAndKeepsWireGapReason",
+        "before": "if let covered = alreadyReported, covered.source == gap.source, covered.epoch == gap.epoch,",
+        "after": "if let covered = Optional<MeetingAudioGap>.none, covered.source == gap.source, covered.epoch == gap.epoch,",
+        "assertion": "Scope failure must report each discarded track exactly once",
+    }),
+    ("MeetingCaptureFailureDiagnosticTests", {
+        "name": "scope-discard-respects-cutoff",
+        "source": MEETINGS / "MeetingCaptureRuntime.swift",
+        "test": "testScopeDiscardClipsPartialCallbacksAtPauseWithoutDuplicateCoverage",
+        "before": "let end = min(discarded.endNanoseconds, entry.cutoff ?? discarded.endNanoseconds)",
+        "after": "let end = discarded.endNanoseconds",
+        "assertion": "Discarded scope coverage must be clipped at the pause cutoff on both tracks",
+    }),
     ("MeetingRecoveryAcquisitionHostTests", {
         "name": "recovery-deadline-is-not-authorization-lease",
         "source": MEETINGS / "MeetingCaptureHost.swift",

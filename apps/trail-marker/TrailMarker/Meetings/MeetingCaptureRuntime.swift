@@ -471,16 +471,17 @@ final class MeetingCaptureRuntime {
             try machine.pause(at: at)
             rememberPause(at: at)
             closeCurrentEpoch(at: at)
-            gaps.append(MeetingAudioGap(source: failed.buffer.source, epoch: failed.buffer.epoch,
+            let failureGap = MeetingAudioGap(source: failed.buffer.source, epoch: failed.buffer.epoch,
                 startNanoseconds: reason == .sourceReconfigured ? min(at, failed.buffer.recoveryBoundaryNanoseconds) : epochStart, endNanoseconds: at,
-                reason: reason == .bufferFull ? .bufferFull : .captureFailure(reason)))
+                reason: reason == .bufferFull ? .bufferFull : .captureFailure(reason))
+            gaps.append(failureGap)
             do { try stopDevices() } catch {
-                gaps.append(contentsOf: discardUnsafeScope(current))
+                gaps.append(contentsOf: discardUnsafeScope(current, alreadyReported: failureGap))
                 machine.fail()
                 retainedGaps = gaps
                 throw error
             }
-            gaps.append(contentsOf: discardUnsafeScope(current))
+            gaps.append(contentsOf: discardUnsafeScope(current, alreadyReported: failureGap))
         }
         var lostUnknownReceipt = false
         for index in pending.indices {
@@ -522,14 +523,32 @@ final class MeetingCaptureRuntime {
         return gaps
     }
 
-    private func discardUnsafeScope(_ current: [MeetingAudioBuffer]) -> [MeetingAudioGap] {
+    private func discardUnsafeScope(_ current: [MeetingAudioBuffer], alreadyReported: MeetingAudioGap? = nil) -> [MeetingAudioGap] {
         let unsafeEpochs = Set(current.filter { $0.failure == .invalidSelection }.map(\.epoch))
         guard !unsafeEpochs.isEmpty else { return [] }
         // Recheck after teardown drains listeners: a hard scope notice arriving while a
         // softer microphone fault closes the pair still invalidates every uncertain tail.
         var gaps: [MeetingAudioGap] = []
         for entry in pending where unsafeEpochs.contains(entry.buffer.epoch) {
-            if let gap = entry.buffer.discard(reason: .captureFailure(.invalidSelection)) { gaps.append(gap) }
+            guard let discarded = entry.buffer.discard(reason: .captureFailure(.invalidSelection)) else { continue }
+            let end = min(discarded.endNanoseconds, entry.cutoff ?? discarded.endNanoseconds)
+            guard end > discarded.startNanoseconds else { continue }
+            let gap = MeetingAudioGap(source: discarded.source, epoch: discarded.epoch,
+                startNanoseconds: discarded.startNanoseconds, endNanoseconds: end, reason: discarded.reason)
+            if let covered = alreadyReported, covered.source == gap.source, covered.epoch == gap.epoch,
+               covered.reason == gap.reason, gap.startNanoseconds < covered.endNanoseconds,
+               covered.startNanoseconds < gap.endNanoseconds {
+                // The failure event already covers this source's interval. Keep any
+                // uncovered prefix/suffix and every peer tail, without duplicate loss.
+                if gap.startNanoseconds < covered.startNanoseconds {
+                    gaps.append(.init(source: gap.source, epoch: gap.epoch, startNanoseconds: gap.startNanoseconds,
+                        endNanoseconds: covered.startNanoseconds, reason: gap.reason))
+                }
+                if gap.endNanoseconds > covered.endNanoseconds {
+                    gaps.append(.init(source: gap.source, epoch: gap.epoch, startNanoseconds: covered.endNanoseconds,
+                        endNanoseconds: gap.endNanoseconds, reason: gap.reason))
+                }
+            } else { gaps.append(gap) }
         }
         pending.removeAll { unsafeEpochs.contains($0.buffer.epoch) }
         recoveryEvidence.removeAll()

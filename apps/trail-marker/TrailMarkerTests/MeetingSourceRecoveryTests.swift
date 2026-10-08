@@ -35,6 +35,37 @@ final class MeetingSourceRecoveryTests: XCTestCase {
         XCTAssertFalse(short.beginAttempt(at: origin + 1), "Lease expiry cannot be extended by recovery")
     }
 
+    func testCompletedRecoveryCooldownRequiresRecordingAcknowledgmentAndThirtySeconds() {
+        var budget = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 120_000_000_000,
+            faultedSources: [.microphone])
+        XCTAssertTrue(budget.beginAttempt(at: origin))
+        XCTAssertFalse(budget.completedCooldownElapsed(at: origin + 120_000_000_000),
+            "Control, acquisition and unacknowledged recording cannot start the completed cooldown")
+        let acknowledgedAt = origin + 2_000_000_000
+        budget.acknowledgeRecording(at: acknowledgedAt)
+        XCTAssertFalse(budget.completedCooldownElapsed(at: acknowledgedAt - 1))
+        XCTAssertFalse(budget.completedCooldownElapsed(at: acknowledgedAt + 29_999_999_999))
+        XCTAssertTrue(budget.completedCooldownElapsed(at: acknowledgedAt + 30_000_000_000),
+            "An acknowledged quiet recovery must retire its local budget at thirty seconds")
+        XCTAssertEqual(budget.deadline, origin + 12_000_000_000)
+        XCTAssertEqual(budget.attempts, 1)
+    }
+
+    func testImmediateRecurringRecoveryRetainsDeadlineAndCancelsCompletedCooldown() {
+        var budget = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 120_000_000_000,
+            faultedSources: [.microphone])
+        XCTAssertTrue(budget.beginAttempt(at: origin))
+        budget.acknowledgeRecording(at: origin + 1)
+        XCTAssertFalse(budget.completedCooldownElapsed(at: origin + 2))
+        XCTAssertTrue(budget.beginAttempt(at: origin + 2))
+        XCTAssertEqual(budget.attempts, 2)
+        XCTAssertEqual(budget.deadline, origin + 12_000_000_000,
+            "An immediate recurring fault must retain the original episode deadline")
+        XCTAssertFalse(budget.completedCooldownElapsed(at: origin + 120_000_000_000),
+            "A fresh in-progress attempt must never inherit an earlier completed cooldown")
+        XCTAssertFalse(budget.beginAttempt(at: origin + 12_000_000_000))
+    }
+
     func testHealthyRecoveredMicrophoneDoesNotWaitForCallbackFreeOutput() {
         var budget = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 30_000_000_000,
             faultedSources: [.microphone])
@@ -426,6 +457,54 @@ final class MeetingSourceRecoveryHostTests: XCTestCase {
         XCTAssertEqual(fixture.server.captureEpoch, 3)
     }
 
+    func testAcknowledgedQuietRecoveryCoolsDownOnlyAtThirtySeconds() async throws {
+        let cases: [(UInt64, Bool)] = [(29_999_999_999, false), (30_000_000_000, false), (30_000_000_000, true)]
+        for (elapsed, hardFailure) in cases {
+            let fixture = try Fixture()
+            defer { fixture.close() }
+            fixture.permission = .granted
+            fixture.server.configureSource()
+            let host = fixture.host { false }
+            defer { host.shutdown(reason: "Quiet recovery cooldown test") }
+            try host.acceptStart(fixture.server.command, claim: await fixture.claim(),
+                credential: fixture.pending.credential, origin: 9_000_000_000)
+            try await waitUntil { host.phase == .recording }
+            fixture.device.receiver?.fail(.sourceReconfigured)
+            host.service()
+            try await waitUntil { fixture.device.starts == 2 && host.phase == .recording && !host.sourceRecoveryPending }
+            let completedAt = fixture.monotonic
+            XCTAssertEqual(fixture.runtime.audioDiagnostics[.microphone]?.acceptedCallbacks, 0)
+            // Renew genuine recording authorization independently of the expired 12s episode.
+            fixture.monotonic = completedAt + 15_000_000_000
+            fixture.server.advanceElapsed(to: 16000)
+            host.service()
+            try await waitUntil { host.remote?.elapsedMs == 16000 }
+            XCTAssertEqual(host.phase, .recording)
+            fixture.monotonic = completedAt + elapsed
+            fixture.server.advanceElapsed(to: 1000 + elapsed / 1_000_000)
+            fixture.device.receiver?.fail(hardFailure ? .invalidSelection : .sourceReconfigured)
+            host.service()
+            if hardFailure {
+                XCTAssertEqual(host.phase, .paused)
+                XCTAssertEqual(host.message, MeetingHostError.sourceChanged.message)
+                XCTAssertEqual(fixture.device.starts, 2,
+                    "Completed cooldown must not erase hard source evidence or reopen an unauthorized source")
+                XCTAssertEqual(fixture.server.sourceBodies.count, 1)
+            } else if elapsed < 30_000_000_000 {
+                XCTAssertEqual(host.phase, .paused, "An immediate recurring fault must not reset an expired episode")
+                XCTAssertEqual(host.message, MeetingHostError.recoveryExhausted.message)
+                XCTAssertEqual(fixture.server.sourceBodies.count, 1)
+                try await waitUntil { host.canResumeFromUserClick }
+            } else {
+                try await waitUntil { fixture.device.starts == 3 && host.phase == .recording && !host.sourceRecoveryPending }
+                XCTAssertEqual(fixture.server.sourceBodies.count, 2,
+                    "A later fault after completed cooldown must get a new local recovery episode")
+                XCTAssertEqual(fixture.server.captureEpoch, 3)
+                XCTAssertNil(host.interruptionWarning)
+            }
+        }
+    }
+
     func testRecoveryDeadlineFailsVisiblyEvenWhenPillWasHidden() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }
@@ -441,6 +520,10 @@ final class MeetingSourceRecoveryHostTests: XCTestCase {
         fixture.monotonic += 12_000_000_000
         host.service()
         XCTAssertEqual(host.phase, .paused)
+        XCTAssertEqual(host.message, "Audio recovery could not finish. Capture is paused. Press Resume in Moss to try again.",
+            "Recovery exhaustion must explain resumable audio recovery rather than a server outage")
+        XCTAssertFalse(host.message.contains("unreachable"))
+        XCTAssertNil(host.connectivityMessage)
         XCTAssertNotNil(host.interruptionWarning)
         XCTAssertTrue(host.recordingPresentation.showsPill)
         XCTAssertEqual(fixture.device.starts, 1)

@@ -144,6 +144,9 @@ final class MeetingRecoveryAcquisitionHostTests: XCTestCase {
         fixture.server.advanceElapsed(to: 13100)
         host.service()
         XCTAssertEqual(host.phase, .paused, "Recovery acknowledgment timeout must remain a resumable pause")
+        XCTAssertEqual(host.message, MeetingHostError.recoveryExhausted.message,
+            "Delayed recovery acknowledgment must not be reported as Moss being unreachable")
+        XCTAssertNil(host.connectivityMessage)
         fixture.server.releaseRecordingStatusReplies()
         try await waitUntil { host.canResumeFromUserClick }
         host.resumeFromUserClick()
@@ -234,6 +237,8 @@ final class MeetingRecoveryAcquisitionHostTests: XCTestCase {
         host.service()
         XCTAssertFalse(blocked.returned)
         XCTAssertEqual(host.phase, .paused)
+        XCTAssertEqual(host.message, "Audio recovery could not finish. Capture is paused. Press Resume in Moss to try again.",
+            "A slow native or permission answer must pause with a recovery-specific explanation")
         XCTAssertNotNil(host.interruptionWarning)
         blocked.unblock()
         try await waitUntil { !host.acquisitionPending }

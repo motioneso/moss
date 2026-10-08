@@ -40,31 +40,40 @@ describe("recording-wide automatic recovery limits", () => {
     }
   );
 
-  it("caps repeated healthy recoveries at eight and does not charge stable request replays", async () => {
-    let now = at(2000);
-    const f = fixture(undefined, () => now);
-    for (let count = 1; count <= 8; count++) {
-      const input = recover(stored(f));
-      const accepted = await f.service.nativeControl(f.headers, "recover", input);
-      expect(await f.service.nativeControl(f.headers, "replay", input)).toEqual(accepted);
-      expect(stored(f).automaticRecoveryCount).toBe(count);
-      expect(stored(f).epochs).toHaveLength(count + 1);
-      // More than the native healthy-audio reset window must not renew the server budget.
-      now = new Date(now.getTime() + 3000);
-      await f.service.status(f.headers, "healthy-recording", {
-        meetingId,
-        grantId,
-        inventory,
-        observed: { generation: accepted.capture.generation, phase: "recording" }
-      });
+  it.each([3000, 32000])(
+    "caps repeated completed episodes %i ms apart at eight without charging replays",
+    async (interval) => {
+      let now = at(2000);
+      const f = fixture(undefined, () => now);
+      for (let count = 1; count <= 8; count++) {
+        const input = recover(stored(f));
+        const accepted = await f.service.nativeControl(f.headers, "recover", input);
+        expect(await f.service.nativeControl(f.headers, "replay", input)).toEqual(accepted);
+        expect(stored(f).automaticRecoveryCount).toBe(count);
+        expect(stored(f).epochs).toHaveLength(count + 1);
+        // Neither sustained-health reset nor the completed 30s quiet cooldown renews the cap.
+        // Renew the genuine recording lease mid-interval so the longer case stays authorized.
+        const refreshes = interval > 30000 ? [16000, 16000] : [interval];
+        for (const elapsed of refreshes) {
+          now = new Date(now.getTime() + elapsed);
+          // The companion's separate inventory heartbeat remains live during these episodes.
+          f.connection.last_seen_at = now;
+          await f.service.status(f.headers, "acknowledged-recording", {
+            meetingId,
+            grantId,
+            inventory,
+            observed: { generation: accepted.capture.generation, phase: "recording" }
+          });
+        }
+      }
+      const before = f.grant.state_json;
+      await expect(
+        f.service.nativeControl(f.headers, "ninth-recovery", recover(stored(f)))
+      ).rejects.toMatchObject({ code: "meeting_capture_limit", httpStatus: 413 });
+      expect(f.grant.state_json).toBe(before);
+      expect(f.repository.reserve).toHaveBeenCalledTimes(8);
     }
-    const before = f.grant.state_json;
-    await expect(
-      f.service.nativeControl(f.headers, "ninth-recovery", recover(stored(f)))
-    ).rejects.toMatchObject({ code: "meeting_capture_limit", httpStatus: 413 });
-    expect(f.grant.state_json).toBe(before);
-    expect(f.repository.reserve).toHaveBeenCalledTimes(8);
-  });
+  );
 
   it("preserves the recovery cap through explicit Pause, Resume and source edits", async () => {
     const f = fixture();
