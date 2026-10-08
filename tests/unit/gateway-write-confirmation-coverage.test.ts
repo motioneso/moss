@@ -60,6 +60,9 @@ function setup(module: MossModuleManifest, declared: ModuleAssistantToolManifest
     inputSchema: { type: "object", properties: {} },
     summarize: () => declared.name,
     preview: undefined,
+    actionLabel: "Apply fixture action",
+    approvalContent: "user_authored",
+    approvalPresentation: async () => ({ target: "Fixture target", fields: [] }),
     requiresConfirmation,
     runsWithoutAsking,
     execute

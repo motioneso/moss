@@ -1,3 +1,7 @@
+import {
+  workshopCreatePresentation,
+  workshopProjectPresentation
+} from "./approval-presentation.js";
 import { workshopProjectTarget } from "./chat-targets.js";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
@@ -177,6 +181,8 @@ export const workshopModuleManifest = {
   assistantTools: [
     {
       name: "workshop.buildModule",
+      actionLabel: "Save a private Workshop project",
+      approvalPresentation: workshopCreatePresentation,
       description:
         "Save a private Workshop project from the user's explicit request and return its link. " +
         "This only saves the request; it does not plan, build, install, or enqueue work. " +
@@ -226,7 +232,11 @@ export const workshopModuleManifest = {
     {
       method: "PATCH",
       path: "/api/workshop/projects/:projectId",
-      chat: { access: "write", title: "Rename a Workshop project" },
+      chat: {
+        access: "write",
+        title: "Rename a Workshop project",
+        presentation: workshopProjectPresentation(false)
+      },
       permissionId: "workshop.view",
       requestSchema: renameWorkshopProjectInputSchema,
       responseSchema: renameWorkshopProjectResponseSchema
@@ -238,7 +248,8 @@ export const workshopModuleManifest = {
         access: "destructive",
         title: "Delete a Workshop project and its messages",
         content: "user_authored",
-        target: workshopProjectTarget
+        target: workshopProjectTarget,
+        presentation: workshopProjectPresentation(true)
       },
       permissionId: "workshop.view",
       responseSchema: deleteWorkshopProjectResponseSchema

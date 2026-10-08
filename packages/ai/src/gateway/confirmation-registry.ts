@@ -1,3 +1,4 @@
+import { completeActionPresentation } from "./pending-presentation.js";
 import type { GatewaySessionRecord } from "./types.js";
 import { reportActionRecordFailure } from "./action-record-diagnostics.js";
 
@@ -50,10 +51,7 @@ export class ConfirmationRegistry {
     actionRequestId: string
   ): Extract<GatewaySessionRecord, { kind: "action_request" }> | undefined {
     const saved = this.presentations.get(actionRequestId);
-    const complete =
-      typeof saved?.record.summary === "string" &&
-      saved.record.summary.trim() &&
-      (!saved.record.requiresTarget || saved.record.details?.target?.trim());
+    const complete = saved && completeActionPresentation(saved.record);
     return saved?.actorUserId === actorUserId && complete && this.isAwaiting(actionRequestId)
       ? structuredClone(saved.record)
       : undefined;

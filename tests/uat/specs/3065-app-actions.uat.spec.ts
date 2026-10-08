@@ -22,7 +22,7 @@ export const uatLevel = {
   chatScript: "3065-app-actions"
 } as const;
 
-const NOTICE = "This chat has outside or unverified context, so changes need your approval.";
+const NOTICE = "Moss read something from outside your account before asking this.";
 const ACTION_CARD = '[role="region"][aria-label="Action request"]';
 
 function readThemePuts() {
@@ -117,7 +117,11 @@ test("an approved app action changes a named theme once, without reload, across 
         timeout: 90_000
       });
       await expect(card).toContainText("Switch your theme");
-      await expect(card).toContainText(APP_ACTION_THEME.id);
+      await expect(card.locator(".action-request-target")).toHaveText("Appearance");
+      await expect(card.locator("dt")).toHaveText(["Theme"]);
+      await expect(card.locator("dd")).toHaveText([APP_ACTION_THEME.name]);
+      await expect(card).not.toContainText(APP_ACTION_THEME.id);
+      await expect(card).not.toContainText(APP_ACTION_THEME_PATH);
       await expect(card).toContainText(NOTICE);
       const id = await card.getAttribute("data-action-request-id");
       expect(id).toBeTruthy();

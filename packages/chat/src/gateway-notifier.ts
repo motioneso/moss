@@ -130,6 +130,10 @@ function toTranscriptRecord(record: GatewaySessionRecord): TranscriptRecord | nu
       toolName: record.toolName,
       summary: record.summary,
       ...(record.outcomeTitle ? { outcomeTitle: record.outcomeTitle } : {}),
+      ...(record.nativePermission ? { nativePermission: true as const } : {}),
+      ...(record.externalTool
+        ? { externalTool: true as const, exactArguments: record.exactArguments }
+        : {}),
       outsideContentNotice: record.outsideContentNotice,
       ...(record.details ? { details: record.details } : {}),
       // Rides the live stream only; never persisted (see TranscriptRecord.preview).

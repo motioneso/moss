@@ -41,7 +41,9 @@ const records: readonly TranscriptRecord[] = [
     text: "Approve profile",
     actionRequestId: "ar-1",
     toolName: "demo-module.profile.approve",
-    summary: "Approve profile"
+    summary: "Approve profile",
+    outcomeTitle: "Approve profile",
+    details: { presentation: "human", target: "Your profile", fields: [] }
   },
   {
     kind: "action_result",
@@ -120,7 +122,7 @@ describe("AssistantSurface", () => {
           )
         )
       );
-      expect(html).toContain("Needs your approval");
+      expect(html).toContain("action-request-title");
       expect(html).toContain("Approve profile");
       expect(html).not.toContain("Profile approved");
       expect(html).not.toContain('role="status">Approved</p>');

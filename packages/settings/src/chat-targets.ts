@@ -2,7 +2,7 @@ import { assertDataContextDb } from "@moss/db";
 import type { RouteChatTargetResolver } from "@moss/module-sdk";
 import { PreferencesRepository } from "@moss/structured-state";
 
-import { readCustomThemeName } from "./themes-routes.js";
+import { normalizeCustomThemes } from "./themes-routes.js";
 
 const preferences = new PreferencesRepository();
 
@@ -11,5 +11,8 @@ export const customThemeTarget: RouteChatTargetResolver = async (db, params) => 
   assertDataContextDb(db);
   const id = params.id;
   if (!id) return null;
-  return readCustomThemeName(preferences, db, id);
+  const theme = normalizeCustomThemes(await preferences.get(db, "themes.custom")).find(
+    (entry) => entry.id === id
+  );
+  return theme ? { label: theme.name, version: JSON.stringify(theme) } : null;
 };

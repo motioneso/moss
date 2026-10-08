@@ -46,6 +46,9 @@ export interface ConversationProvenancePort {
 }
 
 export interface CallCardDetails {
+  readonly presentation?: "human";
+  /** Host-owned semantic identity; never derived from title text. */
+  readonly approvalKind?: "memory_delete" | "note_delete";
   readonly target: string | null;
   readonly fields: readonly { readonly label: string; readonly value: string }[];
 }
@@ -53,13 +56,16 @@ export interface CallCardDetails {
 export type PerCallResolution =
   | {
       readonly kind: "refuse";
-      readonly reason: "unknown_route" | "blocked" | "consent_off" | "not_ready";
+      readonly reason: "unknown_route" | "blocked" | "consent_off" | "not_ready" | "invalid_input";
+      /** Trusted server schema feedback; no target lookup, grant, approval or write occurred. */
+      readonly validationError?: { readonly title: string; readonly message: string };
       readonly category?: SelfOperationExclusionCategory;
     }
   | {
       readonly kind: "proceed";
       readonly risk: ModuleAssistantToolRisk;
       readonly externalContent: boolean;
+      readonly disclosureExternalContent?: boolean;
       readonly forceConfirm: boolean;
       readonly confirmWhenTainted: boolean;
       readonly summary: string;
@@ -111,6 +117,11 @@ export type ActiveModulesResolver = (actorUserId: string) => Promise<readonly Mo
 export type GatewaySessionRecord =
   | {
       readonly kind: "action_request";
+      /** Set exclusively by the native permission adapters. */
+      readonly nativePermission?: true;
+      /** Host-marked connected tool; complete arguments are shown verbatim. */
+      readonly externalTool?: true;
+      readonly exactArguments?: string;
       /** Server-only completeness rule declared by the host's per-call resolver. */
       readonly requiresTarget?: true;
       /** Server-only proof copied from the owned persisted request, never provider/model input. */

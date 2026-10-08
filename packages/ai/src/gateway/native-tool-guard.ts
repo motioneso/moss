@@ -124,6 +124,5 @@ export function nativeToolRisk(toolName: string): "write" | "destructive" {
 }
 
 export function nativeToolSummary(toolName: string, input: Record<string, unknown>): string {
-  const inputKeyCount = Object.keys(input).length;
-  return `Claude wants to use native ${toolName} (${inputKeyCount} field(s)).`;
+  return `Claude wants to use native ${toolName}:\n${JSON.stringify(input, null, 2)}`;
 }

@@ -1,3 +1,4 @@
+import { checkinPresentation, therapyNoteRemovalPresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import { assertDataContextDb } from "@moss/db";
@@ -156,7 +157,12 @@ export const wellnessModuleManifest = {
     {
       method: "POST",
       path: "/api/wellness/checkins",
-      chat: { access: "write", title: "Log mood check-in", content: "outside" },
+      chat: {
+        access: "write",
+        title: "Log mood check-in",
+        presentation: checkinPresentation(false),
+        content: "outside"
+      },
       requestSchema: createCheckinRequestSchema,
       responseSchema: createCheckinResponseSchema,
       permissionId: "wellness.create"
@@ -171,7 +177,12 @@ export const wellnessModuleManifest = {
     {
       method: "PATCH",
       path: "/api/wellness/checkins/:id",
-      chat: { access: "write", title: "Update mood check-in", content: "outside" },
+      chat: {
+        access: "write",
+        title: "Update mood check-in",
+        presentation: checkinPresentation(true),
+        content: "outside"
+      },
       requestSchema: updateCheckinRouteSchema.body,
       responseSchema: updateCheckinRouteSchema.response[200],
       permissionId: "wellness.update"
@@ -243,7 +254,8 @@ export const wellnessModuleManifest = {
         access: "destructive",
         title: "Delete therapy note",
         content: "user_authored",
-        target: therapyNoteTarget
+        target: therapyNoteTarget,
+        presentation: therapyNoteRemovalPresentation
       },
       responseSchema: deleteTherapyNoteRouteSchema.response[200],
       permissionId: "wellness.delete"

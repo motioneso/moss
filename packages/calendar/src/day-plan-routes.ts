@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { setDayPlanApprovalDependencies } from "./day-plan-approval-presentation.js";
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -331,6 +332,7 @@ export function registerDayPlanRoutes(
   server: FastifyInstance,
   dependencies: DayPlanRoutesDependencies
 ): void {
+  setDayPlanApprovalDependencies(dependencies);
   server.get<{ Querystring: GetDayPlanQuery }>(
     "/api/calendar/day-plan",
     { schema: getDayPlanRouteSchema },

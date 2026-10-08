@@ -30,6 +30,7 @@ export {
   notesEditExecute,
   recheckInside,
   resolveSource,
+  resolveNoteApprovalTarget,
   type NotesSyncToolService
 } from "./write-tools.js";
 export {

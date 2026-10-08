@@ -1,3 +1,5 @@
+import type { RouteApprovalPresentation } from "./action-presentation.js";
+
 /**
  * #3065: how Moss may call a built-in module's HTTP route from chat. Each route declares a
  * `chat` policy (or inherits the module's `chatDefaults`); the route catalog in
@@ -47,6 +49,12 @@ export interface RouteChatPolicy {
   readonly consent?: string;
   /** Required for destructive routes with a path parameter. */
   readonly target?: RouteChatTargetResolver;
+  /** Authored exhaustive human disclosure; no inferred labels or hidden submitted values. */
+  readonly presentation?: RouteApprovalPresentation;
+  /** Disclosure provenance is independent of response content; defaults to outside. */
+  readonly presentationContent?: ChatContentClass;
+  /** Explicitly mirrors an owning route preValidation that replaces a nullish body with {}. */
+  readonly emptyBody?: "object";
   /** Name of a dedicated assistant tool that does the same job. */
   readonly coveredBy?: string;
   /** GET only: the route sends model-chosen input to a third party. */

@@ -1,3 +1,5 @@
+import { freezeSnapshot } from "./per-call-resolution.js";
+import { exactArgumentText } from "./pending-presentation.js";
 import { randomUUID } from "node:crypto";
 import type { AccessContext, DataContextDb } from "@moss/db";
 import type { ToolContext } from "@moss/module-sdk";
@@ -44,7 +46,9 @@ export async function requestNativeToolPermission(
   if (NATIVE_READONLY_AUTO_ALLOW.has(toolName)) {
     return { decision: "allow", reason: "Read-only native tool." };
   }
-  const input = request.toolInput;
+  const input = freezeSnapshot(request.toolInput);
+  if (exactArgumentText(input) === null)
+    return { decision: "deny", reason: "Complete native tool details are unavailable." };
   const requestId = `native_${randomUUID()}`;
   const access: AccessContext = { actorUserId, requestId };
   const ctx: ToolContext = {
@@ -137,6 +141,7 @@ export async function requestNativeToolPermission(
 
   emitPendingActionRequest(deps, actorUserId, chatSessionId, action, {
     kind: "action_request",
+    nativePermission: true,
     actionRequestId: action.id,
     ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
     toolName,

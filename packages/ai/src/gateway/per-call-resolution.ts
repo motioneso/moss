@@ -1,3 +1,4 @@
+import { inputValidationFailure } from "./validation-failure.js";
 import type { ToolContext, ToolServices } from "@moss/module-sdk";
 
 import { validateToolInput } from "./input-validation.js";
@@ -12,10 +13,14 @@ import type {
 
 export type PreparedToolCall =
   | { readonly found: ExecutableTool; readonly input: Record<string, unknown> }
-  | { readonly failure: GatewayToolResponse; readonly reason: GatewayDeclineReason };
+  | {
+      readonly failure: GatewayToolResponse;
+      readonly reason: GatewayDeclineReason;
+      readonly validationTitle?: string;
+    };
 
 /** Snapshot per-call inputs before resolver lookups, policy planning and approval holds. */
-function freezeSnapshot<T>(value: T): T {
+export function freezeSnapshot<T>(value: T): T {
   const snapshot: T = structuredClone(value);
   const seen = new WeakSet<object>();
   const freeze = (entry: unknown): void => {
@@ -40,7 +45,7 @@ export async function prepareToolCall(
   try {
     input = await validateToolInput(
       found.tool.inputSchema,
-      resolver ? freezeSnapshot(rawInput) : rawInput,
+      resolver ? freezeSnapshot(rawInput) : structuredClone(rawInput),
       { external: found.tool.isExternal !== false, toolName: found.tool.name }
     );
   } catch (error) {
@@ -58,6 +63,12 @@ export async function prepareToolCall(
     Object.freeze(ctx);
     const resolution = freezeSnapshot(await resolver(input, ctx));
     if (resolution.kind === "refuse") {
+      if (resolution.reason === "invalid_input" && resolution.validationError) {
+        return inputValidationFailure(
+          resolution.validationError.title,
+          resolution.validationError.message
+        );
+      }
       return {
         failure: {
           ok: false,
