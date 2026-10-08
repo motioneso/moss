@@ -54,6 +54,15 @@ export function captureView(
   at: Date
 ): MeetingCaptureState {
   const epoch = state.epochs.at(-1);
+  const finalization =
+    state.desired === "stopped"
+      ? state.finalized ||
+        grant.status === "complete" ||
+        (state.finalizationDeadline !== null &&
+          at.getTime() >= Date.parse(state.finalizationDeadline))
+        ? "complete"
+        : "pending"
+      : "none";
   const semanticState = {
     ...state,
     lastSeenAt: undefined,
@@ -69,16 +78,10 @@ export function captureView(
     transcriptRevision: state.transcriptRevision ?? 0,
     leaseMs: MEETING_CAPTURE_LEASE_MS,
     recordedDurationMs: state.recordedDurationMs ?? 0,
-    finalization:
-      state.desired === "stopped"
-        ? state.finalized ||
-          grant.status === "complete" ||
-          (state.finalizationDeadline !== null &&
-            at.getTime() >= Date.parse(state.finalizationDeadline))
-          ? "complete"
-          : "pending"
-        : "none",
-    processing: state.processing ?? { status: "ready" },
+    finalization,
+    // Completed recordings cannot still be delayed; retained gaps report any lost clips.
+    processing:
+      finalization === "complete" ? { status: "ready" } : (state.processing ?? { status: "ready" }),
     gaps: state.gaps,
     gapLimitReached: state.gapLimitReached,
     grantId: grant.id,

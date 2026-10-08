@@ -1,3 +1,4 @@
+import { isNearSilentCapturePcm } from "./capture-silence.js";
 import type { CaptureMaintenanceScheduler } from "./capture-maintenance.js";
 import { settleCaptureRevocation, withCaptureBindingTransaction } from "./capture-binding.js";
 import type { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
@@ -789,6 +790,7 @@ export class MeetingCaptureService {
       pcm.fill(0);
       return reservation.result;
     }
+    const nearSilent = isNearSilentCapturePcm(pcm);
     let processingStage: "dispatch" | "validation" | "persistence" = "dispatch";
     try {
       // Module availability stays outside app transactions; auth-only binding is repeated at dispatch.
@@ -815,16 +817,20 @@ export class MeetingCaptureService {
         });
         return admitted.pending;
       };
-      const generated = await abortable(
-        signal,
-        this.deps.transcribe(proof.actor, {
-          audio: pcmWave(pcm, input.sampleRateHz),
-          sampleRateHz: input.sampleRateHz,
-          signal,
-          expectedModelRoute: reservation.modelRoute!,
-          dispatch
-        })
-      );
+      // Silence still crosses the same admission fence and completes its source/epoch receipt.
+      // No provider call means no live route check; speech still validates the reserved route.
+      const generated = nearSilent
+        ? await dispatch(async () => ({ segments: [], modelRoute: reservation.modelRoute! }))
+        : await abortable(
+            signal,
+            this.deps.transcribe(proof.actor, {
+              audio: pcmWave(pcm, input.sampleRateHz),
+              sampleRateHz: input.sampleRateHz,
+              signal,
+              expectedModelRoute: reservation.modelRoute!,
+              dispatch
+            })
+          );
       processingStage = "validation";
       if (
         !dispatched ||
@@ -908,9 +914,11 @@ export class MeetingCaptureService {
           replayed: false
         };
         state.transcriptRevision = saved.receipt.transcriptRevision;
-        state.processing = { status: "ready" };
-        await this.repository.save(db, grant, state);
         await this.repository.finish(db, grant.id, result, this.now());
+        // Clear settled warnings, without masking other in-flight/retryable source audio.
+        if (!nearSilent || !(await this.repository.hasPendingAudio(db, grant.id)))
+          state.processing = { status: "ready" };
+        await this.repository.save(db, grant, state);
         return result;
       });
     } catch (error) {
@@ -938,14 +946,16 @@ export class MeetingCaptureService {
           (previous?.attempts ?? 1) < 4 &&
           this.now().getTime() - (previous?.created_at.getTime() ?? 0) < 60000;
         const finalResult = { ...result, retryable };
-        state.processing = {
-          status: "delayed",
-          reason: failure.reason,
-          stage: failure.stage,
-          retryable,
-          ...(failure.httpStatus === undefined ? {} : { httpStatus: failure.httpStatus }),
-          ...(retryable ? { retryAfterMs: failure.retryAfterMs ?? 1000 } : {})
-        };
+        // No speech was dispatched: receipt retries must not replace another clip's warning.
+        if (!nearSilent)
+          state.processing = {
+            status: "delayed",
+            reason: failure.reason,
+            stage: failure.stage,
+            retryable,
+            ...(failure.httpStatus === undefined ? {} : { httpStatus: failure.httpStatus }),
+            ...(retryable ? { retryAfterMs: failure.retryAfterMs ?? 1000 } : {})
+          };
         if (!retryable)
           retainCaptureGap(
             state,
