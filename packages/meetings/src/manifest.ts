@@ -366,9 +366,14 @@ export const meetingsModuleManifest = {
         "Capture duration uses native acknowledgement. Transcription delay is separate; transient clips retry within bounded memory. Activity records clip model, duration and outcome without audio or transcript text."
     },
     {
+      id: "meetings.speaker_echo_control",
+      description:
+        "Mic plus computer audio uses Apple voice processing with minimum playback ducking. Route changes pause for explicit Resume. Mic-only stays unprocessed; computer-audio-only opens no mic. Real-speaker compatibility needs live validation."
+    },
+    {
       id: "meetings.native_capture",
       description:
-        "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Only Start or Resume records. Microphone plus computer audio uses Apple voice processing with minimum playback ducking; route changes pause for explicit recovery. Pause and Stop remain available; a nav dot shows recording elsewhere. Mac only.",
+        "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Only Start or Resume records. Pause and Stop remain available; a nav dot shows recording elsewhere. Mac only.",
       errors: [
         {
           code: "meeting_capture_source_unavailable",

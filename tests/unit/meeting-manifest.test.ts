@@ -19,6 +19,11 @@ describe("meetings composition", () => {
     const link = CORE_APP_SCREENS.find((item) => item.id === "link-trail-marker")!.description;
     expect(meeting.navigation![0]!.description).toContain("authorized by initial linking");
     expect(native.description).toContain("nav dot");
+    const echo = meeting.features!.find((item) => item.id === "meetings.speaker_echo_control")!;
+    expect(echo.description).toContain("minimum playback ducking");
+    expect(echo.description).toContain("explicit Resume");
+    expect(echo.description).toContain("live validation");
+    expect(echo.description.length).toBeLessThanOrEqual(240);
     expect(native.remediations![0]!.description).toContain("relink through Trail Marker");
     expect(JSON.stringify(native)).not.toMatch(/one-time recording|recording upgrade/);
     expect(profile).toContain("single initial linking approval");
@@ -165,6 +170,7 @@ describe("meetings composition", () => {
       "meetings.mac_link_controls",
       "meetings.automatic_summary",
       "transcribe.meeting",
+      "meetings.speaker_echo_control",
       "meetings.native_capture",
       "meetings.mac_recording_status",
       "meetings.mac_recording_pill_visibility",
