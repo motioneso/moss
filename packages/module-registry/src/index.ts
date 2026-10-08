@@ -1,5 +1,8 @@
 import { createApprovalSourceReferences } from "./approval-source-references.js";
-import { createMeetingOutputRuntime } from "./meeting-output-runtime.js";
+import {
+  createMeetingOutputRuntime,
+  type ConstrainedCliReadiness
+} from "./meeting-output-runtime.js";
 import {
   createMeetingNoteIndexPort,
   withMeetingExportAvailability
@@ -159,6 +162,7 @@ import {
   isCurrentClassifierReviewed,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
+  createConstrainedCliStructuredAdapterFactory,
   createAcpOneShotEngineFactory,
   registerChatJobWorkers,
   registerChatRoutes,
@@ -742,6 +746,13 @@ export interface BuiltInRouteDependencies {
   readonly hostDiagnostics?: HostDiagnosticsProvider;
   readonly personaPreview?: (input: PersonaPreviewInput) => Promise<string>;
   readonly createCliStructuredAdapter?: ReturnType<typeof createCliStructuredAdapterFactory>;
+  readonly createConstrainedCliStructuredAdapter?: ReturnType<
+    typeof createConstrainedCliStructuredAdapterFactory
+  >;
+  readonly probeConstrainedCli?: (
+    actorUserId: string,
+    signal?: AbortSignal
+  ) => Promise<ConstrainedCliReadiness>;
   /**
    * Bounded, live onboarding probes (Phase 2). Built inside registerBuiltInApiRoutes (sync,
    * no boot-time probing) and forwarded to the settings module so it keeps no @moss/ai /
@@ -874,7 +885,8 @@ export function createStructuredChatEngineFactory(options: {
       engineOptions?.executionMode,
       undefined,
       engineOptions?.needsStructuredOutput,
-      engineOptions?.userId
+      engineOptions?.userId,
+      engineOptions?.constrainedStructured
     );
   };
 }
@@ -3686,6 +3698,21 @@ export function registerBuiltInApiRoutes(
     platformDiagnostics,
     chatEngineFactory,
     createCliStructuredAdapter: createCliStructuredAdapterFactory(structuredChatEngineFactory),
+    createConstrainedCliStructuredAdapter: createConstrainedCliStructuredAdapterFactory(
+      structuredChatEngineFactory
+    ),
+    probeConstrainedCli: async (actorUserId, signal) => {
+      const connection = getRpcConnection();
+      if (!connection) return "model-unavailable";
+      const result = await connection.probeProvider(
+        { provider: "anthropic", constrainedStructured: true },
+        actorUserId,
+        { timeoutMs: 5_000, signal }
+      );
+      if (result.constrainedUnavailableReason === "per_user_isolation_required")
+        return "subscription-isolation-unavailable";
+      return result.status === "ready" ? "available" : "model-unavailable";
+    },
     personaPreview:
       dependencies.personaPreview ??
       createDefaultPersonaPreview(dependencies.dataContext, {

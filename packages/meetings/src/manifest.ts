@@ -331,9 +331,14 @@ export const meetingsModuleManifest = {
       ]
     },
     {
+      id: "meetings.summary.validation",
+      description: "Checked a meeting summary",
+      errors: []
+    },
+    {
       id: "meetings.grounded_outputs",
       description:
-        "Generate evidence-checked summaries, decisions and actions with four templates. Compare versions and review exact sources. Generate requires a supported API-key route; CLI unavailable. Refresh summaries rechecks model configuration.",
+        "Generate evidence-checked summaries with your default model, without fallback. Claude availability depends on this server setup. Compare versions and exact sources; refresh to check availability without generating a summary.",
       errors: [
         {
           code: "meeting_output_unavailable",
@@ -342,10 +347,28 @@ export const meetingsModuleManifest = {
             "This output version is unavailable to the owner. Refresh the meeting and review another retained version."
         },
         {
+          code: "meeting_output_subscription_unsupported",
+          class: "validation",
+          description:
+            "Codex and other unconstrained subscription profiles do not support summaries yet. No replacement model is used. API-key and supported Claude profiles remain available."
+        },
+        {
+          code: "meeting_output_subscription_isolation_unavailable",
+          class: "validation",
+          description:
+            "Claude summaries aren’t available on this server setup. No other model was used."
+        },
+        {
+          code: "meeting_output_claude_subscription_unsupported",
+          class: "validation",
+          description:
+            "Summaries on this Claude subscription are not supported by the installed constrained runner yet. No other model is used. Ask an admin to check the installed CLI version."
+        },
+        {
           code: "meeting_output_route_unavailable",
           class: "validation",
           description:
-            "Summaries need an API-key model with summarization and structured-output support; CLI is unsupported. Admins check Settings → AI providers; other owners contact an admin. Refresh summaries after updating configuration, then generate."
+            "Your default model is unavailable or cannot produce structured summaries. No replacement is used. Check Settings → AI providers or ask an admin, then refresh summaries and try again."
         },
         {
           code: "meeting_output_route_changed",
@@ -378,10 +401,43 @@ export const meetingsModuleManifest = {
             "Generation was interrupted or its reservation expired. Start a new explicit request; replaying the old key will not run it again."
         },
         {
+          code: "meeting_output_timed_out",
+          class: "transient",
+          description: "The summary took too long and was stopped. Try again when you’re ready."
+        },
+        ...(
+          [
+            "json_parse",
+            "schema_validation",
+            "oversized_output",
+            "schema_invalid",
+            "length_exceeded",
+            "source_binding_missing",
+            "source_binding_invalid",
+            "source_identity_mismatch",
+            "source_revision_mismatch",
+            "utf16_range_invalid",
+            "owner_phrase_unsupported",
+            "due_phrase_unsupported",
+            "inputs_invalid"
+          ] as const
+        ).map((reason) => ({
+          code: `meeting_output_rejected_${reason}`,
+          class: "transient" as const,
+          description:
+            "The summary couldn’t be checked against your meeting notes or transcript. Try generating it again."
+        })),
+        {
+          code: "meeting_output_provider_failed",
+          class: "transient",
+          description:
+            "Your model couldn’t complete the summary. Check its connection in Settings → AI providers, or ask an admin, then try again. No other model was used."
+        },
+        {
           code: "meeting_output_generation_failed",
           class: "transient",
           description:
-            "Generation failed or its result was invalid. Review provider settings, then explicitly start a new request; no fallback provider is used."
+            "The summary could not be generated. Try again when you’re ready. No other model was used."
         },
         {
           code: "meeting_output_busy",

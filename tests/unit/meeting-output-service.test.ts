@@ -412,7 +412,7 @@ describe("meeting output generation service", () => {
     expect(result).toEqual({
       status: "failed",
       requestKey: INPUT.requestKey,
-      code: "meeting_output_interrupted"
+      code: "meeting_output_timed_out"
     });
     generated.resolve({ content: CONTENT, modelRoute: "configured-route" });
     await generated.promise;
@@ -532,8 +532,11 @@ describe("meeting output generation service", () => {
     expect(first).toEqual({
       status: "failed",
       requestKey: INPUT.requestKey,
-      code: "meeting_output_generation_failed"
+      code: "meeting_output_rejected_source_revision_mismatch"
     });
+    const receipt = harness.requests.get(INPUT.requestKey)?.result_json;
+    expect(receipt).not.toContain("Invented decision");
+    expect(receipt).not.toContain(MEETING_ID);
     expect(harness.save).not.toHaveBeenCalled();
     expect(await harness.service.generate(ACTOR, MEETING_ID, INPUT)).toEqual(first);
     expect(harness.generator).toHaveBeenCalledOnce();

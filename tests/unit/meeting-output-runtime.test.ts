@@ -6,10 +6,19 @@ import {
   assertBoundedStructuredSchema,
   installModelActivityRecorder,
   type ActiveModulesResolver,
+  type GenerateStructuredDeps,
+  type StructuredProviderAdapter,
+  StructuredTransportUnavailableError,
   type AiConfiguredModelSafeRow,
   type AiProviderWithSealedCredential
 } from "@moss/ai";
-import { getMeetingOutputTemplate, meetingsModuleManifest } from "@moss/meetings";
+import {
+  MeetingOutputValidationError,
+  getMeetingOutputTemplate,
+  meetingsModuleManifest
+} from "@moss/meetings";
+import { ConstrainedProcessError } from "../../packages/chat/src/live/constrained-structured-process.js";
+import { parseConstrainedClaudeOutput } from "../../packages/chat/src/live/constrained-claude-profile.js";
 import { TasksRepository, tasksModuleManifest } from "@moss/tasks";
 import {
   createMeetingOutputRuntime,
@@ -27,7 +36,7 @@ const model = {
   provider_status: "active",
   provider_purpose: "assistant",
   status: "active",
-  capabilities: ["summarization", "json"],
+  capabilities: ["chat", "summarization", "json"],
   updated_at: new Date("2026-01-01")
 } as AiConfiguredModelSafeRow;
 const provider = {
@@ -80,14 +89,12 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-function setup() {
-  const route = vi
-    .spyOn(AiRepository.prototype, "resolveModelForService")
-    .mockResolvedValue({ model, reason: "admin-pin" });
+function setup(createCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"]) {
+  const route = vi.spyOn(AiRepository.prototype, "selectChatModelForUser").mockResolvedValue(model);
   const credential = vi
     .spyOn(AiRepository.prototype, "selectProviderWithCredential")
     .mockResolvedValue(provider);
-  const serviceRoute = vi.spyOn(AiRepository.prototype, "resolveModelForCapability");
+  const serviceRoute = vi.spyOn(AiRepository.prototype, "resolveModelForService");
   const sortingRoute = vi.spyOn(AiRepository.prototype, "resolveSortingModel");
   const modules = vi
     .fn<ActiveModulesResolver>()
@@ -95,7 +102,12 @@ function setup() {
   const fetch = vi.fn<typeof globalThis.fetch>(async () => response());
   vi.stubGlobal("fetch", fetch);
   let activeTransactions = 0;
+  const probe = vi.fn<
+    () => Promise<"available" | "model-unavailable" | "subscription-isolation-unavailable">
+  >(async () => "available");
   const runtime = createMeetingOutputRuntime({
+    probeConstrainedCli: probe,
+    createConstrainedCliStructuredAdapter: createCliStructuredAdapter,
     resolveActiveModules: modules,
     dataContext: {
       withDataContext: async <T>(
@@ -113,6 +125,7 @@ function setup() {
   });
   return {
     ...runtime,
+    probe,
     route,
     credential,
     serviceRoute,
@@ -134,31 +147,22 @@ describe("meeting summary generation availability", () => {
     const { encrypted_credential: _credential, ...safe } = provider;
     const providers = vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([safe]);
     await expect(h.generationAvailability(actor)).resolves.toBe("available");
-    expect(h.route).toHaveBeenCalledWith(db, "module.meetings", {
-      capability: "summarization",
-      rejectUnavailableFixedBinding: true,
-      rejectUnavailablePinnedModel: true,
-      logNeedsConfig: false
-    });
+    expect(h.route).toHaveBeenCalledWith(db, { rejectUnavailableOverride: true });
     expect(providers).toHaveBeenCalledWith(db);
     expect(h.credential).not.toHaveBeenCalled();
     expect(h.fetch).not.toHaveBeenCalled();
   });
-  it.each([
-    null,
-    { ...model, provider_auth_method: "cli" },
-    { ...model, capabilities: ["summarization"] }
-  ])("disables unavailable and unsupported selected models (case %#)", async (selected) => {
-    const h = setup();
-    h.route.mockResolvedValue({
-      model: selected as AiConfiguredModelSafeRow | null,
-      reason: "needs-config"
-    });
-    await expect(h.generationAvailability(actor)).resolves.toBe("model-unavailable");
-    expect(h.credential).not.toHaveBeenCalled();
-    expect(h.fetch).not.toHaveBeenCalled();
-    expect(h.serviceRoute).not.toHaveBeenCalled();
-  });
+  it.each([null, { ...model, capabilities: ["summarization"] }])(
+    "disables unavailable and unsupported selected models (case %#)",
+    async (selected) => {
+      const h = setup();
+      h.route.mockResolvedValue(selected as AiConfiguredModelSafeRow | null);
+      await expect(h.generationAvailability(actor)).resolves.toBe("model-unavailable");
+      expect(h.credential).not.toHaveBeenCalled();
+      expect(h.fetch).not.toHaveBeenCalled();
+      expect(h.serviceRoute).not.toHaveBeenCalled();
+    }
+  );
   it.each([
     { has_credential: false },
     { revoked_at: new Date("2026-01-02") },
@@ -179,21 +183,14 @@ describe("meeting summary generation availability", () => {
     expect(h.credential).not.toHaveBeenCalled();
     expect(h.fetch).not.toHaveBeenCalled();
   });
-  it("rejects hard-model-pin substitution through the real resolver before metadata lookup", async () => {
+  it("rejects a missing default before reading provider metadata", async () => {
     const h = setup();
-    h.route.mockRestore();
-    vi.spyOn(AiRepository.prototype, "listModuleServiceBindings").mockResolvedValue({});
-    vi.spyOn(AiRepository.prototype, "getAdminPinnedModelId").mockResolvedValue(model.id);
-    vi.spyOn(AiRepository.prototype, "getAdminPinnedProviderId").mockResolvedValue(null);
-    h.serviceRoute.mockResolvedValue({
-      model: { ...model, id: "replacement" },
-      reason: "admin-pin"
-    });
+    h.route.mockResolvedValue(null);
     const providers = vi.spyOn(AiRepository.prototype, "listProviders");
     await expect(h.generationAvailability(actor)).resolves.toBe("model-unavailable");
     expect(providers).not.toHaveBeenCalled();
     expect(h.credential).not.toHaveBeenCalled();
-    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.serviceRoute).not.toHaveBeenCalled();
   });
 });
 
@@ -242,7 +239,7 @@ describe("meeting output composition HTTP boundary", () => {
     expect(h.activeTransactions()).toBe(0);
   });
 
-  it("uses exactly the summarization hard-pin route with bounded schema and no executable tools", async () => {
+  it("uses exactly the effective default route with bounded schema and no executable tools", async () => {
     assertBoundedStructuredSchema(MEETING_OUTPUT_SCHEMA);
     const h = setup();
     const result = await h.generator(actor, input());
@@ -256,15 +253,7 @@ describe("meeting output composition HTTP boundary", () => {
     expect(result.modelRoute).not.toContain("synthetic.invalid");
     expect(h.route).toHaveBeenCalledTimes(3);
     for (const args of h.route.mock.calls)
-      expect(args).toEqual([
-        db,
-        "module.meetings",
-        {
-          capability: "summarization",
-          rejectUnavailableFixedBinding: true,
-          rejectUnavailablePinnedModel: true
-        }
-      ]);
+      expect(args).toEqual([db, { rejectUnavailableOverride: true }]);
     expect(h.serviceRoute).not.toHaveBeenCalled();
     expect(h.sortingRoute).not.toHaveBeenCalled();
     expect(h.fetch).toHaveBeenCalledTimes(1);
@@ -279,7 +268,7 @@ describe("meeting output composition HTTP boundary", () => {
     expect(body.messages[0].content).toContain("not necessarily the full meeting");
   });
   it.each([
-    { provider_auth_method: "cli" },
+    { provider_auth_method: "unsupported" },
     { status: "inactive" },
     { provider_status: "inactive" },
     { capabilities: ["summarization"] },
@@ -287,34 +276,15 @@ describe("meeting output composition HTTP boundary", () => {
     { provider_purpose: "voice" }
   ])("rejects unsupported or inactive selected route %j without dispatch", async (change) => {
     const h = setup();
-    h.route.mockResolvedValue({
-      model: { ...model, ...change } as AiConfiguredModelSafeRow,
-      reason: "admin-pin"
-    });
+    h.route.mockResolvedValue({ ...model, ...change } as AiConfiguredModelSafeRow);
     await expect(h.generator(actor, input())).rejects.toMatchObject({
       code: "meeting_output_route_unavailable"
     });
-    expect(h.fetch).not.toHaveBeenCalled();
-  });
-  it("rejects same-provider hard-model-pin substitution through the real service resolver before credential lookup", async () => {
-    const h = setup();
-    h.route.mockRestore();
-    vi.spyOn(AiRepository.prototype, "listModuleServiceBindings").mockResolvedValue({});
-    vi.spyOn(AiRepository.prototype, "getAdminPinnedModelId").mockResolvedValue(model.id);
-    vi.spyOn(AiRepository.prototype, "getAdminPinnedProviderId").mockResolvedValue(null);
-    h.serviceRoute.mockResolvedValue({
-      model: { ...model, id: "same-provider-replacement" },
-      reason: "admin-pin"
-    });
-    await expect(h.generator(actor, input())).rejects.toMatchObject({
-      code: "meeting_output_route_unavailable"
-    });
-    expect(h.credential).not.toHaveBeenCalled();
     expect(h.fetch).not.toHaveBeenCalled();
   });
   it("fails closed on an unavailable admin pin without an alternate route", async () => {
     const h = setup();
-    h.route.mockResolvedValue({ model: null, reason: "admin-pin-unavailable" });
+    h.route.mockResolvedValue(null);
     await expect(h.generator(actor, input())).rejects.toMatchObject({
       code: "meeting_output_route_unavailable"
     });
@@ -339,9 +309,7 @@ describe("meeting output composition HTTP boundary", () => {
   });
   it("checks current selected route again at actual dispatch", async () => {
     const h = setup();
-    h.route
-      .mockResolvedValueOnce({ model, reason: "admin-pin" })
-      .mockResolvedValue({ model: { ...model, id: "other-model" }, reason: "admin-pin" });
+    h.route.mockResolvedValueOnce(model).mockResolvedValue({ ...model, id: "other-model" });
     await expect(h.generator(actor, input())).rejects.toMatchObject({
       code: "meeting_output_route_changed"
     });
@@ -368,7 +336,7 @@ describe("meeting output composition HTTP boundary", () => {
     const h = setup();
     h.fetch.mockResolvedValue(response(value));
     await expect(h.generator(actor, input())).rejects.toMatchObject({
-      code: "meeting_output_generation_failed"
+      code: "meeting_output_rejected_schema_validation"
     });
     expect(h.fetch).toHaveBeenCalledTimes(1);
   });
@@ -394,7 +362,7 @@ describe("meeting output composition HTTP boundary", () => {
       })
     );
     await expect(h.generator(actor, input())).rejects.toMatchObject({
-      code: "meeting_output_generation_failed"
+      code: "meeting_output_rejected_source_identity_mismatch"
     });
   });
   it("fails oversized UTF-8 input before selecting or dispatching without truncation", async () => {
@@ -426,7 +394,7 @@ describe("meeting output composition HTTP boundary", () => {
     const logs = [vi.spyOn(console, "log"), vi.spyOn(console, "warn"), vi.spyOn(console, "error")];
     h.fetch.mockRejectedValue(new Error("RAW_PRIVATE_RESPONSE synthetic-not-real-key"));
     await expect(h.generator(actor, input())).rejects.toMatchObject({
-      message: "meeting_output_generation_failed"
+      message: "meeting_output_provider_failed"
     });
     const observed = JSON.stringify([activity.mock.calls, ...logs.map((log) => log.mock.calls)]);
     expect(observed).not.toContain("RAW_PRIVATE_RESPONSE");
@@ -464,10 +432,7 @@ describe("meeting output composition HTTP boundary", () => {
 describe("meeting structured provider HTTP variants", () => {
   it("Anthropic exposes only the schema emission pseudo-tool, never an executable tool", async () => {
     const h = setup();
-    h.route.mockResolvedValue({
-      model: { ...model, provider_kind: "anthropic" },
-      reason: "admin-pin"
-    });
+    h.route.mockResolvedValue({ ...model, provider_kind: "anthropic" });
     h.credential.mockResolvedValue({ ...provider, provider_kind: "anthropic" });
     h.fetch.mockResolvedValue(
       new Response(
@@ -495,10 +460,7 @@ describe("meeting structured provider HTTP variants", () => {
   });
   it("Google uses responseSchema without executable tools or search", async () => {
     const h = setup();
-    h.route.mockResolvedValue({
-      model: { ...model, provider_kind: "google" },
-      reason: "admin-pin"
-    });
+    h.route.mockResolvedValue({ ...model, provider_kind: "google" });
     h.credential.mockResolvedValue({ ...provider, provider_kind: "google" });
     h.fetch.mockResolvedValue(
       new Response(
@@ -546,4 +508,430 @@ describe("meeting accepted Tasks composition", () => {
       code: "meeting_action_tasks_unavailable"
     });
   });
+});
+
+describe("meeting summaries with the default CLI subscription", () => {
+  it.each(["anthropic"] as const)(
+    "uses the exact %s default and accepts a single JSON fence outside actor transactions",
+    async (kind) => {
+      const generate = vi.fn<StructuredProviderAdapter["generateStructured"]>(async () => {
+        expect(h.activeTransactions()).toBe(0);
+        return {
+          rawText: "```json\n" + JSON.stringify(content) + "\n```",
+          usage: { inputTokens: 0, outputTokens: 0 }
+        };
+      });
+      const adapter = vi.fn(() => ({ generateStructured: generate }));
+      const h = setup(adapter);
+      const cliModel = { ...model, provider_kind: kind, provider_auth_method: "cli" as const };
+      const cliProvider = {
+        ...provider,
+        provider_kind: kind,
+        auth_method: "cli" as const,
+        acp_agent_id: "claude-acp"
+      };
+      h.route.mockResolvedValue(cliModel);
+      h.credential.mockResolvedValue(cliProvider);
+      vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([cliProvider]);
+      expect(await h.generationAvailability(actor)).toBe("available");
+      expect(adapter).not.toHaveBeenCalled();
+      const result = await h.generator(actor, input());
+      expect(result.content).toEqual(content);
+      expect(adapter).toHaveBeenCalledExactlyOnceWith(kind);
+      expect(generate).toHaveBeenCalledTimes(1);
+      expect(generate.mock.calls[0]?.[0]).toMatchObject({
+        model: { provider_kind: kind, provider_model_id: model.provider_model_id },
+        schema: MEETING_OUTPUT_SCHEMA,
+        maxOutputTokens: 8192,
+        acpAgentId: cliProvider.acp_agent_id
+      });
+      expect(generate.mock.calls[0]?.[0]).not.toHaveProperty("nativeSearch", true);
+      expect(h.fetch).not.toHaveBeenCalled();
+      expect(h.serviceRoute).not.toHaveBeenCalled();
+      expect(h.sortingRoute).not.toHaveBeenCalled();
+    }
+  );
+  it("fails the selected subscription plainly without trying an API-key route", async () => {
+    const generate = vi.fn(async () => {
+      throw new Error("synthetic CLI login unavailable");
+    });
+    const h = setup(() => ({ generateStructured: generate }));
+    h.route.mockResolvedValue({
+      ...model,
+      provider_kind: "anthropic",
+      provider_auth_method: "cli"
+    });
+    h.credential.mockResolvedValue({ ...provider, provider_kind: "anthropic", auth_method: "cli" });
+    await expect(h.generator(actor, input())).rejects.toMatchObject({
+      code: "meeting_output_provider_failed"
+    });
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.serviceRoute).not.toHaveBeenCalled();
+  });
+  it("rejects a changed CLI agent identity before dispatch", async () => {
+    const generate = vi.fn();
+    const h = setup(() => ({ generateStructured: generate }));
+    h.route.mockResolvedValue({
+      ...model,
+      provider_kind: "anthropic",
+      provider_auth_method: "cli"
+    });
+    h.credential
+      .mockResolvedValueOnce({
+        ...provider,
+        provider_kind: "anthropic",
+        auth_method: "cli",
+        acp_agent_id: "claude-acp"
+      })
+      .mockResolvedValue({
+        ...provider,
+        provider_kind: "anthropic",
+        auth_method: "cli",
+        acp_agent_id: "opencode"
+      });
+    await expect(h.generator(actor, input())).rejects.toMatchObject({
+      code: "meeting_output_route_changed"
+    });
+    expect(generate).not.toHaveBeenCalled();
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("meeting summaries preserve canonical default-model policy", () => {
+  function canonical() {
+    const overrideReads = AiRepository.prototype as unknown as {
+      getChatModelOverrideEnabled(db: DataContextDb): Promise<boolean>;
+      getChatModelOverridePreference(db: DataContextDb): Promise<string | null>;
+    };
+    const h = setup();
+    h.route.mockRestore();
+    vi.spyOn(AiRepository.prototype, "selectModelForCapability").mockResolvedValue(model);
+    const models = vi.spyOn(AiRepository.prototype, "listModels").mockResolvedValue([model]);
+    const enabled = vi.spyOn(overrideReads, "getChatModelOverrideEnabled").mockResolvedValue(true);
+    const preference = vi
+      .spyOn(overrideReads, "getChatModelOverridePreference")
+      .mockResolvedValue(null);
+    const modelPin = vi
+      .spyOn(AiRepository.prototype, "getAdminPinnedModelId")
+      .mockResolvedValue(null);
+    const providerPin = vi
+      .spyOn(AiRepository.prototype, "getAdminPinnedProviderId")
+      .mockResolvedValue(null);
+    return { ...h, models, enabled, preference, modelPin, providerPin };
+  }
+  it("rejects an unavailable enabled override instead of using the instance default", async () => {
+    const h = canonical();
+    h.preference.mockResolvedValue("missing-override");
+    // Ordinary chat's fallback remains unchanged; meeting disclosure is stricter.
+    expect(await new AiRepository().selectChatModelForUser(db)).toMatchObject({ id: model.id });
+    await expect(h.generator(actor, input())).rejects.toMatchObject({
+      code: "meeting_output_route_unavailable"
+    });
+    expect(h.credential).not.toHaveBeenCalled();
+    expect(h.fetch).not.toHaveBeenCalled();
+    expect(h.serviceRoute).not.toHaveBeenCalled();
+  });
+  it.each(["model", "provider", "disabled-override"])(
+    "honors the effective administrator default (%s)",
+    async (kind) => {
+      const h = canonical();
+      h.preference.mockResolvedValue("missing-override");
+      if (kind === "model") h.modelPin.mockResolvedValue(model.id);
+      else if (kind === "provider") h.providerPin.mockResolvedValue(provider.id);
+      else h.enabled.mockResolvedValue(false);
+      expect((await h.generator(actor, input())).content).toEqual(content);
+      expect(h.fetch).toHaveBeenCalledTimes(1);
+      expect(h.serviceRoute).not.toHaveBeenCalled();
+    }
+  );
+});
+
+it("reports unsupported Claude subscription profiles plainly without provider fallback", async () => {
+  const generate = vi.fn(async () => {
+    throw new StructuredTransportUnavailableError();
+  });
+  const h = setup(() => ({ generateStructured: generate }));
+  h.route.mockResolvedValue({ ...model, provider_kind: "anthropic", provider_auth_method: "cli" });
+  h.credential.mockResolvedValue({ ...provider, provider_kind: "anthropic", auth_method: "cli" });
+  await expect(h.generator(actor, input())).rejects.toMatchObject({
+    code: "meeting_output_claude_subscription_unsupported"
+  });
+  expect(h.fetch).not.toHaveBeenCalled();
+  expect(h.serviceRoute).not.toHaveBeenCalled();
+  expect(generate).toHaveBeenCalledTimes(1);
+});
+
+it("fails unsupported subscriptions before credential lookup or any provider dispatch", async () => {
+  const generate = vi.fn();
+  const adapter = vi.fn(() => ({ generateStructured: generate }));
+  const h = setup(adapter);
+  h.route.mockResolvedValue({ ...model, provider_auth_method: "cli" });
+  expect(await h.generationAvailability(actor)).toBe("subscription-unsupported");
+  await expect(h.generator(actor, input())).rejects.toMatchObject({
+    code: "meeting_output_subscription_unsupported"
+  });
+  expect(h.credential).not.toHaveBeenCalled();
+  expect(h.fetch).not.toHaveBeenCalled();
+  expect(adapter).not.toHaveBeenCalled();
+  expect(generate).not.toHaveBeenCalled();
+});
+
+it("checks constrained binary presence outside actor transactions before enabling Generate", async () => {
+  const generate = vi.fn();
+  const h = setup(() => ({ generateStructured: generate }));
+  const cliModel = {
+    ...model,
+    provider_kind: "anthropic" as const,
+    provider_auth_method: "cli" as const
+  };
+  h.route.mockResolvedValue(cliModel);
+  vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([
+    { ...provider, provider_kind: "anthropic", auth_method: "cli" }
+  ]);
+  h.probe.mockImplementation(async () => {
+    expect(h.activeTransactions()).toBe(0);
+    return "model-unavailable";
+  });
+  expect(await h.generationAvailability(actor)).toBe("model-unavailable");
+  expect(h.probe).toHaveBeenCalledExactlyOnceWith(actor.actorUserId);
+  h.probe.mockResolvedValue("available");
+  expect(await h.generationAvailability(actor)).toBe("available");
+  expect(h.credential).not.toHaveBeenCalled();
+  expect(h.fetch).not.toHaveBeenCalled();
+  expect(generate).not.toHaveBeenCalled();
+});
+
+it("rejects shared-account Claude readiness before any model dispatch and preserves the specific reason", async () => {
+  const generate = vi.fn();
+  const h = setup(() => ({ generateStructured: generate }));
+  h.route.mockResolvedValue({
+    ...model,
+    provider_kind: "anthropic",
+    provider_auth_method: "cli",
+    provider_acp_agent_id: "claude-acp"
+  });
+  h.credential.mockResolvedValue({
+    ...provider,
+    provider_kind: "anthropic",
+    auth_method: "cli",
+    acp_agent_id: "claude-acp"
+  });
+  vi.spyOn(AiRepository.prototype, "listProviders").mockResolvedValue([
+    { ...provider, provider_kind: "anthropic", auth_method: "cli" }
+  ]);
+  h.probe.mockImplementation(async () => {
+    expect(h.activeTransactions()).toBe(0);
+    return "subscription-isolation-unavailable";
+  });
+  expect(await h.generationAvailability(actor)).toBe("subscription-isolation-unavailable");
+  expect(h.credential).not.toHaveBeenCalled();
+  await expect(h.generator(actor, input())).rejects.toMatchObject({
+    code: "meeting_output_subscription_isolation_unavailable"
+  });
+  expect(h.fetch).not.toHaveBeenCalled();
+  expect(generate).not.toHaveBeenCalled();
+});
+
+it("preserves user cancellation during the constrained readiness probe without dispatch", async () => {
+  const generate = vi.fn();
+  const h = setup(() => ({ generateStructured: generate }));
+  h.route.mockResolvedValue({
+    ...model,
+    provider_kind: "anthropic",
+    provider_auth_method: "cli",
+    provider_acp_agent_id: "claude-acp"
+  });
+  h.credential.mockResolvedValue({
+    ...provider,
+    provider_kind: "anthropic",
+    auth_method: "cli",
+    acp_agent_id: "claude-acp"
+  });
+  const controller = new AbortController();
+  h.probe.mockImplementation(async () => {
+    controller.abort();
+    throw new Error("probe cancelled");
+  });
+  await expect(h.generator(actor, { ...input(), signal: controller.signal })).rejects.toMatchObject(
+    { code: "meeting_output_interrupted" }
+  );
+  expect(h.probe).toHaveBeenCalledWith(actor.actorUserId, controller.signal);
+  expect(h.fetch).not.toHaveBeenCalled();
+  expect(generate).not.toHaveBeenCalled();
+});
+
+describe("meeting output rejection diagnostics", () => {
+  function cli(rawText: string) {
+    const h = setup(() => ({
+      generateStructured: async () => ({ rawText, usage: { inputTokens: 0, outputTokens: 0 } })
+    }));
+    h.route.mockResolvedValue({
+      ...model,
+      provider_kind: "anthropic",
+      provider_auth_method: "cli",
+      provider_acp_agent_id: "claude-acp"
+    });
+    h.credential.mockResolvedValue({
+      ...provider,
+      provider_kind: "anthropic",
+      auth_method: "cli",
+      acp_agent_id: "claude-acp"
+    });
+    return h;
+  }
+  const bound = {
+    kind: "personal-note",
+    meetingId: "meeting-id",
+    notesRevision: 1,
+    startCharacter: 0,
+    endCharacter: 7
+  };
+  it.each([
+    ["malformed private-answer-canary", "json_parse"],
+    [JSON.stringify({ ...content, extra: "private-answer-canary" }), "schema_validation"],
+    [
+      JSON.stringify({
+        ...content,
+        decisions: [{ text: "private-answer-canary", evidence: [{ ...bound, meetingId: "other" }] }]
+      }),
+      "source_identity_mismatch"
+    ],
+    [
+      JSON.stringify({
+        ...content,
+        decisions: [{ text: "private-answer-canary", evidence: [{ ...bound, notesRevision: 99 }] }]
+      }),
+      "source_revision_mismatch"
+    ],
+    [
+      JSON.stringify({
+        ...content,
+        decisions: [{ text: "private-answer-canary", evidence: [{ ...bound, endCharacter: 9999 }] }]
+      }),
+      "utf16_range_invalid"
+    ],
+    [
+      JSON.stringify({
+        ...content,
+        actions: [
+          {
+            text: "private-answer-canary",
+            evidence: [bound],
+            ownerPhrase: "invented-owner",
+            duePhrase: null
+          }
+        ]
+      }),
+      "owner_phrase_unsupported"
+    ]
+  ])("records only a fixed rejection reason for %s", async (rawText, reason) => {
+    const h = cli(rawText!);
+    const activity = vi.fn();
+    installModelActivityRecorder(activity);
+    const logs = [vi.spyOn(console, "log"), vi.spyOn(console, "warn"), vi.spyOn(console, "error")];
+    const code = `meeting_output_rejected_${reason}`;
+    await expect(h.generator(actor, input())).rejects.toMatchObject({ code, message: code });
+    expect(activity).toHaveBeenCalledExactlyOnceWith({
+      kind: "structured_validation",
+      action: "Checked a meeting summary",
+      actionCode: "meetings.summary.validation",
+      ownerUserId: "owner",
+      turnId: "synthetic",
+      outcome: "error",
+      modelName: "selected-summary-model",
+      result: code,
+      failureCode: "bad_shape"
+    });
+    const observed = JSON.stringify([activity.mock.calls, ...logs.map((log) => log.mock.calls)]);
+    for (const secret of [
+      "private-answer-canary",
+      "Private synthetic note",
+      "invented-owner",
+      "synthetic-not-real-key"
+    ])
+      expect(observed).not.toContain(secret);
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it.each(["result", "structured_output"])(
+    "accepts a full JSON fence from the actual Claude %s envelope through summary validation",
+    async (field) => {
+      const rawText = parseConstrainedClaudeOutput(
+        JSON.stringify({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          [field]: "```json\n" + JSON.stringify(content) + "\n```"
+        })
+      );
+      expect((await cli(rawText).generator(actor, input())).content).toEqual(content);
+    }
+  );
+  it.each(["```json\n{}\n```\n{}", "prose\n```json\n{}\n```", "```json\n{} {}\n```"])(
+    "rejects surrounding or multiple JSON from the native envelope",
+    async (value) => {
+      const rawText = parseConstrainedClaudeOutput(
+        JSON.stringify({ type: "result", subtype: "success", is_error: false, result: value })
+      );
+      await expect(cli(rawText).generator(actor, input())).rejects.toMatchObject({
+        code: "meeting_output_rejected_json_parse"
+      });
+    }
+  );
+  it("maps the constrained timeout to a specific stopped result", async () => {
+    const h = setup(() => ({
+      generateStructured: async () => {
+        throw new ConstrainedProcessError("timeout");
+      }
+    }));
+    h.route.mockResolvedValue({
+      ...model,
+      provider_kind: "anthropic",
+      provider_auth_method: "cli",
+      provider_acp_agent_id: "claude-acp"
+    });
+    h.credential.mockResolvedValue({
+      ...provider,
+      provider_kind: "anthropic",
+      auth_method: "cli",
+      acp_agent_id: "claude-acp"
+    });
+    await expect(h.generator(actor, input())).rejects.toMatchObject({
+      code: "meeting_output_timed_out"
+    });
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+});
+
+it("keeps an outer deadline distinct from user cancellation before dispatch", async () => {
+  const h = setup();
+  const controller = new AbortController();
+  controller.abort(new DOMException("fixed deadline", "TimeoutError"));
+  await expect(h.generator(actor, { ...input(), signal: controller.signal })).rejects.toMatchObject(
+    { code: "meeting_output_timed_out" }
+  );
+  expect(h.fetch).not.toHaveBeenCalled();
+});
+
+it("does not record a made-up model when validation fails before model selection", async () => {
+  const h = setup();
+  const activity = vi.fn();
+  installModelActivityRecorder(activity);
+  h.route.mockRejectedValueOnce(new MeetingOutputValidationError("inputs_invalid"));
+  await expect(h.generator(actor, input())).rejects.toMatchObject({
+    code: "meeting_output_rejected_inputs_invalid"
+  });
+  expect(activity).not.toHaveBeenCalled();
+  expect(h.fetch).not.toHaveBeenCalled();
+});
+
+it("describes every summary rejection as a retryable generation failure", () => {
+  const errors = meetingsModuleManifest.features.map((feature) => feature.errors ?? []).flat();
+  const rejections = errors.filter((error) => error.code.startsWith("meeting_output_rejected_"));
+  expect(rejections).toHaveLength(13);
+  for (const error of rejections) {
+    expect(error.class).toBe("transient");
+    expect(error.description).toContain("Try generating it again.");
+    expect(error.description).not.toMatch(/JSON|UTF-16|schema|revision|rejection code/);
+  }
 });

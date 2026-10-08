@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CliStructuredAdapter } from "../../packages/chat/src/live/cli-structured-adapter.js";
 import type { ChatEngineFactory } from "../../packages/chat/src/live/runtime.js";
 import {
+  CLI_STRUCTURED_TIMEOUT_MESSAGE,
   GATE_TIMEOUT_ABORT_REASON,
   installModelActivityRecorder,
   type GenerateStructuredProviderInput,
@@ -81,7 +82,7 @@ describe("CliStructuredAdapter (#982/#869/#981)", () => {
         schema: { type: "object", required: ["ok"] },
         maxOutputTokens: 100
       })
-    ).rejects.toThrow("CLI structured generation timed out");
+    ).rejects.toThrow(CLI_STRUCTURED_TIMEOUT_MESSAGE);
   });
 
   it("selects a waiting foreground call before FIFO background calls", async () => {
@@ -430,7 +431,7 @@ describe("CliStructuredAdapter — nativeSearch and sources (#2228)", () => {
         maxOutputTokens: 100,
         nativeSearch: true
       })
-    ).rejects.toThrow("CLI structured generation timed out");
+    ).rejects.toThrow(CLI_STRUCTURED_TIMEOUT_MESSAGE);
   });
 });
 

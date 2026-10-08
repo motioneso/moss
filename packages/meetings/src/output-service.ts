@@ -5,7 +5,11 @@ import type {
   MeetingOutputResult
 } from "@moss/shared";
 import { MeetingOutputError, MeetingOutputsRepository } from "./output-repository.js";
-import { getMeetingOutputTemplate, validateMeetingOutput } from "./output-validation.js";
+import {
+  getMeetingOutputTemplate,
+  validateMeetingOutput,
+  MeetingOutputValidationError
+} from "./output-validation.js";
 
 export type MeetingOutputGenerator = (
   actor: AccessContext,
@@ -80,7 +84,7 @@ export class MeetingOutputService {
       const signal = AbortSignal.timeout(110000);
       let rejectAbort: (() => void) | undefined;
       const aborted = new Promise<never>((_resolve, reject) => {
-        rejectAbort = () => reject(new MeetingOutputError("meeting_output_interrupted"));
+        rejectAbort = () => reject(new MeetingOutputError("meeting_output_timed_out"));
         signal.addEventListener("abort", rejectAbort, { once: true });
       });
       let generated: Awaited<ReturnType<MeetingOutputGenerator>>;
@@ -133,7 +137,11 @@ export class MeetingOutputService {
     } catch (error) {
       // No provider errors, prompts or credentials are persisted or returned to callers.
       const code =
-        error instanceof MeetingOutputError ? error.code : "meeting_output_generation_failed";
+        error instanceof MeetingOutputError
+          ? error.code
+          : error instanceof MeetingOutputValidationError
+            ? `meeting_output_rejected_${error.reasonCode}`
+            : "meeting_output_generation_failed";
       const result: MeetingOutputResult = { status: "failed", requestKey: input.requestKey, code };
       return await this.dataContext.withDataContext(actor, async (db) => {
         await this.repository.lock(db, meetingId);
