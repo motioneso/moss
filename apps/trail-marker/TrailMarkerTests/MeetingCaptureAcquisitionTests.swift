@@ -123,11 +123,14 @@ final class MeetingCaptureAcquisitionTests: XCTestCase {
         DispatchQueue.global().async {
             XCTAssertEqual(runtime.snapshot.state, .paused)
             XCTAssertTrue(runtime.canRecoverSources)
-            XCTAssertNoThrow(try runtime.service(at: self.origin + 2))
-            XCTAssertNoThrow(try runtime.pause(at: self.origin + 3))
-            XCTAssertNoThrow(try runtime.stop(at: self.origin + 4, finalizationNanoseconds: 0))
-            XCTAssertNoThrow(try runtime.service(at: self.origin + 5),
-                "Finalization must keep waiting without calling a pending acquisition a cleanup failure")
+            do { _ = try runtime.service(at: self.origin + 2) }
+            catch { XCTFail("Service must remain available during acquisition: \(error)") }
+            do { try runtime.pause(at: self.origin + 3) }
+            catch { XCTFail("Pause must remain available during acquisition: \(error)") }
+            do { try runtime.stop(at: self.origin + 4, finalizationNanoseconds: 0) }
+            catch { XCTFail("Stop must remain available during acquisition: \(error)") }
+            do { _ = try runtime.service(at: self.origin + 5) }
+            catch { XCTFail("Finalization must keep waiting without calling a pending acquisition a cleanup failure: \(error)") }
             XCTAssertEqual(runtime.snapshot.state, .stopping)
             runtime.cancelRecoveryAcquisition(ticket)
             XCTAssertTrue(runtime.hasPendingAcquisition)
@@ -160,10 +163,14 @@ final class MeetingCaptureAcquisitionTests: XCTestCase {
         defer { factory.releaseFactory.signal() }
         let responded = expectation(description: "Termination does not await factory")
         DispatchQueue.global().async {
-            XCTAssertNoThrow(try runtime.terminate(at: self.origin + 2))
+            do { try runtime.terminate(at: self.origin + 2) }
+            catch { XCTFail("Termination must not await the factory: \(error)") }
             XCTAssertEqual(runtime.snapshot.state, .finished)
             XCTAssertTrue(runtime.hasPendingAcquisition)
-            XCTAssertThrowsError(try runtime.reset(at: self.origin + 3))
+            do {
+                try runtime.reset(at: self.origin + 3)
+                XCTFail("Reset must reject pending acquisition ownership")
+            } catch {}
             responded.fulfill()
         }
         wait(for: [responded], timeout: 1)
@@ -323,7 +330,10 @@ final class MeetingCaptureAcquisitionTests: XCTestCase {
                 becameReady = true
                 // A missing between-source guard must fail the semantic assertions below,
                 // not strand a mutation run at an unfulfilled cleanup expectation.
-                XCTAssertThrowsError(try runtime.commitRecoveryAcquisition(ticket, at: pausedAt))
+                do {
+                    try runtime.commitRecoveryAcquisition(ticket, at: pausedAt)
+                    XCTFail("Commit must reject old hard evidence")
+                } catch {}
             }
             if case .cleanupComplete = event { cleaned.fulfill() }
         }
