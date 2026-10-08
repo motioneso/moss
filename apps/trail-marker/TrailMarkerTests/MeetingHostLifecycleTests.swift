@@ -7,6 +7,87 @@ import XCTest
 /// microphone permission API, actual Keychain item, hardware or real network is used.
 @MainActor
 final class MeetingHostLifecycleTests: XCTestCase {
+    func testFirstStartSurvivesMicStartupCounterResetWithoutResume() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let host = fixture.host { XCTFail("Granted permission must not be requested again"); return false }
+        defer { host.shutdown(reason: "Synthetic startup-clock test") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(),
+            credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        let receiver = try XCTUnwrap(fixture.device.receiver)
+        receiver.receive(sampleTime: 0, hostTimeNanoseconds: fixture.monotonic,
+            sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.25 })
+        receiver.receive(sampleTime: 0, hostTimeNanoseconds: fixture.monotonic + 100_000_000,
+            sampleRate: 8000, frameCount: 800,
+            sampleAt: { _ in XCTFail("The uncertain startup callback must not be copied"); return 1 })
+        receiver.receive(sampleTime: 800, hostTimeNanoseconds: fixture.monotonic + 200_000_000,
+            sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.5 })
+        fixture.monotonic += 300_000_000
+        host.service()
+        XCTAssertEqual(host.phase, .recording, "One Start must survive a bounded microphone counter reset without Resume")
+        XCTAssertEqual(fixture.device.starts, 1)
+        XCTAssertEqual(fixture.device.stops, 0)
+        XCTAssertEqual(fixture.server.resumeKeys.count, 0)
+        XCTAssertTrue(host.diagnostics.contains { $0.contains("cause=microphone-startup-timestamp") },
+            "A tolerated startup timestamp must emit the interrupted gap diagnostic")
+        XCTAssertTrue(host.pendingGaps.contains { $0.reason == "interrupted" })
+    }
+
+    func testFirstStartReconfirmsOneMissingMicrophoneWithoutResumeOrSendingUncertainPCM() async throws {
+        for outcome in ["recovered", "still-missing", "late"] {
+            let fixture = try Fixture()
+            defer { fixture.close() }
+            fixture.permission = .granted
+            func snapshot(_ present: Bool) -> MeetingInventorySnapshot {
+                let wire = MeetingCaptureInventory(microphones: present ? [
+                    .init(deviceId: "mic-uid", sourceId: "mic", label: "Synthetic mic")] : [],
+                    applications: [], computerAudio: .init(available: false, excludedProcessTreeIds: []),
+                    microphonePermission: .granted, systemAudioPermission: .unknown)
+                return .init(wire: wire, microphones: present ? ["mic-uid": 42] : [:],
+                    applications: [:], processes: [], audioObjects: [:], excluded: [])
+            }
+            var missingReads = 0
+            var trigger = false
+            let host = fixture.host(readInventory: {
+                guard trigger else { return snapshot(true) }
+                missingReads += 1
+                if missingReads == 1 { return snapshot(false) }
+                // The confirmation read runs with callback admission closed.
+                fixture.device.receiver?.receive(sampleTime: 800, hostTimeNanoseconds: 10_100_000_000,
+                    sampleRate: 8000, frameCount: 800,
+                    sampleAt: { _ in XCTFail("No PCM may be copied while startup sources are uncertain"); return 1 })
+                if outcome == "late" { fixture.monotonic += 600_000_000 }
+                return snapshot(outcome != "still-missing")
+            }) { false }
+            defer { host.shutdown(reason: "Synthetic startup source confirmation") }
+            try host.acceptStart(fixture.server.command, claim: await fixture.claim(),
+                credential: fixture.pending.credential, origin: 9_000_000_000)
+            try await waitUntil { host.phase == .recording }
+            fixture.device.receiver?.receive(sampleTime: 0, hostTimeNanoseconds: fixture.monotonic,
+                sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.25 })
+            fixture.monotonic += 250_000_000
+            trigger = true
+            host.service()
+            trigger = false
+            XCTAssertEqual(missingReads, 2, "A startup omission gets exactly one immediate confirmation")
+            XCTAssertEqual(fixture.server.audioCount, 0, "Uncertain startup PCM must never be uploaded")
+            XCTAssertEqual(fixture.server.resumeKeys.count, 0)
+            XCTAssertEqual(fixture.device.starts, 1)
+            if outcome == "recovered" {
+                XCTAssertEqual(host.phase, .recording, "One Start must survive a reconfirmed startup source omission without Resume")
+                XCTAssertEqual(fixture.device.stops, 0)
+                XCTAssertNil((fixture.device.receiver as? MeetingAudioBuffer)?.peek(),
+                    "The first uncertain snapshot must erase all pre-notice PCM")
+                XCTAssertTrue(host.pendingGaps.contains { $0.reason == "interrupted" })
+            } else {
+                XCTAssertEqual(host.phase, .paused, "Missing or late source confirmation must preserve the safety pause")
+                XCTAssertEqual(fixture.device.stops, 1)
+            }
+        }
+    }
+
     func testStopDuringPermissionWaitRejectsLateGrantAndAllowsNextStart() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }
@@ -838,6 +919,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         }
         func host(snapshot customSnapshot: MeetingInventorySnapshot? = nil,
                   factory customFactory: MeetingCaptureRuntime.DeviceFactory? = nil,
+                  readInventory customReadInventory: (() throws -> MeetingInventorySnapshot)? = nil,
                   permissionRequest: @escaping () async -> Bool) -> MeetingCaptureHost {
             let identity = LinkedIdentity(instance: instance, deviceId: server.deviceId, accountName: "Fixture", accountEmail: "fixture@example.invalid")
             let inventory = MeetingCaptureInventory(microphones: [.init(deviceId: "mic-uid", sourceId: "mic", label: "Synthetic mic")],
@@ -845,7 +927,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
                 microphonePermission: .unknown, systemAudioPermission: .unknown)
             let snapshot = MeetingInventorySnapshot(wire: inventory, microphones: ["mic-uid": 42], applications: [:],
                 processes: [], audioObjects: [:], excluded: [])
-            let ports = MeetingCaptureHostPorts(identity: { identity }, connectionAvailable: { true }, readInventory: { self.inventoryOverride ?? customSnapshot ?? snapshot },
+            let ports = MeetingCaptureHostPorts(identity: { identity }, connectionAvailable: { true }, readInventory: { try customReadInventory?() ?? self.inventoryOverride ?? customSnapshot ?? snapshot },
                 microphonePermission: { self.permissionReads += 1; return self.permission }, requestMicrophone: permissionRequest,
                 makeClient: Self.client, now: { self.monotonic }, wallNow: { self.wall })
             let defaults = UserDefaults(suiteName: defaultsName)!

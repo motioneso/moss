@@ -59,6 +59,21 @@ struct MeetingInventorySnapshot {
         var outputRoutes: [Int32: [AudioObjectID]] = [:]
     }
 
+    /// Only omissions can be a startup inventory race. A positively observed new/replaced
+    /// process or object is never retried, even if a later snapshot would hide it again.
+    func onlyOmitsStartupSources(from original: Self, choice: MeetingCaptureChoice) -> Bool {
+        guard choice.mode != "selected-app" else { return false }
+        if let microphone = choice.microphone,
+           let current = microphones[microphone.deviceId], current != original.microphones[microphone.deviceId] { return false }
+        guard choice.mode == "computer-audio" else { return true }
+        guard excluded.allSatisfy({ original.excluded.contains($0) }) else { return false }
+        for before in original.excluded {
+            if let current = processes.first(where: { $0.pid == before.pid }), current != before { return false }
+            if let object = audioObjects[before.pid], object != original.audioObjects[before.pid] { return false }
+        }
+        return true
+    }
+
     func resolve(_ choice: MeetingCaptureChoice) throws -> Resolved {
         let microphone: AudioObjectID?
         if let requested = choice.microphone {

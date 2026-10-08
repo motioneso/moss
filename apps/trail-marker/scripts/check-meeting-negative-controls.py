@@ -50,6 +50,13 @@ CONTROLS = (
         "after": "guard host <= UInt64.max else {",
         "assertion": "XCTAssertFalse failed",
     },
+    {
+        "name": "microphone-startup-counter-recovery",
+        "test": "testStartupRecoveryRequiresIndependentMonotonicWindow",
+        "before": "        guard permitsStartupClockRecovery, !recoveredStartupClock else { return false }",
+        "after": "        guard false else { return false }",
+        "assertion": "One bounded startup counter reset must not pause microphone capture",
+    },
 )
 
 

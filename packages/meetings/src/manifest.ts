@@ -366,6 +366,11 @@ export const meetingsModuleManifest = {
         "Capture duration uses native acknowledgement. Transcription delay is separate; transient clips retry within bounded memory. Activity records clip model, duration and outcome without audio or transcript text."
     },
     {
+      id: "meetings.native_startup_recovery",
+      description:
+        "A brief microphone timing hiccup at Start can recover without Resume. Missing startup sources are checked once with audio held back; real source changes still pause. The Mac log records short interrupted gaps."
+    },
+    {
       id: "meetings.native_capture",
       description:
         "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Only Start or Resume records. Pause and Stop remain available; a nav dot shows recording elsewhere. Mac only.",

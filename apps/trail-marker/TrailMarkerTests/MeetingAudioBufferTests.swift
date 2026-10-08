@@ -9,6 +9,19 @@ final class MeetingAudioBufferTests: XCTestCase {
     private func put(_ buffer: MeetingAudioBuffer, at: UInt64 = 0, count: Int = 8, value: Float = 0.25) {
         buffer.receive(hostTimeNanoseconds: at, sampleRate: 8000, frameCount: count, sampleAt: { _ in value })
     }
+    private final class StartupTestClock {
+        var now: UInt64 = 10_000_000_000
+    }
+    private func recoveringBuffer(_ clock: StartupTestClock, source: MeetingAudioSource = .microphone,
+                                  origin: UInt64 = 0, lease: MeetingAudioLease? = nil) throws -> MeetingAudioBuffer {
+        try MeetingAudioBuffer(source: source, epoch: 1, originNanoseconds: origin,
+            sampleCapacity: 64, blockCapacity: 8, lease: lease,
+            permitsStartupClockRecovery: true, monotonicNow: { clock.now })
+    }
+    private func putHardware(_ buffer: MeetingAudioBuffer, sampleTime: Double, at: UInt64, value: Float = 1) {
+        buffer.receive(sampleTime: sampleTime, hostTimeNanoseconds: at, sampleRate: 8000,
+                       frameCount: 8, sampleAt: { _ in value })
+    }
     func testPacketIdentityAndReceiptAreIndependentFromProcessing() throws {
         let ring = try buffer()
         put(ring)
@@ -320,6 +333,375 @@ final class MeetingAudioBufferTests: XCTestCase {
             XCTAssertEqual(ring.peek()?.samples, Array(repeating: Float(1), count: 8))
             XCTAssertTrue(ring.acknowledge(sequence: 0))
             XCTAssertNil(ring.peek())
+        }
+    }
+
+    func testStartupClockRecoveryPreservesBothSegmentsAndRetryIdentity() throws {
+        let clock = StartupTestClock()
+        let origin: UInt64 = 1_000_000_000
+        let ring = try recoveringBuffer(clock, origin: origin)
+        putHardware(ring, sampleTime: -8, at: origin, value: 1)
+        putHardware(ring, sampleTime: 0, at: origin + 1_000_000, value: 2)
+        let originalHead = try XCTUnwrap(ring.peek())
+        clock.now += 2_000_000
+        var readUntrustedSamples = false
+        ring.receive(sampleTime: 0, hostTimeNanoseconds: origin + 2_000_000,
+                     sampleRate: 8000, frameCount: 8) { _ in
+            readUntrustedSamples = true
+            return 99
+        }
+        XCTAssertNil(ring.failure, "One early microphone counter reset must not pause capture")
+        XCTAssertFalse(readUntrustedSamples, "The discontinuous callback must never be copied")
+        XCTAssertEqual(ring.peek(), originalHead, "Recovery must not rewrite or discard accepted PCM")
+        putHardware(ring, sampleTime: 8, at: origin + 4_000_000, value: 3)
+        putHardware(ring, sampleTime: 16, at: origin + 5_000_000, value: 4)
+        XCTAssertNil(ring.failure)
+        XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 4)
+        XCTAssertEqual(ring.diagnostics.bufferedSamples, 32)
+        XCTAssertEqual(ring.diagnostics.sampleDiscontinuities, 1)
+
+        // A complete clock segment can drain before the five-second target, but cannot
+        // borrow samples from the new clock merely to satisfy that target.
+        let before = try XCTUnwrap(ring.peekChunk(targetDurationNanoseconds: 5_000_000_000,
+            cutoffNanoseconds: nil, allowPartial: false))
+        XCTAssertEqual(before.packet.samples, [Float](repeating: 1, count: 8) + [Float](repeating: 2, count: 8))
+        XCTAssertEqual(before.packet.sequence, 0)
+        XCTAssertEqual(before.throughSequence, 1)
+        XCTAssertEqual(before.packet.timelineOriginNanoseconds, origin)
+        XCTAssertEqual(before.packet.startNanoseconds, origin)
+        XCTAssertEqual(before.packet.endNanoseconds, origin + 2_000_000)
+        let retry = try XCTUnwrap(ring.peekChunk(targetDurationNanoseconds: 5_000_000_000,
+            cutoffNanoseconds: nil, allowPartial: false))
+        XCTAssertEqual(retry.packet, before.packet)
+        XCTAssertEqual(retry.throughSequence, before.throughSequence)
+        XCTAssertFalse(ring.acknowledge(sequence: 1, throughSequence: 1))
+        XCTAssertTrue(ring.acknowledge(sequence: before.packet.sequence, throughSequence: before.throughSequence))
+
+        let after = try XCTUnwrap(ring.peekChunk(targetDurationNanoseconds: 2_000_000,
+            cutoffNanoseconds: nil, allowPartial: false))
+        XCTAssertEqual(after.packet.samples, [Float](repeating: 3, count: 8) + [Float](repeating: 4, count: 8))
+        XCTAssertEqual(after.packet.sequence, 2, "The dropped callback cannot consume or reset packet identity")
+        XCTAssertEqual(after.throughSequence, 3)
+        XCTAssertEqual(after.packet.sampleOffset, 0)
+        XCTAssertEqual(after.packet.timelineOriginNanoseconds, origin + 4_000_000)
+        XCTAssertEqual(after.packet.startNanoseconds, origin + 4_000_000)
+        XCTAssertEqual(after.packet.endNanoseconds, origin + 6_000_000)
+        XCTAssertGreaterThanOrEqual(after.packet.startNanoseconds, before.packet.endNanoseconds)
+        XCTAssertFalse(ring.acknowledge(sequence: before.packet.sequence, throughSequence: before.throughSequence))
+        XCTAssertEqual(ring.peekChunk(targetDurationNanoseconds: 2_000_000,
+            cutoffNanoseconds: nil, allowPartial: false)?.packet, after.packet)
+        XCTAssertEqual(ring.drainCaptureGaps(), [MeetingAudioGap(source: .microphone, epoch: 1,
+            startNanoseconds: origin + 2_000_000, endNanoseconds: origin + 4_000_000, reason: .startupTimestamp)])
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        XCTAssertTrue(ring.acknowledge(sequence: after.packet.sequence, throughSequence: after.throughSequence))
+        XCTAssertNil(ring.peek())
+    }
+
+    func testStartupRecoveryDoesNotDiscardValidEarlyAudioOrSilence() throws {
+        let clock = StartupTestClock()
+        let ring = try recoveringBuffer(clock)
+        for index in 0..<8 {
+            clock.now += 1_000_000
+            putHardware(ring, sampleTime: Double(index * 8) - 128,
+                        at: UInt64(index) * 1_000_000, value: Float(index))
+        }
+        let packet = try XCTUnwrap(ring.peekChunk(targetDurationNanoseconds: 8_000_000,
+            cutoffNanoseconds: nil, allowPartial: false)?.packet)
+        XCTAssertEqual(packet.samples, (0..<8).flatMap { [Float](repeating: Float($0), count: 8) })
+        XCTAssertEqual(packet.startNanoseconds, 0)
+        XCTAssertEqual(packet.endNanoseconds, 8_000_000)
+        XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 8)
+        XCTAssertEqual(ring.diagnostics.sampleDiscontinuities, 0)
+        XCTAssertNil(ring.failure)
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        XCTAssertTrue(ring.acknowledge(sequence: 0, throughSequence: 7))
+        clock.now += 1_000_000_000
+        putHardware(ring, sampleTime: -64, at: 1_000_000_000, value: 8)
+        XCTAssertNil(ring.failure, "An established continuous sample clock remains valid after startup")
+        XCTAssertEqual(ring.peek()?.startNanoseconds, 8_000_000, "Host drift must not move valid PCM")
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+    }
+
+    func testStartupRecoveryIsOptInAndNeverAppliesToOutput() throws {
+        let clock = StartupTestClock()
+        for ring in [try buffer(), try recoveringBuffer(clock, source: .output)] {
+            putHardware(ring, sampleTime: 0, at: 0)
+            var copied = false
+            ring.receive(sampleTime: 0, hostTimeNanoseconds: 1_000_000, sampleRate: 8000,
+                         frameCount: 8, sampleAt: { _ in copied = true; return 2 })
+            XCTAssertEqual(ring.failure, .invalidTimestamp)
+            XCTAssertFalse(copied)
+            XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
+            XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        }
+    }
+
+    func testStartupRecoveryRequiresIndependentMonotonicWindow() throws {
+        for elapsed in [Int64(500_000_000), 500_000_001, -1] {
+            let clock = StartupTestClock()
+            let ring = try recoveringBuffer(clock)
+            putHardware(ring, sampleTime: 0, at: 0)
+            clock.now = UInt64(Int64(clock.now) + elapsed)
+            // A plausible, early hardware timestamp must not reopen an expired real-time window.
+            putHardware(ring, sampleTime: 0, at: 1_000_000, value: 99)
+            if elapsed == 500_000_000 {
+                XCTAssertNil(ring.failure, "One bounded startup counter reset must not pause microphone capture")
+                putHardware(ring, sampleTime: 8, at: 2_000_000, value: 2)
+                XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 2)
+            } else {
+                XCTAssertEqual(ring.failure, .invalidTimestamp)
+                XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
+                XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+            }
+        }
+    }
+
+    func testStartupRecoveryAlsoRequiresHostWindowFromEpochOrigin() throws {
+        let origin: UInt64 = 1_000_000_000
+        for hostOffset in [UInt64(499_000_000), 499_000_001, 500_000_000, 500_000_001] {
+            let clock = StartupTestClock()
+            let ring = try recoveringBuffer(clock, origin: origin)
+            putHardware(ring, sampleTime: 0, at: origin)
+            putHardware(ring, sampleTime: 0, at: origin + hostOffset, value: 99)
+            if hostOffset == 499_000_000 {
+                XCTAssertNil(ring.failure)
+                putHardware(ring, sampleTime: 8, at: origin + hostOffset + 1_000_000, value: 2)
+                XCTAssertNil(ring.failure, "The discarded interval must end within the startup window")
+                XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 2)
+            } else {
+                XCTAssertEqual(ring.failure, .invalidTimestamp)
+                XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
+                XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+            }
+        }
+        let late = try recoveringBuffer(StartupTestClock(), origin: origin)
+        putHardware(late, sampleTime: 0, at: origin + 600_000_000)
+        putHardware(late, sampleTime: 0, at: origin + 601_000_000)
+        XCTAssertEqual(late.failure, .invalidTimestamp, "A late first callback must not extend the epoch's window")
+
+        let longCallback = try recoveringBuffer(StartupTestClock())
+        putHardware(longCallback, sampleTime: 0, at: 0)
+        longCallback.receive(sampleTime: 0, hostTimeNanoseconds: 1_000_000, sampleRate: 8000,
+            frameCount: 4096, sampleAt: { _ in XCTFail("An over-window reset callback must not read PCM"); return 99 })
+        XCTAssertEqual(longCallback.failure, .invalidTimestamp)
+        XCTAssertTrue(longCallback.drainCaptureGaps().isEmpty)
+    }
+
+    func testDelayedFirstCallbackCannotRestartTrustedStartupWindow() throws {
+        let clock = StartupTestClock()
+        let ring = try recoveringBuffer(clock)
+        clock.now += 500_000_001
+        // Both hardware timestamps look early, but admission was opened more than 500 ms ago.
+        putHardware(ring, sampleTime: 0, at: 0)
+        XCTAssertNil(ring.failure, "A delayed first valid callback must still preserve its PCM")
+        putHardware(ring, sampleTime: 0, at: 1_000_000, value: 99)
+        XCTAssertEqual(ring.failure, .invalidTimestamp)
+        XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
+        XCTAssertEqual(ring.peek()?.samples, [Float](repeating: 1, count: 8))
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+    }
+
+    func testStartupRecoveryRejectsLateSuccessorOnEitherClock() throws {
+        let cases: [(UInt64, UInt64)] = [(500_000_001, 2_000_000), (0, 500_000_001)]
+        for (elapsed, host) in cases {
+            let clock = StartupTestClock()
+            let ring = try recoveringBuffer(clock)
+            putHardware(ring, sampleTime: 0, at: 0)
+            putHardware(ring, sampleTime: 0, at: 1_000_000, value: 99)
+            XCTAssertNil(ring.failure)
+            clock.now += elapsed
+            var copied = false
+            ring.receive(sampleTime: 8, hostTimeNanoseconds: host, sampleRate: 8000,
+                         frameCount: 8, sampleAt: { _ in copied = true; return 2 })
+            XCTAssertEqual(ring.failure, .invalidTimestamp)
+            XCTAssertFalse(copied)
+            XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
+            XCTAssertEqual(ring.drainCaptureGaps(), [MeetingAudioGap(source: .microphone, epoch: 1,
+                startNanoseconds: 1_000_000, endNanoseconds: 2_000_000, reason: .startupTimestamp)])
+        }
+    }
+
+    func testStartupRecoveryCannotBeRepeatedEvenAfterAcknowledgement() throws {
+        let ring = try recoveringBuffer(StartupTestClock())
+        putHardware(ring, sampleTime: 0, at: 0)
+        putHardware(ring, sampleTime: 0, at: 1_000_000, value: 99)
+        putHardware(ring, sampleTime: 8, at: 2_000_000, value: 2)
+        XCTAssertNil(ring.failure)
+        XCTAssertTrue(ring.acknowledge(sequence: 0))
+        let accepted = try XCTUnwrap(ring.peek())
+        XCTAssertEqual(accepted.sequence, 1)
+        _ = ring.drainCaptureGaps()
+        var copied = false
+        ring.receive(sampleTime: 8, hostTimeNanoseconds: 3_000_000, sampleRate: 8000,
+                     frameCount: 8, sampleAt: { _ in copied = true; return 99 })
+        XCTAssertEqual(ring.failure, .invalidTimestamp)
+        XCTAssertFalse(copied)
+        XCTAssertEqual(ring.peek(), accepted)
+        XCTAssertEqual(ring.diagnostics.sampleDiscontinuities, 2)
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        XCTAssertTrue(ring.acknowledge(sequence: 1))
+        putHardware(ring, sampleTime: 16, at: 4_000_000)
+        XCTAssertNil(ring.peek(), "A subsequent valid callback cannot reopen the failed epoch")
+    }
+
+    func testStartupLossSurvivesStopWithoutSuccessorAndHonorsCutoff() throws {
+        let clock = StartupTestClock()
+        let ring = try recoveringBuffer(clock)
+        putHardware(ring, sampleTime: 0, at: 0)
+        putHardware(ring, sampleTime: 0, at: 1_000_000, value: 99)
+        ring.close()
+        clock.now += 500_000_001
+        var copiedAfterStop = false
+        ring.receive(sampleTime: 8, hostTimeNanoseconds: 2_000_000, sampleRate: 8000,
+                     frameCount: 8, sampleAt: { _ in copiedAfterStop = true; return 2 })
+        XCTAssertFalse(copiedAfterStop)
+        XCTAssertNil(ring.failure)
+        XCTAssertEqual(ring.drainCaptureGaps(cutoffNanoseconds: 1_500_000), [MeetingAudioGap(source: .microphone,
+            epoch: 1, startNanoseconds: 1_000_000, endNanoseconds: 1_500_000, reason: .startupTimestamp)])
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        XCTAssertEqual(ring.peek()?.samples, [Float](repeating: 1, count: 8))
+        XCTAssertTrue(ring.acknowledge(sequence: 0))
+        XCTAssertNil(ring.peek())
+    }
+
+    func testStartupRecoveryWithoutSuccessorExpiresWhileOpenAndPreservesScopePriority() throws {
+        for scopeBeforeTimeout in [false, true] {
+            let clock = StartupTestClock()
+            let ring = try recoveringBuffer(clock)
+            putHardware(ring, sampleTime: 0, at: 0)
+            putHardware(ring, sampleTime: 0, at: 1_000_000, value: 99)
+            clock.now += 500_000_000
+            XCTAssertNil(ring.failure, "The exact startup deadline remains eligible for a successor")
+            if scopeBeforeTimeout { ring.fail(.invalidSelection) }
+            clock.now += 1
+            XCTAssertEqual(ring.failure, scopeBeforeTimeout ? .invalidSelection : .invalidTimestamp,
+                "An open reset cannot wait indefinitely for another callback")
+            ring.fail(.invalidSelection)
+            XCTAssertEqual(ring.failure, .invalidSelection, "A scope fault must also override an earlier startup timeout")
+            var copied = false
+            ring.receive(sampleTime: 8, hostTimeNanoseconds: 2_000_000, sampleRate: 8000,
+                         frameCount: 8, sampleAt: { _ in copied = true; return 2 })
+            XCTAssertFalse(copied)
+            XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
+            XCTAssertEqual(ring.drainCaptureGaps(), [MeetingAudioGap(source: .microphone, epoch: 1,
+                startNanoseconds: 1_000_000, endNanoseconds: 2_000_000, reason: .startupTimestamp)])
+        }
+    }
+
+    func testStartupRecoveryRejectsMalformedTimestampsBeforeReadingSamples() throws {
+        let origin: UInt64 = 1_000_000_000
+        let invalid: [(Double, UInt64)] = [
+            (.nan, origin + 1_000_000), (.infinity, origin + 1_000_000),
+            (-.infinity, origin + 1_000_000), (0.5, origin + 1_000_000),
+            (9_007_199_254_740_992, origin + 1_000_000),
+            (0, origin - 1), (0, UInt64.max),
+        ]
+        for (sampleTime, host) in invalid {
+            let ring = try recoveringBuffer(StartupTestClock(), origin: origin)
+            putHardware(ring, sampleTime: 0, at: origin)
+            var copied = false
+            ring.receive(sampleTime: sampleTime, hostTimeNanoseconds: host, sampleRate: 8000,
+                         frameCount: 8, sampleAt: { _ in copied = true; return 2 })
+            XCTAssertEqual(ring.failure, .invalidTimestamp)
+            XCTAssertFalse(copied)
+            XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
+            XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        }
+    }
+
+    func testStartupRecoveryRejectsFormatChangesAndInvalidPCM() throws {
+        for rate in [Double.nan, .infinity, 0, 8000.5, 16000] {
+            let ring = try recoveringBuffer(StartupTestClock())
+            putHardware(ring, sampleTime: 0, at: 0)
+            var copied = false
+            ring.receive(sampleTime: 0, hostTimeNanoseconds: 1_000_000, sampleRate: rate,
+                         frameCount: 8, sampleAt: { _ in copied = true; return 2 })
+            XCTAssertEqual(ring.failure, .invalidFormat)
+            XCTAssertFalse(copied)
+            XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        }
+        for count in [-1, 0, MeetingAudioBuffer.maximumCallbackFrames + 1] {
+            let ring = try recoveringBuffer(StartupTestClock())
+            putHardware(ring, sampleTime: 0, at: 0)
+            ring.receive(sampleTime: 0, hostTimeNanoseconds: 1_000_000, sampleRate: 8000,
+                         frameCount: count, sampleAt: { _ in XCTFail("Invalid frame count read PCM"); return 2 })
+            XCTAssertEqual(ring.failure, .invalidFormat)
+            XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        }
+        let badPCM = try recoveringBuffer(StartupTestClock())
+        putHardware(badPCM, sampleTime: 0, at: 0)
+        putHardware(badPCM, sampleTime: 8, at: 1_000_000, value: .nan)
+        XCTAssertEqual(badPCM.failure, .invalidFormat)
+        XCTAssertEqual(badPCM.diagnostics.acceptedCallbacks, 1)
+        XCTAssertEqual(badPCM.peek()?.samples, [Float](repeating: 1, count: 8))
+    }
+
+    func testStartupRecoveryCannotOverlapAcceptedOrDiscardedAudio() throws {
+        for host in [UInt64(0), 999_999] {
+            let ring = try recoveringBuffer(StartupTestClock())
+            putHardware(ring, sampleTime: 0, at: 0)
+            putHardware(ring, sampleTime: 0, at: host, value: 99)
+            XCTAssertEqual(ring.failure, .invalidTimestamp)
+            XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        }
+        let observed = try recoveringBuffer(StartupTestClock())
+        putHardware(observed, sampleTime: 0, at: 0)
+        putHardware(observed, sampleTime: 8, at: 1_500_000)
+        putHardware(observed, sampleTime: 8, at: 2_000_000, value: 99)
+        XCTAssertEqual(observed.failure, .invalidTimestamp, "The observed end also bounds a reset after host drift")
+
+        let successor = try recoveringBuffer(StartupTestClock())
+        putHardware(successor, sampleTime: 0, at: 0)
+        putHardware(successor, sampleTime: 0, at: 1_000_000, value: 99)
+        var copied = false
+        successor.receive(sampleTime: 8, hostTimeNanoseconds: 1_999_999, sampleRate: 8000,
+                          frameCount: 8, sampleAt: { _ in copied = true; return 2 })
+        XCTAssertEqual(successor.failure, .invalidTimestamp)
+        XCTAssertFalse(copied)
+        XCTAssertEqual(successor.diagnostics.acceptedCallbacks, 1)
+    }
+
+    func testDroppedCallbackCannotInvokeStartupRecovery() throws {
+        let ring = try recoveringBuffer(StartupTestClock())
+        putHardware(ring, sampleTime: 0, at: 0)
+        ring.drop(sampleTime: 0, hostTimeNanoseconds: 1_000_000, sampleRate: 8000, frameCount: 8)
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        XCTAssertEqual(ring.failure, .invalidTimestamp)
+        XCTAssertEqual(ring.diagnostics.droppedCallbacks, 1)
+        XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
+        putHardware(ring, sampleTime: 8, at: 2_000_000, value: 2)
+        XCTAssertEqual(ring.peek()?.samples, [Float](repeating: 1, count: 8))
+    }
+
+    func testStartupRecoveryDoesNotBypassLeaseDeviceOrScopeFaults() throws {
+        for sampleTime in [Double(0), 8] {
+            let lease = MeetingAudioLease(deadline: 1_500_000)
+            let ring = try recoveringBuffer(StartupTestClock(), lease: lease)
+            putHardware(ring, sampleTime: 0, at: 0)
+            var copied = false
+            ring.receive(sampleTime: sampleTime, hostTimeNanoseconds: 1_000_000, sampleRate: 8000,
+                         frameCount: 8, sampleAt: { _ in copied = true; return 2 })
+            XCTAssertNotNil(ring.failure)
+            if sampleTime == 8 { XCTAssertEqual(ring.failure, .leaseExpired) }
+            XCTAssertFalse(copied)
+            XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+            lease.update(deadline: 30_000_000_000)
+            putHardware(ring, sampleTime: 8, at: 2_000_000, value: 3)
+            XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
+        }
+        let faults: [MeetingAudioFailure] = [.invalidSelection, .deviceFailure(operation: "test-device", status: -1)]
+        for fault in faults {
+            let ring = try recoveringBuffer(StartupTestClock())
+            putHardware(ring, sampleTime: 0, at: 0)
+            ring.fail(fault)
+            var copied = false
+            ring.receive(sampleTime: 0, hostTimeNanoseconds: 1_000_000, sampleRate: 8000,
+                         frameCount: 8, sampleAt: { _ in copied = true; return 2 })
+            XCTAssertEqual(ring.failure, fault)
+            XCTAssertFalse(copied)
+            XCTAssertFalse(ring.withSendAdmission { XCTFail("Faulted capture cannot send") })
+            XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
+            XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
         }
     }
 
