@@ -85,7 +85,7 @@ export const emailModuleManifest = {
           id: "email.proactive.restore_access",
           description:
             "Check Email access or reconnect the account in Connections, then allow a later check.",
-          path: "/settings"
+          path: "/settings?section=connections"
         }
       ]
     },

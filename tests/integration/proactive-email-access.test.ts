@@ -50,7 +50,7 @@ function provider(manifests = getBuiltInModuleManifests) {
   });
 }
 
-function collect(actorUserId = ids.userA, monitor = provider()) {
+function collect(actorUserId: string = ids.userA, monitor = provider()) {
   return context.withDataContext({ actorUserId }, (scopedDb) =>
     monitor.collectSignals(scopedDb, {
       ownerUserId: actorUserId,
