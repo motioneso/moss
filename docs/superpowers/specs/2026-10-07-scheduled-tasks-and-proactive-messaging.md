@@ -2,7 +2,7 @@
 
 Tracker: [spec issue #3096](https://github.com/motioneso/moss/issues/3096).
 
-Status: approved product definition and verification boundary; independent review complete and the user's 2026-10-07 approval ruling applied. UI design and the delivery-ticket breakdown are pending. This document does not authorize implementation or unattended builder dispatch.
+Status: approved product definition and verification boundary, reconciled on 2026-10-08 with all four accepted mockups (#3100–#3103) and the accepted conversation shell. The [implementation-ticket proposal](../plans/2026-10-08-scheduled-proactive-ticket-proposal.md) awaits user review; migration recommendations in that proposal are not approved product decisions. This document does not authorize implementation or unattended builder dispatch.
 
 ## Problem Statement
 
@@ -16,7 +16,7 @@ Moss maintains one continuous main conversation and optional topic side chats. I
 
 Useful results appear as ordinary, durable, replyable Moss messages, normally in the main conversation. Internal provider triggers stay outside the visible transcript. Quiet hours delay outward interruptions while work continues and results remain readable in Moss. A task can bypass quiet hours only when the user explicitly requests that exception.
 
-Users manage accepted schedules and watches through one Settings list or through chat. Moss quietly retries temporary failures, distinguishes failures from successful checks with nothing to report, and can close a watch when reliable evidence establishes that its goal is fulfilled.
+Users inspect, pause, resume, and delete accepted schedules and watches through one Settings list or through chat. All task editing happens in ordinary Moss chat. Moss quietly retries temporary failures, distinguishes failures from successful checks with nothing to report, and can close a watch when reliable evidence establishes that its goal is fulfilled.
 
 ## User Stories
 
@@ -50,9 +50,9 @@ Users manage accepted schedules and watches through one Settings list or through
 28. As a user, I want quiet-hours results readable in Moss while outward interruptions wait, so that I can choose when to look.
 29. As a user, I want to explicitly allow a particular alert during quiet hours, so that a responsibility I choose can interrupt me.
 30. As a user, I want Moss's urgency assessment to respect quiet hours, so that only my explicit instruction creates an exception.
-31. As a user, I want one Settings list of accepted schedules and watches with their instruction, timing or trigger, and recent status, so that I can understand my standing responsibilities.
-32. As a user, I want to edit, pause, resume, and delete a responsibility directly in Settings, so that I do not need to chat to manage it.
-33. As a user, I want the same controls in chat to manage the same records, so that either interface reflects the current truth.
+31. As a user, I want a compact Settings list grouped by responsibility type, with instruction, useful timing and recent status in expandable details, so that I can scan and understand my standing responsibilities.
+32. As a user, I want to inspect, pause, resume, and delete a responsibility directly in Settings, so that I can stop work without chatting.
+33. As a user, I want to edit responsibilities through ordinary Moss chat and use chat controls for the same records, so that there is one editing flow and both interfaces reflect the current truth.
 34. As a user, I want deleted, cancelled, or paused work prevented from firing again, so that a queued run does not ignore my control.
 35. As a user, I want temporary failures retried quietly, so that transient problems do not cause unnecessary interruptions.
 36. As a user, I want repeated failures explained with an actionable next step, so that I can restore a responsibility that cannot proceed.
@@ -66,10 +66,38 @@ Users manage accepted schedules and watches through one Settings list or through
 44. As a user, I want my background work, memory, and messages confined to my authorized scope, so that another user's data or conversation cannot be used or exposed.
 45. As a user, I want observed email and web content treated as information rather than authority, so that it cannot grant permissions, change recipients, or bypass quiet hours.
 46. As a user, I want results to stay in Moss for this feature and existing notification preferences honored, so that proactive assistance does not unexpectedly introduce a new messaging channel.
+47. As a user, I want task creation, proposals and approval questions to use ordinary chat text and my normal composer, so that scheduling does not introduce a second task interface.
+48. As a user, I want completed and expired tasks under collapsed Past tasks, so that historical responsibilities remain inspectable without cluttering the active list.
+49. As a user, I want dated run history and a way to open an available result message, so that I can understand what a responsibility actually did.
+50. As a user, I want one Alerts & quiet hours surface that preserves my saved choices and asks me to resolve conflicting schedules, so that consolidation does not silently change when Moss interrupts me.
+51. As a user, I want a disconnected email source and failed preference save explained with a recovery action, so that I can distinguish missing access from my alert choice and know which settings are effective.
+52. As a user, I want source email links to open my connected provider’s webmail in a new tab, so that I can inspect the evidence without losing my Moss conversation.
 
 ## Implementation Decisions
 
 These are required behaviors and architectural constraints, not claims that the existing system already satisfies them. Concrete ownership, schema, and API changes will be chosen during ticketing from the smallest existing seams that can meet this contract.
+
+### Accepted mockups and precedence
+
+The final accepted revisions below govern presentation and user interaction. They supersede initial ticket briefs, comparison layouts, and earlier review recommendations where those differ. These are fictional browser-only previews: acceptance proves the design, not production persistence, permissions, provider evidence, timing or concurrency. Implement the accepted behavior with production primitives; do not merge the throwaway branches wholesale.
+
+| Design                            | Accepted reference                                                                                                                                                                 | Decisions carried into this spec                                                                                                                                                            |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #3100 — create and approve        | [Ordinary-chat creation notes](https://github.com/motioneso/moss/blob/3fd2a152ec43e3f9606d017b40ea224247d437e9/apps/web/src/chat/scheduled-task-creation.prototype.md)             | Normal transcript text and composer; direct requested saves; typed agreement for suggestions and scoped changes/deletion; no task card or approval buttons.                                 |
+| #3101 — manage in Settings        | [Approved management handoff](https://github.com/motioneso/moss/blob/2495cf19a/docs/superpowers/handoffs/2026-10-08-scheduled-task-management-design.md), final UI `bfab305ed`     | Grouped icon/title rows, compact details, history, Past tasks, pause/resume/delete; editing only in chat.                                                                                   |
+| #3102 — receive proactive updates | [Accepted ten-situation preview](https://github.com/motioneso/moss/blob/49a2dbed664318e58597911873d4d0fa897279a4/apps/web/src/chat/proactive-updates.prototype.md)                 | Ordinary sourced/replyable messages, evidence-based completion, quiet checks, late/expired/recovery/failure states, no automatic rerun after a started change, live/background coexistence. |
+| #3103 — control interruptions     | [Accepted final interruption preview](https://github.com/motioneso/moss/blob/98336045fc858cf7dc8d9e31b0a4edc88d7e3b88/apps/web/src/settings/interruption-preferences.prototype.md) | Two columns with phone stacking, saved-off preservation, explicit quiet-hours conflict resolution, task-specific allowances and existing delivery controls.                                 |
+
+All four mockups were accepted by the user on 2026-10-08. The #3103 source notes/tracker still contain an earlier “ready for review” status; the later user acceptance and this reconciliation supersede it. Exact legacy preference mapping and caps remain implementation proposals, as distinguished below.
+
+The inherited [conversation-shell decision](https://github.com/motioneso/moss/tree/prototype/main-side-chat-navigation) uses the existing 380px dock and a closed three-line overlay menu. New side chat opens directly to the composer; Moss generates its title from conversation content. No title dialog or main-chat update banner is introduced. Opening/closing the overlay preserves focus, Escape/outside-click behavior and an inert underlying transcript while open.
+
+### Ordinary-chat creation and approval
+
+- Requested reminders and read-and-report watches save directly when their required details are known. Confirm the saved outcome in natural language, including relevant local timing and stop conditions.
+- A Moss suggestion is an ordinary question, answered through the normal composer. Agreement saves it; decline saves nothing. A response changing the proposed actions is a revision, not approval of the old proposal. Resolve ambiguous responses before saving approval-dependent work.
+- Explain the proposed changes/deletions once in ordinary chat and bind agreement to that action set. No task sheet, special summary, receipt, review panel, separate approval buttons, or second generic confirmation step.
+- Omit redundant Main chat destination and routine-action summaries in ordinary confirmations. Mention an explicitly requested side-chat destination and relevant deadlines naturally. Keep full agreed authority in the stored record and inspectable details.
 
 ### Conversation identity and context
 
@@ -86,9 +114,15 @@ These are required behaviors and architectural constraints, not claims that the 
 - Confirm saved timing in the user's local time zone. Reuse existing timezone-aware scheduling where suitable; resolve time-zone and daylight-saving behavior explicitly in the relevant ticket rather than treating local times as server time.
 - Create a Moss-proposed schedule only after agreement. The initial explicit user request is already authorization to save the requested schedule; do not add a second generic approval step.
 - When a task will change or delete anything, the creation confirmation lists those actions, deletion included, and saving the task approves them. Reminders and read-and-report tasks save without an approval step. Editing a task's actions asks for approval of the new set; editing only its timing or destination does not.
-- Settings and chat manage the same records. One Settings list supports inspection, edit, pause/resume, and direct deletion, including timing/trigger and recent status. Completed and expired watches remain inspectable until the user deletes them.
+- Settings and chat manage the same records. Settings supports inspection, pause/resume and deletion; no Edit button or editing form. All edits happen through ordinary Moss chat, including changed actions that require renewed agreement.
+- Group active list rows into Reminders, Daily, Weekly, More often and Watches. A flat contextual icon and title identify each row; selecting it reveals compact details. Keep completed/expired responsibilities under collapsed Past tasks until deleted.
+- Details contain instruction, state, useful timing, specific watch deadlines, non-default destinations, inspectable approved change/deletion scope and actionable failure guidance. Omit redundant source labels, default Main chat, indefinite duration and obsolete future scheduling facts on past tasks.
+- Show dated, expandable run history distinguishing useful results, quiet successful checks, failures and uncertain changes. Offer View message when a recorded result exists. Pause/resume/edit/delete controls are management actions, not task runs.
+- Confirm Settings deletion with focus initially on Keep task. Deleting the schedule leaves previous messages and completed actions intact.
 - Pausing prevents future runs until resumed. Editing or deleting work must invalidate stale queued instructions. Cancellation/deletion prevents future firings without undoing completed actions; check current task state before execution and before initiating further effects.
-- Stop a fulfilled watch and tell the user once. Completion criteria derive from the user's goal and available reliable evidence. Alert delivery alone does not prove an email was seen. If completion cannot be established, keep the watch active until its deadline or another explicit stop condition.
+- Stop a fulfilled watch and tell the user once. Completion criteria derive from the user's goal and available reliable evidence. A matching reply arriving can fulfill an arrival goal. Alert delivery or opening webmail does not establish a reading goal; explicit user confirmation such as “I’ve read it” can fulfill that goal. Without provider read-state evidence or user confirmation, keep it active until its deadline or another explicit stop condition.
+- Updates and closure/failure explanations use ordinary assistant messages, with normal replies and evidence links where available. Email links open the actual connected provider’s webmail in a new tab; Gmail in the preview is sample data. No background trigger, fabricated user message, or special update card appears.
+- A main-chat update arriving while a side chat is open must not change its transcript, interrupt with a banner, discard its draft, or steal focus. The update is available on returning to Main chat.
 
 ### Background execution and permissions
 
@@ -106,11 +140,21 @@ These are required behaviors and architectural constraints, not claims that the 
 ### Usefulness and attention
 
 - A requested fixed reminder is a useful result when due. A recurring information check sends a message only for a useful new finding or a meaningful change. Persist enough observation/result state to suppress unchanged repeats.
-- Proactive email alerts default on for an available, permitted email source. This preference does not connect an account or grant missing access. Turning it off disables unsolicited email updates only; explicitly requested watches and other tasks retain their own controls.
+- Automatic email alerts default on only when there is no saved email-alert choice and the source is available and permitted. Preserve saved email-off choices, including applicable legacy master/source-off choices; never silently enable them during migration. This preference does not connect an account or grant missing access. Turning it off disables unsolicited email updates only; explicitly requested watches and other tasks retain their own controls.
 - Automatic email updates should contain relevant, supported information, such as a requested-action deadline, and evidence links where available. Avoid claiming urgency or facts unsupported by the inspected source.
 - During quiet hours, continue work and persist useful messages immediately for reading in Moss; delay outward interruptions through the existing notification preference machinery.
 - Only an explicit user request for the particular task/alert can create a quiet-hours exception. Do not inherit a general urgent-notification bypass merely because Moss labels a result urgent. Respect other notification preferences and disabled channels.
 - Keep conversation/results in Moss. Existing app notification delivery may signal those results according to existing preferences; this spec does not add Slack, SMS, or another conversation transport.
+
+### Alerts & quiet hours Settings
+
+- One user-facing Alerts & quiet hours surface has email alerts/delivery in one column and quiet hours/Allowed during quiet hours in the other. Use ruled headings and a vertical divider; stack at narrow widths. Keep the accepted concise copy, without the removed tagline or duplicate “work continues” explanation.
+- Automatic email alerts is separate from Connectors’ email access grant, per-module notification mute, This device delivery and Email digest. A digest is a separately scheduled summary, not a second unsolicited-email switch. Link existing control surfaces rather than duplicating controls.
+- Consolidate quiet-hours control behind one timezone-capable preference. Preserve saved values. If saved schedules disagree, require an explicit choice; do not infer a winner from conflicting defaults or timestamps. Until a choice saves successfully, retain the prior effective behavior. The sample 10 PM–7 AM Pacific schedule is not a new product default.
+- Validate local start/end and timezone; reject matching start/end values. Show the effective saved schedule separately from unsaved edits. A failed save retains the old effective preference and editable draft with nearby retry feedback.
+- Allowed during quiet hours lists explicit per-task allowances; Change in chat adds/removes them through ordinary requests. Model urgency never adds an allowance, and an allowance cannot override a muted module or disabled delivery channel.
+- Include loading, load-error/retry, save-error, empty allowances, disconnected email, revoked access, saved-off and conflicting-schedule states. Retain a saved alert choice while disconnected; explain that no email can be checked until available and permitted.
+- The approved UI settles these behaviors. Exact migration of legacy proactive master/source settings, canonical preference ownership, and the interaction of existing proactive-card caps/deferral with chat delivery are proposed in the ticket breakdown for review, not represented as already implemented or independently approved.
 
 ### Recovery and lifecycle
 
@@ -132,7 +176,7 @@ Briefing background generation is not the live, tool-using Moss conversation pip
 
 ### Design and delivery constraints
 
-- Agree main/side-chat navigation and the Settings list before implementing their UI. Include empty, loading, failure, paused, completed, and expired states and the existing design-system primitives. Use Matt's prototype workflow where a concrete mockup will resolve the design.
+- Main/side-chat navigation and all four feature mockups are accepted above. Carry their desktop/phone, light/dark/Teal, empty, loading, failure, paused, completed and expired states into the production UI using existing design-system primitives. Preview scenario selectors, sample clocks and Run sample buttons are review tools, not product controls.
 - Keep the app map truthful in every product slice, including new controls, requirements, errors, and remediations. Do not declare these capabilities shipped in this documentation-only change.
 - Split delivery into independently demonstrable vertical slices, each fitting one fresh session including verification and review. Security, cancellation, retries, and live proof belong in each applicable slice rather than a final hardening ticket.
 
@@ -155,15 +199,20 @@ The user approved verification through existing application UI/API and backgroun
 2. **Side chats and routing:** create a topic side chat; verify separate transcripts and the same owner memory/preferences. Save a task there and observe main-chat delivery by default, then verify an explicit side-chat destination.
 3. **One-time task:** ask for a reminder, observe confirmation of its saved instruction and local timing, close the app, and execute the run. Observe one persisted, replyable assistant message after reopening and no fabricated user trigger message.
 4. **Useful recurring checks:** run an hourly significant-AI-news check with no useful new finding and observe successful quiet status without a message. Introduce a significant sourced finding and observe one message. Run again unchanged and observe no duplicate update.
-5. **Suggestion and controls:** have Moss suggest an inbox watch and verify no saved responsibility until agreement. After agreement, inspect it in Settings and edit, pause, resume, and delete it without chatting. Chat controls must reflect the same state.
+5. **Suggestion and controls:** have Moss suggest an inbox watch as ordinary chat text and verify no saved responsibility until typed agreement. Decline and revised/ambiguous replies must not save the original proposal. After agreement, inspect, pause, resume and delete it in Settings. Edit it through ordinary chat, with no Settings editor; both interfaces must reflect the same record.
 6. **Independent email preference:** a useful email update produces a main-chat message by default. Disable automatic email alerts and verify unsolicited email updates stop while a requested inbox watch and an unrelated task continue.
 7. **Quiet hours:** run useful work during quiet hours and verify immediate readable chat persistence with outward interruptions deferred. Verify only an explicit task-specific user exception permits a quiet-hours interruption; model-assessed urgency alone does not.
 8. **Failures:** fail a check temporarily and observe quiet retry, then a success. Cause repeated failures and observe actionable status/message rather than a successful nothing-new claim. Recovery must not duplicate a delivered result.
 9. **Authority and cancellation:** create a task that deletes something and verify the creation request asks once for approval of that deletion. Verify its runs, including the deletion, never ask again, even after reading email or web content. Verify an action outside the approved set is refused without asking and reported, and revoked/disabled capabilities are respected. Delete or cancel queued work and verify it cannot initiate future effects; completed effects remain intact.
 10. **Concurrent chat and retry safety:** deliver a proactive message during an active user reply. Verify both messages persist with correct identities and neither overwrites the other. Replay a completed run/delivery and verify no duplicate action or message.
-11. **Watch completion:** fulfill the actual goal using reliable evidence and verify one closure explanation and inspectable completed state. Merely delivering an alert must not close a goal requiring the user to have seen the email. An unfulfilled time-limited watch expires at its deadline.
+11. **Watch completion:** fulfill the actual goal using reliable evidence and verify one closure explanation and inspectable completed state. Merely delivering an alert or opening webmail must not close a reading goal. Explicit owner confirmation can complete that goal; otherwise it remains active without reliable read-state evidence. An unfulfilled time-limited watch expires at its deadline.
 12. **Downtime:** miss several recurring intervals and observe one fresh check followed by normal cadence. Observe one late-marked missed one-time reminder, and verify expired instructions are skipped.
 13. **Trust boundaries:** put instructions to change permissions, recipients, or quiet-hours behavior in observed email/web content. Verify they cannot change the accepted task authority. Exercise two owners and verify execution, memory access, Settings controls, and message delivery remain within their authorized scopes.
+14. **Ordinary creation and scoped approval:** a requested reminder/read-and-report watch saves with a natural local-time confirmation and no second approval. A change/deletion task states its action set as a chat question; typed agreement saves that set, decline saves nothing, and changed actions require a new agreement. No cards, special panels or separate approval buttons appear.
+15. **Compact management:** verify icon/title grouping, collapsed Past tasks, useful details and dated history. Quiet success differs from failure, controls do not appear as runs, and View message opens an available result. Delete focuses Keep task and preserves existing messages/completed effects.
+16. **Saved preferences and conflicts:** no saved email choice defaults on when permitted; saved email/master/source-off remains off. Conflicting quiet-hours settings require an explicit choice. Failed load is retryable; failed save keeps the old effective schedule and draft. Disconnection/revocation never grants access or loses the saved choice.
+17. **Interruption controls:** inspect the two-column/stacked surface and Allowed during quiet hours. Add/remove one task allowance in chat. Verify unrelated tasks remain quiet and disabled module/device channels still block outward delivery. Email digest remains independent.
+18. **Source and navigation continuity:** open an email source in the connected provider’s webmail in a new tab. Deliver a main-chat update while viewing a side chat; verify no banner, focus/draft loss or transcript contamination. New side chat opens to typing and receives an automatic title; overlay keyboard/focus behavior remains usable at desktop and phone widths.
 
 ## Out of Scope
 
@@ -174,7 +223,7 @@ The user approved verification through existing application UI/API and backgroun
 - Replaying every missed recurring interval, running expired instructions, or undoing completed actions when a schedule is cancelled.
 - Treating side chats as separate assistants with independent long-term memory.
 - A commitment to a new scheduling dependency, provider-specific mechanism, or replacement of existing briefings.
-- Implementation, builder dispatch, final ticket publication, or merge of this spec PR in this session.
+- Implementation, builder dispatch, final ticket publication, or merge of this spec PR in this session. A Settings task editor, structured creation/approval cards and preview-only review controls are also outside the accepted design.
 
 ## Further Notes
 
@@ -184,8 +233,8 @@ Research and the detailed product discussion remain outside the public repositor
 
 The candidate delivery areas are stable main conversation/history, invisible context compaction/handoff, side chats, safe actor-scoped background execution and assistant-only delivery, one-time tasks and controls, recurring useful-only checks, requested watches and agreed suggestions, and default-on email updates. These are areas to split, not eight published tickets or a mandatory linear dependency chain.
 
-Next use Matt Pocock's `to-tickets` workflow to propose complete single-session vertical slices with explicit blockers. Have the user review that breakdown before publishing. Resolve minimal module ownership, actual dependencies, resource/retry bounds, briefing interoperability, and local-time edge cases during that work. Finish agreed frontend designs before the corresponding UI tickets become executable. Do not restart the completed product interview.
+The [2026-10-08 implementation-ticket proposal](../plans/2026-10-08-scheduled-proactive-ticket-proposal.md) uses Matt Pocock's `to-tickets` workflow for complete single-session vertical slices with explicit blockers. Review the breakdown and the identified migration recommendations before publishing any tickets. Concrete module ownership, resource/retry bounds, briefing interoperability and local-time edge cases belong to the relevant slice; none may defer its safety or live proof to a final hardening task. The frontend decisions are accepted; do not restart the completed product interview.
 
-The independent Opus 5.5 review (2026-10-07, on the spec PR) found that background authority conflicted with #3065 and that approval requests cannot wait for an absent user, because they expire after 150 seconds inside a live chat turn. The user's creation-time approval ruling resolves both. Its remaining findings are for UI design and ticketing.
+The independent Opus 5.5 review (2026-10-07, on the spec PR) found that background authority conflicted with #3065 and that approval requests cannot wait for an absent user, because they expire after 150 seconds inside a live chat turn. The user's creation-time approval ruling resolves both. The accepted mockups resolve presentation findings; the ticket proposal carries the remaining migration, evidence, lifecycle and resource-bound work.
 
 A `ready-for-agent` tracker label is required by `to-spec`; it does not override the implementation prerequisites or authorize a build fleet.
