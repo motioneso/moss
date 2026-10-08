@@ -44,13 +44,14 @@ async function sendReal(page: Page, drawer: Locator, text: string): Promise<void
 async function threadsWithHistory(page: Page): Promise<
   readonly {
     id: string;
+    title: string;
     isMain: boolean;
     ownerUserId: string;
     messages: readonly { body: string }[];
   }[]
 > {
   const body = (await readUatJson(await page.request.get("/api/chat/threads?surface=drawer"))) as {
-    threads: readonly { id: string; isMain: boolean; ownerUserId: string }[];
+    threads: readonly { id: string; title: string; isMain: boolean; ownerUserId: string }[];
   };
   return Promise.all(
     body.threads.map(async (thread) => {
@@ -123,8 +124,13 @@ test("real model preserves Main across warm/cold reopen and explicit side/privat
   });
 
   await test.step("preserved side resumes, then cold server reopen restores original Main", async () => {
+    const side = (await threadsWithHistory(page)).find((thread) => thread.id === sideId);
+    expect(side?.title).toBeTruthy();
     await openHistory(drawer);
-    await drawer.getByRole("button", { name: new RegExp(SIDE) }).click();
+    await drawer
+      .getByRole("button")
+      .filter({ has: page.getByText(side!.title, { exact: true }) })
+      .click();
     await expect(drawer.getByText(SIDE, { exact: true })).toBeVisible();
     await expect(drawer.getByText(MAIN, { exact: true })).toHaveCount(0);
     await restartUatStack(requireUatProjectName(), requireUatBaseURL());
