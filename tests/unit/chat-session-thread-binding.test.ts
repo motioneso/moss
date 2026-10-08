@@ -107,6 +107,60 @@ function holdResume(h: ReturnType<typeof harness>) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("chat conversation identity binding", () => {
+  it("stops a turn waiting on shared prestart without canceling the shared engine launch", async () => {
+    const launching = deferred<void>();
+    const released = deferred<void>();
+    const h = harness();
+    vi.mocked(h.engine.launch).mockImplementation(async () => {
+      launching.resolve();
+      await released.promise;
+      return { offset: 0 };
+    });
+    const prestart = h.manager.ensureSession("owner", "Owner");
+    await launching.promise;
+    let reply: string | undefined;
+    const turn = h.manager
+      .submitTurn("owner", "Owner", "Cancel only this waiting turn")
+      .then((result) => {
+        reply = result.reply;
+      });
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      await h.manager.stopTurn("owner");
+      await vi.waitFor(() => expect(reply).toBe(""), { timeout: 100 });
+      expect(h.engine.submit).not.toHaveBeenCalled();
+      expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+      expect(h.engine.kill).not.toHaveBeenCalled();
+      const next = h.manager.submitTurn("owner", "Owner", "The shared wait released its lock");
+      await h.manager.stopTurn("owner");
+      expect(await next).toEqual({ reply: "" });
+    } finally {
+      released.resolve();
+      await Promise.all([prestart, turn]);
+    }
+    expect((await prestart).threadId).toBe("thread-A");
+    expect(h.engine.launch).toHaveBeenCalledTimes(1);
+    expect(h.engine.submit).not.toHaveBeenCalled();
+    expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+  });
+
+  it("preserves a persistence failure when Stop races with the save", async () => {
+    const recording = deferred<void>();
+    const released = deferred<void>();
+    const failure = new Error("save failed independently of cancellation");
+    const h = harness();
+    h.persistence.recordTurn.mockImplementation(async () => {
+      recording.resolve();
+      await released.promise;
+      throw failure;
+    });
+    const turn = h.manager.submitTurn("owner", "Owner", "Preserve this save error");
+    await recording.promise;
+    await h.manager.stopTurn("owner");
+    released.resolve();
+    await expect(turn).rejects.toBe(failure);
+  });
+
   it("stops when resume begins during provider validation before the later selection retry", async () => {
     const validating = deferred<void>();
     const providerReleased = deferred<void>();

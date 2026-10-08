@@ -11,6 +11,25 @@ export interface OriginThreadTransition {
   readonly settled: Promise<void>;
 }
 
+/** Cancel this caller's admission wait without canceling a shared selection or launch. */
+export async function waitForChatAdmission<T>(
+  pending: Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  signal?.throwIfAborted();
+  if (!signal) return pending;
+  let cancel!: () => void;
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    cancel = () => reject(signal.reason);
+  });
+  signal.addEventListener("abort", cancel, { once: true });
+  try {
+    return await Promise.race([pending, cancelled]);
+  } finally {
+    signal.removeEventListener("abort", cancel);
+  }
+}
+
 /** Wait for selection changes, never for the model turn that Stop must interrupt. */
 export async function waitForOriginThreadTransition(
   transitions: ReadonlyMap<string, OriginThreadTransition>,
@@ -18,21 +37,7 @@ export async function waitForOriginThreadTransition(
   signal?: AbortSignal
 ): Promise<void> {
   while (transitions.get(key)?.pending && !signal?.aborted) {
-    const settled = transitions.get(key)!.settled;
-    if (!signal) {
-      await settled;
-      continue;
-    }
-    let cancel!: () => void;
-    const cancelled = new Promise<void>((resolve) => {
-      cancel = resolve;
-    });
-    signal.addEventListener("abort", cancel, { once: true });
-    try {
-      await Promise.race([settled, cancelled]);
-    } finally {
-      signal.removeEventListener("abort", cancel);
-    }
+    await waitForChatAdmission(transitions.get(key)!.settled, signal);
   }
 }
 

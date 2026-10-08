@@ -76,6 +76,7 @@ import {
   routeOriginRecord,
   routeLiveOriginRecord,
   withOriginThreadTransition,
+  waitForChatAdmission,
   waitForOriginThreadTransition,
   type OriginRecordReceipt,
   type OriginThreadTransition
@@ -143,7 +144,7 @@ export class ChatSessionManager {
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
     opts?.signal?.throwIfAborted();
     const transition = this.originTransitions.get(sessionKey);
-    const session = await ensureSessionForCurrentProvider({
+    const pending = ensureSessionForCurrentProvider({
       actorUserId,
       userName,
       opts,
@@ -153,15 +154,13 @@ export class ChatSessionManager {
       persistence: this.deps.persistence,
       sessions: this.sessions,
       pendingForcedReplay: this.pendingForcedReplay,
-      waitForSelection: async () => {
-        await waitForOriginThreadTransition(this.originTransitions, sessionKey, opts?.signal);
-        opts?.signal?.throwIfAborted();
-      },
+      waitForSelection: () => waitForOriginThreadTransition(this.originTransitions, sessionKey),
       discardSession: (session) =>
         discardChatSession(sessionKey, session, this.sessions, this.deps.revokeMcpToken),
       launchSession: (launchOpts, providerIdentity) =>
         this.launchSession(actorUserId, userName, launchOpts, chatSurface, providerIdentity)
     });
+    const session = await waitForChatAdmission(pending, opts?.signal);
     opts?.signal?.throwIfAborted();
     return this.originTransitions.get(sessionKey) === transition
       ? session
@@ -639,7 +638,7 @@ export class ChatSessionManager {
         sourceFreshness: stored?.sourceFreshness
       };
     } catch (error) {
-      if (!controller.signal.aborted) throw error;
+      if (!controller.signal.aborted || error !== controller.signal.reason) throw error;
       return this.finishRefusedTurn(actorUserId, surface, sessionKey, undefined, gateShadow);
     } finally {
       // #2907 — record a no-model-tool turn distinctly. A recorded cancel outranks this in the runner.
