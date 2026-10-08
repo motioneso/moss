@@ -115,6 +115,7 @@
     "prepare": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "test:uat:2981-meetings": "tsx tests/uat/run-meetings-uat.ts",
     "test:uat:2981-real-providers": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 1909-sports-public-source-completion.uat.spec.ts notes-default-retrieval.uat.spec.ts notes-path-recheck.uat.spec.ts workshop-chat-handover.uat.spec.ts",
+    "prototype:scheduled-create": "pnpm --filter @moss/web exec vite --config vite.scheduled-create-prototype.config.ts",
     "prototype:chat": "pnpm --filter @moss/web exec vite --config vite.chat-prototype.config.ts"
   },
   "dependencies": {
