@@ -1,0 +1,302 @@
+/* THROWAWAY #3101 · Park Press tokens; existing Settings and @moss/ui primitives. */
+html,
+body {
+  overflow-x: clip;
+}
+.manage-preview {
+  min-height: 100dvh;
+}
+.manage-review {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border);
+}
+.manage-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.manage-review .manage-actions {
+  margin: 0;
+}
+.manage-shell {
+  display: flex;
+  align-items: stretch;
+}
+.manage-appnav {
+  width: var(--nav-w);
+  flex: none;
+  padding: var(--space-6) var(--space-4);
+  border-right: 1px solid var(--border);
+}
+.manage-appnav .module-nav {
+  margin-top: var(--space-7);
+}
+.manage-preview .set2 {
+  min-width: 0;
+  flex: 1;
+  padding: var(--space-6) var(--space-7) var(--space-10);
+}
+.manage-settings-grid {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: var(--space-7);
+  margin-top: var(--space-6);
+}
+.manage-categories .set2__navitem {
+  margin-top: var(--space-3);
+}
+.manage-pane {
+  min-width: 0;
+  max-width: 1100px;
+}
+.manage-lede {
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+}
+.manage-notice {
+  color: var(--accent-fg);
+  font-size: var(--text-sm);
+}
+.manage-notice:empty {
+  display: none;
+}
+.manage-filter {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: var(--space-6) 0;
+}
+.manage-filter .jds-field {
+  min-width: 150px;
+}
+.manage-list {
+  border-top: 1px solid var(--border-strong);
+}
+.manage-preview .set-row {
+  gap: var(--space-3);
+  padding: var(--space-5) 0;
+}
+.manage-rowhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.manage-rowhead .jds-btn {
+  font-size: var(--text-lg);
+  text-align: left;
+  white-space: normal;
+}
+.manage-preview p {
+  margin-bottom: var(--space-2);
+  line-height: var(--leading-relaxed);
+}
+.manage-meta,
+.manage-outcome {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.manage-outcome {
+  margin-top: var(--space-3);
+}
+.manage-status {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--text-muted);
+}
+.manage-status--active,
+.manage-status--completed {
+  color: var(--accent-fg);
+}
+.manage-status--failed {
+  color: var(--danger-fg);
+}
+.manage-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 var(--space-3);
+}
+.manage-detail-head h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.manage-facts {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: var(--space-4);
+  margin: var(--space-6) 0;
+  padding: var(--space-5) 0;
+  border-block: 1px solid var(--border);
+}
+.manage-facts dt {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.manage-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.manage-history {
+  margin-top: var(--space-7);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-5);
+}
+.manage-history ul {
+  padding-left: var(--space-5);
+}
+.manage-history li {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+}
+.manage-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+.manage-form textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.manage-preview .jds-btn,
+.manage-preview .jds-iconbtn {
+  min-height: 44px;
+}
+.manage-preview .jds-iconbtn {
+  min-width: 44px;
+}
+.manage-preview .jds-btn {
+  white-space: nowrap;
+}
+.manage-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+}
+.manage-chat {
+  width: 380px;
+  flex: none;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+.manage-chat header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+.manage-chat h2 {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  overflow-wrap: anywhere;
+}
+.manage-chatcontent {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.manage-transcript {
+  overflow-y: auto;
+  flex: 1;
+  padding: var(--space-4);
+}
+.manage-composer {
+  border-top: 1px solid var(--border);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+.manage-chatmenu {
+  position: absolute;
+  z-index: 2;
+  top: 72px;
+  left: 0;
+  width: min(280px, calc(100% - 48px));
+  padding: var(--space-4);
+  background: var(--surface);
+  box-shadow: var(--shadow-drawer);
+  display: grid;
+  gap: var(--space-2);
+}
+.manage-scrim {
+  position: absolute;
+  inset: 72px 0 0;
+  background: var(--scrim);
+  border: 0;
+  z-index: 1;
+}
+@media (max-width: 1180px) {
+  .manage-appnav {
+    display: none;
+  }
+  .manage-settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .manage-categories {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .manage-review {
+    padding: var(--space-3);
+  }
+  .manage-preview .set2 {
+    padding: var(--space-5) var(--space-4) var(--space-8);
+  }
+  .manage-settings-grid {
+    margin-top: var(--space-4);
+  }
+  .manage-preview .set-row {
+    flex-wrap: wrap;
+  }
+  .manage-rowhead {
+    align-items: start;
+  }
+  .manage-rowhead .jds-btn {
+    font-size: var(--text-md);
+  }
+  .manage-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+  .manage-facts dd {
+    margin-bottom: var(--space-3);
+  }
+  .manage-chat {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    z-index: 5;
+  }
+  .manage-detail-head {
+    flex-wrap: wrap;
+  }
+  .manage-preview .jds-section-head {
+    flex-wrap: wrap;
+  }
+}
