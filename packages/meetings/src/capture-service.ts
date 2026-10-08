@@ -818,6 +818,7 @@ export class MeetingCaptureService {
         return admitted.pending;
       };
       // Silence still crosses the same admission fence and completes its source/epoch receipt.
+      // No provider call means no live route check; speech still validates the reserved route.
       const generated = nearSilent
         ? await dispatch(async () => ({ segments: [], modelRoute: reservation.modelRoute! }))
         : await abortable(
@@ -913,9 +914,11 @@ export class MeetingCaptureService {
           replayed: false
         };
         state.transcriptRevision = saved.receipt.transcriptRevision;
-        if (!nearSilent) state.processing = { status: "ready" };
-        await this.repository.save(db, grant, state);
         await this.repository.finish(db, grant.id, result, this.now());
+        // Clear settled warnings, without masking other in-flight/retryable source audio.
+        if (!nearSilent || !(await this.repository.hasPendingAudio(db, grant.id)))
+          state.processing = { status: "ready" };
+        await this.repository.save(db, grant, state);
         return result;
       });
     } catch (error) {

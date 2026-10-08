@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { captureView } from "../../packages/meetings/src/capture-repository.js";
 import { applyMeetingTranscriptBatch } from "../../packages/meetings/src/transcript-batch.js";
 import { audio, at, fixture, owner } from "./helpers/meeting-capture-fixture.js";
 
@@ -45,21 +46,31 @@ describe("meeting capture near-silence", () => {
     }
   );
 
-  it("also suppresses microphone silence without clearing an unrelated processing warning", async () => {
-    const f = fixture();
-    const state = JSON.parse(f.grant.state_json!);
-    state.processing = {
-      status: "delayed",
-      reason: "transport",
-      stage: "dispatch",
-      retryable: true
-    };
-    f.grant.state_json = JSON.stringify(state);
-    await f.service.audio(f.headers, "silent-mic", { ...audio(), pcmBase64: pcm(0) });
-    expect(f.deps.transcribe).not.toHaveBeenCalled();
-    expect(f.ingest.mock.calls[0]![1].events).toEqual([]);
-    expect(JSON.parse(f.grant.state_json!).processing).toEqual(state.processing);
-  });
+  it.each([false, true])(
+    "clears stale microphone delay but retains pending other audio=%s",
+    async (pending) => {
+      const f = fixture();
+      const state = JSON.parse(f.grant.state_json!);
+      state.processing = {
+        status: "delayed",
+        reason: "transport",
+        stage: "dispatch",
+        retryable: true
+      };
+      f.grant.state_json = JSON.stringify(state);
+      const input = { ...audio(), pcmBase64: pcm(0) };
+      vi.mocked(f.repository.hasPendingAudio).mockImplementation(async () => {
+        expect(JSON.parse(f.receipts.get(input.requestKey)!.result_json!).status).toBe("saved");
+        return pending;
+      });
+      await f.service.audio(f.headers, "silent-mic", input);
+      expect(f.deps.transcribe).not.toHaveBeenCalled();
+      expect(f.ingest.mock.calls[0]![1].events).toEqual([]);
+      expect(JSON.parse(f.grant.state_json!).processing).toEqual(
+        pending ? state.processing : { status: "ready" }
+      );
+    }
+  );
 
   it.each([33, -33, 64])(
     "keeps a short quiet signal at peak %i inside ten seconds of silence, including 'you'",
@@ -124,6 +135,12 @@ describe("meeting capture near-silence", () => {
   it("keeps silent final flush inside the stop boundary and rejects later samples", async () => {
     const f = fixture();
     const state = JSON.parse(f.grant.state_json!);
+    state.processing = {
+      status: "delayed",
+      reason: "provider-network",
+      stage: "dispatch",
+      retryable: false
+    };
     state.desired = "stopped";
     state.generation = 2;
     state.observed = { generation: 2, phase: "stopped" };
@@ -135,6 +152,7 @@ describe("meeting capture near-silence", () => {
       await f.service.audio(f.headers, "silent-final-flush", { ...audio(), pcmBase64: pcm(0) })
     ).toMatchObject({ status: "saved" });
     expect(f.ingest.mock.calls[0]![1]).toMatchObject({ events: [], stopCutoffMs: 1000 });
+    expect(JSON.parse(f.grant.state_json!).processing).toEqual({ status: "ready" });
     await expect(
       f.service.audio(f.headers, "past-stop", {
         ...audio(),
@@ -147,7 +165,7 @@ describe("meeting capture near-silence", () => {
     expect(f.deps.transcribe).not.toHaveBeenCalled();
   });
   it.each([false, true])(
-    "retries silent persistence while preserving prior speech warning=%s",
+    "retries silent persistence and clears settled speech warning=%s",
     async (delayed) => {
       const f = fixture();
       const state = JSON.parse(f.grant.state_json!);
@@ -176,7 +194,7 @@ describe("meeting capture near-silence", () => {
       expect(await f.service.audio(f.headers, "silent-recovery", input)).toMatchObject({
         status: "saved"
       });
-      expect(JSON.parse(f.grant.state_json!).processing).toEqual(initialProcessing);
+      expect(JSON.parse(f.grant.state_json!).processing).toEqual({ status: "ready" });
       expect(f.deps.transcribe).not.toHaveBeenCalled();
     }
   );
@@ -245,4 +263,36 @@ describe("meeting capture near-silence", () => {
     });
     expect(f.deps.transcribe).not.toHaveBeenCalled();
   });
+  it.each(["pending", "acknowledged", "deadline", "complete-grant"] as const)(
+    "shows delay only while Stop finalization remains pending: %s",
+    (completion) => {
+      const f = fixture();
+      const state = JSON.parse(f.grant.state_json!);
+      state.desired = "stopped";
+      state.stopCutoffMs = 1000;
+      state.finalizationDeadline = at(completion === "deadline" ? 2000 : 60000).toISOString();
+      state.finalized = completion === "acknowledged";
+      if (completion === "complete-grant") f.grant.status = "complete";
+      state.processing = {
+        status: "delayed",
+        reason: "provider-network",
+        stage: "dispatch",
+        retryable: false
+      };
+      state.gaps = [
+        {
+          id: "failed-clip",
+          sourceId: "mic",
+          epoch: 1,
+          startMs: 0,
+          endMs: 1000,
+          reason: "processing-failed"
+        }
+      ];
+      const view = captureView(f.grant, state, at(2000));
+      expect(view.finalization).toBe(completion === "pending" ? "pending" : "complete");
+      expect(view.processing?.status).toBe(completion === "pending" ? "delayed" : "ready");
+      expect(view.gaps).toEqual(state.gaps);
+    }
+  );
 });
