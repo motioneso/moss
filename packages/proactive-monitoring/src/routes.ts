@@ -14,8 +14,8 @@ export interface ProactiveMonitoringRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
   readonly boss: PgBoss;
-  /** The set of sources that have a registered provider. Refresh only enqueues enabled+registered. */
-  readonly registeredSources: ReadonlySet<ProactiveSource>;
+  /** Resolve the actor’s available registered sources fresh for each refresh. */
+  readonly resolveRegisteredSources: (actorUserId: string) => Promise<ReadonlySet<ProactiveSource>>;
   readonly cardRepository?: CardRepository;
   readonly preferencesRepository?: ProactiveMonitoringPreferencesRepository;
   readonly monitorStateRepository?: MonitorStateRepository;
@@ -75,10 +75,11 @@ export function registerProactiveMonitoringRoutes(
       // Time-window slot: stable for the duration of the cooldown window, so the idempotency
       // key does not rotate on each HTTP request (which would let rapid clicks flood the queue).
       const windowSlot = Math.floor(Date.now() / REFRESH_COOLDOWN_MS);
+      const registeredSources = await dependencies.resolveRegisteredSources(ctx.actorUserId);
       let enqueued = 0;
       for (const source of sources) {
         if (!pref.sources[source]?.enabled) continue;
-        if (!dependencies.registeredSources.has(source)) continue;
+        if (!registeredSources.has(source)) continue;
 
         const state = monitorStates.get(source);
         if (

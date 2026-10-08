@@ -244,6 +244,7 @@ import { resolveTimeZone, type ProactiveSource } from "@moss/shared";
 import {
   createEmailThreadProvider,
   emailModuleManifest,
+  createEmailMonitorProvider,
   emailModuleSqlMigrationDirectory,
   EmailRepository,
   registerEmailRoutes
@@ -2992,15 +2993,24 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [proactiveMonitoringSqlMigrationDirectory],
     queueDefinitions: [PROACTIVE_SCAN_SOURCE_QUEUE],
     registerRoutes: (server, deps) => {
-      const allProviders = proactiveMonitorProvidersFor(getBuiltInModuleManifests());
       const registeredSources = new Set<ProactiveSource>(
-        allProviders.map((p) => p.provider.source as ProactiveSource)
+        proactiveMonitorProvidersFor(getBuiltInModuleManifests()).map(
+          ({ provider }) => provider.source as ProactiveSource
+        )
       );
       registerProactiveMonitoringRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         boss: deps.boss,
-        registeredSources
+        resolveRegisteredSources: async (actorUserId) => {
+          const sources = new Set(registeredSources);
+          if (
+            !(await deps.resolveActiveModules(actorUserId)).some((module) => module.id === "email")
+          ) {
+            sources.delete("email");
+          }
+          return sources;
+        }
       });
     },
     registerWorkers: async (boss, deps) => {
@@ -3009,6 +3019,22 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         allProviders.map((p) => [p.provider.source as ProactiveSource, p.provider])
       );
       const preferencesRepository = new PreferencesRepository();
+      const featureGrants = buildFeatureGrantService({
+        connectorsRepository: new ConnectorsRepository(),
+        preferencesRepository
+      });
+      const resolveActiveModules = createActiveModulesResolver({
+        dataContext: deps.dataContext,
+        manifests: getBuiltInModuleManifests
+      });
+      providers.set(
+        "email",
+        createEmailMonitorProvider({
+          grantedAccountIds: featureGrants.grantedAccountIds,
+          isModuleActive: async (actorUserId) =>
+            (await resolveActiveModules(actorUserId)).some((manifest) => manifest.id === "email")
+        })
+      );
       return registerProactiveMonitoringWorkers(boss, {
         dataContext: deps.dataContext,
         getLocalePreference: async (scopedDb) => {

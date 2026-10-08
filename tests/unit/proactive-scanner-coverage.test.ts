@@ -723,7 +723,7 @@ describe("monitoring routes", () => {
         }
       },
       boss: { send: vi.fn().mockResolvedValue("job") },
-      registeredSources: new Set(["calendar"]),
+      resolveRegisteredSources: async () => new Set(["calendar"]),
       cardRepository,
       preferencesRepository,
       monitorStateRepository,
@@ -771,7 +771,7 @@ describe("monitoring routes", () => {
 
   it("skips sources that are disabled or have no provider", async () => {
     const { base } = depsWith({
-      registeredSources: new Set(["tasks", "calendar", "email", "notes"])
+      resolveRegisteredSources: async () => new Set(["tasks", "calendar", "email", "notes"])
     });
     const handlers = captureHandlers(base);
     const { reply: res, send } = reply();
