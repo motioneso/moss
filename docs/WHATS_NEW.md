@@ -38,6 +38,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Simpler meetings with your Mac.** Link your Mac once and start recording from a small pill on your screen; the meeting page now shows just the transcript and your notes, and a summary is written when you stop. [PR #3056](https://github.com/motioneso/moss/pull/3056)
 - **Clearer action approvals.** Deleting a note now always asks first, even when note changes are trusted, and approval cards explain corrections, show clearer keyboard focus, and keep completed choices quiet. [PR #3094](https://github.com/motioneso/moss/pull/3094)
 
 ### 2026-10-06
