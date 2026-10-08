@@ -13,7 +13,7 @@ controls, not product UI.
 All names, sources, findings and clocks are fictional. State lives only in browser memory and
 resets on reload. No production entry imports this preview. This does not implement or verify
 scheduling, connectors, permissions, persistence or backend concurrency. Keep this branch out
-of main. The design awaits Ben’s review; #3102 stays open.
+of main. Ben approved the complete preview on 8 October 2026; design task #3102 is complete.
 
 ## Run
 
@@ -64,8 +64,10 @@ there is no real assistant behind this mockup.
 
 ## Review and verification
 
-No new design decisions have been accepted. Review ordinary update/stop/failure wording,
-quiet recovery behavior and the visual ordering of concurrent replies with Ben.
+Ben approved all ten situations on 8 October 2026. The ordinary update, stop and failure
+wording, quiet recovery behavior and visual coexistence of background/live replies are
+accepted as the design reference. This approval covers the mockup; production implementation
+remains separate work against the feature specification.
 
 Scoped formatting and lint, web type checking, and existing design-token/UI-class checks
 passed. Repeatable Firefox checks cover all ten situations, desktop/phone, 320/375/414/768px
