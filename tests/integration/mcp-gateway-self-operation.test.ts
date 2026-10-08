@@ -25,6 +25,7 @@ import type { CreateSportsFollowRequest, SportsFollowDto } from "@moss/shared";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
+import { seedCalendarApprovalEvent } from "./fixtures/calendar-approval.js";
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
 
 describe("AssistantToolGateway self-operation", () => {
@@ -229,6 +230,11 @@ describe("AssistantToolGateway self-operation", () => {
   });
 
   it("install grants for the calendar module still leave calendar.deleteEvent asking (user_promotable is not promoted by install)", async () => {
+    const event = await seedCalendarApprovalEvent(
+      runner,
+      ids.userA,
+      "google-evt-confirm-install-grant"
+    );
     const grantManifest: SelfOperationManifestInput = {
       id: calendarModuleManifest.id,
       assistantTools: calendarModuleManifest.assistantTools,
@@ -285,7 +291,7 @@ describe("AssistantToolGateway self-operation", () => {
     });
 
     const call = calendarGateway.callTool(token, "calendar.deleteEvent", {
-      eventId: "some-uuid",
+      eventId: event.id,
       displayTitle: "Board sync"
     });
     const request = await waitForActionRequest();

@@ -16,7 +16,7 @@ const NEWS_FAVICON_CACHE_MAX_BYTES = 4 * 1024 * 1024;
 
 // A bare hostname only: labels of letters/digits/hyphens, at least one dot, no scheme, no path,
 // no port. Matches what `new URL(homepageUrl).hostname` produces elsewhere in this module.
-const HOSTNAME_PATTERN =
+export const NEWS_FAVICON_HOSTNAME_PATTERN =
   /^(?=.{1,253}$)[a-zA-Z0-9]([a-zA-Z0-9-]{0,62}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,62}[a-zA-Z0-9])?)+$/;
 
 type SupportedFaviconType = "image/png" | "image/x-icon" | "image/gif" | "image/webp";
@@ -45,6 +45,10 @@ const STATIC_APPROVED_HOSTS = new Set(
   [...NEWS_HOMEPAGE_HOSTS, ...NEWS_IMAGE_HOSTS].map((host) => host.toLowerCase())
 );
 
+export function isStaticApprovedNewsFaviconHost(domain: string): boolean {
+  return STATIC_APPROVED_HOSTS.has(domain.toLowerCase());
+}
+
 /**
  * An icon is only ever fetched for a host this actor is entitled to see attributed on their own
  * screen: a source in the built-in catalog, a host one of those sources declares its images come
@@ -59,7 +63,7 @@ async function isApprovedPublisherHost(
   dependencies: Pick<NewsFaviconRouteDependencies, "dataContext" | "customSources">
 ): Promise<boolean> {
   const lower = domain.toLowerCase();
-  if (STATIC_APPROVED_HOSTS.has(lower)) return true;
+  if (isStaticApprovedNewsFaviconHost(domain)) return true;
   const customDomains = await dependencies.dataContext.withDataContext(accessContext, (db) =>
     dependencies.customSources.listCustomSources(db)
   );
@@ -150,7 +154,7 @@ export function registerNewsFaviconRoute(
               type: "string",
               minLength: 1,
               maxLength: 253,
-              pattern: HOSTNAME_PATTERN.source
+              pattern: NEWS_FAVICON_HOSTNAME_PATTERN.source
             }
           }
         }

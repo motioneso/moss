@@ -1,3 +1,4 @@
+import { briefingRerunPresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -112,6 +113,8 @@ export const briefingsModuleManifest = {
   assistantTools: [
     {
       name: "briefings.rerun",
+      actionLabel: "Re-run a briefing",
+      approvalPresentation: briefingRerunPresentation,
       description:
         "Re-run one of the user's own briefings now. Pick it by briefingType (morning, evening, " +
         "weekly_review) or by definitionId; give exactly one. Returns status queued, " +
@@ -291,9 +294,7 @@ export const briefingsModuleManifest = {
     {
       id: "briefings.chat_rerun",
       description:
-        "Ask Moss in chat to re-run your morning, evening or weekly review briefing. It " +
-        "queues one run without an approval card and can say when it is ready or failed. " +
-        "Asking again while it is being written starts no second run.",
+        "Ask Moss in chat to re-run your morning, evening or weekly review briefing. Approval identifies your saved briefing. It queues one run and can report readiness or failure; asking again while it runs starts no second run.",
       errors: [
         {
           code: "briefing_run_in_flight",

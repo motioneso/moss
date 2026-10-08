@@ -120,6 +120,9 @@ describe.each(["module", "native", "acp"] as const)("%s approval outcomes", (pat
           assistantTools: [
             {
               name: "example.delete",
+              actionLabel: "Delete requested item",
+              approvalContent: "user_authored",
+              approvalPresentation: async () => ({ target: "Requested item", fields: [] }),
               description: "Delete the requested item.",
               permissionId: "example.delete",
               risk: "destructive",

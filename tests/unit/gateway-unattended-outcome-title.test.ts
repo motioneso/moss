@@ -127,7 +127,12 @@ describe("unattended action outcome titles", () => {
   ] satisfies Partial<ModuleAssistantToolManifest>[])(
     "does not invent a title or block dispatch when presentation is unavailable: %s",
     async (presentation) => {
-      const tool = admissionTool("calendar.renameMeeting", { risk: "write", ...presentation });
+      const tool = admissionTool("calendar.renameMeeting", {
+        risk: "write",
+        actionLabel: undefined,
+        approvalPresentation: undefined,
+        ...presentation
+      });
       const h = admissionFixture([tool]);
       expect(await h.gateway.callTool(h.token, tool.name, {})).toMatchObject({ ok: true });
       expect(tool.execute).toHaveBeenCalledOnce();

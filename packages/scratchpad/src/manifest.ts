@@ -1,3 +1,8 @@
+import {
+  scratchpadAppendRoutePresentation,
+  scratchpadSettingsPresentation,
+  scratchpadAppendPresentation
+} from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -48,6 +53,7 @@ export const scratchpadModuleManifest = {
         access: "write",
         title: "Append to scratchpad",
         content: "outside",
+        presentation: scratchpadAppendRoutePresentation,
         coveredBy: "scratchpad.append"
       },
       permissionId: "scratchpad.write"
@@ -55,7 +61,12 @@ export const scratchpadModuleManifest = {
     {
       method: "PATCH",
       path: "/api/scratchpad/settings",
-      chat: { access: "write", title: "Update scratchpad settings", content: "user_authored" },
+      chat: {
+        access: "write",
+        title: "Update scratchpad settings",
+        presentation: scratchpadSettingsPresentation,
+        content: "user_authored"
+      },
       permissionId: "scratchpad.write"
     }
   ],
@@ -156,6 +167,8 @@ export const scratchpadModuleManifest = {
     },
     {
       name: "scratchpad.append",
+      actionLabel: "Append to scratchpad",
+      approvalPresentation: scratchpadAppendPresentation,
       description: "Append a line to the user's scratchpad. Never replaces existing text.",
       permissionId: "scratchpad.write",
       risk: "write",

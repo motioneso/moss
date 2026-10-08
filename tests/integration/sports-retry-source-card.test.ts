@@ -102,6 +102,33 @@ describe("sports.retrySource action card (#2159)", () => {
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     runner = new DataContextRunner(appDb);
     repository = new AiRepository();
+    // The execution service below is synthetic; disclosure still resolves a real actor-owned
+    // source through the production presentation hook rather than trusting that fake result.
+    await runner.withDataContext({ actorUserId: ids.userA }, (db) =>
+      db.db
+        .insertInto("app.sports_custom_sources")
+        .values({
+          id: RETRY_SOURCE_ID,
+          owner_user_id: ids.userA,
+          label: retriedSource.label,
+          canonical_domain: retriedSource.canonicalDomain,
+          homepage_url: retriedSource.homepageUrl,
+          feed_url: null,
+          retrieval_method: "scrape",
+          health_reason_code: null,
+          health_message: null,
+          last_checked_at: null,
+          last_success_at: null,
+          validation_fingerprint: "retry-card-fixture",
+          validated_at: new Date("2026-08-31T00:00:00.000Z"),
+          recipe_schema_version: null,
+          recipe_fingerprint: null,
+          recipe_status: "missing",
+          confirmed_fetch_hosts: [retriedSource.canonicalDomain],
+          authorization_confirmed_at: new Date("2026-08-31T00:00:00.000Z")
+        })
+        .execute()
+    );
 
     // Only retrySource is exercised here, so the fake implements just that one method — same
     // convention as fakeCalendarWrite/fakeWriter elsewhere in this suite. No default actionPolicy
@@ -206,6 +233,12 @@ describe("sports.retrySource action card (#2159)", () => {
     if (request.kind !== "action_request") throw new Error("unreachable");
     expect(request.toolName).toBe("sports.retrySource");
     expect(request.summary).toMatch(/^Retry sports source /);
+    expect(request.outcomeTitle).toBe("Retry sports news source");
+    expect(request.details).toEqual({
+      presentation: "human",
+      target: "Test Sports Source (example.com)",
+      fields: [{ label: "Source", value: "Test Sports Source (example.com)" }]
+    });
 
     const pending = await runner.withDataContext(
       { actorUserId: ids.userA, requestId: "req-2159-pending-check" },

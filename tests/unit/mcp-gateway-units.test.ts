@@ -884,6 +884,9 @@ describe("unattended mode security gate in callTool (#2419)", () => {
           assistantTools: [
             {
               name: "danger.nuke",
+              actionLabel: "Delete requested item",
+              approvalContent: "user_authored",
+              approvalPresentation: async () => ({ target: "Requested item", fields: [] }),
               description: "Nuke",
               permissionId: "danger.nuke",
               actionFamilyId: "danger_family",
@@ -946,6 +949,9 @@ describe("unattended mode security gate in callTool (#2419)", () => {
           assistantTools: [
             {
               name: "plain.write",
+              actionLabel: "Write requested value",
+              approvalContent: "user_authored",
+              approvalPresentation: async () => ({ target: "Requested item", fields: [] }),
               description: "Write without family",
               permissionId: "plain.write",
               risk: "write",

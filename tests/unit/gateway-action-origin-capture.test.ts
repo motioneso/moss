@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   admissionFixture,
   admissionTool,
@@ -9,22 +9,21 @@ describe("pending request origins are captured from the verified session", () =>
   it.each(["", " \n ", undefined])("cannot approve an undisclosed action (%s)", async (summary) => {
     const tool = admissionTool("notes.edit", {
       risk: "destructive",
+      actionLabel: undefined,
+      approvalPresentation: undefined,
       summarize: () => summary as string
     });
     const h = admissionFixture([tool]);
-    Object.assign(h.deps.repository, {
-      getAssistantAction: async () => ({ id: "action-1", status: "pending" }),
-      expireAssistantAction: async () => undefined
+    expect(await h.gateway.callTool(h.token, tool.name, {})).toMatchObject({
+      ok: false,
+      denied: true,
+      reason: expect.stringContaining("approval_unavailable")
     });
-    const pending = h.gateway.callTool(h.token, tool.name, {});
-    await vi.waitFor(() => expect(h.records[0]?.kind).toBe("action_request"));
+    expect(h.records).toEqual([]);
+    expect(h.createPending).not.toHaveBeenCalled();
+    expect(h.confirmations.isAwaiting("action-1")).toBe(false);
     expect(h.gateway.getActionRequestPresentation("actor-a", "action-1")).toBeUndefined();
-    expect(await h.gateway.resolveActionRequest("actor-a", "action-1", "confirmed")).toBe(
-      "unavailable"
-    );
     expect(tool.execute).not.toHaveBeenCalled();
-    h.confirmations.resolve("action-1", "rejected");
-    await pending;
   });
   it.each(["module", "native", "acp"] as const)(
     "ignores model origin fields for %s",

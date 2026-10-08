@@ -22,6 +22,7 @@ import {
 } from "@moss/connectors";
 import type { Kysely } from "kysely";
 import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
+import { fixtureApproval } from "./fixtures/approval-presentation.js";
 import { parseToolOutputText } from "./fixtures/tool-output.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { captureFetch, okText } from "./focus-time-helpers.js";
@@ -136,6 +137,7 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
       assistantTools: [
         {
           name: "demo.ping",
+          ...fixtureApproval("Call the demo service", "Demo service"),
           description: "d",
           permissionId: "demo.view",
           risk: "write",
@@ -200,6 +202,7 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
         {
           // declares "allowed" only — must NOT be able to see "secret"
           name: "iso.write",
+          ...fixtureApproval("Check declared service access", "Service injection fixture"),
           description: "d",
           permissionId: "iso.manage",
           risk: "write",

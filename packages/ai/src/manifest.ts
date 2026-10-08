@@ -1,3 +1,4 @@
+import { modelFavoritesPresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -585,6 +586,7 @@ export const aiModuleManifest = {
       chat: {
         access: "write",
         title: "Change your favourite chat models",
+        presentation: modelFavoritesPresentation,
         content: "user_authored"
       },
       requestSchema: chatModelFavoritesSchema,

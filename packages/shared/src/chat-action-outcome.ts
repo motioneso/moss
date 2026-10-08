@@ -14,6 +14,9 @@ export function actionApprovalOutcome(
 
 /** Only fixed plain explanations reach the quiet row; never echo a tool's error payload. */
 function approvalFailureReason(reason: string | undefined): string {
+  if (reason === "invalid_input" || reason?.startsWith("invalid_input:")) {
+    return "Some action details need correcting before this can run.";
+  }
   const reasons: readonly (readonly [string, string])[] = [
     ["approval_changed:", "The item changed before the action could finish."],
     ["unknown_route:", "The action or item is no longer available."],

@@ -14,6 +14,7 @@ import { HttpError, type MossModuleManifest, type ToolExecute } from "@moss/modu
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
+import { fixtureApproval } from "./fixtures/approval-presentation.js";
 
 describe("AssistantToolGateway", () => {
   // A person declining approval must not be described as a system refusal.
@@ -766,6 +767,7 @@ describe("AssistantToolGateway", () => {
       assistantTools: [
         {
           name: "example-confirm.destructive",
+          ...fixtureApproval("Record destructive call", "Confirmation test call log"),
           description: "Ordinary destructive tool.",
           permissionId: "example-confirm.destructive",
           risk: "destructive",
@@ -777,6 +779,7 @@ describe("AssistantToolGateway", () => {
         },
         {
           name: "example-confirm.confirmAlways",
+          ...fixtureApproval("Record always-confirmed call", "Confirmation test call log"),
           description: "Destructive tool that also declares confirm_always.",
           permissionId: "example-confirm.confirmAlways",
           risk: "destructive",
@@ -789,6 +792,7 @@ describe("AssistantToolGateway", () => {
         },
         {
           name: "example-confirm.perCall",
+          ...fixtureApproval("Record per-call-confirmed write", "Confirmation test call log"),
           description: "Write tool that always requires confirmation for this call.",
           permissionId: "example-confirm.perCall",
           risk: "write",

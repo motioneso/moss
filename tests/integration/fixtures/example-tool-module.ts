@@ -1,5 +1,14 @@
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
-import type { MossModuleManifest, ToolContext, ToolInput, ToolResult } from "@moss/module-sdk";
+import {
+  approvalText,
+  type MossModuleManifest,
+  type ToolContext,
+  type ToolInput,
+  type ToolResult
+} from "@moss/module-sdk";
+import { fixtureApproval } from "./approval-presentation.js";
+
+const valueDisclosure = { value: { label: "Value", present: approvalText } };
 
 /** Records every execute call so tests can assert a handler did/did not run. */
 export const exampleToolCalls: { name: string; input: ToolInput; actorUserId: string }[] = [];
@@ -45,6 +54,7 @@ export const exampleToolModule: MossModuleManifest = {
     },
     {
       name: "example.write",
+      ...fixtureApproval("Record example write", "Example call log", valueDisclosure, ["value"]),
       description: "Write fixture.",
       content: "user_authored",
       isExternal: false,
@@ -60,6 +70,9 @@ export const exampleToolModule: MossModuleManifest = {
     },
     {
       name: "example.slowWrite",
+      ...fixtureApproval("Record delayed example write", "Example call log", valueDisclosure, [
+        "value"
+      ]),
       description: "Write fixture with a real delay before recording the call.",
       content: "user_authored",
       isExternal: false,
@@ -78,6 +91,9 @@ export const exampleToolModule: MossModuleManifest = {
     },
     {
       name: "example.autoWrite",
+      ...fixtureApproval("Record automatic example write", "Example call log", valueDisclosure, [
+        "value"
+      ]),
       description: "Auto write fixture.",
       content: "user_authored",
       isExternal: false,
@@ -94,6 +110,9 @@ export const exampleToolModule: MossModuleManifest = {
     },
     {
       name: "example.anotherAutoWrite",
+      ...fixtureApproval("Record another example write", "Example call log", valueDisclosure, [
+        "value"
+      ]),
       description: "Another auto write fixture.",
       content: "user_authored",
       isExternal: false,
@@ -111,6 +130,9 @@ export const exampleToolModule: MossModuleManifest = {
     },
     {
       name: "example.destroy",
+      ...fixtureApproval("Record destructive example call", "Example call log", valueDisclosure, [
+        "value"
+      ]),
       description: "Destroy fixture.",
       content: "user_authored",
       isExternal: false,

@@ -4,6 +4,8 @@ import type { FeedbackSurface, FeedbackTargetKind, UsefulnessFeedbackKind } from
 import type { DataContextDb } from "@moss/db";
 
 export interface FeedbackTargetVerification {
+  /** Exact owning-module disclosure for live approval cards; never supplied by the caller. */
+  readonly approvalTarget?: { readonly label: string; readonly version: string };
   readonly ownerUserId: string;
   readonly targetKind: FeedbackTargetKind;
   readonly targetRef: string;

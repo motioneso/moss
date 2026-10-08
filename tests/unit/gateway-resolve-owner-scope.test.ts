@@ -103,6 +103,8 @@ describe("resolveActionRequest owner scope (#1591)", () => {
       actionRequestId: row.id,
       toolName: "example.write",
       summary: "Change setting",
+      outcomeTitle: "Change setting",
+      details: { presentation: "human", target: "Test target", fields: [] },
       outsideContentNotice: false
     });
     const resolution = gateway.resolveActionRequest("owner-1", row.id, "confirmed");

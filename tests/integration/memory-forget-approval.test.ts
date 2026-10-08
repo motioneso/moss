@@ -100,6 +100,8 @@ describe("memory.forget owner-bound approval through the production gateway", ()
     const h = await gatewayFor(ids.userA);
     const { call, card } = await requestForget(h, fact.id);
     expect(card.details).toEqual({
+      presentation: "human",
+      approvalKind: "memory_delete",
       target: `Subject: prefers: ${text}`,
       fields: []
     });

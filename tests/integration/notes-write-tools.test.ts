@@ -124,18 +124,25 @@ describe("notes write assistant tools", () => {
     ).toContain("x.md");
   });
 
-  it("grants notes.create, notes.edit, and notes.delete at install", () => {
+  it("grants note tools at install while always requiring approval for deletion", async () => {
     const tools = new Map<string, NonNullable<MossModuleManifest["assistantTools"]>[number]>(
       (notesModuleManifest.assistantTools ?? []).map((tool) => [tool.name, tool])
     );
     expect(tools.get("notes.create")?.selfOperationGrant).toBe("granted_at_install");
     expect(tools.get("notes.edit")?.selfOperationGrant).toBe("granted_at_install");
-    // notes.delete: Ben's ruling (2026-07-26) — "approve once, don't need to baby proof."
-    // granted_at_install plus risk: "write" so it can actually auto-run once granted; the
-    // note_changes family still allows always_confirm for a user who wants a prompt back.
+    // Install grants enable the tool; permanent deletion still requires per-call approval.
     expect(tools.get("notes.delete")?.selfOperationGrant).toBe("granted_at_install");
     expect(tools.get("notes.delete")?.risk).toBe("write");
     expect(tools.get("notes.delete")?.executionPolicy).toBe("auto");
+    expect(
+      await tools
+        .get("notes.delete")
+        ?.requiresConfirmation?.(
+          {} as never,
+          { path: "x.md" },
+          { actorUserId: ids.userA, requestId: "r", chatSessionId: "c" }
+        )
+    ).toBe(true);
   });
 
   it("discloses overwrite in notes.create summary and flags it as always-confirm", async () => {
@@ -170,57 +177,94 @@ describe("notes write assistant tools", () => {
     expect(sent[0]).toBeTruthy();
   });
 
-  it("gateway auto-runs create/edit/delete under trusted_auto", async () => {
-    const emitted: unknown[] = [];
-    const { AiRepository, AssistantToolGateway, ConfirmationRegistry, SessionTokenRegistry } =
-      await import("@moss/ai");
-    const repository = new AiRepository();
-    const tokens = new SessionTokenRegistry();
-    const confirmations = new ConfirmationRegistry();
-    const gateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [notesModuleManifest],
-      repository,
-      ...conversations.gatewayDependencies,
-      tokens,
-      confirmations,
-      notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
-      confirmTimeoutMs: 30_000,
+  it.each(["confirmed", "rejected"] as const)(
+    "gateway auto-runs trusted create/edit but waits for deletion to be %s",
+    async (decision) => {
+      const emitted: unknown[] = [];
+      const { AiRepository, AssistantToolGateway, ConfirmationRegistry, SessionTokenRegistry } =
+        await import("@moss/ai");
+      const repository = new AiRepository();
+      const tokens = new SessionTokenRegistry();
+      const confirmations = new ConfirmationRegistry();
+      const gateway = new AssistantToolGateway({
+        resolveActiveModules: async () => [notesModuleManifest],
+        repository,
+        ...conversations.gatewayDependencies,
+        tokens,
+        confirmations,
+        notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
+        confirmTimeoutMs: 30_000,
 
-      actionPolicy: () => ({
-        getFamilyTier: async (moduleId, familyId) => "trusted_auto",
-        getFamilyManifest: async () => ({
-          id: "note_changes",
-          label: "Note Changes",
-          description: "Modify notes.",
-          defaultTier: "ask_each_time",
-          allowedTiers: ["ask_each_time", "trusted_auto"]
-        })
-      }),
-      toolServices: { notesSync: service }
-    });
-    const token = tokens.mint({
-      ...conversations.bindingFor(ids.userA),
-      chatSessionId: "notes-chat",
-      allowedToolNames: null
-    });
+        actionPolicy: () => ({
+          getFamilyTier: async (moduleId, familyId) => "trusted_auto",
+          getFamilyManifest: async () => ({
+            id: "note_changes",
+            label: "Note Changes",
+            description: "Modify notes.",
+            defaultTier: "ask_each_time",
+            allowedTiers: ["ask_each_time", "trusted_auto"]
+          })
+        }),
+        toolServices: { notesSync: service }
+      });
+      const token = tokens.mint({
+        ...conversations.bindingFor(ids.userA),
+        chatSessionId: "notes-chat",
+        allowedToolNames: null
+      });
 
-    const created = await gateway.callTool(token, "notes.create", {
-      path: "auto.md",
-      content: "hello old"
-    });
-    expect(created.ok).toBe(true);
+      const created = await gateway.callTool(token, "notes.create", {
+        path: "auto.md",
+        content: "hello old"
+      });
+      expect(created.ok).toBe(true);
 
-    const edited = await gateway.callTool(token, "notes.edit", {
-      path: "auto.md",
-      oldText: "old",
-      newText: "new"
-    });
-    expect(edited.ok).toBe(true);
+      const edited = await gateway.callTool(token, "notes.edit", {
+        path: "auto.md",
+        oldText: "old",
+        newText: "new"
+      });
+      expect(edited.ok).toBe(true);
 
-    const deleted = await gateway.callTool(token, "notes.delete", { path: "auto.md" });
-    expect(deleted.ok).toBe(true);
-    expect(emitted.some((r) => (r as { kind?: string }).kind === "action_request")).toBe(false);
-  });
+      expect(emitted.some((r) => (r as { kind?: string }).kind === "action_request")).toBe(false);
+      expect(syncs).toHaveLength(2);
+      await expect(readFile(join(root, "auto.md"), "utf8")).resolves.toBe("hello new");
+
+      const pendingDelete = gateway.callTool(token, "notes.delete", { path: "auto.md" });
+      let request: { actionRequestId: string } | undefined;
+      try {
+        await vi.waitFor(() => {
+          request = emitted.find((r) => (r as { kind?: string }).kind === "action_request") as
+            | { actionRequestId: string }
+            | undefined;
+          expect(request).toBeDefined();
+        });
+        expect(confirmations.isAwaiting(request!.actionRequestId)).toBe(true);
+        expect(syncs).toHaveLength(2);
+        await expect(readFile(join(root, "auto.md"), "utf8")).resolves.toBe("hello new");
+        expect(
+          emitted.filter((r) => (r as { kind?: string }).kind === "action_request")
+        ).toHaveLength(1);
+
+        await gateway.resolveActionRequest(ids.userA, request!.actionRequestId, decision);
+        const deleted = await pendingDelete;
+        expect(confirmations.isAwaiting(request!.actionRequestId)).toBe(false);
+        if (decision === "confirmed") {
+          expect(deleted.ok).toBe(true);
+          expect(syncs).toHaveLength(3);
+          await expect(lstat(join(root, "auto.md"))).rejects.toMatchObject({ code: "ENOENT" });
+        } else {
+          expect(deleted).toMatchObject({ ok: false, denied: true });
+          expect(syncs).toHaveLength(2);
+          await expect(readFile(join(root, "auto.md"), "utf8")).resolves.toBe("hello new");
+        }
+      } finally {
+        if (request && confirmations.isAwaiting(request.actionRequestId))
+          await gateway.resolveActionRequest(ids.userA, request.actionRequestId, "rejected");
+        await pendingDelete;
+      }
+    }
+  );
 
   it("gateway forces confirmation for a notes.create overwrite even under trusted_auto", async () => {
     await writeFile(join(root, "existing.md"), "original content");
