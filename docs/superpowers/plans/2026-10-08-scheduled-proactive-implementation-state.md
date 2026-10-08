@@ -14,15 +14,17 @@ Runtime baseline and throwaway prototypes were not merged.
   with harness `7f0fa2877`. See [ticket evidence](../handoffs/2026-10-08-3125-evidence.md)
   for actual check inputs, security negative control, live assertions and limits. The merger
   reruns affected checks on the final integration tip before returning its receipt.
-- Remaining unblocked frontier: #3126, #3127, #3129, #3130 and #3149. Use one builder
+- Remaining unblocked frontier: #3126, #3127, #3130, #3149 and #3155. Use one builder
   and sequential independent reviews within available capacity; serialize heavy checks.
   All other work remains pending its verified blockers. The coordinator owns dispatch
-  and tracker transitions; no integration PR has been opened yet.
+  and tracker transitions. Draft integration PR [#3154](https://github.com/motioneso/moss/pull/3154)
+  is open with #3125 integrated and demonstrated; it remains draft during implementation.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
   records session sizing, Settings coordination and native reslices #3149–#3152 under
-  #3132/#3137. Originals remain complete-scope containers; downstream blockers are retained.
+  #3132/#3137, plus prerequisite #3155 under #3129. #3129 resumes its full saved-choice/Settings
+  outcome after #3155. Original downstream blockers are retained.
 - Each ticket uses a fresh TDD implementer, isolated worktree/branch from the integration
   tip, required checks and independent review, real UI/worker demonstration, evidence
   and truthful app-map updates. DB checks use `verify-gate`.

@@ -12,12 +12,15 @@ The accepted product behavior, mockups and approved migration rulings remain unc
 | #3132    | #3150          | #3149      | Extend the same reminder with local-clock/DST timing, explicit deadlines and late/expired recovery.                                                    |
 | #3137    | #3151          | #3133      | Schedule one exact authorized existing-source read through a real read-only gateway; receive a sourced status report while away.                       |
 | #3137    | #3152          | #3151      | Extend that path with configured-model source reporting and bounded quiet retries.                                                                     |
+| #3129    | #3155          | None       | Existing email refresh/monitoring respects current per-account access and module availability, with two-account revocation and real worker proof.      |
 
-These four tasks are native children of their original tickets, tracked on project 2 with
-native blocking edges. #3132 additionally waits for #3150; #3137 additionally waits for #3152.
-Original downstream edges remain intact. Originals are scope containers, not extra builder
-dispatches; their full acceptance criteria must pass after both children integrate.
-Verified graph now has 28 task nodes and 34 blocking edges. All tickets remain open until
+These five tasks are native children of their original tickets, tracked on project 2 with
+native blocking edges. #3132 additionally waits for #3150; #3137 additionally waits for #3152;
+#3129 waits for #3155 before its saved-choice and accepted Settings implementation.
+Original downstream edges remain intact. #3132 and #3137 are scope containers, not extra builder
+dispatches; their full acceptance criteria must pass after both children integrate. #3129 still
+has its own saved-choice and Settings implementation session after its prerequisite.
+Verified graph now has 29 task nodes and 35 blocking edges. All tickets remain open until
 normal PR closure; integration/verification governs the working frontier.
 
 ## Session fit and shared conversation ownership
@@ -42,6 +45,12 @@ normal PR closure; integration/verification governs the working frontier.
   Reslice if the required seams did not actually land; do not add a general model tool loop.
 
 ## Settings ownership — #3129 and #3130
+
+#3155 first hardens the existing cached email source through public grant/module services and
+per-account filtering. Its demonstration uses the existing refresh/worker/card seam; it adds
+no competing UI, preference migration, cap/cursor rewrite or chat delivery. Fresh preflight
+found that combining this access repair with the full preference/UI migration exceeded a
+single verified session. #3129 retains all of its original acceptance criteria afterward.
 
 #3129 owns Alerts & quiet hours registration/shell, email/delivery column, email client/query
 entry, saved/effective email-choice mapping and relevant email source gates. It owns new surface
