@@ -22,8 +22,23 @@ const concrete = (path: string) =>
 
 // Offline boundary proof: the production catalog, resolver, gateway and approval flow
 // are unchanged. Only persistence and HTTP dispatch are in-memory stand-ins.
-function actionHarness(yoloMode = false, tainted = false) {
-  const { scoped, queries } = makeRecordingDb({ rows: [] });
+function actionHarness(yoloMode = false, tainted = false, meetingAvailable = true) {
+  // Approval now resolves the owner-scoped target through the real repository. A successful
+  // rename needs an existing record; an empty persistence fixture correctly refuses it.
+  const { scoped, queries } = makeRecordingDb({
+    rows: meetingAvailable
+      ? [
+          {
+            id: "00000000-0000-4000-8000-000000000001",
+            title: "Untitled meeting",
+            personal_notes: "",
+            notes_revision: 0,
+            created_at: new Date("2026-10-08T00:00:00Z"),
+            updated_at: new Date("2026-10-08T00:00:00Z")
+          }
+        ]
+      : []
+  });
   const runner = {
     withDataContext: async <T>(_actor: AccessContext, work: (db: DataContextDb) => Promise<T>) =>
       work(scoped)
@@ -180,7 +195,17 @@ describe("record, mail and weather chat policies", () => {
         expect(h.events.some((event) => event.kind === "action_request")).toBe(true)
       );
       const card = h.events.find((event) => event.kind === "action_request")!;
-      expect(card).toMatchObject({ summary: "Rename your meeting" });
+      expect(card).toMatchObject({
+        summary: "Rename your meeting",
+        details: {
+          presentation: "human",
+          target: "Untitled meeting",
+          fields: [
+            { label: "New title", value: "Weekly planning" },
+            { label: "Current title", value: "Untitled meeting" }
+          ]
+        }
+      });
       expect(h.callSpy).not.toHaveBeenCalled();
       h.confirmations.resolve(card.actionRequestId, "confirmed");
       expect(await pending).toMatchObject({ ok: true });
@@ -204,6 +229,28 @@ describe("record, mail and weather chat policies", () => {
       h.confirmations.resolve(card.actionRequestId, "rejected");
       expect(await pending).toMatchObject({ ok: false });
       expect(h.callSpy).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([false, true])(
+    "refuses rename when the owner-scoped target is unavailable (tainted=%s)",
+    async (tainted) => {
+      const h = actionHarness(false, tainted, false);
+      expect(
+        await h.call({
+          method: "PUT",
+          path: concrete("/api/meetings/records/:id/title"),
+          body: { title: "Weekly planning", expectedTitle: "Untitled meeting" }
+        })
+      ).toMatchObject({ ok: false, denied: true });
+      expect(h.events.filter((event) => event.kind === "action_request")).toEqual([]);
+      expect(h.callSpy).not.toHaveBeenCalled();
+      expect(h.queries).toContainEqual(
+        expect.objectContaining({
+          sql: expect.stringContaining('from "app"."meeting_records"'),
+          parameters: ["00000000-0000-4000-8000-000000000001"]
+        })
+      );
     }
   );
 

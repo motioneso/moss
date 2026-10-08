@@ -19,6 +19,10 @@ export const MEETING_TEMPLATE_KEY = "meetings.summary-template";
 export type MeetingPreferenceStore = Pick<PreferencesRepository, "get" | "upsert">;
 export class MeetingPreferencesRepository {
   constructor(private readonly store: MeetingPreferenceStore = new PreferencesRepository()) {}
+  /** Distinguish a saved default from get()’s fallback through the remembered source. */
+  async getPersistedDefaultCaptureMode(db: DataContextDb) {
+    return parseMeetingCaptureMode(await this.store.get(db, MEETING_CAPTURE_DEFAULT_KEY));
+  }
   async get(db: DataContextDb): Promise<MeetingCapturePreferences> {
     const [mode, source, summarize, template] = await Promise.all(
       [
