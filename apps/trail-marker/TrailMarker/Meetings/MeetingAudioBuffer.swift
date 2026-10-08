@@ -162,7 +162,7 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         guard closed.value == 0 else { return }
         let admissionGeneration = hostSourceVerification.value
         if admissionGeneration & 1 != 0 {
-            drop(sampleTime: sampleTime, hostTimeNanoseconds: host, sampleRate: sampleRate, frameCount: frameCount)
+            enqueueDrop(sampleTime: sampleTime, hostTimeNanoseconds: host, sampleRate: sampleRate, frameCount: frameCount, cause: 1)
             return
         }
         guard lock.try() else {
@@ -172,10 +172,15 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         defer { lock.unlock() }
         guard accepting, closed.value == 0, storedFailure == nil, callbackFailures.value == 0 else { return }
         guard hostSourceVerification.value == admissionGeneration else {
+            enqueueDrop(sampleTime: sampleTime, hostTimeNanoseconds: host, sampleRate: sampleRate, frameCount: frameCount, cause: 1)
+            return
+        }
+        guard consumeDropsLocked() else {
+            // An earlier producer has not published its drop yet. Never advance newer PCM
+            // past that ordering frontier; publish this callback as a bounded drop instead.
             drop(sampleTime: sampleTime, hostTimeNanoseconds: host, sampleRate: sampleRate, frameCount: frameCount)
             return
         }
-        consumeDropsLocked()
         guard storedFailure == nil,
               let interval = advanceClockLocked(sampleTime: sampleTime, host: host, rate: sampleRate, frames: frameCount, allowStartupRecovery: true) else { return }
         // Native render can have begun before verification but reach receive after reopening.
@@ -221,10 +226,26 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
     }
 
     func drop(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int) {
+        enqueueDrop(sampleTime: sampleTime, hostTimeNanoseconds: hostTimeNanoseconds, sampleRate: sampleRate,
+            frameCount: frameCount, cause: hostSourceVerification.value & 1 != 0 ? 1 : 0)
+    }
+
+    private func enqueueDrop(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double,
+                             frameCount: Int, cause: UInt32) {
         guard closed.value == 0 else { return }
         guard frameCount > 0, frameCount <= Self.maximumCallbackFrames else { fail(.invalidFormat, diagnostic: .init(.bufferDropFrames)); return }
+        guard sampleRate.isFinite, (8000...192000).contains(sampleRate), sampleRate.rounded() == sampleRate else {
+            fail(.invalidFormat, diagnostic: .init(.bufferFormat)); return
+        }
+        guard sampleTime.isFinite, sampleTime.rounded() == sampleTime,
+              abs(sampleTime) <= 9_007_199_254_732_800, hostTimeNanoseconds >= origin,
+              let duration = MeetingAudioSampleClock.nanoseconds(frames: UInt64(frameCount), sampleRate: sampleRate),
+              hostTimeNanoseconds <= UInt64.max - duration else {
+            fail(.invalidTimestamp, diagnostic: .init(.bufferTimestamp)); return
+        }
         let record = MeetingAudioDropRecord(sampleTime: sampleTime, hostTimeNanoseconds: hostTimeNanoseconds,
-                                           sampleRate: sampleRate, frameCount: UInt32(frameCount))
+                                           sampleRate: sampleRate, frameCount: UInt32(frameCount),
+            cause: cause, maximumFrameCount: UInt32(frameCount), observedEndNanoseconds: 0, firstFrameCount: UInt32(frameCount))
         if !MeetingAudioDropMailboxPush(droppedCallbacks, record) {
             callbackDiagnostic.store(.init(.bufferDropMailbox))
             callbackFailures.insert(8)
@@ -235,36 +256,45 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
     /// All later boundaries use cumulative samples. Host scheduling jitter is not lost audio.
     /// Observed host timestamps are retained separately and also constrain Stop trimming.
     private func advanceClockLocked(sampleTime: Double, host: UInt64, rate sampleRate: Double,
-                                    frames: Int, allowStartupRecovery: Bool = false) -> (start: UInt64, end: UInt64, offset: UInt64)? {
+                                    frames: Int, maximumFrameCount: Int? = nil, firstFrameCount: Int? = nil, measuredEnd: UInt64? = nil, allowStartupRecovery: Bool = false) -> (start: UInt64, end: UInt64, offset: UInt64)? {
         guard sampleRate.isFinite, (8000...192000).contains(sampleRate), sampleRate.rounded() == sampleRate,
-              frames > 0, frames <= Self.maximumCallbackFrames,
+              frames > 0,
+              maximumFrameCount.map({ $0 > 0 && $0 <= Self.maximumCallbackFrames && frames >= $0 && frames <= 11_520_000 })
+                ?? (frames <= Self.maximumCallbackFrames),
+              firstFrameCount.map({ $0 > 0 && $0 <= (maximumFrameCount ?? frames) }) ?? true,
               rate.map({ $0 == sampleRate }) ?? true else { failLocked(.invalidFormat, diagnostic: .init(.bufferFormat)); return nil }
         guard sampleTime.isFinite, sampleTime.rounded() == sampleTime,
               abs(sampleTime) <= 9_007_199_254_732_800, host >= origin,
               let duration = MeetingAudioSampleClock.nanoseconds(frames: UInt64(frames), sampleRate: sampleRate),
               host <= UInt64.max - duration else { failLocked(.invalidTimestamp, diagnostic: .init(.bufferTimestamp)); return nil }
+        let observedEnd = max(host + duration, measuredEnd ?? 0)
+        let callbackDuration = MeetingAudioSampleClock.nanoseconds(
+            frames: UInt64(firstFrameCount ?? frames), sampleRate: sampleRate)!
         if sampleOrigin == nil {
+            var segmentOrigin = host
             if let gapEnd = startupGapEnd {
                 // The successor starts a separate clock segment. Never move already accepted
                 // audio, overlap the discarded callback, or reinterpret its sample counter.
                 let now = monotonicNow()
                 guard now >= startupClockBeganAt, now - startupClockBeganAt <= 500_000_000,
-                      host >= gapEnd, host - origin <= 500_000_000 else {
+                      Self.withinStartupSlack(host: host, boundary: gapEnd, callbackDuration: callbackDuration),
+                      max(host, gapEnd) - origin <= 500_000_000 else {
                     failLocked(.invalidTimestamp, diagnostic: .init(.bufferSampleContinuity)); return nil
                 }
-                if host > gapEnd {
+                segmentOrigin = max(host, gapEnd)
+                if segmentOrigin > gapEnd {
                     appendCaptureGapLocked(.init(source: source, epoch: epoch, startNanoseconds: gapEnd,
-                        endNanoseconds: host, reason: .startupTimestamp))
+                        endNanoseconds: segmentOrigin, reason: .startupTimestamp))
                 }
                 startupGapEnd = nil
             }
             sampleOrigin = sampleTime
-            clockOrigin = host
+            clockOrigin = segmentOrigin
         }
         guard nextSampleTime.map({ sampleTime == $0 }) ?? true,
               let first = sampleOrigin, sampleTime >= first else {
             if sampleDiscontinuities < UInt32.max { sampleDiscontinuities += 1 }
-            if allowStartupRecovery, recoverStartupClockLocked(host: host, duration: duration) { return nil }
+            if allowStartupRecovery, recoverStartupClockLocked(host: host, observedEnd: observedEnd, callbackDuration: callbackDuration) { return nil }
             failLocked(.invalidTimestamp, diagnostic: .init(.bufferSampleContinuity))
             return nil
         }
@@ -274,7 +304,7 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
               clockOrigin <= UInt64.max - endOffset else { failLocked(.invalidTimestamp, diagnostic: .init(.bufferClockRange)); return nil }
         if let lease {
             let deadline = lease.deadline
-            guard host + duration <= deadline, clockOrigin + endOffset <= deadline else {
+            guard observedEnd <= deadline, clockOrigin + endOffset <= deadline else {
                 failLocked(.leaseExpired, diagnostic: .init(.bufferLease))
                 return nil
             }
@@ -285,27 +315,42 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         rate = sampleRate
         nextSampleTime = sampleTime + Double(frames)
         previousMappedEnd = clockOrigin + endOffset
-        previousObservedEnd = max(previousObservedEnd, host + duration)
+        previousObservedEnd = max(previousObservedEnd, observedEnd)
         return (clockOrigin + startOffset, clockOrigin + endOffset, offset)
     }
 
     /// One otherwise-valid microphone counter reset may occur while the device settles.
     /// Both a trusted monotonic clock and the observed callback bound this to 500 ms;
     /// all format, range, lease, closed-admission and subsequent continuity checks remain strict.
-    private func recoverStartupClockLocked(host: UInt64, duration: UInt64) -> Bool {
+    private static func withinStartupSlack(host: UInt64, boundary: UInt64, callbackDuration: UInt64) -> Bool {
+        host >= boundary || boundary - host <= min(callbackDuration, 20_000_000)
+    }
+
+    var hasRecoveredStartupClock: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return recoveredStartupClock
+    }
+
+    private func recoverStartupClockLocked(host: UInt64, observedEnd: UInt64, callbackDuration: UInt64) -> Bool {
         guard permitsStartupClockRecovery, !recoveredStartupClock else { return false }
         let began = startupClockBeganAt
         let now = monotonicNow()
         let boundary = max(previousMappedEnd, previousObservedEnd)
         guard now >= began, now - began <= 500_000_000,
-              host >= origin, host + duration - origin <= 500_000_000,
-              host >= boundary, lease.map({ host + duration <= $0.deadline }) ?? true else { return false }
+              host >= origin, observedEnd - origin <= 500_000_000,
+              Self.withinStartupSlack(host: host, boundary: boundary, callbackDuration: callbackDuration),
+              max(boundary, observedEnd) - origin <= 500_000_000,
+              lease.map({ max(boundary, observedEnd) <= $0.deadline }) ?? true else { return false }
         recoveredStartupClock = true
         sampleOrigin = nil
         nextSampleTime = nil
-        startupGapEnd = host + duration
-        appendCaptureGapLocked(.init(source: source, epoch: epoch, startNanoseconds: boundary,
-            endNanoseconds: host + duration, reason: .startupTimestamp))
+        let end = max(boundary, observedEnd)
+        startupGapEnd = end
+        if end > previousMappedEnd {
+            appendCaptureGapLocked(.init(source: source, epoch: epoch, startNanoseconds: previousMappedEnd,
+                endNanoseconds: end, reason: .startupTimestamp))
+        }
         return true
     }
 
@@ -320,17 +365,22 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
     }
 
     /// Called only with the admission lock. The C mailbox has one consumer and bounded producers.
-    private func consumeDropsLocked() {
+    @discardableResult private func consumeDropsLocked() -> Bool {
         var record = MeetingAudioDropRecord()
         for _ in 0..<64 {
-            guard MeetingAudioDropMailboxPop(droppedCallbacks, &record) else { break }
+            let status = MeetingAudioDropMailboxPopForClock(droppedCallbacks, nextSampleTime ?? 0, nextSampleTime != nil, &record)
+            if status == 0 { return true }
+            if status != 1 { return false }
             guard storedFailure == nil,
                   let interval = advanceClockLocked(sampleTime: record.sampleTime, host: record.hostTimeNanoseconds,
-                                                    rate: record.sampleRate, frames: Int(record.frameCount)) else { continue }
+                                                    rate: record.sampleRate, frames: Int(record.frameCount),
+                                                    maximumFrameCount: Int(record.maximumFrameCount), firstFrameCount: Int(record.firstFrameCount), measuredEnd: record.observedEndNanoseconds,
+                                                    allowStartupRecovery: true) else { continue }
             let gap = MeetingAudioGap(source: source, epoch: epoch, startNanoseconds: interval.start,
-                                      endNanoseconds: interval.end, reason: .callbackContention)
+                                      endNanoseconds: interval.end, reason: record.cause == 1 ? .sourceVerification : .callbackContention)
             appendCaptureGapLocked(gap)
         }
+        return false
     }
 
     /// Control plane, including after close: a dropped final callback remains visible without a successor.

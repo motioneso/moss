@@ -46,7 +46,7 @@ CONTROLS = (
     {
         "name": "finite-capture-lease",
         "test": "testCaptureLeaseClosesAdmissionWithoutWaitingForControlThread",
-        "before": "guard host + duration <= deadline, clockOrigin + endOffset <= deadline else {",
+        "before": "guard observedEnd <= deadline, clockOrigin + endOffset <= deadline else {",
         "after": "guard host <= UInt64.max else {",
         "assertion": "XCTAssertFalse failed",
     },
@@ -56,6 +56,13 @@ CONTROLS = (
         "before": "        guard permitsStartupClockRecovery, !recoveredStartupClock else { return false }",
         "after": "        guard false else { return false }",
         "assertion": "One bounded startup counter reset must not pause microphone capture",
+    },
+    {
+        "name": "microphone-startup-clock-jitter",
+        "test": "testNominalFortyEightKilohertzRoundingJitterDoesNotPauseStartup",
+        "before": "        host >= boundary || boundary - host <= min(callbackDuration, 20_000_000)",
+        "after": "        host >= boundary",
+        "assertion": "Nominal 48 kHz rounding jitter must not pause startup",
     },
 )
 

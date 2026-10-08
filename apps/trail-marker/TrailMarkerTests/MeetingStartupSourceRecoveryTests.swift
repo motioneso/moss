@@ -57,7 +57,7 @@ final class MeetingStartupSourceRecoveryTests: XCTestCase {
             XCTAssertTrue(gaps.contains(.init(source: source, epoch: 1, startNanoseconds: origin,
                 endNanoseconds: origin + 1_000_000, reason: .sourceVerification)))
             XCTAssertTrue(gaps.contains(.init(source: source, epoch: 1, startNanoseconds: origin + 1_000_000,
-                endNanoseconds: origin + 3_000_000, reason: .callbackContention)))
+                endNanoseconds: origin + 3_000_000, reason: .sourceVerification)))
         }
         XCTAssertTrue(runtime.finishStartupSourceRecheck(at: origin + 3_000_000, unchanged: true))
         for ring in rings { put(ring, sample: 24, offset: 3_000_000, value: 0.75) }
@@ -73,6 +73,108 @@ final class MeetingStartupSourceRecoveryTests: XCTestCase {
         }
         XCTAssertTrue(try runtime.service(at: origin + 4_000_000).isEmpty, "Gap delivery must not repeat")
         XCTAssertTrue(devices.allSatisfy { $0.starts == 1 && $0.stops == 0 }, "Recovery must not reopen hardware")
+    }
+
+    func testSlowSourceRecheckCoalescesMoreThanTwoHundredQuarantinedCallbacksPerTrack() throws {
+        let (runtime, devices) = try start(output: true)
+        let rings = try devices.map { try XCTUnwrap($0.receiver as? MeetingAudioBuffer) }
+        let rate: Double = 48_000
+        let frames = 64
+        let callbacks = 250
+        func offset(_ index: Int) -> UInt64 {
+            MeetingAudioSampleClock.nanoseconds(frames: UInt64(index * frames), sampleRate: rate)!
+        }
+        for ring in rings {
+            ring.receive(sampleTime: 0, hostTimeNanoseconds: origin, sampleRate: rate,
+                frameCount: frames, sampleAt: { _ in 0.25 })
+        }
+        XCTAssertTrue(runtime.beginStartupSourceRecheck(at: origin + offset(1)))
+        for ring in rings {
+            for index in 1...callbacks {
+                ring.receive(sampleTime: Double(index * frames), hostTimeNanoseconds: origin + offset(index),
+                    sampleRate: rate, frameCount: frames,
+                    sampleAt: { _ in XCTFail("Source verification must never read quarantined PCM"); return 99 })
+            }
+            XCTAssertNil(ring.failure)
+            XCTAssertEqual(ring.diagnostics.droppedCallbacks, UInt32(callbacks))
+            XCTAssertEqual(ring.diagnostics.dropMailboxOverflows, 0)
+            XCTAssertEqual(ring.diagnostics.bufferedSamples, 0)
+        }
+        let confirmedAt = origin + offset(callbacks + 1)
+        XCTAssertLessThan(confirmedAt - origin, 500_000_000)
+        let gaps = try runtime.service(at: confirmedAt)
+        XCTAssertEqual(runtime.snapshot.state, .recording)
+        for source in MeetingAudioSource.allCases {
+            let losses = gaps.filter { $0.source == source }
+            XCTAssertEqual(losses.count, 2, "Erased PCM and coalesced dropped PCM each retain their complete interval")
+            XCTAssertTrue(losses.allSatisfy { $0.reason == .sourceVerification })
+            XCTAssertEqual(losses.first?.startNanoseconds, origin)
+            XCTAssertEqual(losses.first?.endNanoseconds, losses.last?.startNanoseconds)
+            XCTAssertEqual(losses.last?.endNanoseconds, confirmedAt)
+        }
+        XCTAssertTrue(runtime.finishStartupSourceRecheck(at: confirmedAt, unchanged: true))
+        for ring in rings {
+            ring.receive(sampleTime: Double((callbacks + 1) * frames), hostTimeNanoseconds: confirmedAt,
+                sampleRate: rate, frameCount: frames, sampleAt: { _ in 0.75 })
+            XCTAssertNil(ring.failure)
+        }
+        var packets: [MeetingAudioPacket] = []
+        for _ in rings {
+            XCTAssertTrue(try runtime.dispatchNext(at: origin + offset(callbacks + 2)) { packets.append($0) })
+        }
+        XCTAssertEqual(Set(packets.map(\.source)), Set(MeetingAudioSource.allCases))
+        XCTAssertTrue(packets.allSatisfy { $0.startNanoseconds == confirmedAt && $0.samples == [Float](repeating: 0.75, count: frames) })
+        XCTAssertTrue(devices.allSatisfy { $0.starts == 1 && $0.stops == 0 })
+    }
+
+    func testClockRecoveryHoldsBothTracksSoSourceRecheckCanStillEraseEveryUnofferedPacket() throws {
+        let (runtime, devices) = try start(output: true)
+        let microphone = try XCTUnwrap(devices[0].receiver as? MeetingAudioBuffer)
+        let output = try XCTUnwrap(devices[1].receiver as? MeetingAudioBuffer)
+        put(microphone, sample: 0, offset: 0)
+        put(microphone, sample: 0, offset: 1_000_000, value: 99)
+        put(microphone, sample: 8, offset: 2_000_000)
+        for index in 0..<3 { put(output, sample: Double(index * 8), offset: UInt64(index) * 1_000_000) }
+        XCTAssertNil(microphone.failure)
+        XCTAssertFalse(try runtime.dispatchNext(at: origin + 3_000_000) { _ in
+            XCTFail("A recovered microphone must hold both tracks throughout the source-recheck window")
+        })
+        XCTAssertFalse(try runtime.dispatchNextChunk(at: origin + 3_000_000) { _ in
+            XCTFail("A short completed clock segment must not escape through chunk dispatch")
+        })
+        XCTAssertTrue(runtime.beginStartupSourceRecheck(at: origin + 3_000_000),
+            "Clock recovery cannot consume never-offered eligibility for source recovery")
+        XCTAssertNil(microphone.peek())
+        XCTAssertNil(output.peek())
+        for index in 0..<2 {
+            put(microphone, sample: Double(16 + index * 8), offset: UInt64(3 + index) * 1_000_000, value: 99)
+            put(output, sample: Double(24 + index * 8), offset: UInt64(3 + index) * 1_000_000, value: 99)
+        }
+        XCTAssertTrue(runtime.finishStartupSourceRecheck(at: origin + 5_000_000, unchanged: true))
+        put(microphone, sample: 32, offset: 5_000_000, value: 0.75)
+        put(output, sample: 40, offset: 5_000_000, value: 0.75)
+        for offset in [UInt64(6_000_000), 499_999_999] {
+            XCTAssertFalse(try runtime.dispatchNext(at: origin + offset) { _ in
+                XCTFail("Both current-epoch tracks remain unoffered until the startup window closes")
+            })
+        }
+        var packets: [MeetingAudioPacket] = []
+        for _ in devices {
+            XCTAssertTrue(try runtime.dispatchNext(at: origin + 500_000_000) { packets.append($0) })
+        }
+        XCTAssertEqual(Set(packets.map(\.source)), Set(MeetingAudioSource.allCases))
+        for packet in packets {
+            XCTAssertEqual(packet.startNanoseconds, origin + 5_000_000)
+            XCTAssertEqual(packet.samples, [Float](repeating: 0.75, count: 8))
+            XCTAssertEqual(packet.sequence, packet.source == .microphone ? 2 : 3)
+        }
+        let gaps = try runtime.service(at: origin + 500_000_000)
+        XCTAssertTrue(gaps.contains { $0.source == .microphone && $0.reason == .startupTimestamp })
+        XCTAssertTrue(gaps.contains { $0.source == .microphone && $0.reason == .sourceVerification })
+        XCTAssertTrue(gaps.contains { $0.source == .output && $0.reason == .sourceVerification })
+        XCTAssertFalse(gaps.contains { $0.reason == .callbackContention })
+        XCTAssertEqual(runtime.snapshot.state, .recording)
+        XCTAssertTrue(devices.allSatisfy { $0.starts == 1 && $0.stops == 0 }, "Both recoveries must stay in one hardware epoch")
     }
 
     func testAcknowledgedAndUnacknowledgedOffersBothPermanentlyBlockStartupRetry() throws {
@@ -140,10 +242,13 @@ final class MeetingStartupSourceRecoveryTests: XCTestCase {
         XCTAssertTrue(runtime.finishStartupSourceRecheck(at: origin + 1, unchanged: true))
         XCTAssertTrue(output.isScopeVerificationPending)
         put(output, sample: 0, offset: 0)
-        XCTAssertFalse(try runtime.dispatchNext(at: origin + 1_000_000) { _ in XCTFail("Low-level scope proof is still pending") })
+        XCTAssertNil(output.peek(), "A callback predating host confirmation must still be dropped")
+        put(output, sample: 8, offset: 1_000_000)
+        XCTAssertNotNil(output.peek(), "Wholly post-confirmation PCM may wait behind the independent scope gate")
+        XCTAssertFalse(try runtime.dispatchNext(at: origin + 2_000_000) { _ in XCTFail("Low-level scope proof is still pending") })
         XCTAssertFalse(output.withSendAdmission { XCTFail("Host proof cannot authorize the tap scope") })
         output.setScopeVerificationPending(false)
-        XCTAssertTrue(try runtime.dispatchNext(at: origin + 1_000_000) { XCTAssertEqual($0.source, .output) })
+        XCTAssertTrue(try runtime.dispatchNext(at: origin + 2_000_000) { XCTAssertEqual($0.source, .output) })
     }
 
     func testInvalidSelectionDuringRetryIsNeverClearedByUnchangedHostProof() throws {

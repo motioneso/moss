@@ -368,7 +368,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_startup_recovery",
       description:
-        "A brief microphone timing hiccup at Start can recover without Resume. Missing startup sources are checked once with audio held back; real source changes still pause. The Mac log records short interrupted gaps."
+        "A brief microphone timing hiccup at Start can recover without Resume. Missing startup sources are checked once; uncertain audio is dropped and marked as a gap. Real source changes still pause. The Mac log records audio gaps."
     },
     {
       id: "meetings.native_capture",

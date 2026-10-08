@@ -370,8 +370,14 @@ final class MeetingCaptureRuntime {
             let gaps = try serviceLocked(at: at)
             retainedGaps = gaps
             guard !pending.isEmpty else { return false }
+            // Recovery makes a short first clock segment sendable. Hold it (and its paired
+            // source) until startup ends, so a same-Start inventory omission can still be
+            // quarantined before any uncertain epoch audio has escaped.
+            let holdStartupOffers = machine.state == .recording && at >= epochStart && at - epochStart < 500_000_000 &&
+                pending.contains { $0.buffer.epoch == machine.epoch && $0.buffer.source == .microphone && $0.buffer.hasRecoveredStartupClock }
             for offset in pending.indices {
                 let index = (dispatchCursor + offset) % pending.count
+                if holdStartupOffers, pending[index].buffer.epoch == machine.epoch { continue }
                 guard pending[index].inFlightSequence == nil,
                       !pending[index].buffer.isScopeVerificationPending,
                       eligibleSources.contains(pending[index].buffer.source) else { continue }
@@ -390,6 +396,11 @@ final class MeetingCaptureRuntime {
                       latestEndNanoseconds.map({ chunk.packet.endNanoseconds <= $0 }) ?? true,
                       machine.permitsSend(epoch: chunk.packet.epoch, endNanoseconds: chunk.packet.endNanoseconds,
                                           now: at) else { continue }
+                // A callback may have created this short segment while peekChunk ran.
+                // Recheck after obtaining it, before the first offer becomes irrevocable.
+                if chunk.packet.epoch == machine.epoch, machine.state == .recording,
+                   at >= epochStart, at - epochStart < 500_000_000,
+                   pending.contains(where: { $0.buffer.epoch == machine.epoch && $0.buffer.source == .microphone && $0.buffer.hasRecoveredStartupClock }) { continue }
                 if chunk.packet.epoch == machine.epoch { currentEpochEverOffered = true }
                 pending[index].offeredChunk = chunk
                 pending[index].inFlightSequence = chunk.packet.sequence
