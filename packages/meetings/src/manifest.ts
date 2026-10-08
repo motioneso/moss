@@ -278,7 +278,8 @@ export const meetingsModuleManifest = {
       path: "/api/meetings/preferences",
       chat: {
         access: "write",
-        title: "Change your meeting preferences",
+        title:
+          "Change meeting capture mode, recording source, automatic summaries or summary style",
         content: "user_authored",
         presentation: meetingPreferencesPresentation
       },
@@ -334,7 +335,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.chat_app_actions",
       description:
-        "Actions read meetings/output availability; save drafts, titles, notes, transcripts, summaries and preferences. Approvals show targets, content and evidence. Generate/export/record in Meetings. Deleting meetings and linked chats asks first."
+        "App actions read meetings/output availability; save drafts, titles, notes, transcripts, summaries and preferences. Cards show targets, content and evidence. Generate/export/record in Meetings. Deleting meetings and linked chats asks first."
     },
     {
       id: "meetings.link_state",

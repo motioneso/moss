@@ -492,6 +492,9 @@ describe("real manifests", () => {
     };
     expect(first("microphone only")).toBe("PUT /api/meetings/preferences");
     expect(first("capture mode")).toBe("PUT /api/meetings/preferences");
+    expect(first("recording source")).toBe("PUT /api/meetings/preferences");
+    expect(first("automatic summaries")).toBe("PUT /api/meetings/preferences");
+    expect(first("summary style")).toBe("PUT /api/meetings/preferences");
     expect(first("imperial")).toBe("PUT /api/me/weather-unit");
     expect(first("matrix")).toBe("PATCH /api/tasks/preferences");
   });
