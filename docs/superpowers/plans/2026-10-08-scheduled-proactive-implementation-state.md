@@ -6,9 +6,12 @@ Runtime baseline and throwaway prototypes were not merged.
 
 ## Current state
 
-- Native tracker graph verified: 24 open subissues, 28 blocking edges; initial frontier
+- Original native graph verified: 24 open subissues, 28 blocking edges; initial frontier
   #3125, #3129 and #3130. Ticket bodies and graph snapshot are stored outside the repo.
-- Start #3125 before expanding concurrent implementation. Fresh implementer dispatch next.
+- #3125 is in TDD implementation; early independent review found cold-launch binding and
+  actual-role upgrade-backfill issues for the implementer to fix. Focused first gate passed,
+  but revised checks, full review and real UI proof remain before integration. Do not expand
+  concurrent runtime implementation until the first delivery loop validates.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
