@@ -24,7 +24,7 @@ import "../styles/settings.css";
 import "./scheduled-task-management.prototype.css";
 
 type Status = "Active" | "Paused" | "Completed" | "Expired" | "Failed";
-type Run = { summary: string; source: string; result: string; message?: string };
+type Run = { summary: string; result: string; message?: string };
 type Task = {
   id: string;
   title: string;
@@ -33,7 +33,7 @@ type Task = {
   timing: string;
   stop: string;
   destination: string;
-  actions: string;
+  actions?: string;
   status: Status;
   outcome: string;
   next: string;
@@ -48,7 +48,6 @@ const samples: Task[] = [
     timing: "Thursday 8 October, 9:00 AM PDT",
     stop: "After the reminder is delivered",
     destination: "Main chat",
-    actions: "Post a reminder in chat",
     status: "Active",
     outcome: "Saved today at 2:00 PM. Hasn't run yet.",
     next: "Tomorrow at 9:00 AM PDT",
@@ -62,29 +61,23 @@ const samples: Task[] = [
     timing: "Every day at 8:00 AM PDT",
     stop: "Until I stop it",
     destination: "AI reading",
-    actions: "Read AI news; report significant changes",
     status: "Active",
     outcome: "Today, 8:00 AM · Checked successfully. Nothing significant to report.",
     next: "Tomorrow at 8:00 AM PDT",
     runs: [
       {
         summary: "Today, 8:00 AM · Checked successfully; nothing to report",
-        source: "Connected AI news feeds",
-        result:
-          "The check completed. No significant change met your instruction, so no chat message was sent."
+        result: "No significant changes. No message sent."
       },
       {
         summary: "Yesterday, 8:00 AM · Update shared",
-        source: "Connected AI news feeds",
         result: "One significant update was found and posted in AI reading.",
         message:
           "A new AI model release appeared in your news feeds this morning. I've gathered the announcement for your reading."
       },
       {
         summary: "Tuesday, 8:00 AM · Checked successfully; nothing to report",
-        source: "Connected AI news feeds",
-        result:
-          "The check completed. No significant change met your instruction, so no chat message was sent."
+        result: "No significant changes. No message sent."
       }
     ]
   },
@@ -96,14 +89,12 @@ const samples: Task[] = [
     timing: "Every 15 minutes",
     stop: "When Maya replies, or today at 5:00 PM PDT",
     destination: "Main chat",
-    actions: "Read inbox replies from Maya about the proposal; report the reply",
     status: "Paused",
     outcome: "1:45 PM · No reply yet. Paused at 1:50 PM.",
     next: "Paused · no future checks",
     runs: [
       {
         summary: "Today, 1:45 PM · Checked successfully; no reply",
-        source: "Connected inbox · replies from Maya about the proposal",
         result: "No matching reply was found. No message was sent."
       }
     ]
@@ -124,13 +115,11 @@ const samples: Task[] = [
     runs: [
       {
         summary: "Friday, 4:00 PM · Failed; no changes made",
-        source: "Connected email · Field Notes messages",
         result:
           "Email access had been revoked. The run stopped before reading or changing any emails."
       },
       {
         summary: "Previous Friday, 4:00 PM · Completed",
-        source: "Connected email · Field Notes messages",
         result:
           "Archived 3 newsletters older than 7 days. Permanently deleted 2 promotional emails older than 30 days.",
         message:
@@ -146,14 +135,12 @@ const samples: Task[] = [
     timing: "Every hour",
     stop: "When delivery is confirmed",
     destination: "Home projects",
-    actions: "Read carrier tracking; report confirmed delivery",
     status: "Completed",
     outcome: "Yesterday, 11:10 AM · Carrier confirmed delivery. Watch stopped.",
     next: "Finished · no future checks",
     runs: [
       {
         summary: "Yesterday, 11:10 AM · Delivery confirmed; watch completed",
-        source: "Carrier tracking · delivery status",
         result:
           "Recorded carrier status: Delivered, yesterday at 11:10 AM. That confirmed the goal and stopped the watch.",
         message:
@@ -169,14 +156,12 @@ const samples: Task[] = [
     timing: "Every two hours",
     stop: "Sunday 4 October at 6:00 PM PDT",
     destination: "Main chat",
-    actions: "Read the lamp's price; report a sale",
     status: "Expired",
     outcome: "Sunday, 6:00 PM · Deadline reached without a sale.",
     next: "Expired · no future checks",
     runs: [
       {
         summary: "Sunday, 6:00 PM · Watch expired",
-        source: "Lamp product listing · sale price",
         result:
           "The deadline passed without a matching sale. No sale alert was sent, and future checks stopped."
       }
@@ -566,18 +551,29 @@ function Prototype() {
                   {!deleting && (
                     <>
                       <p>{selected.instruction}</p>
-                      <dl className="manage-facts">
-                        <dt>Timing</dt>
-                        <dd>{selected.timing}</dd>
-                        <dt>Stops</dt>
-                        <dd>{selected.stop}</dd>
-                        <dt>Results go to</dt>
-                        <dd>{selected.destination}</dd>
-                      </dl>
+                      {(selected.status === "Active" ||
+                        selected.status === "Paused" ||
+                        selected.status === "Failed") && (
+                        <dl className="manage-facts">
+                          <dt>Schedule</dt>
+                          <dd>{selected.timing}</dd>
+                          {selected.kind === "Watch" && (
+                            <>
+                              <dt>Stops</dt>
+                              <dd>{selected.stop}</dd>
+                            </>
+                          )}
+                          {selected.destination !== "Main chat" && (
+                            <>
+                              <dt>Results go to</dt>
+                              <dd>{selected.destination}</dd>
+                            </>
+                          )}
+                        </dl>
+                      )}
                       {selected.status === "Failed" && (
                         <Note variant="practical">
                           Reconnect email in Connections, then ask Moss in chat to resume this task.
-                          Previous changes won't be repeated.
                         </Note>
                       )}
                       <div className="manage-actions">
@@ -590,10 +586,12 @@ function Prototype() {
                           Delete task
                         </Button>
                       </div>
-                      <details className="manage-scope">
-                        <summary>What Moss may do</summary>
-                        <p>{selected.actions}</p>
-                      </details>
+                      {selected.actions && (
+                        <details className="manage-scope">
+                          <summary>What Moss may change</summary>
+                          <p>{selected.actions}</p>
+                        </details>
+                      )}
                       <section className="manage-history">
                         <SectionHead title="Run history" />
                         {selected.runs.length ? (
@@ -603,12 +601,7 @@ function Prototype() {
                                 <details>
                                   <summary>{run.summary}</summary>
                                   <div className="manage-run-result">
-                                    <p>
-                                      <strong>Checked:</strong> {run.source}
-                                    </p>
-                                    <p>
-                                      <strong>Result:</strong> {run.result}
-                                    </p>
+                                    <p>{run.result}</p>
                                     {run.message && (
                                       <Button
                                         variant="link"
@@ -636,9 +629,8 @@ function Prototype() {
                     <div className="manage-delete">
                       <SectionHead title="Delete this task?" />
                       <p>
-                        Moss will stop future work for “{selected.title}”. Previous messages and
-                        completed actions remain. Deleting this schedule won't undo any archive or
-                        deletion.
+                        Future runs will stop. Previous messages and completed actions remain.
+                        {selected.actions && " This won't undo any email archive or deletion."}
                       </p>
                       <div className="manage-actions">
                         <Button variant="danger" onClick={() => remove(selected)}>

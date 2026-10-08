@@ -13,6 +13,12 @@ Clicking a row opens a little information, run history with dated outcomes, and 
 or delete controls. A quiet successful check remains distinguishable from a failed run.
 Management actions such as pausing do not appear as task runs.
 
+Ben's detail-screen pass keeps the instruction, status, schedule and useful run results.
+Only watches show a stop condition; the default Main chat destination and indefinite duration
+are omitted. Past tasks show their recorded outcomes without obsolete scheduling metadata.
+Run results omit repeated source labels. Only tasks that change user data disclose their action
+scope, so the inbox sample still makes permanent deletion inspectable.
+
 There is no Edit button or editing form in Settings. Users edit schedules through ordinary
 Moss conversation, including any approval needed for changed actions. Deleting a schedule
 confirms that future work stops while previous messages and completed actions remain.
@@ -53,14 +59,18 @@ page errors, network writes or browser storage were observed. The repeatable scr
 screenshots remain in the private vault. The original fuller preview is retained in branch
 history at c444f83f7; Ben's compact-list and chat-only-editing decisions supersede it.
 
-An independent Impeccable critique and one bounded confirmation scored the revised page
-33/40 (Good). Inspectable recorded run results/messages and action scope, keyboard focus,
+An independent Impeccable critique and one bounded confirmation scored the page before the
+final detail-screen trim 33/40 (Good). Inspectable recorded run results/messages and action scope, keyboard focus,
 phone drawer containment/Escape, failure guidance and prose measure were checked. No current
 blocking or major issue remained in the tested paths. One minor finding remains: phone chat
 covers the selected task context, so changing a task requires recalling its name. Detector
 source scan returned zero findings; browser style flags were interpreted against the authored
 system. Settled dark contrast passed; premature low measurements were transition artifacts.
 The complete critique and independent evidence stay in the private vault.
+
+After the detail-screen trim, the same Firefox flow passed with explicit checks for omitted
+routine metadata, retained watch deadlines, inbox action scope and past-task outcomes.
+Scoped lint/format, web typecheck and design-token/UI-class checks passed again.
 
 This is a mockup ready for Ben's design review. It does not implement or prove real persistence,
 permissions, scheduling, source reconnection, watch completion or background execution.
