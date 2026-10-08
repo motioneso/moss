@@ -47,7 +47,9 @@ normal PR closure; integration/verification governs the working frontier.
 ## Settings ownership — #3129 and #3130
 
 #3155 first hardens the existing cached email source through public grant/module services and
-per-account filtering. Its demonstration uses the existing refresh/worker/card seam; it adds
+per-account filtering. Its demonstration uses existing grant/module controls, authenticated
+proactive-refresh API, real worker and radar result UI. The radar UI has no refresh action;
+connector refresh is a different path. The approved UI/API/worker seams suffice; this adds
 no competing UI, preference migration, cap/cursor rewrite or chat delivery. Fresh preflight
 found that combining this access repair with the full preference/UI migration exceeded a
 single verified session. #3129 retains all of its original acceptance criteria afterward.
