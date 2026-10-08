@@ -56,8 +56,8 @@ CONTROLS = [
     ("MeetingCaptureHost.swift", {
         "name": "source-exact-status-acknowledgment",
         "test": "testMismatchedSourceStatusAcknowledgmentNeverReopensHardware",
-        "before": "        guard intent.acknowledged, intent.matches(capture) else {",
-        "after": "        guard intent.acknowledged else {",
+        "before": "        guard intent.acknowledged, intent.matches(capture) else {\n            failSourceChange(MeetingHostError.rejected)",
+        "after": "        guard intent.acknowledged else {\n            failSourceChange(MeetingHostError.rejected)",
         "assertion": "Mismatched source status acknowledgment must reject the intent",
     }),
     ("MeetingCaptureHost.swift", {
