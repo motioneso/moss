@@ -408,6 +408,7 @@ export async function clearChatSession(input: {
   readonly stopTurn: (actorUserId: string, surface: ChatSurface) => Promise<void>;
   readonly endPrivateSession: (actorUserId: string, surface: ChatSurface) => Promise<void>;
   readonly revokeMcpToken?: (sessionKey: string) => void;
+  readonly pendingForcedReplay: Set<string>;
 }): Promise<void> {
   const chatSurface = normalizeChatSurface(input.surface);
   const sessionKey = surfaceSessionKey(input.actorUserId, chatSurface);
@@ -421,6 +422,7 @@ export async function clearChatSession(input: {
   if (currentThread?.incognito) {
     await input.endPrivateSession(input.actorUserId, chatSurface);
     await input.persistence.openNewConversation(input.actorUserId, input.options, chatSurface);
+    input.pendingForcedReplay.add(sessionKey);
     return;
   }
 
@@ -431,6 +433,7 @@ export async function clearChatSession(input: {
     input.revokeMcpToken?.(sessionKey);
   }
   await input.persistence.openNewConversation(input.actorUserId, input.options, chatSurface);
+  input.pendingForcedReplay.add(sessionKey);
 }
 
 export async function endPrivateChatSession(input: {

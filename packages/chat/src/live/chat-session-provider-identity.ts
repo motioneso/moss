@@ -7,6 +7,7 @@ import {
   surfaceSessionKey,
   type ChatSurface
 } from "./chat-surface.js";
+import { getSelectedThreadState } from "./chat-thread-selection.js";
 import {
   ApiKeyLiveChatUnavailableError,
   ChatProviderChangedError,
@@ -126,7 +127,7 @@ export async function ensureSessionForCurrentProvider(input: {
   readonly launching: Map<string, Promise<UserSession>>;
   readonly persistence: Pick<
     ChatPersistencePort,
-    "resolveActiveProvider" | "getCurrentThreadState"
+    "resolveActiveProvider" | "getCurrentThreadState" | "getMainThreadState"
   >;
   readonly sessions: ReadonlyMap<string, UserSession>;
   readonly pendingForcedReplay: Set<string>;
@@ -160,7 +161,7 @@ async function resolveSessionForCurrentProvider(input: {
   readonly sessionKey: string;
   readonly persistence: Pick<
     ChatPersistencePort,
-    "resolveActiveProvider" | "getCurrentThreadState"
+    "resolveActiveProvider" | "getCurrentThreadState" | "getMainThreadState"
   >;
   readonly sessions: ReadonlyMap<string, UserSession>;
   readonly pendingForcedReplay: Set<string>;
@@ -174,11 +175,7 @@ async function resolveSessionForCurrentProvider(input: {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const providerIdentity = await input.persistence.resolveActiveProvider(input.actorUserId);
     const existing = input.sessions.get(input.sessionKey);
-    if (
-      existing &&
-      sameActiveChatProvider(existing.providerIdentity, providerIdentity) &&
-      (await sessionMatchesCurrentConversation(input, existing, !forceReplay))
-    ) {
+    if (existing && sameActiveChatProvider(existing.providerIdentity, providerIdentity)) {
       return existing;
     }
 
@@ -222,10 +219,12 @@ async function sessionMatchesCurrentConversation(
   session: UserSession,
   preferMain: boolean
 ): Promise<boolean> {
-  const current =
-    preferMain && input.surface === DEFAULT_CHAT_SURFACE && input.persistence.getMainThreadState
-      ? await input.persistence.getMainThreadState(input.actorUserId)
-      : await input.persistence.getCurrentThreadState?.(input.actorUserId, input.surface);
+  const current = await getSelectedThreadState({
+    actorUserId: input.actorUserId,
+    surface: input.surface,
+    useMain: preferMain && input.surface === DEFAULT_CHAT_SURFACE,
+    persistence: input.persistence
+  });
   // A stream pre-start can finish after a clear/resume removed the old session. Its frozen
   // origin remains correct for that engine, but it must never become the new conversation's engine.
   return (

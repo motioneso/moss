@@ -32,6 +32,7 @@ class FlipFlopPersistence implements ChatPersistencePort {
   private noThread = false;
   mainStateReads = 0;
   readonly recordedTurns: string[] = [];
+  readonly recordedThreadIds: Array<string | null | undefined> = [];
   readonly recordedHandled: string[] = [];
 
   /** Simulate a purge that deletes the current thread: no current thread after. */
@@ -71,10 +72,10 @@ class FlipFlopPersistence implements ChatPersistencePort {
 
   async openNewConversation(
     _actorUserId: string,
-    _options?: { incognito?: boolean },
+    options?: { incognito?: boolean },
     _surface?: ChatSurface
   ): Promise<void> {
-    this.thread = { id: "thread-new", incognito: false };
+    this.thread = { id: "thread-new", incognito: options?.incognito ?? false };
     this.noThread = false;
   }
 
@@ -92,7 +93,9 @@ class FlipFlopPersistence implements ChatPersistencePort {
     return { threadTitle: null, localTimezone: null, incognito: this.thread.incognito };
   }
 
-  async touchExistingThread(): Promise<boolean> {
+  async touchExistingThread(_actorUserId: string, threadId: string): Promise<boolean> {
+    this.thread = { id: threadId, incognito: false };
+    this.noThread = false;
     return true;
   }
 
@@ -104,9 +107,11 @@ class FlipFlopPersistence implements ChatPersistencePort {
     _actorUserId: string,
     userText: string,
     assistantReply: string,
-    executed: { provider: ProviderKind; model: string }
+    executed: { provider: ProviderKind; model: string },
+    opts?: { readonly threadId?: string | null }
   ): Promise<{ readonly userMessageId: string; readonly assistantMessageId: string }> {
     this.recordedTurns.push(userText);
+    this.recordedThreadIds.push(opts?.threadId);
     return { userMessageId: "user-msg-1", assistantMessageId: "asst-msg-1" };
   }
 
@@ -265,9 +270,51 @@ describe("#2934 new chat must stop a running turn", () => {
     expect(persistence.mainStateReads).toBe(2);
   });
 
+  it("binds a cold classifier turn and its stored reply to Main", async () => {
+    const persistence = new FlipFlopPersistence();
+    persistence.setNormal();
+    const gate = new DeferredGate();
+    const engine = new BlockingEngine();
+    const manager = new ChatSessionManager(
+      baseDeps(persistence, engine, { classifierGate: gate.runner })
+    );
+
+    const turn = manager.submitTurn("user-1", "Ben", "normal text");
+    gate.openMode("on");
+    await gate.evaluateEntered;
+    expect(gate.evaluateCalls[0]?.threadId).toBe("thread-main");
+    gate.openEvaluate();
+    await engine.readEntered;
+    engine.releaseComplete("reply");
+    await turn;
+
+    expect(persistence.recordedThreadIds).toEqual(["thread-main"]);
+  });
+
+  it("keeps an explicit New chat side thread selected for its next classifier turn", async () => {
+    const persistence = new FlipFlopPersistence();
+    persistence.setNormal();
+    const gate = new DeferredGate();
+    const engine = new BlockingEngine();
+    const manager = new ChatSessionManager(
+      baseDeps(persistence, engine, { classifierGate: gate.runner })
+    );
+
+    await manager.clear("user-1");
+    const turn = manager.submitTurn("user-1", "Ben", "normal text");
+    gate.openMode("on");
+    await gate.evaluateEntered;
+    expect(gate.evaluateCalls[0]?.threadId).toBe("thread-new");
+    gate.openEvaluate();
+    await engine.readEntered;
+    engine.releaseComplete("reply");
+    await turn;
+
+    expect(persistence.recordedThreadIds).toEqual(["thread-new"]);
+  });
+
   it("T1: a thread flip inside the gate-mode wait is refused, never classified, submitted, or saved", async () => {
     const persistence = new FlipFlopPersistence();
-    persistence.setPrivate();
     const gate = new DeferredGate();
     const shadow = new RecordingShadow();
     const engine = new BlockingEngine();
@@ -277,6 +324,8 @@ describe("#2934 new chat must stop a running turn", () => {
         classifierGateShadow: shadow.runner
       })
     );
+
+    await manager.clear("user-1", { incognito: true });
 
     const turn = manager.submitTurn("user-1", "Ben", "private text");
     await Promise.resolve();
@@ -366,7 +415,6 @@ describe("#2934 new chat must stop a running turn", () => {
 
   it("T5 (finding 2): ending the private chat stops the running turn before it launches post-purge work", async () => {
     const persistence = new FlipFlopPersistence();
-    persistence.setPrivate();
     const gate = new DeferredGate();
     const shadow = new RecordingShadow();
     const engine = new BlockingEngine();
@@ -376,6 +424,8 @@ describe("#2934 new chat must stop a running turn", () => {
         classifierGateShadow: shadow.runner
       })
     );
+
+    await manager.clear("user-1", { incognito: true });
 
     const turn = manager.submitTurn("user-1", "Ben", "private text");
     await Promise.resolve();
@@ -427,7 +477,6 @@ describe("#2934 new chat must stop a running turn", () => {
     // chat lands inside the heal, so the healed session belongs to the new
     // normal thread. The retry must refuse instead of re-sending private text.
     const persistence = new FlipFlopPersistence();
-    persistence.setPrivate();
 
     class FailingPrivateEngine extends BlockingEngine {
       submitCalls = 0;
@@ -460,6 +509,8 @@ describe("#2934 new chat must stop a running turn", () => {
     );
     const seen: TranscriptRecord[] = [];
     manager.subscribe("user-1", (record) => seen.push(record));
+
+    await manager.clear("user-1", { incognito: true });
 
     const turn = manager.submitTurn("user-1", "Ben", "private text");
     // Wait until the turn is inside the heal (second launch parked).

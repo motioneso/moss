@@ -13,6 +13,7 @@ import type {
 import type { GateMode, GateOutcome, GateRequest } from "./classifier-gate.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
 import type { TranscriptRecord } from "./types.js";
+import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 
 /**
  * Task 4.1 (#2901) — the handled-turn lifecycle, extracted from ChatSessionManager so that file
@@ -71,9 +72,22 @@ export async function tryGatedTurn(
   requestIncognito: boolean;
   requestThreadId: string | null;
 }> {
-  // Capture identity and privacy together BEFORE the gate-mode wait. A resume or new chat
-  // inside that wait cannot retarget this turn. Missing identity must stay null.
-  const threadState = await host.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
+  // Capture identity and privacy together BEFORE the gate-mode wait. A warm engine stays bound,
+  // an explicit resume/new chat follows current state, and only a cold drawer reconnect selects Main.
+  const sessionKey = surfaceSessionKey(actorUserId, surface);
+  const existingSession = host.sessions.get(sessionKey);
+  const threadState = existingSession
+    ? { id: existingSession.threadId, incognito: existingSession.incognito }
+    : await getSelectedThreadState({
+        actorUserId,
+        surface,
+        useMain: usesMainThreadSelection({
+          surface,
+          forceReplay: host.pendingForcedReplay.has(sessionKey),
+          hasSession: false
+        }),
+        persistence: host.deps.persistence
+      });
   const requestIncognito = threadState?.incognito ?? false;
   const requestThreadId = threadState?.id ?? null;
   const gate = host.deps.classifierGate;

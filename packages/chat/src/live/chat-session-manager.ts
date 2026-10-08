@@ -71,6 +71,7 @@ import type {
   PrivateThreadState
 } from "./chat-session-ports.js";
 import { tryGatedTurn } from "./classifier-gate-lifecycle.js";
+import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 import {
   routeOriginRecord,
   routeLiveOriginRecord,
@@ -729,7 +730,8 @@ export class ChatSessionManager {
           sessions: this.sessions,
           stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface),
           endPrivateSession: (userId, chatSurface) => this.endPrivateSession(userId, chatSurface),
-          revokeMcpToken: this.deps.revokeMcpToken
+          revokeMcpToken: this.deps.revokeMcpToken,
+          pendingForcedReplay: this.pendingForcedReplay
         })
     );
   }
@@ -755,10 +757,21 @@ export class ChatSessionManager {
     actorUserId: string,
     surface?: string
   ): Promise<{ readonly incognito: boolean }> {
-    const currentThread = await this.deps.persistence.getCurrentThreadState?.(
-      actorUserId,
-      normalizeChatSurface(surface)
-    );
+    const chatSurface = normalizeChatSurface(surface);
+    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
+    const session = this.sessions.get(sessionKey);
+    const currentThread = session
+      ? { id: session.threadId, incognito: session.incognito }
+      : await getSelectedThreadState({
+          actorUserId,
+          surface: chatSurface,
+          useMain: usesMainThreadSelection({
+            surface: chatSurface,
+            forceReplay: this.pendingForcedReplay.has(sessionKey),
+            hasSession: false
+          }),
+          persistence: this.deps.persistence
+        });
     return { incognito: currentThread?.incognito ?? false };
   }
 

@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
 import type {
   ActionRequestDetails,
   ChatActivityEventDto,
@@ -18,7 +19,8 @@ import {
   chatStreamUrl,
   listChatThreadMessages,
   listChatThreads,
-  listPendingActionRequests
+  listPendingActionRequests,
+  resumeChat
 } from "../api/client.js";
 import { listWorkflowApprovals } from "../api/workflows-client.js";
 
@@ -220,10 +222,20 @@ export function useChatStream(
         if (!active || generation !== hydrationGeneration.current) return;
         const workflowRecords = workflowApprovals.map(workflowApprovalRecord);
         const { threads } = threadsResult;
-        const thread = threads[0];
+        const thread =
+          surface === undefined || surface === DEFAULT_CHAT_SURFACE
+            ? (threads.find((candidate) => candidate.isMain) ?? threads[0])
+            : threads[0];
         if (!thread) {
           setRecords((current) => (current.length === 0 ? workflowRecords : current));
           return;
+        }
+        // The browser's startup is a cold drawer selection even when another tab left a warm
+        // side-chat engine behind. Route it through the authenticated resume seam before reading
+        // history, so the displayed transcript and the next turn bind to the same Main thread.
+        if ((surface === undefined || surface === DEFAULT_CHAT_SURFACE) && thread.isMain) {
+          await resumeChat(thread.id, surface);
+          if (!active || generation !== hydrationGeneration.current) return;
         }
         // Recovery may persist overdue outcomes. Finish it before fetching history so the
         // first reload includes those outcomes instead of an empty, already-expired card.

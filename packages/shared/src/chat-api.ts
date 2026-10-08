@@ -45,6 +45,8 @@ export interface ChatThreadDto {
   readonly ownerUserId: string;
   readonly title: string;
   readonly incognito: boolean;
+  /** Durable drawer destination used when reconnecting after side-chat activity. */
+  readonly isMain: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
   /** When this conversation was last active (a new turn), for ordering and display age. */
@@ -461,6 +463,7 @@ const chatThreadSchema = {
     "ownerUserId",
     "title",
     "incognito",
+    "isMain",
     "createdAt",
     "updatedAt",
     "lastActiveAt",
@@ -471,6 +474,7 @@ const chatThreadSchema = {
     ownerUserId: { type: "string" },
     title: { type: "string" },
     incognito: { type: "boolean" },
+    isMain: { type: "boolean" },
     createdAt: { type: "string" },
     updatedAt: { type: "string" },
     lastActiveAt: { type: "string" },

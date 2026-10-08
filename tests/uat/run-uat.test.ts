@@ -16,6 +16,7 @@ vi.mock("./provisioner.js", () => ({
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn }));
 
 const originalArgv = process.argv;
+const originalClaimedWebPort = process.env.JARVIS_UAT_CLAIMED_WEB_PORT;
 
 describe("run-uat CLI (#1027/#1047)", () => {
   beforeEach(() => {
@@ -43,6 +44,8 @@ describe("run-uat CLI (#1027/#1047)", () => {
 
   afterEach(() => {
     process.argv = originalArgv;
+    if (originalClaimedWebPort === undefined) delete process.env.JARVIS_UAT_CLAIMED_WEB_PORT;
+    else process.env.JARVIS_UAT_CLAIMED_WEB_PORT = originalClaimedWebPort;
     vi.restoreAllMocks();
   });
 
@@ -73,6 +76,28 @@ describe("run-uat CLI (#1027/#1047)", () => {
       "--config=tests/uat/playwright.uat.config.ts",
       "tests/uat/specs/future-advisory.uat.spec.ts"
     ]);
+  });
+
+  it("uses an explicitly claimed port for an isolated live run", async () => {
+    process.env.JARVIS_UAT_CLAIMED_WEB_PORT = "5188";
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+
+    await import("./run-uat.js");
+
+    expect(mocks.provisionForUat).toHaveBeenCalledWith(
+      "solo-admin",
+      expect.objectContaining({ claimedWebPort: 5188 })
+    );
+  });
+
+  it("rejects an invalid claimed port before provisioning", async () => {
+    process.env.JARVIS_UAT_CLAIMED_WEB_PORT = "not-a-port";
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+
+    await expect(import("./run-uat.js")).rejects.toThrow(
+      "JARVIS_UAT_CLAIMED_WEB_PORT must be a decimal TCP port"
+    );
+    expect(mocks.provisionForUat).not.toHaveBeenCalled();
   });
 
   it("fails clearly when the selected spec has no valid uatLevel export", async () => {

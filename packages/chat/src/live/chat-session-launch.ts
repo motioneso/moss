@@ -25,6 +25,7 @@ import { CliChatUnavailableError } from "./errors.js";
 import { renderPersona } from "./persona.js";
 import { renderMemorySeedBlock } from "./recall-seed.js";
 import { drainEngine } from "./session-runtime-helpers.js";
+import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 
 export interface LaunchChatSessionArgs {
   readonly actorUserId: string;
@@ -55,16 +56,25 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   const sessionKey = surfaceSessionKey(actorUserId, surface);
   const { provider, model, acpModel, providerConfigId, acpAgentId } = providerIdentity;
   assertLiveCliProvider(providerIdentity);
-  const getThreadState =
-    surface === DEFAULT_CHAT_SURFACE && !opts?.forceReplay && deps.persistence.getMainThreadState
-      ? () => deps.persistence.getMainThreadState!(actorUserId)
-      : deps.persistence.getCurrentThreadState
-        ? () => deps.persistence.getCurrentThreadState!(actorUserId, surface)
-        : undefined;
-  let threadState = await getThreadState?.();
-  if (!threadState && getThreadState) {
+  const useMain = usesMainThreadSelection({
+    surface,
+    forceReplay: opts?.forceReplay ?? false,
+    hasSession: false
+  });
+  let threadState = await getSelectedThreadState({
+    actorUserId,
+    surface,
+    useMain,
+    persistence: deps.persistence
+  });
+  if (!threadState && deps.persistence.getCurrentThreadState) {
     await deps.persistence.openNewConversation(actorUserId, undefined, surface);
-    threadState = await getThreadState();
+    threadState = await getSelectedThreadState({
+      actorUserId,
+      surface,
+      useMain,
+      persistence: deps.persistence
+    });
   }
   // Bind once, before persona or tool-menu awaits can overlap a conversation switch.
   const threadId = threadState?.id ?? null;

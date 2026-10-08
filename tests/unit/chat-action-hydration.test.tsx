@@ -57,6 +57,7 @@ function thread(id: string): ChatThreadDto {
     ownerUserId: "user-1",
     title: id,
     incognito: false,
+    isMain: false,
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString(),
     lastActiveAt: new Date(0).toISOString(),

@@ -77,6 +77,7 @@ export function serializeThread(
     ownerUserId: thread.owner_user_id,
     title: thread.title,
     incognito: thread.incognito,
+    isMain: thread.is_main,
     createdAt: toIsoString(thread.created_at),
     updatedAt: toIsoString(thread.updated_at),
     lastActiveAt: toIsoString(thread.last_active_at),
