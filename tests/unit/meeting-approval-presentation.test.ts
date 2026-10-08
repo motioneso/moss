@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
-import { dataContextBrand } from "@moss/db";
+import { dataContextBrand, type DataContextDb } from "@moss/db";
+import { PreferencesRepository } from "@moss/structured-state";
 import type { RouteApprovalInput, RouteApprovalPresentation } from "@moss/module-sdk";
 import type {
   IngestMeetingTranscriptInput,
@@ -19,7 +20,11 @@ import {
 import { meetingsModuleManifest } from "../../packages/meetings/src/manifest.js";
 import { MeetingRecordsRepository } from "../../packages/meetings/src/repository.js";
 import { MeetingOutputsRepository } from "../../packages/meetings/src/output-repository.js";
-import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
+import {
+  MeetingPreferencesRepository,
+  MEETING_CAPTURE_DEFAULT_KEY,
+  MEETING_CAPTURE_SOURCE_KEY
+} from "../../packages/meetings/src/preferences.js";
 import {
   MeetingCaptureConnectionRepository,
   type CaptureConnection
@@ -29,7 +34,7 @@ import { MeetingTranscriptRepository } from "../../packages/meetings/src/transcr
 const id = "11111111-1111-4111-8111-111111111111";
 const key = "22222222-2222-4222-8222-222222222222";
 const foreign = "33333333-3333-4333-8333-333333333333";
-const db = { [dataContextBrand]: true, db: {} };
+const db = { [dataContextBrand]: true, db: {} } as unknown as DataContextDb;
 const ctx = { actorUserId: "owner", requestId: "request", chatSessionId: "session" };
 const meeting: MeetingRecord = {
   id,
@@ -201,11 +206,15 @@ const recorder = (): CaptureConnection => ({
   expires_at: new Date("2030-01-01T00:00:00Z")
 });
 let connection: MockInstance<MeetingCaptureConnectionRepository["connection"]>;
+let persistedDefault: MockInstance<MeetingPreferencesRepository["getPersistedDefaultCaptureMode"]>;
 let readPreferences: MockInstance<MeetingPreferencesRepository["get"]>;
 let get: MockInstance<MeetingRecordsRepository["get"]>;
 let getArtifact: MockInstance<MeetingOutputsRepository["getArtifact"]>;
 let snapshot: MockInstance<MeetingTranscriptRepository["approvalSnapshot"]>;
 beforeEach(() => {
+  persistedDefault = vi
+    .spyOn(MeetingPreferencesRepository.prototype, "getPersistedDefaultCaptureMode")
+    .mockResolvedValue(null);
   connection = vi
     .spyOn(MeetingCaptureConnectionRepository.prototype, "connection")
     .mockResolvedValue(recorder());
@@ -312,7 +321,7 @@ describe("Meetings authored action disclosures", () => {
       target: meeting.title,
       fields: [
         { label: "New title", value: body.title },
-        { label: "Current title expected", value: meeting.title }
+        { label: "Current title", value: meeting.title }
       ]
     });
     noInternalIds(before);
@@ -325,6 +334,9 @@ describe("Meetings authored action disclosures", () => {
       { expectedTitle: "x" },
       { title: " ", expectedTitle: "x" },
       { title: "x".repeat(241), expectedTitle: "x" },
+      { title: "é".repeat(121), expectedTitle: "x" },
+      { title: "x", expectedTitle: "é".repeat(121) },
+      { title: "x\0", expectedTitle: "x" },
       { title: "x", expectedTitle: 1 }
     ])
       expect(await meetingTitlePresentation(db, call(invalid), ctx)).toBeNull();
@@ -415,6 +427,112 @@ describe("Meetings authored action disclosures", () => {
     );
     expect(visible(result)).toContain("Clear the saved Mac, microphone and application");
     expect(connection).not.toHaveBeenCalled();
+  });
+  it.each([
+    [{ summarizeOnStop: false }, "Turn off automatic summaries"],
+    [{ summarizeOnStop: true }, "Turn on automatic summaries"],
+    [{ summaryTemplateId: "interview" }, "Change the summary style"],
+    [{ rememberedSource: null }, "Clear the saved recording source"],
+    [{ defaultCaptureMode: "microphone-only" }, "Change the default recording audio"],
+    [
+      { summarizeOnStop: false, summaryTemplateId: "interview", rememberedSource: null },
+      "Clear the saved recording source; Turn off automatic summaries; Change the summary style"
+    ]
+  ])("titles this exact preference change %j", async (body, title) => {
+    expect(await meetingPreferencesPresentation(db, call(body, false), ctx)).toMatchObject({
+      title
+    });
+  });
+  it("discloses source clearing widening from an inherited microphone-only mode", async () => {
+    readPreferences.mockResolvedValue({
+      ...preferenceState,
+      defaultCaptureMode: "microphone-only",
+      rememberedSource: { deviceId: foreign, microphoneId: "internal-mic", mode: "microphone-only" }
+    });
+    const result = await meetingPreferencesPresentation(
+      db,
+      call({ rememberedSource: null }, false),
+      ctx
+    );
+    expect(result?.fields).toContainEqual({
+      label: "Next recording audio",
+      value: "Computer audio and microphone"
+    });
+    persistedDefault.mockResolvedValue("microphone-only");
+    const savedDefault = await meetingPreferencesPresentation(
+      db,
+      call({ rememberedSource: null }, false),
+      ctx
+    );
+    expect(savedDefault?.fields).toContainEqual({
+      label: "Next recording audio",
+      value: "Microphone only"
+    });
+    expect(savedDefault?.version).not.toBe(result?.version);
+  });
+  it.each([
+    [null, "computer-audio", "Computer audio and microphone"],
+    ["microphone-only", "microphone-only", "Microphone only"]
+  ] as const)(
+    "matches the next persisted read after source clearing with saved default %s",
+    async (savedMode, nextMode, nextLabel) => {
+      readPreferences.mockRestore();
+      persistedDefault.mockRestore();
+      const stored = new Map<string, unknown>([
+        [
+          MEETING_CAPTURE_SOURCE_KEY,
+          { deviceId: foreign, microphoneId: "internal-mic", mode: "microphone-only" }
+        ],
+        [MEETING_CAPTURE_DEFAULT_KEY, savedMode]
+      ]);
+      vi.spyOn(PreferencesRepository.prototype, "get").mockImplementation(
+        async (_db, key) => stored.get(key) ?? null
+      );
+      const write = vi
+        .spyOn(PreferencesRepository.prototype, "upsert")
+        .mockImplementation(async (_db, key, value) => {
+          stored.set(key, value);
+        });
+      const repository = new MeetingPreferencesRepository();
+      expect((await repository.get(db)).defaultCaptureMode).toBe("microphone-only");
+      const card = await meetingPreferencesPresentation(
+        db,
+        call({ rememberedSource: null }, false),
+        ctx
+      );
+      expect(card?.fields).toContainEqual({ label: "Next recording audio", value: nextLabel });
+      expect(write).not.toHaveBeenCalled();
+      await repository.update(db, { rememberedSource: null });
+      expect(write).toHaveBeenCalledExactlyOnceWith(db, MEETING_CAPTURE_SOURCE_KEY, null);
+      expect((await repository.get(db)).defaultCaptureMode).toBe(nextMode);
+      expect(await repository.getPersistedDefaultCaptureMode(db)).toBe(savedMode);
+    }
+  );
+  it("discloses explicit source/default combinations and unavailable selected-app recovery", async () => {
+    for (const [defaultCaptureMode, value] of [
+      [null, "Computer audio and microphone"],
+      ["microphone-only", "Microphone only"]
+    ] as const) {
+      const result = await meetingPreferencesPresentation(
+        db,
+        call({ rememberedSource: null, defaultCaptureMode }, false),
+        ctx
+      );
+      expect(result?.fields).toContainEqual({ label: "Next recording audio", value });
+    }
+    persistedDefault.mockResolvedValue("selected-app");
+    expect(
+      (await meetingPreferencesPresentation(db, call({ rememberedSource: null }, false), ctx))
+        ?.fields
+    ).toContainEqual({
+      label: "Next recording audio",
+      value: "Selected app and microphone; choose an application before recording"
+    });
+  });
+  it("accepts exactly 240 UTF-8 title bytes", async () => {
+    expect(
+      await meetingTitlePresentation(db, call({ title: "é".repeat(120), expectedTitle: "x" }), ctx)
+    ).not.toBeNull();
   });
   it("refuses missing, foreign, ambiguous or malformed recorder references", async () => {
     const input = call({ rememberedSource }, false);

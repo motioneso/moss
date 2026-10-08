@@ -1,5 +1,8 @@
 import { createConstrainedCliStructuredAdapterFactory, selectEngineFactory } from "@moss/chat";
-import type { BuiltInWorkerDependencies } from "@moss/module-registry";
+import {
+  createConstrainedCliReadinessProbe,
+  type BuiltInWorkerDependencies
+} from "@moss/module-registry";
 
 /** One worker-owned connection; no in-process or alternative-model fallback. */
 export function createWorkerMeetingSummaryCli(env: NodeJS.ProcessEnv = process.env): {
@@ -16,17 +19,7 @@ export function createWorkerMeetingSummaryCli(env: NodeJS.ProcessEnv = process.e
       createConstrainedCliStructuredAdapter: runtime
         ? createConstrainedCliStructuredAdapterFactory(runtime.factory)
         : undefined,
-      probeConstrainedCli: async (actorUserId, signal) => {
-        if (!runtime?.connection) return "model-unavailable";
-        const result = await runtime.connection.probeProvider(
-          { provider: "anthropic", constrainedStructured: true },
-          actorUserId,
-          { timeoutMs: 5_000, signal }
-        );
-        if (result.constrainedUnavailableReason === "per_user_isolation_required")
-          return "subscription-isolation-unavailable";
-        return result.status === "ready" ? "available" : "model-unavailable";
-      }
+      probeConstrainedCli: createConstrainedCliReadinessProbe(() => runtime?.connection)
     },
     close: () => runtime?.connection?.close()
   };

@@ -185,12 +185,17 @@ export const meetingTitlePresentation: RouteApprovalPresentation = async (db, in
   const title = (label: string) => ({
     label,
     present: (value: unknown) =>
-      typeof value === "string" && !!value.trim() && value.length <= 240 ? value : null
+      typeof value === "string" &&
+      !!value.trim() &&
+      !value.includes("\0") &&
+      Buffer.byteLength(value) <= 240
+        ? value
+        : null
   });
   const fields = presentApprovalFields(
     input.body,
     {
-      expectedTitle: title("Current title expected"),
+      expectedTitle: title("Current title"),
       title: title("New title")
     },
     ["expectedTitle", "title"]
@@ -212,7 +217,10 @@ export const meetingPreferencesPresentation: RouteApprovalPresentation = async (
       ? null
       : await rememberedSourceDetails(db, body.rememberedSource, ctx.actorUserId);
   if (body.rememberedSource != null && !source) return null;
-  const current = await preferences.get(db);
+  const [current, persistedDefault] = await Promise.all([
+    preferences.get(db),
+    preferences.getPersistedDefaultCaptureMode(db)
+  ]);
   const effectiveSource =
     body.rememberedSource === undefined
       ? current.rememberedSource
@@ -233,17 +241,47 @@ export const meetingPreferencesPresentation: RouteApprovalPresentation = async (
       label: "Remembered recording source",
       present: (value) =>
         value === null
-          ? "Clear the saved Mac, microphone and application; the next Start uses the current capture default and requires an available source"
+          ? "Clear the saved Mac, microphone and application"
           : (source?.fields ?? null)
     }
   });
-  return fields
-    ? {
-        target: "Meeting capture preferences",
-        fields,
-        version: version([body, current, source?.reference])
-      }
-    : null;
+  if (!fields) return null;
+  // update() only persists an explicit default. Without one, the next get() derives
+  // its mode from the newly saved source, not the previous source's fallback.
+  const nextMode =
+    body.defaultCaptureMode === undefined
+      ? (persistedDefault ?? effectiveSource?.mode ?? "computer-audio")
+      : (body.defaultCaptureMode ?? effectiveSource?.mode ?? "computer-audio");
+  const changes = [
+    ...(Object.hasOwn(body, "rememberedSource")
+      ? [
+          body.rememberedSource === null
+            ? "Clear the saved recording source"
+            : "Change the saved recording source"
+        ]
+      : []),
+    ...(Object.hasOwn(body, "defaultCaptureMode") ? ["Change the default recording audio"] : []),
+    ...(Object.hasOwn(body, "summarizeOnStop")
+      ? [body.summarizeOnStop ? "Turn on automatic summaries" : "Turn off automatic summaries"]
+      : []),
+    ...(Object.hasOwn(body, "summaryTemplateId") ? ["Change the summary style"] : [])
+  ];
+  return {
+    title: changes.join("; "),
+    target: "Meeting capture preferences",
+    fields: [
+      ...fields,
+      ...(Object.hasOwn(body, "rememberedSource")
+        ? [
+            {
+              label: "Next recording audio",
+              value: `${captureMode(nextMode)}${nextMode === "selected-app" && !effectiveSource ? "; choose an application before recording" : ""}`
+            }
+          ]
+        : [])
+    ],
+    version: version([body, current, persistedDefault, source?.reference])
+  };
 };
 export const deleteMeetingPresentation: RouteApprovalPresentation = async (db, input) => {
   assertDataContextDb(db);

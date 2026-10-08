@@ -1,3 +1,5 @@
+import { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
+export { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
 import {
   createMeetingCaptureRuntime,
   type MeetingCaptureAuthorization
@@ -3732,18 +3734,7 @@ export function registerBuiltInApiRoutes(
     createConstrainedCliStructuredAdapter: createConstrainedCliStructuredAdapterFactory(
       structuredChatEngineFactory
     ),
-    probeConstrainedCli: async (actorUserId, signal) => {
-      const connection = getRpcConnection();
-      if (!connection) return "model-unavailable";
-      const result = await connection.probeProvider(
-        { provider: "anthropic", constrainedStructured: true },
-        actorUserId,
-        { timeoutMs: 5_000, signal }
-      );
-      if (result.constrainedUnavailableReason === "per_user_isolation_required")
-        return "subscription-isolation-unavailable";
-      return result.status === "ready" ? "available" : "model-unavailable";
-    },
+    probeConstrainedCli: createConstrainedCliReadinessProbe(getRpcConnection),
     personaPreview:
       dependencies.personaPreview ??
       createDefaultPersonaPreview(dependencies.dataContext, {
