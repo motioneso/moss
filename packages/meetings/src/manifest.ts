@@ -368,7 +368,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_capture",
       description:
-        "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Only Start or Resume records. Pause and Stop remain available; a nav dot shows recording elsewhere. Mac only.",
+        "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Only Start or Resume records. Microphone plus computer audio uses Apple voice processing with minimum playback ducking; route changes pause for explicit recovery. Pause and Stop remain available; a nav dot shows recording elsewhere. Mac only.",
       errors: [
         {
           code: "meeting_capture_source_unavailable",

@@ -6,7 +6,7 @@ extension MeetingCaptureHost {
         try selection.validate()
         var devices: [MeetingAudioSource: MeetingAudioCapturing] = [:]
         if let microphone = selection.microphoneDeviceID {
-            devices[.microphone] = MeetingMicrophoneCapture(selectedDeviceID: microphone)
+            devices[.microphone] = MeetingMicrophoneCapture(selectedDeviceID: microphone, voiceProcessing: selection.output != nil)
         }
         if let output = selection.output {
             guard #available(macOS 14.2, *) else { throw MeetingHostError.unavailable }

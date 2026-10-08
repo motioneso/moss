@@ -75,16 +75,16 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             }
         }
 
-        func capture(device: AudioDeviceID = 42) -> MeetingMicrophoneCapture {
+        func capture(device: AudioDeviceID = 42, voiceProcessing: Bool = false) -> MeetingMicrophoneCapture {
             MeetingMicrophoneCapture(
-                selectedDeviceID: device,
+                selectedDeviceID: device, voiceProcessing: voiceProcessing,
                 makeUnit: { try self.step("create"); return self },
                 hostTimeToNanoseconds: { $0 * 10 }
             )
         }
 
         func enableInput() throws { try step("input") }
-        func disableOutput() throws { try step("output") }
+        func configureOutput() throws { try step("output") }
         func selectDevice(_ deviceID: AudioDeviceID) throws { try step("device"); selectedDevice = deviceID }
         func inputFormat() throws -> AudioStreamBasicDescription {
             formatReads += 1
@@ -171,6 +171,79 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         let afterStop = unit.events
         try capture.stop()
         XCTAssertEqual(unit.events, afterStop)
+    }
+
+    func testReferenceRouteChangesCloseMicrophoneAdmissionWithoutRetargeting() throws {
+        for (current, alive) in [(Optional<UInt32>(12), true), (nil, true), (11, false)] {
+            let unit = FakeUnit()
+            let receiver = Receiver()
+            let capture = unit.capture(device: 71)
+            try capture.start(into: receiver)
+            let context = try XCTUnwrap(unit.context)
+            unit.emit()
+            XCTAssertEqual(receiver.batches.count, 1)
+            MeetingVoiceProcessing.verifyReference(expected: 11, current: current, alive: alive, context: context)
+            unit.emit()
+            XCTAssertEqual(receiver.failures, [.invalidSelection], "Changed reference must close microphone admission")
+            XCTAssertEqual(receiver.batches.count, 1, "No microphone samples after reference loss")
+            XCTAssertEqual(unit.selectedDevice, 71)
+            try capture.stop()
+        }
+    }
+
+    func testUnchangedReferenceAndLateRouteNoticesAreInert() throws {
+        let unit = FakeUnit()
+        let receiver = Receiver()
+        let capture = unit.capture()
+        try capture.start(into: receiver)
+        let context = try XCTUnwrap(unit.context)
+        MeetingVoiceProcessing.verifyReference(expected: 11, current: 11, alive: true, context: context)
+        unit.emit()
+        XCTAssertEqual(receiver.batches.count, 1)
+        XCTAssertTrue(receiver.failures.isEmpty)
+        try capture.stop()
+        MeetingVoiceProcessing.verifyReference(expected: 11, current: nil, alive: false, context: context)
+        XCTAssertTrue(receiver.failures.isEmpty)
+    }
+
+    func testReferenceFormatChangeClosesAdmissionUntilExplicitRestart() throws {
+        let unit = FakeUnit()
+        let receiver = Receiver()
+        let capture = unit.capture(voiceProcessing: true)
+        try capture.start(into: receiver)
+        unit.context?.audioUnitFormatDidChange(scope: kAudioUnitScope_Output, element: 0)
+        unit.emit()
+        XCTAssertEqual(receiver.failures, [.invalidFormat])
+        XCTAssertTrue(receiver.batches.isEmpty)
+        try capture.stop()
+    }
+
+    func testMicrophoneOnlyIgnoresPlaybackFormatNotices() throws {
+        let unit = FakeUnit()
+        let receiver = Receiver()
+        let capture = unit.capture()
+        try capture.start(into: receiver)
+        unit.context?.audioUnitFormatDidChange(scope: kAudioUnitScope_Output, element: 0)
+        unit.emit()
+        XCTAssertTrue(receiver.failures.isEmpty)
+        XCTAssertEqual(receiver.batches.count, 1)
+        try capture.stop()
+    }
+
+    func testSourceModesOnlyUseVoiceProcessingWithMicrophoneAndOutput() throws {
+        let micOnly = try MeetingCaptureHost.devices(.init(microphoneDeviceID: 71, output: nil))
+        XCTAssertEqual(Set(micOnly.keys), [.microphone])
+        XCTAssertFalse(try XCTUnwrap(micOnly[.microphone] as? MeetingMicrophoneCapture).voiceProcessing)
+        if #available(macOS 14.2, *) {
+            let both = try MeetingCaptureHost.devices(.init(microphoneDeviceID: 71, output: .excludingProcesses([12])))
+            XCTAssertEqual(Set(both.keys), [.microphone, .output])
+            XCTAssertTrue(try XCTUnwrap(both[.microphone] as? MeetingMicrophoneCapture).voiceProcessing)
+            let selected = try MeetingCaptureHost.devices(.init(microphoneDeviceID: 71, output: .selectedProcesses([12])))
+            XCTAssertTrue(try XCTUnwrap(selected[.microphone] as? MeetingMicrophoneCapture).voiceProcessing)
+            let outputOnly = try MeetingCaptureHost.devices(.init(microphoneDeviceID: nil, output: .excludingProcesses([12])))
+            XCTAssertEqual(Set(outputOnly.keys), [.output])
+            XCTAssertNil(outputOnly[.microphone])
+        }
     }
 
     func testUnknownSelectedDeviceFailsWithoutOpeningAUnit() {

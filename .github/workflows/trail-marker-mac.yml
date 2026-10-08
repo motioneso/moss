@@ -98,6 +98,8 @@ jobs:
             script: check-meeting-resume-negative-controls.py
           - group: source-selection
             script: check-meeting-source-negative-controls.py
+          - group: voice-processing
+            script: check-meeting-voice-negative-controls.py
           - group: recovery
             script: check-meeting-single-link-controls.py
 

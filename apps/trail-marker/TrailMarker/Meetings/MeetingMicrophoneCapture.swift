@@ -6,7 +6,7 @@ import Foundation
 /// A successful dispose must end all callbacks before releasing their context.
 protocol MeetingMicrophoneUnit: AnyObject {
     func enableInput() throws
-    func disableOutput() throws
+    func configureOutput() throws
     func selectDevice(_ deviceID: AudioDeviceID) throws
     func inputFormat() throws -> AudioStreamBasicDescription
     func outputFormat() throws -> AudioStreamBasicDescription
@@ -29,10 +29,11 @@ protocol MeetingMicrophoneUnit: AnyObject {
 }
 
 /// Inert until start. Its owner serializes lifecycle calls and never calls them from a receiver.
-/// The selected ID belongs to this AUHAL only; no system-default device property is changed.
+/// The selected ID belongs to this unit only; no system-default device property is changed.
 final class MeetingMicrophoneCapture: MeetingAudioCapturing {
     static let maximumBufferedFrames = UInt32(MeetingAudioBuffer.maximumCallbackFrames)
 
+    let voiceProcessing: Bool
     private let selectedDeviceID: AudioDeviceID
     private let makeUnit: () throws -> MeetingMicrophoneUnit
     private let hostTimeToNanoseconds: (UInt64) -> UInt64
@@ -43,11 +44,13 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
 
     init(
         selectedDeviceID: AudioDeviceID,
-        makeUnit: @escaping () throws -> MeetingMicrophoneUnit = { try MeetingAUHALUnit() },
+        voiceProcessing: Bool = false,
+        makeUnit: (() throws -> MeetingMicrophoneUnit)? = nil,
         hostTimeToNanoseconds: @escaping (UInt64) -> UInt64 = AudioConvertHostTimeToNanos
     ) {
+        self.voiceProcessing = voiceProcessing
         self.selectedDeviceID = selectedDeviceID
-        self.makeUnit = makeUnit
+        self.makeUnit = makeUnit ?? { try MeetingMicrophoneIOUnit(voiceProcessing: voiceProcessing) }
         self.hostTimeToNanoseconds = hostTimeToNanoseconds
     }
 
@@ -58,7 +61,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
             let acquired = try makeUnit()
             unit = acquired
             try acquired.enableInput()
-            try acquired.disableOutput()
+            try acquired.configureOutput()
             try acquired.selectDevice(selectedDeviceID)
             let format = try acquired.inputFormat()
             guard Self.isUsable(format) else { throw MeetingAudioFailure.invalidFormat }
@@ -69,7 +72,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
             }
             let renderContext = MeetingMicrophoneRenderContext(
                 unit: acquired, receiver: receiver, format: format,
-                capacity: capacity, hostTimeToNanoseconds: hostTimeToNanoseconds
+                capacity: capacity, hostTimeToNanoseconds: hostTimeToNanoseconds, hasVoiceReference: voiceProcessing
             )
             context = renderContext
             try acquired.installInputCallback(renderContext)
@@ -143,6 +146,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
 final class MeetingMicrophoneRenderContext {
     private let unit: MeetingMicrophoneUnit
     private let receiver: MeetingAudioReceiving
+    private let hasVoiceReference: Bool
     private let sampleRate: Double
     private let format: AudioStreamBasicDescription
     private let formatNotice = MeetingAudioAtomicState()
@@ -156,10 +160,11 @@ final class MeetingMicrophoneRenderContext {
 
     init(
         unit: MeetingMicrophoneUnit, receiver: MeetingAudioReceiving, format: AudioStreamBasicDescription,
-        capacity: UInt32, hostTimeToNanoseconds: @escaping (UInt64) -> UInt64
+        capacity: UInt32, hostTimeToNanoseconds: @escaping (UInt64) -> UInt64, hasVoiceReference: Bool = false
     ) {
         self.unit = unit
         self.receiver = receiver
+        self.hasVoiceReference = hasVoiceReference
         self.sampleRate = format.mSampleRate
         self.format = format
         self.capacity = capacity
@@ -209,6 +214,15 @@ final class MeetingMicrophoneRenderContext {
             let currentCapacity = try unit.maximumFramesPerSlice()
             guard currentCapacity > 0, currentCapacity <= capacity else { failFromRender(.bufferFull, diagnostic: .init(.microphoneCapacityVerification)); return }
         } catch { failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatRead, status: MeetingAudioFailureDiagnostic.status(error))) }
+    }
+
+    func audioUnitFormatDidChange(scope: AudioUnitScope, element: AudioUnitElement) {
+        guard scope == kAudioUnitScope_Input || scope == kAudioUnitScope_Output else { return }
+        if element == 0, hasVoiceReference {
+            failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatVerification))
+        } else if element == 1 {
+            formatDidChange()
+        }
     }
 
     func deviceDidDisappear() { failFromRender(.invalidSelection, diagnostic: .init(.microphoneDeviceGone)) }
@@ -289,21 +303,27 @@ final class MeetingMicrophoneRenderContext {
     }
 }
 
-/// AUHAL configuration follows Apple TN2091. Hardware-rate change monitoring is required
+/// HAL input follows Apple TN2091; duplex VPIO uses separate per-bus device selection.
+/// Hardware-rate change monitoring is required
 /// for AUHAL input (QA1777); it cannot silently convert a new device sample rate.
 /// https://developer.apple.com/library/archive/technotes/tn2091/_index.html
 /// https://developer.apple.com/library/archive/qa/qa1777/_index.html
-final class MeetingAUHALUnit: MeetingMicrophoneUnit {
+final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
     private var unit: AudioUnit?
+    private let voiceProcessing: Bool
+    private var referenceDevice: AudioDeviceID?
+    private var referenceListener: AudioObjectPropertyListenerBlock?
     private var callbackContext: Unmanaged<MeetingMicrophoneRenderContext>?
     private var selectedDevice: AudioDeviceID?
     private let deviceQueue = DispatchQueue(label: "com.moss.meeting.microphone-device")
     private var deviceListener: AudioObjectPropertyListenerBlock?
     private var formatMonitor: DispatchSourceTimer?
 
-    init() throws {
+    init(voiceProcessing: Bool = false) throws {
+        self.voiceProcessing = voiceProcessing
         var description = AudioComponentDescription(
-            componentType: kAudioUnitType_Output, componentSubType: kAudioUnitSubType_HALOutput,
+            componentType: kAudioUnitType_Output,
+            componentSubType: voiceProcessing ? kAudioUnitSubType_VoiceProcessingIO : kAudioUnitSubType_HALOutput,
             componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0
         )
         guard let component = AudioComponentFindNext(nil, &description) else {
@@ -321,16 +341,30 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
             kAudioUnitScope_Input, 1, &value, UInt32(MemoryLayout<UInt32>.size)), "enable AUHAL input")
     }
 
-    func disableOutput() throws {
+    func configureOutput() throws {
+        if voiceProcessing {
+            try MeetingVoiceProcessing.configureOutput { property, scope, bus, value, size in
+                try self.check(AudioUnitSetProperty(try self.liveUnit(), property, scope, bus, value, size),
+                               "configure microphone voice processing")
+            }
+            return
+        }
         var value: UInt32 = 0
         try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_EnableIO,
             kAudioUnitScope_Output, 0, &value, UInt32(MemoryLayout<UInt32>.size)), "disable AUHAL output")
     }
 
     func selectDevice(_ deviceID: AudioDeviceID) throws {
+        if voiceProcessing {
+            let output = try Self.defaultOutputDevice()
+            var reference = output
+            try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_CurrentDevice,
+                kAudioUnitScope_Global, 0, &reference, UInt32(MemoryLayout<AudioDeviceID>.size)), "select voice reference device")
+            referenceDevice = output
+        }
         var value = deviceID
         try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_CurrentDevice,
-            kAudioUnitScope_Global, 0, &value, UInt32(MemoryLayout<AudioDeviceID>.size)), "select AUHAL device")
+            kAudioUnitScope_Global, voiceProcessing ? 1 : 0, &value, UInt32(MemoryLayout<AudioDeviceID>.size)), "select microphone device")
         selectedDevice = deviceID
     }
 
@@ -362,10 +396,19 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
         try check(AudioUnitSetProperty(try liveUnit(), kAudioUnitProperty_StreamFormat,
             kAudioUnitScope_Output, 1, &format, UInt32(MemoryLayout<AudioStreamBasicDescription>.size)),
             "configure AUHAL mono format")
+        if voiceProcessing {
+            // VPIO requires matching client formats on both sides. Its output callback
+            // renders silence only; the independent unmuted process tap is never replayed.
+            try check(AudioUnitSetProperty(try liveUnit(), kAudioUnitProperty_StreamFormat,
+                kAudioUnitScope_Input, 0, &format, UInt32(MemoryLayout<AudioStreamBasicDescription>.size)),
+                "configure voice reference format")
+        }
         // Mono means the first input channel, not an unapproved device/route fallback.
-        var channel: Int32 = 0
-        try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_ChannelMap,
-            kAudioUnitScope_Output, 1, &channel, UInt32(MemoryLayout<Int32>.size)), "configure AUHAL channel map")
+        if !voiceProcessing {
+            var channel: Int32 = 0
+            try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_ChannelMap,
+                kAudioUnitScope_Output, 1, &channel, UInt32(MemoryLayout<Int32>.size)), "configure AUHAL channel map")
+        }
         var allocate: UInt32 = 0
         try check(AudioUnitSetProperty(try liveUnit(), kAudioUnitProperty_ShouldAllocateBuffer,
             kAudioUnitScope_Output, 1, &allocate, UInt32(MemoryLayout<UInt32>.size)), "configure AUHAL buffer ownership")
@@ -406,9 +449,9 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
             try liveUnit(), kAudioUnitProperty_StreamFormat,
             { refCon, _, _, scope, element in
                 let contextPointer: UnsafeMutableRawPointer? = refCon
-                guard element == 1, scope == kAudioUnitScope_Input || scope == kAudioUnitScope_Output,
-                      let contextPointer else { return }
-                Unmanaged<MeetingMicrophoneRenderContext>.fromOpaque(contextPointer).takeUnretainedValue().formatDidChange()
+                guard let contextPointer else { return }
+                let context = Unmanaged<MeetingMicrophoneRenderContext>.fromOpaque(contextPointer).takeUnretainedValue()
+                context.audioUnitFormatDidChange(scope: scope, element: element)
             }, callbackContext.toOpaque()
         ), "AudioUnitAddPropertyListener")
         // Preallocate a control-plane poller; the AU property callback never dispatches/allocates.
@@ -421,16 +464,65 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
 
     func installDeviceListener(_ context: MeetingMicrophoneRenderContext) throws {
         guard let selectedDevice, deviceListener == nil else { throw MeetingAudioFailure.invalidTransition }
+        if voiceProcessing {
+            // VPIO may construct its own private aggregate. Verify the selected physical
+            // endpoints through its documented per-bus CurrentDevice properties.
+            guard try currentDevice(bus: 1) == selectedDevice,
+                  try currentDevice(bus: 0) == referenceDevice else { throw MeetingAudioFailure.invalidSelection }
+        }
         var address = Self.devicesAddress()
+        let reference = referenceDevice
         let listener: AudioObjectPropertyListenerBlock = { _, _ in
             // Listen on the stable system object so unplug cannot leave an unremovable
             // listener registered on a now-destroyed device. Unrelated device changes are inert.
-            if !Self.deviceIsAlive(selectedDevice) { context.deviceDidDisappear() }
+            if !Self.deviceIsAlive(selectedDevice) || reference.map({ !Self.deviceIsAlive($0) }) == true {
+                context.deviceDidDisappear()
+            }
         }
         try check(AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
             &address, deviceQueue, listener), "observe microphone devices")
         deviceListener = listener
         guard Self.deviceIsAlive(selectedDevice) else { throw MeetingAudioFailure.invalidSelection }
+        if let reference {
+            var routeAddress = Self.outputAddress()
+            let routeListener: AudioObjectPropertyListenerBlock = { _, _ in
+                // Do not retarget a running unit. Existing host recovery rebuilds both
+                // sources on explicit Resume after checking the exact capture grant.
+                MeetingVoiceProcessing.verifyReference(expected: reference,
+                    current: try? Self.defaultOutputDevice(), alive: Self.deviceIsAlive(reference), context: context)
+            }
+            try check(AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
+                &routeAddress, deviceQueue, routeListener), "observe voice reference route")
+            referenceListener = routeListener
+            guard try Self.defaultOutputDevice() == reference, Self.deviceIsAlive(reference) else {
+                throw MeetingAudioFailure.invalidSelection
+            }
+        }
+    }
+
+    private func currentDevice(bus: AudioUnitElement) throws -> AudioDeviceID {
+        var device = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        try check(AudioUnitGetProperty(try liveUnit(), kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global, bus, &device, &size), "verify microphone route")
+        guard size == UInt32(MemoryLayout<AudioDeviceID>.size) else { throw MeetingAudioFailure.invalidSelection }
+        return device
+    }
+
+    private static func outputAddress() -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    }
+
+    private static func defaultOutputDevice() throws -> AudioDeviceID {
+        var address = outputAddress()
+        var device = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device)
+        guard status == noErr, size == UInt32(MemoryLayout<AudioDeviceID>.size), device != kAudioObjectUnknown else {
+            throw MeetingAudioFailure.invalidSelection
+        }
+        return device
     }
 
     private static func devicesAddress() -> AudioObjectPropertyAddress {
@@ -465,6 +557,12 @@ final class MeetingAUHALUnit: MeetingMicrophoneUnit {
             try check(AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
                 &address, deviceQueue, deviceListener), "remove microphone device listener")
             self.deviceListener = nil
+        }
+        if let referenceListener {
+            var address = Self.outputAddress()
+            try check(AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
+                &address, deviceQueue, referenceListener), "remove voice reference listener")
+            self.referenceListener = nil
         }
         try check(AudioComponentInstanceDispose(unit), "AudioComponentInstanceDispose")
         self.unit = nil
