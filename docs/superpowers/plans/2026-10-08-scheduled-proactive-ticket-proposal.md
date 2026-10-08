@@ -3,16 +3,16 @@
 Status: **for user review; not published, ready for dispatch, or approved for implementation**.
 Source: [reconciled feature spec](../specs/2026-10-07-scheduled-tasks-and-proactive-messaging.md), [#3096](https://github.com/motioneso/moss/issues/3096), accepted mockups #3100–#3103. Related [#2388](https://github.com/motioneso/moss/issues/2388) remains open; reconcile its overlapping scope when publishing approved tickets, without silently closing or rewriting it.
 
-The numbers below are proposal identifiers, not GitHub issue numbers. Each ticket delivers a complete narrow behavior through storage, authenticated APIs, the real UI/worker path, checks and review in one fresh session. There is no schema-only, UI-only, final-hardening or final-proof ticket. A slice ships only the responsibility types it actually supports; it must not advertise later slices as available.
+The numbers below are proposal identifiers, not GitHub issue numbers. Sizing revision: **24 proposed tickets replace the original 15**. Each ticket is bounded to one fresh session including orientation, implementation, relevant checks, review, live demonstration and saved evidence. Session fit is an estimate grounded in existing seams, not a guarantee from a title. Revalidate the stated reuse assumptions against the build branch before dispatch. There is no schema-only, UI-only, final-hardening or final-proof ticket. A slice ships only the responsibility types it actually supports; it must not advertise later slices as available.
 
 ## Recommendations requiring review
 
 These fill gaps left by the mockups; they are proposals, not retroactive design approvals.
 
 - **Existing main conversation (#1):** designate the most recently active eligible persistent app conversation once on upgrade; preserve the other eligible transcripts as side chats. Do not repurpose incognito or module-specific surfaces. Create Main chat only when none exists. Later activity never changes the designation. Validate the actual eligibility rules against current storage before migration.
-- **Email choices (#4):** reuse the existing email source preference instead of adding a competing switch. An explicit legacy source-off or master-off keeps automatic email alerts off; no saved applicable choice defaults on. A saved master-off must not disable user-requested tasks. Do not infer explicit consent from fallback defaults; distinguish absent records from saved records and disclose unavoidable legacy ambiguity in the migration review. Turning the email switch on must not enable unrelated legacy sources.
-- **Quiet hours (#5):** use the existing timezone-capable Profile preference as canonical storage, with existing surfaces linking to Alerts & quiet hours. Carry forward a sole saved value or identical saved values. Different saved values, including enabled/off disagreements, require the accepted explicit choice; keep prior effective policies until resolution. Preserve the existing Profile default when no saved preference exists; the mockup’s Pacific schedule is sample data.
-- **Legacy caps and cards (#14):** preserve saved source/global caps for unsolicited email findings; requested tasks use their own bounded cadence and do not spend the unsolicited-email budget. Persist a useful selected chat result immediately during quiet hours; defer only its outward interruption. Share finding identity/budget accounting with legacy scanning so the same finding does not produce duplicate proactive surfaces/notifications. Preserve existing non-email card behavior. The concrete cap accounting and treatment of unsaved defaults must be settled in #14’s implementation plan before coding.
+- **Email choices (#5):** reuse the existing email source preference instead of adding a competing switch. An explicit legacy source-off or master-off keeps automatic email alerts off; no saved applicable choice defaults on. A saved master-off must not disable user-requested tasks. Do not infer explicit consent from fallback defaults; distinguish absent records from saved records and disclose unavoidable legacy ambiguity in the migration review. Turning the email switch on must not enable unrelated legacy sources.
+- **Quiet hours (#6–#7):** use the existing timezone-capable Profile preference as canonical storage, with existing surfaces linking to Alerts & quiet hours. Carry forward a sole saved value or identical saved values. Different saved values, including enabled/off disagreements, require the accepted explicit choice; keep prior effective policies until resolution. Preserve the existing Profile default when no saved preference exists; the mockup’s Pacific schedule is sample data.
+- **Legacy caps and cards (#22–#23):** preserve saved source/global caps for unsolicited email findings; requested tasks use their own bounded cadence and do not spend the unsolicited-email budget. Persist a useful selected chat result immediately during quiet hours; defer only its outward interruption. Share finding identity/budget accounting with legacy scanning so the same finding does not produce duplicate proactive surfaces/notifications. Preserve existing non-email card behavior. The concrete cap accounting and treatment of unsaved defaults must be settled in #22’s implementation plan before coding.
 
 Review these four recommendations alongside ticket size and dependencies. Module ownership, minimum polling cadence, active-task limits and bounded read-retry policy are engineering choices to record in the relevant ticket before implementation, using existing facilities where possible. They must not quietly narrow an accepted user scenario.
 
@@ -22,172 +22,394 @@ Graph/source inspection at main revision `d47136ad9` confirms timezone/keyed pg-
 
 Prefer the existing chat persistence/provider routing, actor-scoped job queue, authorized module APIs, timezone scheduling, source scanning, notification delivery and authored Settings/chat primitives. Keep scheduled assistant responsibilities distinct from ordinary to-do items. Do not build a second scheduler, workflow engine, connector, approval UI or generic framework. Re-read the actual branch before implementing; the spec branch predates this inspection.
 
+## Sizing method and result
+
+A ticket has one concrete user outcome, a bounded implementation surface, and a short reproducible live demonstration. It reuses its blockers’ behavior rather than rebuilding it. Safety required by an exposed capability ships with that capability; none is parked in a later hardening ticket. A new Settings control is a vertical extension when it operates real saved records and proves the resulting worker behavior, not merely when it renders a screen.
+
+The first reminder slice delivers chat messages without outward notifications. Settings management and notification delivery are separately useful extensions. Read/report starts with one explicit check before recurrence and novelty suppression. Approved actions start with a bounded non-destructive operation before deletion and action-scope editing. These limits reduce scope without pretending that later capabilities have already shipped.
+
+The highest-risk remaining slices are #3, #4, #8, #13 and #18: semantic context handoff, interrupted-turn recovery, the first durable reminder path, the first isolated read run and the first stored-action authority path. They are bounded to their minimum complete behaviors below. If the named existing seams cannot support that boundary without replacing provider runtimes, a gateway or queue infrastructure, revise/split the ticket before dispatch; do not consume multiple sessions under one issue. No numerical time or token estimate is claimed without an agreed session budget.
+
+| Original draft          | Revised tickets | Sizing decision                                                                                      |
+| ----------------------- | --------------- | ---------------------------------------------------------------------------------------------------- |
+| 1 — stable Main chat    | 1               | Keep; one designation/history migration.                                                             |
+| 2 — side chats          | 2               | Keep; wire the accepted overlay to existing conversation operations.                                 |
+| 3 — context changes     | 3, 4            | Separate clean context handoff from interrupted-turn recovery.                                       |
+| 4 — email preference    | 5               | Keep; preference/access mapping only, with legacy cap migration elsewhere.                           |
+| 5 — quiet hours         | 6, 7            | Separate ordinary canonical control from conflicting legacy schedules.                               |
+| 6 — first reminder      | 8, 9, 10        | Separate minimal chat delivery, real Settings management and outward notification delivery.          |
+| 7 — chat edits          | 11              | Keep; instruction/timing/deadline edits, no action-scope approval.                                   |
+| 8 — recurring reminders | 12              | Keep; cadence/catch-up extend the proven fixed-text path.                                            |
+| 9 — source checks       | 13, 14          | Separate one requested read/report run from useful-only recurrence and consecutive-failure handling. |
+| 10 — watches            | 15, 16          | Separate evidence-backed conditions from reading goals with explicit owner confirmation.             |
+| 11 — suggestions        | 17              | Keep; typed agreement creates already-supported responsibilities.                                    |
+| 12 — scoped effects     | 18, 19, 20      | Separate non-destructive actions, deletion and reapproval of action edits.                           |
+| 13 — allowances         | 21              | Keep; one explicit task-specific delivery exception.                                                 |
+| 14 — automatic email    | 22, 23          | Separate legacy scanner compatibility from automatic chat delivery/default-on behavior.              |
+| 15 — side destinations  | 24              | Keep; route/edit destinations on the existing delivery path.                                         |
+
 ## Proposed tickets
 
 ### 1. Keep a stable Main chat and preserve existing history
 
 **Blocked by:** None.
 
-**What it delivers:** reopening Moss returns to the same durable main conversation; upgrade preserves existing conversations rather than assigning Main chat by latest activity on every visit.
+**What it delivers:** reopening Moss returns to the same durable Main chat; a one-time upgrade preserves existing transcripts.
 
-- [ ] Persist an owner’s main designation and perform the reviewed one-time migration without losing transcripts; repeated upgrades are idempotent.
-- [ ] Reload/reconnect retains visible history and the same main identity. Other owners cannot select, read or mutate it.
-- [ ] Preserve unselected histories for the side-chat selector in #2; module/incognito semantics remain explicit.
+**Scope limit:** designate/migrate the main identity using existing chat persistence. No selector redesign, provider-context work or background delivery.
 
-### 2. Open and switch topic side chats in the accepted overlay
+- [ ] Apply the reviewed eligibility rules once, retain other eligible histories, and make repeated upgrades idempotent; exclude module/incognito surfaces.
+- [ ] Reload/reconnect retains designation/history; later side-chat activity cannot change it. Selection/read/write stay owner-scoped.
 
-**Blocked by:** #1.
+**Live demonstration:** reopen an existing owner’s app, verify the same history/designation, repeat the migration and confirm preserved transcript counts.
 
-**What it delivers:** users open New side chat directly to typing and switch between separate transcripts in the closed three-line overlay, sharing their owner memory/preferences.
-
-- [ ] Preserve the 380px dock, automatic titles, existing histories and desktop/phone overlay behavior; no title-entry dialog or update banner.
-- [ ] Switching preserves drafts/focus and does not change Main chat. Overlay supports keyboard entry, Escape/outside close, inert background and focus restoration.
-- [ ] Reload retains identities and separate transcripts; owner isolation applies to selection, memory and messages.
-
-### 3. Continue Main chat through invisible provider context changes
+### 2. Open topic side chats through the accepted overlay
 
 **Blocked by:** #1.
 
-**What it delivers:** a long conversation keeps its visible history and usable decisions while provider context is compacted or handed off.
+**What it delivers:** New side chat opens directly to typing; users switch between distinct persisted transcripts through the three-line overlay.
 
-- [ ] Reuse provider-supported compaction where available; otherwise use the smallest capability-routed handoff that retains relevant context and conversation identity.
-- [ ] Exercise a forced context transition and restart/reconnect; no technical restart message, lost completed turn or fabricated turn.
-- [ ] Relevant prior decisions remain usable. Saved responsibilities, once introduced, load from durable records rather than depending on a summary remembering them.
+**Scope limit:** connect accepted navigation to existing chat operations and shared owner memory/preferences. No new provider runtime or destination scheduling.
 
-### 4. Consolidate automatic email-alert choice without losing saved preferences
+- [ ] Preserve the 380px dock, closed overlay, automatic titles, keyboard/Escape/outside-close behavior, inert background and focus restoration.
+- [ ] Switching/reload preserves identities, separate transcripts and drafts without changing Main chat or introducing an update banner; owner isolation applies.
+
+**Live demonstration:** create/type/switch/reload at desktop and phone widths, then verify transcripts remain separate and Main chat remains designated.
+
+### 3. Continue a conversation through a clean context handoff
+
+**Blocked by:** #1.
+
+**What it delivers:** an existing conversation continues after its provider context fills, retaining relevant decisions without a visible new conversation.
+
+**Scope limit:** semantic summary/context selection and clean handoff through the existing provider-neutral replay/session boundary. No new vendor adapters or interrupted-turn recovery. If this requires a runtime replacement, reslice before dispatch.
+
+- [ ] Use capability-routed semantic compaction/handoff instead of concatenation/truncation; preserve durable transcript and conversation identity.
+- [ ] Summary failure retains the last usable context/history; never replace good context with an empty/failed result. Load durable responsibilities once those records exist instead of relying on summaries to remember them.
+
+**Live demonstration:** reach a small test context budget through real chat, trigger clean handoff, and ask about a decision from before the transition; record unchanged transcript identity and the real-model response.
+
+### 4. Return safely to an interrupted conversation
+
+**Blocked by:** #3.
+
+**What it delivers:** after a provider/app interruption, reopening chat preserves completed messages and makes the unfinished outcome understandable without replaying uncertain actions.
+
+**Scope limit:** persisted pending/completed turn identity and recovery at the existing session boundary. No new compaction algorithm, tool-ledger repair system or generic retry framework. If the current runtime cannot expose a safe interruption boundary, reslice before dispatch.
+
+- [ ] Reconcile pending versus completed turn/message identities across restart; completed turns are not lost or duplicated.
+- [ ] Resume only where existing evidence establishes safety; an uncertain tool/action outcome is never blindly rerun. Explain unfinished work in ordinary chat using existing failure presentation, without a technical new-session announcement.
+
+**Live demonstration:** interrupt one reply on the isolated dev instance, restart/reopen and continue typing; verify earlier history and no duplicated reply/effect.
+
+### 5. Consolidate the saved automatic email-alert choice
 
 **Blocked by:** None.
 
-**What it delivers:** the real Alerts & quiet hours surface offers one persisted Automatic email alerts choice, independent of email access and existing delivery settings.
+**What it delivers:** one persisted Automatic email alerts choice preserves existing off decisions and remains separate from email access and delivery preferences.
 
-- [ ] Apply the reviewed legacy email/master mapping, preserve saved off, and distinguish missing records from saved choices. Fresh eligible users have default-on intent; #14 adds chat delivery.
-- [ ] The existing email scanning entry point respects the effective off choice. Turning it on neither grants/reconnects access nor enables other proactive sources.
-- [ ] Show email/delivery together, existing module/device/digest controls, saved-off, disconnected/revoked, loading and retryable load/save errors. Use accepted column/phone layout.
+**Scope limit:** accepted email/delivery column, effective preference mapping and existing email-source enable/disable entry point. No cap/cursor rewrite, connector changes or new chat alerts; those are #22–#23.
 
-### 5. Use one quiet-hours control and reconcile conflicting saved schedules
+- [ ] Distinguish absent versus saved choices, preserve applicable master/source-off and disconnected preferences, and record default-on intent for eligible users without a saved choice.
+- [ ] An explicit on choice neither grants/reconnects access nor enables unrelated sources. Requested responsibilities do not consult this unsolicited-alert preference.
+- [ ] Keep module/device/digest delivery controls distinct; include saved-off, disconnected/revoked and loading/load/save-error states with local recovery feedback.
+
+**Live demonstration:** save off/on/reload through Settings and exercise the existing source gate, including revoked access and an unrelated source remaining unchanged. Default-on chat behavior is demonstrated in #23.
+
+### 6. Use the canonical quiet-hours control for unambiguous settings
 
 **Blocked by:** None.
 
-**What it delivers:** users manage one timezone-aware quiet-hours preference through the accepted Settings surface; conflicting legacy schedules require an explicit choice.
+**What it delivers:** users manage a timezone-aware quiet-hours schedule through the accepted surface when legacy values are absent, identical or otherwise unambiguous.
 
-- [ ] Apply the reviewed migration/default rules; old effective policies continue until a conflicting choice saves successfully. Existing control surfaces link to the canonical surface.
-- [ ] Validate timezone/start/end, overnight windows and equal-time rejection; test local boundaries/DST. Failed saves preserve the effective setting and editable draft with nearby recovery feedback.
-- [ ] Existing relevant notification/proactive consumers read the resolved preference. No model-urgency exception is carried into the new scheduled/proactive path.
+**Scope limit:** reuse the Profile preference and its existing delivery consumers; no conflicting-value migration UI or task exceptions.
 
-### 6. Save, inspect and deliver one requested reminder while the app is closed
+- [ ] Preserve the reviewed defaults/sole saved value, link existing surfaces to the canonical control and keep saved versus draft/error feedback distinct.
+- [ ] Validate timezone/start/end, overnight windows, equal-time rejection and DST boundaries; failed saves retain the effective schedule and draft.
+- [ ] Detect conflicts without choosing a winner or discarding either value. Until #7 resolves them, keep conflicting owners’ existing controls/policies effective; do not expose a falsely authoritative merged setting.
 
-**Blocked by:** #1, #5.
+**Live demonstration:** save/reload an overnight schedule, fail a save without changing its effective value, and verify an existing notification follows its boundary.
 
-**What it delivers:** a user asks for a fixed-text reminder, receives an ordinary local-time confirmation, inspects/stops it in Settings, and receives one durable replyable Moss message when due.
-
-- [ ] Save directly with no card/second approval. Own the record and metadata-only queued job; this slice invokes no model tools or change/deletion actions.
-- [ ] Introduce Reminders icon/title rows, compact details/history and Past tasks, with loading/empty/error and active/paused/completed/expired states. Pause/resume/delete work in Settings and chat; deletion focuses Keep task and retains old messages/effects.
-- [ ] Post an assistant-only message with stable message/run identity; reload/reconnect and normal reply work. A simultaneous live reply retains its own identity and content.
-- [ ] Quiet hours defer outward interruption while the message persists immediately. Module/device mutes win; delivery retry cannot repeat execution/message creation.
-- [ ] A queued or in-flight paused/deleted reminder cannot initiate further effects. A missed reminder delivers once as clearly late unless expired; replay/concurrent workers cannot duplicate it.
-
-### 7. Edit saved responsibilities through ordinary chat
+### 7. Resolve conflicting legacy quiet-hours schedules explicitly
 
 **Blocked by:** #6.
 
-**What it delivers:** a user changes a reminder’s instruction, local timing or deadline in chat and sees the same updated record in Settings, without a Settings editor.
+**What it delivers:** owners with differing saved quiet-hour values choose explicitly which schedule applies through the accepted conflict flow.
 
-- [ ] Use the normal composer and natural confirmation; retain no competing Edit form/button. Resolve which task is being edited when unclear.
-- [ ] Changes invalidate stale queued instructions; check current version/state before effects and result posting, including an edit during a run.
-- [ ] Timing-only changes do not add approval. Unsupported capabilities are explained honestly; #12 adds renewed agreement for changed action scope.
+**Scope limit:** migration/choice transaction and its real consumers; reuse #6’s control, validation and error handling.
 
-### 8. Run recurring reminders at the saved local cadence
+- [ ] Cover different windows and enabled/off disagreements; retain prior policies until the selected choice saves successfully.
+- [ ] Commit a single effective preference only after the authenticated choice succeeds; repeated upgrade/resolution is idempotent.
+- [ ] Existing relevant notification/proactive consumers use the resolved value. No source/model urgency becomes permission for the new task-delivery path.
 
-**Blocked by:** #7.
+**Live demonstration:** create conflicting records through the real data path, resolve them in Settings, reload, and verify notification timing; repeat with a failed save preserving old behavior.
 
-**What it delivers:** daily, weekly and more-frequent reminders can be created/edited in chat and managed in the matching Settings groups.
+### 8. Save and deliver a cancellable one-time reminder in chat
 
-- [ ] Extend the reminder path with timezone-aware cadence, next-run details and bounded active schedules using the existing queue; no second scheduler.
-- [ ] After downtime, deliver one fresh due reminder/check outcome and resume saved cadence, without replaying every missed interval. Respect deadlines, pause/resume/edit/delete and duplicate-run prevention.
-- [ ] Exercise daily/weekly boundaries and DST policy; demonstrate ordinary creation, execution and history through the real UI.
+**Blocked by:** #1.
 
-### 9. Check sources in the background and speak only when useful
+**What it delivers:** a user requests a fixed-text reminder in ordinary chat, can cancel it in chat, and receives one durable replyable Moss message while the browser is closed.
+
+**Scope limit:** the minimum reminder record, authenticated create/list/cancel operations, existing metadata-only queue and assistant-message persistence. No full Settings surface, model/tool execution, recurrence or outward notifications. If persistence requires a live-runtime rewrite, reslice before dispatch.
+
+- [ ] Save directly with natural local-time/deadline confirmation and no card/second approval. Store owner, instruction, due/deadline, state and default Main chat destination.
+- [ ] Current lifecycle/owner checks prevent cancelled/deleted queued or in-flight work from posting; replay/concurrent workers cannot duplicate execution/message creation.
+- [ ] A missed reminder posts once as clearly late unless expired. The hidden trigger creates no user turn; concurrent live replies retain their own message identities.
+- [ ] Reload/reconnect and a normal reply work. Quiet hours do not defer this chat message; outward delivery is absent until #10.
+
+**Live demonstration:** request a near-future reminder, close/reopen, reply to its persisted result, then cancel a second queued reminder and verify zero resulting messages. Automated checks also cover replay, expiry and active-reply coexistence.
+
+### 9. Inspect and control real reminders in Settings
 
 **Blocked by:** #8.
 
-**What it delivers:** a recurring read-and-report request runs while the browser is closed and sends an ordinary sourced message only for a useful new or materially changed finding.
+**What it delivers:** users inspect reminder details/history and pause/resume/delete the same records through the accepted compact Settings list.
 
-- [ ] Add the smallest isolated background model/tool path using configured capabilities and authorized source APIs; never fabricate a visible user turn or contaminate live-chat authority/context.
-- [ ] Successful empty/unchanged checks stay silent and have distinct history from failures. Persist observation/run/result identity so repeated scans, reload and delivery replay do not duplicate messages.
-- [ ] Retry transient read failures quietly with bounded backoff; repeated failures produce actionable status/message. Interrupted read checks reconcile once after downtime, then resume cadence.
-- [ ] Enforce current access, read-only authority, source trust boundaries, actor isolation, queue metadata constraints and task lifecycle before effects/posting. Work and useful message persistence continue during quiet hours.
-- [ ] Include local polling/task limits and failure bounds in this ticket’s plan; preserve existing briefing behavior and avoid duplicate scheduled ownership.
+**Scope limit:** Settings-backed lifecycle extension for reminders only. Reuse #8’s execution and cancellation; no editing form or new scheduler.
 
-### 10. Watch for a condition and stop from reliable completion evidence
+- [ ] Add Reminders icon/title rows, compact details, dated run history/View message and collapsed Past tasks; cover loading/empty/error and active/paused/completed/expired states.
+- [ ] Pause/resume in Settings and chat affect the actual worker. Confirm deletion with Keep task focus and retain prior messages/effects; controls are not run-history entries.
+- [ ] Recheck pause/delete state before effects/posting, including queued/in-flight work and resume races.
+
+**Live demonstration:** pause a pending reminder in Settings, observe no firing, resume and receive it once, open its result/history, then delete another pending reminder. Exercise the same record from chat and on phone.
+
+### 10. Deliver reminder notifications under existing attention controls
+
+**Blocked by:** #7, #8.
+
+**What it delivers:** reminders can signal through existing enabled delivery channels; quiet hours delay outward interruptions while chat results remain readable.
+
+**Scope limit:** notification/delivery extension of the proven result path and resolved preference. No source scanning or task exceptions.
+
+- [ ] Use result/run identity and existing delivery machinery so notification failure/retry cannot recreate a chat message or rerun the reminder.
+- [ ] Persist chat immediately; defer only outward delivery through canonical quiet hours. Module/device/channel mutes win, and model urgency cannot bypass the window.
+- [ ] Recheck lifecycle and current preferences at queued delivery; cancelled work cannot initiate further notifications. A failed channel has an honest retryable delivery outcome.
+
+**Live demonstration:** request a reminder during a current quiet window, read/reply in chat immediately, then end the window and observe one outward delivery; repeat with the existing channel muted.
+
+### 11. Edit reminder instruction, timing and deadline in chat
 
 **Blocked by:** #9.
 
-**What it delivers:** an explicitly requested, optionally time-limited watch reports a matching condition and closes once its actual goal is established.
+**What it delivers:** users edit saved reminders through ordinary Moss chat and inspect the same updated record in Settings.
 
-- [ ] Demonstrate a matching email-arrival goal through an existing authorized source; store goal/evidence/deadline and display Watches, useful details/history and completed/expired Past tasks.
-- [ ] Explain closure once and stop future runs. Expired watches execute nothing; unfulfilled goals remain active until deadline or explicit stop.
-- [ ] An alert or webmail click never proves reading. Explicit owner “I’ve read it” can complete a reading goal; unknown provider read state remains unknown.
-- [ ] Email evidence opens the actual connected provider’s webmail in a new tab. Cancellation, repeated findings and competing workers cannot duplicate closure or future effects.
+**Scope limit:** instruction/local-time/deadline edits and version invalidation. No action-scope approval or destination selector.
 
-### 11. Suggest a responsibility and save it only after typed agreement
+- [ ] Resolve the intended task, use natural confirmation and provide no Settings Edit form/button.
+- [ ] Invalidate stale queued instructions; check current version/state before posting, including edits during a run. Unsupported or action-widening edits remain refused until implemented, never silently accepted.
+
+**Live demonstration:** move a queued reminder and change its text in chat, inspect the new record, and verify only the revised instruction fires at the new time.
+
+### 12. Run fixed-text reminders on a local recurring cadence
+
+**Blocked by:** #11.
+
+**What it delivers:** daily, weekly and more-frequent reminders run on their saved local schedule and remain controllable in the corresponding Settings groups.
+
+**Scope limit:** recurrence and catch-up on #8’s fixed-text queue/result path. No model checks or novelty scoring.
+
+- [ ] Reuse timezone-aware queue scheduling, current lifecycle/version checks and bounded active schedules; show useful cadence/next-run details and existing chat editing.
+- [ ] After downtime produce one fresh due outcome and resume cadence, never replay all missed intervals. Respect expiry and define/test local DST policy before coding.
+
+**Live demonstration:** create a short recurring reminder in chat, stop the isolated worker for a few intervals, restart, observe one catch-up result and the next normal firing, then cancel it.
+
+### 13. Execute one requested read-and-report check while away
+
+**Blocked by:** #9.
+
+**What it delivers:** a user schedules one read-and-report check of an available source and receives a sourced ordinary assistant reply while the browser is closed.
+
+**Scope limit:** one bounded run through the existing configured model/read gateway and source APIs. No multi-source workflow, recurrence, write authority or new provider/connector adapter. If isolating this run requires replacing the action gateway, reslice before dispatch.
+
+- [ ] Load private instruction/source context through authorized APIs, keep job payloads metadata-only, use current capabilities and deny all changes/deletion at the actual gateway.
+- [ ] Keep the trigger and run context out of visible user turns and live-chat authority. Task cancellation/version checks and stable run/message identity apply before posting and on replay.
+- [ ] Apply bounded quiet retries for transient read failures and report exhausted failures honestly; never claim quiet success for failure. Use configured capabilities without hardcoding provider/model.
+- [ ] Persist a normal replyable sourced result; connected-provider webmail links open in a new tab. Quiet hours never defer chat persistence; reuse outward policy if #10 is installed.
+
+**Live demonstration:** request a near-future check using a real authorized existing source, close/reopen and inspect/reply to the result; revoke access for a second check and observe refusal without data exposure. Automated checks prove write/source-instruction and cross-owner denials.
+
+### 14. Repeat read checks only when there is useful new information
+
+**Blocked by:** #12, #13.
+
+**What it delivers:** recurring read checks stay silent for empty/unchanged findings and post useful new findings with distinct success/failure history.
+
+**Scope limit:** recurrence/observation state and consecutive-failure handling on the proven read path. No condition completion or automatic email policy.
+
+- [ ] Persist novelty/observation identity; empty/unchanged checks show quiet success, not messages. Changed useful findings post once with sources.
+- [ ] Reuse bounded per-run read retries; repeated failed scheduled checks create actionable status/message without flooding or false success.
+- [ ] After downtime make one fresh check, then resume cadence; lifecycle/idempotency remain enforced. Record polling/active-task bounds and briefing interoperability without creating duplicate schedule ownership.
+
+**Live demonstration:** run a requested recurring check through Settings/chat, observe quiet success, change the real source, observe one update, then run unchanged again. Automated clock/failure checks and controlled worker downtime prove recovery.
+
+### 15. Complete an evidence-backed, deadline-bound condition watch
+
+**Blocked by:** #14.
+
+**What it delivers:** a requested condition watch reports reliable fulfilment evidence, explains completion once and stops; unfulfilled watches expire at their deadline.
+
+**Scope limit:** one stated condition over an existing available source, demonstrated with an expected email reply. Reuse the read/report path for other supported evidence; no new condition language, source adapter, provider read-state collection or reading-goal completion.
+
+- [ ] Store goal/matching criteria, evidence and deadline; introduce Watches and inspectable completed/expired states/history using the accepted details.
+- [ ] Alert delivery alone is not completion evidence. Establish the actual requested goal from source evidence; competing workers/duplicate findings cannot repeat closure or run after fulfilment/expiry.
+
+**Live demonstration:** create a watch in chat, deliver a matching email through the connected source, inspect one result/closure and stopped work; demonstrate a short unmet deadline expiring without an execution.
+
+### 16. Complete a reading watch only from reliable owner evidence
+
+**Blocked by:** #15.
+
+**What it delivers:** a reading goal stays active after an alert/webmail click and completes after the owner explicitly confirms reading.
+
+**Scope limit:** reading-goal state and normal-chat owner confirmation. No new read/unread sync or provider telemetry.
+
+- [ ] Unknown provider read state remains unknown; neither notification delivery nor opening a source link can close the watch.
+- [ ] Bind an explicit “I’ve read it” to the correct owner/watch, resolving ambiguity; close once and retain deadline/stop behavior when confirmation never arrives.
+
+**Live demonstration:** open an alert’s webmail link, verify the watch remains active, confirm reading in chat and verify one closure with no later firing.
+
+### 17. Save a suggested responsibility only after typed agreement
+
+**Blocked by:** #15.
+
+**What it delivers:** Moss proposes already-supported reminders/checks/watches in ordinary chat; agreement saves a working responsibility, decline saves none.
+
+**Scope limit:** proposal/agreement binding using existing conversation persistence and creation paths. No new approval UI or unsupported task types.
+
+- [ ] Use ordinary text/composer, no cards/buttons/panels. Revised or ambiguous replies never approve the old terms.
+- [ ] Reconnect preserves the proposal conversation without granting authority; repeated acceptance creates at most one responsibility and a natural confirmation.
+
+**Live demonstration:** decline one proposal, revise another, reload and agree to its current terms; verify exactly one real saved task that executes through the established path.
+
+### 18. Approve one bounded non-destructive action at creation
+
+**Blocked by:** #11, #13.
+
+**What it delivers:** an owner approves a stated, supported change in ordinary chat; its scheduled run performs that bounded action while the owner is away without asking again.
+
+**Scope limit:** stored creation-time scope and the existing action gateway, demonstrated with one existing non-destructive API on disposable data. No new action API, deletion or action-scope editing. If the gateway must be redesigned, reslice before dispatch.
+
+- [ ] Bind typed agreement to the exact proposed task version/action scope; decline/revised terms save nothing. Show inspectable scope in Settings. Refuse scope-changing edits until #20.
+- [ ] Enforce current grants, stored scope, source-trust boundaries and lifecycle at the real effect gateway; refuse/report other actions without runtime approval. Live-chat outside-content rules stay unchanged.
+- [ ] Record effect initiation before invocation. Any failed/uncertain run after a write starts is never automatically rerun, including after restart; provide actionable history/message. Result delivery retry cannot repeat model actions.
+
+**Live demonstration:** approve a bounded action in chat, close the browser, observe one real change/result and no later approval. Replay its job and verify no repeated effect; negative/uncertain-outcome checks exercise the same gateway.
+
+### 19. Run an explicitly approved deletion with no automatic replay
+
+**Blocked by:** #18.
+
+**What it delivers:** an owner can approve a supported destructive action once at creation, inspect its scope and receive an honest result without unattended reapproval.
+
+**Scope limit:** destructive policy classification/authority on #18’s path using one existing deletion API and disposable data. No connector deletion implementation or new approval presentation.
+
+- [ ] Ordinary chat names deletion and its irreversibility where applicable; refusal/decline/revised terms save nothing. No background prompt appears.
+- [ ] Current capability/scope/lifecycle checks still win. Reuse effect-initiation/uncertain-outcome safeguards; deletion and result delivery are never blindly replayed.
+
+**Live demonstration:** explicitly approve deletion of a disposable item, observe it removed once, replay the queued run without further deletion and inspect history/scope. Automated checks cover revoked approval/capability and a failure after invocation starts.
+
+### 20. Renew agreement when editing a task’s approved actions
+
+**Blocked by:** #19.
+
+**What it delivers:** changing saved action scope in ordinary chat asks for fresh agreement; timing-only edits retain their already-approved scope.
+
+**Scope limit:** proposed-version/consent binding and queue invalidation on existing write/deletion tasks. No new effect type or approval system.
+
+- [ ] Never execute widened/revised scope before agreement. Decline leaves the previously saved scope intact unless the user explicitly pauses/deletes it; pending edits confer no authority.
+- [ ] Agreement commits the current proposed version once and invalidates stale queued authority. Recheck versions before initiating effects; source content cannot approve edits.
+- [ ] Preserve timing-only edit behavior; destination-only changes use #24 when available. Deleting/revising a proposal before acceptance prevents stale approval from saving it.
+
+**Live demonstration:** propose a change to an approved action, decline it and verify old scope, then accept a revised scope and verify queued old instructions cannot act. Test ambiguous/replayed acceptance and timing-only edits.
+
+### 21. Allow only the explicitly named task during quiet hours
 
 **Blocked by:** #10.
 
-**What it delivers:** Moss can propose a useful supported reminder/check/watch in ordinary chat; agreeing creates a working responsibility, declining creates none.
+**What it delivers:** an owner adds/removes a per-task allowance in normal chat and sees it under Allowed during quiet hours.
 
-- [ ] No suggestion card, review panel or approval buttons; use the normal composer and natural saved confirmation.
-- [ ] Ambiguous replies or changed proposal terms do not accept the old proposal. Agreement binds to the current proposal and repeated submission creates at most one task.
-- [ ] Pending proposals survive the supported reconnect flow without gaining authority or becoming scheduled on their own; expose only implemented responsibility types.
+**Scope limit:** explicit task-bound intent and delivery exception on the established notification path. No global urgent bypass or new channel.
 
-### 12. Approve scoped changes/deletion once and run without asking again
+- [ ] Change in chat targets the correct owner/task; persist explicit intent, never model/source urgency. Only that task bypasses deferral.
+- [ ] Current module/device/channel mutes still block outward delivery. Recheck removed allowances and task state before queued delivery; never recreate the chat message.
 
-**Blocked by:** #9 (includes #7’s edit/version handling).
+**Live demonstration:** allow one reminder during a current quiet window and compare it with an unallowed reminder; remove the allowance and repeat with the existing device channel muted.
 
-**What it delivers:** a user approves a stated action set in ordinary chat, including deletion where requested, and its scheduled run uses only that authority while the user is absent.
+### 22. Preserve legacy email monitoring under consolidated preferences
 
-- [ ] A creation-time chat question enumerates changes/deletion. Typed agreement binds to the saved task version/scope; decline or revised actions leave it unsaved. Editing actions requires fresh agreement; timing/destination-only edits do not.
-- [ ] The real action gateway permits only the stored set plus current grants, refuses and reports other effects without prompting, and isolates background outside-content state from the destination conversation. Live-chat approval rules stay unchanged.
-- [ ] Disabled/revoked capabilities and observed instructions cannot widen authority, recipient or quiet-hours permission. Inspectable scope remains in Settings.
-- [ ] Mark a run as having started an effect before initiating it. After any write/deletion begins, failure or uncertain outcome is never automatically rerun; history/message gives an actionable reconciliation step. Posting/delivery retry cannot repeat the model’s actions.
-- [ ] Exercise a real supported bounded action and the deletion boundary with safe test data; prove stale edit/delete races and cross-owner/source-authority denials at the actual gateway.
+**Blocked by:** #5, #7.
 
-### 13. Allow only a user-named task during quiet hours
+**What it delivers:** existing opted-in email monitoring continues to respect saved enable choices, caps, finding identity and resolved quiet-hour preferences after consolidation.
 
-**Blocked by:** #6.
+**Scope limit:** the existing email scanner/anti-spam consumers and their real Settings-backed policy. No new default-on chat producer or non-email scan rewrite.
 
-**What it delivers:** users add/remove a task-specific quiet-hours allowance in ordinary chat and inspect it under Allowed during quiet hours.
+- [ ] Preserve reviewed saved source/global caps and apply effective email preference without enabling unrelated sources; preserve cursor/finding identity through migration/restart.
+- [ ] Account for a finding once, including duplicates/concurrent scans. Keep requested responsibilities outside the unsolicited-email budget.
+- [ ] Keep legacy non-email behavior stable; make the email policy usable by #23 so chat delivery need not create a second scan/budget pipeline.
 
-- [ ] Change in chat targets the named responsibility; persist explicit owner intent and reflect changes across Settings/chat. No global urgency or source-derived allowance.
-- [ ] Only that task bypasses quiet-hours deferral; unrelated work still waits. Module mute and disabled device/channel choices remain effective.
-- [ ] Recheck current allowance/task/channel state before notification delivery, including queued changes and removed allowances; never duplicate the already-persisted chat message.
+**Live demonstration:** exercise existing email monitoring from real Settings with saved off/on and a small saved cap; run duplicate/new findings through its source and verify the real capped outcome survives reload/restart.
 
-### 14. Deliver useful automatic email updates with an independent off switch
+### 23. Deliver useful automatic email findings into Main chat
 
-**Blocked by:** #4, #10 (includes #9’s read/check path and enables proof that requested inbox watches continue).
+**Blocked by:** #10, #15, #22.
 
-**What it delivers:** eligible users receive useful unsolicited email messages in Main chat, and turning off Automatic email alerts stops those updates while requested inbox watches and other tasks continue.
+**What it delivers:** eligible users receive useful unsolicited email messages by default when no saved choice exists; switching alerts off leaves requested inbox watches and other tasks running.
 
-- [ ] Apply the reviewed legacy cap/card recommendations through existing source scanning and the common background delivery path; avoid duplicate model scans, findings, budget charges and notifications.
-- [ ] Fresh eligible users receive default-on behavior; saved off remains off. Disconnected/revoked email stays unavailable without changing the preference or granting access.
-- [ ] Updates contain supported useful facts/evidence and connected-provider webmail links. Empty/unchanged findings stay quiet; failures are not reported as successful silence.
-- [ ] Persist useful selected messages immediately during quiet hours, defer outward interruption, and respect existing delivery choices. Turning email alerts off does not cancel explicit responsibilities or other sources.
+**Scope limit:** connect the existing selected email findings to the proven assistant-result/delivery path under #22’s policy. No second source/model scanner or cap migration.
 
-### 15. Deliver a responsibility to an explicitly requested side chat
+- [ ] Apply saved-off/default-on/disconnected/revoked rules; useful source-backed results have real provider webmail links and empty/unchanged findings stay quiet.
+- [ ] Reuse finding identity/accounting to avoid duplicate cards/messages/notifications for a migrated finding; no duplicate model scan. Failure never counts as successful silence.
+- [ ] Persist selected chat messages immediately during quiet hours, defer only outward delivery and respect mutes. The unsolicited-alert switch neither cancels requested watches nor grants email access.
 
-**Blocked by:** #2, #7 (includes #6’s delivery and supports destination edits).
+**Live demonstration:** observe a useful real email alert, turn the switch off, then introduce another finding and a matching requested-watch reply; verify only the watch reports and an unrelated recurring task continues.
 
-**What it delivers:** creation or a chat edit can name a side-chat destination; otherwise results still go to Main chat even when the task was created in a side chat.
+### 24. Send results to an explicitly requested side chat
 
-- [ ] Store the explicit owner-authorized destination, mention it naturally and show it in compact details. A destination-only edit needs no action approval and invalidates stale queued routing.
-- [ ] Main-chat arrivals while a side chat is open preserve its transcript/draft/focus without a banner. Explicit side-chat results persist, remain replyable and coexist with a live reply there.
-- [ ] Recheck destination authorization/existence before posting. Unavailable targets produce an actionable status rather than silent rerouting or cross-owner delivery.
+**Blocked by:** #2, #11.
+
+**What it delivers:** creation or a normal chat edit can name a side-chat destination; otherwise results go to Main chat even when created in a side chat.
+
+**Scope limit:** stored destination, authorized message routing and destination-only edits on the common task path. No new navigation or notification transport.
+
+- [ ] Confirm a non-default destination naturally and show it in details; destination-only edits require no action approval and invalidate stale routing versions.
+- [ ] Main-chat arrivals while a side chat is open preserve its transcript/draft/focus without banners. Explicit side results persist and coexist with a live reply there.
+- [ ] Recheck destination access/existence before posting; an unavailable target gives actionable status rather than silent rerouting/cross-owner delivery.
+
+**Live demonstration:** create tasks in a side chat with default and explicit destinations, edit one destination before firing and verify both histories/identities and preserved drafts during live delivery.
+
+## Coverage and completion
+
+The accepted product spec is unchanged by this sizing pass. The table maps its acceptance scenarios to the slices that provide their assembled behavior; shared boundary checks still apply to every relevant ticket.
+
+| Spec scenario                    | Revised tickets                                                                           |
+| -------------------------------- | ----------------------------------------------------------------------------------------- |
+| 1 — continuity                   | 1, 3, 4                                                                                   |
+| 2 — side chats/routing           | 2, 24                                                                                     |
+| 3 — one-time task                | 8, 10                                                                                     |
+| 4 — useful recurring checks      | 14                                                                                        |
+| 5 — suggestion/controls          | 9, 11, 17                                                                                 |
+| 6 — independent email preference | 5, 15, 23                                                                                 |
+| 7 — quiet hours                  | 7, 10, 21                                                                                 |
+| 8 — failures                     | 13, 14                                                                                    |
+| 9 — authority/cancellation       | 8, 9, 18, 19, 20                                                                          |
+| 10 — concurrent/retry safety     | 8, 13, 18; inherited by every later delivery/effect slice                                 |
+| 11 — watch completion            | 15, 16                                                                                    |
+| 12 — downtime                    | 8, 12, 14, 15                                                                             |
+| 13 — trust boundaries            | 8, 13, 18, 19, 21, 23, 24; owner checks also apply to every earlier control/history slice |
+| 14 — ordinary creation/approval  | 8, 13, 17, 18, 19, 20                                                                     |
+| 15 — compact management          | 9; history/state extensions in 12–15, 18–20                                               |
+| 16 — saved preferences/conflicts | 5–7, 22, 23                                                                               |
+| 17 — interruption controls       | 10, 21, 23                                                                                |
+| 18 — sources/navigation          | 2, 13, 15, 23, 24                                                                         |
 
 ## Shared acceptance and publication boundary
 
-Every product ticket updates the app map in the same PR, including its real capabilities, settings/navigation, requirements, errors and recovery. Use the authored design tokens/primitives and accepted desktop/phone, light/dark/Teal states. Implement only the supported slice, without importing preview controls or fictional persistence.
+Every product ticket updates the app map in the same PR for its actual capabilities, settings/navigation, requirements, errors and recovery. Use authored design primitives and the accepted desktop/phone, light/dark/Teal states. Unsupported later capabilities stay unadvertised/unavailable; never accept unsafe work in anticipation of a future slice. In particular, reminders may exist in chat before Settings/outward delivery, effects cannot run before their approval slice, and ambiguous legacy preferences stay effective until explicitly resolved.
 
-Each ticket includes the relevant smallest behavioral checks at existing seams, actor/authority negatives, cancellation/version races and idempotency where it introduces them. Observe security checks failing with enforcement removed. Run the required scoped/full repository checks with the prescribed gate workflow; do not run DB-touching commands against the live dev database. User-facing completion requires real installed UI/worker proof on an isolated dev instance recorded on the PR, with executable assertions and bounded textual evidence. Time-based live proof uses near-future schedules, a current quiet-hours window and controlled worker downtime; deterministic clock/source/model doubles belong in automated checks, not fabricated live responses.
+Every exposed source/action path must enforce the spec’s trust boundaries: observed content cannot change permissions, action scope, recipients or interruption allowances; private instructions/content stay out of queue payloads and secrets stay out of prompts, frontend output and logs. These are requirements to prove, not claims about existing enforcement.
 
-The starting frontier is #1, #4 and #5. After #1, #2 and #3 can proceed independently. #6 waits for stable Main chat and resolved quiet-hours delivery; #13 branches off #6; #15 needs the side-chat and editing flows. #3 is required for the complete feature but does not gate short reminder/model runs, which must not depend on a live provider session. #12 needs the reusable read/check path without waiting for watch/suggestion completion. #14 also waits for a working watch so its independent off-switch can be proven end to end. There is no requirement to start multiple agents concurrently.
+Each session includes the smallest relevant behavioral checks at existing seams, required repository checks, review and its stated live demonstration/evidence. Actor/authority negatives, cancellation/version races and idempotency ship wherever the slice introduces them. Observe security assertions failing with their enforcement removed. Use the prescribed gate workflow for DB-touching checks, never the live dev database. Live proof exercises the installed real UI/worker path on an isolated dev instance with assertions and bounded textual evidence; no rewritten Moss responses. Use near-future timing, a current quiet window and controlled worker downtime for live checks; deterministic clocks/source/model doubles belong in automated checks. No final hardening or proof ticket substitutes for this work.
 
-Review requested: are the slices small enough, do the blocking edges reflect real dependencies, and should any be merged/split? Also review the four migration recommendations above. Once approved, publish one GitHub task issue per slice in dependency order with native blocking links where available, reconcile the parent/overlap links, and apply dispatch labels only to approved executable tickets. Publication and implementation require subsequent authorization; this document creates neither tickets nor a build fleet.
+The initial frontier is #1, #5 and #6. The first reminder #8 depends only on stable Main chat, because it produces readable chat without outward interruptions. #10 adds notification policy after conflict resolution; #9 independently adds management. #13 adds the bounded read path independently of recurrence; #14 combines it with cadence. #18 does not wait for condition watches. #23 waits for a working requested watch to prove independent opt-out. #3–#4 are required for full conversation continuity but do not gate short isolated reminder/read runs. Every blocker listed is a direct prerequisite; neither review order nor shared ownership alone creates an edge.
+
+Review requested: are these narrower session boundaries and direct blockers right, and are the four unchanged migration recommendations acceptable? Approval of a sizing pass is not approval of those recommendations or a build. After approval, publish one GitHub task per slice in dependency order with native blocking links where available, reconcile parent/overlap links and label only approved executable tickets. This document publishes no tickets and dispatches no agents.
