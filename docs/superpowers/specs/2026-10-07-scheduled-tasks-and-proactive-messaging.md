@@ -2,7 +2,7 @@
 
 Tracker: [spec issue #3096](https://github.com/motioneso/moss/issues/3096).
 
-Status: approved product definition and verification boundary, reconciled on 2026-10-08 with all four accepted mockups (#3100–#3103) and the accepted conversation shell. The [implementation-ticket proposal](../plans/2026-10-08-scheduled-proactive-ticket-proposal.md) awaits user review; migration recommendations in that proposal are not approved product decisions. This document does not authorize implementation or unattended builder dispatch.
+Status: approved product definition and verification boundary, reconciled on 2026-10-08 with all four accepted mockups (#3100–#3103) and the accepted conversation shell. The [24-ticket implementation breakdown](../plans/2026-10-08-scheduled-proactive-ticket-proposal.md) was approved for publication on 2026-10-08; its migration recommendations remain unapproved product decisions. This session publishes the tickets and prepares a fresh-session implementation prompt; it does not start implementation or dispatch builders.
 
 ## Problem Statement
 
@@ -223,7 +223,7 @@ The user approved verification through existing application UI/API and backgroun
 - Replaying every missed recurring interval, running expired instructions, or undoing completed actions when a schedule is cancelled.
 - Treating side chats as separate assistants with independent long-term memory.
 - A commitment to a new scheduling dependency, provider-specific mechanism, or replacement of existing briefings.
-- Implementation, builder dispatch, final ticket publication, or merge of this spec PR in this session. A Settings task editor, structured creation/approval cards and preview-only review controls are also outside the accepted design.
+- Implementation, builder dispatch, or merge of this spec PR in this publication session. A Settings task editor, structured creation/approval cards and preview-only review controls are also outside the accepted design.
 
 ## Further Notes
 
@@ -233,7 +233,7 @@ Research and the detailed product discussion remain outside the public repositor
 
 The candidate delivery areas are stable main conversation/history, invisible context compaction/handoff, side chats, safe actor-scoped background execution and assistant-only delivery, one-time tasks and controls, recurring useful-only checks, requested watches and agreed suggestions, and default-on email updates. These are areas to split, not eight published tickets or a mandatory linear dependency chain.
 
-The [2026-10-08 implementation-ticket proposal](../plans/2026-10-08-scheduled-proactive-ticket-proposal.md) uses Matt Pocock's `to-tickets` workflow for complete single-session vertical slices with explicit blockers. Review the breakdown and the identified migration recommendations before publishing any tickets. Concrete module ownership, resource/retry bounds, briefing interoperability and local-time edge cases belong to the relevant slice; none may defer its safety or live proof to a final hardening task. The frontend decisions are accepted; do not restart the completed product interview.
+The [2026-10-08 implementation-ticket proposal](../plans/2026-10-08-scheduled-proactive-ticket-proposal.md) uses Matt Pocock's `to-tickets` workflow for complete single-session vertical slices with explicit blockers. The user approved publishing the 24-ticket breakdown; the plan records the resulting GitHub issues and native dependencies. Resolve the four identified migration recommendations before coding the affected migrations; publication did not approve those recommendations. Concrete module ownership, resource/retry bounds, briefing interoperability and local-time edge cases belong to the relevant slice; none may defer its safety or live proof to a final hardening task. The frontend decisions are accepted; do not restart the completed product interview.
 
 The independent Opus 5.5 review (2026-10-07, on the spec PR) found that background authority conflicted with #3065 and that approval requests cannot wait for an absent user, because they expire after 150 seconds inside a live chat turn. The user's creation-time approval ruling resolves both. The accepted mockups resolve presentation findings; the ticket proposal carries the remaining migration, evidence, lifecycle and resource-bound work.
 
