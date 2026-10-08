@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Clearer action outcomes.** Unattended writes now show a quiet result line, expired requests stay in their original chat, and saved questions stay before replies in history and exports. [PR #3091](https://github.com/motioneso/moss/pull/3091)
 
+#### Changed
+
+- **Clearer action approvals.** Deleting a note now always asks first, even when note changes are trusted, and approval cards explain corrections, show clearer keyboard focus, and keep completed choices quiet. [PR #3094](https://github.com/motioneso/moss/pull/3094)
+
 ### 2026-10-06
 
 #### Changed
