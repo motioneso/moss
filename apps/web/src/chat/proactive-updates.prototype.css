@@ -1,0 +1,41 @@
+/* THROWAWAY #3102: review controls only; accepted chat styles stay shared. */
+.updates-preview {
+  padding-bottom: var(--space-5);
+}
+.updates-guide {
+  max-width: 1700px;
+  margin: 0 auto var(--space-4);
+}
+.updates-guide p {
+  margin: var(--space-2) 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+}
+.updates-guide [role="status"] {
+  color: var(--accent-fg);
+}
+.updates-preview .proto-stage {
+  height: calc(100dvh - 255px);
+  min-height: 600px;
+}
+.updates-preview .create-demo-controls .jds-field {
+  min-width: 0;
+  width: min(100%, 320px);
+}
+.updates-preview .jds-btn {
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .updates-preview {
+    padding-inline: var(--space-3);
+  }
+  .updates-preview .proto-toolbar {
+    flex-wrap: wrap;
+    padding-block: var(--space-3);
+  }
+  .updates-preview .proto-stage,
+  .updates-preview .proto-stage[data-view="phone"] {
+    height: 740px;
+  }
+}
