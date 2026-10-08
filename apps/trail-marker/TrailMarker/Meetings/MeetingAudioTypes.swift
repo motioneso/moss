@@ -64,12 +64,22 @@ enum MeetingOutputScope: Equatable {
 }
 
 struct MeetingNativeSelection: Equatable {
-    let microphoneDeviceID: UInt32
+    let microphoneDeviceID: UInt32?
     /// Nil means microphone-only. Output route failure never changes this selection.
     let output: MeetingOutputScope?
 
+    var sources: Set<MeetingAudioSource> {
+        var result = Set<MeetingAudioSource>()
+        if microphoneDeviceID != nil { result.insert(.microphone) }
+        if output != nil { result.insert(.output) }
+        return result
+    }
+
     func validate() throws {
-        guard microphoneDeviceID != 0 else { throw MeetingAudioFailure.invalidSelection }
+        guard microphoneDeviceID != 0, microphoneDeviceID != nil || output != nil else {
+            throw MeetingAudioFailure.invalidSelection
+        }
+        if microphoneDeviceID == nil, case .selectedProcesses? = output { throw MeetingAudioFailure.invalidSelection }
         try output?.validate()
     }
 }

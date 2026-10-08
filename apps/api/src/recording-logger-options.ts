@@ -1,5 +1,14 @@
 import type { FastifyServerOptions } from "fastify";
 const recordingSecretPaths = [
+  "req.headers.authorization",
+  "headers.authorization",
+  "req.headers.cookie",
+  "headers.cookie",
+  "req.body.credential",
+  "body.credential",
+  "body.verifier",
+  "body.pcmBase64",
+  "body.recordingProof",
   'req.headers["x-moss-recording-proof"]',
   'headers["x-moss-recording-proof"]',
   "req.body.verifier",

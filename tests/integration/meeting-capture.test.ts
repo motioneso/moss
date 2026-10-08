@@ -66,6 +66,9 @@ async function fixture(fresh = false) {
       )
     ).meeting;
   const meeting = await createMeeting();
+  await sql`DELETE FROM app.meeting_capture_start_limits WHERE owner_user_id=${owner.actorUserId}::uuid`.execute(
+    bootstrap
+  );
   // Auth and provider ports are synthetic. Storage, RLS, locks, receipts and transcript are real.
   const deps: MeetingCaptureDependencies = {
     dataContext: context,
@@ -77,6 +80,8 @@ async function fixture(fresh = false) {
       capabilityRevision: revision,
       expiresAt: browser.expiresAt
     }),
+    acquireRecordingBinding: async () => ({ release: async () => {} }),
+    scheduleMaintenance: async () => {},
     assertRecordingBinding: async (input) => {
       if (
         input.actorUserId !== owner.actorUserId ||

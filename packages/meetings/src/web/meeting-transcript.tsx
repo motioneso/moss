@@ -16,6 +16,8 @@ import { captureAcknowledged } from "./capture-presentation.js";
 import { evidenceQueryOptions, parseTranscriptEvidence } from "./transcript-evidence.js";
 import { transcriptTime } from "./transcript-time.js";
 
+const MIN_TRANSCRIPT_GAP_MS = 250;
+
 export function TranscriptTimeline({
   snapshot,
   sources,
@@ -27,6 +29,19 @@ export function TranscriptTimeline({
   readonly selectedId?: string;
   readonly search?: string;
 }) {
+  // Native and server reports can describe the same lost clip under different IDs.
+  // Keep the retained diagnostics intact and collapse only exact coverage duplicates.
+  // Hide sub-quarter-second interruptions in this view only, using precise duration
+  // rather than rounded timestamp labels. Capture metadata and warnings stay intact.
+  // This also hides processing-failed fragments under 250ms; their failure metadata is retained.
+  const distinctGaps = new Map(
+    gaps
+      .filter((gap) => gap.endMs - gap.startMs >= MIN_TRANSCRIPT_GAP_MS)
+      .map((gap) => [
+        JSON.stringify([gap.sourceId, gap.epoch, gap.startMs, gap.endMs, gap.reason]),
+        gap
+      ])
+  );
   const rows: (
     | { kind: "segment"; start: number; segment: MeetingTranscriptSegment }
     | { kind: "gap"; start: number; gap: MeetingCaptureState["gaps"][number] }
@@ -37,7 +52,11 @@ export function TranscriptTimeline({
           !search || segment.text.toLocaleLowerCase().includes(search.toLocaleLowerCase())
       )
       .map((segment) => ({ kind: "segment" as const, start: segment.startMs, segment })),
-    ...gaps.map((gap) => ({ kind: "gap" as const, start: gap.startMs, gap }))
+    ...Array.from(distinctGaps.values(), (gap) => ({
+      kind: "gap" as const,
+      start: gap.startMs,
+      gap
+    }))
   ].sort((a, b) => a.start - b.start);
   return (
     <>
@@ -52,7 +71,9 @@ export function TranscriptTimeline({
         {rows.map((row) =>
           row.kind === "gap" ? (
             <p className="jds-hint meetings-transcript-gap" key={`gap:${row.gap.id}`}>
-              {transcriptTime(row.gap.startMs)} to {transcriptTime(row.gap.endMs)} missing
+              {transcriptTime(row.gap.startMs) === transcriptTime(row.gap.endMs)
+                ? `Under a second missing at ${transcriptTime(row.gap.startMs)}`
+                : `${transcriptTime(row.gap.startMs)} to ${transcriptTime(row.gap.endMs)} missing`}
             </p>
           ) : (
             (() => {

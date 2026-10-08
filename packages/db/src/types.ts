@@ -1902,6 +1902,10 @@ export interface MossDatabase {
   "app.meeting_output_requests": MeetingOutputRequestsTable;
   "app.meeting_output_artifacts": MeetingOutputArtifactsTable;
   "app.meeting_action_candidates": MeetingActionCandidatesTable;
+  "app.meeting_capture_start_limits": {
+    owner_user_id: ColumnType<string, string | undefined, never>;
+    started_at: Date[];
+  };
   "app.meeting_records": MeetingRecordsTable;
   "app.meeting_note_writes": MeetingNoteWritesTable;
   "app.meeting_transcript_batches": MeetingTranscriptBatchesTable;

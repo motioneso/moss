@@ -54,12 +54,18 @@ export function captureView(
   at: Date
 ): MeetingCaptureState {
   const epoch = state.epochs.at(-1);
-  const semanticState = { ...state, lastSeenAt: undefined, recordedDurationMs: undefined };
+  const semanticState = {
+    ...state,
+    lastSeenAt: undefined,
+    recordedDurationMs: undefined,
+    maintenanceSequence: undefined
+  };
   return {
     revision: createHash("sha256")
       .update(captureMetadataJson({ state: semanticState, status: grant.status }))
       .digest("hex")
       .slice(0, 32),
+    ...(state.revocationReason ? { revocationReason: state.revocationReason } : {}),
     transcriptRevision: state.transcriptRevision ?? 0,
     leaseMs: MEETING_CAPTURE_LEASE_MS,
     recordedDurationMs: state.recordedDurationMs ?? 0,
@@ -320,14 +326,10 @@ export class MeetingCaptureRepository {
         startMs: number;
         endMs: number;
       };
-      const digest = createHash("sha256")
-        .update(`capture-gap:${grant.id}:${receipt.request_key}`)
-        .digest("hex");
-      const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
       retainCaptureGap(
         state,
         {
-          id,
+          id: receipt.request_key,
           sourceId: metadata.sourceId,
           epoch: metadata.epoch,
           startMs: metadata.startMs,

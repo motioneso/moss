@@ -1,3 +1,4 @@
+import { MeetingCaptureStartLimiter } from "../../packages/meetings/src/capture-start-limiter.js";
 import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { captureMetadataJson } from "../../packages/meetings/src/capture-metadata.js";
 import { assertCaptureAudioAdmission } from "../../packages/meetings/src/capture-domain.js";
@@ -37,6 +38,7 @@ const inventory: MeetingCaptureInventory = {
   systemAudioPermission: "granted"
 };
 function fixture() {
+  vi.spyOn(MeetingCaptureStartLimiter.prototype, "consume").mockResolvedValue();
   let clock = now;
   const actor = {
     actorUserId: owner,
@@ -71,6 +73,8 @@ function fixture() {
     resolveBrowser: vi.fn(async () => browser),
     resolveCompanion: vi.fn(),
     resolveRecording: vi.fn(async () => actor),
+    acquireRecordingBinding: async () => ({ release: async () => {} }),
+    scheduleMaintenance: async () => {},
     assertRecordingBinding: vi.fn(async () => ({ expiresAt: later })),
     assertBinding: vi.fn(),
     device: vi.fn(async () => ({ displayName: "Mac", expiresAt: later })),
@@ -145,7 +149,7 @@ function fixture() {
   });
   vi.spyOn(connections, "lockRequest").mockResolvedValue();
   const service = new MeetingCaptureConnectionService(deps, grants, connections, preferences);
-  const legacyStart: MeetingCaptureLegacyStartInput = {
+  const legacyStart = {
     deviceId,
     connectionId,
     expectedRevision: 1,
@@ -157,7 +161,7 @@ function fixture() {
       appProcessTreeId: "123",
       applicationId: "com.example.meeting"
     }
-  };
+  } satisfies MeetingCaptureLegacyStartInput;
   const headers = {
     authorization: "Bearer tm1_synthetic",
     "x-moss-recording-proof": "p".repeat(43)

@@ -19,7 +19,10 @@ import {
   applyMeetingTranscriptBatch,
   encodeMeetingTranscriptBatch
 } from "../../packages/meetings/src/transcript-batch.js";
-import { buildMeetingAccountExportInput } from "../integration/meeting-account-export-fixtures.js";
+import {
+  buildMeetingAccountExportInput,
+  normalizeStoredRow
+} from "../integration/meeting-account-export-fixtures.js";
 
 const ctx = {
   actorUserId: "00000000-0000-4000-8000-000000000001",
@@ -36,6 +39,7 @@ const collections = [
   "export_requests",
   "capture_connections",
   "capture_start_cancellations",
+  "capture_start_limits",
   "stop_summaries",
   "capture_grants"
 ] as const;
@@ -73,6 +77,29 @@ function harness(rows: Record<string, readonly Record<string, unknown>[]> = {}) 
 }
 
 describe("Meetings account-export collector", () => {
+  it("keeps Start timestamp arrays consistent across the database oracle and JSON exports", async () => {
+    const first = new Date("2026-10-06T10:00:00.123Z");
+    const second = new Date("2026-10-06T10:00:01.456Z");
+    const stored = { owner_user_id: ctx.actorUserId, started_at: [first, second] };
+    const expected = {
+      ownerUserId: ctx.actorUserId,
+      startedAt: ["2026-10-06T10:00:00.123Z", "2026-10-06T10:00:01.456Z"]
+    };
+    expect(normalizeStoredRow(stored)).toEqual(expected);
+    const { db, scopedDb } = harness({
+      meeting_capture_start_limits: [{ ownerUserId: ctx.actorUserId, startedAt: [first, second] }]
+    });
+    try {
+      const collected = (await collectMeetingsExportSection(scopedDb, ctx)).capture_start_limits;
+      expect(collected).toEqual([expected]);
+      expect(JSON.parse(JSON.stringify(collected))).toEqual([expected]);
+      expect(stored.started_at).toEqual([first, second]);
+      expect(stored.started_at[0]).toBeInstanceOf(Date);
+    } finally {
+      await db.destroy();
+    }
+  });
+
   it("uses a valid populated integration fixture with exact cited owner and due phrases", () => {
     const meetingId = "00000000-0000-4000-8000-000000000002";
     const { content, personalNotes } = buildMeetingAccountExportInput(meetingId, "UNIT-FIXTURE");
@@ -124,7 +151,9 @@ describe("Meetings account-export collector", () => {
         expect(query.sql).toMatch(/WHERE owner_user_id = \$1::uuid/);
         expect(query.parameters).toEqual([ctx.actorUserId]);
         expect(query.sql).toMatch(/ORDER BY/);
-        expect(query.sql).not.toMatch(/\*|history_|search_terms|JOIN|LIMIT|OFFSET|\bDELETE\b/i);
+        expect(query.sql).not.toMatch(
+          /\*|history_|search_terms|\bJOIN\b|\bLIMIT\b|\bOFFSET\b|\bDELETE\b/i
+        );
       }
       expect(queries[0]?.sql).toMatch(/ORDER BY created_at, id/);
       expect(queries[1]?.sql).toMatch(/ORDER BY meeting_id, expected_revision, request_key/);
@@ -227,7 +256,7 @@ describe("Meetings account-export collector", () => {
       ]);
       expect(result.export_receipts).toEqual([{ receiptJson: '{"writeStatus":"saved"}' }]);
       expect(result.export_requests).toEqual([{ resultJson: null }]);
-      expect(queries).toHaveLength(12);
+      expect(queries).toHaveLength(collections.length);
       expect(JSON.parse(JSON.stringify(result))).toEqual(result);
     } finally {
       await db.destroy();
@@ -254,6 +283,10 @@ describe("Meetings account-export collector", () => {
       new URL("../../packages/meetings/sql/0292_meeting_minimal.sql", import.meta.url),
       "utf8"
     );
+    const limiterMigration = await readFile(
+      new URL("../../packages/meetings/sql/0295_meeting_capture_start_limits.sql", import.meta.url),
+      "utf8"
+    );
     const minimalSelectGrants = [
       ...minimalMigration.matchAll(
         /GRANT SELECT \([^)]+\)\s+ON app\.[a-z_]+ TO jarvis_worker_runtime;/g
@@ -262,6 +295,7 @@ describe("Meetings account-export collector", () => {
       .map((match) => match[0])
       .join("\n");
     const migration =
+      (limiterMigration.match(/-- Rate-limit history[\s\S]*$/)?.[0] ?? "") +
       minimalSelectGrants +
       originalMigration +
       (captureMigration.match(/-- Capture account export[\s\S]*$/)?.[0] ?? "") +

@@ -27,7 +27,8 @@ export const meetingsModuleManifest = {
       "sql/0283_meeting_account_export.sql",
       "sql/0284_meeting_capture.sql",
       "sql/0288_meeting_recording_connections.sql",
-      "sql/0292_meeting_minimal.sql"
+      "sql/0292_meeting_minimal.sql",
+      "sql/0295_meeting_capture_start_limits.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -45,7 +46,8 @@ export const meetingsModuleManifest = {
       "app.meeting_capture_receipts",
       "app.meeting_capture_connections",
       "app.meeting_capture_start_cancellations",
-      "app.meeting_stop_summaries"
+      "app.meeting_stop_summaries",
+      "app.meeting_capture_start_limits"
     ]
   },
   permissions: [
@@ -310,6 +312,19 @@ export const meetingsModuleManifest = {
         "When no Mac is linked, Meetings points to Trail Marker’s existing connect-in-browser flow. Download app has no destination yet. A linked Mac opens a ready workspace without source questions; linking, creating and opening never record."
     },
     {
+      id: "meetings.mac_link_controls",
+      description:
+        "Settings → Meetings shows link status, audio source, automatic summary and confirmed Unlink for the exact Mac. Pending and failed changes are explicit. Recording-capability revocation stays enforced; Unlink keeps retained meetings.",
+      remediations: [
+        {
+          id: "meetings.restore_mac_link",
+          path: "/settings?section=modules&module=meetings",
+          description:
+            "For missing or revoked recording access, unlink this Mac in Settings → Meetings and relink through Trail Marker. If Unlink is unconfirmed, use local Stop, check the connection and retry. Linking never starts capture."
+        }
+      ]
+    },
+    {
       id: "meetings.automatic_summary",
       description:
         "Automatic summaries default on. Turn off Summarize automatically after Stop in Settings → Meetings. Only automatic summaries rename Untitled meeting. Rewrite summary remains available."
@@ -335,20 +350,20 @@ export const meetingsModuleManifest = {
           code: "meeting_capture_processing_failed",
           class: "transient",
           description:
-            "A transcription clip failed. Capture continues while transient failures retry within the memory limit; an unrecoverable clip leaves a visible gap."
+            "Transient transcription failures retry while capture continues. Terminal failed clips retain one gap, shown at 250ms or longer. Provider end rounding up to 100ms is clamped to the clip; other invalid intervals are rejected."
         },
         {
           code: "meeting_capture_rate_limited",
           class: "transient",
           description:
-            "Capture transport is temporarily rate limited. Moss honors Retry-After while keeping Pause and Stop available."
+            "Start is limited per account to 10 requests per minute and 60 per hour, alongside transport limits. Moss honors Retry-After while keeping Pause and Stop available."
         },
         {
           code: "meeting_capture_unavailable",
           class: "prerequisite",
           remediationRef: "meetings.connect_recorder",
           description:
-            "The recording connection is unavailable, expired or revoked. Check the companion connection. For missing or revoked recording access, sign the Mac out under Settings → Active sessions and reconnect through Trail Marker."
+            "The recording connection is unavailable, expired or revoked. Check the Mac in Settings → Meetings. For missing or revoked recording access, unlink the Mac and reconnect through Trail Marker."
         },
         {
           code: "meeting_capture_processing_unavailable",
@@ -385,9 +400,9 @@ export const meetingsModuleManifest = {
       remediations: [
         {
           id: "meetings.connect_recorder",
-          path: "/meetings",
+          path: "/settings?section=modules&module=meetings",
           description:
-            "Check the linked Mac and audio mode in Settings → Meetings. For missing or revoked recording access, sign the Mac out under Active sessions and relink through Trail Marker. Check macOS audio permissions, then press Start in New meeting."
+            "Check the Mac and audio in Settings → Meetings. For missing or revoked recording access, unlink and relink through Trail Marker. Check macOS audio permissions, then press Start in New meeting."
         },
         {
           id: "meetings.configure_transcription",
@@ -396,6 +411,21 @@ export const meetingsModuleManifest = {
             "An admin configures the transcription endpoint and model in AI providers. The selected route must return clip timestamps; unsupported responses stop processing without provider fallback."
         }
       ]
+    },
+    {
+      id: "meetings.mac_recording_status",
+      description:
+        "White 222 × 32 pill with three live audio bars, source menu, Pause/Resume, Stop and Hide X. Silence/stale audio flattens the bars. Resume keeps the current sources. Stop clears the pill and red menu item."
+    },
+    {
+      id: "meetings.mac_recording_pill_visibility",
+      description:
+        "X only hides the pill. Recording and the red Meeting menu continue, with Pause/Stop and Show recording pill available. Showing a paused pill never resumes it. Each new Start shows the pill."
+    },
+    {
+      id: "meetings.mac_audio_sources",
+      description:
+        "Select a mic or None and toggle computer audio for this recording. System-only skips mic permission. Both-off is rejected; select audio. Paused edits stay paused. Changes await confirmation and keep Settings defaults."
     },
     {
       id: "meetings.account_export",
@@ -680,7 +710,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.transcript_review",
       description:
-        "Read live transcript timestamps and source labels beside notes, with inline missing-audio ranges. On phones they become tabs. Chat timestamp links scroll to exact evidence; older cited text remains identifiable."
+        "Transcript timestamps and sources sit beside notes or in phone tabs. Gaps under 250ms and exact duplicates hide; same-second gaps say under a second. Diagnostics stay intact. Chat links scroll to cited evidence, including older text."
     },
     {
       id: "meetings.capture_default",
@@ -758,7 +788,8 @@ export const meetingsModuleManifest = {
           table: "app.meeting_capture_start_cancellations",
           countPredicate: "owner_user_id = $1::uuid"
         },
-        { table: "app.meeting_stop_summaries", countPredicate: "owner_user_id = $1::uuid" }
+        { table: "app.meeting_stop_summaries", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_start_limits", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }

@@ -613,7 +613,8 @@ test("reviewed summary versions create independent Tasks and private vault copie
           "stop_summaries",
           "capture_grants",
           "capture_connections",
-          "capture_start_cancellations"
+          "capture_start_cancellations",
+          "capture_start_limits"
         ].sort()
       );
       // This notes-only UAT does not create recording connections, cancellations, grants or Start history.
@@ -621,13 +622,15 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(exported.capture_grants).toEqual([]);
       expect(exported.capture_connections).toEqual([]);
       expect(exported.capture_start_cancellations).toEqual([]);
+      expect(exported.capture_start_limits).toEqual([]);
       for (const [name, rows] of Object.entries(exported)) {
         if (
           ![
             "stop_summaries",
             "capture_grants",
             "capture_connections",
-            "capture_start_cancellations"
+            "capture_start_cancellations",
+            "capture_start_limits"
           ].includes(name)
         )
           expect(rows.length).toBeGreaterThan(0);

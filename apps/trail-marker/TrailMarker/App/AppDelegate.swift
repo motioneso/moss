@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let loginItem = LoginItemService()
     private let updater = UpdaterService()
     private lazy var meetings = MeetingCaptureHost(connection: connection)
+    private var meetingPillController: MeetingRecordingPillController?
     private var meetingStatusItem: MeetingCaptureStatusItem?
     private var meetingWindowController: NSWindowController?
 
@@ -59,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.meetings.beforeConnectionEvent(event) ?? true
         }
         meetingStatusItem = MeetingCaptureStatusItem(host: meetings, showControls: { [weak self] in self?.showMeetingControls() })
+        meetingPillController = MeetingRecordingPillController(host: meetings)
         permissions.refresh()
         connection.start()
         meetings.startConnection()
@@ -75,19 +77,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
-        connection.$lastDiagnostic
-            .compactMap { $0 }
-            .receive(on: DispatchQueue.main)
-            .sink { message in
-                let alert = NSAlert()
-                alert.messageText = "Logged out on this Mac"
-                alert.informativeText = message
-                alert.addButton(withTitle: "Dismiss")
-                NSApp.activate(ignoringOtherApps: true)
-                alert.runModal()
-            }
-            .store(in: &cancellables)
-
         let feature = backtrack.menuState
         menuBarController = MenuBarController(
             connection: connection,
@@ -95,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onShowLastJudgment: { [weak self] in self?.showLastJudgment() },
             onOpenSettings: { [weak self] in self?.showSettings() },
             onOpenOnboarding: { [weak self] in self?.showOnboarding() },
-            feature: feature
+            feature: feature, meetings: meetings
         )
 
         if case .notLinked = connection.state {

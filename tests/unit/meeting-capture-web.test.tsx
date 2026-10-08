@@ -281,32 +281,43 @@ describe("minimal capture browser regressions (synthetic transport, not live pro
     expect(invalidated).toHaveBeenCalledWith({ queryKey: ["meetings", "history"] });
   });
 
-  it("shows terminal revocation and clears live navigation", async () => {
-    status.capture = capture();
-    await mount(
-      <>
-        <CapturePanel meeting={meeting} onLiveChange={() => {}} />
-        <MeetingCaptureStrip />
-        <MeetingCaptureNavigationIndicator />
-      </>,
-      "/settings"
-    );
-    expect(host.querySelector(".meetings-recording-strip")).not.toBeNull();
-    expect(host.querySelector(".meetings-recording-indicator")).not.toBeNull();
-    status = {
-      ...status,
-      revision: "revoked",
-      capture: capture({ desired: "revoked", finalization: "complete" })
-    };
-    act(() => refreshCaptureStatus(client, meeting.id));
-    await settle();
-    expect(host.textContent).toContain("Recording authorization revoked. Recording stopped.");
-    expect(host.querySelector(".meetings-recording-strip")).toBeNull();
-    expect(host.querySelector(".meetings-recording-indicator")).toBeNull();
-    expect(button("Start recording")).toBeUndefined();
-    expect(button("Resume")).toBeUndefined();
-    expect(host.textContent).toContain("New meeting");
-  });
+  it.each([
+    ["device-unavailable", "Mac unlinked or device access expired"],
+    ["recording-permission-revoked", "Recording permission revoked"],
+    ["session-ended", "Recording browser session ended"],
+    ["connection-replaced", "Mac recording connection replaced"],
+    ["expired", "Recording session expired"],
+    [undefined, "Recording authorization revoked"]
+  ] as const)(
+    "shows the authoritative terminal reason %s and clears live navigation",
+    async (reason, label) => {
+      status.capture = capture();
+      await mount(
+        <>
+          <CapturePanel meeting={meeting} onLiveChange={() => {}} />
+          <MeetingCaptureStrip />
+          <MeetingCaptureNavigationIndicator />
+        </>,
+        "/settings"
+      );
+      expect(host.querySelector(".meetings-recording-strip")).not.toBeNull();
+      expect(host.querySelector(".meetings-recording-indicator")).not.toBeNull();
+      status = {
+        ...status,
+        revision: "revoked",
+        capture: capture({ desired: "revoked", revocationReason: reason, finalization: "complete" })
+      };
+      act(() => refreshCaptureStatus(client, meeting.id));
+      await settle();
+      expect(host.textContent).toContain(`${label}. Recording stopped.`);
+      expect(host.querySelector(".meetings-recording-strip")).toBeNull();
+      expect(host.querySelector(".meetings-recording-indicator")).toBeNull();
+      expect(button("Start recording")).toBeUndefined();
+      expect(button("Resume")).toBeUndefined();
+      expect(host.textContent).toContain("New meeting");
+      if (reason !== "device-unavailable") expect(host.textContent).not.toContain("Mac unlinked");
+    }
+  );
 
   it.each([
     ["Recording", "recording", "recording", 1, 1, true],

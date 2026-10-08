@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
   MeetingCaptureAudioInput,
   MeetingCaptureControlInput,
+  MeetingCaptureNativeControlInput,
   MeetingCaptureConnectionInput,
   MeetingCaptureCommandsInput,
   MeetingCaptureClaimInput,
@@ -61,7 +62,7 @@ const selection = {
     ),
     object({
       mode: { const: "computer-audio" },
-      microphone,
+      microphone: { anyOf: [microphone, { type: "null" }] },
       outputSourceId: text,
       scope: object({
         kind: { const: "process-exclusion" },
@@ -137,6 +138,29 @@ const controlProperties = {
   selection
 };
 const controlRequired = ["grantId", "requestKey", "expectedGeneration", "command"];
+const nativeControlBody = {
+  type: "object",
+  required: ["command"],
+  discriminator: { propertyName: "command" },
+  oneOf: [
+    object({
+      meetingId: uuid,
+      grantId: uuid,
+      requestKey: uuid,
+      expectedGeneration: counter,
+      command: { enum: ["record", "pause", "stop"] }
+    }),
+    object({
+      meetingId: uuid,
+      grantId: uuid,
+      requestKey: uuid,
+      expectedGeneration: counter,
+      command: { const: "change-sources" },
+      expectedEpoch: { ...counter, minimum: 1, maximum: 64 },
+      selection
+    })
+  ]
+};
 const params = object({ id: uuid });
 /** Before credential resolution, rotating untrusted bearer/cookie bytes must not rotate buckets. */
 function ipRateLimit(max: number) {
@@ -150,7 +174,7 @@ function ipRateLimit(max: number) {
 }
 function failure(error: unknown, reply: FastifyReply) {
   if (error instanceof MeetingCaptureError) {
-    if (error.httpStatus === 429) reply.header("Retry-After", "1");
+    if (error.httpStatus === 429) reply.header("Retry-After", String(error.retryAfterSeconds));
     return reply.code(error.httpStatus).send({ code: error.code });
   }
   const unavailable = captureAuthorizationError(error);
@@ -367,16 +391,13 @@ export function registerMeetingCaptureRoutes(
       }
     }
   );
-  server.post<{ Body: MeetingCaptureControlInput & { meetingId: string; grantId: string } }>(
+  server.post<{ Body: MeetingCaptureNativeControlInput }>(
     "/api/meetings/capture/control",
     {
       ...options,
       config: ipRateLimit(60),
       schema: {
-        body: object({ ...controlProperties, meetingId: uuid, grantId: uuid }, [
-          ...controlRequired,
-          "meetingId"
-        ])
+        body: nativeControlBody
       }
     },
     async (request, reply) => {

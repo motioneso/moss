@@ -179,16 +179,6 @@ beforeEach(() => {
       devices = devices.filter((item) => item.deviceId !== id);
       return json({ success: true });
     }
-    if (path === "/api/companion/recording-capability/revoke") {
-      const id = body?.deviceId;
-      capabilities = {
-        devices: capabilities.devices.map((item) =>
-          item.deviceId === id ? { ...item, state: "revoked" } : item
-        )
-      };
-      devices = devices.filter((item) => item.deviceId !== id);
-      return new Response(null, { status: 204 });
-    }
     if (path === "/api/me/sessions") return json(sessions);
     if (path === "/api/companion/recording-capabilities") return json(capabilities);
     if (path === "/api/me/locale")
@@ -204,6 +194,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   client.clear();
   host.remove();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -663,8 +654,8 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
       host.querySelector<HTMLButtonElement>('[role="dialog"] button.jds-btn--danger')!.click()
     );
     await settle();
-    expect(calls.filter((call) => call.method === "DELETE").map((call) => call.path)).toEqual([
-      `/api/me/sessions/${device.deviceId}`
+    expect(calls.filter((call) => call.method !== "GET")).toEqual([
+      { path: `/api/me/sessions/${device.deviceId}`, method: "DELETE", body: undefined }
     ]);
     expect(sessions.sessions).toEqual([second]);
     expect(preferences).toEqual(original);
@@ -723,6 +714,43 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
     expect(sessions.sessions).toHaveLength(0);
     expect(host.querySelector('[role="dialog"]')).toBeNull();
   });
+  it("aborts a timed-out Unlink, keeps the link and permits retry", async () => {
+    let signal: AbortSignal | undefined;
+    const normal = transport.getMockImplementation()!;
+    transport.mockImplementation((path, options) =>
+      options?.method === "DELETE"
+        ? new Promise<Response>((_resolve, reject) => {
+            calls.push({ path, method: "DELETE" });
+            signal = options.signal ?? undefined;
+            signal?.addEventListener("abort", () =>
+              reject(new DOMException("Aborted", "AbortError"))
+            );
+          })
+        : normal(path, options)
+    );
+    await mount();
+    await click("Unlink Mac");
+    vi.useFakeTimers();
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[role="dialog"] button.jds-btn--danger')!.click()
+    );
+    expect(signal?.aborted).toBe(false);
+    await act(async () => vi.advanceTimersByTimeAsync(12000));
+    vi.useRealTimers();
+    await settle();
+    expect(signal?.aborted).toBe(true);
+    expect(host.textContent).toContain("Couldn’t confirm Unlink");
+    expect(sessions.sessions).toHaveLength(1);
+    expect(client.getQueryData(meetingLinkKeys.sessions)).toEqual(sessions);
+    expect(button("Cancel").disabled).toBe(false);
+    transport.mockImplementation(normal);
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[role="dialog"] button.jds-btn--danger')!.click()
+    );
+    await settle();
+    expect(sessions.sessions).toHaveLength(0);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
   it("rechecks the exact companion session before Unlink confirmation", async () => {
     await mount();
     await click("Unlink Mac");
@@ -744,11 +772,13 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
     async (boundary) => {
       for (const success of [false, true]) {
         let finish!: (value: Response) => void;
+        let signal: AbortSignal | undefined;
         const normal = transport.getMockImplementation()!;
         transport.mockImplementation((path, options) =>
           options?.method === "DELETE"
             ? new Promise<Response>((resolve) => {
                 finish = resolve;
+                signal = options.signal ?? undefined;
               })
             : normal(path, options)
         );
@@ -762,6 +792,7 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
           root.unmount();
           if (boundary === "auth reset") await client.resetQueries();
         });
+        expect(signal?.aborted).toBe(true);
         root = createRoot(host);
         transport.mockImplementation(normal);
         await mount();

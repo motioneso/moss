@@ -32,7 +32,8 @@ const expectedSequence = [
   "0283_meeting_account_export.sql",
   "0284_meeting_capture.sql",
   "0288_meeting_recording_connections.sql",
-  "0292_meeting_minimal.sql"
+  "0292_meeting_minimal.sql",
+  "0295_meeting_capture_start_limits.sql"
 ];
 
 describe("unapplied Meetings migration sequence", () => {

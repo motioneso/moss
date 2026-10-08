@@ -231,13 +231,19 @@ export async function assertMeetingLinkControls({
         });
         expect(Date.now()).toBeLessThanOrEqual(stoppedBy);
         await page.goto(`/meetings?id=${meetingId}`);
-        await expect(panel).toContainText("Recording authorization revoked. Recording stopped.");
+        await expect(panel).toContainText(
+          action === "unlink"
+            ? "Mac unlinked or device access expired. Recording stopped."
+            : "Recording permission revoked. Recording stopped."
+        );
         await expect(notes).toHaveValue(`Keep my notes after ${action}.`);
         const terminal = (await (
           await page.request.get(`${path}/capture`)
         ).json()) as MeetingCaptureBrowserStatus;
         expect(terminal.capture).toMatchObject({
-          desired: "revoked"
+          desired: "revoked",
+          revocationReason:
+            action === "unlink" ? "device-unavailable" : "recording-permission-revoked"
         });
         expect(await (await page.request.get("/api/meetings/preferences")).json()).toEqual(saved);
       } finally {

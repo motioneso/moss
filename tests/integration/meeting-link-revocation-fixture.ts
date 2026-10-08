@@ -114,23 +114,20 @@ export async function meetingLinkRevocationFixture() {
     resolveCompanion: runtime.companionDevices.resolve,
     resolveRecording: runtime.recordingCapabilities.resolve,
     assertRecordingBinding: runtime.recordingCapabilities.assertLive,
+    acquireRecordingBinding: runtime.recordingCapabilities.acquireCaptureBinding,
+    // Synthetic maintenance deliberately does not run. This proves request-driven settlement,
+    // not background revocation timing or durable maintenance scheduling.
+    scheduleMaintenance: async () => {},
     assertBinding: runtime.sessionBindings.assertLive,
     device: runtime.sessionBindings.device,
     trustedOrigins: runtime.trustedOrigins,
-    // Only module/provider availability and transcription are synthetic. Auth, cookies,
-    // initial linking approval, proof, session/device checks, RLS, capture and storage are real.
+    // Module/provider availability and transcription are also synthetic. Auth, cookies,
+    // initial linking approval, proof, session/device checks, the auth fence, RLS and storage are real.
     assertModuleAvailable: async () => {},
     processingAvailability: async () => ({ ready: true, modelRoute: "synthetic-transcription" }),
     transcribe,
     now: () => clock
   };
-  // Exercise the real persisted preference path used by request-key-only Start.
-  await context.withDataContext(browser, (db) =>
-    new MeetingPreferencesRepository().update(db, {
-      defaultCaptureMode: "microphone-only",
-      rememberedSource: { deviceId, microphoneId: "fixture-mic", mode: "microphone-only" }
-    })
-  );
   const meeting = await context.withDataContext(
     browser,
     async (db) =>
@@ -140,6 +137,12 @@ export async function meetingLinkRevocationFixture() {
           requestKey: randomUUID()
         })
       ).meeting
+  );
+  await context.withDataContext(browser, (db) =>
+    new MeetingPreferencesRepository().update(db, {
+      defaultCaptureMode: "microphone-only",
+      rememberedSource: { deviceId, microphoneId: "fixture-mic", mode: "microphone-only" }
+    })
   );
   const server = Fastify({ logger: false });
   registerMeetingCaptureRoutes(server, dependencies);
@@ -168,7 +171,7 @@ export async function meetingLinkRevocationFixture() {
       payload: { requestKey: randomUUID() }
     });
     expect(started.statusCode, "explicit-browser-start").toBe(200);
-    expect(started.json().capture.selection, "persisted-microphone-only-start-source").toEqual({
+    expect(started.json().capture.selection, "server-resolved-synthetic-microphone").toEqual({
       mode: "microphone-only",
       microphone: { deviceId: "fixture-mic", sourceId: "mic" }
     });
@@ -255,13 +258,7 @@ export async function meetingLinkRevocationFixture() {
         headers: browserHeaders,
         payload: { deviceId }
       }),
-    unlink: async () =>
-      runtime.companionDevices.logout(
-        await runtime.companionDevices.resolve({
-          headers: native,
-          requestId: "unlink-active-recording"
-        })
-      ),
+    unlink: async () => runtime.companionDevices.logoutCredential({ headers: native }),
     ordinaryLink: () =>
       runtime.companionDevices.resolve({
         headers: native,

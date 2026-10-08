@@ -28,6 +28,8 @@ describe("automatic-summary UAT browser capture requests", () => {
       resolveBrowser,
       resolveCompanion: vi.fn(),
       assertBinding: vi.fn(),
+      acquireRecordingBinding: async () => ({ release: async () => {} }),
+      scheduleMaintenance: async () => {},
       device: vi.fn(),
       assertModuleAvailable: vi.fn(),
       processingAvailability: vi.fn(),

@@ -71,6 +71,44 @@ function stopped() {
 }
 
 describe("meeting lifecycle foundation", () => {
+  it("captures system audio alone with exact output boundaries and no microphone readiness", () => {
+    const selection: MeetingCaptureSelection = {
+      mode: "computer-audio",
+      microphone: null,
+      outputSourceId: "output",
+      scope: { kind: "process-exclusion", excludedProcessTreeIds: ["moss"] }
+    };
+    const readyInput = {
+      ...readiness,
+      microphone: "not-captured" as const,
+      output: "silence" as const
+    };
+    const ready = transitionMeeting(createMeetingLifecycle("meeting"), {
+      type: "ready",
+      atMs: 0,
+      selection,
+      readiness: readyInput,
+      processing
+    });
+    const active = transitionMeeting(ready, { type: "start", atMs: 0, readiness: readyInput });
+    expect(canSendMeetingAudio(active, { ...audio, sourceId: "output" }, 10)).toBe(true);
+    expect(canSendMeetingAudio(active, audio, 10)).toBe(false);
+    expect(
+      transitionMeeting(active, {
+        type: "pause",
+        atMs: 10,
+        boundaries: [{ sourceId: "output", finalSequence: 2 }]
+      }).status
+    ).toBe("paused");
+    expect(() => transitionMeeting(active, { type: "pause", atMs: 10, boundaries })).toThrow();
+    expect(() =>
+      transitionMeeting(ready, {
+        type: "start",
+        atMs: 0,
+        readiness: { ...readyInput, microphone: "audio" }
+      })
+    ).toThrow();
+  });
   it("requires explicit readiness and freshly checked Start", () => {
     expect(() =>
       transitionMeeting(createMeetingLifecycle("meeting"), { type: "start", atMs: 0, readiness })

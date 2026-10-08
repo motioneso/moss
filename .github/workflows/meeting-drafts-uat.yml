@@ -33,6 +33,7 @@ on:
       - "tests/uat/specs/2981-meeting-*.uat.spec.ts"
       - "tests/uat/specs/meeting-capture-native-fixture.ts"
       - "tests/uat/specs/meeting-capture-browser-fixture.ts"
+      - "tests/uat/specs/meeting-link-controls-ui.ts"
       - "tests/uat/specs/meeting-history-layout.ts"
       - "tests/uat/specs/meeting-review-layout.ts"
       - "tests/uat/specs/meeting-minimal-ui.ts"

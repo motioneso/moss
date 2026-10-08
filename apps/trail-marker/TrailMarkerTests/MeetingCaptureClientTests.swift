@@ -89,6 +89,37 @@ final class MeetingCaptureClientTests: XCTestCase {
         XCTAssertEqual((json["credentialHash"] as? String)?.count, 64)
     }
 
+    func testClosedClientRejectsLateControlWithoutCreatingAnInvalidURLSessionTask() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MeetingCaptureFixtureProtocol.self]
+        let client = MeetingCaptureClient(instance: try InstanceURL.parse("https://moss.example").get(), configuration: config)
+        client.close()
+        client.close() // Teardown may be repeated by expiry and fixture/app shutdown.
+        let body = MeetingCaptureControlBody(meetingId: "m", grantId: "g", requestKey: UUID().uuidString,
+            expectedGeneration: 1, command: "pause")
+        do {
+            _ = try await client.control(body, credential: "mm1_synthetic-fixture")
+            XCTFail("A closed capture client must reject a queued control request")
+        } catch {
+            XCTAssertEqual(error as? MeetingHostError, .authorizationExpired)
+        }
+    }
+
+    func testClosedClientRejectsLateAudioBeforeTaskCreationOrCompletion() throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MeetingCaptureFixtureProtocol.self]
+        let client = MeetingCaptureClient(instance: try InstanceURL.parse("https://moss.example").get(), configuration: config)
+        client.close()
+        let body = MeetingCaptureAudioBody(meetingId: "m", grantId: "g", requestKey: UUID().uuidString,
+            generation: 1, epoch: 1, sourceId: "microphone", sequence: 0, startMs: 0, endMs: 1,
+            sampleRateHz: 16000, pcmBase64: "AAA=")
+        XCTAssertThrowsError(try client.beginAudio(body, credential: "mm1_synthetic-fixture") { _ in
+            XCTFail("A request rejected at admission must not create a completion callback")
+        }) { error in
+            XCTAssertEqual(error as? MeetingHostError, .authorizationExpired)
+        }
+    }
+
     func testCompanionCredentialCannotAuthorizeAudio() throws {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MeetingCaptureFixtureProtocol.self]

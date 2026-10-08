@@ -1,3 +1,5 @@
+import { withCaptureBindingTransaction } from "./capture-binding.js";
+import { MeetingCaptureStartLimiter } from "./capture-start-limiter.js";
 import {
   MeetingPreferencesRepository,
   resolveCaptureSource,
@@ -53,7 +55,8 @@ export class MeetingCaptureConnectionService {
     private readonly deps: MeetingCaptureDependencies,
     private readonly grants = new MeetingCaptureRepository(),
     readonly connections = new MeetingCaptureConnectionRepository(),
-    private readonly preferences = new MeetingPreferencesRepository()
+    private readonly preferences = new MeetingPreferencesRepository(),
+    private readonly startLimiter = new MeetingCaptureStartLimiter()
   ) {
     this.now = deps.now ?? (() => new Date());
   }
@@ -266,6 +269,7 @@ export class MeetingCaptureConnectionService {
   }
   async start(actor: CaptureBrowserBinding, meetingId: string, input: MeetingCaptureStartRequest) {
     await this.deps.assertBinding({ actorUserId: actor.actorUserId, sessionId: actor.sessionId });
+    await this.deps.dataContext.withDataContext(actor, (db) => this.startLimiter.consume(db));
     const fingerprint = hash(
       captureMetadataJson({ meetingId, sessionId: actor.sessionId, ...input })
     );
@@ -351,6 +355,7 @@ export class MeetingCaptureConnectionService {
       )
         throw new MeetingCaptureError("meeting_capture_conflict", 409);
       const state: CaptureStoredState = {
+        maintenanceSequence: 0,
         gaps: [],
         gapLimitReached: false,
         generation: 0,
@@ -395,6 +400,11 @@ export class MeetingCaptureConnectionService {
         claimExpiresAt: new Date(this.now().getTime() + MEETING_CAPTURE_CLAIM_MS),
         state
       });
+      await this.deps.scheduleMaintenance(db, actor, {
+        grantId: grant.id,
+        sequence: 0,
+        at: this.now()
+      });
       return {
         capture: captureView(grant, state, this.now()),
         wakeConnectionId: connection.connection_id
@@ -438,64 +448,77 @@ export class MeetingCaptureConnectionService {
     input: MeetingCaptureClaimInput
   ): Promise<MeetingCaptureClaimResult> {
     const actor = await this.native(headers, requestId);
-    return this.deps.dataContext.withDataContext(actor, async (db) => {
-      await this.connections.lock(db, actor.deviceId);
-      const connection = this.valid(
-        await this.connections.connection(db, actor.deviceId),
-        actor,
-        input.connectionId,
-        input.verifier
-      );
-      const initial = await this.grants.grant(db, input.grantId);
-      if (!initial) throw new MeetingCaptureError();
-      await this.grants.lockMeeting(db, initial.meeting_id);
-      const grant = await this.grants.grant(db, input.grantId, true);
-      if (
-        !grant ||
-        grant.device_id !== actor.deviceId ||
-        grant.connection_id !== connection.connection_id ||
-        grant.capability_revision !== actor.capabilityRevision ||
-        grant.verifier_hash !== connection.verifier_hash ||
-        grant.expires_at <= this.now()
-      )
-        throw new MeetingCaptureError();
-      await this.live(actor, grant);
-      if (grant.credential_hash) {
+    return withCaptureBindingTransaction(
+      this.deps,
+      actor,
+      async (db) => {
+        await this.connections.lock(db, actor.deviceId);
+        const connection = this.valid(
+          await this.connections.connection(db, actor.deviceId),
+          actor,
+          input.connectionId,
+          input.verifier
+        );
+        const initial = await this.grants.grant(db, input.grantId);
+        if (!initial) throw new MeetingCaptureError();
+        await this.grants.lockMeeting(db, initial.meeting_id);
+        const grant = await this.grants.grant(db, input.grantId, true);
         if (
-          grant.credential_hash !== input.credentialHash ||
-          !["active", "finalizing", "complete"].includes(grant.status)
-        )
-          throw new MeetingCaptureError("meeting_capture_conflict", 409);
-      } else {
-        if (
-          grant.status !== "approved" ||
-          !grant.claim_expires_at ||
-          grant.claim_expires_at <= this.now()
+          !grant ||
+          grant.device_id !== actor.deviceId ||
+          grant.connection_id !== connection.connection_id ||
+          grant.capability_revision !== actor.capabilityRevision ||
+          grant.verifier_hash !== connection.verifier_hash ||
+          grant.expires_at <= this.now()
         )
           throw new MeetingCaptureError();
-        const state = captureState(grant);
-        if (state.desired !== "recording")
-          throw new MeetingCaptureError("meeting_capture_conflict", 409);
-        const epoch = state.epochs.at(-1)!;
-        validateCaptureSelection(
-          epoch.selection,
-          JSON.parse(connection.inventory_json) as MeetingCaptureInventory
+        await this.live(actor, grant);
+        return grant;
+      },
+      async (db, grant) => {
+        const connection = this.valid(
+          await this.connections.connection(db, actor.deviceId),
+          actor,
+          input.connectionId,
+          input.verifier
         );
-        // A pending Start owns no hardware time. Anchor the meeting clock at activation.
-        state.originAt = this.now().toISOString();
-        state.epochs = [{ ...epoch, epoch: 1, startMs: 0, endMs: null }];
-        state.lastSeenAt = this.now().toISOString();
-        await this.grants.activate(db, grant, input.credentialHash, state);
-        grant.status = "active";
-        grant.credential_hash = input.credentialHash;
-        grant.state_json = JSON.stringify(state);
+        if (grant.credential_hash) {
+          if (
+            grant.credential_hash !== input.credentialHash ||
+            !["active", "finalizing", "complete"].includes(grant.status)
+          )
+            throw new MeetingCaptureError("meeting_capture_conflict", 409);
+        } else {
+          if (
+            grant.status !== "approved" ||
+            !grant.claim_expires_at ||
+            grant.claim_expires_at <= this.now()
+          )
+            throw new MeetingCaptureError();
+          const state = captureState(grant);
+          if (state.desired !== "recording")
+            throw new MeetingCaptureError("meeting_capture_conflict", 409);
+          const epoch = state.epochs.at(-1)!;
+          validateCaptureSelection(
+            epoch.selection,
+            JSON.parse(connection.inventory_json) as MeetingCaptureInventory
+          );
+          // A pending Start owns no hardware time. Anchor the meeting clock at activation.
+          state.originAt = this.now().toISOString();
+          state.epochs = [{ ...epoch, epoch: 1, startMs: 0, endMs: null }];
+          state.lastSeenAt = this.now().toISOString();
+          await this.grants.activate(db, grant, input.credentialHash, state);
+          grant.status = "active";
+          grant.credential_hash = input.credentialHash;
+          grant.state_json = JSON.stringify(state);
+        }
+        return {
+          meetingId: grant.meeting_id,
+          grantId: grant.id,
+          expiresAt: grant.expires_at.toISOString(),
+          capture: captureView(grant, captureState(grant), this.now())
+        };
       }
-      return {
-        meetingId: grant.meeting_id,
-        grantId: grant.id,
-        expiresAt: grant.expires_at.toISOString(),
-        capture: captureView(grant, captureState(grant), this.now())
-      };
-    });
+    );
   }
 }

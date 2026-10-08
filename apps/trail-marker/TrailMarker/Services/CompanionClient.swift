@@ -339,7 +339,8 @@ struct CompanionClient {
     }
 
     func logout(credential: String) async throws {
-        let request = plainRequest(path: "/api/companion/logout", method: "POST", credential: credential)
+        var request = plainRequest(path: "/api/companion/logout", method: "POST", credential: credential)
+        request.timeoutInterval = 15
         _ = try await sendChecked(request, okStatuses: [204])
     }
 

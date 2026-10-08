@@ -1,3 +1,4 @@
+import { AbortablePgPool } from "@moss/db";
 import { createHash, randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -27,6 +28,7 @@ const verifier = "v".repeat(43),
   replacementProof = "r".repeat(43);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 let bootstrap: pg.Client, app: pg.Client, worker: pg.Client, pool: pg.Pool;
+let maintenancePool: AbortablePgPool;
 let pairing: CompanionPairingService, capabilities: RecordingCapabilitiesService;
 const browser = { actorUserId: owner, sessionId, expiresAt, requestId: "synthetic-browser" };
 
@@ -48,16 +50,24 @@ beforeAll(async () => {
     [sessionId, owner, otherSessionId, otherOwner, expiresAt]
   );
   pool = new pg.Pool({ connectionString: connectionStrings.auth, max: 4 });
+  maintenancePool = new AbortablePgPool({ connectionString: connectionStrings.auth });
   pairing = createCompanionPairingService({ pool, now: () => now });
   const devices = createCompanionDevicesService({ pool, now: () => now });
   capabilities = createRecordingCapabilitiesService({
     pool,
+    maintenancePool,
     companionDevices: devices,
     now: () => now
   });
 });
 afterAll(async () => {
-  await Promise.allSettled([bootstrap?.end(), app?.end(), worker?.end(), pool?.end()]);
+  await Promise.allSettled([
+    bootstrap?.end(),
+    app?.end(),
+    worker?.end(),
+    pool?.end(),
+    maintenancePool?.close()
+  ]);
 });
 
 async function link(withRecording = false) {

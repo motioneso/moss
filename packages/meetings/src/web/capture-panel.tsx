@@ -5,7 +5,12 @@ import { ApiError, randomUuid } from "@moss/module-web-sdk";
 import { Badge, Button } from "@moss/ui";
 import type { MeetingRecord } from "@moss/shared";
 import { captureKeys } from "./capture-client.js";
-import { captureSelection, captureStopped, captureStatusLabel } from "./capture-presentation.js";
+import {
+  captureSelection,
+  captureRevocationLabel,
+  captureStopped,
+  captureStatusLabel
+} from "./capture-presentation.js";
 import { useCaptureSession, startMeetingCapture, type ActiveCapture } from "./capture-session.js";
 import { getMeetingPreferences, isMeetingAccessDenied, meetingKeys } from "./client.js";
 import { useCaptureStatus } from "./capture-status.js";
@@ -89,7 +94,7 @@ export function CapturePanel({
       : query.isError
         ? "Couldn’t confirm the recorder connection."
         : revoked && capture
-          ? "Recording authorization revoked. Recording stopped."
+          ? `${captureRevocationLabel(capture)}. Recording stopped.`
           : (session.state.error ??
             (capture?.observed?.phase === "error"
               ? "Recording was interrupted. Check Trail Marker on your Mac."
