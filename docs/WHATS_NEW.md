@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Meeting summaries use your default model.** Meeting summaries use your default model, explain unavailable setups and timeouts clearly, and never switch to another model. [PR #3093](https://github.com/motioneso/moss/pull/3093)
 - **Clearer action outcomes.** Unattended writes now show a quiet result line, expired requests stay in their original chat, and saved questions stay before replies in history and exports. [PR #3091](https://github.com/motioneso/moss/pull/3091)
 
 #### Changed
