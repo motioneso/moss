@@ -131,7 +131,7 @@ label {
   font-weight: var(--weight-strong);
 }
 
-input,
+input:where(:not(.meeting-settings .jds-radio-card input[type="radio"])),
 select,
 textarea {
   width: 100%;
@@ -408,7 +408,7 @@ button {
   height: 19px;
 }
 
-.module-link span {
+.module-link > .module-link__label {
   flex: 1;
   min-width: 0;
   overflow: hidden;

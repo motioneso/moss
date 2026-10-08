@@ -325,6 +325,12 @@ export default defineConfig({
         )
       },
       {
+        find: "@moss/shared/chat-action-outcome",
+        replacement: fileURLToPath(
+          new URL("./packages/shared/src/chat-action-outcome.ts", import.meta.url)
+        )
+      },
+      {
         find: "@moss/shared",
         replacement: fileURLToPath(new URL("./packages/shared/src/index.ts", import.meta.url))
       },

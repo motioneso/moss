@@ -1,0 +1,102 @@
+name: Meeting link security
+
+on:
+  pull_request:
+    paths:
+      - "packages/auth/src/**"
+      - "packages/meetings/**"
+      - "packages/shared/src/meeting-capture-api.ts"
+      - "packages/shared/src/meeting-preferences-api.ts"
+      - "packages/shared/src/meeting-api.ts"
+      - "apps/api/src/recording-logger-options.ts"
+      - "apps/api/src/server.ts"
+      - "apps/worker/src/worker.ts"
+      - "apps/worker/src/meeting-capture-supervisor.ts"
+      - "apps/api/src/meeting-capture-maintenance-runtime.ts"
+      - "apps/api/src/companion-routes.ts"
+      - "apps/api/src/companion-recording-routes.ts"
+      - "packages/module-registry/**"
+      - "packages/jobs/**"
+      - "packages/db/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "scripts/run-gate.sh"
+      - "tests/integration/companion-*.test.ts"
+      - "tests/integration/meeting-account-export*.ts"
+      - "tests/integration/meeting-capture*.test.ts"
+      - "tests/integration/test-database.ts"
+      - "tests/integration/meeting-link-*.ts"
+      - "tests/unit/meeting-link-security.test.ts"
+      - "tests/unit/meeting-capture-maintenance.test.ts"
+      - "tests/unit/api-capture-maintenance-startup.test.ts"
+      - "tests/unit/database-pool-idle-error.test.ts"
+      - "tests/unit/meeting-link-proof-recognition.test.ts"
+      - "tests/unit/queue-definitions.test.ts"
+      - "tests/unit/owned-pg-client.test.ts"
+      - "tests/unit/worker-schedule-mode.test.ts"
+      - "tests/unit/capture-maintenance-deployment.test.ts"
+      - "infra/docker-compose.yml"
+      - "infra/docker-compose.prod.yml"
+      - "infra/env.production.example"
+      - "scripts/setup-prod.ts"
+      - "scripts/check-meeting-link-negative-controls.py"
+      - "scripts/check-meeting-resume-negative-controls.py"
+      - "scripts/check-meeting-source-negative-controls.py"
+      - "tests/unit/meeting-capture-source-*.test.ts"
+      - "tests/unit/meeting-capture-pause-gaps.test.ts"
+      - "tests/unit/meeting-native-resume.test.ts"
+      - "tests/unit/helpers/meeting-capture-fixture.ts"
+      - ".github/workflows/meeting-link-security.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    name: Real auth and guard-removal proofs
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify pooled transport cancellation and capture-only supervision
+        run: |
+          node node_modules/vitest/vitest.mjs run tests/unit/owned-pg-client.test.ts tests/unit/meeting-capture-maintenance.test.ts tests/unit/worker-schedule-mode.test.ts tests/unit/capture-maintenance-deployment.test.ts tests/unit/api-capture-maintenance-startup.test.ts tests/unit/database-pool-idle-error.test.ts tests/unit/meeting-link-proof-recognition.test.ts
+          python3 scripts/check-meeting-link-negative-controls.py --unit
+      - name: Verify scoped native Resume guard removals
+        run: python3 scripts/check-meeting-resume-negative-controls.py --unit
+      - name: Verify source selection boundaries and guard removals
+        run: |
+          node node_modules/vitest/vitest.mjs run tests/unit/meeting-capture-source-changes.test.ts tests/unit/meeting-capture-source-security.test.ts tests/unit/meeting-capture-source-order.test.ts tests/unit/meeting-capture-pause-gaps.test.ts
+          python3 scripts/check-meeting-source-negative-controls.py --unit
+      - name: Verify real auth, database races and source restoration
+        run: |
+          set -euo pipefail
+          scripts/run-gate.sh start --gate test:meeting-link-security
+          scripts/run-gate.sh wait --follow
+          scripts/run-gate.sh start --gate test:meeting-link-negative
+          scripts/run-gate.sh wait --follow
+          git diff --exit-code
+      - name: Keep bounded test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meeting-link-security
+          path: |
+            /tmp/meeting-link-negative-*/
+            /tmp/meeting-resume-negative-*/
+            /tmp/meeting-source-negative-*/
+            /tmp/jarv1s-gate/*.log
+          if-no-files-found: warn
+      - name: Stop the isolated database
+        if: always()
+        run: scripts/run-gate.sh stop || true

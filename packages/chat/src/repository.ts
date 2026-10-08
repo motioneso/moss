@@ -21,6 +21,25 @@ import type {
 import type { StoredMeetingChatContext } from "@moss/shared";
 import { normalizeChatSurface } from "./live/chat-surface.js";
 import { toIsoString } from "./memory-serializers.js";
+import {
+  actionRecordId,
+  actionRecords,
+  mergeTerminalAction,
+  type TerminalActionRecord
+} from "./action-record-history.js";
+
+/** Absorbed synthetic rows remain stored; only their visible replacement participates in history. */
+function visibleChatMessage(table: "app.chat_messages" | "m" = "app.chat_messages") {
+  const metadata = sql.ref(`${table}.tool_metadata`);
+  return sql<boolean>`NOT COALESCE(
+    ${sql.ref(`${table}.body`)} = ''
+    AND ${sql.ref(`${table}.role`)} = 'assistant'
+    AND ${sql.ref(`${table}.status`)} = 'stored'
+    AND ${metadata}->'actionOutcomeOnly' = 'true'::jsonb
+    AND ${metadata}->'actionOutcomeHidden' = 'true'::jsonb,
+    false
+  )`;
+}
 
 export interface CreateChatThreadInput {
   readonly title: string;
@@ -61,6 +80,7 @@ export class ChatRepository {
       .select((eb) =>
         eb
           .selectFrom("app.chat_messages")
+          .where(visibleChatMessage())
           .select("body")
           .whereRef("app.chat_messages.thread_id", "=", "app.chat_threads.id")
           // A saved turn stores the person's message and the reply at the same
@@ -68,7 +88,7 @@ export class ChatRepository {
           // the message the preview should show.
           .orderBy("created_at", "desc")
           .orderBy(sql<number>`CASE WHEN role = 'user' THEN 0 ELSE 1 END`, "desc")
-          .orderBy("id")
+          .orderBy("id", "desc")
           .limit(1)
           .as("lastMessageBody")
       )
@@ -119,11 +139,123 @@ export class ChatRepository {
       .executeTakeFirst();
   }
 
+  /** Exact owner identity with no surface/current-thread default. */
+  async getOwnedThreadById(
+    scopedDb: DataContextDb,
+    actorUserId: string,
+    threadId: string
+  ): Promise<ChatThread | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("id", "=", threadId)
+      .where("owner_user_id", "=", actorUserId)
+      .executeTakeFirst();
+  }
+
+  /** A late outcome never selects its old thread or creates a synthetic user turn. */
+  async persistActionRecord(
+    scopedDb: DataContextDb,
+    actorUserId: string,
+    threadId: string,
+    record: TerminalActionRecord
+  ): Promise<boolean> {
+    assertDataContextDb(scopedDb);
+    const thread = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("id", "=", threadId)
+      .where("owner_user_id", "=", actorUserId)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!thread || thread.owner_user_id !== actorUserId || thread.incognito) return false;
+    await this.lockActionHistory(scopedDb, threadId);
+    const matching = JSON.stringify([{ actionRequestId: record.actionRequestId }]);
+    const message = await scopedDb.db
+      .selectFrom("app.chat_messages")
+      .where(visibleChatMessage())
+      .selectAll()
+      .where("thread_id", "=", thread.id)
+      .where("owner_user_id", "=", actorUserId)
+      .where("role", "=", "assistant")
+      .where("status", "=", "stored")
+      .where(
+        sql<boolean>`(tool_metadata->'activity' @> ${matching}::jsonb OR tool_metadata->'actionResults' @> ${matching}::jsonb)`
+      )
+      .orderBy(
+        sql<number>`CASE WHEN tool_metadata->>'actionOutcomeOnly' = 'true' THEN 1 ELSE 0 END`
+      )
+      .orderBy("created_at", "desc")
+      .orderBy("id", "desc")
+      .limit(1)
+      .forUpdate()
+      .executeTakeFirst();
+    if (message) {
+      const metadata = message.tool_metadata;
+      const activity = actionRecords(metadata.activity ?? metadata.actionResults);
+      const updatedMetadata = {
+        ...metadata,
+        activity: mergeTerminalAction(activity, record),
+        actionResults: mergeTerminalAction(actionRecords(metadata.actionResults), record).slice(
+          0,
+          20
+        )
+      };
+      const updated = await scopedDb.db
+        .updateTable("app.chat_messages")
+        .set({
+          tool_metadata: updatedMetadata,
+          updated_at: new Date()
+        })
+        .where("id", "=", message.id)
+        .where("thread_id", "=", threadId)
+        .where("owner_user_id", "=", actorUserId)
+        .where(
+          sql<boolean>`tool_metadata IS DISTINCT FROM ${JSON.stringify(updatedMetadata)}::jsonb`
+        )
+        .executeTakeFirst();
+      if (updated.numUpdatedRows > 0n) return true;
+      const unchanged = await scopedDb.db
+        .selectFrom("app.chat_messages")
+        .select("id")
+        .where("id", "=", message.id)
+        .where("thread_id", "=", threadId)
+        .where("owner_user_id", "=", actorUserId)
+        .where("status", "=", "stored")
+        .where(sql<boolean>`tool_metadata = ${JSON.stringify(updatedMetadata)}::jsonb`)
+        .executeTakeFirst();
+      return Boolean(unchanged);
+    }
+    await this.insertMessage(scopedDb, {
+      thread,
+      role: "assistant",
+      status: "stored",
+      body: "",
+      modelMetadata: {},
+      toolMetadata: {
+        selectedTools: [],
+        actionOutcomeOnly: true,
+        activity: [record],
+        actionResults: [record]
+      },
+      now: new Date()
+    });
+    return true;
+  }
+
+  private async lockActionHistory(scopedDb: DataContextDb, threadId: string): Promise<void> {
+    await sql`SELECT pg_advisory_xact_lock(hashtextextended(
+      'chat:action-history:' || app.current_actor_user_id()::text || ':' || ${threadId}, 0
+    ))`.execute(scopedDb.db);
+  }
+
   async listMessages(scopedDb: DataContextDb, threadId: string): Promise<ChatMessage[]> {
     assertDataContextDb(scopedDb);
 
     return scopedDb.db
       .selectFrom("app.chat_messages")
+      .where(visibleChatMessage())
       .selectAll()
       .where("thread_id", "=", threadId)
       .orderBy("created_at")
@@ -140,6 +272,7 @@ export class ChatRepository {
 
     return scopedDb.db
       .selectFrom("app.chat_messages")
+      .where(visibleChatMessage())
       .selectAll()
       .where("id", "=", messageId)
       .executeTakeFirst();
@@ -295,7 +428,14 @@ export class ChatRepository {
   ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
     assertDataContextDb(scopedDb);
 
-    const thread = await this.getThreadById(scopedDb, threadId, surface);
+    // Match the live persistence path: lock the parent before the action-history lock.
+    const thread = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("id", "=", threadId)
+      .where("surface", "=", normalizeChatSurface(surface))
+      .forUpdate()
+      .executeTakeFirst();
 
     if (!thread) {
       return undefined;
@@ -304,6 +444,72 @@ export class ChatRepository {
       return undefined;
     }
 
+    await this.lockActionHistory(scopedDb, threadId);
+    let activity = [...(opts?.activityRecords ?? opts?.actionResults ?? [])];
+    let actionResults: readonly unknown[] = [...(opts?.actionResults ?? [])];
+    const actionIds = new Set(activity.map(actionRecordId).filter((id): id is string => !!id));
+    if (actionIds.size > 0) {
+      const existing = await scopedDb.db
+        .selectFrom("app.chat_messages")
+        .where(visibleChatMessage())
+        .selectAll()
+        .where("thread_id", "=", threadId)
+        .where("owner_user_id", "=", thread.owner_user_id)
+        .where("role", "=", "assistant")
+        .where((eb) =>
+          eb.or(
+            [...actionIds].map((id) => {
+              const matching = JSON.stringify([{ actionRequestId: id }]);
+              return sql<boolean>`(tool_metadata->'activity' @> ${matching}::jsonb OR tool_metadata->'actionResults' @> ${matching}::jsonb)`;
+            })
+          )
+        )
+        .execute();
+      // A delayed result may also enter a newer live turn in the same conversation. Its
+      // already-stored originating message keeps ownership; do not duplicate it on this reply.
+      const alreadyStored = new Set(
+        existing
+          .filter((message) => message.tool_metadata.actionOutcomeOnly !== true)
+          .flatMap((message) => [
+            ...actionRecords(message.tool_metadata.activity),
+            ...actionRecords(message.tool_metadata.actionResults)
+          ])
+          .map(actionRecordId)
+          .filter((id): id is string => !!id && actionIds.has(id))
+      );
+      activity = activity.filter((entry) => !alreadyStored.has(actionRecordId(entry) ?? ""));
+      actionResults = actionResults.filter(
+        (entry) => !alreadyStored.has(actionRecordId(entry) ?? "")
+      );
+      for (const message of existing.filter(
+        (entry) => entry.tool_metadata.actionOutcomeOnly === true
+      )) {
+        const records = actionRecords(message.tool_metadata.activity);
+        if (
+          records.length === 0 ||
+          !records.every((entry) => actionIds.has(actionRecordId(entry) ?? ""))
+        )
+          continue;
+        for (const entry of records) {
+          // Only this repository creates these metadata-only terminal rows.
+          const terminal = entry as TerminalActionRecord;
+          if (!alreadyStored.has(terminal.actionRequestId)) {
+            activity = mergeTerminalAction(activity, terminal);
+            actionResults = mergeTerminalAction(actionResults, terminal).slice(0, 20);
+          }
+        }
+        await scopedDb.db
+          .updateTable("app.chat_messages")
+          .set({
+            tool_metadata: { ...message.tool_metadata, actionOutcomeHidden: true },
+            updated_at: new Date()
+          })
+          .where("id", "=", message.id)
+          .where("thread_id", "=", threadId)
+          .where("owner_user_id", "=", thread.owner_user_id)
+          .execute();
+      }
+    }
     const now = new Date();
     const userMessage = await this.insertMessage(scopedDb, {
       thread,
@@ -332,12 +538,8 @@ export class ChatRepository {
         ...(opts?.answerProvenance !== undefined
           ? { answerProvenanceV1: opts.answerProvenance }
           : {}),
-        ...(opts?.actionResults?.length ? { actionResults: opts.actionResults } : {}),
-        ...(opts?.activityRecords?.length
-          ? { activity: opts.activityRecords }
-          : opts?.actionResults?.length
-            ? { activity: opts.actionResults }
-            : {}),
+        ...(actionResults.length ? { actionResults } : {}),
+        ...(activity.length ? { activity } : {}),
         ...(opts?.elapsedMs !== undefined ? { elapsedMs: opts.elapsedMs } : {}),
         ...(opts?.usage !== undefined ? { usage: opts.usage } : {})
       },
@@ -461,6 +663,7 @@ export class ChatRepository {
 
     const rows = await scopedDb.db
       .selectFrom("app.chat_messages as m")
+      .where(visibleChatMessage("m"))
       .innerJoin("app.chat_threads as t", "t.id", "m.thread_id")
       .select([
         "m.thread_id as threadId",
@@ -480,6 +683,8 @@ export class ChatRepository {
       .where("m.created_at", "<=", new Date(rangeEndUtcIso))
       .orderBy("threadFirstMessageAt")
       .orderBy("m.created_at")
+      .orderBy(sql<number>`CASE WHEN m.role = 'user' THEN 0 ELSE 1 END`)
+      .orderBy("m.id")
       .execute();
 
     return rows.map((row) => ({

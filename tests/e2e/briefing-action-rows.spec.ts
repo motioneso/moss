@@ -207,6 +207,7 @@ test("morning and evening prose and action rows render accept dismiss view reply
       actionRequestId: "draft-reply-action-1",
       toolName: "email.draftReply",
       summary: "Draft reply to Alex?",
+      outcomeTitle: "Draft reply to Alex?",
       preview: {
         to: "alex@example.test",
         subject: "Re: Launch decision",

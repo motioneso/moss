@@ -15,9 +15,11 @@ export interface MeetingsExportSection {
   readonly action_candidates: readonly ExportRow[];
   readonly export_receipts: readonly ExportRow[];
   readonly export_requests: readonly ExportRow[];
+  readonly stop_summaries: readonly ExportRow[];
   readonly capture_grants: readonly ExportRow[];
   readonly capture_connections: readonly ExportRow[];
   readonly capture_start_cancellations: readonly ExportRow[];
+  readonly capture_start_limits: readonly ExportRow[];
 }
 
 /**
@@ -39,7 +41,7 @@ export async function collectMeetingsExportSection(
       scopedDb,
       sql<Record<string, unknown>>`
       SELECT id::text AS id, owner_user_id::text AS "ownerUserId",
-        request_key::text AS "requestKey", title, personal_notes AS "personalNotes",
+        request_key::text AS "requestKey", title, creation_title AS "creationTitle", personal_notes AS "personalNotes",
         notes_revision AS "notesRevision", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM app.meeting_records
       WHERE owner_user_id = ${ownerUserId}::uuid
@@ -138,6 +140,19 @@ export async function collectMeetingsExportSection(
       sql<Record<string, unknown>>`
       SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",request_key::text AS "requestKey",created_at AS "createdAt"
       FROM app.meeting_capture_start_cancellations WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY created_at,request_key
+    `
+    ),
+    capture_start_limits: await readRows(
+      scopedDb,
+      sql<
+        Record<string, unknown>
+      >`SELECT owner_user_id::text AS "ownerUserId", started_at AS "startedAt" FROM app.meeting_capture_start_limits WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY owner_user_id`
+    ),
+    stop_summaries: await readRows(
+      scopedDb,
+      sql<Record<string, unknown>>`
+      SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",grant_id::text AS "grantId",request_key::text AS "requestKey",template_id AS "templateId",status,code,due_at AS "dueAt",created_at AS "createdAt",early_enqueued AS "earlyEnqueued",input_json AS "inputJson"
+      FROM app.meeting_stop_summaries WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY created_at,meeting_id
     `
     ),
     capture_grants: await readRows(

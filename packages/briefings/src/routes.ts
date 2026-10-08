@@ -287,17 +287,20 @@ export function registerBriefingsRoutes(
                   metadata: { briefingType: run.briefing_type }
                 });
               }
-              for (const item of serializedRuns.flatMap((run) => run.feedbackItems)) {
-                await dependencies.feedbackRepository.upsertTarget(scopedDb, {
-                  ownerUserId: accessContext.actorUserId,
-                  targetKind: "briefing_item",
-                  targetRef: item.feedbackItemId,
-                  surface: "briefing",
-                  sourceKind: item.sourceKind,
-                  sourceLabel: item.sourceLabel,
-                  priorityBand: item.priorityBand,
-                  metadata: item.metadata
-                });
+              for (const run of serializedRuns) {
+                for (const item of run.feedbackItems) {
+                  await dependencies.feedbackRepository.upsertTarget(scopedDb, {
+                    ownerUserId: accessContext.actorUserId,
+                    targetKind: "briefing_item",
+                    targetRef: item.feedbackItemId,
+                    surface: "briefing",
+                    sourceKind: item.sourceKind,
+                    sourceLabel: item.sourceLabel,
+                    priorityBand: item.priorityBand,
+                    // Read the text from its owning record when an approval is requested.
+                    metadata: { ...item.metadata, briefingRunId: run.id }
+                  });
+                }
               }
               await upsertCatchUpTargets(
                 dependencies,
@@ -843,14 +846,15 @@ async function upsertCatchUpTargets(
   runs: readonly BriefingRun[]
 ): Promise<void> {
   if (!dependencies.feedbackRepository) return;
-  const refs = new Set(
-    runs.flatMap((run) =>
-      storedCatchUpEntries(
-        (run.source_metadata.structuredPayload as { catchUp?: unknown } | undefined)?.catchUp
-      ).map((entry) => entry.id)
-    )
-  );
-  for (const ref of refs) {
+  const refs = new Map<string, string>();
+  for (const run of runs) {
+    for (const entry of storedCatchUpEntries(
+      (run.source_metadata.structuredPayload as { catchUp?: unknown } | undefined)?.catchUp
+    )) {
+      if (!refs.has(entry.id)) refs.set(entry.id, run.id);
+    }
+  }
+  for (const [ref, runId] of refs) {
     await dependencies.feedbackRepository.upsertTarget(scopedDb, {
       ownerUserId: actorUserId,
       targetKind: "briefing_item",
@@ -858,7 +862,7 @@ async function upsertCatchUpTargets(
       surface: "briefing",
       sourceKind: "email",
       sourceLabel: "Catch-up",
-      metadata: { catchUp: true }
+      metadata: { catchUp: true, briefingRunId: runId }
     });
   }
 }

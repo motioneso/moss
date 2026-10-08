@@ -28,7 +28,10 @@ import {
   MeetingTranscriptRequestConflictError
 } from "./transcript-batch.js";
 
-type Batch = Selectable<MeetingTranscriptBatchesTable>;
+type Batch = Omit<
+  Selectable<MeetingTranscriptBatchesTable>,
+  "history_sources_json" | "history_omitted_sources"
+>;
 function receipt(batch?: Batch): MeetingTranscriptReceipt {
   return {
     version: batch?.version ?? 0,
@@ -61,7 +64,17 @@ export class MeetingTranscriptRepository {
       throw new MeetingTranscriptLimitError();
     const batches = await scopedDb.db
       .selectFrom("app.meeting_transcript_batches")
-      .selectAll()
+      .select([
+        "meeting_id",
+        "owner_user_id",
+        "request_key",
+        "version",
+        "input_json",
+        "transcript_revision",
+        "cursor",
+        "stop_cutoff_ms",
+        "created_at"
+      ])
       .where("meeting_id", "=", meetingId)
       .orderBy("version")
       .limit(MEETING_TRANSCRIPT_MAX_BATCHES + 1)
@@ -174,6 +187,12 @@ export class MeetingTranscriptRepository {
     } catch {
       throw new MeetingTranscriptInputError();
     }
+  }
+
+  /** Read-only, owner-scoped identity snapshot for exhaustive action disclosure. */
+  async approvalSnapshot(scopedDb: DataContextDb, meetingId: string) {
+    const state = await this.load(scopedDb, meetingId.toLowerCase(), false);
+    return state ? { ledger: state.ledger, receipt: state.receipt } : null;
   }
 
   async snapshot(

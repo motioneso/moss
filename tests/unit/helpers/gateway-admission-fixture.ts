@@ -21,6 +21,19 @@ export function admissionTool(
     permissionId: "example.use",
     actionFamilyId: "change",
     risk: "read",
+    ...(overrides.risk && overrides.risk !== "read"
+      ? {
+          actionLabel: "Apply fixture action",
+          approvalContent: "user_authored" as const,
+          approvalPresentation: async (_db: unknown, input: Record<string, unknown>) => ({
+            target: "Fixture target",
+            fields: Object.entries(input).map(([label, value]) => ({
+              label,
+              value: JSON.stringify(value)
+            }))
+          })
+        }
+      : {}),
     content: "user_authored",
     isExternal: false,
     executionPolicy: "auto",
@@ -52,7 +65,7 @@ export function resolvedCall(
     forceConfirm: false,
     confirmWhenTainted: false,
     summary: "Change the requested app setting",
-    details: { target: "Setting", fields: [] },
+    details: { presentation: "human", target: "Setting", fields: [] },
     affectsModules: ["settings"],
     ...overrides
   };
@@ -113,7 +126,13 @@ export function admissionFixture(
     repository: {
       createPendingAssistantAction: createPending,
       insertActionAuditLog: audit,
-      resolveAssistantAction: vi.fn(async () => ({ id: "action-1", status: "confirmed" }))
+      resolveAssistantAction: vi.fn(
+        async (_db: unknown, id: string, input: { status: string }) => ({
+          id,
+          status: input.status
+        })
+      ),
+      expireAssistantAction: vi.fn(async () => ({ id: "action-1", status: "timed_out" }))
     } as never,
     tokens,
     confirmations,

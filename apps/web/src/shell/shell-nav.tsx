@@ -13,6 +13,7 @@ import { NavLink } from "react-router";
 import type { MeResponse, ModuleNavigationEntryDto } from "@moss/shared";
 import { BrandMark, IconButton } from "@moss/ui";
 import type { NavSection } from "../app-route-metadata.js";
+import { ModulePersistentControls } from "./module-persistent-controls.js";
 import { NAV_ICON_MAP } from "./nav-icons.js";
 import type { ShellNavMode } from "./nav-storage.js";
 import { assistantName } from "../api/use-assistant-name.js";
@@ -275,17 +276,12 @@ function NavItem(props: {
       onClick={props.onClick}
     >
       <Icon size={17} />
-      <span>{props.entry.label}</span>
+      <span className="module-link__label">{props.entry.label}</span>
+      <ModulePersistentControls navigationFor={moduleId} />
       {unreadCount > 0 ? (
         // #1285: a module can only ever select WHICH core-owned count to display
-        // (badge.source is a closed enum), never supply its own number — this renders
-        // exactly `unreadByModule`, never anything module-authored. Inline flex override
-        // is needed because `.module-link span` (styles.css) sets flex:1 on every span
-        // descendant, including this one, and styles.css is outside this task's file
-        // boundary to edit.
-        <span className="jds-badge-count" style={{ flex: "0 0 auto" }}>
-          {formatUnreadCount(unreadCount)}
-        </span>
+        // (badge.source is a closed enum), never supply its own number.
+        <span className="jds-badge-count">{formatUnreadCount(unreadCount)}</span>
       ) : null}
     </NavLink>
   );

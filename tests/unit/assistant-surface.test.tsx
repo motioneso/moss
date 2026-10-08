@@ -41,9 +41,17 @@ const records: readonly TranscriptRecord[] = [
     text: "Approve profile",
     actionRequestId: "ar-1",
     toolName: "demo-module.profile.approve",
-    summary: "Approve profile"
+    summary: "Approve profile",
+    outcomeTitle: "Approve profile",
+    details: { presentation: "human", target: "Your profile", fields: [] }
   },
-  { kind: "action_result", text: "Profile approved", outcome: "executed" },
+  {
+    kind: "action_result",
+    text: "Executed: demo-module.profile.approve",
+    actionRequestId: "ar-1",
+    outcome: "executed",
+    decidedBy: "person"
+  },
   { kind: "error", text: "Visible failure" }
 ];
 
@@ -74,13 +82,52 @@ describe("AssistantSurface", () => {
 
     expect(html).not.toContain("hidden thought");
     expect(html).toContain("<strong>Streamed reply</strong>");
-    expect(html).toContain("Approve profile");
-    expect(html).toContain("Profile approved");
+    expect(html).toContain('role="status">Approved</p>');
+    expect(html).not.toContain("Needs your approval");
+    expect(html).not.toContain("Approve profile");
+    expect(html).not.toContain("Executed:");
+    expect(html).not.toContain("demo-module.profile.approve");
     expect(html).toContain("Visible failure");
     expect(html).toContain('aria-label="Alfred is typing"');
     expect(html.indexOf("Scripted intro")).toBeLessThan(html.indexOf("Streamed user"));
     expect(html.indexOf("Streamed user")).toBeLessThan(html.indexOf("Choose sources"));
   });
+
+  it.each([undefined, "ar-other"])(
+    "never resolves a pending card from an uncorrelated execution result (%s)",
+    (actionRequestId) => {
+      const uncorrelated = records.map(
+        (record): TranscriptRecord =>
+          record.kind === "action_result"
+            ? {
+                kind: "action_result",
+                text: "Profile approved",
+                outcome: "executed",
+                actionRequestId
+              }
+            : record
+      );
+      const html = renderToString(
+        withPersonaQueryClient(
+          createElement(
+            AssistantSurfaceHostProvider,
+            {
+              value: {
+                records: uncorrelated,
+                registerComposer: () => () => undefined,
+                subscribeRecords: () => () => undefined
+              }
+            },
+            createElement(AssistantSurface, {})
+          )
+        )
+      );
+      expect(html).toContain("action-request-title");
+      expect(html).toContain("Approve profile");
+      expect(html).not.toContain("Profile approved");
+      expect(html).not.toContain('role="status">Approved</p>');
+    }
+  );
 
   it("shows neutral copy, not the product name, while the persona fetch is still pending (#1482)", () => {
     const html = renderToString(

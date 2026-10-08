@@ -27,19 +27,24 @@ an operator's deployed proxy.
 
 Connect Trail Marker once through the native app's existing connect-in-browser flow. Linking
 grants recording capability in the single initial linking approval but never starts capture.
-Missing or revoked recording authority requires signing the Mac out under Settings → Active
-sessions and explicitly relinking through Trail Marker. There is no separate recording approval;
-already-approved Macs remain linked. New meeting opens without
-recording; press **Start recording** explicitly. Microphone + system audio is the default, using
-the Mac's advertised OS-default microphone. An unavailable default fails closed. The microphone
-list's display order does not choose a source. Existing exact saved microphone/app choices remain
-scoped until an explicit settings change; a missing source never authorizes broader capture.
+Missing or revoked recording access requires explicit Unlink in Settings → Meetings and relinking
+through Trail Marker; already-approved Macs stay linked. There is no separate recording approval.
+New meeting opens a ready transcript-and-notes workspace; press **Start recording** explicitly.
+Microphone + system audio is the default, using the Mac's advertised OS-default microphone. Change
+audio mode only in Settings → Meetings, alongside link status and Unlink Mac. Existing exact
+microphone/app choices remain scoped; a missing source never authorizes broader capture.
+Download app has no link until a supported signed release exists; no Moss-address copy control
+is added. The [approved four states](../../docs/superpowers/specs/2026-10-06-meetings-minimal-design.md)
+are the current design authority.
 
-The approved four-state workspace and Settings design is tracked in #3077/#3087 and implemented
-in Part A (#3079); the native floating pill belongs to Part B (#3082). The first explicit Start
-may request an OS permission. Granting permission alone cannot start a cancelled or expired
-command. The browser stays where the person started; Trail Marker does not choose the default
-browser for each meeting.
+The native floating pill is pure white in light and dark appearances, 250 × 80 points, with a red
+three-bar captured-audio level meter, grey-ringed Pause and solid red Stop with a filled square.
+It has no visible text, timer, name or close button. Silent or stale audio flattens all three bars.
+The paused pill's play control explicitly resumes only the existing paused, claimed recording with
+its retained sources and live authority. It cannot create an initial Start. A newer Pause/Stop or
+known rejection cancels pending Resume; hardware waits for authoritative status confirmation.
+Existing credentials, OS permissions, revocation and capture limits remain. The first explicit
+Start may request an OS permission; permission approval cannot start a cancelled or expired command.
 A second browser signed in as the same owner may explicitly control the named recorder. Opening
 a meeting never changes the recording computer. Missing or ambiguous remembered sources require
 selection; a missing selected app never widens to computer audio. Provider configuration stays in
@@ -231,13 +236,16 @@ cannot operate on that reserved surface. `GET /api/chat/meeting-context?surface=
 ## Summary, Task review and private export checkpoint
 
 Review offers explicit template selection and Generate; merely opening a meeting does not run a
-model. Generate stays disabled while the configured summary route is unavailable or its
+model. Generate stays disabled while your default model is unavailable or its
 availability cannot be checked. Refresh summaries rechecks safe configuration metadata without
 reading credentials or contacting a provider; existing saved summaries remain readable.
-Generation resolves the configured active API-key model with both `summarization` and
-`json` capabilities, respecting the routing/pin contract. It makes one structured HTTP attempt,
-without executable tools, native search, CLI engines or repair/fallback attempts. The model's
+Generation resolves the same effective default model as chat, honoring administrator locks and
+user overrides, and requires `summarization` and `json` capabilities. An unavailable enabled
+override fails closed. API-key and supported constrained Claude subscription providers make one bounded
+structured attempt, without native search or repair/fallback attempts. Entire JSON-fenced CLI
+replies are accepted; surrounding prose, multiple JSON values and malformed replies are rejected. The model's
 claims must bind to the retained input's exact meeting, revision and UTF-16 evidence ranges.
+Codex subscriptions currently fail before dispatch with an unsupported message; no API-key or other-model fallback is used.
 A proposal never authorizes an action.
 
 The escaped structured prompt is limited to **65,536 UTF-8 bytes**, including guidance and JSON

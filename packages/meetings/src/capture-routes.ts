@@ -5,11 +5,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
   MeetingCaptureAudioInput,
   MeetingCaptureControlInput,
+  MeetingCaptureNativeControlInput,
   MeetingCaptureConnectionInput,
   MeetingCaptureCommandsInput,
   MeetingCaptureClaimInput,
   MeetingCaptureCancelStartInput,
-  MeetingCaptureStartInput,
+  MeetingCaptureStartRequest,
   MeetingCaptureStatusInput
 } from "@moss/shared";
 import { MeetingCaptureConnectionService } from "./capture-connection-service.js";
@@ -61,7 +62,7 @@ const selection = {
     ),
     object({
       mode: { const: "computer-audio" },
-      microphone,
+      microphone: { anyOf: [microphone, { type: "null" }] },
       outputSourceId: text,
       scope: object({
         kind: { const: "process-exclusion" },
@@ -137,6 +138,29 @@ const controlProperties = {
   selection
 };
 const controlRequired = ["grantId", "requestKey", "expectedGeneration", "command"];
+const nativeControlBody = {
+  type: "object",
+  required: ["command"],
+  discriminator: { propertyName: "command" },
+  oneOf: [
+    object({
+      meetingId: uuid,
+      grantId: uuid,
+      requestKey: uuid,
+      expectedGeneration: counter,
+      command: { enum: ["record", "pause", "stop"] }
+    }),
+    object({
+      meetingId: uuid,
+      grantId: uuid,
+      requestKey: uuid,
+      expectedGeneration: counter,
+      command: { const: "change-sources" },
+      expectedEpoch: { ...counter, minimum: 1, maximum: 64 },
+      selection
+    })
+  ]
+};
 const params = object({ id: uuid });
 /** Before credential resolution, rotating untrusted bearer/cookie bytes must not rotate buckets. */
 function ipRateLimit(max: number) {
@@ -150,7 +174,7 @@ function ipRateLimit(max: number) {
 }
 function failure(error: unknown, reply: FastifyReply) {
   if (error instanceof MeetingCaptureError) {
-    if (error.httpStatus === 429) reply.header("Retry-After", "1");
+    if (error.httpStatus === 429) reply.header("Retry-After", String(error.retryAfterSeconds));
     return reply.code(error.httpStatus).send({ code: error.code });
   }
   const unavailable = captureAuthorizationError(error);
@@ -270,23 +294,28 @@ export function registerMeetingCaptureRoutes(
       }
     }
   );
-  server.post<{ Params: { id: string }; Body: MeetingCaptureStartInput }>(
+  server.post<{ Params: { id: string }; Body: MeetingCaptureStartRequest }>(
     "/api/meetings/records/:id/capture/start",
     {
       ...options,
       config: ipRateLimit(60),
       schema: {
         params,
-        body: object(
-          {
-            deviceId: uuid,
-            connectionId: uuid,
-            expectedRevision: { type: "integer", minimum: 1 },
-            requestKey: uuid,
-            selection
-          },
-          ["deviceId", "connectionId", "expectedRevision", "requestKey"]
-        )
+        body: {
+          oneOf: [
+            object({ requestKey: uuid }),
+            object(
+              {
+                deviceId: uuid,
+                connectionId: uuid,
+                expectedRevision: { type: "integer", minimum: 1 },
+                requestKey: uuid,
+                selection
+              },
+              ["deviceId", "connectionId", "expectedRevision", "requestKey", "selection"]
+            )
+          ]
+        }
       }
     },
     async (request, reply) => {
@@ -296,9 +325,9 @@ export function registerMeetingCaptureRoutes(
           request.params.id,
           request.body
         );
-        waiters.notify(`device:${request.body.connectionId}`);
+        if (result.wakeConnectionId) waiters.notify(`device:${result.wakeConnectionId}`);
         waiters.notify(`meeting:${request.params.id}`);
-        return result;
+        return { capture: result.capture };
       } catch (error) {
         return failure(error, reply);
       }
@@ -309,7 +338,13 @@ export function registerMeetingCaptureRoutes(
     {
       ...options,
       config: ipRateLimit(60),
-      schema: { params, body: object({ deviceId: uuid, connectionId: uuid, requestKey: uuid }) }
+      schema: {
+        params,
+        body: {
+          ...object({ deviceId: uuid, connectionId: uuid, requestKey: uuid }, ["requestKey"]),
+          dependencies: { deviceId: ["connectionId"], connectionId: ["deviceId"] }
+        }
+      }
     },
     async (request, reply) => {
       try {
@@ -318,9 +353,9 @@ export function registerMeetingCaptureRoutes(
           request.params.id,
           request.body
         );
-        waiters.notify(`device:${request.body.connectionId}`);
+        if (result.wakeConnectionId) waiters.notify(`device:${result.wakeConnectionId}`);
         waiters.notify(`meeting:${request.params.id}`);
-        return result;
+        return { cancelled: result.cancelled, capture: result.capture };
       } catch (error) {
         return failure(error, reply);
       }
@@ -356,16 +391,13 @@ export function registerMeetingCaptureRoutes(
       }
     }
   );
-  server.post<{ Body: MeetingCaptureControlInput & { meetingId: string; grantId: string } }>(
+  server.post<{ Body: MeetingCaptureNativeControlInput }>(
     "/api/meetings/capture/control",
     {
       ...options,
       config: ipRateLimit(60),
       schema: {
-        body: object({ ...controlProperties, meetingId: uuid, grantId: uuid }, [
-          ...controlRequired,
-          "meetingId"
-        ])
+        body: nativeControlBody
       }
     },
     async (request, reply) => {
@@ -462,7 +494,7 @@ export function registerMeetingCaptureRoutes(
       config: ipRateLimit(300),
       schema: {
         params,
-        body: { ...object(controlProperties, controlRequired) }
+        body: object(controlProperties, controlRequired)
       }
     },
     async (request, reply) => {

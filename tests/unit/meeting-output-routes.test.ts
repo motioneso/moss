@@ -1,3 +1,4 @@
+import { MeetingStopSummaryRepository } from "../../packages/meetings/src/stop-summary-repository.js";
 import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DataContextRunner } from "@moss/db";
@@ -14,6 +15,7 @@ describe("Meeting output generation availability", () => {
   it.each(["available", "model-unavailable", "check-failed"] as const)(
     "returns %s alongside retained output without generating",
     async (availability) => {
+      vi.spyOn(MeetingStopSummaryRepository.prototype, "status").mockResolvedValue(null);
       const server = Fastify();
       const actor = { actorUserId: meetingId };
       const list = vi.spyOn(MeetingOutputsRepository.prototype, "list").mockResolvedValue({

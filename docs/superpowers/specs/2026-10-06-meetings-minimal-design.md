@@ -211,7 +211,7 @@ recording capability and processing availability under the existing locks.
 `defaultCaptureMode` defaults to `computer-audio`. `rememberedSource` retains exact saved identities
 for compatibility. Settings may update the mode without requiring a source-selection form.
 Neither a setup timestamp nor a setup-completion write is required.
-The saved `MeetingCaptureSelection` contract gains a computer-audio-only form: `mode: "computer-audio"`
+The per-recording `MeetingCaptureSelection` contract gains a computer-audio-only form: `mode: "computer-audio"`
 with an explicit `microphone: null` and a valid output identity/scope. Microphone-only and selected-app
 forms still require a microphone; an omitted microphone is not an implicit default.
 

@@ -1,3 +1,4 @@
+import { CaptureWaiters } from "../../packages/meetings/src/capture-waiters.js";
 import Fastify, { type FastifyRequest } from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { registerMeetingCaptureRoutes } from "../../packages/meetings/src/capture-routes.js";
@@ -16,6 +17,8 @@ function dependencies(): MeetingCaptureDependencies {
     resolveCompanion: vi.fn(async () => {
       throw Error("synthetic unavailable");
     }),
+    acquireRecordingBinding: async () => ({ release: async () => {} }),
+    scheduleMaintenance: async () => {},
     assertBinding: vi.fn(),
     device: vi.fn(),
     assertModuleAvailable: vi.fn(),
@@ -147,7 +150,7 @@ describe("capture route credential boundaries", () => {
 
 describe("native default microphone inventory", () => {
   it.each([undefined, null, "os-default"])(
-    "preserves the optional exact default UID %s",
+    "accepts the optional exact default UID %s",
     async (defaultMicrophoneId) => {
       const server = Fastify();
       const register = vi
@@ -184,6 +187,73 @@ describe("native default microphone inventory", () => {
 });
 
 describe("capture source envelope regression", () => {
+  const computerOnly = {
+    mode: "computer-audio",
+    microphone: null,
+    outputSourceId: "output",
+    scope: { kind: "process-exclusion", excludedProcessTreeIds: ["moss"] }
+  };
+  it.each([
+    {
+      name: "explicit computer audio without a microphone",
+      command: "change-sources",
+      selection: computerOnly,
+      status: 200
+    },
+    {
+      name: "microphone-only without a microphone",
+      command: "change-sources",
+      selection: { mode: "microphone-only", microphone: null },
+      status: 400
+    },
+    {
+      name: "Resume carrying a source selection",
+      command: "record",
+      selection: computerOnly,
+      status: 400
+    },
+    {
+      name: "computer audio with the microphone field omitted",
+      command: "change-sources",
+      selection: { mode: "computer-audio", outputSourceId: "output", scope: computerOnly.scope },
+      status: 400
+    }
+  ])("validates $name at native route ingress", async ({ command, selection, status }) => {
+    const server = Fastify();
+    const deps = dependencies();
+    const control = vi
+      .spyOn(MeetingCaptureService.prototype, "nativeControl")
+      .mockImplementation(async (_headers, _requestId, input) => ({ capture: input as never }));
+    registerMeetingCaptureRoutes(server, deps);
+    const payload = {
+      meetingId,
+      grantId: meetingId,
+      requestKey: meetingId,
+      expectedGeneration: 2,
+      command,
+      ...(command === "change-sources" ? { expectedEpoch: 1 } : {}),
+      selection
+    };
+    try {
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/meetings/capture/control",
+        payload
+      });
+      expect(response.statusCode).toBe(status);
+      if (status === 200) {
+        expect(control).toHaveBeenCalledOnce();
+        expect(control.mock.calls[0]?.[2]).toEqual(payload);
+      } else {
+        expect(control).not.toHaveBeenCalled();
+        expect(deps.resolveCompanion).not.toHaveBeenCalled();
+        expect(deps.dataContext.withDataContext).not.toHaveBeenCalled();
+      }
+    } finally {
+      control.mockRestore();
+      await server.close();
+    }
+  });
   it.each([
     { mode: "microphone-only", microphone: { deviceId: "mic", sourceId: "mic" } },
     {
@@ -304,7 +374,7 @@ describe("explicit recording route boundary", () => {
       });
       const start = vi
         .spyOn(MeetingCaptureConnectionService.prototype, "start")
-        .mockResolvedValue({ capture: {} as never });
+        .mockResolvedValue({ capture: {} as never, wakeConnectionId: undefined });
       const control = vi
         .spyOn(MeetingCaptureService.prototype, "browserControl")
         .mockResolvedValue({ capture: {} as never });
@@ -343,71 +413,38 @@ describe("explicit recording route boundary", () => {
   );
 });
 
-describe("default recording route boundary", () => {
-  it.each(["start", "control"])(
-    "allows %s to resolve the selection on the server",
-    async (kind) => {
-      const server = Fastify();
-      const browser = vi.spyOn(MeetingCaptureService.prototype, "browser").mockResolvedValue({
-        actorUserId: meetingId,
-        sessionId: meetingId,
-        expiresAt: new Date("2027-01-01")
+describe("saved-source wake routing", () => {
+  it("wakes only the resolved connection and never returns internal wake metadata", async () => {
+    const server = Fastify();
+    const connectionA = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      connectionB = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    const browser = vi.spyOn(MeetingCaptureService.prototype, "browser").mockResolvedValue({
+      actorUserId: meetingId,
+      sessionId: meetingId,
+      expiresAt: new Date("2027-01-01")
+    });
+    const start = vi.spyOn(MeetingCaptureConnectionService.prototype, "start").mockResolvedValue({
+      capture: { grantId: meetingId } as never,
+      wakeConnectionId: connectionA
+    });
+    const notify = vi.spyOn(CaptureWaiters.prototype, "notify");
+    registerMeetingCaptureRoutes(server, dependencies());
+    try {
+      const response = await server.inject({
+        method: "POST",
+        url: `/api/meetings/records/${meetingId}/capture/start`,
+        payload: { requestKey: meetingId }
       });
-      const start = vi
-        .spyOn(MeetingCaptureConnectionService.prototype, "start")
-        .mockResolvedValue({ capture: {} as never });
-      const control = vi
-        .spyOn(MeetingCaptureService.prototype, "browserControl")
-        .mockResolvedValue({ capture: {} as never });
-      registerMeetingCaptureRoutes(server, dependencies());
-      const payload =
-        kind === "start"
-          ? {
-              deviceId: meetingId,
-              connectionId: meetingId,
-              expectedRevision: 1,
-              requestKey: meetingId
-            }
-          : { grantId: meetingId, requestKey: meetingId, expectedGeneration: 2, command: "record" };
-      try {
-        const response = await server.inject({
-          method: "POST",
-          url: `/api/meetings/records/${meetingId}/capture/${kind}`,
-          payload
-        });
-        expect(response.statusCode).toBe(200);
-        expect((kind === "start" ? start : control).mock.calls[0]?.[2]).toEqual(payload);
-      } finally {
-        browser.mockRestore();
-        start.mockRestore();
-        control.mockRestore();
-        await server.close();
-      }
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ capture: { grantId: meetingId } });
+      expect(notify).toHaveBeenCalledWith(`device:${connectionA}`);
+      expect(notify).not.toHaveBeenCalledWith(`device:${connectionB}`);
+      expect(notify.mock.calls.filter(([key]) => key.startsWith("device:"))).toHaveLength(1);
+    } finally {
+      browser.mockRestore();
+      start.mockRestore();
+      notify.mockRestore();
+      await server.close();
     }
-  );
-  it.each(["deviceId", "connectionId", "expectedRevision"])(
-    "requires Start authority field %s even when selection is omitted",
-    async (field) => {
-      const server = Fastify(),
-        deps = dependencies();
-      registerMeetingCaptureRoutes(server, deps);
-      const payload = {
-        deviceId: meetingId,
-        connectionId: meetingId,
-        expectedRevision: 1,
-        requestKey: meetingId
-      };
-      try {
-        const response = await server.inject({
-          method: "POST",
-          url: `/api/meetings/records/${meetingId}/capture/start`,
-          payload: Object.fromEntries(Object.entries(payload).filter(([key]) => key !== field))
-        });
-        expect(response.statusCode).toBe(400);
-        expect(deps.resolveBrowser).not.toHaveBeenCalled();
-      } finally {
-        await server.close();
-      }
-    }
-  );
+  });
 });

@@ -1,3 +1,4 @@
+import { createAppActionValidator } from "./app-action-validation.js";
 import type { FastifyInstance } from "fastify";
 import { isDeepStrictEqual } from "node:util";
 import type { DataContextRunner } from "@moss/db";
@@ -9,8 +10,12 @@ import type {
 } from "@moss/ai";
 
 import {
+  ApprovalInputError,
+  type HumanActionDetails,
   canonicalAppPath,
+  presentApprovalFields,
   HttpError,
+  type CatalogRoute,
   type RouteCatalog,
   type RouteCatalogHolder,
   type ToolContext
@@ -32,6 +37,11 @@ export interface AppActionCallInput {
 
 export interface AppActionsService {
   catalog(): RouteCatalog | null;
+  validate?(
+    input: AppActionCallInput,
+    route: CatalogRoute,
+    params: Record<string, string>
+  ): Promise<string | null>;
   call(input: AppActionCallInput, ctx: ToolContext): Promise<{ status: number; body: unknown }>;
 }
 
@@ -52,6 +62,7 @@ export class AppActionNotReadyError extends Error {
 }
 
 const REFUSAL_MESSAGES = {
+  invalid_input: "Some submitted values are invalid. Check the action fields and try again.",
   unknown_route: "The route or target is no longer available. Find the action again.",
   blocked: "This action is outside the allowed route policy. Use the relevant app screen.",
   consent_off:
@@ -66,13 +77,18 @@ const REFUSAL_MESSAGES = {
 /** Safe fixed codes and recovery text only, never caller input or dependency error text. */
 export class AppActionRefusedError extends HttpError {
   constructor(readonly code: keyof typeof REFUSAL_MESSAGES) {
-    super(code === "not_ready" ? 503 : 409, `${code}: ${REFUSAL_MESSAGES[code]}`);
+    super(
+      code === "not_ready" ? 503 : code === "invalid_input" ? 400 : 409,
+      `${code}: ${REFUSAL_MESSAGES[code]}`
+    );
   }
 }
 
 const METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
 function actionInput(input: Record<string, unknown>): AppActionCallInput | null {
+  if (Object.keys(input).some((key) => !["method", "path", "query", "body"].includes(key)))
+    return null;
   if (typeof input.method !== "string" || !METHODS.has(input.method)) return null;
   if (typeof input.path !== "string" || canonicalAppPath(input.path) === null) return null;
   if (
@@ -84,27 +100,6 @@ function actionInput(input: Record<string, unknown>): AppActionCallInput | null 
   )
     return null;
   return input as unknown as AppActionCallInput;
-}
-
-/** Exact JSON values are shown as text; never truncate a value the person is approving. */
-function callFields(input: AppActionCallInput) {
-  const fields = [
-    { label: "Method", value: input.method },
-    { label: "Path", value: input.path }
-  ];
-  for (const [key, value] of Object.entries(input.query ?? {})) {
-    fields.push({ label: `Query: ${key}`, value: JSON.stringify(value) });
-  }
-  if (input.body !== undefined) {
-    if (input.body !== null && typeof input.body === "object" && !Array.isArray(input.body)) {
-      for (const [key, value] of Object.entries(input.body)) {
-        fields.push({ label: `Body: ${key}`, value: JSON.stringify(value) });
-      }
-    } else {
-      fields.push({ label: "Body", value: JSON.stringify(input.body) });
-    }
-  }
-  return fields;
 }
 
 /** Resolve before policy planning, target disclosure, capability binding or grant minting. */
@@ -125,9 +120,8 @@ export function createAppActionResolver(deps: {
     if (policy.access === "blocked") {
       return { kind: "refuse", reason: "blocked", category: policy.blockedBecause };
     }
-    const module = (await deps.resolveActiveModules(ctx.actorUserId)).find(
-      (manifest) => manifest.id === route.moduleId
-    );
+    const modules = await deps.resolveActiveModules(ctx.actorUserId);
+    const module = modules.find((manifest) => manifest.id === route.moduleId);
     if (!module) return { kind: "refuse", reason: "unknown_route" };
     // A dedicated executor must not bypass a malformed route consent declaration.
     if (
@@ -139,6 +133,8 @@ export function createAppActionResolver(deps: {
     // The generic entry point must share the same atomic version-bound deletion as
     // memory.forget, rather than injecting the unversioned browser DELETE route.
     if (policy.coveredBy === "memory.forget") {
+      if (!presentApprovalFields(input.body, {}) || Object.keys(input.query ?? {}).length > 0)
+        return { kind: "refuse", reason: "not_ready" };
       return deps.memoryForgetResolver
         ? deps.memoryForgetResolver({ factId: params.id }, ctx)
         : { kind: "refuse", reason: "not_ready" };
@@ -156,24 +152,75 @@ export function createAppActionResolver(deps: {
         )
           return { kind: "refuse", reason: "consent_off" };
       }
+      const validationError = await deps.appActions.validate?.(input, route, params);
+      if (validationError)
+        return {
+          kind: "refuse",
+          reason: "invalid_input",
+          validationError: {
+            title: policy.title ?? "Read app information",
+            message: validationError
+          }
+        };
       const target = policy.target ? await policy.target(scopedDb, params) : null;
       if (policy.target && target === null) return { kind: "refuse", reason: "unknown_route" };
+      const label = typeof target === "object" && target ? target.label : target;
+      let presented: HumanActionDetails | null;
+      try {
+        presented = policy.presentation
+          ? await policy.presentation(
+              scopedDb,
+              {
+                params,
+                query: input.query,
+                body: policy.emptyBody === "object" && input.body == null ? {} : input.body,
+                target: label,
+                modules: modules.map((entry) => ({
+                  id: entry.id,
+                  name: entry.name,
+                  notificationsSupported: entry.notifications?.supported === true
+                }))
+              },
+              ctx
+            )
+          : null;
+      } catch (error) {
+        if (!(error instanceof ApprovalInputError)) throw error;
+        return {
+          kind: "refuse",
+          reason: "invalid_input",
+          validationError: {
+            title: policy.title ?? "Change app information",
+            message: error.message
+          }
+        };
+      }
+      const complete =
+        presented &&
+        presented.target.trim() &&
+        presented.fields.every((field) => field.label.trim() && typeof field.value === "string");
       return {
         kind: "proceed",
         risk,
         externalContent: policy.content === "outside",
-        forceConfirm: risk === "destructive",
+        disclosureExternalContent:
+          Boolean(policy.target || policy.presentation) &&
+          (presented?.content ?? policy.presentationContent) !== "user_authored",
+        forceConfirm: risk === "destructive" || (risk !== "read" && !complete),
         confirmWhenTainted: policy.outbound === true,
-        summary: policy.title ?? `Read ${route.moduleId}`,
-        ...(typeof target === "object" && target ? { targetVersion: target.version } : {}),
-        details: {
-          target: typeof target === "object" && target ? target.label : target,
-          // Memory cards identify targets by their resolved text, not routing IDs.
-          // The full frozen input remains bound to the execution capability.
-          fields: callFields(input).filter(
-            (field) => !(route.moduleId === "memory" && target !== null && field.label === "Path")
-          )
-        },
+        summary: presented?.title ?? policy.title ?? `Read ${route.moduleId}`,
+        ...((typeof target === "object" && target) || presented?.version
+          ? {
+              targetVersion: JSON.stringify([
+                typeof target === "object" && target ? target.version : null,
+                presented?.version ?? null
+              ])
+            }
+          : {}),
+        details:
+          complete && presented
+            ? { presentation: "human", target: presented.target, fields: presented.fields }
+            : { target: null, fields: [] },
         affectsModules: risk === "read" ? [] : [route.moduleId]
       };
     });
@@ -252,6 +299,7 @@ export function createAppActionsService(deps: {
 }): AppActionsService {
   return {
     catalog: () => deps.catalog.get(),
+    validate: createAppActionValidator(deps.server),
     async call(input, ctx) {
       if (!deps.catalog.get()) throw new AppActionNotReadyError();
       const path = canonicalAppPath(input.path);

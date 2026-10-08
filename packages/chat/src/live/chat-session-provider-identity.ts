@@ -119,7 +119,10 @@ export async function ensureSessionForCurrentProvider(input: {
   readonly surface: ChatSurface;
   readonly sessionKey: string;
   readonly launching: Map<string, Promise<UserSession>>;
-  readonly persistence: Pick<ChatPersistencePort, "resolveActiveProvider">;
+  readonly persistence: Pick<
+    ChatPersistencePort,
+    "resolveActiveProvider" | "getCurrentThreadState"
+  >;
   readonly sessions: ReadonlyMap<string, UserSession>;
   readonly pendingForcedReplay: Set<string>;
   readonly discardSession: (session: UserSession) => Promise<void>;
@@ -150,7 +153,10 @@ async function resolveSessionForCurrentProvider(input: {
   readonly opts: { readonly forceReplay?: boolean } | undefined;
   readonly surface: ChatSurface;
   readonly sessionKey: string;
-  readonly persistence: Pick<ChatPersistencePort, "resolveActiveProvider">;
+  readonly persistence: Pick<
+    ChatPersistencePort,
+    "resolveActiveProvider" | "getCurrentThreadState"
+  >;
   readonly sessions: ReadonlyMap<string, UserSession>;
   readonly pendingForcedReplay: Set<string>;
   readonly discardSession: (session: UserSession) => Promise<void>;
@@ -163,7 +169,11 @@ async function resolveSessionForCurrentProvider(input: {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const providerIdentity = await input.persistence.resolveActiveProvider(input.actorUserId);
     const existing = input.sessions.get(input.sessionKey);
-    if (existing && sameActiveChatProvider(existing.providerIdentity, providerIdentity)) {
+    if (
+      existing &&
+      sameActiveChatProvider(existing.providerIdentity, providerIdentity) &&
+      (await sessionMatchesCurrentConversation(input, existing))
+    ) {
       return existing;
     }
 
@@ -180,21 +190,39 @@ async function resolveSessionForCurrentProvider(input: {
       forceReplay = true;
       continue;
     }
-    let providerAfterLaunch: ActiveChatProvider;
     try {
-      providerAfterLaunch = await input.persistence.resolveActiveProvider(input.actorUserId);
+      const providerAfterLaunch = await input.persistence.resolveActiveProvider(input.actorUserId);
+      if (
+        sameActiveChatProvider(session.providerIdentity, providerAfterLaunch) &&
+        (await sessionMatchesCurrentConversation(input, session))
+      )
+        return session;
     } catch (error) {
       await input.discardSession(session);
       throw error;
     }
-    if (sameActiveChatProvider(session.providerIdentity, providerAfterLaunch)) return session;
-
     await input.discardSession(session);
     forceReplay = true;
   }
 
-  throw new CliChatUnavailableError(
-    "The active chat provider changed while the session was starting. Please try again."
+  throw new CliChatUnavailableError("Your chat changed while it was starting. Please try again.");
+}
+
+async function sessionMatchesCurrentConversation(
+  input: {
+    readonly actorUserId: string;
+    readonly surface: ChatSurface;
+    readonly persistence: Pick<ChatPersistencePort, "getCurrentThreadState">;
+  },
+  session: UserSession
+): Promise<boolean> {
+  if (!input.persistence.getCurrentThreadState) return true;
+  const current = await input.persistence.getCurrentThreadState(input.actorUserId, input.surface);
+  // A stream pre-start can finish after a clear/resume removed the old session. Its frozen
+  // origin remains correct for that engine, but it must never become the new conversation's engine.
+  return (
+    session.threadId === (current?.id ?? null) &&
+    session.incognito === (current?.incognito ?? false)
   );
 }
 

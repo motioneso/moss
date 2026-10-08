@@ -1,3 +1,4 @@
+import { meetingsModuleManifest } from "@moss/meetings";
 import { describe, expect, it } from "vitest";
 
 import type { ActionAuditLogEntryDto, ActivityLineDto } from "@moss/shared";
@@ -229,4 +230,13 @@ describe("activity grouping (#2956 slice C)", () => {
     const rows = groupActivity([old, fresh], []);
     expect(rows.map((row) => (row.kind === "line" ? row.line.id : "?"))).toEqual(["fresh", "old"]);
   });
+});
+
+it("names meeting-summary validation using its app-map title", () => {
+  const title = activityTitle("meetings.summary.validation", "selected-summary-model");
+  expect(title).toBe("Checked a meeting summary");
+  expect(
+    meetingsModuleManifest.features.find((feature) => feature.id === "meetings.summary.validation")
+      ?.description
+  ).toBe(title);
 });

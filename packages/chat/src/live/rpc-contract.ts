@@ -294,6 +294,8 @@ export interface RpcLaunchParams {
    *  cli-runner root can't drift from the in-process root on which calls keep the bounded print
    *  engine regardless of the persistent-runtime flag. */
   readonly needsStructuredOutput?: boolean;
+  /** Fresh bounded no-tools profile; never inferred from ordinary structured use. */
+  readonly constrainedStructured?: boolean;
   /** #2228: enable the CLI's own web search tool for this launch. See EngineLaunchOpts.nativeSearch. */
   readonly nativeSearch?: boolean;
   /**
@@ -488,6 +490,8 @@ export interface RpcListLiveSessionsResult {
 /** params for method "probeProvider" (§4.8) — instance-wide query, no sessionKey. */
 export interface RpcProbeProviderParams {
   readonly provider: RpcProviderKind;
+  /** Metadata-only constrained binary check; never runs auth/model probes. */
+  readonly constrainedStructured?: boolean;
   /**
    * #2242: skip any saved answer and run the real check now. Used by the periodic install-state
    * reconciliation so a login that quietly expired is caught on its own within a bounded time,
@@ -500,6 +504,8 @@ export interface RpcProbeProviderResult {
   /** EXISTING OnboardingProviderCheckResponse status set (onboarding-api.ts), reused verbatim. */
   readonly status: "ready" | "needs_login" | "not_installed" | "multiplexer_unavailable" | "error";
   readonly message?: string;
+  /** Constrained summaries require the existing per-user process identity. */
+  readonly constrainedUnavailableReason?: "per_user_isolation_required";
 }
 
 /**

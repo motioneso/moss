@@ -27,13 +27,14 @@ import {
 import type { SportsCustomSourceDto } from "@moss/shared";
 import { registerMcpTransportRoute } from "../../packages/chat/src/mcp-transport.js";
 import { ChatSessionManager } from "../../packages/chat/src/live/chat-session-manager.js";
-import { ChatGatewayNotifier } from "../../packages/chat/src/gateway-notifier.js";
+import { createChatGatewayNotifier } from "../../packages/chat/src/gateway-notifier.js";
+import { DataContextChatPersistence } from "../../packages/chat/src/live/persistence.js";
+import { ChatRepository } from "../../packages/chat/src/repository.js";
 import {
   DEFAULT_CHAT_SURFACE,
   surfaceSessionKey
 } from "../../packages/chat/src/live/chat-surface.js";
 import type { TranscriptRecord } from "../../packages/chat/src/live/types.js";
-import { makeMinimalDeps } from "../unit/chat-session-manager.test.js";
 
 import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 import { parseToolOutputText } from "./fixtures/tool-output.js";
@@ -101,6 +102,33 @@ describe("sports.retrySource action card (#2159)", () => {
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     runner = new DataContextRunner(appDb);
     repository = new AiRepository();
+    // The execution service below is synthetic; disclosure still resolves a real actor-owned
+    // source through the production presentation hook rather than trusting that fake result.
+    await runner.withDataContext({ actorUserId: ids.userA }, (db) =>
+      db.db
+        .insertInto("app.sports_custom_sources")
+        .values({
+          id: RETRY_SOURCE_ID,
+          owner_user_id: ids.userA,
+          label: retriedSource.label,
+          canonical_domain: retriedSource.canonicalDomain,
+          homepage_url: retriedSource.homepageUrl,
+          feed_url: null,
+          retrieval_method: "scrape",
+          health_reason_code: null,
+          health_message: null,
+          last_checked_at: null,
+          last_success_at: null,
+          validation_fingerprint: "retry-card-fixture",
+          validated_at: new Date("2026-08-31T00:00:00.000Z"),
+          recipe_schema_version: null,
+          recipe_fingerprint: null,
+          recipe_status: "missing",
+          confirmed_fetch_hosts: [retriedSource.canonicalDomain],
+          authorization_confirmed_at: new Date("2026-08-31T00:00:00.000Z")
+        })
+        .execute()
+    );
 
     // Only retrySource is exercised here, so the fake implements just that one method — same
     // convention as fakeCalendarWrite/fakeWriter elsewhere in this suite. No default actionPolicy
@@ -205,6 +233,12 @@ describe("sports.retrySource action card (#2159)", () => {
     if (request.kind !== "action_request") throw new Error("unreachable");
     expect(request.toolName).toBe("sports.retrySource");
     expect(request.summary).toMatch(/^Retry sports source /);
+    expect(request.outcomeTitle).toBe("Retry sports news source");
+    expect(request.details).toEqual({
+      presentation: "human",
+      target: "Test Sports Source (example.com)",
+      fields: [{ label: "Source", value: "Test Sports Source (example.com)" }]
+    });
 
     const pending = await runner.withDataContext(
       { actorUserId: ids.userA, requestId: "req-2159-pending-check" },
@@ -247,11 +281,31 @@ describe("sports.retrySource action card (#2159)", () => {
   // chat-session-manager.ts; if it passes, the boundary is proven end to end and the missing
   // card is a live-model/prompt problem, not a delivery problem.
   it("a real-format session key delivers action_request to an actor+surface subscriber via the real notifier", async () => {
-    const manager = new ChatSessionManager(makeMinimalDeps());
-    const realGatewayNotifier = new ChatGatewayNotifier(manager);
+    const chatRepository = new ChatRepository();
+    const persistence = new DataContextChatPersistence({
+      dataContext: runner,
+      chatRepository,
+      aiRepository: repository
+    });
+    const manager = new ChatSessionManager({
+      persistence,
+      engineFactory: () => {
+        throw new Error("This delivery test must not launch a model");
+      },
+      personaFs: { mkdir: async () => {}, writeFile: async () => {} },
+      clock: { now: () => Date.now() },
+      idleMs: 60_000,
+      neutralBase: "/tmp/sports-retry-card",
+      persona: "Moss"
+    });
+    const realGatewayNotifier = createChatGatewayNotifier(manager, runner, repository);
 
     const received: TranscriptRecord[] = [];
-    manager.subscribe(ids.userA, (record) => received.push(record), DEFAULT_CHAT_SURFACE);
+    const unsubscribe = manager.subscribe(
+      ids.userA,
+      (record) => received.push(record),
+      DEFAULT_CHAT_SURFACE
+    );
 
     const realTokens = new SessionTokenRegistry();
     const realGateway = new AssistantToolGateway({
@@ -307,7 +361,27 @@ describe("sports.retrySource action card (#2159)", () => {
       });
       expect(resolveRes.statusCode).toBe(204);
       await callPromise;
+      await realGatewayNotifier.flush(chatSessionId);
+      expect(received).toContainEqual(
+        expect.objectContaining({
+          kind: "action_result",
+          actionRequestId: record.actionRequestId,
+          outcome: "executed"
+        })
+      );
+      const history = await runner.withDataContext({ actorUserId: ids.userA }, (db) =>
+        chatRepository.listMessages(db, conversations.bindingFor(ids.userA).threadId)
+      );
+      expect(history.flatMap((message) => message.tool_metadata.activity ?? [])).toContainEqual(
+        expect.objectContaining({
+          kind: "action_result",
+          actionRequestId: record.actionRequestId,
+          outcome: "executed"
+        })
+      );
     } finally {
+      await realGatewayNotifier.flush();
+      unsubscribe();
       await realApp.close();
     }
   });

@@ -1,69 +1,129 @@
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation, useSearchParams } from "react-router";
 import { ApiError } from "@moss/module-web-sdk";
-import { Badge, Button, Divider, Note, SectionHead } from "@moss/ui";
+import { Button, SectionHead, Field, FormLabel, Note, Highlight } from "@moss/ui";
+import type { MeetingCaptureState, MeetingTranscriptSegment } from "@moss/shared";
 import {
   getMeetingTranscript,
   isMeetingAccessDenied,
   meetingKeys,
   type MeetingTranscriptView
 } from "./client.js";
-
+import { captureKeys } from "./capture-client.js";
+import { useCaptureClock } from "./capture-clock.js";
+import { captureAcknowledged } from "./capture-presentation.js";
+import { evidenceQueryOptions, parseTranscriptEvidence } from "./transcript-evidence.js";
 import { transcriptTime } from "./transcript-time.js";
 
-export function TranscriptTimeline({ snapshot, sources }: MeetingTranscriptView) {
+const MIN_TRANSCRIPT_GAP_MS = 250;
+
+export function TranscriptTimeline({
+  snapshot,
+  sources,
+  gaps = [],
+  selectedId,
+  search = ""
+}: MeetingTranscriptView & {
+  readonly gaps?: MeetingCaptureState["gaps"];
+  readonly selectedId?: string;
+  readonly search?: string;
+}) {
+  // Native and server reports can describe the same lost clip under different IDs.
+  // Keep the retained diagnostics intact and collapse only exact coverage duplicates.
+  // Hide sub-quarter-second interruptions in this view only, using precise duration
+  // rather than rounded timestamp labels. Capture metadata and warnings stay intact.
+  // This also hides processing-failed fragments under 250ms; their failure metadata is retained.
+  const distinctGaps = new Map(
+    gaps
+      .filter((gap) => gap.endMs - gap.startMs >= MIN_TRANSCRIPT_GAP_MS)
+      .map((gap) => [
+        JSON.stringify([gap.sourceId, gap.epoch, gap.startMs, gap.endMs, gap.reason]),
+        gap
+      ])
+  );
+  const rows: (
+    | { kind: "segment"; start: number; segment: MeetingTranscriptSegment }
+    | { kind: "gap"; start: number; gap: MeetingCaptureState["gaps"][number] }
+  )[] = [
+    ...snapshot.segments
+      .filter(
+        (segment) =>
+          !search || segment.text.toLocaleLowerCase().includes(search.toLocaleLowerCase())
+      )
+      .map((segment) => ({ kind: "segment" as const, start: segment.startMs, segment })),
+    ...Array.from(distinctGaps.values(), (gap) => ({
+      kind: "gap" as const,
+      start: gap.startMs,
+      gap
+    }))
+  ].sort((a, b) => a.start - b.start);
   return (
     <>
-      <p className="jds-hint">
-        {snapshot.throughMs === null
-          ? "No text in this selection"
-          : `Through ${transcriptTime(snapshot.throughMs)}`}{" "}
-      </p>
-      <p className="jds-hint">
-        Source labels only. Sources do not identify people. Timestamps do not establish continuous
-        coverage.
-      </p>
-      {snapshot.containsProvisional ? (
-        <Note variant="practical">Includes provisional text that may change.</Note>
-      ) : null}
+      {snapshot.containsProvisional ? <p className="jds-hint">Still being finalised</p> : null}
       {snapshot.omittedSegments > 0 ? (
         <Note variant="practical">
-          {snapshot.omittedSegments} segments omitted by the display limits ({snapshot.maxSegments}{" "}
-          segments, {snapshot.maxCharacters} characters). This is a partial view.
+          {snapshot.omittedSegments} lines are outside this view’s limits. Search or follow a cited
+          timestamp to find the text.
         </Note>
       ) : null}
-      <div className="meetings-section" aria-label="Transcript timeline">
-        {snapshot.segments.map((segment) => {
-          const source = sources.find(
-            (item) => item.sourceId === segment.sourceId && item.epoch === segment.epoch
-          );
-          return (
-            <article
-              className="meetings-transcript-turn"
-              key={segment.segmentId}
-              aria-label={`Transcript at ${transcriptTime(segment.startMs)}`}
-            >
-              <Divider />
-              <div className="meetings-actions">
-                <span className="jds-label">
-                  {transcriptTime(segment.startMs)}–{transcriptTime(segment.endMs)}
-                </span>
-                <span className="jds-label">{source?.label ?? "Source unavailable"}</span>
-                <Badge tone={segment.finality === "provisional" ? "amber" : "neutral"}>
-                  {segment.finality === "provisional" ? "Provisional" : "Final"}
-                </Badge>
-                {segment.provenance === "correction" ? (
-                  <span className="jds-hint">Corrected</span>
-                ) : null}
-              </div>
-              <p className="meetings-transcript-text">{segment.text}</p>
-            </article>
-          );
-        })}
+      <div className="meetings-transcript-timeline" aria-label="Transcript timeline">
+        {rows.map((row) =>
+          row.kind === "gap" ? (
+            <p className="jds-hint meetings-transcript-gap" key={`gap:${row.gap.id}`}>
+              {transcriptTime(row.gap.startMs) === transcriptTime(row.gap.endMs)
+                ? `Under a second missing at ${transcriptTime(row.gap.startMs)}`
+                : `${transcriptTime(row.gap.startMs)} to ${transcriptTime(row.gap.endMs)} missing`}
+            </p>
+          ) : (
+            (() => {
+              const segment = row.segment;
+              const source = sources.find(
+                (item) => item.sourceId === segment.sourceId && item.epoch === segment.epoch
+              );
+              return (
+                <article
+                  id={`meeting-line-${segment.segmentId}`}
+                  tabIndex={-1}
+                  className={`meetings-transcript-turn${segment.finality === "provisional" ? " meetings-transcript-turn--live" : ""}`}
+                  key={segment.segmentId}
+                  aria-label={`Transcript at ${transcriptTime(segment.startMs)}`}
+                >
+                  <span className="jds-hint">{transcriptTime(segment.startMs)}</span>
+                  <div>
+                    <span className="jds-label">
+                      {source?.kind === "microphone"
+                        ? "You"
+                        : source?.kind === "output"
+                          ? "Call audio"
+                          : (source?.label ?? "Audio")}
+                    </span>
+                    <p
+                      className={
+                        segment.finality === "provisional"
+                          ? "meetings-transcript-text jds-hint"
+                          : "meetings-transcript-text"
+                      }
+                    >
+                      {segment.segmentId === selectedId ? (
+                        <Highlight>{segment.text}</Highlight>
+                      ) : (
+                        segment.text
+                      )}
+                    </p>
+                  </div>
+                </article>
+              );
+            })()
+          )
+        )}
+        {search && !rows.some((row) => row.kind === "segment") ? (
+          <p className="jds-hint">No transcript lines match.</p>
+        ) : null}
       </div>
     </>
   );
 }
-
 export function transcriptQueryOptions(meetingId: string, revision?: number) {
   return {
     queryKey: meetingKeys.transcript(meetingId, revision),
@@ -75,72 +135,141 @@ export function transcriptQueryOptions(meetingId: string, revision?: number) {
     refetchOnWindowFocus: "always" as const
   };
 }
-
 export function useMeetingTranscript(meetingId: string, revision?: number) {
   return useQuery(transcriptQueryOptions(meetingId, revision));
 }
-
-/** Read-only retained text. Refresh is explicit; this view does not start capture or generation. */
 export function MeetingTranscript({
   meetingId,
-  revision,
-  onRevisionChange
+  search = null,
+  onSearch,
+  onReference
 }: {
   readonly meetingId: string;
-  readonly revision: number | undefined;
-  readonly onRevisionChange: (revision: number | undefined) => void;
+  readonly search?: string | null;
+  readonly onSearch?: (value: string | null) => void;
+  readonly onReference?: () => void;
 }) {
-  const transcript = useMeetingTranscript(meetingId, revision);
-  const snapshot = transcript.data?.snapshot;
+  const transcript = useMeetingTranscript(meetingId);
+  const [params] = useSearchParams();
+  const navigation = useLocation().key;
+  const reference = useMemo(() => parseTranscriptEvidence(meetingId, params), [meetingId, params]);
+  const evidence = useQuery(evidenceQueryOptions(meetingId, reference));
+  const capture = useQuery<{ capture: MeetingCaptureState | null }>({
+    queryKey: captureKeys.status(meetingId),
+    enabled: false
+  });
+  const { connected } = useCaptureClock(
+    capture.data?.capture,
+    capture.dataUpdatedAt,
+    capture.isError
+  );
+  const emptyText =
+    capture.data?.capture?.desired === "recording" &&
+    connected &&
+    captureAcknowledged(capture.data.capture)
+      ? "Listening…"
+      : "Start when you’re ready.";
+  const snapshot = isMeetingAccessDenied(transcript.error) ? undefined : transcript.data?.snapshot;
+  const exact = evidence.isError ? undefined : evidence.data?.evidence.segment;
+  const selected =
+    exact &&
+    snapshot?.segments.find(
+      (line) => line.segmentId === exact.segmentId && line.revision === exact.revision
+    );
+  const requested = ["segmentId", "segmentRevision", "startCharacter", "endCharacter"].some(
+    (field) => params.has(field)
+  );
+  useEffect(() => {
+    if (!requested || typeof document === "undefined") return;
+    onReference?.();
+    if (!exact) return;
+    const timer = setTimeout(() => {
+      const node = document.getElementById(
+        selected ? `meeting-line-${exact.segmentId}` : `meeting-reference-${meetingId}`
+      );
+      node?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+      node?.focus({ preventScroll: true });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [navigation, exact, selected?.segmentId, requested, meetingId]);
+  const denied =
+    isMeetingAccessDenied(transcript.error) &&
+    !(transcript.error instanceof ApiError && transcript.error.status === 404);
   return (
-    <section className="meetings-section" aria-label="Retained transcript">
-      <SectionHead number="01" title="Transcript" rule meta="Read only" />
-      <div className="meetings-actions">
-        <Button
-          variant="secondary"
-          disabled={transcript.isFetching}
-          onClick={() => void transcript.refetch()}
-        >
-          Refresh transcript
-        </Button>
-        {snapshot && !transcript.isError ? (
-          <Button
-            variant="quiet"
-            disabled={transcript.isFetching || snapshot.transcriptRevision <= 1}
-            onClick={() => onRevisionChange(snapshot.transcriptRevision - 1)}
-          >
-            Previous revision
+    <section className="meetings-section meetings-transcript-pane" aria-label="Transcript">
+      <SectionHead title="Transcript" rule />
+      {search !== null ? (
+        <Field>
+          <FormLabel htmlFor="meeting-transcript-search">Search transcript</FormLabel>
+          <input
+            autoFocus
+            id="meeting-transcript-search"
+            type="search"
+            className="jds-input meetings-input"
+            value={search}
+            onChange={(event) => onSearch?.(event.target.value)}
+          />
+          <Button variant="link" onClick={() => onSearch?.(null)}>
+            Close search
           </Button>
-        ) : null}
-        {revision !== undefined ? (
-          <Button variant="quiet" onClick={() => onRevisionChange(undefined)}>
-            Latest revision
-          </Button>
-        ) : null}
-      </div>
-      {transcript.isFetching && !transcript.data ? (
+        </Field>
+      ) : null}
+      {requested && (!reference || evidence.isError) ? (
         <p role="status" className="jds-hint">
-          Loading transcript…
+          This transcript reference is unavailable. It may have changed or access was removed.
         </p>
       ) : null}
-      {transcript.isError && (!transcript.data || isMeetingAccessDenied(transcript.error)) ? (
+      {requested && evidence.isFetching && !exact ? (
+        <p className="jds-hint">Loading referenced text…</p>
+      ) : null}
+      {exact && !selected && !denied ? (
+        <article id={`meeting-reference-${meetingId}`} tabIndex={-1}>
+          <span className="jds-hint">Earlier text at {transcriptTime(exact.startMs)}</span>
+          <p className="meetings-transcript-text">
+            <Highlight>{evidence.data?.evidence.excerpt}</Highlight>
+          </p>
+        </article>
+      ) : null}
+      {denied ? (
         <p role="status" className="jds-hint">
-          {transcript.error instanceof ApiError && transcript.error.status === 404
-            ? "No retained transcript is available for this selection."
-            : transcript.error instanceof ApiError && [401, 403].includes(transcript.error.status)
-              ? "Transcript access is unavailable. Sign in again or return to meeting history."
-              : "Couldn’t load the transcript. Refresh to try again."}
+          Transcript access is unavailable. Return to Meetings or sign in again.
         </p>
-      ) : transcript.data ? (
+      ) : snapshot ? (
         <>
-          {revision !== undefined ? (
-            <Note variant="practical">
-              Viewing an earlier transcript revision. Choose Latest revision to return to current
-              text.
-            </Note>
+          <TranscriptTimeline
+            {...transcript.data!}
+            gaps={capture.data?.capture?.gaps}
+            selectedId={selected?.segmentId}
+            search={search ?? ""}
+          />
+          {!snapshot.segments.length && search === null ? (
+            <p className="jds-hint" role="status">
+              {emptyText}
+            </p>
           ) : null}
-          <TranscriptTimeline {...transcript.data} />
         </>
+      ) : transcript.isFetching ? (
+        <p className="jds-hint">Loading transcript…</p>
+      ) : transcript.isError &&
+        !(transcript.error instanceof ApiError && transcript.error.status === 404) ? (
+        <p className="jds-hint">
+          Couldn’t load the transcript.{" "}
+          <Button variant="link" onClick={() => void transcript.refetch()}>
+            Try again
+          </Button>
+        </p>
+      ) : (
+        <p className="jds-hint" role="status">
+          {emptyText}
+        </p>
+      )}
+      <p className="jds-sr-only" aria-live="polite" aria-atomic="true">
+        {snapshot?.segments.length
+          ? `${snapshot.segments.length} transcript lines available, through ${transcriptTime(snapshot.throughMs ?? 0)}.`
+          : ""}
+      </p>
+      {capture.data?.capture?.gapLimitReached ? (
+        <Note variant="practical">Some additional missing audio ranges could not be listed.</Note>
       ) : null}
     </section>
   );

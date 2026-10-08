@@ -3,46 +3,73 @@ import { createWriteStream, mkdtempSync, readFileSync, rmSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 
 // Never treat a setup/import error as proof. Each mutation must fail its named, concrete
 // assertion, and byte-for-byte restoration must pass the same test before proceeding.
 const root = fileURLToPath(new URL("../", import.meta.url));
-const source = resolve(root, "packages/meetings/src/capture-service.ts");
 const suite = "tests/integration/meeting-link-revocation.test.ts";
 const testName = "recording-only revocation refuses the next native upload";
-const controls = [
+interface Mutation {
+  path: string;
+  before: string;
+  after: string;
+}
+interface Control {
+  name: string;
+  marker: string;
+  difference: RegExp;
+  edits: readonly Mutation[];
+}
+const controls: readonly Control[] = [
   {
-    name: "recording-binding-admission",
+    name: "recording-binding-and-fence-admission",
     marker: "revoked-next-native-audio-status",
     difference: /expected 200 to be 401/,
-    before: `      await this.deps.assertRecordingBinding({
+    // Both independent protections must be removed to admit revoked audio. Keep the
+    // ordinary recording resolver intact so the failure is at the next-upload assertion.
+    edits: [
+      {
+        path: "packages/meetings/src/capture-service.ts",
+        before: `      await this.deps.assertRecordingBinding({
         actorUserId: actor.actorUserId,
         deviceId: grant.device_id,
         capabilityRevision: grant.capability_revision
       });`,
-    after: "      void grant.capability_revision;"
+        after: "      void grant.capability_revision;"
+      },
+      {
+        path: "packages/auth/src/capture-binding.ts",
+        before: "    if (!capability.rows.length) throw new RecordingCapabilityError();",
+        after: "    void capability;"
+      }
+    ]
   },
   {
-    name: "browser-revocation-observation",
-    marker: "revoked-browser-capture-state",
-    difference: /expected 'recording' to be 'revoked'/,
-    before: `            if (error instanceof MeetingCaptureError && error.httpStatus === 401)
-              state.desired = "revoked";
-            else throw error;`,
-    after: `            if (error instanceof MeetingCaptureError && error.httpStatus === 401)
-              void error;
-            else throw error;`
-  },
-  {
-    name: "browser-revocation-persistence",
-    marker: "revoked-persisted-grant-status",
+    name: "request-revocation-persistence",
+    marker: "revoked-immediate-persisted-grant-status",
     difference: /expected 'active' to be 'revoked'/,
-    before: `        if (JSON.stringify(state) !== grant.state_json)
-          await this.repository.save(db, grant, state);`,
-    after: "        void state;"
+    edits: [
+      {
+        path: "packages/meetings/src/capture-binding.ts",
+        before: "    await repository.save(db, grant, state);",
+        after: "    void state;"
+      }
+    ]
+  },
+  {
+    name: "request-revocation-reason",
+    marker: "revoked-immediate-persisted-reason",
+    difference: /expected undefined to be 'recording-permission-revoked'/,
+    edits: [
+      {
+        path: "packages/meetings/src/capture-binding.ts",
+        before: "    state.revocationReason = failure.revocationReason;",
+        after: "    void failure.revocationReason;"
+      }
+    ]
   }
-] as const;
-type Control = (typeof controls)[number];
+];
 interface AssertionResult {
   fullName: string;
   status: string;
@@ -101,8 +128,8 @@ function selfTest() {
   }
   const differences = [
     "expected 200 to be 401",
-    "expected 'recording' to be 'revoked'",
-    "expected 'active' to be 'revoked'"
+    "expected 'active' to be 'revoked'",
+    "expected undefined to be 'recording-permission-revoked'"
   ];
   for (const [index, control] of controls.entries()) {
     const named = `${control.marker}: ${differences[index]}`;
@@ -119,15 +146,38 @@ function selfTest() {
     }
   }
 }
-function validateAnchors(original: string) {
+function validateAnchors(originals: ReadonlyMap<string, Buffer>) {
   for (const control of controls) {
-    if (original.split(control.before).length !== 2)
-      throw new Error(`${control.name}: expected exactly one source anchor`);
+    for (const edit of control.edits) {
+      if (originals.get(edit.path)!.toString("utf8").split(edit.before).length !== 2)
+        throw new Error(`${control.name}: expected exactly one source anchor in ${edit.path}`);
+    }
   }
 }
-function restoreSource(original: Buffer) {
-  writeFileSync(source, original);
-  if (!readFileSync(source).equals(original)) throw new Error("Source restoration failed");
+function restoreSources(originals: ReadonlyMap<string, Buffer>) {
+  const failures: string[] = [];
+  for (const [path, original] of originals) {
+    try {
+      writeFileSync(resolve(root, path), original);
+      if (!readFileSync(resolve(root, path)).equals(original)) failures.push(path);
+    } catch {
+      failures.push(path);
+    }
+  }
+  if (failures.length) throw new Error(`Source restoration failed: ${failures.join(", ")}`);
+}
+function mutateSources(control: Control, originals: ReadonlyMap<string, Buffer>) {
+  const updated = new Map<string, string>();
+  // Validate every input before writing anything, including multi-file controls.
+  for (const [path, original] of originals) {
+    if (!readFileSync(resolve(root, path)).equals(original))
+      throw new Error(`Source changed during proof: ${path}`);
+  }
+  for (const edit of control.edits) {
+    const before = updated.get(edit.path) ?? originals.get(edit.path)!.toString("utf8");
+    updated.set(edit.path, before.replace(edit.before, edit.after));
+  }
+  for (const [path, contents] of updated) writeFileSync(resolve(root, path), contents);
 }
 function requireHostedGate() {
   if (
@@ -215,6 +265,24 @@ async function runTests(directory: string, label: string, selected: boolean) {
     throw new Error(`${label}: wrong test selection or runtime failure`);
   return { ...result, report, runtime, executed };
 }
+/** Bounded synthetic assertion diagnostics, without stack traces or full report contents. */
+export function failedAssertionLines(tests: readonly AssertionResult[]): string[] {
+  return tests
+    .filter((test) => test.status === "failed")
+    .slice(0, 3)
+    .map((test) => {
+      const name = stripVTControlCharacters(test.fullName).replace(/\s+/g, " ").slice(0, 200);
+      const first = stripVTControlCharacters(test.failureMessages[0] ?? "")
+        .split(/\r?\n/)
+        .find((line) => line.trim());
+      const message = first?.trim().slice(0, 500) || "No assertion message";
+      return `${name}: ${message}`;
+    });
+}
+function reportFailures(result: Awaited<ReturnType<typeof runTests>>, label: string) {
+  for (const line of failedAssertionLines(result.executed))
+    console.error(`[meeting-link-revocation] ${label} FAIL ${line}`);
+}
 function assertGreen(result: Awaited<ReturnType<typeof runTests>>, label: string) {
   if (
     result.code !== 0 ||
@@ -222,8 +290,10 @@ function assertGreen(result: Awaited<ReturnType<typeof runTests>>, label: string
     !result.report.success ||
     result.report.numFailedTests !== 0 ||
     result.executed.some((test) => test.status !== "passed")
-  )
+  ) {
+    reportFailures(result, label);
     throw new Error(`${label}: restored source is not green`);
+  }
 }
 
 async function main() {
@@ -235,11 +305,12 @@ async function main() {
     console.log("Proof-recognition self-test passed; no database or source mutation executed.");
     return;
   }
-  const original = readFileSync(source);
-  validateAnchors(original.toString("utf8"));
+  const paths = [...new Set(controls.flatMap((control) => control.edits.map((edit) => edit.path)))];
+  const originals = new Map(paths.map((path) => [path, readFileSync(resolve(root, path))]));
+  validateAnchors(originals);
   if (mode === "--check") {
     console.log(
-      "Validated 3 source anchors and proof recognition; no database or negative proof executed."
+      "Validated 3 controls / 4 source anchors and proof recognition; no database or negative proof executed."
     );
     return;
   }
@@ -252,8 +323,7 @@ async function main() {
     console.log("[meeting-link-revocation] Real recording-only revoke and Unlink baseline GREEN");
     for (const control of controls) {
       try {
-        if (!readFileSync(source).equals(original)) throw new Error("Source changed during proof");
-        writeFileSync(source, original.toString("utf8").replace(control.before, control.after));
+        mutateSources(control, originals);
         const result = await runTests(directory, `${control.name}-red`, true);
         const test = result.executed[0]!;
         if (
@@ -264,13 +334,15 @@ async function main() {
           test.status !== "failed" ||
           test.failureMessages.length !== 1 ||
           !expectedFailure(control, test.failureMessages[0]!)
-        )
+        ) {
+          reportFailures(result, control.name);
           throw new Error(
             `${control.name}: missing intended assertion failure (${control.marker})`
           );
+        }
         console.log(`[meeting-link-revocation] ${control.name} RED at ${control.marker}`);
       } finally {
-        restoreSource(original);
+        restoreSources(originals);
       }
       assertGreen(await runTests(directory, `${control.name}-green`, true), control.name);
       console.log(`[meeting-link-revocation] ${control.name} restored GREEN`);
@@ -283,4 +355,4 @@ async function main() {
   }
 }
 
-await main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) await main();

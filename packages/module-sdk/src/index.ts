@@ -48,6 +48,8 @@ export {
 } from "./diagnostics.js";
 export * from "./module-params.js";
 export * from "./route-chat.js";
+export * from "./action-presentation.js";
+import type { ToolApprovalPresentation } from "./action-presentation.js";
 export type { VaultIngestRootProvider } from "./vault-ingest-provider.js";
 
 import type {
@@ -643,6 +645,10 @@ export interface ModuleAssistantToolManifest {
    * recipient/subject + composed body without persisting the body.
    */
   readonly preview?: ToolPreview;
+  /** Complete, live-only human disclosure. Missing/failed hooks cannot authorize a card. */
+  readonly approvalPresentation?: ToolApprovalPresentation;
+  /** Content rendered by the approval hook; defaults to outside, independently of results. */
+  readonly approvalContent?: ChatContentClass;
   /**
    * Names of composition-layer services this tool's execute requires in the 4th
    * `services` argument (e.g. ["calendarWrite"]). Declaration only — the module does

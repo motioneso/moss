@@ -24,6 +24,10 @@ export function normalizeChatSurface(value?: unknown): ChatSurface {
 }
 
 export interface ChatActivityEventDto {
+  /** Correlates a server approval decision without retaining its input preview. */
+  readonly actionRequestId?: string;
+  /** Server-owned action title, never model-authored text. */
+  readonly summary?: string;
   readonly kind: string;
   readonly text: string;
   readonly id?: string;
@@ -173,11 +177,19 @@ export interface ActionRequestPreview {
 
 /** Live, server-derived app action preview; never interpreted as markup. */
 export interface ActionRequestDetails {
+  readonly presentation?: "human";
+  /** Host-owned semantic identity; never derived from title text. */
+  readonly approvalKind?: "memory_delete" | "note_delete";
   readonly target: string | null;
   readonly fields: readonly { readonly label: string; readonly value: string }[];
 }
 
 export interface TranscriptRecord {
+  readonly nativePermission?: true;
+  /** Host-marked connected tool; complete arguments are shown verbatim. */
+  readonly externalTool?: true;
+  readonly exactArguments?: string;
+  readonly approvalAvailable?: boolean;
   readonly meetingContext?: MeetingChatCoverage;
   readonly kind: ChatRecordKind;
   readonly text: string;
@@ -189,6 +201,8 @@ export interface TranscriptRecord {
   readonly toolName?: string;
   readonly toolCallId?: string;
   readonly summary?: string;
+  /** Plain title frozen with a pending server card; absent for native command descriptions. */
+  readonly outcomeTitle?: string;
   readonly status?: WorkflowApprovalStatusDto;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
   readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
@@ -470,7 +484,17 @@ const chatActivityEventSchema = {
   required: ["kind", "text"],
   properties: {
     kind: { type: "string" },
-    text: { type: "string" }
+    text: { type: "string" },
+    id: { type: "string" },
+    sequence: { type: "number" },
+    actionRequestId: { type: "string" },
+    toolName: { type: "string" },
+    summary: { type: "string" },
+    outcome: { type: "string", enum: ["executed", "denied", "error", "allowed"] },
+    toolCallId: { type: "string" },
+    durationMs: { type: "number" },
+    decidedBy: { type: "string", enum: ["person", "policy", "timeout", "cancelled"] },
+    reason: { type: "string" }
   }
 } as const;
 
@@ -617,7 +641,10 @@ const chatMessageSchema = {
         cutoffMs: { type: "integer" },
         throughMs: { anyOf: [{ type: "integer" }, { type: "null" }] },
         containsProvisional: { type: "boolean" },
-        omittedSegments: { type: "integer" }
+        omittedSegments: { type: "integer" },
+        notesRevision: { type: "integer" },
+        notesCharacters: { type: "integer" },
+        notesTruncated: { type: "boolean" }
       }
     }
   }

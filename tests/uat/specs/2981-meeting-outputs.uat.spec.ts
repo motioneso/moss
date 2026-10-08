@@ -1,4 +1,5 @@
 import { assertMeetingReviewLayout } from "./meeting-review-layout.js";
+import { meetingRow, openMeetingAction } from "./meeting-minimal-ui.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
@@ -152,7 +153,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
         providerConfigId: providerId,
         providerModelId: OUTPUT_FIXTURE_MODEL,
         displayName: "Synthetic summary JSON model",
-        capabilities: ["summarization", "json"],
+        capabilities: ["chat", "summarization", "json"],
         status: "active",
         tier: "economy"
       }
@@ -161,11 +162,25 @@ test("reviewed summary versions create independent Tasks and private vault copie
     modelId = (await model.json()).model.id as string;
     expect((await page.request.put(pinPath, { data: { modelId } })).status()).toBe(200);
     const title = `Synthetic Orchid summary ${randomUUID()}`;
-    const created = await page.request.post("/api/meetings/records", {
-      data: { requestKey: randomUUID(), title }
+    await page.getByRole("link", { name: "Meetings", exact: true }).click();
+    // Notes-only output review does not require a linked Mac. Create the fixture through
+    // the real API, then open it from the unlinked account's preserved history list.
+    const createdResponse = await page.request.post("/api/meetings/records", {
+      data: { requestKey: randomUUID(), title: "Untitled meeting" }
     });
-    expect(created.status()).toBe(201);
-    meetingId = (await created.json()).meeting.id as string;
+    expect(createdResponse.status()).toBe(201);
+    meetingId = (await createdResponse.json()).meeting.id as string;
+    await page.reload();
+    await meetingRow(page, "Untitled meeting").click();
+    await page.getByRole("button", { name: "Edit meeting title", exact: true }).click();
+    await page.getByLabel("Meeting title", { exact: true }).fill(title);
+    const renamed = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/meetings/records/${meetingId}/title`) &&
+        response.request().method() === "PUT"
+    );
+    await page.getByLabel("Meeting title", { exact: true }).press("Enter");
+    expect((await renamed).status()).toBe(200);
     const path = `/api/meetings/records/${meetingId}`;
     const segmentId = randomUUID();
     const posted = await page.request.post(`${path}/transcript`, {
@@ -204,16 +219,121 @@ test("reviewed summary versions create independent Tasks and private vault copie
       }
     });
     expect(posted.status()).toBe(201);
-    await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await page.getByRole("button", { name: "View meeting history", exact: true }).click();
-    await page.getByRole("button", { name: title, exact: true }).click();
-    await page.getByRole("button", { name: "Open review", exact: true }).click();
+    await page.reload();
     const summary = page.getByRole("region", { name: "Summary and actions", exact: true });
+    await expect(page.getByLabel("Summary style", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Write summary", exact: true })).toHaveCount(0);
+    await openMeetingAction(page, "Rewrite summary");
     await expect(summary).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Generate summary", exact: true })
-    ).toBeDisabled();
-    await page.getByLabel("Summary template", { exact: true }).selectOption("general");
+    await expect(page.getByLabel("Summary style", { exact: true })).toHaveValue("general");
+    await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeEnabled();
+    await test.step("summary availability follows the effective default without dispatch", async () => {
+      // Install the official locked Claude native binary in this disposable stack only.
+      // This existing install seam verifies the package; no login/model invocation follows.
+      const installed = await page.request.post("/api/onboarding/provider-install", {
+        data: { providerKind: "anthropic" }
+      });
+      expect(installed.status()).toBe(200);
+      expect(await installed.json()).toMatchObject({
+        installState: "installed",
+        version: "2.1.282"
+      });
+      const { stdout } = await exec(
+        "docker",
+        buildUatComposeArgs(project, [
+          "exec",
+          "-T",
+          "jarv1s",
+          "node_modules/.bin/tsx",
+          "tests/uat/fixtures/meeting-output-default-models-cli.ts",
+          project
+        ])
+      );
+      const defaults = JSON.parse(stdout) as Record<
+        "codex" | "claude",
+        { providerId: string; modelId: string }
+      >;
+      try {
+        for (const [name, availability] of [
+          ["codex", "subscription-unsupported"],
+          ["claude", "available"]
+        ] as const) {
+          expect(
+            (
+              await page.request.put(pinPath, {
+                data: { modelId: defaults[name].modelId }
+              })
+            ).status()
+          ).toBe(200);
+          // Assert the real chat resolver's selected default too, not merely a seeded row.
+          const effective = await page.request.get("/api/ai/chat-model-override");
+          expect(effective.status()).toBe(200);
+          expect((await effective.json()).settings).toMatchObject({
+            defaultModel: { id: defaults[name].modelId },
+            selectedModel: { id: defaults[name].modelId }
+          });
+          const refreshed = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
+          expect((await refreshed.json()).generationAvailability).toBe(availability);
+          const generate = page.getByRole("button", { name: "Write summary", exact: true });
+          if (name === "codex") {
+            await expect(generate).toBeDisabled();
+            await expect(summary).toContainText(
+              "Summaries on this subscription aren’t supported yet. No other model was used."
+            );
+          } else {
+            // The production-like runner isolates each owner's structured calls.
+            // Readiness makes no model request and does not require login.
+            await expect(generate).toBeEnabled();
+            await expect(summary).not.toContainText("Claude summaries aren’t available");
+            await expect(summary).not.toContainText("Your default model is unavailable");
+          }
+          expect(await readOutputs(page, path)).toMatchObject({ headVersion: 0, artifacts: [] });
+        }
+      } finally {
+        expect((await page.request.put(pinPath, { data: { modelId } })).status()).toBe(200);
+        for (const configured of Object.values(defaults)) {
+          expect((await page.request.delete(`/api/ai/models/${configured.modelId}`)).status()).toBe(
+            200
+          );
+          expect(
+            (await page.request.post(`/api/ai/providers/${configured.providerId}/revoke`)).status()
+          ).toBe(200);
+        }
+      }
+      const restored = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
+      expect((await restored.json()).generationAvailability).toBe("available");
+      await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeEnabled();
+    });
+    await test.step("an inactive default stays unavailable rather than substituting another model", async () => {
+      try {
+        expect(
+          (
+            await page.request.patch(`/api/ai/models/${modelId}`, {
+              data: { status: "disabled" }
+            })
+          ).status()
+        ).toBe(200);
+        const unavailable = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
+        expect((await unavailable.json()).generationAvailability).toBe("model-unavailable");
+        await expect(
+          page.getByRole("button", { name: "Write summary", exact: true })
+        ).toBeDisabled();
+        await expect(summary).toContainText(
+          "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used."
+        );
+      } finally {
+        expect(
+          (
+            await page.request.patch(`/api/ai/models/${modelId}`, {
+              data: { status: "active" }
+            })
+          ).status()
+        ).toBe(200);
+      }
+      const repaired = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
+      expect((await repaired.json()).generationAvailability).toBe("available");
+      await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeEnabled();
+    });
     const failedRequestKey =
       await test.step("unsupported summary model explains real configuration recovery", async () => {
         // Change the real synthetic model, not a Moss response. The hard pin stays selected;
@@ -222,14 +342,14 @@ test("reviewed summary versions create independent Tasks and private vault copie
           expect(
             (
               await page.request.patch(`/api/ai/models/${modelId}`, {
-                data: { capabilities: ["summarization"] }
+                data: { capabilities: ["chat", "summarization"] }
               })
             ).status()
           ).toBe(200);
           const rejectedGeneration = page.waitForResponse(
             (r) => r.url().endsWith(`${path}/outputs`) && r.request().method() === "POST"
           );
-          await page.getByRole("button", { name: "Generate summary", exact: true }).click();
+          await page.getByRole("button", { name: "Write summary", exact: true }).click();
           const rejected = await rejectedGeneration;
           expect(rejected.status()).toBe(422);
           const requestKey = rejected.request().postDataJSON().requestKey as string;
@@ -239,9 +359,9 @@ test("reviewed summary versions create independent Tasks and private vault copie
             code: "meeting_output_route_unavailable"
           });
           await expect(summary).toContainText(
-            "Summaries need an available API-key model with summarization and structured-output support."
+            "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used."
           );
-          await expect(summary).toContainText("CLI models aren’t supported for summaries.");
+          await expect(summary).toContainText("Check your default model in");
           await expect(summary).not.toContainText("Choose Generate to start a new request");
           expect(await readOutputs(page, path)).toMatchObject({ headVersion: 0, artifacts: [] });
           const recovery = summary.getByRole("link", {
@@ -263,6 +383,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
           );
           await page.goBack();
           await expect(page).toHaveURL(reviewUrl);
+          await openMeetingAction(page, "Rewrite summary");
           expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
           const unavailable = await unavailableOnReturn;
           expect(unavailable.status()).toBe(200);
@@ -270,10 +391,10 @@ test("reviewed summary versions create independent Tasks and private vault copie
           await expect(
             summary.getByText("Checking summary model availability…", { exact: true })
           ).toHaveCount(0);
-          await expect(summary).toContainText("CLI models aren’t supported for summaries.");
-          await expect(page.getByLabel("Summary template", { exact: true })).toHaveValue("general");
+          await expect(summary).toContainText("Check your default model in");
+          await expect(page.getByLabel("Summary style", { exact: true })).toHaveValue("general");
           await expect(
-            page.getByRole("button", { name: "Generate summary", exact: true })
+            page.getByRole("button", { name: "Write summary", exact: true })
           ).toBeDisabled();
           await expect(summary).toContainText(
             "Refresh summaries after the configuration is updated, then generate again."
@@ -283,7 +404,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
           expect(
             (
               await page.request.patch(`/api/ai/models/${modelId}`, {
-                data: { capabilities: ["summarization", "json"] }
+                data: { capabilities: ["chat", "summarization", "json"] }
               })
             ).status()
           ).toBe(200);
@@ -292,17 +413,13 @@ test("reviewed summary versions create independent Tasks and private vault copie
     await test.step("refreshes availability after a repair while the review stays open", async () => {
       // The API-only repair above happens after returning to the focused review, so it
       // creates no mount or visibility event. Follow the disabled-state recovery hint.
-      await expect(
-        page.getByRole("button", { name: "Generate summary", exact: true })
-      ).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeDisabled();
       await expect(summary).toContainText(
         "Refresh summaries after the configuration is updated, then generate again."
       );
       const refreshed = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
       expect((await refreshed.json()).generationAvailability).toBe("available");
-      await expect(
-        page.getByRole("button", { name: "Generate summary", exact: true })
-      ).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeEnabled();
     });
     await test.step("returning from repaired model settings rechecks availability without Refresh", async () => {
       // Also prove the ordinary Settings → repair → return flow. Change the real
@@ -311,14 +428,14 @@ test("reviewed summary versions create independent Tasks and private vault copie
         expect(
           (
             await page.request.patch(`/api/ai/models/${modelId}`, {
-              data: { capabilities: ["summarization"] }
+              data: { capabilities: ["chat", "summarization"] }
             })
           ).status()
         ).toBe(200);
         const unavailable = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
         expect((await unavailable.json()).generationAvailability).toBe("model-unavailable");
         await expect(
-          page.getByRole("button", { name: "Generate summary", exact: true })
+          page.getByRole("button", { name: "Write summary", exact: true })
         ).toBeDisabled();
         const reviewUrl = page.url();
         await summary.getByRole("link", { name: "Settings → AI providers", exact: true }).click();
@@ -329,7 +446,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
         expect(
           (
             await page.request.patch(`/api/ai/models/${modelId}`, {
-              data: { capabilities: ["summarization", "json"] }
+              data: { capabilities: ["chat", "summarization", "json"] }
             })
           ).status()
         ).toBe(200);
@@ -339,13 +456,14 @@ test("reviewed summary versions create independent Tasks and private vault copie
         );
         await page.goBack();
         await expect(page).toHaveURL(reviewUrl);
+        await openMeetingAction(page, "Rewrite summary");
         const rechecked = await returning;
         expect(rechecked.status()).toBe(200);
         expect((await rechecked.json()).generationAvailability).toBe("available");
         await expect(
-          page.getByRole("button", { name: "Generate summary", exact: true })
+          page.getByRole("button", { name: "Write summary", exact: true })
         ).toBeEnabled();
-        await expect(page.getByLabel("Summary template", { exact: true })).toHaveValue("general");
+        await expect(page.getByLabel("Summary style", { exact: true })).toHaveValue("general");
         const selectedPin = await page.request.get(pinPath);
         expect(selectedPin.status()).toBe(200);
         expect((await selectedPin.json()).pin.pinnedModelId).toBe(modelId);
@@ -353,13 +471,13 @@ test("reviewed summary versions create independent Tasks and private vault copie
         expect(
           (
             await page.request.patch(`/api/ai/models/${modelId}`, {
-              data: { capabilities: ["summarization", "json"] }
+              data: { capabilities: ["chat", "summarization", "json"] }
             })
           ).status()
         ).toBe(200);
       }
     });
-    const generated = await clickCommand(page, "Generate summary", `${path}/outputs`);
+    const generated = await clickCommand(page, "Write summary", `${path}/outputs`);
     expect(generated.request().postDataJSON().requestKey).not.toBe(failedRequestKey);
     console.log(
       "MEETINGS_SUMMARY_RECOVERY_UAT explicit disabled-state Refresh hint; focused-review repair → Refresh → enabled; Settings repair → return → automatic availability recheck → Generate POST, without an extra Refresh click."
@@ -367,6 +485,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
     await expect(summary).toContainText(OUTPUT_FIXTURE_OVERVIEW);
     await expect(summary).toContainText(OUTPUT_FIXTURE_DECISION);
     await assertMeetingReviewLayout(page);
+    await page.getByRole("tab", { name: "Summary", exact: true }).click();
     let outputs = await readOutputs(page, path);
     expect(outputs.headVersion).toBe(1);
     expect(outputs.candidates).toHaveLength(1);
@@ -394,39 +513,27 @@ test("reviewed summary versions create independent Tasks and private vault copie
     };
     expect(await taskList()).toHaveLength(0);
     // Follow exact evidence without unmounting the focused review controls.
-    await page.getByRole("button", { name: "Edit this version", exact: true }).click();
+    await page.getByRole("button", { name: "Edit summary", exact: true }).click();
     const overview = page.getByLabel("Overview", { exact: true });
     const editorNode = await overview.elementHandle();
     const evidenceLink = summary.getByRole("link", { name: /^Transcript ·/ }).first();
     await evidenceLink.focus();
     await evidenceLink.press("Enter");
-    await expect(
-      page.getByRole("region", { name: "Transcript evidence", exact: true })
-    ).toContainText(OUTPUT_FIXTURE_TEXT);
-    await expect(evidenceLink).toBeFocused();
+    await expect(page.locator(`#meeting-line-${segmentId}`)).toContainText(OUTPUT_FIXTURE_TEXT);
+    await expect(page.locator(`#meeting-line-${segmentId}`)).toBeFocused();
     expect(await editorNode!.evaluate((node) => node.isConnected)).toBe(true);
     await expect(overview).toHaveValue(OUTPUT_FIXTURE_OVERVIEW);
     await page.getByRole("button", { name: "Close editor", exact: true }).click();
     expect(new URL(page.url()).searchParams.get("segmentRevision")).toBe("1");
-    await expect(page.getByRole("button", { name: "Accept Task", exact: true })).toBeDisabled();
+    await expect(
+      page.getByRole("checkbox", { name: "Create in my Tasks after owner review", exact: true })
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Add to Tasks", exact: true })).toBeEnabled();
     const reviewedTitle = "Owner reviewed Orchid action";
-    await page.getByLabel("Suggested Task", { exact: true }).fill(reviewedTitle);
-    // Switch intentionally hides its native checkbox; the associated label is the real
-    // visible click target (the same interaction used by the draft/setup UAT).
-    const ownerReview = page.getByRole("checkbox", {
-      name: "Create in my Tasks after owner review",
-      exact: true
-    });
-    const ownerReviewLabel = page.locator("label.jds-switch", { has: ownerReview });
-    await expect(ownerReviewLabel).toBeVisible();
-    await expect(ownerReview).not.toBeChecked();
-    await expect(ownerReview).toBeEnabled();
-    await ownerReviewLabel.click();
-    await expect(ownerReview).toBeChecked();
-    await expect(page.getByRole("button", { name: "Accept Task", exact: true })).toBeEnabled();
+    await page.getByLabel("Suggested task", { exact: true }).fill(reviewedTitle);
     const review = await clickCommand(
       page,
-      "Accept Task",
+      "Add to Tasks",
       `${path}/actions/${candidate.id}/review`
     );
     const accepted = (await review.json()) as MeetingActionCandidate;
@@ -454,6 +561,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(rejected.status()).toBe(409);
       expect(await rejected.json()).toMatchObject({ error: "Required modules cannot be disabled" });
     });
+    await openMeetingAction(page, "Save to vault");
     const firstSave = await clickCommand(page, "Save new private version", `${path}/exports`);
     const firstReceipt = (await firstSave.json()).receipt as MeetingExportReceipt;
     await assertReceipt(page, firstReceipt, 1);
@@ -480,7 +588,8 @@ test("reviewed summary versions create independent Tasks and private vault copie
         })
       ).status()
     ).toBe(200);
-    await clickCommand(page, "Generate new version", `${path}/outputs`);
+    await openMeetingAction(page, "Rewrite summary");
+    await clickCommand(page, "Rewrite summary", `${path}/outputs`);
     outputs = await readOutputs(page, path);
     expect(outputs.headVersion).toBe(2);
     expect(outputs.candidates).toHaveLength(1);
@@ -488,8 +597,9 @@ test("reviewed summary versions create independent Tasks and private vault copie
     expect(await taskList()).toEqual([
       expect.objectContaining({ id: accepted.acceptedTaskId, title: changedTitle })
     ]);
+    await openMeetingAction(page, "Earlier versions");
     await expect(page.getByLabel("Saved version", { exact: true })).toHaveValue("2");
-    await page.getByRole("button", { name: "Edit this version", exact: true }).click();
+    await page.getByRole("button", { name: "Edit summary", exact: true }).click();
     await page.getByLabel("Overview", { exact: true }).fill(OUTPUT_FIXTURE_MANUAL);
     await clickCommand(page, "Save edits as new version", `${path}/outputs`, "PUT");
     outputs = await readOutputs(page, path);
@@ -501,6 +611,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
     });
     expect(await vaultEvidence(project, meetingId)).toEqual(firstFiles);
     await expect(page.getByLabel("Saved version", { exact: true })).toHaveValue("3");
+    await openMeetingAction(page, "Save to vault");
     const manualSave = await clickCommand(page, "Save new private version", `${path}/exports`);
     const manualReceipt = (await manualSave.json()).receipt as MeetingExportReceipt;
     await assertReceipt(page, manualReceipt, 3);
@@ -540,25 +651,28 @@ test("reviewed summary versions create independent Tasks and private vault copie
       });
       expect(observation.promptBytes).toBeLessThanOrEqual(65536);
     }
-    // History uses actual receipts and accepted suggestions, not inferred Task/vault state.
-    await page.getByRole("button", { name: "View meeting history", exact: true }).click();
-    await page.getByRole("button", { name: title, exact: true }).click();
-    const selectedHistory = page.getByRole("complementary", {
-      name: "Selected meeting",
-      exact: true
+    // The minimal list shows the summary gist; receipt detail remains factual in its API.
+    await page.getByRole("button", { name: "Meetings", exact: true }).click();
+    await expect(meetingRow(page, title)).toContainText(OUTPUT_FIXTURE_MANUAL);
+    await expect(meetingRow(page, title)).not.toContainText("Indexed");
+    const history = await page.request.post("/api/meetings/history/search", {
+      data: { query: title, filter: "all", limit: 30 }
     });
-    await expect(selectedHistory).toContainText("Version 3 saved");
-    await expect(selectedHistory).toContainText(`Search indexing ${manualReceipt.indexStatus}`);
-    await expect(
-      selectedHistory.locator(".jds-index__row").filter({ hasText: "Accepted suggestions" })
-    ).toContainText("1");
-    await expect(
-      selectedHistory.locator(".jds-index__row").filter({ hasText: "Saved versions" })
-    ).toContainText("2");
-    await expect(selectedHistory.getByRole("link", { name: "Open note", exact: true })).toHaveCount(
-      0
-    );
-    await expect(selectedHistory).not.toContainText("Indexed");
+    expect(history.status()).toBe(200);
+    expect((await history.json()).meetings).toEqual([
+      expect.objectContaining({
+        id: meetingId,
+        summary: expect.objectContaining({ version: 3, overview: OUTPUT_FIXTURE_MANUAL }),
+        actions: expect.objectContaining({ accepted: 1 }),
+        vault: expect.objectContaining({
+          savedVersionCount: 2,
+          latest: expect.objectContaining({
+            artifactVersion: 3,
+            indexStatus: manualReceipt.indexStatus
+          })
+        })
+      })
+    ]);
     await test.step("Settings downloads retained meeting data through the real export worker", async () => {
       // Retained revisions are seeded through real owner writes, not archive/response rewriting.
       for (const [expectedRevision, personalNotes] of [
@@ -603,18 +717,28 @@ test("reviewed summary versions create independent Tasks and private vault copie
           "action_candidates",
           "export_receipts",
           "export_requests",
+          "stop_summaries",
           "capture_grants",
           "capture_connections",
-          "capture_start_cancellations"
+          "capture_start_cancellations",
+          "capture_start_limits"
         ].sort()
       );
-      // This notes-only UAT does not create recording connections, cancellations or grants.
+      // This notes-only UAT does not create recording connections, cancellations, grants or Start history.
+      expect(exported.stop_summaries).toEqual([]);
       expect(exported.capture_grants).toEqual([]);
       expect(exported.capture_connections).toEqual([]);
       expect(exported.capture_start_cancellations).toEqual([]);
+      expect(exported.capture_start_limits).toEqual([]);
       for (const [name, rows] of Object.entries(exported)) {
         if (
-          !["capture_grants", "capture_connections", "capture_start_cancellations"].includes(name)
+          ![
+            "stop_summaries",
+            "capture_grants",
+            "capture_connections",
+            "capture_start_cancellations",
+            "capture_start_limits"
+          ].includes(name)
         )
           expect(rows.length).toBeGreaterThan(0);
         for (const row of rows) expect(row.ownerUserId).toBe(UAT_ADMIN_ID);
@@ -623,6 +747,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
         expect.objectContaining({
           id: meetingId,
           title,
+          creationTitle: "Untitled meeting",
           personalNotes: "Synthetic current meeting note"
         })
       ]);
@@ -642,7 +767,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
       expect(exported.export_receipts).toHaveLength(2);
       await page.getByRole("button", { name: "Prepare a new export", exact: true }).click();
       console.log(
-        "MEETINGS_ACCOUNT_EXPORT_UAT real Settings prepare/download; worker-built owner archive; 9 collections (capture grants empty in notes-only path); retained note revisions, transcript, generated/manual outputs, accepted Task reference and vault receipts"
+        "MEETINGS_ACCOUNT_EXPORT_UAT real Settings prepare/download; worker-built owner archive; 13 collections (recording and stop-summary collections empty in notes-only path); retained note revisions, transcript, generated/manual outputs, accepted Task reference and vault receipts"
       );
     });
     // Meeting deletion removes provenance, never independently accepted Tasks/private copies.
@@ -654,7 +779,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
     expect(await vaultEvidence(project, meetingId)).toEqual(finalFiles);
     meetingId = undefined;
     console.log(
-      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; unsupported summary capability returns bounded code and actionable copy; admin AI provider link and Back preserve the SPA document and summary selection; capabilities restored before a fresh successful request; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. CLI rejection is unit-tested, not a live CLI login. No whole long-meeting/model-quality/audio proof."
+      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; unsupported summary capability returns bounded code and actionable copy; admin AI provider link and Back preserve the SPA document and summary selection; capabilities restored before a fresh successful request; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. Real Codex effective default rejected; official locked Claude default available with Generate enabled on the per-user runner before generation or login; HTTP default restored for all generated artifacts. No whole long-meeting/model-quality/audio proof."
     );
   } finally {
     try {

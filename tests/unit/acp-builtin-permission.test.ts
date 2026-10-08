@@ -39,7 +39,16 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
         return { ...store.actionRow, id: `acp-action-${store.created.length}` };
       },
       getAssistantAction: async (_db: unknown, id: string) => ({ ...store.actionRow, id }),
-      resolveAssistantAction: async (_db: unknown, id: string) => ({ ...store.actionRow, id }),
+      resolveAssistantAction: async (_db: unknown, id: string, input: { status: string }) => ({
+        ...store.actionRow,
+        id,
+        status: input.status
+      }),
+      expireAssistantAction: async (_db: unknown, id: string) => ({
+        ...store.actionRow,
+        id,
+        status: "timed_out"
+      }),
       insertActionAuditLog: async (_db: unknown, input: unknown) => {
         store.audit.push(input);
       }

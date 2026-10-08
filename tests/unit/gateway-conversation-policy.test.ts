@@ -32,7 +32,7 @@ const resolution = (confirmWhenTainted: boolean): PerCallResolution => ({
   forceConfirm: false,
   confirmWhenTainted,
   summary: "Search outside the app",
-  details: { target: "Search", fields: [] },
+  details: { presentation: "human", target: "Search", fields: [] },
   affectsModules: []
 });
 
@@ -50,6 +50,9 @@ function build(
   const handler = vi.fn<ToolExecute>(async () => ({ data: { ok: true } }));
   const tool: ModuleAssistantToolManifest = {
     name: "example.change",
+    actionLabel: "Change fixture setting",
+    approvalContent: "user_authored",
+    approvalPresentation: async () => ({ target: "Fixture setting", fields: [] }),
     description: "Change settings",
     permissionId: "example.change",
     actionFamilyId: family.id,

@@ -1,3 +1,4 @@
+import { registerActionNotificationLifecycle } from "./action-notification-lifecycle.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
@@ -51,7 +52,7 @@ import {
   type MossModuleManifest,
   type RouteCatalogHolder
 } from "@moss/module-sdk";
-import { ChatGatewayNotifier } from "./gateway-notifier.js";
+import { type ChatGatewayNotifier, createChatGatewayNotifier } from "./gateway-notifier.js";
 import { ClassifierShadowRepository } from "./classifier-shadow-repository.js";
 import { readRouteSurface } from "./live/chat-surface.js";
 import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes.js";
@@ -127,8 +128,6 @@ export {
   buildChatToolServices,
   resolveYoloMode
 } from "./gateway-services.js";
-
-const STALE_ACTION_GRACE_MS = 5 * 60_000;
 
 export interface ChatRoutesDependencies {
   readonly meetingChat?: MeetingChatData;
@@ -306,6 +305,9 @@ export function registerChatRoutes(
   const notifierProxy: SessionNotifier = {
     emit(chatSessionId: string, record: GatewaySessionRecord) {
       realNotifier?.emit(chatSessionId, record);
+    },
+    async flush(chatSessionId: string) {
+      await realNotifier?.flush(chatSessionId);
     }
   };
   let realNotifier: ChatGatewayNotifier | null = null;
@@ -459,6 +461,9 @@ export function registerChatRoutes(
         })
       : undefined;
   const runtime = createChatSessionRuntime({
+    flushActionRecords: async (sessionKey) => {
+      await realNotifier?.flush(sessionKey);
+    },
     conversationProvenance,
     rootDb: dependencies.rootDb,
     dataContext: dependencies.dataContext,
@@ -568,10 +573,7 @@ export function registerChatRoutes(
     runtime.manager.dropSessionsForProvider(provider)
   );
 
-  // #1554 task #6: same late-bound "adopt" seam as above, publishing the wiring closure's
-  // `SessionTokenRegistry.revokeBySessionId` so the composition root can thread it into the
-  // persistent-runtime pool's `onPersistentReap` (see `adoptMcpTokenRevoke`'s doc comment).
-  // No-op when no gateway is wired (`wiring === null`).
+  // #1554: publish token revocation to the persistent-runtime reap hook when wired.
   if (wiring) {
     dependencies.adoptMcpTokenRevoke?.((chatSessionId) =>
       wiring.tokens.revokeBySessionId(chatSessionId)
@@ -579,29 +581,19 @@ export function registerChatRoutes(
     dependencies.adoptCheckTokenMinter?.(buildCheckTokenMinter(wiring.tokens, wiring.mcpServerUrl));
   }
 
-  // Wire real notifier now that manager is available.
-  realNotifier = new ChatGatewayNotifier(runtime.manager);
+  realNotifier = createChatGatewayNotifier(
+    runtime.manager,
+    dependencies.dataContext,
+    wiring?.aiRepository
+  );
 
-  // #342 (§5.5): tear down runtime-owned background resources on server close — stop the idle reaper
-  // and close the RPC connection. Idempotent (the composition root also closes the adopted connection;
-  // both `shutdown()` and `connection.close()` guard re-entry). A no-op on the in-process path (no
-  // reaper, no connection).
-  server.addHook("onClose", async () => {
-    runtime.shutdown();
-  });
-
-  server.addHook("onReady", async () => {
-    if (!wiring) return;
-    try {
-      const count = await wiring.aiRepository.cancelStalePendingAssistantActions(
-        dependencies.rootDb,
-        { olderThan: new Date(Date.now() - STALE_ACTION_GRACE_MS) }
-      );
-      if (count > 0) {
-        server.log.info({ count }, "cancelled stale assistant action requests");
-      }
-    } catch (err) {
-      server.log.warn({ err }, "stale assistant action cleanup failed");
+  registerActionNotificationLifecycle(server, {
+    gateway: wiring?.gateway,
+    repository: wiring?.aiRepository,
+    rootDb: dependencies.rootDb,
+    shutdown: () => runtime.shutdown(),
+    flush: async () => {
+      await realNotifier?.flush();
     }
   });
 
@@ -635,6 +627,13 @@ export function registerChatRoutes(
             id,
             rawStatus
           );
+          if (outcome === "unavailable") {
+            return reply.code(409).send({
+              code: "approval_unavailable",
+              error:
+                "Details for this request aren’t available. Ask Moss again if you still want it."
+            });
+          }
           if (outcome === "expired") {
             return reply.code(409).send({ error: "This request expired — ask again." });
           }

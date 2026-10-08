@@ -1,3 +1,4 @@
+import { peopleMatchRoutePresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import { PEOPLE_TOOLS } from "./tools.js";
@@ -57,6 +58,7 @@ export const peopleModuleManifest: MossModuleManifest = {
         access: "write",
         title: "Accept People match",
         content: "user_authored",
+        presentation: peopleMatchRoutePresentation(true),
         coveredBy: "people.acceptMatch"
       }
     },
@@ -67,13 +69,19 @@ export const peopleModuleManifest: MossModuleManifest = {
         access: "write",
         title: "Reject People match",
         content: "user_authored",
+        presentation: peopleMatchRoutePresentation(false),
         coveredBy: "people.rejectMatch"
       }
     },
     {
       method: "POST",
       path: "/api/people/match-candidates/:id/suppress",
-      chat: { access: "write", title: "Suppress People match", content: "user_authored" }
+      chat: {
+        access: "write",
+        title: "Suppress People match",
+        presentation: peopleMatchRoutePresentation(false),
+        content: "user_authored"
+      }
     },
     {
       method: "POST",
@@ -123,6 +131,11 @@ export const peopleModuleManifest: MossModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "people.split_identity_approval",
+      description:
+        "Identity-split approval names the actual destination. An existing selection overrides a supplied name; otherwise Moss finds an exact-name match or creates one. Duplicate names require choosing a specific person."
+    },
     {
       id: "people.chat_app_actions",
       description:

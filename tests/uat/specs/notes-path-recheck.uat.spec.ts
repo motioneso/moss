@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
+import { captureActionAuditEvidence } from "./notes-failure-evidence.js";
 import {
   bringUpRealChatProvider,
   discoverCheapestChatModel,
@@ -87,6 +88,33 @@ function execInVaultAsOwner(projectName: string, script: string): void {
   );
 }
 
+async function expectToolOutcome(
+  projectName: string,
+  toolName: string,
+  startedAt: number,
+  outcome: "success" | "failed"
+): Promise<void> {
+  await expect
+    .poll(
+      () => {
+        const evidence = captureActionAuditEvidence(
+          execFileSync,
+          projectName,
+          UAT_ADMIN_ID,
+          new Date(startedAt).toISOString(),
+          new Date().toISOString()
+        );
+        return evidence.error === null
+          ? evidence.entries
+              .filter((entry) => entry.toolName === toolName)
+              .map((entry) => entry.outcome)
+          : [];
+      },
+      { timeout: 60_000, message: `${toolName} did not record ${outcome}` }
+    )
+    .toContain(outcome);
+}
+
 // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured fixtures arg
 test.afterEach(async ({}, testInfo) => {
   const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
@@ -130,18 +158,26 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const composer = page.getByRole("textbox", { name: "Message Moss" });
   const chatDialog = page.getByRole("dialog", { name: "Chat with Moss" });
+  const createFailures = chatDialog.getByRole("status").filter({
+    hasText: "Create note didn’t go through · The app reported a problem."
+  });
+  const modelGuardReplies = chatDialog
+    .locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")
+    .filter({ hasText: /path is not within the linked notes source/i });
 
   // --- (a) legitimate in-root create / edit / delete succeed, and create syncs ------------
   const legitPath = `uat/notes-path-recheck-${stamp}.md`;
+  const createdNotes = chatDialog.getByRole("status").filter({ hasText: /^Done: Create note$/ });
+  const createCount = await createdNotes.count();
   const syncNotBefore = Date.now();
   await composer.fill(
     `Use the notes.create tool with path set to exactly "${legitPath}" and content set to exactly: ` +
-      "Path recheck baseline. Do not ask a follow-up question."
+      "Path recheck baseline. Use these exact inputs without further questions."
   );
   await composer.press("Enter");
-  await expect(page.getByRole("status").filter({ hasText: "Executed: notes.create" })).toBeVisible({
-    timeout: 60_000
-  });
+  await expect(createdNotes).toHaveCount(createCount + 1, { timeout: 60_000 });
+  await expect(createdNotes.last()).toBeVisible();
+  await expectToolOutcome(projectName, "notes.create", syncNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   let lastSyncBody: unknown;
@@ -170,23 +206,29 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
     throw error;
   }
 
+  const editedNotes = chatDialog.getByRole("status").filter({ hasText: /^Done: Edit note$/ });
+  const editCount = await editedNotes.count();
+  const editNotBefore = Date.now();
   await composer.fill(
     `Use the notes.edit tool on path "${legitPath}": replace the exact text "baseline" with ` +
-      '"baseline edited". Do not ask a follow-up question.'
+      '"baseline edited". Use these exact inputs without further questions.'
   );
   await composer.press("Enter");
-  await expect(page.getByRole("status").filter({ hasText: "Executed: notes.edit" })).toBeVisible({
-    timeout: 60_000
-  });
+  await expect(editedNotes).toHaveCount(editCount + 1, { timeout: 60_000 });
+  await expect(editedNotes.last()).toBeVisible();
+  await expectToolOutcome(projectName, "notes.edit", editNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
+  const deletedNotes = chatDialog.getByRole("status").filter({ hasText: /^Done: Delete note$/ });
+  const deleteCount = await deletedNotes.count();
+  const deleteNotBefore = Date.now();
   await composer.fill(
-    `Use the notes.delete tool to delete path "${legitPath}". Do not ask a follow-up question.`
+    `Use the notes.delete tool to delete path "${legitPath}". Use these exact inputs without further questions.`
   );
   await composer.press("Enter");
-  await expect(page.getByRole("status").filter({ hasText: "Executed: notes.delete" })).toBeVisible({
-    timeout: 60_000
-  });
+  await expect(deletedNotes).toHaveCount(deleteCount + 1, { timeout: 60_000 });
+  await expect(deletedNotes.last()).toBeVisible();
+  await expectToolOutcome(projectName, "notes.delete", deleteNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   // --- (b) rejectSymlinkParent: an ANCESTOR directory of the target is a symlink ----------
@@ -197,20 +239,39 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
     `mkdir -p /tmp/uat-1512-b-target-${stamp} && ln -sfn /tmp/uat-1512-b-target-${stamp} ${NOTES_ROOT}/D-${stamp}`
   );
 
-  // notes.create opts into the gateway's safe error path: this fixed, path-free guard message is
-  // useful to the user and safe for the assistant to repeat.
+  // The quiet status reports failure; the model's own reply must also explain the guard.
+  // Count matching replies before the turn so earlier assistant text cannot satisfy the check.
+  const ancestorFailureCount = await createFailures.count();
+  const ancestorReplyCount = await modelGuardReplies.count();
+  const ancestorAttemptNotBefore = Date.now();
   await composer.fill(
     `Use the notes.create tool with path set to exactly "D-${stamp}/x.md" and content set to ` +
-      "exactly: should not be written. Do not ask a follow-up question."
+      "exactly: should not be written. Use these exact inputs without further questions."
   );
   await composer.press("Enter");
-  await expect(
-    page.getByRole("status").filter({ hasText: "path is not within the linked notes source" })
-  ).toBeVisible({ timeout: 60_000 });
+  await expectToolOutcome(projectName, "notes.create", ancestorAttemptNotBefore, "failed");
+  await expect(createFailures).toHaveCount(ancestorFailureCount + 1, { timeout: 60_000 });
+  await expect(createFailures.nth(ancestorFailureCount)).toBeVisible();
+  await expect(modelGuardReplies.nth(ancestorReplyCount)).toBeVisible({ timeout: 60_000 });
+  execInVaultAsOwner(projectName, `test ! -e /tmp/uat-1512-b-target-${stamp}/x.md`);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
+  await expect(chatDialog.locator(".action-request-card")).toHaveCount(0);
+  expect(await chatDialog.innerText()).not.toMatch(/\/tmp\/|\/data\/vaults/);
+
+  // The safe tool error taints this conversation, so later writes correctly need approval.
+  // Exercise the second guard independently through the real New chat flow.
+  const cleared = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/chat/clear" &&
+      response.status() === 204
+  );
+  await chatDialog.getByRole("button", { name: "New chat" }).click();
+  await cleared;
+  await expect(createFailures).toHaveCount(0);
 
   // --- (c') the #1512 guard itself: leaf symlink, kernel-vs-lexical ".." divergence -------
-  // The opted-in notes.create tool exposes its fixed, path-free guard message.
+  // The fresh conversation must show its own failed-create outcome.
   execInVaultAsOwner(
     projectName,
     `mkdir -p /tmp/uat-1512-c-outside-${stamp} && ` +
@@ -218,18 +279,26 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
       `ln -sfn "S-${stamp}/../evil-${stamp}.md" ${NOTES_ROOT}/b-${stamp}.md`
   );
 
+  const leafFailureCount = await createFailures.count();
+  const leafReplyCount = await modelGuardReplies.count();
+  const leafAttemptNotBefore = Date.now();
   await composer.fill(
     `Use the notes.create tool with path set to exactly "b-${stamp}.md" and content set to ` +
-      "exactly: should not be written. Do not ask a follow-up question."
+      "exactly: should not be written. Use these exact inputs without further questions."
   );
   await composer.press("Enter");
-  await expect(
-    page.getByRole("status").filter({ hasText: "path is not within the linked notes source" })
-  ).toBeVisible({ timeout: 60_000 });
+  await expectToolOutcome(projectName, "notes.create", leafAttemptNotBefore, "failed");
+  await expect(createFailures).toHaveCount(leafFailureCount + 1, { timeout: 60_000 });
+  await expect(createFailures.nth(leafFailureCount)).toBeVisible();
+  await expect(modelGuardReplies.nth(leafReplyCount)).toBeVisible({ timeout: 60_000 });
+  execInVaultAsOwner(projectName, `test ! -e /tmp/evil-${stamp}.md`);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
-  // No host filesystem path (the vault volume path, or the /tmp escape target) is ever surfaced
-  // to the browser — the HttpError message is a fixed, path-free string.
+  // Host paths stay out of the thread. The fixed guard explanation belongs in the model's
+  // reply, while the quiet outcome keeps its generic failure wording.
   const threadText = await chatDialog.innerText();
   expect(threadText).not.toMatch(/\/tmp\/|\/data\/vaults/);
+  const outcomeText = (await chatDialog.getByRole("status").allTextContents()).join("\n");
+  expect(outcomeText).not.toContain("path is not within the linked notes source");
+  await expect(chatDialog.locator(".action-request-card")).toHaveCount(0);
 });

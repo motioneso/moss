@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page, type Request } from "@playwright/test";
 import type { MeetingHistoryPage, MeetingRecord } from "@moss/shared";
 import { requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
+import { meetingRow } from "./meeting-minimal-ui.js";
 import { assertMeetingHistoryLayout } from "./meeting-history-layout.js";
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -26,7 +27,7 @@ async function search(page: Page, query: string): Promise<MeetingHistoryPage> {
 
 // Synthetic text is inserted through production record/notes/transcript endpoints. This proves
 // assembled history search and metadata, never recording, ASR, or speaker identification.
-test("History searches all retained current text, filters and reopens a selected meeting (#2981)", async ({
+test("Minimal list searches all current text, preserves API filters and opens a meeting directly (#2981)", async ({
   page
 }) => {
   test.setTimeout(180_000);
@@ -124,11 +125,10 @@ test("History searches all retained current text, filters and reopens a selected
     ).toBe(200);
 
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await page.getByRole("button", { name: "View meeting history", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Load older meetings", exact: true })
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: title, exact: true })).toHaveCount(0);
+    await expect(meetingRow(page, title)).toHaveCount(0);
     // Search before loading the older page: all terms cross title, notes and two current turns.
     const query = `${marker} orchard birch maple`;
     const found = await search(page, query);
@@ -145,31 +145,37 @@ test("History searches all retained current text, filters and reopens a selected
     });
     expect(found.meetings[0]).not.toHaveProperty("personalNotes");
     await search(page, "");
-    await expect(page.getByRole("button", { name: title, exact: true })).toHaveCount(0);
+    await expect(meetingRow(page, title)).toHaveCount(0);
     await page.getByRole("button", { name: "Load older meetings", exact: true }).click();
-    await expect(page.getByRole("button", { name: title, exact: true })).toBeVisible();
+    await expect(meetingRow(page, title)).toBeVisible();
     await search(page, query);
-    await page.getByLabel("State", { exact: true }).selectOption("needs-review");
-    const targetButton = page.getByRole("button", { name: title, exact: true });
+    const filtered = await page.request.post("/api/meetings/history/search", {
+      data: { query, filter: "needs-review", limit: 30 }
+    });
+    expect(filtered.status()).toBe(200);
+    expect((await filtered.json()).meetings.map((meeting: MeetingRecord) => meeting.id)).toEqual([
+      target.id
+    ]);
+    const targetButton = meetingRow(page, title);
     await expect(targetButton).toBeVisible();
+    await expect(targetButton).toContainText("Personal notes");
+    await expect(page.getByLabel("State", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Capture: Unavailable", { exact: false })).toHaveCount(0);
+    await assertMeetingHistoryLayout(page, title);
     await targetButton.focus();
     await targetButton.press("Enter");
-    await expect(targetButton).toBeFocused();
-    const rail = page.getByRole("complementary", { name: "Selected meeting", exact: true });
-    await expect(rail).toContainText("Transcript span 0:01–0:07");
-    await expect(rail).toContainText("1 final · 1 provisional");
-    await expect(rail).toContainText("Native capture is unavailable");
-    await expect(rail).toContainText("Declared synthetic microphone");
-    await expect(rail.getByRole("button", { name: "Ask Moss", exact: true })).toBeEnabled();
-    await assertMeetingHistoryLayout(page, title);
-    await rail.getByRole("button", { name: "Open review", exact: true }).click();
-    await expect(page.getByRole("tab", { name: /^Transcript/ })).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`id=${target.id}`));
+    await expect(page.getByRole("region", { name: "Transcript", exact: true })).toContainText(
+      "Maple concern."
+    );
+    await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toHaveValue(
+      "Orchard agenda."
+    );
     await page.goBack();
     await expect(page.getByRole("searchbox", { name: "Search meetings", exact: true })).toHaveValue(
       query
     );
-    await expect(page.getByLabel("State", { exact: true })).toHaveValue("needs-review");
-    await expect(rail.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    await expect(targetButton).toBeVisible();
 
     // Real browser offline state pauses new queries; reconnect resumes the actual request.
     const absentQuery = `absent${marker}`;
@@ -179,7 +185,7 @@ test("History searches all retained current text, filters and reopens a selected
       page.getByRole("status").filter({ hasText: "Search will continue when you reconnect" })
     ).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
-    await expect(page.getByText("No meetings match", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("No meetings match this search.", { exact: true })).toHaveCount(0);
     const resumed = page.waitForResponse(
       (result) =>
         result.url().endsWith("/api/meetings/history/search") &&
@@ -188,16 +194,22 @@ test("History searches all retained current text, filters and reopens a selected
     );
     await page.context().setOffline(false);
     expect((await resumed).status()).toBe(200);
-    await expect(page.getByText("No meetings match", { exact: true })).toBeVisible();
+    await expect(page.getByText("No meetings match this search.", { exact: true })).toBeVisible();
 
-    await page.getByLabel("State", { exact: true }).selectOption("all");
     await search(page, marker);
-    await page.getByLabel("State", { exact: true }).selectOption("notes-only");
-    await expect(page.getByRole("button", { name: notesOnly.title, exact: true })).toBeVisible();
-    await expect(targetButton).toHaveCount(0);
-    await page.getByLabel("State", { exact: true }).selectOption("transcript");
-    await expect(targetButton).toBeVisible();
-    await expect(page.getByRole("button", { name: notesOnly.title, exact: true })).toHaveCount(0);
+    for (const [filter, expectedId] of [
+      ["notes-only", notesOnly.id],
+      ["transcript", target.id]
+    ] as const) {
+      const response = await page.request.post("/api/meetings/history/search", {
+        data: { query: marker, filter, limit: 30 }
+      });
+      expect(response.status()).toBe(200);
+      expect((await response.json()).meetings.map((meeting: MeetingRecord) => meeting.id)).toEqual([
+        expectedId
+      ]);
+    }
+    await expect(meetingRow(page, notesOnly.title)).toContainText("Personal notes");
 
     // Correction must remove superseded words while retaining the corrected current turn.
     const corrected = await page.request.post(`/api/meetings/records/${target.id}/transcript`, {
@@ -226,24 +238,31 @@ test("History searches all retained current text, filters and reopens a selected
       target.id
     ]);
     await targetButton.click();
-    await expect(rail).toContainText("2 final · 0 provisional");
+    await expect(page.getByRole("region", { name: "Transcript", exact: true })).toContainText(
+      "Willow resolution."
+    );
+    await expect(page.getByRole("region", { name: "Transcript", exact: true })).not.toContainText(
+      "Maple concern."
+    );
     expect((await page.request.delete(`/api/meetings/records/${target.id}`)).status()).toBe(204);
     ids.splice(ids.indexOf(target.id), 1);
     observeDeletedSelection = true;
     await page.reload();
-    await expect(rail).toContainText("This meeting is unavailable");
-    await expect(rail.getByRole("heading", { name: title, exact: true })).toHaveCount(0);
-    await expect(rail.getByRole("button", { name: "Ask Moss", exact: true })).toHaveCount(0);
-    await page.setViewportSize({ width: 375, height: 1000 });
-    await rail.getByRole("button", { name: "Back to results", exact: true }).click();
+    await expect(page.getByText("This meeting is unavailable", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit meeting title", exact: true })).toHaveCount(
+      0
+    );
+    await expect(page.getByRole("region", { name: "Transcript", exact: true })).toHaveCount(0);
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await page.getByRole("button", { name: "Meetings", exact: true }).click();
     await expect(
       page.getByRole("searchbox", { name: "Search meetings", exact: true })
-    ).toBeFocused();
-    // One initial search plus denial invalidation (and at most one host-handler change),
-    // never a render-driven refetch loop that consumes the principal's rate-limit bucket.
+    ).toBeVisible();
+    await expect(targetButton).toHaveCount(0);
+    // No render-driven refetch loop after a selected record disappears.
     expect(deletedSelectionSearches).toBeLessThanOrEqual(3);
     console.log(
-      "MEETINGS_HISTORY_UAT real UI/API; older-than-page search across title/notes/current turns; real correction; factual status metadata; independent selected read; retained search on back; real offline pause/reconnect; keyboard/mobile/light/dark/teal; deleted selection hidden. Synthetic text only, no audio or capture proof."
+      "MEETINGS_HISTORY_UAT real UI/API; older-than-page search across title/notes/current turns; real correction; factual metadata; direct workspace navigation; retained search on back; real offline pause/reconnect; keyboard/mobile/light/dark/teal; deleted meeting content hidden. Synthetic text only, no audio or capture proof."
     );
   } finally {
     try {

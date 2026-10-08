@@ -40,6 +40,8 @@ export interface ModuleWebContribution {
 export interface ModulePersistentControlsContribution {
   readonly moduleId: string;
   readonly element: ReactNode;
+  /** Optional compact status beside this module’s navigation label. No commands here. */
+  readonly navigationIndicator?: ReactNode;
 }
 
 export interface ModuleWebRoute {

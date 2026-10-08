@@ -1,3 +1,8 @@
+import {
+  notificationReadPresentation,
+  notificationsReadAllPresentation,
+  pushDeviceRemovalPresentation
+} from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -235,14 +240,24 @@ export const notificationsModuleManifest = {
     {
       method: "PATCH",
       path: "/api/notifications/:id/read",
-      chat: { access: "write", title: "Mark a notification as read", content: "outside" },
+      chat: {
+        access: "write",
+        title: "Mark a notification as read",
+        presentation: notificationReadPresentation,
+        content: "outside"
+      },
       responseSchema: markNotificationReadResponseSchema,
       permissionId: "notifications.update"
     },
     {
       method: "PATCH",
       path: "/api/notifications/read-all",
-      chat: { access: "write", title: "Mark every notification as read", content: "user_authored" },
+      chat: {
+        access: "write",
+        title: "Mark every notification as read",
+        presentation: notificationsReadAllPresentation,
+        content: "user_authored"
+      },
       responseSchema: markAllNotificationsReadResponseSchema,
       permissionId: "notifications.update"
     },
@@ -267,7 +282,8 @@ export const notificationsModuleManifest = {
         access: "destructive",
         title: "Stop push notifications on a device",
         content: "user_authored",
-        target: pushDeviceTarget
+        target: pushDeviceTarget,
+        presentation: pushDeviceRemovalPresentation
       },
       responseSchema: deletePushSubscriptionResponseSchema,
       permissionId: "notifications.update"

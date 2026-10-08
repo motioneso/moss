@@ -60,6 +60,7 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   routeKey("POST", "/api/companion/heartbeat"),
   routeKey("PATCH", "/api/companion/device"),
   routeKey("POST", "/api/companion/logout"),
+  // Legacy recording attempt/decide endpoints authenticate, then return 410; linking is the only approval.
   routeKey("POST", "/api/companion/recording-capability/attempt"),
   routeKey("POST", "/api/companion/recording-capability/status"),
   routeKey("GET", "/api/companion/recording-capabilities"),

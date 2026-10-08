@@ -118,6 +118,7 @@ enum MenuModel {
         case .disconnected: return "Paused"
         case .reconnecting: return "Reconnecting"
         case .signInRequired: return "Sign-in required"
+        case .unlinking: return "Not unlinked yet"
         case .notLinked: return "Not linked"
         }
     }
@@ -128,6 +129,7 @@ enum MenuModel {
         case .disconnected: return "Resume All"
         case .reconnecting: return "Retry Now"
         case .signInRequired: return "Sign In"
+        case .unlinking: return "Retry Unlink"
         case .notLinked: return "Set Up Trail Marker"
         }
     }
@@ -141,7 +143,7 @@ enum MenuModel {
         // Focus rows only exist for a linked Mac with Focus turned on.
         let focusOn = identity != nil && focus != nil && focus?.state != .off
         // Paused already says nothing is sent; "Can't reach Moss" under it would be untrue.
-        let connectionPaused = state == .disconnected
+        let connectionPaused = state == .disconnected || state == .unlinking
         if focusOn, !connectionPaused, let line = focus?.statusLine {
             items.append(.item(line, role: .focusStatus, enabled: false))
         }
@@ -177,7 +179,7 @@ enum MenuModel {
 
         if identity != nil {
             items.append(.separator)
-            items.append(.item("Log Out…", role: .logOut, destructive: true))
+            items.append(.item("Unlink…", role: .logOut, destructive: true))
         }
 
         items.append(.separator)

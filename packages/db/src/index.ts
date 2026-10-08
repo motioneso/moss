@@ -3,6 +3,7 @@ export * from "./cluster-ddl-lock.js";
 export * from "./data-context.js";
 export * from "./database.js";
 export * from "./env.js";
+export * from "./error-diagnostics.js";
 export * from "./gate-run-guard.js";
 export * from "./keyring.js";
 export * from "./migrations/module-sql-runner.js";
@@ -20,3 +21,9 @@ export * from "./target-identity-guard.js";
 export * from "./trust-proxy.js";
 export * from "./types.js";
 export * from "./urls.js";
+
+export * from "./abortable-data-context.js";
+
+export * from "./owned-pg-client.js";
+
+export * from "./abortable-pg-pool.js";

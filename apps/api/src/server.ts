@@ -1,3 +1,7 @@
+import {
+  createMeetingCaptureMaintenanceRuntime,
+  type MeetingCaptureMaintenanceRuntime
+} from "./meeting-capture-maintenance-runtime.js";
 import { recordingLoggerOptions } from "./recording-logger-options.js";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -111,6 +115,8 @@ export interface CreateApiServerOptions {
   readonly appDb?: Kysely<MossDatabase>;
   readonly workerDb?: Kysely<MossDatabase>;
   readonly boss?: PgBoss;
+  /** Override the maintenance lifecycle; the API still awaits start and drains close. */
+  readonly captureMaintenance?: MeetingCaptureMaintenanceRuntime;
   readonly authRuntime?: MossAuthRuntime;
   /** #3065: tests inject a registry with a fake clock. */
   readonly actAsGrants?: ActAsGrantRegistry;
@@ -276,6 +282,15 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   );
   installActAsActorLookup(server, actAsActor);
   const ownsAuthRuntime = options.authRuntime === undefined;
+  const captureMaintenance =
+    options.captureMaintenance ??
+    createMeetingCaptureMaintenanceRuntime({
+      producer: boss,
+      workerConnectionString: getMossDatabaseUrls().worker,
+      appConnectionString: getMossDatabaseUrls().app,
+      auth: authRuntime
+    });
+  server.addHook("preClose", async () => captureMaintenance.close());
   const AUTH_MAX = parsePositiveIntEnv(resolveMossEnv(process.env, "JARVIS_RL_AUTH_MAX"), 10);
 
   registerRequestTimeZoneHook(server);
@@ -601,6 +616,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         resolveCompanion: (input) => authRuntime.companionDevices.resolve(input),
         resolveRecording: (input) => authRuntime.recordingCapabilities.resolve(input),
         assertRecordingBinding: (input) => authRuntime.recordingCapabilities.assertLive(input),
+        acquireRecordingBinding: (input) =>
+          authRuntime.recordingCapabilities.acquireCaptureBinding(input),
         assertBinding: (input) => authRuntime.sessionBindings.assertLive(input),
         device: (input) => authRuntime.sessionBindings.device(input),
         trustedOrigins: authRuntime.trustedOrigins
@@ -797,9 +814,10 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   });
 
   server.addHook("onReady", async () => {
-    if (ownsBoss) {
-      await boss.start();
-    }
+    // Only the composition root starts its own producer. Injected queue clients retain
+    // their caller-owned lifecycle; maintenance borrows send and owns its consumer.
+    if (ownsBoss) await boss.start();
+    await captureMaintenance.start();
   });
 
   server.addHook("onClose", async () => {

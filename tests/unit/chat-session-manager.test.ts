@@ -100,28 +100,28 @@ export function rejectingDeps(engine: FakeEngine) {
 }
 
 describe("ChatSessionManager.injectRecord", () => {
-  it("fans out the record to all subscribers of that user", () => {
+  it("fans out non-action records only to subscribers of that user", () => {
     const manager = new ChatSessionManager(makeMinimalDeps());
-    const received: unknown[] = [];
-    manager.subscribe("u1", (r) => received.push(r));
-
-    manager.injectRecord("u1", {
-      kind: "action_request",
-      text: "Approve?",
-      actionRequestId: "ar_1",
-      toolName: "t",
-      summary: "s"
-    });
-
-    expect(received).toHaveLength(1);
-    expect((received[0] as { kind: string }).kind).toBe("action_request");
+    const received = [vi.fn(), vi.fn(), vi.fn()];
+    manager.subscribe("u1", received[0]!);
+    manager.subscribe("u1", received[1]!);
+    manager.subscribe("u2", received[2]!);
+    const record: TranscriptRecord = { kind: "status", text: "Ready" };
+    manager.injectRecord("u1", record);
+    expect(received[0]).toHaveBeenCalledExactlyOnceWith(record);
+    expect(received[1]).toHaveBeenCalledExactlyOnceWith(record);
+    expect(received[2]).not.toHaveBeenCalled();
   });
-
-  it("does nothing when no subscribers are registered", () => {
+  it("drops unbound action records even when the actor has subscribers", () => {
     const manager = new ChatSessionManager(makeMinimalDeps());
-    expect(() =>
-      manager.injectRecord("u_nobody", { kind: "action_request", text: "x" })
-    ).not.toThrow();
+    const received = vi.fn();
+    manager.subscribe("u1", received);
+    for (const actor of ["u1", "u_nobody"]) {
+      for (const kind of ["action_request", "action_result"] as const) {
+        expect(() => manager.injectRecord(actor, { kind, text: "Action" })).not.toThrow();
+      }
+    }
+    expect(received).not.toHaveBeenCalled();
   });
 });
 

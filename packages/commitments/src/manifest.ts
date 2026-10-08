@@ -1,3 +1,4 @@
+import { commitmentPresentation, commitmentRoutePresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
@@ -55,7 +56,11 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     {
       method: "PATCH",
       path: "/api/commitments/candidates/:id/status",
-      chat: { access: "write", title: "Update commitment status" },
+      chat: {
+        access: "write",
+        title: "Update commitment status",
+        presentation: commitmentRoutePresentation("status")
+      },
       permissionId: "commitments.update"
     },
     {
@@ -67,7 +72,11 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     {
       method: "POST",
       path: "/api/commitments/candidates/:id/suppress",
-      chat: { access: "write", title: "Suppress commitment" },
+      chat: {
+        access: "write",
+        title: "Suppress commitment",
+        presentation: commitmentRoutePresentation("suppress")
+      },
       permissionId: "commitments.update"
     },
     {
@@ -164,6 +173,8 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     },
     {
       name: "commitments.accept",
+      actionLabel: "Accept commitment",
+      approvalPresentation: commitmentPresentation("accept"),
       description: "Accept a commitment candidate as a real commitment.",
       permissionId: "commitments.update",
       risk: "write",
@@ -180,6 +191,8 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     },
     {
       name: "commitments.reject",
+      actionLabel: "Reject commitment",
+      approvalPresentation: commitmentPresentation("reject"),
       description: "Reject a commitment candidate as not a real commitment.",
       permissionId: "commitments.update",
       risk: "write",
@@ -196,6 +209,8 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     },
     {
       name: "commitments.snooze",
+      actionLabel: "Snooze commitment",
+      approvalPresentation: commitmentPresentation("snooze"),
       description: "Snooze a commitment candidate until a later date.",
       permissionId: "commitments.update",
       risk: "write",

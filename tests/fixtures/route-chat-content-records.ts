@@ -17,6 +17,8 @@ export const RECORDS_EXPECTED_ROWS = [
   "meetings GET /api/meetings/records/:id/capture blocked external_effect",
   "meetings POST /api/meetings/records/:id/capture/start blocked external_effect",
   "meetings POST /api/meetings/records/:id/capture/control blocked external_effect",
+  "meetings PUT /api/meetings/records/:id/title write user_authored",
+  "meetings GET /api/meetings/output-availability read",
   "meetings POST /api/meetings/history/search read",
   "meetings GET /api/meetings/history/:id read",
   "meetings GET /api/meetings/records/:id/exports read",

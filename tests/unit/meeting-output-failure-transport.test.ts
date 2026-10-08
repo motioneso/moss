@@ -29,6 +29,10 @@ describe("meeting summary failure transport", () => {
   it.each([
     "meeting_output_route_unavailable",
     "meeting_output_route_changed",
+    "meeting_output_timed_out",
+    "meeting_output_rejected_json_parse",
+    "meeting_output_rejected_schema_validation",
+    "meeting_output_rejected_source_revision_mismatch",
     "meeting_output_generation_failed"
   ])("preserves only the safe %s code through service, route and browser client", async (code) => {
     // Every database port is stubbed; the real service and HTTP serializers run without I/O.

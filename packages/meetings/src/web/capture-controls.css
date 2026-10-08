@@ -9,8 +9,11 @@
   align-items: center;
   gap: var(--space-3);
 }
-
-.meetings-recording-strip {
-  padding: var(--space-3) var(--space-4);
+.meetings-recording-strip,
+.meetings-recording-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   min-width: 0;
+  flex: 0 0 auto;
 }

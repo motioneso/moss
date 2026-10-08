@@ -1,3 +1,4 @@
+import type { AbortablePgPool } from "@moss/db";
 import { createHash } from "node:crypto";
 import Fastify from "fastify";
 import type pg from "pg";
@@ -23,6 +24,7 @@ function fixture() {
   const resolve = vi.fn(async () => ({ actorUserId: owner, deviceId: device, requestId: "test" }));
   const service = createRecordingCapabilitiesService({
     pool: { query } as unknown as pg.Pool,
+    maintenancePool: { withClient: vi.fn() } as unknown as AbortablePgPool,
     companionDevices: { resolve } as unknown as CompanionDevicesService
   });
   return { row, query, resolve, service };
@@ -208,6 +210,7 @@ describe("read-only recovery of previously approved recording proof", () => {
     });
     const service = createRecordingCapabilitiesService({
       pool: { query } as unknown as pg.Pool,
+      maintenancePool: { withClient: vi.fn() } as unknown as AbortablePgPool,
       companionDevices: {} as CompanionDevicesService
     });
     const actor = { actorUserId: owner, deviceId: device, requestId: "recovery" };

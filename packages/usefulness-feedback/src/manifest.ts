@@ -1,3 +1,4 @@
+import { usefulnessFeedbackPresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -53,8 +54,7 @@ export const usefulnessFeedbackModuleManifest = {
     {
       id: "usefulness-feedback.record-only",
       description:
-        "Moss can record usefulness signals for your chat messages, briefings and proactive cards " +
-        "without removing tasks or events, creating memories, dismissing cards or refreshing feeds.",
+        "Record usefulness signals for chat messages, briefings and proactive cards. Approval identifies the exact owned item. Signals do not remove tasks, create memories, dismiss cards or refresh feeds; unavailable targets cannot be approved.",
       errors: [
         {
           code: "usefulness-feedback.effectful-action",
@@ -76,7 +76,12 @@ export const usefulnessFeedbackModuleManifest = {
     {
       method: "POST",
       path: "/api/me/usefulness-feedback/signals",
-      chat: { access: "write", title: "Record a usefulness feedback signal", content: "outside" },
+      chat: {
+        access: "write",
+        title: "Record a usefulness feedback signal",
+        presentation: usefulnessFeedbackPresentation,
+        content: "outside"
+      },
       requestSchema: createUsefulnessFeedbackSignalRequestSchema,
       responseSchema: createUsefulnessFeedbackResponseSchema,
       permissionId: "usefulness-feedback.manage"

@@ -346,12 +346,18 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
 
   server.post(
     "/api/companion/logout",
-    { schema: companionLogoutRouteSchema },
+    { schema: companionLogoutRouteSchema, config: ipRateLimit(PAIR_RATE_MAX) },
     async (request, reply) => {
-      const ctx = await requireCompanion(request, reply);
-      if (!ctx) return reply;
-      await devices.logout(ctx);
-      return reply.code(204).send();
+      try {
+        await devices.logoutCredential({ headers: request.headers });
+        return reply.code(204).send();
+      } catch (error) {
+        if (error instanceof CompanionAuthError)
+          return reply
+            .code(error.httpStatus)
+            .send({ error: "Companion credential unavailable", code: error.code });
+        throw error;
+      }
     }
   );
 

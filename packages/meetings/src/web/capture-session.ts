@@ -23,6 +23,7 @@ import {
 } from "./capture-presentation.js";
 import { isMeetingAccessDenied, meetingKeys } from "./client.js";
 import { refreshCaptureStatus } from "./capture-status.js";
+import { meetingLinkKeys } from "./meeting-link-state.js";
 import { useSessionBoundary } from "./session-draft.js";
 
 type CaptureRequest =
@@ -116,9 +117,13 @@ function acceptCapture(
   return true;
 }
 function captureAccessDenied(client: QueryClient, id: string) {
-  return [meetingKeys.record(id), captureKeys.status(id), captureKeys.devices].some((key) =>
-    isMeetingAccessDenied(client.getQueryState(key)?.error)
-  );
+  return [
+    meetingKeys.record(id),
+    captureKeys.status(id),
+    captureKeys.devices,
+    meetingLinkKeys.sessions,
+    meetingLinkKeys.capabilities
+  ].some((key) => isMeetingAccessDenied(client.getQueryState(key)?.error));
 }
 async function send(
   client: QueryClient,
@@ -420,9 +425,7 @@ export function useCaptureSession(id: string) {
             {
               kind: "cancel-start",
               input: {
-                requestKey: start.requestKey,
-                deviceId: start.deviceId,
-                connectionId: start.connectionId
+                requestKey: start.requestKey
               }
             },
             currentSession

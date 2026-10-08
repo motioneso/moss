@@ -1,12 +1,12 @@
 import type {
   MeetingCaptureInventory,
+  MeetingCaptureMode,
   MeetingCaptureSelection,
   MeetingCaptureState
 } from "@moss/shared";
-import type { CaptureMode } from "./capture-modes.js";
 
 export interface CaptureChoice {
-  readonly mode: CaptureMode | null;
+  readonly mode: MeetingCaptureMode | null;
   readonly microphoneId: string;
   readonly applicationId: string;
 }
@@ -20,7 +20,7 @@ export function choiceFromCapture(capture: MeetingCaptureState | null | undefine
   return selection
     ? {
         mode: selection.mode,
-        microphoneId: selection.microphone.deviceId,
+        microphoneId: selection.microphone?.deviceId ?? "",
         applicationId: selection.mode === "selected-app" ? (selection.applicationId ?? "") : ""
       }
     : emptyCaptureChoice;
@@ -46,7 +46,7 @@ export function captureStopped(capture: MeetingCaptureState | null | undefined):
   );
 }
 export function captureStatusLabel(capture: MeetingCaptureState, connected: boolean): string {
-  if (capture.desired === "revoked") return "Authorization revoked";
+  if (capture.desired === "revoked") return captureRevocationLabel(capture);
   if (capture.desired === "stopped" && captureAcknowledged(capture)) return "Stopped";
   if (capture.desired === "stopped" && capture.finalization === "complete")
     return "Recording authority ended";
@@ -61,11 +61,30 @@ export function captureStatusLabel(capture: MeetingCaptureState, connected: bool
     capture.desired
   ];
 }
+export function captureRevocationLabel(capture: MeetingCaptureState): string {
+  switch (capture.revocationReason) {
+    case "device-unavailable":
+      return "Mac unlinked or device access expired";
+    case "recording-permission-revoked":
+      return "Recording permission revoked";
+    case "session-ended":
+      return "Recording browser session ended";
+    case "connection-replaced":
+      return "Mac recording connection replaced";
+    case "expired":
+      return "Recording session expired";
+    default:
+      return "Recording authorization revoked";
+  }
+}
 export function captureSelection(
   choice: CaptureChoice,
   inventory: MeetingCaptureInventory | null
 ): MeetingCaptureSelection | null {
-  const microphone = inventory?.microphones.find((item) => item.deviceId === choice.microphoneId);
+  const microphones = inventory?.microphones.filter(
+    (item) => item.deviceId === choice.microphoneId
+  );
+  const microphone = microphones?.length === 1 ? microphones[0] : undefined;
   if (!inventory || !microphone || !choice.mode || inventory.microphonePermission === "denied")
     return null;
   const input = { microphone: { deviceId: microphone.deviceId, sourceId: microphone.sourceId } };
