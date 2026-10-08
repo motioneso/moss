@@ -121,6 +121,21 @@ describe("same-source recovery with real auth and storage (isolated gate only)",
       const f = await fixture(),
         active = await f.begin(),
         repository = new MeetingCaptureRepository();
+      // Advancing the service clock must also advance receipt creation time. PostgreSQL's
+      // real now() would otherwise make newly uploaded audio look more than 60 seconds old.
+      // Keep the real reservation, admission guards and transaction; only align fixture time.
+      const reserve = repository.reserve.bind(repository);
+      vi.spyOn(MeetingCaptureRepository.prototype, "reserve").mockImplementation(
+        async (...args) => {
+          await reserve(...args);
+          const [db, grantId, input] = args;
+          if (grantId === active.grantId && input.kind === "audio")
+            await sql`UPDATE app.meeting_capture_receipts SET created_at=${f.now()}
+            WHERE grant_id=${grantId}::uuid AND request_key=${input.requestKey}::uuid`.execute(
+              db.db
+            );
+        }
+      );
       const original = active.audio;
       const { fingerprint } = decodeCaptureAudio(original);
       await context.withDataContext(f.browser, async (db) => {

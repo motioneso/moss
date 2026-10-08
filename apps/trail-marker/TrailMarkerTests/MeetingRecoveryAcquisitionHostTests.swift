@@ -62,6 +62,44 @@ final class MeetingRecoveryAcquisitionHostTests: XCTestCase {
         XCTAssertTrue(condition(), "Condition did not become true")
     }
 
+    func testRecoveryPermissionFlipBetweenConsecutiveReadsNeverRequestsPermission() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        let inventory = MeetingCaptureInventory(microphones: [
+            .init(deviceId: "mic-uid", sourceId: "mic", label: "Synthetic mic")],
+            applications: [], computerAudio: .init(available: false, excludedProcessTreeIds: []),
+            microphonePermission: .granted, systemAudioPermission: .unknown)
+        let snapshot = MeetingInventorySnapshot(wire: inventory, microphones: ["mic-uid": 42],
+            applications: [:], processes: [], audioObjects: [:], excluded: [])
+        var checkRecovery = false
+        var readsSinceInventory = 0
+        var permissionRequests = 0
+        let host = fixture.host(readInventory: {
+            readsSinceInventory = 0
+            return snapshot
+        }, microphonePermission: {
+            guard checkRecovery else { return .granted }
+            readsSinceInventory += 1
+            // Reproduce permission reset between a separate recovery guard and the
+            // permission-request branch, without depending on asynchronous poll counts.
+            return readsSinceInventory == 1 ? .granted : .unknown
+        }) {
+            permissionRequests += 1
+            return false
+        }
+        defer { host.shutdown(reason: "Recovery permission race test") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(),
+            credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        checkRecovery = true
+        fixture.device.receiver?.fail(.sourceReconfigured)
+        host.service()
+        try await waitUntil { permissionRequests > 0 || (fixture.device.starts == 2 && host.phase == .recording) }
+        XCTAssertEqual(permissionRequests, 0, "Automatic recovery must never request microphone permission after a permission-read race")
+        XCTAssertEqual(fixture.device.starts, 2)
+        XCTAssertEqual(host.phase, .recording)
+    }
+
     func testLocalPauseReachesServerWhileAcquisitionRemainsBlocked() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }

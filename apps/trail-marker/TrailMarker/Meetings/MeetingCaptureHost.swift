@@ -321,10 +321,8 @@ final class MeetingCaptureHost: ObservableObject {
         guard start, !stoppedByUser, !controlInFlight, !cleanupBlocked, !gapCoverageIncomplete, let selection = next.selection else { return }
         if next.generation != initialStartGeneration { startCommandDeadline = nil }
         let generation = sessionGeneration
-        if recoveryIntent != nil, selection.microphone != nil, ports.microphonePermission() != .granted {
-            throw MeetingHostError.permissionDenied
-        }
         if selection.microphone != nil, ports.microphonePermission() != .granted {
+            guard recoveryIntent == nil else { throw MeetingHostError.permissionDenied }
             let permissionFence = MeetingStartPermissionFence(sessionGeneration: generation, captureGeneration: next.generation,
                 grantId: next.grantId, deviceId: next.deviceId, expiresAt: startCommandDeadline)
             let permissionStarted = self.now()

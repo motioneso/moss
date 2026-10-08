@@ -20,6 +20,14 @@ SPEC.loader.exec_module(SHARED)
 RUNNER = SHARED.RUNNER
 MEETINGS = RUNNER.APP / "TrailMarker/Meetings"
 CONTROLS = [
+    ("MeetingRecoveryAcquisitionHostTests", {
+        "name": "recovery-permission-read-race",
+        "source": MEETINGS / "MeetingCaptureHost.swift",
+        "test": "testRecoveryPermissionFlipBetweenConsecutiveReadsNeverRequestsPermission",
+        "before": "        if selection.microphone != nil, ports.microphonePermission() != .granted {\n            guard recoveryIntent == nil else { throw MeetingHostError.permissionDenied }",
+        "after": "        if recoveryIntent != nil, selection.microphone != nil, ports.microphonePermission() != .granted {\n            throw MeetingHostError.permissionDenied\n        }\n        if selection.microphone != nil, ports.microphonePermission() != .granted {",
+        "assertion": "Automatic recovery must never request microphone permission after a permission-read race",
+    }),
     ("MeetingSourceReconfigurationTests", {
         "name": "output-teardown-hard-fault-priority",
         "source": MEETINGS / "CoreAudioMeetingOutput.swift",

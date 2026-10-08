@@ -350,10 +350,13 @@ final class MeetingSourceRecoveryHostTests: XCTestCase {
         try await waitUntil { failedPostAcquisition && host.canResumeFromUserClick }
         XCTAssertFalse(readUnconfirmedPCM, "Unconfirmed acquisition must never retain an unmapped ring")
         XCTAssertFalse(fixture.runtime.hasPendingAcquisition)
+        XCTAssertEqual(fixture.runtime.snapshot.epoch, 1, "Rejected staged acquisition must not advance the native timeline")
         host.resumeFromUserClick()
         try await waitUntil { fixture.device.starts == 3 && host.phase == .recording }
         XCTAssertNil(host.interruptionWarning)
-        XCTAssertEqual(fixture.runtime.snapshot.epoch, 3)
+        // Server epoch 2 existed during recovery, but its staged native epoch was never adopted.
+        // Explicit Resume therefore maps local epoch 2 to the independently advanced server epoch 3.
+        XCTAssertEqual(fixture.runtime.snapshot.epoch, 2)
         XCTAssertEqual(fixture.server.captureEpoch, 3)
     }
 

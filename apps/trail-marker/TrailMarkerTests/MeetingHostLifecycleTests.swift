@@ -920,6 +920,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         func host(snapshot customSnapshot: MeetingInventorySnapshot? = nil,
                   factory customFactory: MeetingCaptureRuntime.DeviceFactory? = nil,
                   readInventory customReadInventory: (() throws -> MeetingInventorySnapshot)? = nil,
+                  microphonePermission customMicrophonePermission: (() -> MeetingCapturePermission)? = nil,
                   permissionRequest: @escaping () async -> Bool) -> MeetingCaptureHost {
             let identity = LinkedIdentity(instance: instance, deviceId: server.deviceId, accountName: "Fixture", accountEmail: "fixture@example.invalid")
             let inventory = MeetingCaptureInventory(microphones: [.init(deviceId: "mic-uid", sourceId: "mic", label: "Synthetic mic")],
@@ -928,7 +929,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
             let snapshot = MeetingInventorySnapshot(wire: inventory, microphones: ["mic-uid": 42], applications: [:],
                 processes: [], audioObjects: [:], excluded: [])
             let ports = MeetingCaptureHostPorts(identity: { identity }, connectionAvailable: { true }, readInventory: { try customReadInventory?() ?? self.inventoryOverride ?? customSnapshot ?? snapshot },
-                microphonePermission: { self.permissionReads += 1; return self.permission }, requestMicrophone: permissionRequest,
+                microphonePermission: { self.permissionReads += 1; return customMicrophonePermission?() ?? self.permission }, requestMicrophone: permissionRequest,
                 makeClient: Self.client, now: { self.monotonic }, wallNow: { self.wall })
             let defaults = UserDefaults(suiteName: defaultsName)!
             let connection = ConnectionRuntime(keychain: KeychainStore(service: defaultsName), preferences: PreferencesStore(defaults: defaults))
