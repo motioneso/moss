@@ -52,6 +52,7 @@ final class MeetingCaptureHost: ObservableObject {
     private var observed = MeetingCaptureObserved(generation: 0, phase: "idle", errorCode: nil)
     @Published private(set) var remote: MeetingRemoteCapture?
     private var selected: MeetingInventorySnapshot.Resolved?
+    private var selectedSourceDiagnostics: MeetingCaptureSourceDiagnostics?
     private var choice: MeetingCaptureChoice?
     private var recordingDuration = MeetingRecordingDuration()
     private var uploadAdmitted = false
@@ -329,7 +330,8 @@ final class MeetingCaptureHost: ObservableObject {
             return
         }
         guard now < leaseDeadlineNanoseconds else { throw MeetingHostError.network }
-        let resolved = try ports.readInventory().resolve(selection)
+        let sourceSnapshot = try ports.readInventory()
+        let resolved = try sourceSnapshot.resolve(selection)
         let readiness = MeetingNativeReadiness(permissionsGranted: true, processingReady: true,
             meetingDeviceAuthorized: true)
         if let previousEpoch = timeline.pauseGapSelection?.epoch ?? timeline.epochs[runtime.snapshot.epoch]?.remoteEpoch,
@@ -356,6 +358,7 @@ final class MeetingCaptureHost: ObservableObject {
         pausedCaptureCutoff = nil
         startCommandDeadline = nil
         selected = resolved
+        selectedSourceDiagnostics = MeetingCaptureSourceDiagnostics(snapshot: sourceSnapshot)
         choice = selection
         observed = .init(generation: next.generation, phase: "recording", errorCode: nil)
         phase = .recording
@@ -451,13 +454,33 @@ final class MeetingCaptureHost: ObservableObject {
 
     private func validateCurrentSources(_ fresh: MeetingInventorySnapshot) {
         guard phase == .recording, let choice, let selected else { return }
-        guard choice.microphone == nil || ports.microphonePermission() == .granted,
-              let current = try? fresh.resolve(choice), current == selected else {
+        guard choice.microphone == nil || ports.microphonePermission() == .granted else {
+            noteSourceValidationFailure(.microphonePermissionNotGranted, fresh: fresh)
+            sourceChanged()
+            return
+        }
+        let current: MeetingInventorySnapshot.Resolved
+        do { current = try fresh.resolve(choice) }
+        catch {
+            noteSourceValidationFailure(.resolveThrew, fresh: fresh)
+            sourceChanged()
+            return
+        }
+        guard current == selected else {
+            noteSourceValidationFailure(.resolvedNotEqual, fresh: fresh)
             // Drop pending audio on membership change, including newly appearing Moss helpers.
             // This never replaces a failed app-scoped route with computer capture.
             sourceChanged()
             return
         }
+    }
+
+    private func noteSourceValidationFailure(_ reason: MeetingCaptureSourceDiagnostics.Reason,
+                                             fresh: MeetingInventorySnapshot) {
+        let detail = MeetingCaptureSourceDiagnostics.failure(reason, before: selectedSourceDiagnostics,
+            after: MeetingCaptureSourceDiagnostics(snapshot: fresh))
+        captureLog.error("Source validation failed: \(detail, privacy: .public)")
+        diagnostics = diagnosticLog.sourceValidationFailed(detail)
     }
 
     private enum SendResult { case started, tooShort, deferred }
@@ -569,7 +592,7 @@ final class MeetingCaptureHost: ObservableObject {
         timer?.invalidate(); timer = nil
         for (center, observer) in observers { center.removeObserver(observer) }
         observers.removeAll()
-        choice = nil; selected = nil; remote = nil; timeline = MeetingCaptureTimeline()
+        choice = nil; selected = nil; selectedSourceDiagnostics = nil; remote = nil; timeline = MeetingCaptureTimeline()
         pausedCaptureCutoff = nil
         fence = MeetingCommandFence(); controlInFlight = false; controlRetryAtNanoseconds = 0; controlOutbox = MeetingControlOutbox()
         observed = .init(generation: 0, phase: "idle", errorCode: nil)
@@ -970,6 +993,7 @@ final class MeetingCaptureHost: ObservableObject {
             localEpoch: runtime.snapshot.epoch, stoppedByUser: stoppedByUser) { queueGap(gap) }
         choice = selection
         selected = nil
+        selectedSourceDiagnostics = nil
         let currentInventory = try ports.readInventory().wire
         sourceDescription = Self.describe(selection, inventory: currentInventory)
     }

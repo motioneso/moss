@@ -459,11 +459,6 @@ export const meetingsModuleManifest = {
         "Select a mic or None and toggle computer audio for this recording. System-only skips mic permission. Both-off is rejected; select audio. Paused edits stay paused. Changes await confirmation and keep Settings defaults."
     },
     {
-      id: "meetings.mac_capture_safety",
-      description:
-        "Computer audio checks Moss exclusions by executable path without requiring other users’ process metadata. An unreadable live path still pauses capture. Native pause reasons appear in local logs and recording diagnostics."
-    },
-    {
       id: "meetings.account_export",
       description:
         "Your data in Settings exports your meeting records, retained notes/transcripts, summaries, action reviews and export receipts. Owner-only, including disabled-module data. Derived search indexes are excluded; no model request runs."
