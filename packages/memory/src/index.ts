@@ -127,3 +127,8 @@ export type {
   NewMemorySuppression
 } from "./suppressions-repository.js";
 export { ChatMemorySuppressionsRepository } from "./suppressions-repository.js";
+
+export {
+  configureMemoryApprovalReferences,
+  type MemoryApprovalSourceResolver
+} from "./action-presentations.js";

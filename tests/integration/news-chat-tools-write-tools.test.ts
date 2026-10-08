@@ -18,6 +18,10 @@ import {
 } from "../../packages/news/src/personalization-repository.js";
 
 import { ids } from "./test-database.js";
+import {
+  newsAddTopicExecute,
+  newsRemoveSourceExecute
+} from "../../packages/news/src/chat-tools.js";
 import { NewsChatToolsHarness, parseToolText } from "./news-chat-tools-harness.js";
 
 describe("topic/exclusion/removal write tools (#975 Task 8)", () => {
@@ -58,8 +62,7 @@ describe("topic/exclusion/removal write tools (#975 Task 8)", () => {
     const before = await topicRowCount(ids.userA);
 
     const pending = gateway.callTool(token, "news.addTopic", {
-      label: "Local climate policy",
-      guidance: "prefer municipal coverage"
+      label: "Local climate policy"
     });
     const request = await harness.waitForActionRequest(emitted, 0);
     expect(request.toolName).toBe("news.addTopic");
@@ -83,15 +86,47 @@ describe("topic/exclusion/removal write tools (#975 Task 8)", () => {
       approval_mode: "confirmed"
     });
 
-    // Regression: `guidance` was dropped from the tool schema, but the gateway validator does
-    // not strip undeclared keys (input-validation.ts), so the input above still carried
-    // guidance: "prefer municipal coverage" as if the model had emitted it anyway. Assert the
-    // execute fn — not the schema — is what refuses it: the persisted row must be null.
+    // Legal chat topic creation never persists prompt-shaping guidance. The separate
+    // undeclared-input test below also checks the executor guard directly.
     const rows = await harness.bootstrap.query(
       `SELECT guidance FROM app.news_custom_topics WHERE owner_user_id = $1 AND label = $2`,
       [ids.userA, "Local climate policy"]
     );
     expect(rows.rows[0].guidance).toBeNull();
+  }, 30_000);
+
+  it("undeclared topic guidance is refused before approval and ignored by the executor", async () => {
+    const { gateway, emitted, mint } = await harness.makeGateway();
+    const token = mint(ids.userA, "news-chat-extra-guidance");
+    const before = await topicRowCount(ids.userA);
+    const input = { label: "Undeclared guidance guard", guidance: "prefer municipal coverage" };
+    const result = await gateway.callTool(token, "news.addTopic", input);
+    expect(result).toMatchObject({ ok: false, denied: true });
+    expect(JSON.stringify(result)).toContain("approval_unavailable");
+    expect(emitted.filter((record) => record.kind === "action_request")).toEqual([]);
+    expect(await topicRowCount(ids.userA)).toBe(before);
+
+    await harness.appContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "news-direct-guidance" },
+      (db) =>
+        newsAddTopicExecute(db, input, {
+          actorUserId: ids.userA,
+          requestId: "news-direct-guidance",
+          chatSessionId: "news-chat-extra-guidance"
+        })
+    );
+    const rows = await harness.bootstrap.query(
+      `SELECT id, guidance FROM app.news_custom_topics WHERE owner_user_id = $1 AND label = $2`,
+      [ids.userA, input.label]
+    );
+    expect(rows.rowCount).toBe(1);
+    expect(rows.rows[0].guidance).toBeNull();
+    expect(await topicRowCount(ids.userA)).toBe(before + 1);
+    await harness.appContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "news-direct-guidance-cleanup" },
+      (db) => repository.deleteCustomTopic(db, rows.rows[0].id as string)
+    );
+    expect(await topicRowCount(ids.userA)).toBe(before);
   }, 30_000);
 
   it("addTopic at the per-user cap returns a friendly error and writes nothing", async () => {
@@ -176,7 +211,7 @@ describe("topic/exclusion/removal write tools (#975 Task 8)", () => {
     ).toMatchObject({ owner_user_id: ids.userA, approval_mode: "confirmed" });
   }, 30_000);
 
-  it("removeSource treats a cross-owner id as not-found and removes own sources after confirm", async () => {
+  it("removeSource refuses a cross-owner target before approval and removes own sources after confirm", async () => {
     // B follows example.com through the existing chat preview/confirm flow.
     const { gateway, emitted, mint } = await harness.makeGateway();
     const tokenB = mint(ids.userB, "news-chat-b-source");
@@ -196,16 +231,30 @@ describe("topic/exclusion/removal write tools (#975 Task 8)", () => {
     expect(bSources).toHaveLength(1);
     const targetId = bSources[0]!.id;
 
-    // Cross-owner attempt: A confirms removal of B's source id — RLS makes it
-    // invisible, so the tool reports not-found and B's row is untouched.
+    // RLS makes B's target unavailable to A, before an approval can be offered.
     const tokenA = mint(ids.userA, "news-chat-a-remove-foreign");
     mark = emitted.length;
-    const stealPending = gateway.callTool(tokenA, "news.removeSource", { sourceId: targetId });
-    const stealRequest = await harness.waitForActionRequest(emitted, mark);
-    await gateway.resolveActionRequest(ids.userA, stealRequest.actionRequestId, "confirmed");
-    const stealResult = await stealPending;
-    expect(stealResult).toMatchObject({ ok: true });
-    expect(JSON.stringify(stealResult)).toMatch(/not found/i);
+    const stealResult = await gateway.callTool(tokenA, "news.removeSource", { sourceId: targetId });
+    expect(stealResult).toMatchObject({ ok: false, denied: true });
+    expect(JSON.stringify(stealResult)).toContain("approval_unavailable");
+    expect(emitted.slice(mark).filter((record) => record.kind === "action_request")).toEqual([]);
+    expect(await ownerSourceRows(ids.userB)).toHaveLength(1);
+
+    // Keep the executor's own not-found/no-write protection covered too.
+    const direct = await harness.appContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "news-direct-remove-foreign" },
+      (db) =>
+        newsRemoveSourceExecute(
+          db,
+          { sourceId: targetId },
+          {
+            actorUserId: ids.userA,
+            requestId: "news-direct-remove-foreign",
+            chatSessionId: "news-chat-a-remove-foreign"
+          }
+        )
+    );
+    expect(JSON.stringify(direct.data)).toMatch(/not found/i);
     expect(await ownerSourceRows(ids.userB)).toHaveLength(1);
 
     // Positive control: the owner removes it, confirm-gated end to end.

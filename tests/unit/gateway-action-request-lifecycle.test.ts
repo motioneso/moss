@@ -111,6 +111,8 @@ function fixture() {
       actionRequestId: row.id,
       toolName: row.tool_name,
       summary: "Edit note",
+      outcomeTitle: "Edit note",
+      details: { presentation: "human" as const, target: "Test target", fields: [] },
       outsideContentNotice: false
     });
     return pending;
@@ -126,6 +128,8 @@ describe("durable action resolution", () => {
       actionRequestId: h.row.id,
       toolName: h.row.tool_name,
       summary: "Edit note",
+      outcomeTitle: "Edit note",
+      details: { presentation: "human" as const, target: "Test target", fields: [] },
       outsideContentNotice: false,
       liveOrigin: { actorUserId: "forged", chatSessionId: "forged", threadId: "forged" }
     };

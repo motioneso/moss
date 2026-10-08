@@ -25,7 +25,7 @@ const proceed = (
   forceConfirm: false,
   confirmWhenTainted: false,
   summary: "Change Ocean theme",
-  details: { target: "Ocean", fields: [{ label: "Name", value: "Ocean" }] },
+  details: { presentation: "human", target: "Ocean", fields: [{ label: "Name", value: "Ocean" }] },
   affectsModules: ["settings"],
   ...fields
 });
@@ -177,7 +177,11 @@ describe("per-call policy", () => {
       kind: "action_request",
       summary: "Change Ocean theme",
       outsideContentNotice: false,
-      details: { target: "Ocean", fields: [{ label: "Name", value: "Ocean" }] }
+      details: {
+        presentation: "human",
+        target: "Ocean",
+        fields: [{ label: "Name", value: "Ocean" }]
+      }
     });
     expect(h.records[1]).toMatchObject({
       kind: "action_result",

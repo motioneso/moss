@@ -55,9 +55,12 @@ export function RecordRow(props: {
     return (
       <ActionRequestCard
         approvalAvailable={props.record.approvalAvailable}
+        nativePermission={props.record.nativePermission}
+        externalTool={props.record.externalTool}
+        exactArguments={props.record.exactArguments}
         actionRequestId={props.record.actionRequestId}
-        summary={props.record.summary ?? text}
-        toolName={props.record.toolName ?? kind}
+        summary={props.record.summary ?? ""}
+        toolName={props.record.toolName ?? ""}
         preview={props.record.preview}
         details={props.record.details}
         outsideContentNotice={props.record.outsideContentNotice}

@@ -98,6 +98,12 @@ describe("assistant action hydration origin", () => {
         actionRequestId: id,
         toolName: "notes.write_note",
         summary: "Save note",
+        outcomeTitle: "Save note",
+        details: {
+          presentation: "human",
+          target: "New note",
+          fields: [{ label: "Content", value: "Approve note creation" }]
+        },
         outsideContentNotice: false
       });
     }
@@ -128,12 +134,40 @@ describe("assistant action hydration origin", () => {
   });
 
   it("restores an orphaned pending row as decline-only without mutating its status", async () => {
-    expect((await list(threadA)).find((action) => action.id === orphanAction)).toMatchObject({
+    const orphaned = (await list(threadA)).find((action) => action.id === orphanAction);
+    expect(orphaned).toMatchObject({
       approvalAvailable: false
     });
+    expect(orphaned).not.toHaveProperty("presentation");
+    const complete = confirmations.getPresentation(ids.userA, actionA);
+    expect(complete).toBeDefined();
+    if (!complete) throw new Error("Expected the complete live fixture presentation");
+    try {
+      confirmations.storePresentation(ids.userA, {
+        kind: "action_request",
+        actionRequestId: actionA,
+        toolName: "notes.write_note",
+        summary: "Save note",
+        outsideContentNotice: false
+      });
+      const incomplete = (await list(threadA)).find((action) => action.id === actionA);
+      expect(confirmations.isAwaiting(actionA)).toBe(true);
+      expect(incomplete).toMatchObject({ approvalAvailable: false, status: "pending" });
+      expect(incomplete).not.toHaveProperty("presentation");
+    } finally {
+      confirmations.storePresentation(ids.userA, complete);
+    }
     expect((await list(threadA)).find((action) => action.id === actionA)).toMatchObject({
       approvalAvailable: true,
-      presentation: { summary: "Save note" }
+      presentation: {
+        summary: "Save note",
+        outcomeTitle: "Save note",
+        details: {
+          presentation: "human",
+          target: "New note",
+          fields: [{ label: "Content", value: "Approve note creation" }]
+        }
+      }
     });
     const orphan = await dataContext.withDataContext({ actorUserId: ids.userA }, (db) =>
       repository.getAssistantAction(db, orphanAction)

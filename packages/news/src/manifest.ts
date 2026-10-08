@@ -1,3 +1,13 @@
+import {
+  newsImagePresentation,
+  newsFaviconPresentation,
+  newsRefreshPresentation,
+  newsConfirmPresentation,
+  newsRemoveSourcePresentation,
+  newsRemoveTopicPresentation,
+  newsAddTopicPresentation,
+  newsExclusionPresentation
+} from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest, ModuleAiRequirementManifest } from "@moss/module-sdk";
@@ -290,13 +300,25 @@ export const newsModuleManifest = {
     {
       method: "GET",
       path: "/api/news/images/:articleId",
-      chat: { access: "read", content: "outside", outbound: true },
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Load news image",
+        presentation: newsImagePresentation
+      },
       permissionId: "news.view"
     },
     {
       method: "GET",
       path: "/api/news/favicon/:domain",
-      chat: { access: "read", content: "outside", outbound: true },
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Load publisher icon",
+        presentation: newsFaviconPresentation
+      },
       permissionId: "news.view"
     },
     // #2005 publisher credentials. news.credentials, never news.prefs.
@@ -363,6 +385,9 @@ export const newsModuleManifest = {
     },
     {
       name: "news.refreshNews",
+      actionLabel: "Refresh news",
+      approvalPresentation: newsRefreshPresentation,
+      approvalContent: "user_authored",
       description:
         "Ask the news service to refresh the actor's feed. The work runs asynchronously.",
       permissionId: "news.prefs",
@@ -410,6 +435,8 @@ export const newsModuleManifest = {
     },
     {
       name: "news.confirmSource",
+      actionLabel: "Follow news publisher",
+      approvalPresentation: newsConfirmPresentation,
       description:
         "Add a previously previewed publisher as a followed custom news source. Requires the confirmationId from news.previewSource plus the chosen candidate's label and domain exactly as previewed.",
       permissionId: "news.prefs",
@@ -438,6 +465,8 @@ export const newsModuleManifest = {
     // from tool INPUT only (execute hasn't run at prompt time).
     {
       name: "news.removeSource",
+      actionLabel: "Remove news publisher",
+      approvalPresentation: newsRemoveSourcePresentation,
       description:
         "Stop following a custom news source. Requires the source id (list them via the news personalization surface first). Removal also prunes the source's articles from the current briefing.",
       permissionId: "news.prefs",
@@ -458,6 +487,9 @@ export const newsModuleManifest = {
     },
     {
       name: "news.addTopic",
+      actionLabel: "Follow news topic",
+      approvalPresentation: newsAddTopicPresentation,
+      approvalContent: "user_authored",
       description:
         "Follow a custom news topic (e.g. 'local climate policy'). The topic is policy-checked before it is added.",
       permissionId: "news.prefs",
@@ -482,6 +514,8 @@ export const newsModuleManifest = {
     },
     {
       name: "news.removeTopic",
+      actionLabel: "Remove news topic",
+      approvalPresentation: newsRemoveTopicPresentation,
       description: "Stop following a custom news topic. Requires the topic id.",
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
@@ -501,6 +535,9 @@ export const newsModuleManifest = {
     },
     {
       name: "news.addExclusion",
+      actionLabel: "Exclude news publisher",
+      approvalPresentation: newsExclusionPresentation,
+      approvalContent: "user_authored",
       description:
         "Exclude a news publisher domain from the actor's briefing (also hides its subdomains). Excluded articles are pruned from the current briefing immediately.",
       permissionId: "news.prefs",
@@ -524,6 +561,11 @@ export const newsModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "news.publisher_removal_approval",
+      description:
+        "Removing a publisher asks first and discloses deletion of any saved publisher credentials and removal of its articles, including subdomains, from saved briefings."
+    },
     {
       id: "news.chat_app_actions",
       description:

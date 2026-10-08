@@ -69,9 +69,17 @@ export async function admitToolOutcome(
 export async function admitResolvedCard(
   provenance: ConversationProvenancePort | undefined,
   found: ExecutableTool,
-  ctx: ToolContext
+  ctx: ToolContext,
+  displayedOutside?: boolean
 ): Promise<boolean> {
-  if (!found.resolution?.externalContent) return true;
+  const disclosureIsOutside =
+    displayedOutside ??
+    (found.resolution
+      ? (found.resolution.disclosureExternalContent ?? found.resolution.externalContent)
+      : found.tool.approvalPresentation
+        ? found.tool.approvalContent !== "user_authored"
+        : Boolean(found.tool.preview) && toolHasOutsideContent(found.tool));
+  if (!disclosureIsOutside) return true;
   try {
     await recordContextAdmission(
       provenance,

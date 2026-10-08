@@ -21,7 +21,9 @@ test("embedded assistant owns chat presence and restores the drawer on unmount (
     text: "Approve profile",
     actionRequestId: "action-1",
     toolName: "demo-module.profile.approve",
-    summary: "Approve profile"
+    summary: "Approve profile",
+    outcomeTitle: "Approve profile",
+    details: { presentation: "human", target: "Your profile", fields: [] }
   });
   // The shell owns exactly ONE stream today (the drawer), so every embedded surface renders the
   // same records via recordsForSurface. The second shell-owned stream that used to be keyed to a

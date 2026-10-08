@@ -57,6 +57,13 @@ describe("gateway content admission", () => {
     async (entry) => {
       const tool = admissionTool("example.read", {
         risk: entry === "confirmed" ? "write" : "read",
+        ...(entry === "confirmed"
+          ? {
+              actionLabel: "Read example",
+              approvalContent: "user_authored" as const,
+              approvalPresentation: async () => ({ target: "Example", fields: [] })
+            }
+          : {}),
         content: "outside",
         execute: async () => payload
       });
@@ -179,7 +186,12 @@ describe("content determines later app-action policy", () => {
 
   it("a dedicated write tool follows the same admitted-content policy", async () => {
     const read = admissionTool("example.read", { content: "outside" });
-    const write = admissionTool("settings.themeMode.set", { risk: "write" });
+    const write = admissionTool("settings.themeMode.set", {
+      risk: "write",
+      actionLabel: "Change appearance",
+      approvalContent: "user_authored",
+      approvalPresentation: async () => ({ target: "Appearance", fields: [] })
+    });
     const h = admissionFixture([read, write]);
     await h.gateway.callTool(h.token, read.name, {});
     await rejectAdmissionCard(h, h.gateway.callTool(h.token, write.name, {}));

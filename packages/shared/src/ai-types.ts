@@ -311,6 +311,10 @@ export interface AiAssistantToolInvocationDto {
 }
 
 export interface AiAssistantActionPresentation {
+  readonly nativePermission?: true;
+  /** Host-marked connected tool; complete arguments are shown verbatim. */
+  readonly externalTool?: true;
+  readonly exactArguments?: string;
   readonly summary: string;
   readonly outcomeTitle?: string;
   readonly outsideContentNotice: boolean;

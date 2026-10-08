@@ -12,6 +12,7 @@ import { PreferencesRepository } from "@moss/structured-state";
 import type { Kysely } from "kysely";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
+import { seedCalendarApprovalEvent } from "./fixtures/calendar-approval.js";
 
 // ─── Section A: CalendarRepository.deleteById ────────────────────────────────
 
@@ -364,6 +365,11 @@ describe("Section C — manifest structure + gateway routing", () => {
   }
 
   it("callTool always emits an action_request card (never auto-runs)", async () => {
+    const event = await seedCalendarApprovalEvent(
+      dataContext,
+      ids.userA,
+      "google-evt-confirm-delete"
+    );
     const fakeDelete = {
       async createEvent() {
         throw new Error("should not be called");
@@ -387,7 +393,7 @@ describe("Section C — manifest structure + gateway routing", () => {
     });
 
     const callP = gateway.callTool(token, "calendar.deleteEvent", {
-      eventId: "some-uuid",
+      eventId: event.id,
       displayTitle: "Board sync"
     });
 
@@ -471,6 +477,11 @@ describe("Section C — manifest structure + gateway routing", () => {
   });
 
   it("gateway falls to confirm even if a trusted_auto tier is stored and executionPolicy=auto is set on a hypothetical tool variant", async () => {
+    const event = await seedCalendarApprovalEvent(
+      dataContext,
+      ids.userA,
+      "google-evt-confirm-auto-variant"
+    );
     const autoVariant: MossModuleManifest = {
       ...calendarModuleManifest,
       assistantActionFamilies: [
@@ -514,7 +525,7 @@ describe("Section C — manifest structure + gateway routing", () => {
       allowedToolNames: null
     });
 
-    const callP = gateway.callTool(token, "calendar.deleteEvent", { eventId: "u" });
+    const callP = gateway.callTool(token, "calendar.deleteEvent", { eventId: event.id });
     const card = await waitForCard(emitted, "calendar.deleteEvent");
     // The tool did NOT auto-run (no execute call before confirm card)
     expect(executed).toBe(false);

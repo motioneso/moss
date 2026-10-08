@@ -6,7 +6,7 @@ import type { ActionRequestPreview, MossModuleManifest } from "@moss/module-sdk"
 /**
  * T7 — gateway threads a tool's async `preview` hook into the `action_request` emit ONLY.
  * The persisted action row's `inputSummary` must stay key-names-only (metadata-only
- * persistence); a preview that throws must NOT block the card.
+ * persistence); an unavailable preview must never create a blind fresh card.
  */
 describe("gateway action_request preview threading", () => {
   const preview: ActionRequestPreview = {
@@ -35,6 +35,7 @@ describe("gateway action_request preview threading", () => {
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [module],
+      provenance: { isTainted: async () => true, recordAdmission: async () => undefined },
       repository: {
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
           capture.created.push(input);
@@ -50,12 +51,18 @@ describe("gateway action_request preview threading", () => {
       notifier: { emit: (_chatSessionId, record) => capture.emitted.push(record) },
       confirmTimeoutMs: 1000
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      threadId: "thread",
+      allowedToolNames: null
+    });
     return { gateway, token, confirmations };
   };
 
   const draftTool = (previewHook: unknown) => ({
     name: "email.draftReply",
+    actionLabel: "Draft email reply",
     description: "Draft a reply.",
     permissionId: "email.write",
     risk: "destructive" as const,
@@ -99,7 +106,7 @@ describe("gateway action_request preview threading", () => {
     await pending;
   });
 
-  it("still emits the card (without preview) when the preview hook throws", async () => {
+  it("refuses before a pending row when a preview hook fails", async () => {
     const capture = { emitted: [] as unknown[], created: [] as unknown[] };
     const module = moduleWith(
       draftTool(async () => {
@@ -107,50 +114,35 @@ describe("gateway action_request preview threading", () => {
       }) as never
     );
     const { gateway, token, confirmations } = buildGateway(module, capture);
-
-    const pending = gateway.callTool(token, "email.draftReply", {
+    const result = await gateway.callTool(token, "email.draftReply", {
       cacheMessageId: "m1",
       body: "hello"
     });
-
-    await vi.waitFor(() =>
-      expect(capture.emitted.some((r) => (r as { kind: string }).kind === "action_request")).toBe(
-        true
-      )
-    );
-    const request = capture.emitted.find(
-      (r) => (r as { kind: string }).kind === "action_request"
-    ) as { preview?: ActionRequestPreview; summary?: string };
-    expect(request.preview).toBeUndefined();
-    expect(typeof request.summary).toBe("string");
-    // The thrown message (which could carry sensitive detail) never rides the emit.
-    expect(JSON.stringify(request)).not.toContain("SECRET");
-
-    confirmations.resolve("action-1", "confirmed");
-    await pending;
+    expect(result).toEqual({
+      ok: false,
+      error: "The app could not prepare this action. Try again or use its app screen."
+    });
+    expect(JSON.stringify(result)).not.toContain("SECRET");
+    expect(capture.emitted).toEqual([]);
+    expect(capture.created).toEqual([]);
+    expect(confirmations.isAwaiting("action-1")).toBe(false);
   });
 
-  it("omits preview entirely for a tool that declares no preview hook", async () => {
+  it("does not create a blind fresh card when no presentation exists", async () => {
     const capture = { emitted: [] as unknown[], created: [] as unknown[] };
     const module = moduleWith(draftTool(undefined) as never);
     const { gateway, token, confirmations } = buildGateway(module, capture);
-
-    const pending = gateway.callTool(token, "email.draftReply", {
+    const result = await gateway.callTool(token, "email.draftReply", {
       cacheMessageId: "m1",
       body: "hello"
     });
-
-    await vi.waitFor(() =>
-      expect(capture.emitted.some((r) => (r as { kind: string }).kind === "action_request")).toBe(
-        true
-      )
-    );
-    const request = capture.emitted.find(
-      (r) => (r as { kind: string }).kind === "action_request"
-    ) as { preview?: ActionRequestPreview };
-    expect(request.preview).toBeUndefined();
-
-    confirmations.resolve("action-1", "confirmed");
-    await pending;
+    expect(result).toMatchObject({
+      ok: false,
+      denied: true,
+      reason: expect.stringContaining("approval_unavailable")
+    });
+    expect(capture.emitted).toEqual([]);
+    expect(capture.created).toEqual([]);
+    expect(confirmations.isAwaiting("action-1")).toBe(false);
   });
 });

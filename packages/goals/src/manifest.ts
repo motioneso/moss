@@ -1,3 +1,9 @@
+import {
+  goalCreatePresentation,
+  goalCreateRoutePresentation,
+  goalUpdatePresentation,
+  goalEvidencePresentation
+} from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
@@ -31,7 +37,7 @@ export const goalsModuleManifest: MossModuleManifest = {
     {
       id: "goals.chat_app_actions",
       description:
-        "App actions read and create goals. Edits and evidence additions stay unavailable because they enqueue memory synchronization."
+        "App actions read and create goals. Edit and evidence routes remain blocked for memory synchronization. Dedicated goal tools resolve goals by title; foreign-source evidence references need a supported source resolver."
     }
   ],
   routes: [
@@ -48,6 +54,7 @@ export const goalsModuleManifest: MossModuleManifest = {
         access: "write",
         content: "user_authored",
         title: "Create goal",
+        presentation: goalCreateRoutePresentation,
         coveredBy: "goals.create"
       },
       permissionId: "goals.create"
@@ -110,6 +117,8 @@ export const goalsModuleManifest: MossModuleManifest = {
     },
     {
       name: "goals.create",
+      actionLabel: "Create goal",
+      approvalPresentation: goalCreatePresentation,
       description: "Create a new long-running goal.",
       permissionId: "goals.create",
       risk: "write",
@@ -136,6 +145,8 @@ export const goalsModuleManifest: MossModuleManifest = {
     },
     {
       name: "goals.update",
+      actionLabel: "Update goal",
+      approvalPresentation: goalUpdatePresentation,
       description: "Update an existing long-running goal.",
       permissionId: "goals.update",
       risk: "write",
@@ -166,6 +177,8 @@ export const goalsModuleManifest: MossModuleManifest = {
     },
     {
       name: "goals.addEvidence",
+      actionLabel: "Add goal evidence",
+      approvalPresentation: goalEvidencePresentation,
       description: "Add evidence (progress, context, etc) to a goal.",
       permissionId: "goals.update",
       risk: "write",

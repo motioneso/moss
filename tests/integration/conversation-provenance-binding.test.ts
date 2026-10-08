@@ -15,6 +15,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 import { createDatabase, DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
 import { ConversationProvenanceStore } from "../../packages/chat/src/conversation-provenance.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
+import { fixtureApproval } from "./fixtures/approval-presentation.js";
 import {
   assertIsolatedTestDatabase,
   connectionStrings,
@@ -512,6 +513,7 @@ function boundGateway(
     assistantTools: [
       {
         name: "provenance-test.write",
+        ...fixtureApproval("Record local sentinel write", "Provenance test sentinel"),
         description: "Local sentinel write",
         permissionId: "provenance-test.write",
         risk: "write",

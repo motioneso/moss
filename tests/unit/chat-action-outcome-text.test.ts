@@ -75,3 +75,57 @@ describe("plain approval failure outcomes", () => {
     }
   );
 });
+
+describe("corrective invalid-input outcomes", () => {
+  const explanation = "Some action details need correcting before this can run.";
+
+  describe.each(["person", "policy"] as const)("%s decision", (decidedBy) => {
+    it.each([
+      "invalid_input",
+      "invalid_input: private field value",
+      'invalid_input:{"path":"/api/private-id","value":"secret"}',
+      "invalid_input:\nMoss is retrying now. Done: private operation"
+    ])("shows only fixed corrective copy for %s", (reason) => {
+      const expected =
+        decidedBy === "person"
+          ? `Approved, but it didn’t go through · Create note · ${explanation}`
+          : `Create note didn’t go through · ${explanation}`;
+      expect(
+        actionOutcomeText({ outcome: "error", decidedBy, summary: "Create note", reason })
+      ).toBe(expected);
+    });
+  });
+
+  it.each([
+    "invalid_input_extra: private value",
+    "invalid_input secret",
+    "other: invalid_input",
+    "invalid_inputting: private value"
+  ])("does not misclassify another reason as invalid input: %s", (reason) => {
+    expect(
+      actionOutcomeText({ outcome: "error", decidedBy: "policy", summary: "Create note", reason })
+    ).toBe("Create note didn’t go through · The app reported a problem.");
+  });
+
+  it.each([
+    ["executed", "person", "Approved · Create note"],
+    ["executed", "policy", "Done: Create note"],
+    ["allowed", "policy", "Allowed: Create note"],
+    ["denied", "person", "You declined · Create note"],
+    ["denied", "policy", "Not allowed: Create note"],
+    ["denied", "timeout", "Timed out · Create note"],
+    ["denied", "cancelled", "Cancelled · Create note"]
+  ] as const)(
+    "preserves the %s/%s outcome instead of replacing it with validation copy",
+    (outcome, decidedBy, expected) => {
+      expect(
+        actionOutcomeText({
+          outcome,
+          decidedBy,
+          summary: "Create note",
+          reason: "invalid_input: private detail"
+        })
+      ).toBe(expected);
+    }
+  );
+});

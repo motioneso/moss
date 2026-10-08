@@ -177,11 +177,18 @@ export interface ActionRequestPreview {
 
 /** Live, server-derived app action preview; never interpreted as markup. */
 export interface ActionRequestDetails {
+  readonly presentation?: "human";
+  /** Host-owned semantic identity; never derived from title text. */
+  readonly approvalKind?: "memory_delete" | "note_delete";
   readonly target: string | null;
   readonly fields: readonly { readonly label: string; readonly value: string }[];
 }
 
 export interface TranscriptRecord {
+  readonly nativePermission?: true;
+  /** Host-marked connected tool; complete arguments are shown verbatim. */
+  readonly externalTool?: true;
+  readonly exactArguments?: string;
   readonly approvalAvailable?: boolean;
   readonly meetingContext?: MeetingChatCoverage;
   readonly kind: ChatRecordKind;

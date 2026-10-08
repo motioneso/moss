@@ -176,6 +176,12 @@ export class MeetingTranscriptRepository {
     }
   }
 
+  /** Read-only, owner-scoped identity snapshot for exhaustive action disclosure. */
+  async approvalSnapshot(scopedDb: DataContextDb, meetingId: string) {
+    const state = await this.load(scopedDb, meetingId.toLowerCase(), false);
+    return state ? { ledger: state.ledger, receipt: state.receipt } : null;
+  }
+
   async snapshot(
     scopedDb: DataContextDb,
     meetingId: string,

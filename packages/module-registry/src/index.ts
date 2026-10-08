@@ -1,3 +1,4 @@
+import { createApprovalSourceReferences } from "./approval-source-references.js";
 import { createMeetingOutputRuntime } from "./meeting-output-runtime.js";
 import {
   createMeetingNoteIndexPort,
@@ -100,6 +101,7 @@ import {
   MemoryRepository,
   type MemoryRetriever,
   memoryModuleManifest,
+  configureMemoryApprovalReferences,
   memorySqlMigrationDirectory,
   installEmbeddingActivityRecorder,
   registerMemoryDashboardRoutes,
@@ -331,6 +333,7 @@ import {
 } from "@moss/tasks";
 import {
   goalsModuleManifest,
+  configureGoalApprovalReferences,
   goalsModuleSqlMigrationDirectory,
   registerGoalsRoutes,
   registerGoalsMemorySyncWorker,
@@ -441,6 +444,7 @@ import {
 } from "@moss/scratchpad";
 import {
   FeedbackTargetVerifierRegistry,
+  configureUsefulnessFeedbackPresentation,
   buildStoryTargetContext,
   createStoryFeedbackTargetVerifier,
   createStoryRelevancePolicy,
@@ -1957,12 +1961,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         options: { retryLimit: 3, retryDelay: 60, retryBackoff: true }
       }
     ],
-    registerRoutes: (server, deps) =>
-      registerGoalsRoutes(server, {
+    registerRoutes: (server, deps) => {
+      configureGoalApprovalReferences(
+        createApprovalSourceReferences({ manifests: deps.listModuleManifests })
+      );
+      return registerGoalsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         boss: deps.boss
-      }),
+      });
+    },
     registerWorkers: async (boss, deps) => {
       const repository = new GoalsRepository();
       const memoryGraphRepo = new MemoryGraphRepository();
@@ -2432,6 +2440,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [memorySqlMigrationDirectory],
     queueDefinitions: [...VAULT_INGEST_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
+      configureMemoryApprovalReferences(
+        createApprovalSourceReferences({ manifests: deps.listModuleManifests })
+      );
       registerMemoryGraphRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
@@ -2474,6 +2485,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const storyVerifier = createStoryFeedbackTargetVerifier(usefulnessFeedbackRepository);
       registry.register("news_story", storyVerifier);
       registry.register("sports_story", storyVerifier);
+      configureUsefulnessFeedbackPresentation(registry);
       registerUsefulnessFeedbackRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,

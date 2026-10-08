@@ -251,6 +251,7 @@ function expectRenderedTarget(record: ActionRequest, expected: string) {
         actionRequestId: record.actionRequestId,
         toolName: record.toolName,
         summary: record.summary,
+        outcomeTitle: parsed.outcomeTitle,
         details: parsed.details,
         outsideContentNotice: parsed.outsideContentNotice
       })
@@ -262,14 +263,12 @@ function expectRenderedTarget(record: ActionRequest, expected: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#x27;");
-  expect(html).toContain(`<q>${escaped}</q>`);
-  expect(html).toContain(
-    'class="action-request-preview__value action-request-preview__value--multiline"'
-  );
+  expect(html).toContain(`<p class="action-request-target">${escaped}</p>`);
+  expect(html).toContain('class="action-request-target"');
   expect(html).not.toContain(FACT_ID);
   expect(html).not.toContain("memory-thread");
   expect(html).not.toContain("<script>");
-  expect(html).toContain("outside or unverified context");
+  expect(html).toContain("Moss read something from outside your account before asking this.");
   expect(html).toContain("Approve");
   expect(html).toContain("Reject");
   client.clear();
@@ -290,9 +289,9 @@ describe("legacy memory.forget approval binding", () => {
       actionRequestId: "memory-action-1",
       originThreadId: "memory-thread",
       toolName: "memory.forget",
-      summary: "Forget saved memory",
-      outcomeTitle: "Forget saved memory",
-      details: { target: label, fields: [] },
+      summary: "Delete memory",
+      outcomeTitle: "Delete memory",
+      details: { presentation: "human", approvalKind: "memory_delete", target: label, fields: [] },
       outsideContentNotice: true
     });
     expectRenderedTarget(request, label);
@@ -357,7 +356,12 @@ describe("legacy memory.forget approval binding", () => {
     const h = build({ label });
     const pending = h.gateway.callTool(h.token, "memory.forget", { factId: FACT_ID });
     const request = await card(h);
-    expect(request.details).toEqual({ target: expected, fields: [] });
+    expect(request.details).toEqual({
+      presentation: "human",
+      approvalKind: "memory_delete",
+      target: expected,
+      fields: []
+    });
     expectRenderedTarget(request, expected);
     await resolve(h, "rejected");
     await pending;
@@ -669,7 +673,12 @@ describe("generic app memory deletion shares the exact-version boundary", () => 
         path: `/api/memory/graph/facts/${FACT_ID}`
       });
       const request = await card(h);
-      expect(request.details).toEqual({ target: DEFAULT_LABEL, fields: [] });
+      expect(request.details).toEqual({
+        presentation: "human",
+        approvalKind: "memory_delete",
+        target: DEFAULT_LABEL,
+        fields: []
+      });
       if (changed) h.state.version = "new-version-with-identical-label";
       await resolve(h, "confirmed");
       const result = await pending;

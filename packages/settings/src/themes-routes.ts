@@ -190,7 +190,7 @@ export function registerThemeRoutes(
   );
 }
 
-function normalizeCustomThemes(value: unknown): readonly CustomThemeDto[] {
+export function normalizeCustomThemes(value: unknown): readonly CustomThemeDto[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
     if (!item || typeof item !== "object") return [];

@@ -141,8 +141,11 @@ async function sendMessage(
       timeout: 60_000
     });
     await expect(
-      card.getByText("This chat has outside or unverified context, so changes need your approval.")
+      card.getByText("Moss read something from outside your account before asking this.")
     ).toBeVisible();
+    const disclosedArguments = await card.locator(".action-request-arguments").textContent();
+    expect(disclosedArguments).not.toBeNull();
+    expect(JSON.parse(disclosedArguments!)).toEqual({ name: "Kitchen light", on: true });
     expect(await fixtureLightEvidence(approveFixtureLightInProject)).toEqual({
       calls: 0,
       totalCalls: 0,

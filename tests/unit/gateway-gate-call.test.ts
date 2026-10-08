@@ -44,6 +44,12 @@ const build = (initial: Setup) => {
   });
   const tool = {
     name: "mock.tool",
+    actionLabel: "Apply fixture action",
+    approvalContent: "user_authored",
+    approvalPresentation: async (_db: unknown, input: Record<string, unknown>) => ({
+      target: "Fixture target",
+      fields: [{ label: "Name", value: String(input.name) }]
+    }),
     description: "Mock tool",
     permissionId: "mock.tool",
     ...(setup.familyId === undefined ? { actionFamilyId: "fam" } : {}),
