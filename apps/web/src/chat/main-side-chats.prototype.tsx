@@ -12,12 +12,12 @@ import {
   Bell,
   CalendarDays,
   CheckCheck,
-  ChevronDown,
   ChevronsUpDown,
   FileText,
   House,
   Mail,
   Maximize2,
+  Menu,
   MessageSquare,
   Minimize2,
   Moon,
@@ -53,8 +53,8 @@ type Topic = { id: string; title: string; note: string };
 const variants: { key: Variant; name: string; description: string }[] = [
   {
     key: "A",
-    name: "Conversation sidebar",
-    description: "Main chat and topics are always in view."
+    name: "Collapsible conversation menu",
+    description: "Open the topic list over the chat."
   },
   {
     key: "B",
@@ -128,7 +128,7 @@ function Prototype() {
   const [topics, setTopics] = useState(initialTopics);
   const [records, setRecords] = useState(initialRecords);
   const [unread, setUnread] = useState(1);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(initialVariant === "A" && params.get("menu") === "open");
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [topicName, setTopicName] = useState("");
@@ -137,6 +137,7 @@ function Prototype() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [dark, setDark] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const activeTopic = topics.find((topic) => topic.id === active);
   const title = activeTopic?.title ?? "Main chat";
   const currentVariant = variants.find((item) => item.key === variant) ?? variants[0];
@@ -151,6 +152,7 @@ function Prototype() {
     const url = new URL(location.href);
     url.searchParams.set("variant", variant);
     url.searchParams.set("view", view);
+    url.searchParams.set("menu", menuOpen ? "open" : "closed");
     history.replaceState(null, "", url);
     console.info("Design preview", {
       variant,
@@ -158,15 +160,24 @@ function Prototype() {
       conversation: title,
       sideChats: topics.map((t) => t.title)
     });
-  }, [variant, view, title, topics]);
+  }, [variant, view, title, topics, menuOpen]);
   useEffect(() => {
     const element = bodyRef.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [active, records]);
   useEffect(() => {
+    if (menuOpen && variant === "A") {
+      document
+        .getElementById("conversation-menu")
+        ?.querySelector<HTMLButtonElement>("button[aria-pressed]")
+        ?.focus();
+    }
+  }, [menuOpen, variant]);
+  useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setMenuOpen(false);
+        if (menuOpen && variant === "A") menuButtonRef.current?.focus();
         setNewChatOpen(false);
         setSourceOpen(false);
       }
@@ -192,7 +203,9 @@ function Prototype() {
       const target = event.target;
       if (
         !(target instanceof Element) ||
-        target.closest("input, textarea, [contenteditable], [role=tablist], [role=dialog]")
+        target.closest(
+          "input, textarea, [contenteditable], [role=tablist], [role=dialog], #conversation-menu"
+        )
       )
         return;
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -203,7 +216,7 @@ function Prototype() {
     };
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
-  }, [variant]);
+  }, [variant, menuOpen]);
 
   function selectTopic(id: string) {
     setDrafts((previous) => ({ ...previous, [active]: draft }));
@@ -211,6 +224,7 @@ function Prototype() {
     setActive(id);
     setMenuOpen(false);
     setSearch("");
+    menuButtonRef.current?.focus();
     if (id === "main") setUnread(0);
   }
   function startSideChat() {
@@ -258,7 +272,10 @@ function Prototype() {
             <IconButton
               size="sm"
               aria-label="Close conversation list"
-              onClick={() => setMenuOpen(false)}
+              onClick={() => {
+                setMenuOpen(false);
+                menuButtonRef.current?.focus();
+              }}
             >
               <X size={16} />
             </IconButton>
@@ -442,7 +459,25 @@ function Prototype() {
             <section className="proto-chat" aria-label="Moss conversation">
               <header className="proto-chat-head">
                 <div className="proto-chat-brand">
-                  <BrandMark size={23} />
+                  {variant === "A" ? (
+                    <span className="proto-menu-toggle">
+                      <IconButton
+                        ref={menuButtonRef}
+                        aria-label="Conversations"
+                        title="Conversations"
+                        aria-expanded={menuOpen}
+                        aria-controls="conversation-menu"
+                        onClick={() => setMenuOpen(!menuOpen)}
+                      >
+                        <Menu size={21} />
+                        {active !== "main" && unread > 0 && (
+                          <span className="proto-menu-dot" aria-hidden="true" />
+                        )}
+                      </IconButton>
+                    </span>
+                  ) : (
+                    <BrandMark size={23} />
+                  )}
                   <div>
                     <strong>Moss</strong>
                     <span>Your chief of staff</span>
@@ -465,21 +500,6 @@ function Prototype() {
                   </IconButton>
                 </div>
               </header>
-              {variant === "A" && (
-                <div className="proto-mobile-navigation">
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    icon={<MessageSquare size={16} />}
-                    aria-expanded={menuOpen}
-                    onClick={() => setMenuOpen(!menuOpen)}
-                  >
-                    Chats <ChevronDown size={14} />
-                  </Button>
-                  {active !== "main" && mainButton}
-                  <span>{title}</span>
-                </div>
-              )}
               {variant === "B" && (
                 <div className="proto-tabs" role="tablist" aria-label="Conversations">
                   {[{ id: "main", title: "Main chat" }, ...topics].map((topic) => (
@@ -540,12 +560,31 @@ function Prototype() {
                 </div>
               )}
               <div className="proto-chat-layout">
-                {variant === "A" && (
-                  <aside className="proto-conversation-rail">{conversationList()}</aside>
+                {menuOpen && variant === "A" && (
+                  <>
+                    <button
+                      className="proto-conversation-scrim"
+                      aria-label="Close conversation menu"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        menuButtonRef.current?.focus();
+                      }}
+                    />
+                    <aside
+                      id="conversation-menu"
+                      className="proto-conversation-overlay"
+                      aria-label="Conversations"
+                    >
+                      {conversationList()}
+                    </aside>
+                  </>
                 )}
-                {menuOpen && <div className="proto-conversation-popover">{conversationList()}</div>}
+                {menuOpen && variant === "C" && (
+                  <div className="proto-conversation-popover">{conversationList()}</div>
+                )}
                 <div
                   className="proto-conversation"
+                  inert={variant === "A" && menuOpen ? true : undefined}
                   id="conversation-panel"
                   role={variant === "B" ? "tabpanel" : undefined}
                   aria-labelledby={variant === "B" ? `topic-tab-${active}` : undefined}

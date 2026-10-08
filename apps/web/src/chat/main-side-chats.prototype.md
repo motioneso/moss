@@ -6,11 +6,11 @@ This is the first design comparison for [spec #3096](https://github.com/motiones
 
 ## Three options
 
-- **A — Conversation sidebar:** a permanent main-chat entry and visible topic list. On phones the list opens from Chats.
+- **A — Collapsible conversation menu:** a three-line button opens main chat and the topic list over the conversation. It is closed by default on desktop and phones; the menu never widens or pushes the chat.
 - **B — Compact tabs:** main chat and topic tabs across the top; the row scrolls when needed.
 - **C — Conversation picker:** a main-chat shortcut alongside a topic picker, leaving the conversation width open.
 
-Each option has an Alongside Today view, an Expanded view, and a Phone view. The comparison controls are outside the proposed product interface. Left/right arrow keys switch options except when typing, using the topic tabs, or working in a dialog.
+Each option has an Alongside Today view, an Expanded view, and a Phone view. The Alongside Today chat uses the existing 380px docked width. Add `menu=open` to an option A URL to preview its open overlay. The comparison controls are outside the proposed product interface. Left/right arrow keys switch options except when typing, using the topic tabs, or working in a dialog.
 
 ## Run
 
@@ -40,4 +40,4 @@ All interactions remain in browser memory. This demonstrates navigation, not sch
 
 ## Design status
 
-Awaiting the user's choice or combination of these layouts. Existing-thread migration, task Settings, task approval, and notification controls remain separate design work. Keep this prototype on its throwaway branch as a primary source; update the spec with the agreed decisions rather than merging prototype code into the app.
+The user prefers A with a collapsed three-line menu over the chat and the existing default width preserved. That revision is ready to inspect; final acceptance remains pending. Existing-thread migration, task Settings, task approval, and notification controls remain separate design work. Keep this prototype on its throwaway branch as a primary source; update the spec with the agreed decisions rather than merging prototype code into the app.

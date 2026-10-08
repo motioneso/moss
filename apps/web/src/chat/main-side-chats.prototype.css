@@ -93,7 +93,7 @@
 }
 .proto-content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 520px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   flex: 1;
   min-height: 0;
 }
@@ -345,14 +345,6 @@
 .proto-send-arrow {
   transform: rotate(180deg);
 }
-.proto-conversation-rail {
-  width: 160px;
-  flex: none;
-  border-right: 1px solid var(--border);
-  padding: var(--space-5) var(--space-3);
-  background: var(--surface-2);
-  overflow: auto;
-}
 .proto-list-top,
 .proto-topic-heading {
   display: flex;
@@ -376,14 +368,14 @@
   align-items: center;
   gap: var(--space-2);
 }
-.proto-conversation-rail .jds-navindex__name,
+.proto-conversation-overlay .jds-navindex__name,
 .proto-conversation-popover .jds-navindex__name {
   font-size: var(--text-xs);
 }
-.proto-conversation-rail .jds-navindex__item {
+.proto-conversation-overlay .jds-navindex__item {
   padding: var(--space-3) var(--space-1);
 }
-.proto-conversation-rail .jds-navindex__name {
+.proto-conversation-overlay .jds-navindex__name {
   white-space: normal;
 }
 .proto-search {
@@ -413,9 +405,6 @@
   line-height: var(--leading-relaxed);
   color: var(--text-muted);
   margin: var(--space-6) var(--space-1) 0;
-}
-.proto-mobile-navigation {
-  display: none;
 }
 .proto-tabs {
   display: flex;
@@ -585,10 +574,6 @@
 .proto-stage[data-view="expanded"] .proto-app-topbar {
   display: none;
 }
-.proto-stage[data-view="expanded"] .proto-conversation-rail {
-  width: 214px;
-  padding: var(--space-6) var(--space-4);
-}
 .proto-stage[data-view="expanded"] .proto-conversation {
   max-width: 900px;
   margin: auto;
@@ -638,25 +623,6 @@
 .proto-stage[data-view="phone"] .proto-chat-head {
   padding: var(--space-3);
 }
-.proto-stage[data-view="phone"] .proto-conversation-rail {
-  display: none;
-}
-.proto-stage[data-view="phone"][data-variant="A"] .proto-mobile-navigation {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  border-bottom: 1px solid var(--border);
-  padding: var(--space-2) var(--space-3);
-}
-.proto-mobile-navigation > span {
-  margin-left: auto;
-  max-width: 130px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: var(--text-2xs);
-  color: var(--text-muted);
-}
 .proto-stage[data-view="phone"] .proto-conversation-title {
   padding: var(--space-3) var(--space-4);
 }
@@ -674,7 +640,7 @@
     --nav-w: 168px;
   }
   .proto-content {
-    grid-template-columns: minmax(0, 1fr) 480px;
+    grid-template-columns: minmax(0, 1fr) 380px;
   }
   .proto-today-body .jds-section-head__meta {
     display: none;
@@ -700,11 +666,7 @@
     justify-content: center;
   }
   .proto-content {
-    grid-template-columns: minmax(0, 1fr) 440px;
-  }
-  .proto-conversation-rail {
-    width: 144px;
-    padding-inline: var(--space-2);
+    grid-template-columns: minmax(0, 1fr) 380px;
   }
   .proto-today .jds-masthead {
     padding: var(--space-4);
@@ -777,16 +739,6 @@
   .proto-chat-head {
     padding: var(--space-3);
   }
-  .proto-stage .proto-conversation-rail {
-    display: none;
-  }
-  .proto-stage[data-variant="A"] .proto-mobile-navigation {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    border-bottom: 1px solid var(--border);
-    padding: var(--space-2) var(--space-3);
-  }
   .proto-conversation-title {
     padding: var(--space-3) var(--space-4);
   }
@@ -808,4 +760,40 @@
     padding: var(--space-3);
     bottom: var(--space-3);
   }
+}
+
+/* The topic menu overlays the existing 380px dock; it never consumes a grid column. */
+.proto-menu-toggle {
+  position: relative;
+  display: flex;
+}
+.proto-menu-dot {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+.proto-conversation-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border: 0;
+  padding: 0;
+  background: var(--scrim);
+  cursor: default;
+}
+.proto-conversation-overlay {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 5;
+  width: 280px;
+  max-width: calc(100% - 48px);
+  padding: var(--space-5) var(--space-4);
+  border-right: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-lg);
+  overflow: auto;
 }
