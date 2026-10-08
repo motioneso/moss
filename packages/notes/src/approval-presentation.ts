@@ -25,9 +25,9 @@ function notePresentation(
     return {
       ...(allowNew ? { title: changes.overwrite === true ? "Overwrite note" : "Create note" } : {}),
       target: name,
-      // Each component stays exact, even if a folder name itself contains a breadcrumb glyph.
+      // A real relative folder path keeps names recognizable without exposing the host root.
       fields: [
-        ...segments.map((value, index) => ({ label: `Folder ${index + 1}`, value })),
+        ...(segments.length ? [{ label: "Folder", value: segments.join("/") }] : []),
         ...fields
       ],
       version: target.version

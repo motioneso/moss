@@ -33,6 +33,29 @@ describe("app-map integrity and truthfulness", () => {
     );
   });
 
+  it("links approval setup failures to Settings Connections", () => {
+    const feature = getBuiltInModuleManifests()
+      .find((module) => module.id === "chat")
+      ?.features?.find((entry) => entry.id === "chat.pending_action_disclosure");
+    const setup = feature?.errors?.find((entry) => entry.code === "approval_preparation_failed");
+    expect(setup).toMatchObject({
+      class: "prerequisite",
+      remediationRef: "chat.configure_action_source"
+    });
+    expect(
+      feature?.remediations?.find((entry) => entry.id === setup?.remediationRef)
+    ).toMatchObject({ path: "/settings?section=sources" });
+    const notes = getBuiltInModuleManifests()
+      .find((module) => module.id === "notes")
+      ?.features?.find((entry) => entry.id === "notes.approval_prerequisites");
+    expect(notes?.errors).toContainEqual(
+      expect.objectContaining({ class: "prerequisite", remediationRef: "notes.configure_folder" })
+    );
+    expect(notes?.remediations).toContainEqual(
+      expect.objectContaining({ id: "notes.configure_folder", path: "/settings?section=sources" })
+    );
+  });
+
   it("describes exact server disclosure, raw permission exceptions and quiet outcomes", () => {
     const provider = CORE_APP_SETTINGS.find((screen) => screen.id === "assistant");
     for (const text of [

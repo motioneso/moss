@@ -129,9 +129,10 @@ export const chatModuleManifest = {
         },
         {
           code: "approval_preparation_failed",
-          class: "transient",
+          class: "prerequisite",
+          remediationRef: "chat.configure_action_source",
           description:
-            "The app could not prepare the action. Safe prerequisite reasons reach Moss; unexpected dependency details stay private. Retry or use the app screen."
+            "Required setup is missing before this action can be prepared. Follow its safe prerequisite reason; notes need a linked folder in Settings, Connections."
         },
         {
           code: "approval_unavailable",
@@ -142,6 +143,12 @@ export const chatModuleManifest = {
         }
       ],
       remediations: [
+        {
+          id: "chat.configure_action_source",
+          description:
+            "Review the source or connection setup in Settings, Connections. Choose a notes folder if none is linked.",
+          path: "/settings?section=sources"
+        },
         {
           id: "chat.request_fresh_action",
           description: "Reject the request and ask again, or make the change in its app screen.",

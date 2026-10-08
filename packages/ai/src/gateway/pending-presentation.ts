@@ -273,7 +273,10 @@ export async function prepareApprovalCard(
     );
   };
   const presentation: PendingPresentation = await readPresentation().catch(() => ({
-    preparationError: "The app could not prepare this action. Try again or use its app screen."
+    preparationError:
+      found.tool.isExternal === true
+        ? "The connected tool could not prepare this request. Try again or check its connection."
+        : "The app could not prepare this action. Try again or use its app screen."
   }));
   if (presentation.title !== undefined) outcomeTitle = presentation.title;
   if (presentation.preparationError)

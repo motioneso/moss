@@ -39,8 +39,7 @@ describe("server-owned note approval presentations", () => {
       title: "Overwrite note",
       target: "Next week.md",
       fields: [
-        { label: "Folder 1", value: "Work" },
-        { label: "Folder 2", value: "Plans › personal" },
+        { label: "Folder", value: "Work/Plans › personal" },
         { label: "Content", value: content },
         { label: "Replace existing content", value: "Yes" }
       ],
@@ -53,6 +52,23 @@ describe("server-owned note approval presentations", () => {
       true
     );
   });
+
+  it.each(["proof", "Folder 1", "Work/Plans › personal"])(
+    "shows the actual server-owned folder path %s, not an ordinal placeholder",
+    async (folder) => {
+      resolveTarget.mockResolvedValue({ relative: `${folder}/note.md`, version: "server-version" });
+      const result = await notesCreatePresentation(
+        db,
+        { path: "/private/server/root/note.md", content: "Exact content" },
+        ctx
+      );
+      expect(result?.fields).toEqual([
+        { label: "Folder", value: folder },
+        { label: "Content", value: "Exact content" }
+      ]);
+      expect(JSON.stringify(result)).not.toContain("/private/server/root");
+    }
+  );
 
   it.each([undefined, false])(
     "keeps the create heading when overwrite is %s",

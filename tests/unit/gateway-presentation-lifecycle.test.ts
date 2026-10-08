@@ -196,3 +196,31 @@ it("returns dedicated typed state validation before any pending row or execution
     { kind: "action_result", outcome: "error", summary: "Save plan", reason: "invalid_input" }
   ]);
 });
+
+it.each([
+  [true, "The connected tool could not prepare this request. Try again or check its connection."],
+  [false, "The app could not prepare this action. Try again or use its app screen."]
+] as const)(
+  "keeps preparation failure guidance appropriate to external=%s",
+  async (isExternal, error) => {
+    const { prepareApprovalCard } =
+      await import("../../packages/ai/src/gateway/pending-presentation.js");
+    const lookup = vi.fn(async () => {
+      throw new Error("PRIVATE_CONNECTION_DETAIL");
+    });
+    const scope = vi.fn();
+    const result = await prepareApprovalCard(
+      { runner: { withDataContext: scope } as never, resolveActiveModules: lookup },
+      {
+        dto: { moduleId: "example", name: "example.write" },
+        tool: { ...tool(), name: "example.write", isExternal }
+      } as never,
+      { value: "PRIVATE_ARGUMENT" },
+      { actorUserId: "owner", requestId: "request", chatSessionId: "session" },
+      {}
+    );
+    expect(result).toEqual({ failure: { ok: false, error } });
+    expect(scope).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("PRIVATE");
+  }
+);

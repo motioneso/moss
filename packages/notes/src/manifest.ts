@@ -23,6 +23,12 @@ import {
 export const NOTES_MODULE_ID = "notes";
 export const NOTES_SYNC_QUEUE = "notes.sync";
 
+const configureFolderRemediation = {
+  id: "notes.configure_folder",
+  description: "Choose a notes folder under Connections in Settings.",
+  path: "/settings?section=sources"
+};
+
 export const notesModuleSqlMigrationDirectory = fileURLToPath(new URL("../sql", import.meta.url));
 
 export const notesModuleManifest = {
@@ -180,6 +186,8 @@ export const notesModuleManifest = {
       inputSchema: notesDeleteInputSchema,
       outputSchema: notesWriteResultSchema,
       execute: notesDeleteExecute,
+      // Permanent deletion must ask even when note changes or Auto-approve are trusted.
+      requiresConfirmation: () => true,
       summarize: (input) => `Delete note ${String(input.path)}.`
     }
   ],
@@ -197,13 +205,7 @@ export const notesModuleManifest = {
           description: "No notes folder is selected in Connections."
         }
       ],
-      remediations: [
-        {
-          id: "notes.configure_folder",
-          description: "Choose a notes folder under Connections in Settings.",
-          path: "/settings?section=sources"
-        }
-      ]
+      remediations: [configureFolderRemediation]
     },
     {
       id: "notes.semantic_search",
@@ -214,13 +216,28 @@ export const notesModuleManifest = {
     {
       id: "notes.approval_prerequisites",
       description:
-        "Before approval, an unlinked or unavailable notes folder returns its safe configuration reason to Moss, without exposing filesystem paths. Link or fix the folder in Settings, then Connections."
+        "Before approval, an unlinked or unavailable notes folder returns its safe configuration reason to Moss, without exposing filesystem paths. Link or fix the folder in Settings, then Connections.",
+      errors: [
+        {
+          code: "notes.approval_folder_unavailable",
+          class: "prerequisite",
+          remediationRef: "notes.configure_folder",
+          description:
+            "A linked notes folder is missing, unavailable, or outside the allowed notes roots."
+        }
+      ],
+      remediations: [configureFolderRemediation]
+    },
+    {
+      id: "notes.approval_folder_path",
+      description:
+        "Note approval cards show the exact folder path within your linked notes source under Folder. Absolute server paths stay private."
     },
     {
       id: "notes.assistant_authoring",
       description:
-        "Ask the assistant to create, edit, or delete Markdown notes in your linked notes folder. " +
-        "Overwrite is named in approval. Delete approval uses red Approve and states permanent deletion with no trash or undo."
+        "Create, edit, or delete Markdown notes in your linked folder. Overwrite is named in approval. " +
+        "Deletion always asks, even with trusted note changes or Auto-approve, with red Approve and a warning that there is no trash or undo."
     }
   ],
   proactiveMonitor: notesMonitorProvider
