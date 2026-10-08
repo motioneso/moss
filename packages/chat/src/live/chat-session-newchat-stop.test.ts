@@ -30,6 +30,7 @@ const noopPersonaFs = {
 class FlipFlopPersistence implements ChatPersistencePort {
   private thread = { id: "thread-private", incognito: true };
   private noThread = false;
+  mainStateReads = 0;
   readonly recordedTurns: string[] = [];
   readonly recordedHandled: string[] = [];
 
@@ -80,6 +81,11 @@ class FlipFlopPersistence implements ChatPersistencePort {
   async getCurrentThreadState() {
     if (this.noThread) return undefined;
     return { ...this.thread };
+  }
+
+  async getMainThreadState() {
+    this.mainStateReads += 1;
+    return { id: "thread-main", incognito: false };
   }
 
   async getThreadContext() {
@@ -247,6 +253,18 @@ function baseDeps(
 }
 
 describe("#2934 new chat must stop a running turn", () => {
+  it("uses the durable Main chat for a cold drawer launch", async () => {
+    const persistence = new FlipFlopPersistence();
+    persistence.setNormal();
+    const engine = new BlockingEngine();
+    const manager = new ChatSessionManager(baseDeps(persistence, engine));
+
+    const session = await manager.ensureSession("user-1", "Ben");
+
+    expect(session.threadId).toBe("thread-main");
+    expect(persistence.mainStateReads).toBe(2);
+  });
+
   it("T1: a thread flip inside the gate-mode wait is refused, never classified, submitted, or saved", async () => {
     const persistence = new FlipFlopPersistence();
     persistence.setPrivate();

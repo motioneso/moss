@@ -940,6 +940,7 @@ export interface ChatThreadsTable {
   title: string;
   surface: string;
   incognito: boolean;
+  is_main: boolean;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
   last_active_at: TimestampColumn;

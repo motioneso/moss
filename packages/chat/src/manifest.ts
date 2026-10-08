@@ -66,7 +66,8 @@ export const chatModuleManifest = {
       "sql/0277_chat_surface_immutable.sql",
       "sql/0291_chat_conversation_provenance.sql",
       "sql/0293_chat_automatic_action_reservations.sql",
-      "sql/0297_chat_action_history_permissions.sql"
+      "sql/0297_chat_action_history_permissions.sql",
+      "sql/0299_main_chat.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -352,8 +353,9 @@ export const chatModuleManifest = {
     {
       id: "chat.thread_history",
       description:
-        "Keep previous conversations so you can go back to them: pick an older thread from the " +
-        "drawer history, start a new one anywhere, and see threads ordered by recent activity."
+        "Keep one Main chat when you reopen Moss while preserving older conversations as side " +
+        "chats: pick an older thread from drawer history, start a new one anywhere, and see " +
+        "threads ordered by recent activity."
     }
   ],
   routes: [

@@ -524,6 +524,15 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     });
   }
 
+  async getMainThreadState(
+    actorUserId: string
+  ): Promise<{ readonly id: string; readonly incognito: boolean } | undefined> {
+    return this.run(actorUserId, "get-main-thread-state", async (scopedDb) => {
+      const thread = await this.chat.getMainThread(scopedDb, actorUserId);
+      return thread ? { id: thread.id, incognito: thread.incognito } : undefined;
+    });
+  }
+
   async getOwnedThreadState(
     actorUserId: string,
     threadId: string

@@ -113,6 +113,10 @@ export interface ChatPersistencePort {
     actorUserId: string,
     surface?: ChatSurface
   ): Promise<{ readonly id: string; readonly incognito: boolean } | undefined>;
+  /** Stable drawer destination for a cold reconnect; explicit resume stays on current-thread state. */
+  getMainThreadState?(
+    actorUserId: string
+  ): Promise<{ readonly id: string; readonly incognito: boolean } | undefined>;
   /** Exact owner-scoped lookup; never substitutes the active conversation. */
   getOwnedThreadState?(
     actorUserId: string,

@@ -55,10 +55,16 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   const sessionKey = surfaceSessionKey(actorUserId, surface);
   const { provider, model, acpModel, providerConfigId, acpAgentId } = providerIdentity;
   assertLiveCliProvider(providerIdentity);
-  let threadState = await deps.persistence.getCurrentThreadState?.(actorUserId, surface);
-  if (!threadState && deps.persistence.getCurrentThreadState) {
+  const getThreadState =
+    surface === DEFAULT_CHAT_SURFACE && !opts?.forceReplay && deps.persistence.getMainThreadState
+      ? () => deps.persistence.getMainThreadState!(actorUserId)
+      : deps.persistence.getCurrentThreadState
+        ? () => deps.persistence.getCurrentThreadState!(actorUserId, surface)
+        : undefined;
+  let threadState = await getThreadState?.();
+  if (!threadState && getThreadState) {
     await deps.persistence.openNewConversation(actorUserId, undefined, surface);
-    threadState = await deps.persistence.getCurrentThreadState(actorUserId, surface);
+    threadState = await getThreadState();
   }
   // Bind once, before persona or tool-menu awaits can overlap a conversation switch.
   const threadId = threadState?.id ?? null;

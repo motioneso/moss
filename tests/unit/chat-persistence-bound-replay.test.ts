@@ -15,6 +15,7 @@ const bound: ChatThread = {
   title: "Bound conversation",
   surface: DEFAULT_CHAT_SURFACE,
   incognito: false,
+  is_main: true,
   created_at: now,
   updated_at: now,
   last_active_at: now,

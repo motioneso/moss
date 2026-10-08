@@ -308,11 +308,7 @@ export class ChatRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /**
-   * Returns the owner's most-recent thread by last_active_at (the conversation the
-   * live drawer should open to), or undefined when the owner has no threads. RLS
-   * scopes rows to the owner; we still bind to the actor's ownership explicitly.
-   */
+  /** Returns the owner's most-recent thread by last_active_at for an explicit side-chat resume. */
   async getCurrentThread(
     scopedDb: DataContextDb,
     actorUserId: string,
@@ -332,6 +328,21 @@ export class ChatRepository {
       .executeTakeFirst();
   }
 
+  /** Returns the owner's durable drawer Main chat, excluding shared and transient threads. */
+  async getMainThread(
+    scopedDb: DataContextDb,
+    actorUserId: string
+  ): Promise<ChatThread | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("owner_user_id", "=", actorUserId)
+      .where("surface", "=", "drawer")
+      .where("is_main", "=", true)
+      .executeTakeFirst();
+  }
+
   /**
    * Creates a new chat thread stamped active now, making it the most-recent (and
    * therefore "current") conversation for the owner.
@@ -340,6 +351,16 @@ export class ChatRepository {
     assertDataContextDb(scopedDb);
     const surface = normalizeChatSurface(input.surface);
     await this.lockThreadSelection(scopedDb, surface);
+
+    const isMain =
+      surface === "drawer" &&
+      !input.incognito &&
+      !(await scopedDb.db
+        .selectFrom("app.chat_threads")
+        .select("id")
+        .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .where("is_main", "=", true)
+        .executeTakeFirst());
 
     const now = new Date();
 
@@ -351,6 +372,7 @@ export class ChatRepository {
         owner_user_id: sql<string>`app.current_actor_user_id()`,
         title: input.title,
         incognito: input.incognito ?? false,
+        is_main: isMain,
         surface,
         created_at: now,
         updated_at: now,
