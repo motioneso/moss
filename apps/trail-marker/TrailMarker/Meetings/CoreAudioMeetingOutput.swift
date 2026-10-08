@@ -55,7 +55,8 @@ final class CoreAudioMeetingOutput: MeetingAudioCapturing {
             io = installed
             try installed.start()
         } catch {
-            receiver.fail(.deviceFailure(operation: "output-start", status: -1))
+            receiver.fail(.deviceFailure(operation: "output-start", status: -1),
+                diagnostic: .init(.outputStart, status: MeetingAudioFailureDiagnostic.status(error)))
             do { try stop() } catch { throw MeetingAudioFailure.cleanupFailed }
             throw error
         }
@@ -203,14 +204,14 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
             guard timestamp.pointee.mFlags.contains([.hostTimeValid, .sampleTimeValid]),
                   timestamp.pointee.mSampleTime.isFinite,
                   timestamp.pointee.mSampleTime.rounded() == timestamp.pointee.mSampleTime else {
-                receiver.fail(.invalidTimestamp); return
+                receiver.fail(.invalidTimestamp, diagnostic: .init(.outputTimestamp)); return
             }
             let list = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
             guard list.count == 1, let buffer = list.first, buffer.mNumberChannels == 1,
                   buffer.mDataByteSize > 0, buffer.mDataByteSize % 4 == 0,
-                  let data = buffer.mData else { receiver.fail(.invalidFormat); return }
+                  let data = buffer.mData else { receiver.fail(.invalidFormat, diagnostic: .init(.outputBufferLayout)); return }
             let frames = Int(buffer.mDataByteSize / 4)
-            guard frames <= MeetingAudioBuffer.maximumCallbackFrames else { receiver.fail(.bufferFull); return }
+            guard frames <= MeetingAudioBuffer.maximumCallbackFrames else { receiver.fail(.bufferFull, diagnostic: .init(.outputFrameCapacity)); return }
             let samples = data.assumingMemoryBound(to: Float.self)
             receiver.receive(sampleTime: timestamp.pointee.mSampleTime,
                              hostTimeNanoseconds: AudioConvertHostTimeToNanos(timestamp.pointee.mHostTime),
@@ -225,14 +226,14 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
         }
         receiver.verifyFormat(expected: format, readCurrent: readFormat)
         try observe(device, selector: kAudioDevicePropertyDeviceIsAlive) {
-            if !Self.deviceIsAlive(device) { receiver.fail(.invalidSelection) }
+            if !Self.deviceIsAlive(device) { receiver.fail(.invalidSelection, diagnostic: .init(.outputDeviceAlive)) }
         }
         guard Self.deviceIsAlive(device) else { throw MeetingAudioFailure.invalidSelection }
         for selector in [kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDefaultSystemOutputDevice] {
             try observeRoute(AudioObjectID(kAudioObjectSystemObject), selector: selector, receiver: receiver)
         }
         try observe(AudioObjectID(kAudioObjectSystemObject), selector: kAudioHardwarePropertyDevices) {
-            if !Self.deviceIsAlive(device) { receiver.fail(.invalidSelection) }
+            if !Self.deviceIsAlive(device) { receiver.fail(.invalidSelection, diagnostic: .init(.outputDeviceList)) }
         }
         if case .selectedProcesses(let objects) = scope {
             for object in objects {
@@ -274,7 +275,9 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
         let original = try Self.routeObjects(object, selector: selector)
         try observe(object, selector: selector) {
             guard let current = try? Self.routeObjects(object, selector: selector), current == original else {
-                receiver.fail(.invalidSelection); return
+                let code: MeetingAudioFailureDiagnostic.Code = selector == kAudioHardwarePropertyDefaultOutputDevice
+                    ? .outputDefaultRoute : (selector == kAudioHardwarePropertyDefaultSystemOutputDevice ? .outputSystemRoute : .outputProcessRoute)
+                receiver.fail(.invalidSelection, diagnostic: .init(code)); return
             }
         }
         // Ignore a coalesced notification caused by our own already-created aggregate, but
@@ -512,7 +515,7 @@ final class MeetingOutputReceiverGate: MeetingAudioReceiving {
         formatVerification.exchange(1)
         defer { formatVerification.exchange(0) }
         guard let current = try? readCurrent(), MeetingMicrophoneCapture.matches(current, expected) else {
-            fail(.invalidFormat); return
+            fail(.invalidFormat, diagnostic: .init(.outputFormatVerification)); return
         }
     }
     /// Source verification holds both callback and queued-send admission while checking.
@@ -528,10 +531,17 @@ final class MeetingOutputReceiverGate: MeetingAudioReceiving {
             downstream.setScopeVerificationPending(false)
             formatVerification.exchange(0)
         }
-        if !unchanged() { fail(.invalidSelection) }
+        if !unchanged() { fail(.invalidSelection, diagnostic: .init(.outputProcessScope)) }
     }
 
     func setScopeVerificationPending(_ pending: Bool) { downstream.setScopeVerificationPending(pending) }
+
+    func fail(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic) {
+        let previous = admission.insert(2)
+        if previous == 1 || (previous == 3 && failure == .invalidSelection) {
+            downstream.fail(failure, diagnostic: diagnostic)
+        }
+    }
 
     func fail(_ failure: MeetingAudioFailure) {
         let previous = admission.insert(2)

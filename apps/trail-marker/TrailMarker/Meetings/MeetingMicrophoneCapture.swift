@@ -205,13 +205,13 @@ final class MeetingMicrophoneRenderContext {
                   output.mFormatFlags == kAudioFormatFlagsNativeFloatPacked,
                   output.mChannelsPerFrame == 1, output.mBitsPerChannel == 32,
                   output.mBytesPerFrame == 4, output.mBytesPerPacket == 4,
-                  output.mFramesPerPacket == 1 else { failFromRender(.invalidFormat); return }
+                  output.mFramesPerPacket == 1 else { failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatVerification)); return }
             let currentCapacity = try unit.maximumFramesPerSlice()
-            guard currentCapacity > 0, currentCapacity <= capacity else { failFromRender(.bufferFull); return }
-        } catch { failFromRender(.invalidFormat) }
+            guard currentCapacity > 0, currentCapacity <= capacity else { failFromRender(.bufferFull, diagnostic: .init(.microphoneCapacityVerification)); return }
+        } catch { failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatRead, status: MeetingAudioFailureDiagnostic.status(error))) }
     }
 
-    func deviceDidDisappear() { failFromRender(.invalidSelection) }
+    func deviceDidDisappear() { failFromRender(.invalidSelection, diagnostic: .init(.microphoneDeviceGone)) }
 
     func render(
         flags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
@@ -225,19 +225,19 @@ final class MeetingMicrophoneRenderContext {
                 receiver.drop(sampleTime: timestamp.pointee.mSampleTime,
                     hostTimeNanoseconds: hostTimeToNanoseconds(timestamp.pointee.mHostTime),
                     sampleRate: sampleRate, frameCount: Int(frameCount))
-            } else if admission.value == 1 { failFromRender(.invalidTimestamp) }
+            } else if admission.value == 1 { failFromRender(.invalidTimestamp, diagnostic: .init(.microphoneContendedTimestamp)) }
             return noErr
         }
         defer { renderLock.unlock() }
         guard admission.value == 1 else { return noErr }
         guard frameCount > 0, frameCount <= capacity else {
-            failFromRender(.bufferFull)
+            failFromRender(.bufferFull, diagnostic: .init(.microphoneFrameCapacity))
             return kAudioUnitErr_TooManyFramesToProcess
         }
         guard timestamp.pointee.mFlags.contains([.hostTimeValid, .sampleTimeValid]),
               timestamp.pointee.mSampleTime.isFinite,
               timestamp.pointee.mSampleTime.rounded() == timestamp.pointee.mSampleTime else {
-            failFromRender(.invalidTimestamp)
+            failFromRender(.invalidTimestamp, diagnostic: .init(.microphoneTimestamp))
             return kAudio_ParamError
         }
         let hostTime = hostTimeToNanoseconds(timestamp.pointee.mHostTime)
@@ -253,14 +253,14 @@ final class MeetingMicrophoneRenderContext {
         )
         let status = unit.render(flags: flags, timestamp: timestamp, frameCount: frameCount, buffers: buffers)
         guard status == noErr else {
-            failFromRender(.deviceFailure(operation: "AudioUnitRender", status: status))
+            failFromRender(.deviceFailure(operation: "AudioUnitRender", status: status), diagnostic: .init(.microphoneRender, status: status))
             return status
         }
         guard buffers.pointee.mNumberBuffers == 1,
               buffers.pointee.mBuffers.mNumberChannels == 1,
               buffers.pointee.mBuffers.mDataByteSize == byteCount,
               buffers.pointee.mBuffers.mData == UnsafeMutableRawPointer(samples) else {
-            failFromRender(.invalidFormat)
+            failFromRender(.invalidFormat, diagnostic: .init(.microphoneBufferLayout))
             return kAudio_ParamError
         }
         // Stop/format changes may arrive during AudioUnitRender. Recheck at the copy boundary.
@@ -277,8 +277,8 @@ final class MeetingMicrophoneRenderContext {
         return noErr
     }
 
-    private func failFromRender(_ failure: MeetingAudioFailure) {
-        if admission.insert(2) == 1 { receiver.fail(failure) }
+    private func failFromRender(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic) {
+        if admission.insert(2) == 1 { receiver.fail(failure, diagnostic: diagnostic) }
     }
 
     deinit {
