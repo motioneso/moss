@@ -363,7 +363,7 @@ export const meetingsModuleManifest = {
     {
       id: "transcribe.meeting",
       description:
-        "Capture duration uses native acknowledgement. Transcription delay is separate; transient clips retry within bounded memory. Activity records clip model, duration and outcome without audio or transcript text."
+        "Capture time uses native acknowledgement. Silent and near-silent clips skip transcription; delays stay separate. Transient clips retry in bounded memory. Activity records model, duration and outcome without audio or transcript text."
     },
     {
       id: "meetings.native_capture",

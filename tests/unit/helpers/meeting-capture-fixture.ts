@@ -90,7 +90,8 @@ export function audio(): MeetingCaptureAudioInput {
     startMs: 0,
     endMs: 1000,
     sampleRateHz: 16000,
-    pcmBase64: Buffer.alloc(32000).toString("base64")
+    // Non-silent PCM16 signal: ordinary fixture calls exercise real provider dispatch.
+    pcmBase64: Buffer.alloc(32000, Buffer.from([0, 1, 0, 255])).toString("base64")
   };
 }
 export function fixture(selection?: MeetingCaptureSelection, now: () => Date = () => at(2000)) {
