@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-08
+
+#### Fixed
+
+- **Meeting recording on Mac.** Meeting recording on the mac no longer stops itself a moment after starting. [PR #3099](https://github.com/motioneso/moss/pull/3099)
+
 ### 2026-10-07
 
 #### Fixed
