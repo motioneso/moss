@@ -16,11 +16,10 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Build and test
+  baseline:
+    name: Baseline build and test
     runs-on: macos-15
-    # Sequential native mutation/restoration tests need time to finish every control
-    # and preserve their evidence, including on slower hosted Macs.
+    # Keep the original build, portable, SDK, unit and UI checks unchanged.
     timeout-minutes: 90
 
     steps:
@@ -77,33 +76,64 @@ jobs:
             -scheme TrailMarker \
             -destination 'platform=macOS'
 
-      # These selected tests inject generated audio/fake devices. Each source mutation must
-      # cause its own XCTest assertion failure, then pass again after byte-for-byte restore.
-      - name: Verify meeting audio negative controls
-        working-directory: apps/trail-marker
-        run: python3 scripts/check-meeting-negative-controls.py
+  negative-controls:
+    name: Negative controls (${{ matrix.group }})
+    needs: baseline
+    runs-on: macos-15
+    timeout-minutes: 90
+    strategy:
+      # One broken control must not cancel another group's proof or artifact upload.
+      fail-fast: false
+      matrix:
+        include:
+          - group: audio
+            script: check-meeting-negative-controls.py
+          - group: visibility-and-unlink
+            script: check-meeting-link-negative-controls.py
+          - group: resume
+            script: check-meeting-resume-negative-controls.py
+          - group: source-selection
+            script: check-meeting-source-negative-controls.py
+          - group: recovery
+            script: check-meeting-single-link-controls.py
 
-      - name: Verify meeting visibility and unlink negative controls
-        working-directory: apps/trail-marker
-        run: python3 scripts/check-meeting-link-negative-controls.py
+    steps:
+      # Every matrix job gets a fresh checkout and its own Xcode build products.
+      # Never share a mutable checkout or DerivedData between mutation runners.
+      - uses: actions/checkout@v4
 
-      - name: Verify native Resume negative controls
-        working-directory: apps/trail-marker
-        run: python3 scripts/check-meeting-resume-negative-controls.py
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
-      - name: Verify native source selection negative controls
+      - name: Generate Xcode project
         working-directory: apps/trail-marker
-        run: python3 scripts/check-meeting-source-negative-controls.py
+        run: xcodegen generate
 
-      - name: Verify single-link recovery negative controls
+      - name: Enable UI automation
+        run: sudo automationmodetool enable-automationmode-without-authentication
+
+      # Run the same positive suite in the cold checkout before mutating it. This
+      # also builds dependencies outside the existing 300-second mutation timeout.
+      - name: Build and test before mutations
         working-directory: apps/trail-marker
-        run: python3 scripts/check-meeting-single-link-controls.py
+        run: |
+          xcodebuild test \
+            -scheme TrailMarker \
+            -destination 'platform=macOS'
+
+      # Runners remain unchanged: each mutation must fail its named assertion,
+      # then pass after byte-for-byte restoration. No selectors omit controls.
+      - name: Verify native negative controls
+        working-directory: apps/trail-marker
+        env:
+          CONTROL_SCRIPT: ${{ matrix.script }}
+        run: python3 "scripts/$CONTROL_SCRIPT"
 
       - name: Preserve native negative-control evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: trail-marker-negative-controls
+          name: trail-marker-negative-controls-${{ matrix.group }}
           path: |
             ${{ runner.temp }}/meeting-negative-controls-*/
             ${{ runner.temp }}/meeting-link-negative-*/
@@ -112,3 +142,20 @@ jobs:
             ${{ runner.temp }}/meeting-source-negative-*/
           if-no-files-found: ignore
           retention-days: 7
+
+  # Preserve the existing check name, but never turn a failed, skipped,
+  # cancelled or timed-out prerequisite into a successful aggregate check.
+  test:
+    name: Build and test
+    if: always()
+    needs: [baseline, negative-controls]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every Mac job to succeed
+        env:
+          BASELINE_RESULT: ${{ needs.baseline.result }}
+          NEGATIVE_CONTROLS_RESULT: ${{ needs.negative-controls.result }}
+        run: |
+          test "$BASELINE_RESULT" = success
+          test "$NEGATIVE_CONTROLS_RESULT" = success
