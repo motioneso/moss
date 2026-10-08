@@ -8,23 +8,32 @@ Runtime baseline and throwaway prototypes were not merged.
 
 - Original native graph verified: 24 open subissues, 28 blocking edges; initial frontier
   #3125, #3129 and #3130. Ticket bodies and graph snapshot are stored outside the repo.
-- #3125 is verified and integrated from `9bee2d414`: stable owner Main designation,
+- #3125 is integrated from `9bee2d414`: stable owner Main designation,
   preserved eligible history and cold/warm startup binding. Independent source review
   cleared runtime `50c8f807b`; real configured-model UI proof used that unchanged runtime
   with harness `7f0fa2877`. See [ticket evidence](../handoffs/2026-10-08-3125-evidence.md)
-  for actual check inputs, security negative control, live assertions and limits. The merger
-  reruns affected checks on the final integration tip before returning its receipt.
-- Remaining unblocked frontier: #3126, #3127, #3130, #3149 and #3155. Use one builder
+  for actual check inputs, security negative control, live assertions and limits. That proof
+  remains valid for its recorded scenarios; a subsequently observed Main reopen/turn race
+  and latest CI failures mean the assembled feature is not ready. Chat-descendant dispatch
+  (#3126, #3127 and #3149) remains held until the regression is resolved and verified.
+- #3155 is integrated from `8ef212857`; independent source review and scoped installed
+  UI/API/worker proof cleared `cd2641479`, using unchanged image runtime `28c43f5ac`.
+  See [email-access evidence](../handoffs/2026-10-08-3155-evidence.md) for current account
+  filtering, public app-map recovery, negative controls, exact inputs and proof limits.
+  The merger returns a verified integration receipt only after assembled static, focused
+  unit and email-access DB checks pass; builder receipts do not certify a different tip.
+- Remaining unblocked Settings frontier: #3129 and #3130. Use one builder
   and sequential independent reviews within available capacity; serialize heavy checks.
   All other work remains pending its verified blockers. The coordinator owns dispatch
   and tracker transitions. Draft integration PR [#3154](https://github.com/motioneso/moss/pull/3154)
-  is open with #3125 integrated and demonstrated; it remains draft during implementation.
+  is open and remains draft during implementation. Scoped ticket verification does not
+  establish branch-wide CI or Main-chat correctness.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
   records session sizing, Settings coordination and native reslices #3149–#3152 under
-  #3132/#3137, plus prerequisite #3155 under #3129. #3129 resumes its full saved-choice/Settings
-  outcome after #3155. Original downstream blockers are retained.
+  #3132/#3137, plus integrated prerequisite #3155 under #3129. #3129 is now unblocked for
+  its full saved-choice/Settings outcome. Original downstream blockers are retained.
 - Each ticket uses a fresh TDD implementer, isolated worktree/branch from the integration
   tip, required checks and independent review, real UI/worker demonstration, evidence
   and truthful app-map updates. DB checks use `verify-gate`.
