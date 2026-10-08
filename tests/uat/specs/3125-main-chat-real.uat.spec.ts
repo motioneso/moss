@@ -151,6 +151,11 @@ test("real model preserves Main across warm/cold reopen and explicit side/privat
   await test.step("explicit private first turn stays private and does not append to Main or side", async () => {
     await drawer.getByRole("button", { name: "More chat options" }).click();
     await drawer.getByRole("menuitemcheckbox", { name: "Start private chat" }).click();
+    await expect(
+      drawer.getByText("Private chat: not saved to history. Approved actions still keep records.", {
+        exact: true
+      })
+    ).toBeVisible();
     const privacy = (await readUatJson(await page.request.get("/api/chat/privacy"))) as {
       incognito: boolean;
     };
