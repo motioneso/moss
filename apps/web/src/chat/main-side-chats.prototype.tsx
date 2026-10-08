@@ -295,16 +295,17 @@ function Prototype() {
         </NavIndex>
         <div className="proto-topic-heading">
           <Eyebrow tone="muted">Side chats</Eyebrow>
-          <IconButton
+          <Button
+            variant="quiet"
             size="sm"
-            aria-label="New side chat"
+            icon={<Plus size={17} />}
             onClick={() => {
               setMenuOpen(false);
               setNewChatOpen(true);
             }}
           >
-            <Plus size={17} />
-          </IconButton>
+            New side chat
+          </Button>
         </div>
         <label className="proto-search">
           <Search size={15} />
@@ -484,14 +485,16 @@ function Prototype() {
                   </div>
                 </div>
                 <div className="proto-chat-head-actions">
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    icon={<Plus size={15} />}
-                    onClick={() => setNewChatOpen(true)}
-                  >
-                    Side chat
-                  </Button>
+                  {variant === "B" && (
+                    <Button
+                      variant="quiet"
+                      size="sm"
+                      icon={<Plus size={15} />}
+                      onClick={() => setNewChatOpen(true)}
+                    >
+                      Side chat
+                    </Button>
+                  )}
                   <IconButton
                     aria-label={view === "expanded" ? "Show Today alongside chat" : "Expand chat"}
                     onClick={() => setView(view === "expanded" ? "docked" : "expanded")}
@@ -649,17 +652,6 @@ function Prototype() {
                       </>
                     )}
                   </div>
-                  {active !== "main" && unread > 0 && (
-                    <button className="proto-main-alert" onClick={() => selectTopic("main")}>
-                      <BrandMark size={16} />
-                      <span>
-                        {unread === 1
-                          ? "Moss has an update in main chat"
-                          : `${unread} updates in main chat`}
-                      </span>
-                      <ArrowRight size={15} />
-                    </button>
-                  )}
                   <form
                     className="proto-composer"
                     onSubmit={(event) => {
