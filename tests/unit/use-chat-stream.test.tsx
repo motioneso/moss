@@ -27,6 +27,21 @@ import {
 
 vi.mock("../../apps/web/src/api/client.js", () => ({
   chatStreamUrl: (surface?: string) => `/api/chat/stream${surface ? `?surface=${surface}` : ""}`,
+  getMe: vi.fn(async () => ({
+    user: {
+      id: "user-1",
+      email: "owner@example.test",
+      emailVerified: false,
+      name: "Owner",
+      isInstanceAdmin: false,
+      status: "active",
+      isBootstrapOwner: false,
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString()
+    },
+    profilePrefs: { addressed: null },
+    hasPasswordCredential: true
+  })),
   listChatThreadMessages: vi.fn(),
   listChatThreads: vi.fn(),
   listPendingActionRequests: vi.fn(async () => ({ actions: [] })),
