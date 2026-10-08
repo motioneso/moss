@@ -8,6 +8,9 @@ import {
   type GenerateStructuredInput,
   type StructuredProviderAdapter
 } from "@moss/ai";
+import { createConstrainedCliStructuredAdapterFactory } from "../../packages/chat/src/live/constrained-structured-adapter.js";
+import { ConstrainedProcessError } from "../../packages/chat/src/live/constrained-structured-process.js";
+import type { ChatEngineFactory } from "../../packages/chat/src/live/runtime.js";
 import { makeRecordingDb } from "./helpers/recording-db.js";
 
 const owner = "12345678-1234-4234-9234-123456789abc";
@@ -98,7 +101,7 @@ it.each(["anthropic", "openai-compatible"])(
       usage,
       servedBy: "main"
     });
-    expect(await run()).toEqual({ ok: false, error: "provider_error" });
+    expect(await run()).toEqual({ ok: false, error: "provider_error", reason: "provider_failure" });
     expect(f.generate).toHaveBeenCalledTimes(1);
     expect(f.lookup).toHaveBeenCalledTimes(1);
     expect(f.createCliStructuredAdapter).toHaveBeenCalledExactlyOnceWith(kind);
@@ -143,6 +146,8 @@ it.each([
   '```json\n{"overview":"Done"}\n```\n```json\n{}\n```',
   '```json\n{"overview":"Done"}',
   '{"overview":',
+  '{"overview":"Done"} {"overview":"Other"}',
+  '```json\n{"overview":"Done"} {"overview":"Other"}\n```',
   "{}",
   '{"overview":4}',
   '{"overview":"Done","extra":true}'
@@ -154,7 +159,15 @@ it.each([
     f.deps
   );
   f.close();
-  expect(await run()).toEqual({ ok: false, error: "validation_failed" });
+  expect(await run()).toEqual({
+    ok: false,
+    error: "validation_failed",
+    reason:
+      rawText.startsWith("{") &&
+      ["{}", '{"overview":4}', '{"overview":"Done","extra":true}'].includes(rawText)
+        ? "schema_validation"
+        : "json_parse"
+  });
   expect(f.generate).toHaveBeenCalledTimes(1);
 });
 
@@ -166,7 +179,11 @@ it.each([
   const run = await prepareStructuredGeneration(f.scoped, request, f.deps);
   f.close();
   const parse = vi.spyOn(JSON, "parse");
-  expect(await run()).toEqual({ ok: false, error: "validation_failed" });
+  expect(await run()).toEqual({
+    ok: false,
+    error: "validation_failed",
+    reason: "oversized_output"
+  });
   expect(parse.mock.calls.some(([value]) => value === rawText || value === rawText.trim())).toBe(
     false
   );
@@ -208,7 +225,7 @@ it("aborts an adapter that ignores the signal and consumes the closure immediate
   );
   f.close();
   const pending = run();
-  expect(await run()).toEqual({ ok: false, error: "provider_error" });
+  expect(await run()).toEqual({ ok: false, error: "provider_error", reason: "provider_failure" });
   controller.abort();
   expect(await pending).toEqual({ ok: false, error: "aborted" });
   expect(f.generate).toHaveBeenCalledTimes(1);
@@ -219,7 +236,7 @@ it("reports provider errors without retry or reroute", async () => {
   f.generate.mockRejectedValue(new Error("Synthetic provider failure"));
   const run = await prepareStructuredGeneration(f.scoped, request, f.deps);
   f.close();
-  expect(await run()).toEqual({ ok: false, error: "provider_error" });
+  expect(await run()).toEqual({ ok: false, error: "provider_error", reason: "provider_failure" });
   expect(f.generate).toHaveBeenCalledTimes(1);
   expect(f.lookup).toHaveBeenCalledTimes(1);
 });
@@ -250,3 +267,88 @@ it("checks input bounds before provider lookup and retains the prepared schema/m
   expect(f.generate.mock.calls[0]![0].model.provider_model_id).toBe("selected-model");
   expect(f.generate.mock.calls[0]![0].schema).toEqual(request.schema);
 });
+
+it.each([
+  [new ConstrainedProcessError("timeout"), "timeout"],
+  [new ConstrainedProcessError("output_limit"), "oversized_output"],
+  [new DOMException("Private diagnostic", "TimeoutError"), "timeout"],
+  [
+    Object.assign(new Error("CLI structured generation timed out"), {
+      name: "CliChatUnavailableError"
+    }),
+    "timeout"
+  ],
+  [new Error("Private prompt or provider output"), "provider_failure"],
+  [new SyntaxError("Private malformed response"), "json_parse"]
+])("returns only a fixed reason for transport failure %s", async (error, reason) => {
+  const f = fixture();
+  f.generate.mockRejectedValue(error);
+  const run = await prepareStructuredGeneration(f.scoped, request, f.deps);
+  f.close();
+  expect(await run()).toEqual({ ok: false, error: "provider_error", reason });
+  expect(f.generate).toHaveBeenCalledTimes(1);
+});
+
+it("distinguishes a caller deadline from ordinary cancellation even if the adapter ignores it", async () => {
+  const f = fixture();
+  const controller = new AbortController();
+  f.generate.mockImplementation(() => new Promise(() => {}));
+  const run = await prepareStructuredGeneration(
+    f.scoped,
+    { ...request, signal: controller.signal },
+    f.deps
+  );
+  f.close();
+  const pending = run();
+  controller.abort(new DOMException("Private deadline detail", "TimeoutError"));
+  expect(await pending).toEqual({ ok: false, error: "aborted", reason: "timeout" });
+});
+
+it("bounds parsed provider objects with a fixed reason", async () => {
+  const f = fixture();
+  f.generate.mockResolvedValue({
+    rawObject: { overview: "x".repeat(STRUCTURED_RESULT_MAX_BYTES) },
+    usage
+  });
+  const run = await prepareStructuredGeneration(f.scoped, request, f.deps);
+  f.close();
+  expect(await run()).toEqual({
+    ok: false,
+    error: "validation_failed",
+    reason: "oversized_output"
+  });
+});
+
+it.each([
+  ['```json\n{"overview":"Done"}\n```', true],
+  ['```json\n{"overview":"Done"} {"overview":"Other"}\n```', false],
+  ['```json\n{"overview":"Done"}\n```\n```json\n{}\n```', false],
+  ['```json\n{"overview":\n```', false]
+])(
+  "validates the entire reply through the actual constrained CLI wrapper: %s",
+  async (rawText, ok) => {
+    const f = fixture();
+    const kill = vi.fn(async () => undefined);
+    const factory = vi.fn(async () => ({
+      launchStructured: async () => ({ offset: 0 }),
+      submitStructured: async () => undefined,
+      readStructured: async () => ({ text: rawText, offset: 1, complete: true }),
+      kill
+    })) as unknown as ChatEngineFactory;
+    const run = await prepareStructuredGeneration(f.scoped, request, {
+      ...f.deps,
+      repository: {
+        selectProviderWithCredential: async () =>
+          ({ auth_method: "cli", acp_agent_id: "claude-acp" }) as AiProviderWithSealedCredential
+      },
+      createCliStructuredAdapter: createConstrainedCliStructuredAdapterFactory(factory)
+    });
+    f.close();
+    expect(await run()).toMatchObject(
+      ok
+        ? { ok: true, object: { overview: "Done" } }
+        : { ok: false, error: "validation_failed", reason: "json_parse" }
+    );
+    expect(kill).toHaveBeenCalledTimes(1);
+  }
+);

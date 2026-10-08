@@ -13,6 +13,8 @@ import {
   type AiProviderWithSealedCredential
 } from "@moss/ai";
 import { getMeetingOutputTemplate, meetingsModuleManifest } from "@moss/meetings";
+import { ConstrainedProcessError } from "../../packages/chat/src/live/constrained-structured-process.js";
+import { parseConstrainedClaudeOutput } from "../../packages/chat/src/live/constrained-claude-profile.js";
 import { TasksRepository, tasksModuleManifest } from "@moss/tasks";
 import {
   createMeetingOutputRuntime,
@@ -330,7 +332,7 @@ describe("meeting output composition HTTP boundary", () => {
     const h = setup();
     h.fetch.mockResolvedValue(response(value));
     await expect(h.generator(actor, input())).rejects.toMatchObject({
-      code: "meeting_output_generation_failed"
+      code: "meeting_output_rejected_schema_validation"
     });
     expect(h.fetch).toHaveBeenCalledTimes(1);
   });
@@ -356,7 +358,7 @@ describe("meeting output composition HTTP boundary", () => {
       })
     );
     await expect(h.generator(actor, input())).rejects.toMatchObject({
-      code: "meeting_output_generation_failed"
+      code: "meeting_output_rejected_source_identity_mismatch"
     });
   });
   it("fails oversized UTF-8 input before selecting or dispatching without truncation", async () => {
@@ -388,7 +390,7 @@ describe("meeting output composition HTTP boundary", () => {
     const logs = [vi.spyOn(console, "log"), vi.spyOn(console, "warn"), vi.spyOn(console, "error")];
     h.fetch.mockRejectedValue(new Error("RAW_PRIVATE_RESPONSE synthetic-not-real-key"));
     await expect(h.generator(actor, input())).rejects.toMatchObject({
-      message: "meeting_output_generation_failed"
+      message: "meeting_output_provider_failed"
     });
     const observed = JSON.stringify([activity.mock.calls, ...logs.map((log) => log.mock.calls)]);
     expect(observed).not.toContain("RAW_PRIVATE_RESPONSE");
@@ -557,7 +559,7 @@ describe("meeting summaries with the default CLI subscription", () => {
     });
     h.credential.mockResolvedValue({ ...provider, provider_kind: "anthropic", auth_method: "cli" });
     await expect(h.generator(actor, input())).rejects.toMatchObject({
-      code: "meeting_output_generation_failed"
+      code: "meeting_output_provider_failed"
     });
     expect(generate).toHaveBeenCalledTimes(1);
     expect(h.fetch).not.toHaveBeenCalled();
@@ -753,4 +755,156 @@ it("preserves user cancellation during the constrained readiness probe without d
   expect(h.probe).toHaveBeenCalledWith(actor.actorUserId, controller.signal);
   expect(h.fetch).not.toHaveBeenCalled();
   expect(generate).not.toHaveBeenCalled();
+});
+
+describe("meeting output rejection diagnostics", () => {
+  function cli(rawText: string) {
+    const h = setup(() => ({
+      generateStructured: async () => ({ rawText, usage: { inputTokens: 0, outputTokens: 0 } })
+    }));
+    h.route.mockResolvedValue({
+      ...model,
+      provider_kind: "anthropic",
+      provider_auth_method: "cli",
+      provider_acp_agent_id: "claude-acp"
+    });
+    h.credential.mockResolvedValue({
+      ...provider,
+      provider_kind: "anthropic",
+      auth_method: "cli",
+      acp_agent_id: "claude-acp"
+    });
+    return h;
+  }
+  const bound = {
+    kind: "personal-note",
+    meetingId: "meeting-id",
+    notesRevision: 1,
+    startCharacter: 0,
+    endCharacter: 7
+  };
+  it.each([
+    ["malformed private-answer-canary", "json_parse"],
+    [JSON.stringify({ ...content, extra: "private-answer-canary" }), "schema_validation"],
+    [
+      JSON.stringify({
+        ...content,
+        decisions: [{ text: "private-answer-canary", evidence: [{ ...bound, meetingId: "other" }] }]
+      }),
+      "source_identity_mismatch"
+    ],
+    [
+      JSON.stringify({
+        ...content,
+        decisions: [{ text: "private-answer-canary", evidence: [{ ...bound, notesRevision: 99 }] }]
+      }),
+      "source_revision_mismatch"
+    ],
+    [
+      JSON.stringify({
+        ...content,
+        decisions: [{ text: "private-answer-canary", evidence: [{ ...bound, endCharacter: 9999 }] }]
+      }),
+      "utf16_range_invalid"
+    ],
+    [
+      JSON.stringify({
+        ...content,
+        actions: [
+          {
+            text: "private-answer-canary",
+            evidence: [bound],
+            ownerPhrase: "invented-owner",
+            duePhrase: null
+          }
+        ]
+      }),
+      "owner_phrase_unsupported"
+    ]
+  ])("records only a fixed rejection reason for %s", async (rawText, reason) => {
+    const h = cli(rawText!);
+    const activity = vi.fn();
+    installModelActivityRecorder(activity);
+    const logs = [vi.spyOn(console, "log"), vi.spyOn(console, "warn"), vi.spyOn(console, "error")];
+    const code = `meeting_output_rejected_${reason}`;
+    await expect(h.generator(actor, input())).rejects.toMatchObject({ code, message: code });
+    expect(activity).toHaveBeenCalledExactlyOnceWith({
+      kind: "structured_validation",
+      action: "Validate meeting summary",
+      actionCode: "meetings.summary.validation",
+      ownerUserId: "owner",
+      turnId: "synthetic",
+      outcome: "error",
+      modelName: "selected-summary-model",
+      result: code,
+      failureCode: "bad_shape"
+    });
+    const observed = JSON.stringify([activity.mock.calls, ...logs.map((log) => log.mock.calls)]);
+    for (const secret of [
+      "private-answer-canary",
+      "Private synthetic note",
+      "invented-owner",
+      "synthetic-not-real-key"
+    ])
+      expect(observed).not.toContain(secret);
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+  it.each(["result", "structured_output"])(
+    "accepts a full JSON fence from the actual Claude %s envelope through summary validation",
+    async (field) => {
+      const rawText = parseConstrainedClaudeOutput(
+        JSON.stringify({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          [field]: "```json\n" + JSON.stringify(content) + "\n```"
+        })
+      );
+      expect((await cli(rawText).generator(actor, input())).content).toEqual(content);
+    }
+  );
+  it.each(["```json\n{}\n```\n{}", "prose\n```json\n{}\n```", "```json\n{} {}\n```"])(
+    "rejects surrounding or multiple JSON from the native envelope",
+    async (value) => {
+      const rawText = parseConstrainedClaudeOutput(
+        JSON.stringify({ type: "result", subtype: "success", is_error: false, result: value })
+      );
+      await expect(cli(rawText).generator(actor, input())).rejects.toMatchObject({
+        code: "meeting_output_rejected_json_parse"
+      });
+    }
+  );
+  it("maps the constrained timeout to a specific stopped result", async () => {
+    const h = setup(() => ({
+      generateStructured: async () => {
+        throw new ConstrainedProcessError("timeout");
+      }
+    }));
+    h.route.mockResolvedValue({
+      ...model,
+      provider_kind: "anthropic",
+      provider_auth_method: "cli",
+      provider_acp_agent_id: "claude-acp"
+    });
+    h.credential.mockResolvedValue({
+      ...provider,
+      provider_kind: "anthropic",
+      auth_method: "cli",
+      acp_agent_id: "claude-acp"
+    });
+    await expect(h.generator(actor, input())).rejects.toMatchObject({
+      code: "meeting_output_timed_out"
+    });
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+});
+
+it("keeps an outer deadline distinct from user cancellation before dispatch", async () => {
+  const h = setup();
+  const controller = new AbortController();
+  controller.abort(new DOMException("fixed deadline", "TimeoutError"));
+  await expect(h.generator(actor, { ...input(), signal: controller.signal })).rejects.toMatchObject(
+    { code: "meeting_output_timed_out" }
+  );
+  expect(h.fetch).not.toHaveBeenCalled();
 });

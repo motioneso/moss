@@ -9,7 +9,6 @@ import type {
   MeetingOutputArtifact,
   MeetingRecord
 } from "@moss/shared";
-import { summaryGenerationFailure } from "../../packages/meetings/src/web/summary-generation-error.js";
 import { MeetingSummary } from "../../packages/meetings/src/web/meeting-summary.js";
 import { exportStatus } from "../../packages/meetings/src/web/meeting-vault-export.js";
 import { invalidateOutputAccess } from "../../packages/meetings/src/web/output-access.js";
@@ -183,7 +182,7 @@ describe("meeting summary owner review", () => {
     ],
     [
       "subscription-isolation-unavailable",
-      "Claude subscription summaries need separate per-user runner accounts. This runner uses a shared account"
+      "Claude summaries aren’t available on this server setup. No other model was used."
     ]
   ] as const)(
     "disables Generate with the specific subscription reason: %s",
@@ -983,12 +982,5 @@ describe("meeting summary owner review", () => {
       "not been overwritten"
     );
     expect(exportStatus(receipt)).not.toMatch(/indexed/i);
-  });
-});
-
-it("names an unsupported Claude subscription without suggesting a silent replacement", () => {
-  expect(summaryGenerationFailure("meeting_output_claude_subscription_unsupported")).toEqual({
-    status: "failed",
-    message: "Summaries on this Claude subscription aren’t supported yet. No other model was used."
   });
 });

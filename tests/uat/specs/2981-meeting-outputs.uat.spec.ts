@@ -243,7 +243,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
       try {
         for (const [name, availability] of [
           ["codex", "subscription-unsupported"],
-          ["claude", "subscription-isolation-unavailable"]
+          ["claude", "available"]
         ] as const) {
           expect(
             (
@@ -268,13 +268,10 @@ test("reviewed summary versions create independent Tasks and private vault copie
               "Summaries on this subscription aren’t supported yet. No other model was used."
             );
           } else {
-            // The existing disposable dev runner deliberately uses a shared account.
-            // A binary alone must never make this unsupported launch appear ready.
-            await expect(generate).toBeDisabled();
-            await expect(summary).toContainText(
-              "Claude subscription summaries need separate per-user runner accounts."
-            );
-            await expect(summary).toContainText("This runner uses a shared account");
+            // The production-like runner isolates each owner's structured calls.
+            // Readiness makes no model request and does not require login.
+            await expect(generate).toBeEnabled();
+            await expect(summary).not.toContainText("Claude summaries aren’t available");
             await expect(summary).not.toContainText("Your default model is unavailable");
           }
           expect(await readOutputs(page, path)).toMatchObject({ headVersion: 0, artifacts: [] });
@@ -758,7 +755,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
     expect(await vaultEvidence(project, meetingId)).toEqual(finalFiles);
     meetingId = undefined;
     console.log(
-      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; unsupported summary capability returns bounded code and actionable copy; admin AI provider link and Back preserve the SPA document and summary selection; capabilities restored before a fresh successful request; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. Real Codex effective default rejected; official locked Claude default rejected on shared-account runner before generation or login; HTTP default restored for all generated artifacts. No whole long-meeting/model-quality/audio proof."
+      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; unsupported summary capability returns bounded code and actionable copy; admin AI provider link and Back preserve the SPA document and summary selection; capabilities restored before a fresh successful request; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. Real Codex effective default rejected; official locked Claude default available with Generate enabled on the per-user runner before generation or login; HTTP default restored for all generated artifacts. No whole long-meeting/model-quality/audio proof."
     );
   } finally {
     try {

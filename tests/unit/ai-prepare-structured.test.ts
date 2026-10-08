@@ -61,7 +61,7 @@ it("prepares without dispatch, then runs once outside the closed DataContext wit
   expect(fetch).not.toHaveBeenCalled();
   open = false;
   expect(await run()).toMatchObject({ ok: true, object: { overview: "Done" }, servedBy: "main" });
-  expect(await run()).toEqual({ ok: false, error: "provider_error" });
+  expect(await run()).toEqual({ ok: false, error: "provider_error", reason: "provider_failure" });
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(lookup).toHaveBeenCalledTimes(1);
 });
@@ -99,7 +99,7 @@ it("captures the prepared API activity owner from the actor context without reus
   expect(queries[0]?.sql).toContain("current_setting('app.actor_user_id'");
   expect(generate).not.toHaveBeenCalled();
   expect(await run()).toMatchObject({ ok: true });
-  expect(await run()).toEqual({ ok: false, error: "provider_error" });
+  expect(await run()).toEqual({ ok: false, error: "provider_error", reason: "provider_failure" });
   expect(generate).toHaveBeenCalledTimes(1);
   expect(generate.mock.calls[0]?.[0]).toMatchObject({ actorUserId: owner });
   expect(queries).toHaveLength(1);
@@ -126,7 +126,11 @@ it("does not carry extra search, sorting, CLI or retry options into the prepared
       selectProviderWithCredential: async () => provider
     }
   });
-  expect(await run()).toEqual({ ok: false, error: "validation_failed" });
+  expect(await run()).toEqual({
+    ok: false,
+    error: "validation_failed",
+    reason: "schema_validation"
+  });
   expect(fetch).toHaveBeenCalledTimes(1);
   const [url, options] = (fetch.mock.calls as unknown as [string, RequestInit][])[0]!;
   expect(url).toBe("https://synthetic.invalid/v1/chat/completions");
@@ -158,3 +162,23 @@ it("preserves the general structured reply-schema override while sending the ori
     request.schema
   );
 });
+
+it.each(["schema", "provider", "timeout"] as const)(
+  "preserves API-only compatibility failure shapes for %s failures and repeated calls",
+  async (failure) => {
+    vi.spyOn(HttpApiAdapter.prototype, "generateStructured").mockImplementation(async () => {
+      if (failure === "provider") throw new Error("Synthetic provider diagnostic");
+      if (failure === "timeout") throw new DOMException("Synthetic deadline", "TimeoutError");
+      return { rawObject: {}, usage: { inputTokens: 0, outputTokens: 0 } };
+    });
+    const run = await prepareStructuredApiGeneration({} as DataContextDb, request, {
+      cipher,
+      repository: { selectProviderWithCredential: async () => provider }
+    });
+    expect(await run()).toEqual({
+      ok: false,
+      error: failure === "schema" ? "validation_failed" : "provider_error"
+    });
+    expect(await run()).toEqual({ ok: false, error: "provider_error" });
+  }
+);

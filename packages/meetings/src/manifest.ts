@@ -309,7 +309,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.grounded_outputs",
       description:
-        "Generate evidence-checked summaries with your default model, without fallback. Claude needs per-user runner accounts and the pinned CLI; readiness makes no model calls. Compare versions and exact sources; refresh to recheck availability.",
+        "Generate evidence-checked summaries with your default model, without fallback. Claude availability depends on this server setup. Compare versions and exact sources; refresh to check availability without generating a summary.",
       errors: [
         {
           code: "meeting_output_unavailable",
@@ -327,7 +327,7 @@ export const meetingsModuleManifest = {
           code: "meeting_output_subscription_isolation_unavailable",
           class: "validation",
           description:
-            "Claude subscription summaries need separate per-user runner accounts. Shared-account runners cannot generate summaries; no other model is used."
+            "Claude summaries aren’t available on this server setup. No other model was used."
         },
         {
           code: "meeting_output_claude_subscription_unsupported",
@@ -372,10 +372,45 @@ export const meetingsModuleManifest = {
             "Generation was interrupted or its reservation expired. Start a new explicit request; replaying the old key will not run it again."
         },
         {
+          code: "meeting_output_timed_out",
+          class: "transient",
+          description: "The summary took too long and was stopped. Try again when you’re ready."
+        },
+        ...(
+          [
+            ["json_parse", "The model reply was not valid JSON."],
+            ["schema_validation", "The model reply did not match the required summary format."],
+            ["oversized_output", "The model reply exceeded the response limit."],
+            ["schema_invalid", "The summary structure was invalid."],
+            ["length_exceeded", "The summary exceeded its content limits."],
+            ["source_binding_missing", "A claim was missing required evidence."],
+            ["source_binding_invalid", "A claim had invalid evidence references."],
+            [
+              "source_identity_mismatch",
+              "Evidence referred to a different meeting or missing source."
+            ],
+            ["source_revision_mismatch", "Evidence referred to the wrong source revision."],
+            ["utf16_range_invalid", "Evidence did not identify a valid exact source range."],
+            ["owner_phrase_unsupported", "A suggested owner phrase was absent from its evidence."],
+            ["due_phrase_unsupported", "A suggested due phrase was absent from its evidence."],
+            ["inputs_invalid", "The retained evidence was invalid."]
+          ] as const
+        ).map(([reason, description]) => ({
+          code: `meeting_output_rejected_${reason}`,
+          class: "validation" as const,
+          description: `${description} Only the rejection code is recorded; review inputs and explicitly retry.`
+        })),
+        {
+          code: "meeting_output_provider_failed",
+          class: "transient",
+          description:
+            "The selected model could not complete the request. No replacement was used. Review its connection and explicitly retry."
+        },
+        {
           code: "meeting_output_generation_failed",
           class: "transient",
           description:
-            "Generation failed, timed out or returned invalid output. Claude’s 105-second deadline is recorded as a timeout, separate from user cancellation. Review settings and explicitly retry; no fallback is used."
+            "The summary could not be generated. Review your settings and try again when you’re ready. No other model was used."
         },
         {
           code: "meeting_output_busy",

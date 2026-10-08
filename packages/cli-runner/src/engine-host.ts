@@ -60,6 +60,7 @@ import { AcpHost, type AcpExecPollResult, type AcpReadResult } from "./acp-host.
 import { ACP_DEADLINE_DIR } from "./exec-records.js";
 import { ACP_PRIVATE_MARKER_DIR } from "./acp-private-markers.js";
 import { Mutex } from "./mutex.js";
+import { withLaunchTimeout } from "./engine-host-timeout.js";
 import {
   BadSubmitAttemptError,
   NotLaunchedError,
@@ -411,7 +412,7 @@ export class CliChatEngineHost {
 
     let timedOut = false;
     try {
-      const result = await this.withTimeout(launchPromise, this.launchTimeoutMs, () => {
+      const result = await withLaunchTimeout(launchPromise, this.launchTimeoutMs, () => {
         timedOut = true;
       });
       // mux-create SUCCEEDED in time: register the engine so submit/readNew/kill route here.
@@ -665,10 +666,13 @@ export class CliChatEngineHost {
     });
   }
 
+  // ─── listLiveSessions (§4.6) — by mux, NOT the engine Map ──────────────────────
+
   async listLiveSessions(): Promise<string[]> {
     return listLiveMuxSessions(this.deps.io, this.deps.homeBase);
   }
 
+  // ─── probeProvider (§4.8) — no token, no replay ───────────────────────────────
   async probeProvider(
     provider: RpcProviderKind,
     userIdOrOpts?: string | Omit<RpcProbeProviderParams, "provider">,
@@ -971,27 +975,6 @@ export class CliChatEngineHost {
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────────
-
-  private async withTimeout<T>(
-    promise: Promise<T>,
-    ms: number,
-    onTimeout?: () => void
-  ): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      return await Promise.race([
-        promise,
-        new Promise<T>((_, reject) => {
-          timer = setTimeout(() => {
-            onTimeout?.();
-            reject(new Error("launch timed out"));
-          }, ms);
-        })
-      ]);
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  }
 
   /** Test/introspection helper: how many engines are registered. */
   liveEngineCount(): number {

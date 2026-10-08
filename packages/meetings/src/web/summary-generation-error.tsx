@@ -18,8 +18,7 @@ export function summaryGenerationFailure(code?: string): {
     case "meeting_output_subscription_isolation_unavailable":
       return {
         status: "failed",
-        message:
-          "Claude subscription summaries need separate per-user runner accounts. This runner uses a shared account, so summaries are unavailable. No other model was used."
+        message: "Claude summaries aren’t available on this server setup. No other model was used."
       };
     case "meeting_output_claude_subscription_unsupported":
       return {
@@ -33,6 +32,11 @@ export function summaryGenerationFailure(code?: string): {
         message:
           "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used.",
         remediation: "ai-providers"
+      };
+    case "meeting_output_timed_out":
+      return {
+        status: "failed",
+        message: "The summary took too long and was stopped. Try again when you’re ready."
       };
     case "meeting_output_route_changed":
       return {

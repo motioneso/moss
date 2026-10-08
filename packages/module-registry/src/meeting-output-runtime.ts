@@ -4,6 +4,7 @@ import {
   AiRepository,
   createAiSecretCipher,
   prepareStructuredGeneration,
+  recordModelActivity,
   STRUCTURED_PROMPT_MAX_BYTES,
   type AiConfiguredModelSafeRow,
   type AiProviderConfigSafeRow,
@@ -13,6 +14,8 @@ import {
 import {
   getMeetingOutputTemplate,
   validateMeetingOutput,
+  MeetingOutputValidationError,
+  type MeetingOutputValidationReasonCode,
   MeetingOutputError,
   type MeetingOutputGenerator,
   type MeetingTaskCreator
@@ -89,6 +92,12 @@ const usableProvider = (
   !provider.revoked_at &&
   provider.has_credential;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const interruption = (signal: AbortSignal) =>
+  new MeetingOutputError(
+    signal.reason instanceof Error && signal.reason.name === "TimeoutError"
+      ? "meeting_output_timed_out"
+      : "meeting_output_interrupted"
+  );
 
 export type ConstrainedCliReadiness =
   | "available"
@@ -196,8 +205,32 @@ export function createMeetingOutputRuntime(deps: {
     }
   };
   const generator: MeetingOutputGenerator = async (actor, input) => {
+    let modelName: string | undefined;
+    const rejected = (
+      reasonCode:
+        | MeetingOutputValidationReasonCode
+        | "json_parse"
+        | "schema_validation"
+        | "oversized_output"
+    ) => {
+      const code = `meeting_output_rejected_${reasonCode}`;
+      // This is a validation event, separate from the recorded provider call. Both its result
+      // and request receipt contain only fixed reason codes, never source or generated text.
+      recordModelActivity({
+        kind: "structured_validation",
+        action: "Validate meeting summary",
+        actionCode: "meetings.summary.validation",
+        ownerUserId: actor.actorUserId,
+        ...(actor.requestId ? { turnId: actor.requestId } : {}),
+        outcome: "error",
+        modelName: modelName ?? "",
+        result: code,
+        failureCode: "bad_shape"
+      });
+      return new MeetingOutputError(code);
+    };
     try {
-      if (input.signal.aborted) throw new MeetingOutputError("meeting_output_interrupted");
+      if (input.signal.aborted) throw interruption(input.signal);
       await requireModules(actor.actorUserId);
       const template = getMeetingOutputTemplate(input.template.id, input.template.version);
       if (!template) throw new MeetingOutputError("meeting_output_invalid_input", 400);
@@ -215,6 +248,7 @@ export function createMeetingOutputRuntime(deps: {
       if (Buffer.byteLength(prompt, "utf8") > STRUCTURED_PROMPT_MAX_BYTES)
         throw new MeetingOutputError("meeting_output_input_too_large", 400);
       const selected = await deps.dataContext.withDataContext(actor, (db) => resolve(db));
+      modelName = selected.model.provider_model_id;
       if (selected.model.provider_auth_method === "cli") {
         const readiness = await deps.probeConstrainedCli?.(actor.actorUserId, input.signal);
         if (readiness !== "available")
@@ -254,26 +288,38 @@ export function createMeetingOutputRuntime(deps: {
       );
       // The prepared transport closure does not retain or reuse a DataContext.
       const result = await run();
-      if (input.signal.aborted) throw new MeetingOutputError("meeting_output_interrupted");
+      if (input.signal.aborted) throw interruption(input.signal);
       await requireModules(actor.actorUserId);
       const current = await deps.dataContext.withDataContext(actor, (db) => resolve(db, true));
       if (current.fingerprint !== selected.fingerprint)
         throw new MeetingOutputError("meeting_output_route_changed");
-      if (!result.ok)
+      if (!result.ok) {
+        if (result.error === "aborted") throw interruption(input.signal);
+        if (result.reason === "timeout") throw new MeetingOutputError("meeting_output_timed_out");
+        if (
+          result.reason === "unsupported_transport" &&
+          selected.model.provider_kind === "anthropic"
+        )
+          throw new MeetingOutputError("meeting_output_claude_subscription_unsupported");
+        if (
+          result.reason === "json_parse" ||
+          result.reason === "schema_validation" ||
+          result.reason === "oversized_output"
+        )
+          throw rejected(result.reason);
         throw new MeetingOutputError(
-          result.error === "aborted"
-            ? "meeting_output_interrupted"
-            : result.reason === "unsupported_transport" &&
-                selected.model.provider_kind === "anthropic"
-              ? "meeting_output_claude_subscription_unsupported"
-              : "meeting_output_generation_failed"
+          result.reason === "provider_failure"
+            ? "meeting_output_provider_failed"
+            : "meeting_output_generation_failed"
         );
+      }
       return {
         content: validateMeetingOutput(result.object, input.inputs),
         modelRoute: selected.modelRoute
       };
     } catch (error) {
-      if (input.signal.aborted) throw new MeetingOutputError("meeting_output_interrupted");
+      if (input.signal.aborted) throw interruption(input.signal);
+      if (error instanceof MeetingOutputValidationError) throw rejected(error.reasonCode);
       if (error instanceof MeetingOutputError) throw error;
       // Provider exceptions and malformed source/model content never become API error text.
       throw new MeetingOutputError("meeting_output_generation_failed");
