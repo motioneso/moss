@@ -200,7 +200,8 @@ async function resolveSessionForCurrentProvider(input: {
           input,
           session,
           !forceReplay && !input.pendingForcedReplay.has(input.sessionKey)
-        ))
+        )) &&
+        input.sessions.get(input.sessionKey) === session
       ) {
         input.pendingForcedReplay.delete(input.sessionKey);
         return session;

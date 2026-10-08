@@ -107,6 +107,29 @@ function holdResume(h: ReturnType<typeof harness>) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("chat conversation identity binding", () => {
+  it("keeps New chat chosen during awaited Main launch validation (#3125)", async () => {
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const h = harness();
+    let reads = 0;
+    h.deps.persistence.getMainThreadState = async () => {
+      if (++reads === 2) {
+        entered.resolve();
+        await release.promise;
+      }
+      return { id: "thread-A", incognito: false };
+    };
+    const prestart = h.manager.ensureSession("user-1", "Ben");
+    await entered.promise;
+    await h.manager.clear("user-1");
+    release.resolve();
+    expect((await prestart).threadId).toBe("new-thread");
+    expect((await h.manager.ensureSession("user-1", "Ben")).threadId).toBe("new-thread");
+    expect(await h.manager.submitTurn("user-1", "Ben", "Keep my new chat")).toMatchObject({
+      reply: "Done."
+    });
+  });
+
   it("honors New chat chosen during a cold Main stream launch (#3125)", async () => {
     const started = deferred<void>();
     const release = deferred<void>();
@@ -131,7 +154,9 @@ describe("chat conversation identity binding", () => {
     const started = deferred<void>();
     const release = deferred<void>();
     const readMode = vi.fn(async () => "off" as const);
-    const h = harness({ classifierGate: buildClassifierGateRunner({ readMode }) });
+    const h = harness({
+      classifierGate: buildClassifierGateRunner({ readMode, tokens: new SessionTokenRegistry() })
+    });
     h.deps.persistence.getMainThreadState = async () => ({ id: "thread-A", incognito: false });
     vi.mocked(h.engine.launch).mockImplementation(async () => {
       started.resolve();
