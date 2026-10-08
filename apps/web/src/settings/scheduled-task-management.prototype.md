@@ -1,6 +1,7 @@
 # Scheduled task management — throwaway design preview
 
-Design mockup for task #3101, using fictional data and browser-memory state. Source brief:
+Approved design mockup for task #3101, finalized after Ben’s review on 2026-10-08.
+Uses fictional data and browser-memory state. Source brief:
 the Moss vault's `Design previews/Scheduled proactive design sessions/02-manage-tasks.md`.
 This branch inherits #3100's accepted ordinary-chat creation preview. Keep it out of main.
 
@@ -72,6 +73,8 @@ After the detail-screen trim, the same Firefox flow passed with explicit checks 
 routine metadata, retained watch deadlines, inbox action scope and past-task outcomes.
 Scoped lint/format, web typecheck and design-token/UI-class checks passed again.
 
-This is a mockup ready for Ben's design review. It does not implement or prove real persistence,
+Ben approved the grouped list and simplified details. The final decisions and implementation
+boundaries are recorded in `docs/superpowers/handoffs/2026-10-08-scheduled-task-management-design.md`.
+This is an approved mockup. It does not implement or prove real persistence,
 permissions, scheduling, source reconnection, watch completion or background execution.
 No backend, production route, app-map declaration or subsequent design session was changed.
