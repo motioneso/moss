@@ -40,4 +40,6 @@ All interactions remain in browser memory. This demonstrates navigation, not sch
 
 ## Design status
 
+Accepted side-chat creation behavior: New side chat opens an empty conversation with the composer ready for typing. The user does not enter a title or complete a creation dialog. Moss generates the title from the conversation after the user starts talking. The preview still contains the earlier title dialog; the user explicitly requested recording this decision without another mockup.
+
 The user accepted A with a collapsed three-line menu over the chat and the existing default width preserved. The requested refinements put New side chat inside the menu and remove main-chat update banners entirely. Email source links open the connected provider’s webmail in a new tab, rather than a popup inside Moss. Existing-thread migration, task Settings, task approval, and notification controls remain separate design work. Keep this prototype on its throwaway branch as a primary source; update the spec with the agreed decisions rather than merging prototype code into the app.
