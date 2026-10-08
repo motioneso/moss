@@ -14,9 +14,20 @@ import {
 
 import { notesSearchExecute } from "./tools.js";
 import { notesCreateExecute, notesDeleteExecute, notesEditExecute } from "./write-tools.js";
+import {
+  notesCreatePresentation,
+  notesDeletePresentation,
+  notesEditPresentation
+} from "./approval-presentation.js";
 
 export const NOTES_MODULE_ID = "notes";
 export const NOTES_SYNC_QUEUE = "notes.sync";
+
+const configureFolderRemediation = {
+  id: "notes.configure_folder",
+  description: "Choose a notes folder under Connections in Settings.",
+  path: "/settings?section=sources"
+};
 
 export const notesModuleSqlMigrationDirectory = fileURLToPath(new URL("../sql", import.meta.url));
 
@@ -83,7 +94,7 @@ export const notesModuleManifest = {
     {
       id: "note_changes",
       label: "Note changes",
-      description: "Create and update notes.",
+      description: "Create and update notes. Deleting a note always asks for approval.",
       defaultTier: "ask_each_time",
       allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
     }
@@ -112,6 +123,9 @@ export const notesModuleManifest = {
     },
     {
       name: "notes.create",
+      approvalPresentation: notesCreatePresentation,
+      approvalContent: "user_authored",
+      actionLabel: "Create note",
       description: "Create a Markdown note in the linked notes source.",
       permissionId: "notes.create",
       actionFamilyId: "note_changes",
@@ -136,6 +150,9 @@ export const notesModuleManifest = {
     },
     {
       name: "notes.edit",
+      approvalPresentation: notesEditPresentation,
+      approvalContent: "user_authored",
+      actionLabel: "Edit note",
       description: "Edit a Markdown note in the linked notes source.",
       permissionId: "notes.edit",
       actionFamilyId: "note_changes",
@@ -152,6 +169,9 @@ export const notesModuleManifest = {
     },
     {
       name: "notes.delete",
+      approvalPresentation: notesDeletePresentation,
+      approvalContent: "user_authored",
+      actionLabel: "Delete note",
       description:
         "Delete a Markdown note from the linked notes source immediately and permanently. There is " +
         "no trash or restore — the file is unlinked on disk.",
@@ -166,6 +186,8 @@ export const notesModuleManifest = {
       inputSchema: notesDeleteInputSchema,
       outputSchema: notesWriteResultSchema,
       execute: notesDeleteExecute,
+      // Permanent deletion must ask even when note changes or Auto-approve are trusted.
+      requiresConfirmation: () => true,
       summarize: (input) => `Delete note ${String(input.path)}.`
     }
   ],
@@ -183,13 +205,7 @@ export const notesModuleManifest = {
           description: "No notes folder is selected in Connections."
         }
       ],
-      remediations: [
-        {
-          id: "notes.configure_folder",
-          description: "Choose a notes folder under Connections in Settings.",
-          path: "/settings?section=sources"
-        }
-      ]
+      remediations: [configureFolderRemediation]
     },
     {
       id: "notes.semantic_search",
@@ -198,10 +214,30 @@ export const notesModuleManifest = {
         "wording still matches."
     },
     {
+      id: "notes.approval_prerequisites",
+      description:
+        "Before approval, an unlinked or unavailable notes folder returns its safe configuration reason to Moss, without exposing filesystem paths. Link or fix the folder in Settings, then Connections.",
+      errors: [
+        {
+          code: "notes.approval_folder_unavailable",
+          class: "prerequisite",
+          remediationRef: "notes.configure_folder",
+          description:
+            "A linked notes folder is missing, unavailable, or outside the allowed notes roots."
+        }
+      ],
+      remediations: [configureFolderRemediation]
+    },
+    {
+      id: "notes.approval_folder_path",
+      description:
+        "Note approval cards and cited note sources in goal and memory cards show the exact relative folder path under Folder. Absolute server paths stay private."
+    },
+    {
       id: "notes.assistant_authoring",
       description:
-        "Ask the assistant to create, edit, or delete Markdown notes in your linked notes folder. " +
-        "Deleting is immediate and permanent; there is no trash."
+        "Create, edit, or delete Markdown notes in your linked folder. Overwrite is named in approval. " +
+        "Deletion always asks, even with trusted note changes or Auto-approve, with red Approve and a warning that there is no trash or undo."
     }
   ],
   proactiveMonitor: notesMonitorProvider

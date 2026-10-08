@@ -1,3 +1,14 @@
+import {
+  sportsPublicReadPresentation,
+  sportsFollowPresentation,
+  sportsUnfollowPresentation,
+  sportsFollowRoutePresentation,
+  sportsResolveTeamPresentation,
+  sportsRemovalPresentation,
+  sportsCoveragePresentation,
+  sportsStandingsPresentation,
+  sportsSourcePresentation
+} from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest, ModuleAiRequirementManifest } from "@moss/module-sdk";
@@ -126,9 +137,14 @@ export const sportsModuleManifest = {
   },
   features: [
     {
+      id: "sports.approval_effects",
+      description:
+        "Sports approvals disclose source removal's coverage and photo loss, and unfollow's coverage removal. ESPN coverage replaces the whole list; an empty list turns headlines off."
+    },
+    {
       id: "sports.chat_app_actions",
       description:
-        "App actions read sports data and manage follows, coverage and standings preferences. Removing follows or saved sources asks first. Source discovery, feed authorization and retention-touching reads remain blocked."
+        "App actions manage follows, coverage and standings with verified team and publisher names. Unresolved teams need a selection in Sports first. Source discovery, feed authorization and retention-touching reads remain blocked."
     },
     {
       // #2956: the Activity history line title for this module's structured calls.
@@ -262,7 +278,13 @@ export const sportsModuleManifest = {
     {
       method: "GET",
       path: "/api/sports/leagues/:competitionKey/teams",
-      chat: { access: "read", content: "outside", outbound: true },
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Look up sports teams",
+        presentation: sportsPublicReadPresentation("teams")
+      },
       responseSchema: sportsLeagueTeamsResponseSchema,
       permissionId: "sports.view"
     },
@@ -284,7 +306,13 @@ export const sportsModuleManifest = {
     {
       method: "GET",
       path: "/api/sports/standings",
-      chat: { access: "read", content: "outside", outbound: true },
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Look up sports standings",
+        presentation: sportsPublicReadPresentation("standings")
+      },
       responseSchema: sportsStandingsResponseSchema,
       permissionId: "sports.view"
     },
@@ -300,7 +328,12 @@ export const sportsModuleManifest = {
       method: "PUT",
       path: "/api/sports/standings-preferences",
       // lastViewed.viewLabel comes from provider standings, even when stored as a preference.
-      chat: { access: "write", title: "Change standings preferences", content: "outside" },
+      chat: {
+        access: "write",
+        title: "Change standings preferences",
+        presentation: sportsStandingsPresentation,
+        content: "outside"
+      },
       requestSchema: updateSportsStandingsPreferencesSchema.body,
       responseSchema: updateSportsStandingsPreferencesSchema.response,
       permissionId: "sports.follow"
@@ -316,7 +349,12 @@ export const sportsModuleManifest = {
       method: "POST",
       path: "/api/sports/follows",
       // Roster validation only fetches a fixed catalog URL; the team key is matched locally.
-      chat: { access: "write", title: "Follow sports team or competition", content: "outside" },
+      chat: {
+        access: "write",
+        title: "Follow sports team or competition",
+        presentation: sportsFollowRoutePresentation,
+        content: "outside"
+      },
       requestSchema: createSportsFollowRequestSchema,
       responseSchema: createSportsFollowResponseSchema,
       permissionId: "sports.follow"
@@ -325,7 +363,12 @@ export const sportsModuleManifest = {
       method: "POST",
       path: "/api/sports/follows/:id/team",
       // The saved catalog competition selects a public roster; sourceTeamId stays local.
-      chat: { access: "write", title: "Identify followed sports team", content: "outside" },
+      chat: {
+        access: "write",
+        title: "Identify followed sports team",
+        presentation: sportsResolveTeamPresentation,
+        content: "outside"
+      },
       requestSchema: resolveSportsFollowTeamRequestSchema,
       responseSchema: resolveSportsFollowTeamResponseSchema,
       permissionId: "sports.follow"
@@ -337,7 +380,8 @@ export const sportsModuleManifest = {
         access: "destructive",
         title: "Unfollow sports team or competition",
         content: "user_authored",
-        target: sportsFollowTarget
+        target: sportsFollowTarget,
+        presentation: sportsRemovalPresentation("follow")
       },
       responseSchema: deleteSportsFollowResponseSchema,
       permissionId: "sports.follow"
@@ -352,7 +396,12 @@ export const sportsModuleManifest = {
     {
       method: "PUT",
       path: "/api/sports/sources/espn/coverage",
-      chat: { access: "write", title: "Change ESPN sports coverage", content: "user_authored" },
+      chat: {
+        access: "write",
+        title: "Change ESPN sports coverage",
+        presentation: sportsCoveragePresentation,
+        content: "user_authored"
+      },
       requestSchema: updateSportsEspnCoverageSchema.body,
       responseSchema: updateSportsEspnCoverageSchema,
       permissionId: "sports.sources"
@@ -418,7 +467,8 @@ export const sportsModuleManifest = {
         access: "destructive",
         title: "Remove sports news source",
         content: "outside",
-        target: sportsSourceTarget
+        target: sportsSourceTarget,
+        presentation: sportsRemovalPresentation("source")
       },
       responseSchema: deleteSportsCustomSourceSchema,
       permissionId: "sports.sources"
@@ -430,7 +480,8 @@ export const sportsModuleManifest = {
         access: "destructive",
         title: "Forget sports source photo instructions",
         content: "outside",
-        target: sportsSourceTarget
+        target: sportsSourceTarget,
+        presentation: sportsRemovalPresentation("photo-instructions")
       },
       responseSchema: deleteSportsSourcePhotosSchema,
       permissionId: "sports.sources"
@@ -438,7 +489,13 @@ export const sportsModuleManifest = {
     {
       method: "GET",
       path: "/api/sports/sources/:sourceId/icon",
-      chat: { access: "read", content: "outside", outbound: true },
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Load sports news source icon",
+        presentation: sportsPublicReadPresentation("icon")
+      },
       permissionId: "sports.view"
     },
     {
@@ -488,6 +545,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.followTeam",
+      actionLabel: "Follow sports team or competition",
+      approvalPresentation: sportsFollowPresentation,
       description:
         "Follow a team or a whole competition (e.g. 'the Yankees' or 'the Premier League'). Resolve the name to a catalog competitionKey, plus a teamKey for a single team, through the sports catalog or search, then call this with those keys.",
       permissionId: "sports.follow",
@@ -520,6 +579,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.unfollowTeam",
+      actionLabel: "Unfollow sports team or competition",
+      approvalPresentation: sportsUnfollowPresentation,
       description:
         "Stop following a team or competition previously followed. Requires the same competitionKey (and teamKey if a specific team) used to follow it.",
       permissionId: "sports.follow",
@@ -574,6 +635,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.confirmSource",
+      actionLabel: "Add sports news source",
+      approvalPresentation: sportsSourcePresentation("new-source"),
       description:
         "Confirm a sports source from its actor-bound preview using the exact displayed publisher, hosts, targets, and authorization acknowledgement.",
       permissionId: "sports.sources",
@@ -605,6 +668,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.confirmSourceAssignments",
+      actionLabel: "Change sports source coverage",
+      approvalPresentation: sportsSourcePresentation("assignment-replacement"),
       description:
         "Confirm the exact actor-bound sports source assignment replacement shown by the preview.",
       permissionId: "sports.sources",
@@ -638,6 +703,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.confirmSourceRecipe",
+      actionLabel: "Change sports source instructions",
+      approvalPresentation: sportsSourcePresentation("recipe-rebuild"),
       description:
         "Confirm the exact actor-bound sports source recipe rebuild shown by the preview.",
       permissionId: "sports.sources",
@@ -655,6 +722,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.retrySource",
+      actionLabel: "Retry sports news source",
+      approvalPresentation: sportsSourcePresentation("retry"),
       description:
         "Retry every verified target for one actor-owned sports source through pinned safe fetch with no browser.",
       permissionId: "sports.sources",
@@ -672,6 +741,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.removeSource",
+      actionLabel: "Remove sports news source",
+      approvalPresentation: sportsSourcePresentation("remove"),
       description: "Remove one actor-owned sports source and its assignments.",
       permissionId: "sports.sources",
       actionFamilyId: "sports.sources",

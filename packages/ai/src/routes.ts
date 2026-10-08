@@ -54,7 +54,7 @@ import {
   updateAiProviderConfigRouteSchema,
   type AiAssistantToolBlockedReason,
   type AiAssistantActionDto,
-  type AiAssistantActionStatus,
+  type AiAssistantActionPresentation,
   type AiAssistantToolDto,
   type AiAssistantToolInvocationDto,
   type AiAuthMethod,
@@ -153,7 +153,14 @@ export interface AiRoutesDependencies {
     actorUserId: string,
     actionRequestId: string,
     status: "confirmed" | "rejected" | "cancelled"
-  ) => Promise<"resolved" | "expired" | "not_found">;
+  ) => Promise<"resolved" | "expired" | "unavailable" | "not_found">;
+  /** Full owner-bound disclosure exists only while its original live waiter remains available. */
+  readonly getActionRequestPresentation?: (
+    actorUserId: string,
+    actionRequestId: string
+  ) => AiAssistantActionPresentation | undefined;
+  /** Re-arm or settle persisted request deadlines for this owner after a restart. */
+  readonly recoverActionRequests?: (actorUserId: string) => Promise<void>;
   // #1888 — injected by the composition root: approving a module build starts it, which needs
   // the job queue. packages/ai owns the rule (ownership check, status transition) but not the
   // queue, so the wiring is handed in the same way resolveActionRequest is. Absent means the
@@ -739,17 +746,39 @@ export function registerAiRoutes(
     }
   );
 
-  server.get(
+  server.get<{ Querystring: { readonly threadId?: string } }>(
     "/api/ai/assistant-actions",
     { schema: listAiAssistantActionsRouteSchema },
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
+        if (request.query.threadId) {
+          await dependencies.recoverActionRequests?.(accessContext.actorUserId);
+        }
         const actions = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repository.listAssistantActions(scopedDb)
+          repository.listAssistantActions(scopedDb, request.query.threadId)
         );
 
-        return { actions: actions.map(serializeAssistantAction) };
+        // Metadata-only requests remain declineable, but only a retained owner-bound live
+        // disclosure may expose Approve. Never reconstruct disclosure from inputSummary.
+        const visibleActions = request.query.threadId
+          ? actions.filter((action) => action.status === "pending")
+          : actions;
+        return {
+          actions: visibleActions.map((action) => {
+            const dto = serializeAssistantAction(action);
+            if (!request.query.threadId) return dto;
+            const presentation = dependencies.getActionRequestPresentation?.(
+              accessContext.actorUserId,
+              action.id
+            );
+            return {
+              ...dto,
+              approvalAvailable: presentation !== undefined,
+              ...(presentation ? { presentation } : {})
+            };
+          })
+        };
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -771,6 +800,12 @@ export function registerAiRoutes(
           request.params.id,
           body.status
         );
+        if (outcome === "unavailable") {
+          return reply.code(409).send({
+            code: "approval_unavailable",
+            error: "Details for this request aren’t available. Ask Moss again if you still want it."
+          });
+        }
         if (outcome === "expired") {
           return reply.code(409).send({ error: "This request expired — ask again." });
         }
@@ -1182,7 +1217,7 @@ function parsePutAdminChatModelOverrideBody(body: unknown): PutAdminChatModelOve
 
 function requiredResolvableAssistantActionStatus(
   value: unknown
-): Exclude<AiAssistantActionStatus, "pending"> {
+): ResolveAiAssistantActionRequest["status"] {
   if (value === "confirmed" || value === "rejected" || value === "cancelled") {
     return value;
   }

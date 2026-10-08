@@ -77,6 +77,9 @@ describe("gateway computeConfirmOverride", () => {
 
   const autoTool = (requiresConfirmation: unknown) => ({
     name: "mock.write",
+    actionLabel: "Apply fixture action",
+    approvalContent: "user_authored",
+    approvalPresentation: async () => ({ target: "Fixture target", fields: [] }),
     description: "Mock write tool that would otherwise auto-run under trusted_auto.",
     permissionId: "mock.write",
     actionFamilyId: "mock_family",

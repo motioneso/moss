@@ -174,6 +174,7 @@ describe("meetings composition", () => {
       "meetings.unsaved_changes",
       "meetings.referenced_evidence",
       "meetings.private_exports",
+      "meetings.summary.validation",
       "meetings.grounded_outputs",
       "meetings.reviewed_tasks",
       "meetings.questions",

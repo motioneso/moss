@@ -82,11 +82,18 @@ export const memoryEntityTarget: RouteChatTargetResolver = async (db, params) =>
   assertDataContextDb(db);
   const id = params.id;
   if (!id || !isUuid(id)) return null;
-  const result = await sql<{ name: string }>`
-    SELECT name FROM app.memory_entities
+  const result = await sql<{
+    id: string;
+    name: string;
+    summary: string;
+    status: string;
+    updated_at: string;
+  }>`
+    SELECT id, kind, name, summary, status, importance, pinned, created_at, updated_at FROM app.memory_entities
     WHERE id = ${id}::uuid AND owner_user_id = app.current_actor_user_id()
   `.execute(db.db);
-  return result.rows[0]?.name ?? null;
+  const row = result.rows[0];
+  return row ? approvalTarget(row.name, row) : null;
 };
 
 /** The actor's pending suggestion, labelled with the full text the decision applies to. */

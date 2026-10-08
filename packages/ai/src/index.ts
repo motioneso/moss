@@ -31,6 +31,7 @@ export * from "./terminal-password-repository.js";
 export * from "./terminal-routes.js";
 export * from "./routes.js";
 export * from "./structured/schema-bounds.js";
+export * from "./structured/transport-timeouts.js";
 export * from "./structured/generate-structured.js";
 export * from "./structured/generate-choices.js";
 export * from "./structured/classifier.js";

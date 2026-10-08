@@ -28,7 +28,11 @@ function setup(active = true) {
       runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
     },
     resolveActiveModules: async () => [],
-    repository: { createPendingAssistantAction, insertActionAuditLog } as never,
+    repository: {
+      createPendingAssistantAction,
+      insertActionAuditLog,
+      expireAssistantAction: async () => ({ id: "action-1", status: "timed_out" })
+    } as never,
     runner: {
       withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) => work({})
     } as never,

@@ -412,7 +412,12 @@ export type AiModelTier = "reasoning" | "interactive" | "economy";
 // #2208: who created a model row. Discovery may prune only its own ('discovered') rows.
 export type AiConfiguredModelOrigin = "discovered" | "manual";
 export type AiAssistantActionRisk = "read" | "write" | "outbound" | "destructive";
-export type AiAssistantActionStatus = "pending" | "confirmed" | "rejected" | "cancelled";
+export type AiAssistantActionStatus =
+  | "pending"
+  | "confirmed"
+  | "rejected"
+  | "cancelled"
+  | "timed_out";
 export type ChatMessageRole = "user" | "assistant";
 export type ChatMessageStatus = "stored" | "pending" | "blocked" | "no_model" | "working" | "error";
 export type BriefingCadence = "manual" | "daily" | "weekly";
@@ -830,6 +835,11 @@ export interface AiConfiguredModelsTable {
 
 export interface AiAssistantActionRequestsTable {
   id: string;
+  chat_thread_id: string | null;
+  chat_session_id: string | null;
+  expires_at: NullableTimestampColumn;
+  outcome_recorded_at: NullableTimestampColumn;
+  outcome_ignored_at: NullableTimestampColumn;
   owner_user_id: string;
   tool_module_id: string;
   tool_module_name: string;

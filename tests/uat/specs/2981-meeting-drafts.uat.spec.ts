@@ -134,6 +134,7 @@ test("Minimal meeting workspace edits titles, autosaves notes, resolves conflict
       .getByRole("button", { name: /^(Chat with .+|Open chat)$/ })
       .click();
 
+    // The fixture has no configured default model; check the real availability and button.
     const outputsResponse = await page.request.get(`/api/meetings/records/${fixtureId}/outputs`);
     expect(outputsResponse.status()).toBe(200);
     expect((await outputsResponse.json()).generationAvailability).toBe("model-unavailable");
@@ -141,7 +142,10 @@ test("Minimal meeting workspace edits titles, autosaves notes, resolves conflict
     await expect(page.getByLabel("Summary style", { exact: true })).toHaveValue("general");
     await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeDisabled();
     await expect(
-      page.getByText("CLI models aren’t supported for summaries.", { exact: false })
+      page.getByText(
+        "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used.",
+        { exact: true }
+      )
     ).toBeVisible();
     await page.getByRole("tab", { name: "Notes", exact: true }).click();
     await openMeetingAction(page, "Delete meeting");

@@ -238,8 +238,10 @@ describe("meeting summary owner review", () => {
       await click("Write summary");
       expect(api.generateMeetingOutput).not.toHaveBeenCalled();
       const rendered = JSON.stringify(renderer.toJSON());
-      expect(rendered).toContain("No supported summary model is available.");
-      expect(rendered).toContain("API-key model with summarization and structured-output support");
+      expect(rendered).toContain(
+        "Your default model is unavailable or cannot produce structured summaries."
+      );
+      expect(rendered).toContain("No other model will be used.");
       expect(rendered).toContain(admin ? "Settings → AI providers" : "Contact an instance admin");
     }
   );
@@ -269,7 +271,7 @@ describe("meeting summary owner review", () => {
     await click("Refresh summaries");
     expect(button("Write summary").props.disabled).toBe(false);
     expect(JSON.stringify(renderer.toJSON())).not.toContain(
-      "No supported summary model is available."
+      "Your default model is unavailable or cannot produce structured summaries."
     );
     await click("Write summary");
     expect(api.generateMeetingOutput).toHaveBeenCalledWith(
@@ -359,8 +361,8 @@ describe("meeting summary owner review", () => {
       await click("Rewrite summary");
       await flush();
       const rendered = JSON.stringify(renderer.toJSON());
-      expect(rendered).toContain("API-key model with summarization and structured-output support");
-      expect(rendered).toContain("CLI models aren’t supported for summaries");
+      expect(rendered).toContain("No other model will be used.");
+      expect(rendered).toContain("Check its connection and try again.");
       expect(rendered).toContain("Contact an instance admin");
       expect(rendered).not.toContain("Private provider credential error");
       expect(rendered).not.toContain("Choose Generate to start a new request");
@@ -377,11 +379,15 @@ describe("meeting summary owner review", () => {
     }
   );
 
-  it.each([true, false, "unavailable"] as const)(
-    "offers AI provider settings only with confirmed admin access: %s",
-    async (admin) => {
+  it.each(
+    ["meeting_output_route_unavailable", "meeting_output_provider_failed"].flatMap((code) =>
+      ([true, false, "unavailable"] as const).map((admin) => ({ code, admin }))
+    )
+  )(
+    "offers AI provider settings only with confirmed admin access: $code / $admin",
+    async ({ code, admin }) => {
       vi.mocked(api.generateMeetingOutput).mockRejectedValueOnce(
-        new ApiError(422, "Private provider error", "meeting_output_route_unavailable")
+        new ApiError(422, "Private provider error", code)
       );
       vi.stubGlobal(
         "fetch",
@@ -429,7 +435,9 @@ describe("meeting summary owner review", () => {
       await click("Rewrite summary");
       const rendered = JSON.stringify(renderer.toJSON());
       expect(rendered).not.toContain(code);
-      expect(rendered).toContain("Generation failed. Review the saved inputs");
+      expect(rendered).toContain(
+        "The summary could not be generated. Try again when you’re ready."
+      );
       expect(fetch).not.toHaveBeenCalled();
       expect(button("Check or retry generation")).toBeUndefined();
     }

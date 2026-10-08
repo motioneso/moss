@@ -2,7 +2,11 @@ import {
   createMeetingCaptureRuntime,
   type MeetingCaptureAuthorization
 } from "./meeting-capture-runtime.js";
-import { createMeetingOutputRuntime } from "./meeting-output-runtime.js";
+import { createApprovalSourceReferences } from "./approval-source-references.js";
+import {
+  createMeetingOutputRuntime,
+  type ConstrainedCliReadiness
+} from "./meeting-output-runtime.js";
 import {
   createMeetingNoteIndexPort,
   withMeetingExportAvailability
@@ -109,6 +113,7 @@ import {
   MemoryRepository,
   type MemoryRetriever,
   memoryModuleManifest,
+  configureMemoryApprovalReferences,
   memorySqlMigrationDirectory,
   installEmbeddingActivityRecorder,
   registerMemoryDashboardRoutes,
@@ -166,6 +171,7 @@ import {
   isCurrentClassifierReviewed,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
+  createConstrainedCliStructuredAdapterFactory,
   createAcpOneShotEngineFactory,
   registerChatJobWorkers,
   registerChatRoutes,
@@ -340,6 +346,7 @@ import {
 } from "@moss/tasks";
 import {
   goalsModuleManifest,
+  configureGoalApprovalReferences,
   goalsModuleSqlMigrationDirectory,
   registerGoalsRoutes,
   registerGoalsMemorySyncWorker,
@@ -450,6 +457,7 @@ import {
 } from "@moss/scratchpad";
 import {
   FeedbackTargetVerifierRegistry,
+  configureUsefulnessFeedbackPresentation,
   buildStoryTargetContext,
   createStoryFeedbackTargetVerifier,
   createStoryRelevancePolicy,
@@ -704,6 +712,13 @@ export interface BuiltInRouteDependencies {
   readonly getResolveActionRequestFn?: () =>
     | AssistantToolGateway["resolveActionRequest"]
     | undefined;
+  /** Per-server live waiter lookup for origin-scoped chat-card hydration. */
+  readonly getActionRequestPresentationFn?: () =>
+    | AssistantToolGateway["getActionRequestPresentation"]
+    | undefined;
+  readonly getRecoverActionRequestsFn?: () =>
+    | AssistantToolGateway["recoverActionRequests"]
+    | undefined;
   /**
    * #1554 task #6 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
    * same late-bound "adopt" seam as {@link adoptChatRpcConnection}/
@@ -742,6 +757,13 @@ export interface BuiltInRouteDependencies {
   readonly hostDiagnostics?: HostDiagnosticsProvider;
   readonly personaPreview?: (input: PersonaPreviewInput) => Promise<string>;
   readonly createCliStructuredAdapter?: ReturnType<typeof createCliStructuredAdapterFactory>;
+  readonly createConstrainedCliStructuredAdapter?: ReturnType<
+    typeof createConstrainedCliStructuredAdapterFactory
+  >;
+  readonly probeConstrainedCli?: (
+    actorUserId: string,
+    signal?: AbortSignal
+  ) => Promise<ConstrainedCliReadiness>;
   /**
    * Bounded, live onboarding probes (Phase 2). Built inside registerBuiltInApiRoutes (sync,
    * no boot-time probing) and forwarded to the settings module so it keeps no @moss/ai /
@@ -874,7 +896,8 @@ export function createStructuredChatEngineFactory(options: {
       engineOptions?.executionMode,
       undefined,
       engineOptions?.needsStructuredOutput,
-      engineOptions?.userId
+      engineOptions?.userId,
+      engineOptions?.constrainedStructured
     );
   };
 }
@@ -1961,12 +1984,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         options: { retryLimit: 3, retryDelay: 60, retryBackoff: true }
       }
     ],
-    registerRoutes: (server, deps) =>
-      registerGoalsRoutes(server, {
+    registerRoutes: (server, deps) => {
+      configureGoalApprovalReferences(
+        createApprovalSourceReferences({ manifests: deps.listModuleManifests })
+      );
+      return registerGoalsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         boss: deps.boss
-      }),
+      });
+    },
     registerWorkers: async (boss, deps) => {
       const repository = new GoalsRepository();
       const memoryGraphRepo = new MemoryGraphRepository();
@@ -2178,6 +2205,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveActionRequest: (actorUserId, id, status) => {
           const fn = deps.getResolveActionRequestFn?.() ?? unwiredActionResolver;
           return fn(actorUserId, id, status);
+        },
+        getActionRequestPresentation: (actorUserId, id) =>
+          deps.getActionRequestPresentationFn?.()?.(actorUserId, id),
+        recoverActionRequests: async (actorUserId) => {
+          await deps.getRecoverActionRequestsFn?.()?.(actorUserId);
         },
         // #1888 — the "Build it" button. packages/ai owns the ownership check and the status
         // transition; the queue lives out here, so the composition root supplies the send.
@@ -2431,6 +2463,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [memorySqlMigrationDirectory],
     queueDefinitions: [...VAULT_INGEST_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
+      configureMemoryApprovalReferences(
+        createApprovalSourceReferences({ manifests: deps.listModuleManifests })
+      );
       registerMemoryGraphRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
@@ -2473,6 +2508,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const storyVerifier = createStoryFeedbackTargetVerifier(usefulnessFeedbackRepository);
       registry.register("news_story", storyVerifier);
       registry.register("sports_story", storyVerifier);
+      configureUsefulnessFeedbackPresentation(registry);
       registerUsefulnessFeedbackRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
@@ -3514,6 +3550,10 @@ export function registerBuiltInApiRoutes(
   let resolveActionRequestFn: AssistantToolGateway["resolveActionRequest"] | undefined;
   const getResolveActionRequestFn = (): AssistantToolGateway["resolveActionRequest"] | undefined =>
     resolveActionRequestFn;
+  let actionRequestPresentationFn: AssistantToolGateway["getActionRequestPresentation"] | undefined;
+  const getActionRequestPresentationFn = () => actionRequestPresentationFn;
+  let recoverActionRequestsFn: AssistantToolGateway["recoverActionRequests"] | undefined;
+  const getRecoverActionRequestsFn = () => recoverActionRequestsFn;
   // #1554 task #6: the persistent-runtime pool's onPersistentReap needs
   // SessionTokenRegistry.revokeBySessionId, which is likewise built INSIDE registerChatRoutes's
   // `wiring` closure — same late-bound "adopt" seam as dropSessionsForProvider above. Populated
@@ -3685,6 +3725,21 @@ export function registerBuiltInApiRoutes(
     platformDiagnostics,
     chatEngineFactory,
     createCliStructuredAdapter: createCliStructuredAdapterFactory(structuredChatEngineFactory),
+    createConstrainedCliStructuredAdapter: createConstrainedCliStructuredAdapterFactory(
+      structuredChatEngineFactory
+    ),
+    probeConstrainedCli: async (actorUserId, signal) => {
+      const connection = getRpcConnection();
+      if (!connection) return "model-unavailable";
+      const result = await connection.probeProvider(
+        { provider: "anthropic", constrainedStructured: true },
+        actorUserId,
+        { timeoutMs: 5_000, signal }
+      );
+      if (result.constrainedUnavailableReason === "per_user_isolation_required")
+        return "subscription-isolation-unavailable";
+      return result.status === "ready" ? "available" : "model-unavailable";
+    },
     personaPreview:
       dependencies.personaPreview ??
       createDefaultPersonaPreview(dependencies.dataContext, {
@@ -3746,8 +3801,12 @@ export function registerBuiltInApiRoutes(
     // resolveActionRequest closure reads back out through getResolveActionRequestFn below.
     adoptChatGateway: (gateway: AssistantToolGateway) => {
       resolveActionRequestFn = gateway.resolveActionRequest.bind(gateway);
+      actionRequestPresentationFn = gateway.getActionRequestPresentation.bind(gateway);
+      recoverActionRequestsFn = gateway.recoverActionRequests.bind(gateway);
     },
     getResolveActionRequestFn,
+    getActionRequestPresentationFn,
+    getRecoverActionRequestsFn,
     // #1554 task #6: mirrors adoptDropSessionsForProvider immediately above — publishes the chat
     // wiring closure's SessionTokenRegistry.revokeBySessionId into this per-server binding, which
     // the onReady hook below reads through onPersistentReap when it resolves the real engine

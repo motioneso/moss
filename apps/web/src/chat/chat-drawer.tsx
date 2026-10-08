@@ -1,6 +1,7 @@
 import { randomUuid, requestJson } from "@moss/module-web-sdk";
 import type { MeetingChatSelection, MeetingChatTurnResponse } from "@moss/shared";
 import { HistoryList } from "./history-list";
+import { useChatTransition, type ChatTransition } from "./use-chat-transition";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
@@ -29,10 +30,8 @@ import {
   clearChat,
   endPrivateChat,
   getChatPrivacyState,
-  listCalendarEvents,
   listChatThreadMessages,
   listChatThreads,
-  listTasks,
   lookupAiCapabilityRoute,
   resumeChat,
   sendChatTurn
@@ -45,15 +44,14 @@ import {
   type ChatSurface,
   type LookupAiCapabilityRouteResponse
 } from "@moss/shared";
-import { useUserLocale } from "../locale/locale-format";
 import { ChatModelPill } from "./chat-model-pill";
+import { ChatEmptyState } from "./chat-empty-state";
 import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
 import { Thread } from "@moss/ui";
 import { trapFocus } from "../shell/command-palette";
 
 import { RecordRow } from "./message-row";
-import { buildChatSeeds } from "./seeds";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
 import {
   recordsFromMessages,
@@ -97,6 +95,7 @@ export function ChatDrawer(props: {
   readonly onToggleExpanded?: () => void;
 }) {
   const generationRef = useRef(0);
+  const transition = useChatTransition(props.surface, generationRef);
   useEffect(
     () => () => {
       generationRef.current += 1;
@@ -183,12 +182,15 @@ export function ChatDrawer(props: {
   }, [scrollToLatest]);
 
   const resumeMutation = useMutation({
-    mutationFn: (vars: { readonly threadId: string; readonly surface: ChatSurface }) =>
-      resumeChat(vars.threadId, vars.surface),
+    mutationFn: (vars: {
+      readonly threadId: string;
+      readonly surface: ChatSurface;
+      readonly transition: ChatTransition;
+    }) => resumeChat(vars.threadId, vars.surface),
     onSuccess: (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(vars.surface) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.chat.privacy(vars.surface) });
-      if (vars.surface !== surfaceRef.current) return;
+      if (!transition.isCurrent(vars.transition)) return;
       props.clearRecords();
       setShowHistory(false);
       // #1090: resumed threads are always non-incognito (ChatRepository.listThreads filters
@@ -198,10 +200,11 @@ export function ChatDrawer(props: {
       setPrivateEnded(false);
     },
     onError: (_error, vars) => {
-      if (vars.surface !== surfaceRef.current) return;
+      if (!transition.isCurrent(vars.transition)) return;
       setReviewThreadId(null);
       setShowHistory(true);
-    }
+    },
+    onSettled: (_data, _error, vars) => transition.finish(vars.transition)
   });
 
   const [isSending, setIsSending] = useState(false);
@@ -300,6 +303,7 @@ export function ChatDrawer(props: {
         isSending ||
         privateEnded ||
         activatingPrivate ||
+        transition.pending ||
         historyActivationPending ||
         (Boolean(props.meetingContext) && reviewThreadId !== null)
       ) {
@@ -403,6 +407,7 @@ export function ChatDrawer(props: {
     },
     [
       activatingPrivate,
+      transition.pending,
       historyActivationPending,
       isSending,
       messagesQuery.data?.messages,
@@ -416,12 +421,12 @@ export function ChatDrawer(props: {
   );
 
   useEffect(() => {
-    if (isSending || queuedSendText === null) return;
+    if (isSending || transition.pending || queuedSendText === null) return;
     const queued = queuedSendText;
     setQueuedSendText(null);
     if (queued.surface !== props.surface) return;
     sendMessage(queued.text);
-  }, [queuedSendText, isSending, props.surface, sendMessage]);
+  }, [queuedSendText, isSending, transition.pending, props.surface, sendMessage]);
 
   const reviewing = reviewThreadId !== null;
   const displayRecords = reviewing
@@ -559,21 +564,36 @@ export function ChatDrawer(props: {
   };
 
   const startNewChat = () => {
-    generationRef.current += 1;
-    setReviewThreadId(null);
-    setShowHistory(false);
-    setIsSending(false);
-    setSendError(null);
-    setNeedsProvider(false);
-    setQueuedSendText(null);
-    setPendingUser(null);
-    setFallbackRecords([]);
-    privateModeDecidedLocally.current = true;
-    setPrivateMode(false);
-    setPrivateEnded(false);
-    void clearChat({ surface: props.surface });
-    props.clearRecords();
-    void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(props.surface) });
+    const change = transition.begin();
+    if (!change) return;
+    void (async () => {
+      try {
+        await clearChat({ surface: change.surface });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(change.surface) });
+        if (!transition.isCurrent(change)) return;
+        setReviewThreadId(null);
+        setShowHistory(false);
+        setIsSending(false);
+        setSendError(null);
+        setNeedsProvider(false);
+        setQueuedSendText(null);
+        setPendingUser(null);
+        setFallbackRecords([]);
+        privateModeDecidedLocally.current = true;
+        setPrivateMode(false);
+        setPrivateEnded(false);
+        props.clearRecords();
+      } catch (caught) {
+        if (transition.isCurrent(change)) {
+          setIsSending(false);
+          setPendingUser(null);
+          setQueuedSendText(null);
+          setSendError(caught instanceof Error ? caught.message : "Could not start a new chat");
+        }
+      } finally {
+        transition.finish(change);
+      }
+    })();
   };
 
   const switchToNewModelChat = (surface: ChatSurface) => {
@@ -585,6 +605,8 @@ export function ChatDrawer(props: {
   };
 
   const startPrivateChat = () => {
+    const change = transition.begin();
+    if (!change) return;
     setReviewThreadId(null);
     setShowHistory(false);
     setIsSending(false);
@@ -605,36 +627,40 @@ export function ChatDrawer(props: {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.chat.threads(initiatingSurface)
         });
-        if (surfaceRef.current !== initiatingSurface) return;
+        if (!transition.isCurrent(change)) return;
         setFallbackRecords([]);
         props.clearRecords();
         setPrivateMode(true);
       } catch (caught) {
-        if (surfaceRef.current !== initiatingSurface) return;
+        if (!transition.isCurrent(change)) return;
         setPrivateActivationError(
           caught instanceof Error ? caught.message : "Could not start a private chat"
         );
       } finally {
-        if (surfaceRef.current === initiatingSurface) {
+        if (transition.isCurrent(change)) {
           setActivatingPrivate(false);
         }
+        transition.finish(change);
       }
     })();
   };
 
   const closePrivateChat = () => {
+    const change = transition.begin();
+    if (!change) return;
     privateModeDecidedLocally.current = true;
     closingPrivateChatRef.current = true;
     setPrivateMode(false);
     setPrivateEnded(false);
-    props.clearRecords();
-    setFallbackRecords([]);
     const initiatingSurface = props.surface;
     void (async () => {
       try {
         await endPrivateChat(initiatingSurface);
+        if (!transition.isCurrent(change)) return;
+        props.clearRecords();
+        setFallbackRecords([]);
       } catch (caught) {
-        if (surfaceRef.current === initiatingSurface) {
+        if (transition.isCurrent(change)) {
           // The close never reached the server, so this was never really "decided" — let the
           // privacy-query effect apply server truth again once the invalidated query refetches,
           // instead of permanently pinning the optimistic (wrong) "closed" state.
@@ -644,12 +670,13 @@ export function ChatDrawer(props: {
           );
         }
       } finally {
-        if (surfaceRef.current === initiatingSurface) {
+        if (transition.isCurrent(change)) {
           closingPrivateChatRef.current = false;
           void queryClient.invalidateQueries({
             queryKey: queryKeys.chat.privacy(initiatingSurface)
           });
         }
+        transition.finish(change);
       }
     })();
   };
@@ -694,7 +721,12 @@ export function ChatDrawer(props: {
                   : "Here when you need me"}
           </div>
         </div>
-        <IconButton aria-label="New chat" title="New chat" onClick={startNewChat}>
+        <IconButton
+          aria-label="New chat"
+          title="New chat"
+          onClick={startNewChat}
+          disabled={transition.pending}
+        >
           <SquarePen aria-hidden="true" />
         </IconButton>
         {props.onToggleExpanded ? (
@@ -759,10 +791,16 @@ export function ChatDrawer(props: {
               selectedThreadId={reviewThreadId}
               threads={threadsQuery.data?.threads ?? []}
               onSelect={(id) => {
+                const change = props.meetingContext ? undefined : transition.begin();
+                if (!props.meetingContext && !change) return;
                 setReviewThreadId(id);
                 setShowHistory(false);
-                if (!props.meetingContext)
-                  resumeMutation.mutate({ threadId: id, surface: props.surface });
+                if (change)
+                  resumeMutation.mutate({
+                    threadId: id,
+                    surface: props.surface,
+                    transition: change
+                  });
               }}
               activating={resumeMutation.isPending}
             />
@@ -796,8 +834,9 @@ export function ChatDrawer(props: {
             <Thread
               records={effectiveRecords}
               working={isWaiting}
-              renderRecord={(record) => (
+              renderRecord={(record, _index, context) => (
                 <RecordRow
+                  approvalOutcomeShown={context.approvalOutcomeShown}
                   record={record}
                   meetingScoped={Boolean(props.meetingContext)}
                   focusActionRequestId={props.focusActionRequestId}
@@ -813,7 +852,7 @@ export function ChatDrawer(props: {
               <div className="chatd-empty__sub">Meeting questions only</div>
             </div>
           ) : (
-            <EmptyState
+            <ChatEmptyState
               onSend={sendMessage}
               isSending={isSending}
               lockedModelUnavailable={lockedModelUnavailable}
@@ -898,7 +937,11 @@ export function ChatDrawer(props: {
         modelSelector={
           <ChatModelPill
             disabled={
-              Boolean(props.meetingContext) || privateEnded || isSending || historyActivationPending
+              Boolean(props.meetingContext) ||
+              privateEnded ||
+              isSending ||
+              historyActivationPending ||
+              transition.pending
             }
             privateMode={privateMode}
             surface={props.surface}
@@ -906,7 +949,10 @@ export function ChatDrawer(props: {
           />
         }
         readOnly={
-          privateEnded || historyActivationPending || (Boolean(props.meetingContext) && reviewing)
+          privateEnded ||
+          historyActivationPending ||
+          (transition.pending && !activatingPrivate) ||
+          (Boolean(props.meetingContext) && reviewing)
         }
         isFounder={props.isFounder}
         initialText={props.initialText}
@@ -949,48 +995,4 @@ function reconcileFallbacks(
 
 export function chatAvailableFromRoute(data: LookupAiCapabilityRouteResponse | undefined): boolean {
   return data?.route?.available === true;
-}
-
-function EmptyState(props: {
-  readonly onSend: (text: string) => void;
-  readonly isSending: boolean;
-  readonly lockedModelUnavailable: boolean;
-}) {
-  const tasksQuery = useQuery({ queryKey: queryKeys.tasks.list, queryFn: () => listTasks() });
-  const eventsQuery = useQuery({
-    queryKey: queryKeys.calendar.list,
-    queryFn: () => listCalendarEvents()
-  });
-  const locale = useUserLocale();
-
-  const seeds = buildChatSeeds(
-    tasksQuery.data?.tasks ?? [],
-    eventsQuery.data?.events ?? [],
-    locale
-  );
-
-  return (
-    <div className="chatd-empty">
-      <span className="chatd-empty__mark">
-        <BrandMark size={22} />
-      </span>
-      <div className="chatd-empty__title">What can I help with?</div>
-      <div className="chatd-empty__sub">
-        Ask about your day, your tasks, or anything you&apos;ve told me.
-      </div>
-      <div className="chatd-sugg">
-        {seeds.map((seed) => (
-          <button
-            className="chatd-sugg__btn"
-            disabled={props.isSending || props.lockedModelUnavailable}
-            key={seed}
-            type="button"
-            onClick={() => props.onSend(seed)}
-          >
-            {seed}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }

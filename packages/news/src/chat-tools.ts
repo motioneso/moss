@@ -71,6 +71,20 @@ export function configureNewsChatTools(config: NewsChatToolDependencies): void {
   deps = config;
 }
 
+/** Read-only access to the same actor-scoped records used by the eventual writes. */
+export async function newsApprovalSources(db: DataContextDb) {
+  return requireDeps().repository.listCustomSources(db);
+}
+export async function newsApprovalSnapshot(db: DataContextDb) {
+  return requireDeps().repository.readLatestSnapshot(db);
+}
+export async function newsApprovalTopics(db: DataContextDb) {
+  return requireDeps().repository.listCustomTopics(db);
+}
+export function newsApprovalPreview(actorUserId: string, confirmationId: string) {
+  return requireDeps().previews.peek(actorUserId, confirmationId);
+}
+
 /** Queue a refresh after the gateway has completed its normal confirmation flow. */
 export const newsRefreshNewsExecute: ToolExecute = async (
   scopedDb,

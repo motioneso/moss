@@ -153,7 +153,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
         providerConfigId: providerId,
         providerModelId: OUTPUT_FIXTURE_MODEL,
         displayName: "Synthetic summary JSON model",
-        capabilities: ["summarization", "json"],
+        capabilities: ["chat", "summarization", "json"],
         status: "active",
         tier: "economy"
       }
@@ -227,6 +227,113 @@ test("reviewed summary versions create independent Tasks and private vault copie
     await expect(summary).toBeVisible();
     await expect(page.getByLabel("Summary style", { exact: true })).toHaveValue("general");
     await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeEnabled();
+    await test.step("summary availability follows the effective default without dispatch", async () => {
+      // Install the official locked Claude native binary in this disposable stack only.
+      // This existing install seam verifies the package; no login/model invocation follows.
+      const installed = await page.request.post("/api/onboarding/provider-install", {
+        data: { providerKind: "anthropic" }
+      });
+      expect(installed.status()).toBe(200);
+      expect(await installed.json()).toMatchObject({
+        installState: "installed",
+        version: "2.1.282"
+      });
+      const { stdout } = await exec(
+        "docker",
+        buildUatComposeArgs(project, [
+          "exec",
+          "-T",
+          "jarv1s",
+          "node_modules/.bin/tsx",
+          "tests/uat/fixtures/meeting-output-default-models-cli.ts",
+          project
+        ])
+      );
+      const defaults = JSON.parse(stdout) as Record<
+        "codex" | "claude",
+        { providerId: string; modelId: string }
+      >;
+      try {
+        for (const [name, availability] of [
+          ["codex", "subscription-unsupported"],
+          ["claude", "available"]
+        ] as const) {
+          expect(
+            (
+              await page.request.put(pinPath, {
+                data: { modelId: defaults[name].modelId }
+              })
+            ).status()
+          ).toBe(200);
+          // Assert the real chat resolver's selected default too, not merely a seeded row.
+          const effective = await page.request.get("/api/ai/chat-model-override");
+          expect(effective.status()).toBe(200);
+          expect((await effective.json()).settings).toMatchObject({
+            defaultModel: { id: defaults[name].modelId },
+            selectedModel: { id: defaults[name].modelId }
+          });
+          const refreshed = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
+          expect((await refreshed.json()).generationAvailability).toBe(availability);
+          const generate = page.getByRole("button", { name: "Write summary", exact: true });
+          if (name === "codex") {
+            await expect(generate).toBeDisabled();
+            await expect(summary).toContainText(
+              "Summaries on this subscription aren’t supported yet. No other model was used."
+            );
+          } else {
+            // The production-like runner isolates each owner's structured calls.
+            // Readiness makes no model request and does not require login.
+            await expect(generate).toBeEnabled();
+            await expect(summary).not.toContainText("Claude summaries aren’t available");
+            await expect(summary).not.toContainText("Your default model is unavailable");
+          }
+          expect(await readOutputs(page, path)).toMatchObject({ headVersion: 0, artifacts: [] });
+        }
+      } finally {
+        expect((await page.request.put(pinPath, { data: { modelId } })).status()).toBe(200);
+        for (const configured of Object.values(defaults)) {
+          expect((await page.request.delete(`/api/ai/models/${configured.modelId}`)).status()).toBe(
+            200
+          );
+          expect(
+            (await page.request.post(`/api/ai/providers/${configured.providerId}/revoke`)).status()
+          ).toBe(200);
+        }
+      }
+      const restored = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
+      expect((await restored.json()).generationAvailability).toBe("available");
+      await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeEnabled();
+    });
+    await test.step("an inactive default stays unavailable rather than substituting another model", async () => {
+      try {
+        expect(
+          (
+            await page.request.patch(`/api/ai/models/${modelId}`, {
+              data: { status: "disabled" }
+            })
+          ).status()
+        ).toBe(200);
+        const unavailable = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
+        expect((await unavailable.json()).generationAvailability).toBe("model-unavailable");
+        await expect(
+          page.getByRole("button", { name: "Write summary", exact: true })
+        ).toBeDisabled();
+        await expect(summary).toContainText(
+          "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used."
+        );
+      } finally {
+        expect(
+          (
+            await page.request.patch(`/api/ai/models/${modelId}`, {
+              data: { status: "active" }
+            })
+          ).status()
+        ).toBe(200);
+      }
+      const repaired = await clickCommand(page, "Refresh summaries", `${path}/outputs`, "GET");
+      expect((await repaired.json()).generationAvailability).toBe("available");
+      await expect(page.getByRole("button", { name: "Write summary", exact: true })).toBeEnabled();
+    });
     const failedRequestKey =
       await test.step("unsupported summary model explains real configuration recovery", async () => {
         // Change the real synthetic model, not a Moss response. The hard pin stays selected;
@@ -235,7 +342,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
           expect(
             (
               await page.request.patch(`/api/ai/models/${modelId}`, {
-                data: { capabilities: ["summarization"] }
+                data: { capabilities: ["chat", "summarization"] }
               })
             ).status()
           ).toBe(200);
@@ -252,9 +359,9 @@ test("reviewed summary versions create independent Tasks and private vault copie
             code: "meeting_output_route_unavailable"
           });
           await expect(summary).toContainText(
-            "Summaries need an available API-key model with summarization and structured-output support."
+            "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used."
           );
-          await expect(summary).toContainText("CLI models aren’t supported for summaries.");
+          await expect(summary).toContainText("Check your default model in");
           await expect(summary).not.toContainText("Choose Generate to start a new request");
           expect(await readOutputs(page, path)).toMatchObject({ headVersion: 0, artifacts: [] });
           const recovery = summary.getByRole("link", {
@@ -284,7 +391,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
           await expect(
             summary.getByText("Checking summary model availability…", { exact: true })
           ).toHaveCount(0);
-          await expect(summary).toContainText("CLI models aren’t supported for summaries.");
+          await expect(summary).toContainText("Check your default model in");
           await expect(page.getByLabel("Summary style", { exact: true })).toHaveValue("general");
           await expect(
             page.getByRole("button", { name: "Write summary", exact: true })
@@ -297,7 +404,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
           expect(
             (
               await page.request.patch(`/api/ai/models/${modelId}`, {
-                data: { capabilities: ["summarization", "json"] }
+                data: { capabilities: ["chat", "summarization", "json"] }
               })
             ).status()
           ).toBe(200);
@@ -321,7 +428,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
         expect(
           (
             await page.request.patch(`/api/ai/models/${modelId}`, {
-              data: { capabilities: ["summarization"] }
+              data: { capabilities: ["chat", "summarization"] }
             })
           ).status()
         ).toBe(200);
@@ -339,7 +446,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
         expect(
           (
             await page.request.patch(`/api/ai/models/${modelId}`, {
-              data: { capabilities: ["summarization", "json"] }
+              data: { capabilities: ["chat", "summarization", "json"] }
             })
           ).status()
         ).toBe(200);
@@ -364,7 +471,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
         expect(
           (
             await page.request.patch(`/api/ai/models/${modelId}`, {
-              data: { capabilities: ["summarization", "json"] }
+              data: { capabilities: ["chat", "summarization", "json"] }
             })
           ).status()
         ).toBe(200);
@@ -672,7 +779,7 @@ test("reviewed summary versions create independent Tasks and private vault copie
     expect(await vaultEvidence(project, meetingId)).toEqual(finalFiles);
     meetingId = undefined;
     console.log(
-      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; unsupported summary capability returns bounded code and actionable copy; admin AI provider link and Back preserve the SPA document and summary selection; capabilities restored before a fresh successful request; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. CLI rejection is unit-tested, not a live CLI login. No whole long-meeting/model-quality/audio proof."
+      "MEETINGS_OUTPUT_UAT real UI/API; disclosed synthetic HTTP model; unsupported summary capability returns bounded code and actionable copy; admin AI provider link and Back preserve the SPA document and summary selection; capabilities restored before a fresh successful request; two bounded no-tool requests; exact source evidence; explicit owner-reviewed Task; acceptance replay and regeneration no duplicate/overwrite; immutable manual version; explicit create-only private copies; receipts separate write/index status; repeated save stable; independent Task and vault copies survive meeting deletion. Real Codex effective default rejected; official locked Claude default available with Generate enabled on the per-user runner before generation or login; HTTP default restored for all generated artifacts. No whole long-meeting/model-quality/audio proof."
     );
   } finally {
     try {

@@ -233,6 +233,7 @@ describe("native Claude tool permission bridge", () => {
       provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
           created.push(input);
           return { id: "native-action-1" };
@@ -294,6 +295,7 @@ describe("native Claude tool permission bridge", () => {
       provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "native-action-timeout" })
       } as never,
       runner: {
@@ -336,6 +338,7 @@ describe("native Claude tool permission bridge", () => {
       provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
           created.push(input);
           return { id: "native-action-x" };
@@ -373,6 +376,7 @@ describe("native Claude tool permission bridge", () => {
       provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "native-action-grep" })
       } as never,
       runner: {
@@ -410,6 +414,7 @@ describe("native Claude tool permission bridge", () => {
       provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
           createPendingCalled = true;
           created.push(input);
@@ -464,6 +469,7 @@ describe("native Claude tool permission bridge", () => {
         provenance: cleanProvenance,
         resolveActiveModules: async () => [],
         repository: {
+          expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
           createPendingAssistantAction: async () => ({ id: "pending_gated" }),
           insertActionAuditLog: async () => {}
         } as never,
@@ -518,6 +524,7 @@ describe("native Claude tool permission bridge", () => {
       provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "pending_config" }),
         insertActionAuditLog: async () => {}
       } as never,
@@ -559,6 +566,7 @@ describe("native Claude tool permission bridge", () => {
       provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: `pending_path_${++actionNumber}` }),
         insertActionAuditLog: async () => {}
       } as never,
@@ -611,6 +619,7 @@ describe("native Claude tool permission bridge", () => {
       provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "pending_1" }),
         insertActionAuditLog: async () => {}
       } as never,
@@ -710,6 +719,7 @@ describe("gateway audit outcome truth (#1252)", () => {
       provenance: cleanProvenance,
       resolveActiveModules: async () => [manifestWithTool(toolOverrides)],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         insertActionAuditLog: async (
           _db: unknown,
           input: { outcome: string; errorClass: string | null }
@@ -787,6 +797,7 @@ describe("gateway audit outcome truth (#1252)", () => {
         })
       ],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         insertActionAuditLog: async () => {}
       } as never,
       runner: {
@@ -873,6 +884,9 @@ describe("unattended mode security gate in callTool (#2419)", () => {
           assistantTools: [
             {
               name: "danger.nuke",
+              actionLabel: "Delete requested item",
+              approvalContent: "user_authored",
+              approvalPresentation: async () => ({ target: "Requested item", fields: [] }),
               description: "Nuke",
               permissionId: "danger.nuke",
               actionFamilyId: "danger_family",
@@ -884,6 +898,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
         }
       ],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "act_1" }),
         resolveAssistantAction: async () => ({ id: "act_1", status: "confirmed" }),
         insertActionAuditLog: async () => {}
@@ -934,6 +949,9 @@ describe("unattended mode security gate in callTool (#2419)", () => {
           assistantTools: [
             {
               name: "plain.write",
+              actionLabel: "Write requested value",
+              approvalContent: "user_authored",
+              approvalPresentation: async () => ({ target: "Requested item", fields: [] }),
               description: "Write without family",
               permissionId: "plain.write",
               risk: "write",
@@ -943,6 +961,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
         }
       ],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "act_2" }),
         resolveAssistantAction: async () => ({ id: "act_2", status: "confirmed" }),
         insertActionAuditLog: async () => {}

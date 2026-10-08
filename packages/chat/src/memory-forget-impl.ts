@@ -46,6 +46,8 @@ export function createMemoryForgetBoundary(deps: {
   ) => !module.aiConsent || (await module.aiConsent.isGranted(db, actorUserId));
 
   const resolver: PerCallResolver = async (input, ctx) => {
+    if (Object.keys(input).some((key) => key !== "factId"))
+      return { kind: "refuse", reason: "not_ready" };
     if (typeof input.factId !== "string" || !isUuid(input.factId))
       return { kind: "refuse", reason: "unknown_route" };
     const module = await activeMemory(ctx);
@@ -63,9 +65,15 @@ export function createMemoryForgetBoundary(deps: {
           externalContent: true,
           forceConfirm: true,
           confirmWhenTainted: false,
-          summary: "Forget saved memory",
+          summary: "Delete memory",
+          requiresTarget: true,
           targetVersion: target.version,
-          details: { target: target.label, fields: [] },
+          details: {
+            presentation: "human",
+            approvalKind: "memory_delete",
+            target: target.label,
+            fields: []
+          },
           affectsModules: ["memory"]
         };
       }

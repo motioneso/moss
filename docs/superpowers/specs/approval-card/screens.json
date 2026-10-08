@@ -26,5 +26,9 @@
   {
     "file": "07-cancelled",
     "title": "Cancelled"
+  },
+  {
+    "file": "08-delete-memory-comparison",
+    "title": "Delete memory · red comparison"
   }
 ]

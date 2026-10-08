@@ -26,6 +26,16 @@ import {
 } from "@moss/shared";
 
 import { requiresCalendarConfirmation } from "./confirmation-policy.js";
+import {
+  createDayPlanPresentation,
+  saveDayPlanPresentation,
+  dayPlanDraftPresentation
+} from "./day-plan-approval-presentation.js";
+import {
+  calendarCreatePresentation,
+  calendarDeletePresentation,
+  calendarReschedulePresentation
+} from "./approval-presentation.js";
 import { CALENDAR_CLASSIFIER_WINDOWS } from "./classifier-window.js";
 import { dayPlanDraftExecute, summarizeDayPlanDraft } from "./day-plan-chat-tool.js";
 import { resolveCalendarEventRef } from "./event-resolver.js";
@@ -200,7 +210,11 @@ export const calendarModuleManifest = {
     {
       method: "POST",
       path: "/api/calendar/day-plans",
-      chat: { access: "write", title: "Create day-plan draft" },
+      chat: {
+        access: "write",
+        title: "Create day-plan draft",
+        presentation: createDayPlanPresentation
+      },
       requestSchema: createDayPlanRequestSchema,
       responseSchema: createDayPlanResponseSchema,
       permissionId: "calendar.manage"
@@ -208,7 +222,11 @@ export const calendarModuleManifest = {
     {
       method: "PATCH",
       path: "/api/calendar/day-plans/:id/draft",
-      chat: { access: "write", title: "Save day-plan draft" },
+      chat: {
+        access: "write",
+        title: "Save day-plan draft",
+        presentation: saveDayPlanPresentation
+      },
       requestSchema: saveDayPlanRequestSchema,
       responseSchema: saveDayPlanResponseSchema,
       permissionId: "calendar.manage"
@@ -365,6 +383,9 @@ export const calendarModuleManifest = {
     },
     {
       name: "calendar.createEvent",
+      actionLabel: "Create calendar event",
+      approvalPresentation: calendarCreatePresentation,
+      approvalContent: "user_authored",
       description:
         "Create a calendar event on the user's primary Google Calendar at a time you name (or a " +
         "part of the day, e.g. tomorrow morning), conflict-checked live against their availability. " +
@@ -412,6 +433,8 @@ export const calendarModuleManifest = {
     },
     {
       name: "calendar.deleteEvent",
+      actionLabel: "Delete calendar event",
+      approvalPresentation: calendarDeletePresentation,
       description:
         "Delete a single calendar event the user owns. Asks for confirmation by default, unless the " +
         "user has allowed automatic calendar deletions in settings. On approval (or automatically, " +
@@ -451,6 +474,8 @@ export const calendarModuleManifest = {
     },
     {
       name: "calendar.rescheduleEvent",
+      actionLabel: "Reschedule calendar event",
+      approvalPresentation: calendarReschedulePresentation,
       description:
         "Move a single calendar event the user owns to a new start/end time, keeping the same " +
         "event id (never delete-then-create). Refuses outright, regardless of settings, if the " +
@@ -489,6 +514,8 @@ export const calendarModuleManifest = {
     },
     {
       name: "calendar.dayPlanDraft",
+      actionLabel: "Save day-plan draft",
+      approvalPresentation: dayPlanDraftPresentation,
       description:
         "Save the evening interview's typed intent and untimed task additions to the " +
         "actor's day-plan draft for tomorrow. Additions land as dateless proposals that " +
@@ -579,9 +606,14 @@ export const calendarModuleManifest = {
       ]
     },
     {
+      id: "calendar.draft_removal_disclosure",
+      description:
+        "Draft approval separates list changes from an empty block list. Every omitted block is identified; if its task is gone and it has no title, its kind and position identify it without exposing internal IDs."
+    },
+    {
       id: "calendar.saved_day_plan_draft",
       description:
-        "Save evening intent and draft blocks. Only this proposal changes; saves may fail if plan changed, task unavailable, or placed block omitted without pending removal. Drafts are not previewed, approved, scheduled, or written to a calendar.",
+        "Save evening intent and draft blocks. Approval lists every omitted block that the replacement removes from the draft. Placed blocks require pending removal. Draft saves never schedule or write calendar events.",
       errors: [
         {
           code: "day_plan_invalid",

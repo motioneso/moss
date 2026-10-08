@@ -12,7 +12,12 @@ export * from "./output-routes.js";
 
 export * from "./export-service.js";
 export * from "./export-routes.js";
-export { getMeetingOutputTemplate, validateMeetingOutput } from "./output-validation.js";
+export {
+  getMeetingOutputTemplate,
+  validateMeetingOutput,
+  MeetingOutputValidationError,
+  type MeetingOutputValidationReasonCode
+} from "./output-validation.js";
 export type { MeetingPrivateExportPort } from "./export-port.js";
 
 export * from "./history-repository.js";

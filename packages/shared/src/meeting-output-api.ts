@@ -89,6 +89,8 @@ export type MeetingOutputResult =
 export type MeetingOutputGenerationAvailability =
   | "available"
   | "model-unavailable"
+  | "subscription-unsupported"
+  | "subscription-isolation-unavailable"
   | "check-failed";
 export interface MeetingAutomaticSummary {
   readonly status: "waiting" | "pending" | "saved" | "failed" | "skipped";
