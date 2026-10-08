@@ -20,10 +20,12 @@ protocol MeetingAudioReceiving: AnyObject {
                  frameCount: Int, sampleAt: (Int) -> Float)
     func drop(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int)
     func fail(_ failure: MeetingAudioFailure)
+    func fail(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic)
     func setScopeVerificationPending(_ pending: Bool)
 }
 
 extension MeetingAudioReceiving {
+    func fail(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic) { fail(failure) }
     func setScopeVerificationPending(_ pending: Bool) {}
     // Compatibility for synthetic receivers. Native adapters always provide the hardware sample clock.
     func receive(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double,

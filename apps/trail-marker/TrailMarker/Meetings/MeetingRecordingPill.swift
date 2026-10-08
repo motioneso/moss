@@ -129,6 +129,7 @@ final class MeetingRecordingPillController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
+        panel.appearance = NSAppearance(named: .aqua)
         panel.contentView = RecordingPillHostingView(rootView: MeetingRecordingPill(host: host))
         if let screen = NSScreen.main ?? NSScreen.screens.first {
             panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - TrailMarkerTokens.Layout.recordingPillWidth / 2,

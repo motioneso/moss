@@ -124,6 +124,140 @@ final class MeetingHostLifecycleTests: XCTestCase {
         XCTAssertEqual(fixture.device.starts, 1, "Closing the resumed session must not acquire the source again")
     }
 
+    func testPauseDiagnosticsExposeNativeFailureButNotArbitraryErrorContent() {
+        XCTAssertEqual(MeetingCaptureDiagnostics.interruptionReason(MeetingAudioFailure.invalidSelection), "invalidSelection")
+        XCTAssertEqual(MeetingCaptureDiagnostics.interruptionReason(
+            MeetingAudioFailure.deviceFailure(operation: "start-output-io", status: -77)),
+            "deviceFailure(operation: \"start-output-io\", status: -77)")
+        let error = NSError(domain: "private-instance", code: 42,
+            userInfo: [NSLocalizedDescriptionKey: "private URL, credential or transcript"])
+        XCTAssertEqual(MeetingCaptureDiagnostics.interruptionReason(error), "unexpectedError(code: 42)")
+    }
+
+    func testSourceValidationDiagnosticsDistinguishPermissionResolveAndMismatch() async throws {
+        let reasons = ["microphone-permission-not-granted", "resolve-threw", "resolved-not-equal"]
+        for reason in reasons {
+            let fixture = try Fixture()
+            defer { fixture.close() }
+            fixture.permission = .granted
+            fixture.inventoryOverride = sourceDiagnosticSnapshot()
+            let host = fixture.host { XCTFail("Granted permission must not be requested again"); return false }
+            defer { host.shutdown(reason: "Synthetic source diagnostic test") }
+            try host.acceptStart(fixture.server.command, claim: await fixture.claim(),
+                credential: fixture.pending.credential, origin: 9_000_000_000)
+            try await waitUntil { host.phase == .recording }
+            switch reason {
+            case "microphone-permission-not-granted":
+                fixture.permission = .denied
+                // Permission must remain the first failure even when resolution would fail too.
+                fixture.inventoryOverride = sourceDiagnosticSnapshot(microphone: nil)
+            case "resolve-threw": fixture.inventoryOverride = sourceDiagnosticSnapshot(microphone: nil)
+            default: fixture.inventoryOverride = sourceDiagnosticSnapshot(microphone: 43)
+            }
+            fixture.monotonic += 250_000_000
+            host.service()
+            XCTAssertEqual(host.phase, .paused, "Source diagnostic branches must retain the existing pause")
+            XCTAssertEqual(fixture.device.stops, 1, "Source diagnostic branches must close capture")
+            XCTAssertTrue(host.diagnostics.contains { $0.contains(reason) }, "Source validation must name the failed branch")
+            for other in reasons where other != reason {
+                XCTAssertFalse(host.diagnostics.contains { $0.contains(other) }, "Only the failing source-validation branch is logged")
+            }
+        }
+    }
+
+    func testComputerSourceDiagnosticsKeepStableObjectsAndPauseChangedExclusions() async throws {
+        for addOtherMoss in [false, true] {
+            let fixture = try Fixture()
+            defer { fixture.close() }
+            fixture.permission = .granted
+            let baseline = sourceDiagnosticSnapshot()
+            fixture.inventoryOverride = baseline
+            fixture.server.setSelection(.init(mode: "computer-audio",
+                microphone: .init(deviceId: "mic-uid", sourceId: "mic"), outputSourceId: "output",
+                appProcessTreeId: nil, scope: .init(kind: "process-exclusion", endpointId: nil,
+                    excludedProcessTreeIds: baseline.wire.computerAudio.excludedProcessTreeIds)))
+            let output = Device()
+            let host = fixture.host(factory: { _ in [.microphone: fixture.device, .output: output] }) { false }
+            defer { host.shutdown(reason: "Synthetic computer source diagnostic test") }
+            try host.acceptStart(fixture.server.command, claim: await fixture.claim(),
+                credential: fixture.pending.credential, origin: 9_000_000_000)
+            try await waitUntil { host.phase == .recording }
+            // A translated object gaining a listed route retains exactly the same exclusion.
+            var listed = baseline
+            listed.audioRoutes = [17: [70]]
+            fixture.inventoryOverride = listed
+            fixture.monotonic += 250_000_000
+            host.service()
+            XCTAssertEqual(host.phase, .recording, "A stable excluded object becoming listed must not pause capture")
+            XCTAssertEqual(output.stops, 0)
+            XCTAssertFalse(host.diagnostics.contains { $0.contains("source-validation") })
+
+            fixture.inventoryOverride = sourceDiagnosticSnapshot(audioObject: addOtherMoss ? 101 : 202,
+                addOtherMoss: addOtherMoss)
+            fixture.monotonic += 250_000_000
+            host.service()
+            XCTAssertEqual(host.phase, .paused, "Changed exclusion objects and new Moss processes must still pause")
+            XCTAssertEqual(output.stops, 1, "Unsafe exclusion changes must still close the output tap")
+            let expected = addOtherMoss ? "resolve-threw" : "resolved-not-equal"
+            XCTAssertTrue(host.diagnostics.contains { $0.contains(expected) }, "Computer source changes must log their actual branch")
+            if !addOtherMoss {
+                let line = try XCTUnwrap(host.diagnostics.first { $0.contains("resolved-not-equal") })
+                XCTAssertTrue(line.contains("101"), "Mismatch diagnostics must retain the original excluded audio object")
+                XCTAssertTrue(line.contains("202"), "Mismatch diagnostics must show the current excluded audio object")
+                XCTAssertTrue(line.contains("17"), "Mismatch diagnostics must identify the excluded PID")
+                XCTAssertFalse(line.contains("PRIVATE_SENTINEL"))
+            }
+        }
+    }
+
+    func testSourceMismatchDiagnosticsAreNumericBoundedAndDoNotLeakInventoryText() {
+        let before = MeetingCaptureSourceDiagnostics(snapshot: sourceDiagnosticSnapshot())
+        let after = MeetingCaptureSourceDiagnostics(snapshot: sourceDiagnosticSnapshot(audioObject: nil))
+        let mismatch = MeetingCaptureSourceDiagnostics.failure(.resolvedNotEqual, before: before, after: after)
+        XCTAssertEqual(mismatch,
+            "resolved-not-equal before(count=1,excluded=[pid=17/audio-object=101]) after(count=1,excluded=[pid=17/audio-object=0])",
+            "Source mismatch diagnostics must report sorted numeric identities and zero for unavailable objects")
+        XCTAssertFalse(mismatch.contains("PRIVATE_SENTINEL"), "Source diagnostics must never render inventory paths or labels")
+        XCTAssertEqual(MeetingCaptureSourceDiagnostics.failure(.microphonePermissionNotGranted, before: before, after: after),
+            "microphone-permission-not-granted", "Permission failures must contain only the fixed branch label")
+        XCTAssertEqual(MeetingCaptureSourceDiagnostics.failure(.resolveThrew, before: before, after: after),
+            "resolve-threw", "Resolution failures must contain only the fixed branch label")
+        let baseline = sourceDiagnosticSnapshot()
+        let processes = (1...129).reversed().map { pid in
+            MeetingProcessIdentity(pid: Int32(pid), parentPID: 0, startedSeconds: 1, startedMicroseconds: 0,
+                executable: "/PRIVATE_SENTINEL/Moss.app/PRIVATE_SENTINEL")
+        }
+        let oversized = MeetingInventorySnapshot(wire: baseline.wire, microphones: baseline.microphones,
+            applications: [:], processes: processes, audioObjects: [:], excluded: processes)
+        let bounded = MeetingCaptureSourceDiagnostics.failure(.resolvedNotEqual, before: nil,
+            after: .init(snapshot: oversized))
+        XCTAssertTrue(bounded.contains("before(unavailable)"))
+        XCTAssertTrue(bounded.contains("after(count=129,excluded=[pid=1/audio-object=0"),
+            "Diagnostics must sort identities and retain the full exclusion count")
+        XCTAssertEqual(bounded.components(separatedBy: "pid=").count - 1, 128,
+            "Public source diagnostics must cap numeric process pairs")
+        XCTAssertFalse(bounded.contains("pid=129/"))
+        XCTAssertFalse(bounded.contains("PRIVATE_SENTINEL"))
+    }
+
+    private func sourceDiagnosticSnapshot(microphone: UInt32? = 42, audioObject: UInt32? = 101,
+                                          addOtherMoss: Bool = false) -> MeetingInventorySnapshot {
+        let moss = MeetingProcessIdentity(pid: 17, parentPID: 1, startedSeconds: 2, startedMicroseconds: 3,
+            executable: "/PRIVATE_SENTINEL/Moss.app/Contents/MacOS/PRIVATE_SENTINEL")
+        let other = MeetingProcessIdentity(pid: 18, parentPID: 1, startedSeconds: 4, startedMicroseconds: 5,
+            executable: "/PRIVATE_SENTINEL/Moss.app/Contents/MacOS/Other")
+        let excluded = addOtherMoss ? [moss, other] : [moss]
+        let wire = MeetingCaptureInventory(microphones: microphone == nil ? [] : [
+            .init(deviceId: "mic-uid", sourceId: "mic", label: "PRIVATE_SENTINEL")],
+            applications: [], computerAudio: .init(available: true, excludedProcessTreeIds: excluded.map(\.key)),
+            microphonePermission: .granted, systemAudioPermission: .unknown)
+        var objects: [Int32: UInt32] = [:]
+        if let audioObject { objects[17] = audioObject }
+        if addOtherMoss { objects[18] = 303 }
+        return .init(wire: wire, microphones: microphone.map { ["mic-uid": $0] } ?? [:],
+            applications: [:], processes: excluded, audioObjects: objects, excluded: excluded)
+    }
+
     func testAlreadyPausedCaptureAcknowledgesNewPauseGenerationWithoutTouchingDevices() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }
@@ -133,6 +267,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
         try await waitUntil { host.phase == .recording }
         host.sourceChanged()
+        XCTAssertTrue(host.diagnostics.contains("capture-paused: sourceChanged"))
         XCTAssertEqual(host.phase, .paused)
         let stops = fixture.device.stops
         try await waitUntil(timeout: 4) { fixture.server.lastObservation?.phase == "paused" }
@@ -678,6 +813,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         var monotonic: UInt64 = 10_000_000_000
         var permission: MeetingCapturePermission = .unknown
         var permissionReads = 0
+        var inventoryOverride: MeetingInventorySnapshot?
 
         init() throws {
             instance = try InstanceURL.parse("https://moss.example").get()
@@ -709,7 +845,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
                 microphonePermission: .unknown, systemAudioPermission: .unknown)
             let snapshot = MeetingInventorySnapshot(wire: inventory, microphones: ["mic-uid": 42], applications: [:],
                 processes: [], audioObjects: [:], excluded: [])
-            let ports = MeetingCaptureHostPorts(identity: { identity }, connectionAvailable: { true }, readInventory: { customSnapshot ?? snapshot },
+            let ports = MeetingCaptureHostPorts(identity: { identity }, connectionAvailable: { true }, readInventory: { self.inventoryOverride ?? customSnapshot ?? snapshot },
                 microphonePermission: { self.permissionReads += 1; return self.permission }, requestMicrophone: permissionRequest,
                 makeClient: Self.client, now: { self.monotonic }, wallNow: { self.wall })
             let defaults = UserDefaults(suiteName: defaultsName)!

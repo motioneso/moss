@@ -446,7 +446,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.mac_recording_status",
       description:
-        "White 222 × 32 pill with three live audio bars, source menu, Pause/Resume, Stop and Hide X. Silence/stale audio flattens the bars. Resume keeps the current sources. Stop clears the pill and red menu item."
+        "White 222 × 32 pill: three live audio bars, light/dark-readable source menu, Pause/Resume, Stop and Hide X. Silence/stale audio flattens bars. Resume keeps sources. Stop clears the pill and red menu item."
     },
     {
       id: "meetings.mac_recording_pill_visibility",
