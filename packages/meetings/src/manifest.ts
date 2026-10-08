@@ -5,6 +5,7 @@ import {
   meetingNotesPresentation,
   meetingPreferencesPresentation,
   meetingSummaryPresentation,
+  meetingTitlePresentation,
   meetingTranscriptPresentation
 } from "./action-presentations.js";
 import { fileURLToPath } from "node:url";
@@ -105,7 +106,12 @@ export const meetingsModuleManifest = {
     {
       method: "PUT",
       path: "/api/meetings/records/:id/title",
-      chat: { access: "write", title: "Rename your meeting", content: "user_authored" },
+      chat: {
+        access: "write",
+        title: "Rename your meeting",
+        content: "user_authored",
+        presentation: meetingTitlePresentation
+      },
       permissionId: "meetings.write"
     },
     {
