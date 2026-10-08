@@ -8,10 +8,16 @@ Runtime baseline and throwaway prototypes were not merged.
 
 - Original native graph verified: 24 open subissues, 28 blocking edges; initial frontier
   #3125, #3129 and #3130. Ticket bodies and graph snapshot are stored outside the repo.
-- #3125 is in TDD implementation; early independent review found cold-launch binding and
-  actual-role upgrade-backfill issues for the implementer to fix. Focused first gate passed,
-  but revised checks, full review and real UI proof remain before integration. Do not expand
-  concurrent runtime implementation until the first delivery loop validates.
+- #3125 is verified and integrated from `9bee2d414`: stable owner Main designation,
+  preserved eligible history and cold/warm startup binding. Independent source review
+  cleared runtime `50c8f807b`; real configured-model UI proof used that unchanged runtime
+  with harness `7f0fa2877`. See [ticket evidence](../handoffs/2026-10-08-3125-evidence.md)
+  for actual check inputs, security negative control, live assertions and limits. The merger
+  reruns affected checks on the final integration tip before returning its receipt.
+- Remaining unblocked frontier: #3126, #3127, #3129, #3130 and #3149. Use one builder
+  and sequential independent reviews within available capacity; serialize heavy checks.
+  All other work remains pending its verified blockers. The coordinator owns dispatch
+  and tracker transitions; no integration PR has been opened yet.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
@@ -20,7 +26,7 @@ Runtime baseline and throwaway prototypes were not merged.
 - Each ticket uses a fresh TDD implementer, isolated worktree/branch from the integration
   tip, required checks and independent review, real UI/worker demonstration, evidence
   and truthful app-map updates. DB checks use `verify-gate`.
-- A merger agent integrates verified tickets. Draft integration PR after first integration;
+- A merger agent integrates verified tickets. The coordinator opens the draft integration PR;
   final two-axis code review and fixes, then ready for Ben. Never auto-merge or deploy.
 
 ## Decisions
