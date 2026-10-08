@@ -59,7 +59,14 @@ export function LinkTrailMarkerPage() {
   });
 
   const decide = useMutation({
-    mutationFn: (decision: "approve" | "deny") => decideCompanionPairAttempt({ code, decision }),
+    mutationFn: (decision: "approve" | "deny") =>
+      decideCompanionPairAttempt({
+        code,
+        decision,
+        ...(attemptQuery.data?.recordingPolicyVersion === 1
+          ? { recordingPolicyVersion: 1 as const }
+          : {})
+      }),
     onSuccess: (result) => setDecided(result.status)
   });
 
@@ -92,8 +99,8 @@ export function LinkTrailMarkerPage() {
 
         {decided === "approved" ? (
           <p>
-            <strong>{deviceName}</strong> is linked. You can close this page, and sign the Mac out
-            any time from Settings, under Active sessions.
+            <strong>{deviceName}</strong> is linked. Keep using this tab to start a meeting when
+            you’re ready. You can sign the Mac out any time from Settings, under Active sessions.
           </p>
         ) : null}
 
@@ -118,6 +125,9 @@ export function LinkTrailMarkerPage() {
                   {APPROVAL_CAPABILITIES.map((capability) => (
                     <li key={capability}>{capability}</li>
                   ))}
+                  {attemptQuery.data?.recordingPolicyVersion === 1 ? (
+                    <li>Record meetings when you choose Start</li>
+                  ) : null}
                 </ul>
                 <span>It never gets your password or your browser session.</span>
               </div>

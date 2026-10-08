@@ -78,6 +78,10 @@ _No enum or boolean props._
 
 - **disabled** (optional boolean flag)
 
+## control-pill
+
+_No enum or boolean props._
+
 ## day-cell
 
 - **out** (optional boolean flag)
@@ -113,6 +117,10 @@ _No enum or boolean props._
 _No enum or boolean props._
 
 ## held-banner
+
+_No enum or boolean props._
+
+## highlight
 
 _No enum or boolean props._
 

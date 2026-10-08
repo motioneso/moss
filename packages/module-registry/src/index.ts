@@ -1,3 +1,9 @@
+import { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
+export { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
+import {
+  createMeetingCaptureRuntime,
+  type MeetingCaptureAuthorization
+} from "./meeting-capture-runtime.js";
 import { createApprovalSourceReferences } from "./approval-source-references.js";
 import {
   createMeetingOutputRuntime,
@@ -22,10 +28,15 @@ import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 import {
   meetingsModuleManifest,
   meetingsModuleSqlMigrationDirectory,
+  registerMeetingCaptureRoutes,
   registerMeetingRecordRoutes,
   registerMeetingOutputRoutes,
   registerMeetingExportRoutes,
-  MeetingExportService
+  MeetingExportService,
+  MEETING_STOP_SUMMARY_QUEUES,
+  MEETING_CAPTURE_MAINTENANCE_QUEUES,
+  createMeetingStopSummaryScheduler,
+  registerMeetingStopSummaryWorker
 } from "@moss/meetings";
 import {
   backtrackModuleManifest,
@@ -163,6 +174,7 @@ import {
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
   createConstrainedCliStructuredAdapterFactory,
+  selectEngineFactory,
   createAcpOneShotEngineFactory,
   registerChatJobWorkers,
   registerChatRoutes,
@@ -597,6 +609,8 @@ function findWorkspaceRoot(startDir: string): string {
 const APP_MAP_ARTIFACT_PATH = join(findWorkspaceRoot(MODULE_DIR), "dist", "app-map.json");
 
 export interface BuiltInRouteDependencies {
+  /** Dedicated session/device identity for explicit meeting recorder approval. */
+  readonly meetingCaptureAuthorization?: MeetingCaptureAuthorization;
   // Raw root handle forwarded to settings' BootstrapHelper (pre-session bootstrap status).
   // Documented Kysely< exemption — see packages/settings/src/bootstrap.ts. This is the
   // ONLY root-handle escape hatch in the route layer; module admin checks run through
@@ -829,6 +843,8 @@ export interface BuiltInRouteDependencies {
 }
 
 export interface BuiltInWorkerDependencies {
+  readonly createConstrainedCliStructuredAdapter?: BuiltInRouteDependencies["createConstrainedCliStructuredAdapter"];
+  readonly probeConstrainedCli?: BuiltInRouteDependencies["probeConstrainedCli"];
   readonly rootDb: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
   readonly focusSignals?: BuiltInRouteDependencies["focusSignals"];
@@ -860,6 +876,31 @@ export interface BuiltInWorkerDependencies {
    */
   readonly externalBriefingManifests?: readonly JsonMossModuleManifest[];
   readonly invokeExternalBriefing?: ExternalBriefingInvoker;
+}
+
+/**
+ * Worker transport composition stays beside the API's recorded adapter construction.
+ * The constrained adapter records every settled call through the worker-installed recorder.
+ * Own one RPC connection, with no in-process or alternative-model fallback.
+ */
+export function createWorkerMeetingSummaryCli(env: NodeJS.ProcessEnv = process.env): {
+  readonly dependencies: Pick<
+    BuiltInWorkerDependencies,
+    "createConstrainedCliStructuredAdapter" | "probeConstrainedCli"
+  >;
+  close(): void;
+} {
+  // Only select the RPC branch. An unconfigured host keeps API-key summaries available.
+  const runtime = env.JARVIS_CLI_RUNNER_SOCKET?.trim() ? selectEngineFactory({ env }) : undefined;
+  return {
+    dependencies: {
+      createConstrainedCliStructuredAdapter: runtime
+        ? createConstrainedCliStructuredAdapterFactory(runtime.factory)
+        : undefined,
+      probeConstrainedCli: createConstrainedCliReadinessProbe(() => runtime?.connection)
+    },
+    close: () => runtime?.connection?.close()
+  };
 }
 
 export function createStructuredChatEngineFactory(options: {
@@ -2892,8 +2933,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: meetingsModuleManifest,
     sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
-    queueDefinitions: [],
+    queueDefinitions: [...MEETING_STOP_SUMMARY_QUEUES, ...MEETING_CAPTURE_MAINTENANCE_QUEUES],
     registerRoutes: (server, deps) => {
+      registerMeetingCaptureRoutes(server, {
+        ...createMeetingCaptureRuntime(deps),
+        scheduleSummary: createMeetingStopSummaryScheduler(deps.boss)
+      });
       registerMeetingRecordRoutes(server, {
         beforeRemove: deleteMeetingChatThreads,
         dataContext: deps.dataContext,
@@ -2916,7 +2961,21 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           deps.resolveActiveModules
         )
       });
-    }
+    },
+    registerWorkers: (boss, deps) =>
+      registerMeetingStopSummaryWorker(
+        boss,
+        deps.dataContext,
+        createMeetingOutputRuntime({
+          dataContext: deps.dataContext,
+          createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
+          probeConstrainedCli: deps.probeConstrainedCli,
+          resolveActiveModules: createActiveModulesResolver({
+            dataContext: deps.dataContext,
+            manifests: getBuiltInModuleManifests
+          })
+        }).generator
+      )
   },
   {
     manifest: scratchpadModuleManifest,
@@ -3701,18 +3760,7 @@ export function registerBuiltInApiRoutes(
     createConstrainedCliStructuredAdapter: createConstrainedCliStructuredAdapterFactory(
       structuredChatEngineFactory
     ),
-    probeConstrainedCli: async (actorUserId, signal) => {
-      const connection = getRpcConnection();
-      if (!connection) return "model-unavailable";
-      const result = await connection.probeProvider(
-        { provider: "anthropic", constrainedStructured: true },
-        actorUserId,
-        { timeoutMs: 5_000, signal }
-      );
-      if (result.constrainedUnavailableReason === "per_user_isolation_required")
-        return "subscription-isolation-unavailable";
-      return result.status === "ready" ? "available" : "model-unavailable";
-    },
+    probeConstrainedCli: createConstrainedCliReadinessProbe(getRpcConnection),
     personaPreview:
       dependencies.personaPreview ??
       createDefaultPersonaPreview(dependencies.dataContext, {

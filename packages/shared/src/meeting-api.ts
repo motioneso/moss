@@ -13,17 +13,19 @@ export interface MeetingMicrophone {
   readonly deviceId: string;
 }
 
-export type MeetingCaptureSelection = {
-  readonly microphone: MeetingMicrophone;
-} & (
-  | { readonly mode: "microphone-only" }
+export type MeetingCaptureSelection =
+  | { readonly mode: "microphone-only"; readonly microphone: MeetingMicrophone }
   | {
       readonly mode: "selected-app";
+      readonly microphone: MeetingMicrophone;
       readonly outputSourceId: string;
       readonly appProcessTreeId: string;
+      readonly applicationId?: string;
     }
   | {
       readonly mode: "computer-audio";
+      /** Explicit null captures computer audio without opening a microphone. */
+      readonly microphone: MeetingMicrophone | null;
       readonly outputSourceId: string;
       /** Endpoint loopback is limited to this device, never implicitly all outputs. */
       readonly scope:
@@ -32,8 +34,7 @@ export type MeetingCaptureSelection = {
             readonly kind: "process-exclusion";
             readonly excludedProcessTreeIds: readonly string[];
           };
-    }
-);
+    };
 
 /** Independently declared capabilities; a transcription model implies no speaker capability. */
 export interface MeetingProcessingCapabilities {
@@ -56,7 +57,6 @@ export interface MeetingReadiness {
   readonly output: MeetingSourceHealth;
   readonly permissionsGranted: boolean;
   readonly processingReady: boolean;
-  readonly noticeAcknowledged: boolean;
 }
 
 export interface MeetingSourceBoundary {

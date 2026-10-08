@@ -189,7 +189,8 @@ export interface MeetingRecordsTable {
   id: ColumnType<string, string | undefined, never>;
   owner_user_id: ColumnType<string, string | undefined, never>;
   request_key: ColumnType<string, string, never>;
-  title: ColumnType<string, string, never>;
+  title: ColumnType<string, string, string>;
+  creation_title: ColumnType<string, string | undefined, never>;
   personal_notes: ColumnType<string, string | undefined, string>;
   notes_revision: ColumnType<number, number | undefined, number>;
   created_at: TimestampColumn;
@@ -275,6 +276,7 @@ export interface MeetingOutputArtifactsTable {
   artifact_json: string;
   inactive: boolean;
   created_at: TimestampColumn;
+  history_overview: ColumnType<string, string | undefined, string>;
 }
 export interface MeetingActionCandidatesTable {
   id: ColumnType<string, string | undefined, never>;
@@ -289,7 +291,7 @@ export interface MeetingActionCandidatesTable {
     "pending" | undefined,
     "pending" | "accepted" | "dismissed"
   >;
-  accepted_task_id: string | null;
+  accepted_task_id: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface WorkshopProjectsTable {
@@ -1910,6 +1912,10 @@ export interface MossDatabase {
   "app.meeting_output_requests": MeetingOutputRequestsTable;
   "app.meeting_output_artifacts": MeetingOutputArtifactsTable;
   "app.meeting_action_candidates": MeetingActionCandidatesTable;
+  "app.meeting_capture_start_limits": {
+    owner_user_id: ColumnType<string, string | undefined, never>;
+    started_at: Date[];
+  };
   "app.meeting_records": MeetingRecordsTable;
   "app.meeting_note_writes": MeetingNoteWritesTable;
   "app.meeting_transcript_batches": MeetingTranscriptBatchesTable;

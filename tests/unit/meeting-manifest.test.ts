@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import Fastify from "fastify";
+import { CORE_APP_SCREENS, CORE_APP_SETTINGS } from "@moss/shared";
 import {
   getBuiltInModuleManifests,
   getBuiltInModuleRegistrations,
@@ -11,6 +12,59 @@ import {
 // Importing the actual composition root runs its compatibility gate. A default-disabled
 // built-in prevents API/worker startup because this repository has deny-only enablement.
 describe("meetings composition", () => {
+  it("keeps single-link approval consistent with the newer minimal meeting surfaces", () => {
+    const meeting = getBuiltInModuleManifests().find((item) => item.id === "meetings")!;
+    const native = meeting.features!.find((item) => item.id === "meetings.native_capture")!;
+    const profile = CORE_APP_SETTINGS.find((item) => item.id === "profile")!.description;
+    const link = CORE_APP_SCREENS.find((item) => item.id === "link-trail-marker")!.description;
+    expect(meeting.navigation![0]!.description).toContain("authorized by initial linking");
+    expect(native.description).toContain("nav dot");
+    expect(native.remediations![0]!.description).toContain("relink through Trail Marker");
+    expect(JSON.stringify(native)).not.toMatch(/one-time recording|recording upgrade/);
+    expect(profile).toContain("single initial linking approval");
+    expect(profile).toContain("Summarize automatically after Stop (on by default)");
+    expect(profile).toContain("existing exact source choices stay in effect");
+    expect(profile).toContain("Meetings navigation dot and top-bar duration");
+    expect(profile).not.toMatch(/one-time connection upgrade|persistent recording strip/);
+    expect(link).toContain("Record meetings when you choose Start");
+  });
+
+  it("describes the actual passage exit, removable chat context and automatic title", () => {
+    const features = getBuiltInModuleManifests().find((item) => item.id === "meetings")!.features!;
+    const description = (id: string) => features.find((item) => item.id === id)!.description;
+    expect(description("meetings.referenced_evidence")).toContain("Meetings to return to the list");
+    expect(description("meetings.referenced_evidence")).not.toContain("Close evidence");
+    const questions = features.find((item) => item.id === "meetings.questions")!;
+    expect(questions.description).toBe(
+      "Chat attaches the open meeting’s notes and transcript; its chip announces the title. API-key only, no actions. Remove About this meeting for ordinary subscription chat. Admin pins and locked defaults apply."
+    );
+    expect(questions.errors).toEqual([
+      {
+        code: "meeting_chat_unsupported",
+        class: "prerequisite",
+        remediationRef: "meetings.remove_chat_context",
+        description:
+          "Selected-meeting questions need an API-key chat model. Remove the About this meeting chip to continue ordinary chat with your subscription model."
+      }
+    ]);
+    expect(questions.remediations).toEqual([
+      {
+        id: "meetings.remove_chat_context",
+        path: "/meetings",
+        description:
+          "Remove the About this meeting chip in the chat drawer to continue ordinary subscription chat, or choose an API-key chat model for meeting questions."
+      }
+    ]);
+    expect(questions.description).not.toContain("Ask Moss");
+    expect(description("meetings.automatic_summary")).not.toContain("summarizeOnStop");
+    expect(description("meetings.draft_records")).toContain(
+      "Untitled meeting has the same title in its page, list and chat chip."
+    );
+    expect(description("meetings.automatic_summary")).toBe(
+      "Automatic summaries default on and use your default model without fallback, including supported Claude. Turn off Summarize automatically after Stop in Settings → Meetings. Only these rename Untitled meeting; Rewrite summary stays available."
+    );
+  });
+
   it("explains export and history failures, including the Notes prerequisite", () => {
     const meeting = getBuiltInModuleManifests().find((manifest) => manifest.id === "meetings")!;
     const exports = meeting.features!.find((feature) => feature.id === "meetings.private_exports")!;
@@ -31,7 +85,7 @@ describe("meetings composition", () => {
     ).toContainEqual(expect.objectContaining({ code: "meeting_history_access_denied" }));
   });
 
-  it("boots the real registry with a compatible optional draft module", () => {
+  it("boots the real registry with a compatible optional meeting module", () => {
     const meeting = getBuiltInModuleManifests().find((manifest) => manifest.id === "meetings");
     expect(meeting?.availability).toEqual({
       defaultEnabled: true,
@@ -47,7 +101,14 @@ describe("meetings composition", () => {
       "app.meeting_output_artifacts",
       "app.meeting_action_candidates",
       "app.meeting_export_receipts",
-      "app.meeting_export_requests"
+      "app.meeting_export_requests",
+      "app.meeting_capture_links",
+      "app.meeting_capture_grants",
+      "app.meeting_capture_receipts",
+      "app.meeting_capture_connections",
+      "app.meeting_capture_start_cancellations",
+      "app.meeting_stop_summaries",
+      "app.meeting_capture_start_limits"
     ]);
     const chat = getBuiltInModuleManifests().find((manifest) => manifest.id === "chat");
     expect(chat?.database?.migrations).toEqual(
@@ -65,6 +126,19 @@ describe("meetings composition", () => {
       })
     ]);
     expect(meeting?.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
+      "PUT /api/meetings/records/:id/title",
+      "GET /api/meetings/output-availability",
+      "POST /api/meetings/capture/connection",
+      "POST /api/meetings/capture/commands",
+      "POST /api/meetings/capture/claim",
+      "GET /api/meetings/capture/devices",
+      "POST /api/meetings/records/:id/capture/cancel-start",
+      "POST /api/meetings/capture/status",
+      "POST /api/meetings/capture/control",
+      "POST /api/meetings/capture/audio",
+      "GET /api/meetings/records/:id/capture",
+      "POST /api/meetings/records/:id/capture/start",
+      "POST /api/meetings/records/:id/capture/control",
       "POST /api/meetings/history/search",
       "GET /api/meetings/history/:id",
       "GET /api/meetings/records/:id/exports",
@@ -87,6 +161,14 @@ describe("meetings composition", () => {
     ]);
     expect(meeting?.features?.map((feature) => feature.id)).toEqual([
       "meetings.chat_app_actions",
+      "meetings.link_state",
+      "meetings.mac_link_controls",
+      "meetings.automatic_summary",
+      "transcribe.meeting",
+      "meetings.native_capture",
+      "meetings.mac_recording_status",
+      "meetings.mac_recording_pill_visibility",
+      "meetings.mac_audio_sources",
       "meetings.account_export",
       "meetings.history",
       "meetings.unsaved_changes",

@@ -51,6 +51,32 @@ describe("meeting review shared primitives", () => {
       "review-panel-notes"
     );
   });
+  it("hides a lone tab without remounting its editor when a second section arrives", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const note = { value: "notes", label: "Notes", content: <input defaultValue="Kept" /> };
+    await act(async () => {
+      renderer = create(
+        <Tabs id="single" ariaLabel="Sections" value="notes" items={[note]} onChange={() => {}} />
+      );
+    });
+    const input = renderer.root.findByType("input");
+    expect(renderer.root.findByProps({ role: "tablist" }).props.hidden).toBe(true);
+    expect(renderer.root.findByProps({ id: "single-panel-notes" }).props.role).toBeUndefined();
+    await act(async () =>
+      renderer.update(
+        <Tabs
+          id="single"
+          ariaLabel="Sections"
+          value="notes"
+          items={[note, { value: "summary", label: "Summary", content: <p>Summary</p> }]}
+          onChange={() => {}}
+        />
+      )
+    );
+    expect(renderer.root.findByType("input")).toBe(input);
+    expect(renderer.root.findByProps({ role: "tablist" }).props.hidden).toBe(false);
+    expect(renderer.root.findByProps({ id: "single-panel-notes" }).props.role).toBe("tabpanel");
+  });
   it("uses native mutually exclusive radios and clickable visible switch labels", () => {
     const radio = renderToStaticMarkup(
       <RadioCardGroup

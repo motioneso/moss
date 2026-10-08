@@ -1565,9 +1565,6 @@ ports fail closed. Policy checks are repeated after asynchronous policy/YOLO loo
 admission site records state yet: that is Slice 7, and the concurrency requirements above remain
 open. The notice line/card admission behavior also remains Slice 7.
 
-The independent recording-notice acknowledgement route on the held capture branch is explicitly
-blocked by central path policy, even under permissive metadata. This is compatibility coverage
-with a synthetic route declaration, not a claim that the two branches have been combined/tested.
 The older Wellness check-in nested-connection problem and retained-data consent-revocation gap
 remain outside this change.
 

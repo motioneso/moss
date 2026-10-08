@@ -147,6 +147,25 @@ describe("transactional first-party migration sidecars", () => {
     await expectForcedRls("projection");
   });
 
+  it("applies a missing lower version after a higher main version without renumbering", async () => {
+    await bootstrap.query(`UPDATE ${schema}.control SET should_fail = false`);
+    await writeFile(join(directory, "0294_main_fixture.sql"), "SELECT 1;\n");
+    const initial = await migrate();
+    expect(initial.applied.map((file) => file.version)).toEqual(["0001", "0294"]);
+    await writeFile(
+      join(directory, "0284_capture_fixture.sql"),
+      `CREATE TABLE ${schema}.late_capture (id integer PRIMARY KEY);\n`
+    );
+    const upgrade = await migrate();
+    expect(upgrade.applied.map((file) => file.version)).toEqual(["0284"]);
+    expect(upgrade.skipped.map((file) => file.version)).toEqual(["0001", "0294"]);
+    expect(
+      (await bootstrap.query("SELECT to_regclass($1)::text AS name", [`${schema}.late_capture`]))
+        .rows
+    ).toEqual([{ name: `${schema}.late_capture` }]);
+    expect((await migrate()).applied).toEqual([]);
+  });
+
   it("also rolls back all sidecar effects if ledger insertion fails after the callback", async () => {
     // First failure creates only the ordinary empty ledger, outside the per-file transaction.
     await expect(migrate()).rejects.toThrow(`Migration backfill ${sidecarName} failed`);

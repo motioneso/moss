@@ -19,6 +19,7 @@ import {
 } from "@moss/meetings";
 import { ConstrainedProcessError } from "../../packages/chat/src/live/constrained-structured-process.js";
 import { parseConstrainedClaudeOutput } from "../../packages/chat/src/live/constrained-claude-profile.js";
+import * as meetings from "@moss/meetings";
 import { TasksRepository, tasksModuleManifest } from "@moss/tasks";
 import {
   createMeetingOutputRuntime,
@@ -91,6 +92,9 @@ function deferred<T>() {
 }
 function setup(createCliStructuredAdapter?: GenerateStructuredDeps["createCliStructuredAdapter"]) {
   const route = vi.spyOn(AiRepository.prototype, "selectChatModelForUser").mockResolvedValue(model);
+  const coverage = vi
+    .spyOn(meetings, "readMeetingCaptureCompleteness")
+    .mockResolvedValue({ hasGaps: false, gapLimitReached: false });
   const credential = vi
     .spyOn(AiRepository.prototype, "selectProviderWithCredential")
     .mockResolvedValue(provider);
@@ -125,6 +129,7 @@ function setup(createCliStructuredAdapter?: GenerateStructuredDeps["createCliStr
   });
   return {
     ...runtime,
+    coverage,
     probe,
     route,
     credential,
@@ -139,6 +144,21 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   installModelActivityRecorder(null);
+});
+
+describe("recorded capture gaps in meeting summaries", () => {
+  it("adds deterministic coverage warnings independently of model output", async () => {
+    const h = setup();
+    h.coverage.mockResolvedValue({ hasGaps: true, gapLimitReached: true });
+    const generated = await h.generator(actor, input());
+    expect(generated.content).toMatchObject({
+      warnings: [
+        "Recorded capture gaps mean this summary may omit part of the meeting.",
+        "Additional gap details could not be retained after the capture limit."
+      ]
+    });
+    expect(String(h.fetch.mock.calls[0]?.[1]?.body)).toContain("Capture has recorded gaps");
+  });
 });
 
 describe("meeting summary generation availability", () => {

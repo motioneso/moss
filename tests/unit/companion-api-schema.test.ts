@@ -49,6 +49,22 @@ describe("companion protocol constants", () => {
 });
 
 describe("createPairAttemptRouteSchema", () => {
+  it("carries independent recording proof only with an explicit supported policy", async () => {
+    const capability = { recordingProofHash: "a".repeat(64), recordingPolicyVersion: 1 };
+    expect(
+      await parseBody(createPairAttemptRouteSchema.body, { ...VALID_PAIR_BODY, ...capability })
+    ).toEqual({ status: 200, body: { ...VALID_PAIR_BODY, ...capability } });
+    for (const extra of [
+      { recordingProofHash: capability.recordingProofHash },
+      { recordingPolicyVersion: 1 },
+      { ...capability, recordingPolicyVersion: 2 },
+      { ...capability, recordingProofHash: "not-a-digest" }
+    ])
+      expect(
+        (await parseBody(createPairAttemptRouteSchema.body, { ...VALID_PAIR_BODY, ...extra }))
+          .status
+      ).toBe(400);
+  });
   it("accepts a well-formed attempt and strips unknown keys", async () => {
     const { status, body } = await parseBody(createPairAttemptRouteSchema.body, {
       ...VALID_PAIR_BODY,

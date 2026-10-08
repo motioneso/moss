@@ -20,7 +20,7 @@ vi.mock("pg", async () => {
   return { default: { Pool }, Pool };
 });
 
-const { createDatabase } = await import("../../packages/db/src/database.js");
+const { createDatabase, AbortablePgPool } = await import("../../packages/db/src/index.js");
 const { createMossAuthRuntime } = await import("../../packages/auth/src/index.js");
 
 // A database restart terminates idle pooled connections, and pg emits that on the pool.
@@ -36,10 +36,28 @@ describe("database pools survive a server-side disconnect", () => {
     expect(() => pools[0]!.emit("error", terminated())).not.toThrow();
   });
 
-  it("the auth database pool handles an idle client error and logs it", () => {
+  it("imports db/auth and closes unused maintenance without needing pg.Client", async () => {
+    pools.length = 0;
+    let maintenance!: InstanceType<typeof AbortablePgPool>;
+    expect(() => {
+      maintenance = new AbortablePgPool({ connectionString: "postgres://unused@localhost/unused" });
+    }, "maintenance-construction-is-lazy").not.toThrow();
+    const cancelled = AbortSignal.abort(new Error("cancelled before first use"));
+    await expect(maintenance.withClient(cancelled, vi.fn())).rejects.toThrow(
+      "cancelled before first use"
+    );
+    await maintenance.close();
+    await maintenance.close();
+    await expect(maintenance.withClient(new AbortController().signal, vi.fn())).rejects.toThrow(
+      "Cannot use a closed maintenance pool"
+    );
+    expect(pools, "unused-maintenance-does-not-create-pool").toHaveLength(0);
+  });
+
+  it("the auth database pool handles an idle client error and logs it", async () => {
     pools.length = 0;
     const warn = vi.fn();
-    createMossAuthRuntime({
+    const runtime = createMossAuthRuntime({
       appDb: {} as never,
       runner: {} as never,
       connectionString: "postgres://unused@localhost/unused",
@@ -52,5 +70,7 @@ describe("database pools survive a server-side disconnect", () => {
       expect.objectContaining({ event: "auth.db_pool_idle_client_error" }),
       expect.any(String)
     );
+    await runtime.close();
+    expect(pools, "unused-auth-maintenance-stays-lazy").toHaveLength(1);
   });
 });

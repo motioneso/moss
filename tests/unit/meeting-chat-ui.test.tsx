@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router";
@@ -7,7 +8,8 @@ import { afterEach, expect, it, vi } from "vitest";
 // `beforeunload` listener once privateMode goes true, which only this file's tests drive.
 vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 
-import { meetingChatSurface } from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE, meetingChatSurface, type TranscriptRecord } from "@moss/shared";
+import { Thread } from "@moss/ui";
 import type * as ApiClientModule from "../../apps/web/src/api/client.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
@@ -92,7 +94,11 @@ afterEach(async () => {
   client?.clear();
   vi.clearAllMocks();
 });
-async function mount(gated = false) {
+async function mount(
+  gated = false,
+  initialSelection = selection,
+  records: readonly TranscriptRecord[] = []
+) {
   vi.stubGlobal("fetch", fetchMock);
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
@@ -100,12 +106,12 @@ async function mount(gated = false) {
       <QueryClientProvider client={client}>
         <MemoryRouter>
           {gated ? (
-            <MeetingChatDrawer selection={selection} onClose={() => {}} isFounder={false} />
+            <MeetingChatDrawer selection={initialSelection} onClose={() => {}} isFounder={false} />
           ) : (
             <ChatDrawer
               open
               onClose={() => {}}
-              records={[]}
+              records={records}
               clearRecords={() => {}}
               streamErrorCount={0}
               isFounder={false}
@@ -122,12 +128,32 @@ async function mount(gated = false) {
   });
   return renderer!;
 }
+function availableMeeting(url: string, title = selection.title, id = meetingId) {
+  return url.startsWith("/api/meetings/records/")
+    ? { meeting: { id, title, personalNotes: "", notesRevision: 0 } }
+    : { available: true };
+}
 function json(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), {
     status,
     headers: { "content-type": "application/json" }
   });
 }
+it("accepts native capture segment identifiers and rejects malformed evidence routes", () => {
+  const path = (segmentId: string) =>
+    `/meetings?id=${meetingId}&segmentId=${encodeURIComponent(segmentId)}&segmentRevision=1&startCharacter=0&endCharacter=12`;
+  expect(validMeetingEvidencePath(path(`${meetingId}:0`))).toBe(true);
+  expect(validMeetingEvidencePath(path(" "))).toBe(false);
+  expect(validMeetingEvidencePath(path("a".repeat(257)))).toBe(false);
+  expect(validMeetingEvidencePath(`${path(`${meetingId}:0`)}&id=${meetingId}`)).toBe(false);
+  expect(validMeetingEvidencePath(`${path(`${meetingId}:0`)}&segmentId=other`)).toBe(false);
+  expect(
+    validMeetingEvidencePath(path("native").replace("segmentRevision=1", "segmentRevision=0"))
+  ).toBe(false);
+  expect(
+    validMeetingEvidencePath(path("native").replace("endCharacter=12", "endCharacter=0"))
+  ).toBe(false);
+});
 it("opens through the browser-safe host bridge without submitting a turn", () => {
   const openMeetingChat = vi.fn();
   setMeetingChatHook(() => ({ openMeetingChat, clearMeetingChat: () => {} }));
@@ -177,7 +203,7 @@ it("does not restore a late answer after New chat clears the meeting turn", asyn
 it.each([401, 403, 404])(
   "hides title and history after an authoritative %s access denial",
   async (status) => {
-    fetchMock.mockImplementation(async () => json({ available: true }));
+    fetchMock.mockImplementation(async (url: string) => json(availableMeeting(url)));
     const view = await mount(true);
     expect(JSON.stringify(view.toJSON())).toContain("Private review");
     fetchMock.mockImplementation(async () => json({ error: "Meeting unavailable" }, status));
@@ -195,7 +221,7 @@ it.each([401, 403, 404])(
   "keeps a %s denial closed through later refreshes until a new selection",
   async (status) => {
     fetchMock.mockImplementation(async (url: string) =>
-      json(url === "/api/chat/turn" ? response : { available: true })
+      json(url === "/api/chat/turn" ? response : availableMeeting(url))
     );
     const view = await mount(true);
     await act(async () => view.root.findByType(Composer).props.onSend("What was decided?"));
@@ -231,7 +257,7 @@ it.each([401, 403, 404])(
     expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
     expect(JSON.stringify(view.toJSON())).not.toContain("A selected meeting answer");
     expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable");
-    fetchMock.mockImplementation(async () => json({ available: true }));
+    fetchMock.mockImplementation(async (url: string) => json(availableMeeting(url)));
     await act(async () => {
       view.update(
         <QueryClientProvider client={client}>
@@ -254,7 +280,7 @@ it.each(["offline", 429, 500] as const)(
   "preserves the composer and completed turns through a transient %s access refresh failure",
   async (failure) => {
     fetchMock.mockImplementation(async (url: string) =>
-      json(url === "/api/chat/turn" ? response : { available: true })
+      json(url === "/api/chat/turn" ? response : availableMeeting(url))
     );
     const view = await mount(true);
     await act(async () => view.root.findByType(Composer).props.onSend("What was decided?"));
@@ -275,7 +301,7 @@ it.each(["offline", 429, 500] as const)(
     expect(JSON.stringify(view.toJSON())).toContain("A selected meeting answer");
     expect(JSON.stringify(view.toJSON())).toContain("Private review");
     expect(JSON.stringify(view.toJSON())).not.toContain("Meeting unavailable");
-    fetchMock.mockImplementation(async () => json({ available: true }));
+    fetchMock.mockImplementation(async (url: string) => json(availableMeeting(url)));
     await act(async () => {
       await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
     });
@@ -288,7 +314,7 @@ it.each([
   new ApiError(429, "Busy"),
   new ApiError(503, "Unavailable")
 ])("preserves unsent text through a transient history refresh failure: %s", async (error) => {
-  fetchMock.mockImplementation(async () => json({ available: true }));
+  fetchMock.mockImplementation(async (url: string) => json(availableMeeting(url)));
   const view = await mount(true);
   const input = view.root.findByType("textarea");
   await act(async () => input.props.onChange({ target: { value: "Keep my question" } }));
@@ -306,7 +332,7 @@ it.each([
 it.each([401, 403, 404])(
   "hides the drawer after an authoritative %s history denial",
   async (status) => {
-    fetchMock.mockImplementation(async () => json({ available: true }));
+    fetchMock.mockImplementation(async (url: string) => json(availableMeeting(url)));
     const view = await mount(true);
     vi.mocked(listChatThreads).mockRejectedValueOnce(new ApiError(status, "Denied"));
     await act(async () => {
@@ -320,12 +346,13 @@ it.each([401, 403, 404])(
     expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable");
   }
 );
-it.each(["access", "history"])(
+it.each(["access", "title", "history"])(
   "offers retry for an initial %s failure without claiming access was denied",
   async (source) => {
-    fetchMock.mockImplementation(async () => {
-      if (source === "access") throw new TypeError("Failed to fetch");
-      return json({ available: true });
+    fetchMock.mockImplementation(async (url: string) => {
+      if (source === "access" || (source === "title" && url.startsWith("/api/meetings/records/")))
+        throw new TypeError("Failed to fetch");
+      return json(availableMeeting(url));
     });
     if (source === "history")
       vi.mocked(listChatThreads).mockRejectedValueOnce(new ApiError(503, "Unavailable"));
@@ -336,7 +363,7 @@ it.each(["access", "history"])(
     expect(view.root.findAllByType(Composer)).toHaveLength(0);
     expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
     expect(JSON.stringify(view.toJSON())).not.toContain("Meeting unavailable");
-    fetchMock.mockImplementation(async () => json({ available: true }));
+    fetchMock.mockImplementation(async (url: string) => json(availableMeeting(url)));
     await act(async () => {
       view.root
         .findAllByType("button")
@@ -369,22 +396,333 @@ it("renders no network image from a meeting answer", async () => {
   expect(view.root.findAllByType("img")).toHaveLength(0);
   expect(JSON.stringify(view.toJSON())).not.toContain("https://example.com/collect");
 });
-it("shows a functional unsupported-model error without sending ordinary chat", async () => {
-  fetchMock.mockImplementation(async () =>
-    json(
-      {
-        error: "Meeting questions require an API-key chat model",
-        code: "meeting_chat_unsupported"
-      },
-      422
+it("lets a subscription-model user remove context and continue ordinary chat", async () => {
+  const error =
+    "Meeting questions currently require an API-key chat model. " +
+    "Remove the ‘About this meeting’ chip to continue ordinary chat with your selected model.";
+  fetchMock.mockImplementation(async () => json({ error, code: "meeting_chat_unsupported" }, 422));
+  function RemovableMeeting() {
+    const [attached, setAttached] = useState(true);
+    return (
+      <ChatDrawer
+        key={attached ? "meeting" : "ordinary"}
+        open
+        onClose={() => {}}
+        records={[]}
+        clearRecords={() => {}}
+        streamErrorCount={0}
+        isFounder={false}
+        surface={attached ? meetingChatSurface(meetingId) : DEFAULT_CHAT_SURFACE}
+        meetingContext={attached ? selection : undefined}
+        onRemoveMeetingContext={() => setAttached(false)}
+      />
+    );
+  }
+  const view = await mount();
+  await act(async () =>
+    view.update(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <RemovableMeeting />
+        </MemoryRouter>
+      </QueryClientProvider>
     )
   );
-  const view = await mount();
   await act(async () => view.root.findByType(Composer).props.onSend("Summarize"));
-  expect(view.root.findByType(Composer).props.sendError).toBe(
-    "Meeting questions require an API-key chat model"
-  );
+  expect(view.root.findByType(Composer).props.sendError).toBe(error);
   expect(sendChatTurn).not.toHaveBeenCalled();
+  await act(async () =>
+    view.root.findByProps({ "aria-label": "Remove meeting context" }).props.onClick()
+  );
+  expect(JSON.stringify(view.toJSON())).not.toContain("About this meeting");
+  await act(async () => view.root.findByType(Composer).props.onSend("An ordinary question"));
+  expect(sendChatTurn).toHaveBeenCalledWith(
+    "An ordinary question",
+    undefined,
+    undefined,
+    DEFAULT_CHAT_SURFACE
+  );
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it("announces the current meeting title for automatically selected route context", async () => {
+  fetchMock.mockImplementation(async (url: string) => json(availableMeeting(url, "Design review")));
+  const view = await mount(true, { ...selection, title: "About this meeting" });
+  await vi.waitFor(() => expect(view.root.findAllByType(Composer)).toHaveLength(1));
+  expect(view.root.findByProps({ className: "jds-sr-only" }).children.join("")).toBe(
+    ": Design review"
+  );
+  expect(fetchMock).toHaveBeenCalledWith(
+    `/api/meetings/records/${meetingId}`,
+    expect.objectContaining({ signal: expect.any(AbortSignal) })
+  );
+});
+
+it("refreshes an edited meeting title without replacing the composer or its draft", async () => {
+  fetchMock.mockImplementation(async (url: string) => json(availableMeeting(url)));
+  const view = await mount(true, { ...selection, title: "About this meeting" });
+  const input = view.root.findByType("textarea");
+  await act(async () => input.props.onChange({ target: { value: "Keep my question" } }));
+  fetchMock.mockImplementation(async (url: string) =>
+    json(availableMeeting(url, "Renamed review"))
+  );
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["meeting-chat-title", meetingId] });
+  });
+  await vi.waitFor(() =>
+    expect(view.root.findByProps({ className: "jds-sr-only" }).children.join("")).toBe(
+      ": Renamed review"
+    )
+  );
+  expect(view.root.findByType("textarea")).toBe(input);
+  expect(input.props.value).toBe("Keep my question");
+});
+
+it("keeps the title, conversation and draft through a transient title refresh failure", async () => {
+  fetchMock.mockImplementation(async (url: string) =>
+    json(url === "/api/chat/turn" ? response : availableMeeting(url))
+  );
+  const view = await mount(true);
+  await act(async () => view.root.findByType(Composer).props.onSend("What was decided?"));
+  const input = view.root.findByType("textarea");
+  await act(async () => input.props.onChange({ target: { value: "Keep my question" } }));
+  fetchMock.mockImplementation(async () => json({ error: "Temporary failure" }, 503));
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["meeting-chat-title", meetingId] });
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  expect(view.root.findByType("textarea")).toBe(input);
+  expect(input.props.value).toBe("Keep my question");
+  expect(JSON.stringify(view.toJSON())).toContain("Private review");
+  expect(JSON.stringify(view.toJSON())).toContain("A selected meeting answer");
+});
+
+it.each(["meeting", "account"])(
+  "discards a late title after the %s selection changes",
+  async (boundary) => {
+    let finish!: (value: Response) => void;
+    fetchMock.mockImplementation(async (url: string) =>
+      url.startsWith("/api/meetings/records/")
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : json({ available: true })
+    );
+    const view = await mount(true, { ...selection, title: "About this meeting" });
+    await vi.waitFor(() => expect(finish).toEqual(expect.any(Function)));
+    const next = {
+      meetingId: boundary === "account" ? meetingId : "22334455-2233-4233-8233-223344556677",
+      selectionId: "new-selection",
+      title: "About this meeting"
+    };
+    fetchMock.mockImplementation(async (url: string) =>
+      json(availableMeeting(url, "Current meeting", next.meetingId))
+    );
+    await act(async () =>
+      view.update(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <MeetingChatDrawer
+              key={next.selectionId}
+              selection={next}
+              onClose={() => {}}
+              isFounder={false}
+            />
+          </MemoryRouter>
+        </QueryClientProvider>
+      )
+    );
+    await vi.waitFor(() => expect(view.root.findAllByType(Composer)).toHaveLength(1));
+    await act(async () =>
+      finish(json(availableMeeting(`/api/meetings/records/${meetingId}`, "Previous private title")))
+    );
+    expect(JSON.stringify(view.toJSON())).not.toContain("Previous private title");
+    expect(view.root.findByProps({ className: "jds-sr-only" }).children.join("")).toBe(
+      ": Current meeting"
+    );
+  }
+);
+
+it.each([401, 403, 404])(
+  "hides title and history when the meeting record returns %s",
+  async (status) => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url.startsWith("/api/meetings/records/")
+        ? json({ error: "Meeting unavailable" }, status)
+        : json({ available: true })
+    );
+    const view = await mount(true);
+    await vi.waitFor(() => expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable"));
+    expect(view.root.findAllByType(Composer)).toHaveLength(0);
+    expect(JSON.stringify(view.toJSON())).not.toContain(selection.title);
+    expect(listChatThreads).not.toHaveBeenCalled();
+  }
+);
+
+it("retains a failed meeting question above the error without leaving the turn running", async () => {
+  fetchMock.mockImplementation(async () => json({ error: "Please try again" }, 503));
+  const view = await mount();
+  await act(async () => view.root.findByType(Composer).props.onSend("What was decided?"));
+  const transcript = view.root.findByType(Thread);
+  expect(transcript.props.records).toEqual([
+    expect.objectContaining({ kind: "user", text: "What was decided?" })
+  ]);
+  expect(transcript.props.working).toBe(false);
+  expect(view.root.findByType(Composer).props.isSending).toBe(false);
+  expect(view.root.findByType(Composer).props.sendError).toBe("Please try again");
+  const content = JSON.stringify(view.toJSON());
+  expect(content.indexOf("What was decided?")).toBeLessThan(content.indexOf("Please try again"));
+});
+
+it("keeps repeated failed questions distinct from matching history and a successful retry", async () => {
+  const question = "What was decided?";
+  let finish!: (value: Response) => void;
+  fetchMock.mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  const view = await mount(false, selection, [
+    { kind: "user", text: question, messageId: "saved-user" },
+    { kind: "reply", text: "A previous answer", messageId: "saved-answer" }
+  ]);
+  await act(async () => view.root.findByType(Composer).props.onSend(question));
+  expect(view.root.findByType(Thread).props.records).toHaveLength(3);
+  expect(view.root.findByType(Thread).props.working).toBe(true);
+  await act(async () => finish(json({ error: "Please try again" }, 503)));
+  fetchMock.mockImplementation(async () => json({ error: "Please try again" }, 503));
+  await act(async () => view.root.findByType(Composer).props.onSend(question));
+  expect(
+    view.root.findByType(Thread).props.records.filter((r: { kind: string }) => r.kind === "user")
+  ).toHaveLength(3);
+  fetchMock.mockImplementation(async () =>
+    json({ ...response, userMessageId: "retry-user", assistantMessageId: "retry-answer" })
+  );
+  await act(async () => view.root.findByType(Composer).props.onSend(question));
+  const records = view.root.findByType(Thread).props.records;
+  expect(records.map((r: { kind: string }) => r.kind)).toEqual([
+    "user",
+    "reply",
+    "user",
+    "user",
+    "user",
+    "reply"
+  ]);
+  expect(view.root.findByType(Composer).props.sendError).toBeNull();
+  expect(view.root.findByType(Thread).props.working).toBe(false);
+});
+
+it("clears failed meeting questions on New chat and ignores a late failure from the old turn", async () => {
+  fetchMock.mockImplementation(async () => json({ error: "First send failed" }, 503));
+  const view = await mount();
+  await act(async () => view.root.findByType(Composer).props.onSend("First private question"));
+  let finish!: (value: Response) => void;
+  fetchMock.mockImplementation(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  await act(async () => view.root.findByType(Composer).props.onSend("Second private question"));
+  await act(async () =>
+    view.root
+      .findAll((node) => node.type === "button" && node.props["aria-label"] === "New chat")[0]!
+      .props.onClick()
+  );
+  await act(async () => finish(json({ error: "Late failure" }, 503)));
+  expect(view.root.findAllByType(Thread)).toHaveLength(0);
+  expect(view.root.findByType(Composer).props.sendError).toBeNull();
+});
+
+it.each([401, 403, 404])(
+  "hides failed question text after a later %s access denial",
+  async (status) => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url === "/api/chat/turn" ? json({ error: "Try again" }, 503) : json(availableMeeting(url))
+    );
+    const view = await mount(true);
+    await act(async () => view.root.findByType(Composer).props.onSend("Private failed question"));
+    expect(JSON.stringify(view.toJSON())).toContain("Private failed question");
+    fetchMock.mockImplementation(async () => json({ error: "Unavailable" }, status));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
+    });
+    await vi.waitFor(() => expect(view.root.findAllByType(Composer)).toHaveLength(0));
+    expect(JSON.stringify(view.toJSON())).not.toContain("Private failed question");
+  }
+);
+
+it.each(["meeting", "account"])(
+  "discards failed questions and late failures after a %s change",
+  async (boundary) => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url === "/api/chat/turn" ? json({ error: "Try again" }, 503) : json(availableMeeting(url))
+    );
+    const view = await mount(true);
+    await act(async () => view.root.findByType(Composer).props.onSend("Previous private question"));
+    let finish!: (value: Response) => void;
+    fetchMock.mockImplementation(async (url: string) =>
+      url === "/api/chat/turn"
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : json(availableMeeting(url))
+    );
+    await act(async () => view.root.findByType(Composer).props.onSend("Late private question"));
+    const next = {
+      ...selection,
+      meetingId: boundary === "account" ? meetingId : "22334455-2233-4233-8233-223344556677",
+      selectionId: "next-selection"
+    };
+    await act(async () =>
+      view.update(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <MeetingChatDrawer
+              key={next.selectionId}
+              selection={next}
+              onClose={() => {}}
+              isFounder={false}
+            />
+          </MemoryRouter>
+        </QueryClientProvider>
+      )
+    );
+    await vi.waitFor(() => expect(view.root.findAllByType(Composer)).toHaveLength(1));
+    await act(async () => finish(json({ error: "Late private failure" }, 503)));
+    expect(view.root.findAllByType(Thread)).toHaveLength(0);
+    expect(view.root.findByType(Composer).props.sendError).toBeNull();
+  }
+);
+
+it("leaves ordinary chat's failed-send behavior unchanged", async () => {
+  const view = await mount();
+  await act(async () =>
+    view.update(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ChatDrawer
+            key="ordinary"
+            open
+            onClose={() => {}}
+            records={[]}
+            clearRecords={() => {}}
+            streamErrorCount={0}
+            isFounder={false}
+            surface={DEFAULT_CHAT_SURFACE}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+  );
+  vi.mocked(sendChatTurn).mockRejectedValueOnce(new Error("Ordinary send failed"));
+  await act(async () => view.root.findByType(Composer).props.onSend("Ordinary question"));
+  expect(view.root.findAllByType(Thread)).toHaveLength(0);
+  expect(view.root.findByType(Composer).props.sendError).toBe("Ordinary send failed");
+  expect(view.root.findByType(Composer).props.isSending).toBe(false);
 });
 
 it("exposes no feedback or memory controls on scoped turns", async () => {
@@ -533,7 +871,7 @@ it("keeps legacy meeting history inert even without coverage metadata", async ()
 });
 
 it("dereferences a citation and opens the pinned range", async () => {
-  const deepLinkPath = `/meetings?id=${meetingId}&segmentId=${meetingId}&segmentRevision=4&startCharacter=3&endCharacter=12`;
+  const deepLinkPath = `/meetings?id=${meetingId}&segmentId=${encodeURIComponent(`${meetingId}:0`)}&segmentRevision=4&startCharacter=3&endCharacter=12`;
   fetchMock.mockImplementation(async () => json({ deepLinkPath }));
   vi.stubGlobal("fetch", fetchMock);
   const locations: string[] = [];

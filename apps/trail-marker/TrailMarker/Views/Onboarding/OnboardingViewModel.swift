@@ -28,6 +28,7 @@ final class OnboardingViewModel: ObservableObject {
 
     private var instance: InstanceURL?
     private var linkAttempt: LinkAttempt?
+    private var recordingProof: String?
     private var attemptId: String?
     private var approvalPath: String?
     private var pollIntervalSeconds = 3
@@ -45,6 +46,7 @@ final class OnboardingViewModel: ObservableObject {
     private let osVersion: String
     private let onLinkCompleted: (LinkedIdentity, String) -> Void
     private let onFinished: () -> Void
+    private let onRecordingApproved: (LinkedIdentity, String) throws -> Void
 
     init(
         permissions: PermissionsService,
@@ -52,7 +54,8 @@ final class OnboardingViewModel: ObservableObject {
         appVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0",
         osVersion: String = ProcessInfo.processInfo.operatingSystemVersionString,
         onLinkCompleted: @escaping (LinkedIdentity, String) -> Void,
-        onFinished: @escaping () -> Void
+        onFinished: @escaping () -> Void,
+        onRecordingApproved: @escaping (LinkedIdentity, String) throws -> Void = { _, _ in }
     ) {
         self.permissions = permissions
         self.loginItem = loginItem
@@ -60,6 +63,7 @@ final class OnboardingViewModel: ObservableObject {
         self.osVersion = osVersion
         self.onLinkCompleted = onLinkCompleted
         self.onFinished = onFinished
+        self.onRecordingApproved = onRecordingApproved
     }
 
     // MARK: - Step 1: Welcome
@@ -88,21 +92,23 @@ final class OnboardingViewModel: ObservableObject {
                     throw CompanionError.incompatible(protocolVersion: serverProtocol)
                 }
                 let attempt = LinkAttempt()
+                let recordingProof = LinkAttempt.makeVerifier()
                 let response = try await client.createPairAttempt(
                     CreatePairAttemptRequest(
                         deviceName: name, platform: "macos", appVersion: appVersion, osVersion: osVersion,
-                        verifierHash: attempt.verifierHash
+                        verifierHash: attempt.verifierHash,
+                        recordingProofHash: MeetingCaptureClient.verifierHash(recordingProof), recordingPolicyVersion: 1
                     )
                 )
                 guard token == self.sessionToken else { return }
                 self.linkAttempt = attempt
+                self.recordingProof = recordingProof
                 self.attemptId = response.attemptId
                 self.approvalPath = response.approvalPath
                 self.pollIntervalSeconds = response.pollIntervalSeconds
                 self.attemptExpiresAt = ServerTime.parse(response.expiresAt)
                 self.deviceName = name
                 self.step = .waitingForApproval
-                self.openApprovalPage()
                 self.startPolling(client: client, token: token)
             } catch let error as CompanionError {
                 guard token == self.sessionToken else { return }
@@ -116,9 +122,10 @@ final class OnboardingViewModel: ObservableObject {
 
     // MARK: - Step 2: Waiting for browser approval
 
-    func openApprovalPage() {
+    func copyApprovalLink() {
         guard let instance, let approvalPath else { return }
-        NSWorkspace.shared.open(instance.browserURL(approvalPath))
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(instance.browserURL(approvalPath).absoluteString, forType: .string)
     }
 
     private func startPolling(client: CompanionClient, token: Int) {
@@ -183,6 +190,12 @@ final class OnboardingViewModel: ObservableObject {
         // Store the credential now. Waiting until Continue meant quitting during device setup
         // left a device linked on the server that this Mac had no credential for.
         onLinkCompleted(identity, response.credential)
+        if response.recordingCapability?.policyVersion == 1,
+           (response.recordingCapability?.revision ?? 0) > 0, let recordingProof {
+            do { try onRecordingApproved(identity, recordingProof) }
+            catch { bannerMessage = "Connected. To use Meetings, sign this Mac out in Settings → Active sessions, then connect again." }
+        }
+        self.recordingProof = nil
         deviceName = response.device.displayName
         serverAssignedDeviceName = response.device.displayName
         accountName = response.account.name
@@ -194,6 +207,7 @@ final class OnboardingViewModel: ObservableObject {
     func cancelWaiting() {
         sessionToken += 1
         pollTask?.cancel()
+        recordingProof = nil
         if let instance, let attempt = linkAttempt, let attemptId {
             let client = CompanionClient(instance: instance, transport: URLSessionTransport())
             Task { try? await client.cancel(attemptId: attemptId, verifier: attempt.verifier) }

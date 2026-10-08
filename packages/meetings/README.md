@@ -4,36 +4,108 @@ Issue [#2981](https://github.com/motioneso/moss/issues/2981), approved
 [design](../../docs/superpowers/specs/2026-10-03-meeting-companion.md) and
 [plan](../../docs/superpowers/plans/2026-10-03-2981-meeting-companion.md).
 
-This package is not yet a meeting recorder. The ordinary UI supports creating/reopening drafts,
-personal notes, searchable History and deletion. Saved personal notes can also supply evidence
-for summaries, reviewed Tasks and private exports when an active API-key model with the required
-summary capabilities is configured. Transcript review and Ask Moss require transcript text
-supplied through the authenticated API: there is no user-facing recording or transcript-import
-path yet. Meetings is default-enabled, but recording remains unavailable.
+## Native capture repair checkpoint (6 October 2026)
 
-The current checkpoint contains:
+The current repair follows the [connection and reliability plan](../../docs/superpowers/plans/2026-10-06-2981-capture-reliability-and-connection.md).
+It replaces the first Mac implementation's per-meeting preparation and approval with a shared
+Trail Marker connection and one explicit **Start meeting**. The first implementation passed
+synthetic checks but failed owner testing; the repair still needs exact-head hosted checks and
+new owner-run OS/device acceptance. Windows shares the protocol but has no native host yet.
 
-- A package-owned `/meetings` screen for Setup, searchable History and personal notes.
-- Current-text server search, state filters and a selected-meeting rail with factual receipts.
-- Explicit capture-mode defaults; Start remains unavailable until native capture exists.
-- Real draft creation, reopening, version-checked notes, conflict review and confirmed deletion.
-- In-memory unsaved-note recovery across signed-in navigation; save before closing/signing out.
-- Pure capture/lifecycle/send-eligibility rules for later native wiring.
-- Authenticated text-only transcript ingestion, immutable revisions, bounded snapshots and evidence.
-- Read-only transcript review with source labels, provisional status and revision navigation.
-- Meeting questions in the existing chat drawer using the selected API-key model and exact evidence.
-  Enabled user overrides fail closed when unavailable; admin pins and locked instance defaults
-  remain authoritative when personal overrides are disabled.
-- Explicit generated/manual summary versions, source-grounded decisions and owner-reviewed Tasks.
-- Explicit versioned, create-only copies in Moss private vault with separate write/index receipts.
-- Owner-only account export through Settings → Account & preferences → Your data, including
-  retained notes/transcripts, output versions, action reviews and export receipts.
+Moss may run on a remote, headless server without audio devices. Trail Marker runs on the
+computer whose microphone/apps the person explicitly chooses. Device inventory and OS capture
+stay on that computer. Browser and companion connect to the same public HTTPS Moss origin,
+including its port; that may be a remote server. Use its final canonical origin: deployment
+subpaths and HTTP redirects are unsupported. The server authorizes and processes uploaded clips;
+it never opens a server microphone or output device. Browser-only capture is not implemented.
 
-The AI-owned clip transcription API separately supports an explicit timestamp request and
-cancellation. That adapter is not yet wired to meeting capture or a persisted meeting transcript.
-There is no claimed streaming, speaker separation or native recording implementation in this
-checkpoint. Meeting questions and summaries are bounded API-key-only stages below. Setup links to
-existing AI providers configuration and does not present an unvalidated meeting profile as ready.
+The supported static-web nginx proxy gives only `/api/meetings/capture/audio` a 5,200,000-byte
+request limit and unbuffered HTTP/1.1 forwarding. A custom proxy must preserve that bound and
+stream audio without request-body spooling or body logging. The proxy workflow exercises
+fixed-length/chunked generated uploads and temporary-file negative controls; it does not validate
+an operator's deployed proxy.
+
+Connect Trail Marker once through the native app's existing connect-in-browser flow. Linking
+grants recording capability in the single initial linking approval but never starts capture.
+Missing or revoked recording access requires explicit Unlink in Settings → Meetings and relinking
+through Trail Marker; already-approved Macs stay linked. There is no separate recording approval.
+New meeting opens a ready transcript-and-notes workspace; press **Start recording** explicitly.
+Microphone + system audio is the default, using the Mac's advertised OS-default microphone. Change
+audio mode only in Settings → Meetings, alongside link status and Unlink Mac. Existing exact
+microphone/app choices remain scoped; a missing source never authorizes broader capture.
+Download app has no link until a supported signed release exists; no Moss-address copy control
+is added. The [approved four states](../../docs/superpowers/specs/2026-10-06-meetings-minimal-design.md)
+are the current design authority.
+
+The native floating pill is pure white in light and dark appearances, 250 × 80 points, with a red
+three-bar captured-audio level meter, grey-ringed Pause and solid red Stop with a filled square.
+It has no visible text, timer, name or close button. Silent or stale audio flattens all three bars.
+The paused pill's play control explicitly resumes only the existing paused, claimed recording with
+its retained sources and live authority. It cannot create an initial Start. A newer Pause/Stop or
+known rejection cancels pending Resume; hardware waits for authoritative status confirmation.
+Existing credentials, OS permissions, revocation and capture limits remain. The first explicit
+Start may request an OS permission; permission approval cannot start a cancelled or expired command.
+A second browser signed in as the same owner may explicitly control the named recorder. Opening
+a meeting never changes the recording computer. Missing or ambiguous remembered sources require
+selection; a missing selected app never widens to computer audio. Provider configuration stays in
+Settings → AI providers. Connecting, page navigation, app restart or reconnect never creates a
+recording Start.
+
+The native host uses AUHAL microphone capture and macOS 14.2+ Core Audio process taps. Separate
+tracks share a monotonic timeline and use bounded native-rate mono PCM chunks. Sample progression
+establishes continuity; host-clock jitter and unchanged format notifications are not automatic
+capture failures. The server wraps clips as WAV, requests timestamps from the configured
+transcription route and writes retained transcript revisions. This is chunked transcription with
+source labels, not speaker diarization. Real provider timestamp/latency acceptance remains needed.
+
+System-audio permission stays `unknown` in inventory until there is trustworthy platform evidence;
+tap creation alone is not permission proof. Native controls show Waiting for output audio until
+the first valid callback, including a zero-valued callback. That establishes callback delivery,
+not intelligible sound or chosen-app isolation. The owner trial must exercise a known test tone.
+
+Pause closes inputs and sends no new audio. Stop closes inputs, fixes the cutoff and permits only
+pre-cutoff finalization, bounded to 60 seconds. The single native recorder waits for that bounded
+finalization before another meeting starts. Browser controls distinguish requested commands from
+native acknowledgement, and remain available while navigating the meeting list or another Moss
+module. The native menu-bar indicator has local Pause/Stop controls. Recording duration follows
+acknowledged capture time; connectivity and transcription delay have separate status.
+
+Each track retains at most 2,097,152 Float32 samples (8 MiB), with a process limit of 16 retained
+rings (128 MiB of sample storage, plus bounded metadata/request buffers), and a maximum age of
+60 seconds. The sample limit is shorter at higher rates:
+about 43.7 seconds at 48 kHz. The connection lease permits at most 30 seconds without successful
+authorization refresh. Whichever bound is reached first applies. Retryable chunk failures use
+bounded backoff and the same identity; a terminal transcription failure records a gap and releases
+that chunk without pausing healthy inputs. Sources receive fair independent upload scheduling.
+Exhausted bounds pause visibly. There is no audio disk spool or crash-recovery archive, and no
+promise of arbitrary offline recording. Safe diagnostic reason/stage/status fields omit raw
+provider errors, audio, transcript text and credentials.
+
+Recording authority is separate from Trail Marker's legacy identity credential. The shared
+connection requires an independently stored recording-capability proof, current owner/device
+capability revision and an ephemeral native connection verifier. Existing paired devices receive
+no recording capability from migration and must explicitly relink. Initial browser approval is
+cookie-only and origin checked. The legacy recording-attempt and recording-decision mutation
+routes return 410; read-only status can recover only the exact already-approved candidate with
+its still-live owner/device capability and revision. Status reads never issue new authority.
+An explicit Start binds the current browser session, meeting, exact device/connection and sources;
+only that native connection can claim the short-lived grant. Native creates the per-meeting secret
+in memory and the server stores only its hash. Lost-response retries preserve identity. Revocation,
+logout, expiry, reconnect and stale callbacks are fenced; reapproval does not revive old grants.
+The legacy credential alone cannot upload audio or control a meeting.
+
+Computer capture excludes native Moss processes. Unrelated process-list notifications do not
+invalidate a verified exclusion set; changes affecting that set or output device are rechecked
+and may pause capture. Inability to establish safe host-process exclusion disables computer mode.
+This does not promise exclusion of a future Moss web player inside a shared browser. Selected-app
+capture keeps its verified process scope and requires explicit Resume after that scope changes.
+Teams/Zoom, device changes, actual isolation, permission timing, cleanup, latency and CPU still need
+hardware testing.
+
+The existing notes, History, transcript evidence, Ask Moss, reviewed Tasks, summaries and private
+export flows remain independent of recording. Exports include retained capture/gap metadata but
+exclude credentials, proofs, verifiers and browser-session IDs. Summaries warn about retained gaps.
+Development and CI use generated fixtures; no provider credential or OS permission was activated.
 
 ## Draft API
 
@@ -54,9 +126,10 @@ start capture, contact a provider, or create/expand companion grants.
   survive deletion; their source evidence can become unavailable. Repeated and inaccessible
   deletion requests return the same 204 response. The UI
   requires confirmation and explains the retained content and unsaved edits that will be lost.
-- `GET` / `PUT /api/meetings/preferences`: `{ defaultCaptureMode }`, where the value is
-  `microphone-only`, `selected-app`, `computer-audio`, or `null` to clear the explicit default.
-  Reading preferences never creates a default, and choosing a mode alone does not save it.
+- `GET` / `PUT /api/meetings/preferences`: `{ defaultCaptureMode, rememberedSource? }`. The mode
+  is `microphone-only`, `selected-app`, `computer-audio`, or `null`. An explicitly chosen source
+  stores device ID, microphone UID and, for selected-app mode, stable application identity.
+  Reading preferences never creates a default or silently substitutes another source.
 
 Titles are at most 240 UTF-8 bytes; notes at most 64,000 UTF-8 bytes. Draft titles are immutable
 at this checkpoint. A stored draft is not evidence that capture occurred. Migration 0273 defines
@@ -219,8 +292,8 @@ was corrected to 0280; backfill sidecars are excluded from Prettier and ESLint s
 changes cannot rewrite applied checksums. Applied main migrations are untouched. Do not reuse a
 disposable database carrying an earlier sidecar checksum or the old sequence, edit an applied
 ledger, or run these renames as a live database repair. Fresh exact-commit CI and UI proof remain
-required. The unpublished device-authorization candidate is still excluded and has no reserved
-migration number in this branch.
+required. The historical unpublished device-authorization candidate remains excluded. The new capture
+protocol described above uses migration 0284 for owner-bound links, grants and metadata receipts.
 
 ## Local verification
 
@@ -263,7 +336,8 @@ scripts/run-gate.sh wait --follow
 
 The underlying `test:uat:2981-meetings` command runs `tests/uat/run-meetings-uat.ts`, which includes
 `2981-meeting-drafts.uat.spec.ts`, `2981-meeting-chat.uat.spec.ts`,
-`2981-meeting-outputs.uat.spec.ts` and `2981-meeting-history.uat.spec.ts`.
+`2981-meeting-outputs.uat.spec.ts`, `2981-meeting-history.uat.spec.ts` and
+`2981-meeting-capture.uat.spec.ts`.
 The dedicated wrapper selects an absent host-login file in a fresh
 temporary directory; it never needs real provider credentials, host chat login, audio or a user's
 vault. The chat/summary tests disclose local third-party HTTP stand-ins while exercising Moss's
@@ -287,7 +361,7 @@ accepted-Task references and vault receipts. Vault assertions use public
 `VaultContext` operations. Real APIs clean up meeting/configuration fixtures; the provisioner
 removes the isolated DB and volumes, including deliberately surviving synthetic Task/note copies.
 This is the implemented acceptance path, not a claim of a passing live run. Exact-commit results
-and remaining blockers belong on [PR #2982](https://github.com/motioneso/moss/pull/2982).
+and remaining blockers for this capture slice belong on [PR #3056](https://github.com/motioneso/moss/pull/3056).
 
 ### Credential-free regression groups
 
@@ -297,7 +371,7 @@ before provisioning rather than falling back to all tests. Run these DB-backed g
 through the supported isolated gate.
 
 - `meetings`: draft/review/sign-out (3 tests), meeting chat (1), summary/Task/private and account
-  exports (1), History (1).
+  exports (1), History (1), generated-audio capture/ASR/transcript/control (1).
 - `chat`: private drawer #1089/#1090 (2), attachments #1133 (2 active, 1 fixme), runtime context
   (2 active, 2 fixmes), assistant naming (4).
 - `runtime`: module install/restart (1), vault ownership #1217 (1), install grant #1311
@@ -315,7 +389,7 @@ screenshot or video artifacts. The wrapper overrides any inherited host-auth loc
 absent temporary file and clears inherited real-chat readiness. No real provider login is used.
 Module installation may still download the public Finance module; that is not provider proof.
 
-The source groups define **26 active tests and 4 pre-existing fixmes**, not 30 passing assertions.
+The source groups define **27 active tests and 4 pre-existing fixmes**, not 31 passing assertions.
 The retired #2889 activity spec is replaced by #2956, preserving the one-test slot. The assembled
 main reconciliation and new migration numbering require a fresh run; older pass counts are historical.
 Attachments do not prove a model read the file; runtime-context does not prove the model's refusal

@@ -67,6 +67,7 @@ describe("activity titles (#2956 slice C)", () => {
     );
     expect(activityTitle("embed.notes", "embed")).toBe("Indexed notes for search");
     expect(activityTitle("transcribe.voice_note", "transcribe")).toBe("Transcribed a voice note");
+    expect(activityTitle("transcribe.meeting", "transcribe")).toBe("Transcribed a meeting clip");
     expect(activityTitle("module.build", "build")).toBe("Built a module draft");
     expect(activityTitle("probe.reachable", "probe")).toBe("Checked that a model is reachable");
   });

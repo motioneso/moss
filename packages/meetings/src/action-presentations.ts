@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { assertDataContextDb, isUuid, type DataContextDb } from "@moss/db";
 import {
+  approvalBoolean,
   approvalChoice,
   approvalText,
   presentApprovalFields,
@@ -13,6 +14,8 @@ import {
 import type {
   IngestMeetingTranscriptInput,
   MeetingOutputInputs,
+  MeetingCaptureInventory,
+  MeetingRememberedSource,
   MeetingRecord,
   MeetingTranscriptLedger
 } from "@moss/shared";
@@ -20,7 +23,9 @@ import { MeetingRecordsRepository } from "./repository.js";
 import { MeetingOutputsRepository } from "./output-repository.js";
 import { MeetingTranscriptRepository } from "./transcript-repository.js";
 import { encodeMeetingTranscriptBatch } from "./transcript-batch.js";
-import { validateMeetingOutput } from "./output-validation.js";
+import { getMeetingOutputTemplate, validateMeetingOutput } from "./output-validation.js";
+import { MeetingPreferencesRepository, savedCaptureSelection } from "./preferences.js";
+import { MeetingCaptureConnectionRepository } from "./capture-connection-repository.js";
 
 const records = new MeetingRecordsRepository();
 const outputs = new MeetingOutputsRepository();
@@ -98,26 +103,185 @@ export const createMeetingPresentation: RouteApprovalPresentation = async (_db, 
   if (!body.title.trim()) return null;
   return { target: body.title, fields, version: version(input.body) };
 };
-export const meetingPreferencesPresentation: RouteApprovalPresentation = async (_db, input) => {
-  if (!params(input)) return null;
-  const choices = approvalChoice({
-    "microphone-only": "Microphone only",
-    "selected-app": "Selected app and microphone",
-    "computer-audio": "Computer audio and microphone"
+const captureMode = approvalChoice({
+  "microphone-only": "Microphone only",
+  "selected-app": "Selected app and microphone",
+  "computer-audio": "Computer audio and microphone"
+});
+const preferences = new MeetingPreferencesRepository();
+const connections = new MeetingCaptureConnectionRepository();
+
+async function rememberedSourceDetails(db: DataContextDb, value: unknown, ownerUserId: string) {
+  const identity = (label: string) => ({
+    label,
+    present: (entry: unknown) => (identifier(entry) ? entry : null)
+  });
+  if (
+    !presentApprovalFields(
+      value,
+      {
+        deviceId: {
+          label: "Mac",
+          present: (entry) => (typeof entry === "string" && isUuid(entry) ? entry : null)
+        },
+        microphoneId: identity("Microphone"),
+        applicationId: identity("Application"),
+        mode: { label: "Audio source", present: captureMode }
+      },
+      ["deviceId", "microphoneId", "mode"]
+    )
+  )
+    return null;
+  const source = value as MeetingRememberedSource;
+  if (source.mode === "selected-app" && !source.applicationId) return null;
+  const connection = await connections.connection(db, source.deviceId);
+  if (
+    !connection ||
+    connection.device_id !== source.deviceId ||
+    connection.owner_user_id !== ownerUserId ||
+    connection.expires_at.getTime() <= Date.now() ||
+    !connection.device_name.trim()
+  )
+    return null;
+  let inventory: MeetingCaptureInventory;
+  try {
+    inventory = JSON.parse(connection.inventory_json) as MeetingCaptureInventory;
+    savedCaptureSelection(source, inventory);
+  } catch {
+    return null;
+  }
+  const microphone = inventory.microphones.find((item) => item.deviceId === source.microphoneId)!;
+  const applications =
+    source.applicationId === undefined
+      ? []
+      : inventory.applications.filter((item) => item.applicationId === source.applicationId);
+  if (
+    !microphone.label.trim() ||
+    (source.applicationId !== undefined &&
+      (applications.length !== 1 || !applications[0]!.label.trim()))
+  )
+    return null;
+  const fields: ApprovalField[] = [
+    { label: "Recording Mac", value: connection.device_name },
+    { label: "Microphone", value: microphone.label },
+    { label: "Remembered audio source", value: captureMode(source.mode) as string },
+    ...(applications.length ? [{ label: "Application", value: applications[0]!.label }] : [])
+  ];
+  return {
+    fields,
+    // Only reference metadata participates in revalidation, never recorder credentials.
+    reference: [
+      connection.device_id,
+      connection.connection_id,
+      connection.revision,
+      connection.capability_revision,
+      fields
+    ]
+  };
+}
+
+export const meetingTitlePresentation: RouteApprovalPresentation = async (db, input) => {
+  assertDataContextDb(db);
+  const title = (label: string) => ({
+    label,
+    present: (value: unknown) =>
+      typeof value === "string" &&
+      !!value.trim() &&
+      !value.includes("\0") &&
+      Buffer.byteLength(value) <= 240
+        ? value
+        : null
   });
   const fields = presentApprovalFields(
     input.body,
     {
-      defaultCaptureMode: {
-        label: "Default capture source",
-        present: (value) => (value === null ? "No saved default" : choices(value))
-      }
+      expectedTitle: title("Current title"),
+      title: title("New title")
     },
-    ["defaultCaptureMode"]
+    ["expectedTitle", "title"]
   );
-  return fields
-    ? { target: "Meeting capture preferences", fields, version: version(input.body) }
+  if (!fields) return null;
+  const meeting = await target(db, input);
+  return meeting
+    ? { target: meeting.title, fields, version: version([meeting, input.body]) }
     : null;
+};
+export const meetingPreferencesPresentation: RouteApprovalPresentation = async (db, input, ctx) => {
+  assertDataContextDb(db);
+  if (!params(input) || !input.body || typeof input.body !== "object" || Array.isArray(input.body))
+    return null;
+  const body = input.body as Record<string, unknown>;
+  if (Object.keys(body).length === 0) return null;
+  const source =
+    body.rememberedSource == null
+      ? null
+      : await rememberedSourceDetails(db, body.rememberedSource, ctx.actorUserId);
+  if (body.rememberedSource != null && !source) return null;
+  const [current, persistedDefault] = await Promise.all([
+    preferences.get(db),
+    preferences.getPersistedDefaultCaptureMode(db)
+  ]);
+  const effectiveSource =
+    body.rememberedSource === undefined
+      ? current.rememberedSource
+      : (body.rememberedSource as MeetingRememberedSource | null);
+  const fields = presentApprovalFields(body, {
+    defaultCaptureMode: {
+      label: "Default capture source",
+      present: (value) =>
+        value === null ? captureMode(effectiveSource?.mode ?? "computer-audio") : captureMode(value)
+    },
+    summarizeOnStop: { label: "Summarize automatically after Stop", present: approvalBoolean },
+    summaryTemplateId: {
+      label: "Summary style",
+      present: (value) =>
+        typeof value === "string" ? (getMeetingOutputTemplate(value, 1)?.name ?? null) : null
+    },
+    rememberedSource: {
+      label: "Remembered recording source",
+      present: (value) =>
+        value === null
+          ? "Clear the saved Mac, microphone and application"
+          : (source?.fields ?? null)
+    }
+  });
+  if (!fields) return null;
+  // update() only persists an explicit default. Without one, the next get() derives
+  // its mode from the newly saved source, not the previous source's fallback.
+  const nextMode =
+    body.defaultCaptureMode === undefined
+      ? (persistedDefault ?? effectiveSource?.mode ?? "computer-audio")
+      : (body.defaultCaptureMode ?? effectiveSource?.mode ?? "computer-audio");
+  const changes = [
+    ...(Object.hasOwn(body, "rememberedSource")
+      ? [
+          body.rememberedSource === null
+            ? "Clear the saved recording source"
+            : "Change the saved recording source"
+        ]
+      : []),
+    ...(Object.hasOwn(body, "defaultCaptureMode") ? ["Change the default recording audio"] : []),
+    ...(Object.hasOwn(body, "summarizeOnStop")
+      ? [body.summarizeOnStop ? "Turn on automatic summaries" : "Turn off automatic summaries"]
+      : []),
+    ...(Object.hasOwn(body, "summaryTemplateId") ? ["Change the summary style"] : [])
+  ];
+  return {
+    title: changes.join("; "),
+    target: "Meeting capture preferences",
+    fields: [
+      ...fields,
+      ...(Object.hasOwn(body, "rememberedSource")
+        ? [
+            {
+              label: "Next recording audio",
+              value: `${captureMode(nextMode)}${nextMode === "selected-app" && !effectiveSource ? "; choose an application before recording" : ""}`
+            }
+          ]
+        : [])
+    ],
+    version: version([body, current, persistedDefault, source?.reference])
+  };
 };
 export const deleteMeetingPresentation: RouteApprovalPresentation = async (db, input) => {
   assertDataContextDb(db);

@@ -11,6 +11,7 @@
  */
 
 import type { FastifyBaseLogger } from "fastify";
+import { TranscriptionTransportError } from "./transcription-errors.js";
 
 import type { ActivityDetailStep, ActivityFactCounts } from "@moss/db";
 
@@ -103,7 +104,27 @@ export type ModelActivityFacts = {
  * unrecognized is `unknown`.
  */
 export function modelActivityFailureCode(error: unknown): ModelActivityFailureCode {
+  if (error instanceof TranscriptionTransportError) {
+    switch (error.reason) {
+      case "provider-rate-limited":
+        return "rate_limited";
+      case "provider-timeout":
+        return "timeout";
+      case "provider-authentication":
+        return "auth_failed";
+      case "provider-network":
+      case "provider-unavailable":
+        return "provider_down";
+      case "provider-response-invalid":
+        return "bad_shape";
+      case "cancelled":
+        return "cancelled";
+      default:
+        return "unknown";
+    }
+  }
   if (error instanceof Error) {
+    if (error.name === "TimeoutError") return "timeout";
     if (error.name === "AbortError") return "cancelled";
     const code = (error as { code?: unknown }).code;
     if (typeof code === "string") {

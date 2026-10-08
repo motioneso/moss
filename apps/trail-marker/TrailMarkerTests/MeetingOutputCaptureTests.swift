@@ -7,6 +7,10 @@ import XCTest
 final class MeetingOutputCaptureTests: XCTestCase {
     private final class Receiver: MeetingAudioReceiving {
         var received = 0
+        var dropped = 0
+        func drop(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int) {
+            dropped += frameCount
+        }
         var failures: [MeetingAudioFailure] = []
         func receive(hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int, sampleAt: (Int) -> Float) {
             received += frameCount
@@ -27,7 +31,7 @@ final class MeetingOutputCaptureTests: XCTestCase {
         func createTap(scope: MeetingOutputScope) throws -> AudioObjectID { self.scope = scope; try step("tap"); return 1 }
         func tapFormat(_ tap: AudioObjectID) throws -> AudioStreamBasicDescription { try step("format"); return format }
         func createAggregate(tap: AudioObjectID) throws -> AudioObjectID { try step("aggregate"); return 2 }
-        func createIO(device: AudioObjectID, tap: AudioObjectID, format: AudioStreamBasicDescription,
+        func createIO(device: AudioObjectID, tap: AudioObjectID, scope: MeetingOutputScope, format: AudioStreamBasicDescription,
                       receiver: MeetingAudioReceiving) throws -> MeetingOutputIO {
             try step("io"); return IO(self)
         }
@@ -185,4 +189,201 @@ final class MeetingOutputCaptureTests: XCTestCase {
             XCTAssertEqual($0 as? MeetingAudioFailure, .deviceFailure(operation: "read-tap-uid", status: -77))
         }
     }
+    func testProcessIdentityIgnoresUnrelatedLaunchesAndExitsWithoutBroadeningScope() throws {
+        for scope in [MeetingOutputScope.selectedProcesses([7, 8]), .excludingProcesses([7, 8])] {
+            var processes: [UInt32: Int32] = [7: 101, 8: 102, 9: 103]
+            func snapshot() throws -> [UInt32: Int32] {
+                try MeetingOutputProcessIdentity.snapshot(scope: scope) { object in
+                    guard let pid = processes[object] else { throw MeetingAudioFailure.invalidSelection }
+                    return pid
+                }
+            }
+            let original = try snapshot()
+            processes.removeValue(forKey: 9)
+            processes[10] = 104
+            XCTAssertEqual(try snapshot(), original)
+            XCTAssertEqual(Set(original.keys), Set([UInt32(7), 8]))
+            processes[8] = 999
+            XCTAssertNotEqual(try snapshot(), original, "A reused object cannot retain its old process identity")
+            processes.removeValue(forKey: 7)
+            XCTAssertThrowsError(try snapshot())
+        }
+    }
+
+    func testInvalidProcessIdentityFailsClosed() {
+        for pid in [Int32(0), -1] {
+            XCTAssertThrowsError(try MeetingOutputProcessIdentity.snapshot(scope: .selectedProcesses([7])) { _ in pid })
+        }
+    }
+
+    func testClosedGateLateFailureCannotReachOldReceiver() throws {
+        let receiver = Receiver()
+        let gate = MeetingOutputReceiverGate(receiver)
+        try gate.open()
+        gate.close()
+        gate.fail(.invalidSelection)
+        gate.fail(.invalidSelection)
+        gate.fail(.invalidFormat)
+        XCTAssertTrue(receiver.failures.isEmpty)
+        XCTAssertThrowsError(try gate.open())
+    }
+
+    func testEverySuccessfulRollbackAllowsFreshExplicitStart() throws {
+        for stage in ["tap", "format", "aggregate", "io", "start"] {
+            let hardware = Hardware()
+            hardware.failure = stage
+            let capture = CoreAudioMeetingOutput(scope: .selectedProcesses([7]), hardware: hardware)
+            XCTAssertThrowsError(try capture.start(into: Receiver()))
+            hardware.failure = nil
+            try capture.start(into: Receiver())
+            try capture.stop()
+            XCTAssertEqual(Array(hardware.events.suffix(4)), ["stop", "destroyIO", "destroyAggregate", "destroyTap"])
+        }
+    }
+
+    func testGlobalExclusionRequiresVerifiedCompleteScopeButIgnoresUnrelatedEvents() {
+        let original: [UInt32: Int32] = [7: 101]
+        XCTAssertTrue(MeetingOutputProcessIdentity.invalidates(scope: .excludingProcesses([7]),
+            original: original, readCurrent: { original }), "Unknown exclusions must fail closed")
+        XCTAssertFalse(MeetingOutputProcessIdentity.invalidates(scope: .excludingProcesses([7]),
+            original: original, readCurrent: { original }, readExclusions: { original }))
+        XCTAssertTrue(MeetingOutputProcessIdentity.invalidates(scope: .excludingProcesses([7]),
+            original: original, readCurrent: { original }, readExclusions: { [7: 101, 8: 202] }), "New Moss helper")
+        XCTAssertTrue(MeetingOutputProcessIdentity.invalidates(scope: .excludingProcesses([7]),
+            original: original, readCurrent: { original }, readExclusions: { throw MeetingAudioFailure.invalidSelection }))
+        XCTAssertFalse(MeetingOutputProcessIdentity.invalidates(scope: .selectedProcesses([7]),
+            original: original, readCurrent: { original }))
+        XCTAssertTrue(MeetingOutputProcessIdentity.invalidates(scope: .selectedProcesses([7]),
+            original: original, readCurrent: { [7: 102] }))
+        XCTAssertTrue(MeetingOutputProcessIdentity.invalidates(scope: .selectedProcesses([7]),
+            original: original, readCurrent: { throw MeetingAudioFailure.invalidSelection }))
+    }
+
+    func testOutputRouteEventClosesGateEvenWhenSampleFormatIsUnchanged() throws {
+        let receiver = Receiver()
+        let gate = MeetingOutputReceiverGate(receiver)
+        try gate.open()
+        gate.receive(hostTimeNanoseconds: 0, sampleRate: 48000, frameCount: 1, sampleAt: { _ in 0 })
+        // This is the same failure emitted by default-output/device/per-app route listeners.
+        gate.fail(.invalidSelection)
+        gate.receive(hostTimeNanoseconds: 20_834, sampleRate: 48000, frameCount: 1, sampleAt: { _ in 0 })
+        XCTAssertEqual(receiver.received, 1)
+        XCTAssertEqual(receiver.failures, [.invalidSelection])
+        XCTAssertThrowsError(try gate.open())
+    }
+
+    func testScopeFaultStillReachesReceiverAfterAnEarlierFormatFault() throws {
+        let receiver = Receiver()
+        let gate = MeetingOutputReceiverGate(receiver)
+        try gate.open()
+        gate.fail(.invalidFormat)
+        gate.fail(.invalidSelection)
+        gate.close()
+        gate.fail(.invalidSelection)
+        gate.fail(.invalidSelection)
+        XCTAssertEqual(receiver.failures, [.invalidFormat, .invalidSelection])
+    }
+
+    func testUnchangedTapFormatNoticeDoesNotCloseAdmission() throws {
+        let receiver = Receiver(), hardware = Hardware()
+        let gate = MeetingOutputReceiverGate(receiver)
+        try gate.open()
+        var reads = 0
+        gate.verifyFormat(expected: hardware.format) { reads += 1; return hardware.format }
+        gate.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 48000, frameCount: 1, sampleAt: { _ in 0 })
+        XCTAssertEqual(reads, 1)
+        XCTAssertEqual(receiver.received, 1)
+        XCTAssertTrue(receiver.failures.isEmpty)
+        gate.close()
+        gate.verifyFormat(expected: hardware.format) { XCTFail("Closed gate must not read destroyed hardware"); return hardware.format }
+    }
+
+    func testRealTapFormatChangeOrUnreadableFormatClosesAdmission() throws {
+        for unreadable in [true, false] {
+            let receiver = Receiver(), hardware = Hardware()
+            let gate = MeetingOutputReceiverGate(receiver)
+            try gate.open()
+            gate.verifyFormat(expected: hardware.format) {
+                if unreadable { throw MeetingAudioFailure.invalidFormat }
+                var changed = hardware.format
+                changed.mSampleRate = 44_100
+                return changed
+            }
+            gate.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 48000, frameCount: 1, sampleAt: { _ in 0 })
+            XCTAssertEqual(receiver.received, 0)
+            XCTAssertEqual(receiver.failures, [.invalidFormat])
+        }
+    }
+
+    func testConcurrentOutputCallbackRecordsGapAndKeepsTheGateOpen() throws {
+        let ring = try MeetingAudioBuffer(source: .output, epoch: 1, originNanoseconds: 0,
+                                         sampleCapacity: 32, blockCapacity: 4)
+        let gate = MeetingOutputReceiverGate(ring)
+        try gate.open()
+        gate.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 1) { _ in
+            gate.receive(sampleTime: 1, hostTimeNanoseconds: 125_000, sampleRate: 8000, frameCount: 1, sampleAt: { _ in 99 })
+            return 1
+        }
+        gate.receive(sampleTime: 2, hostTimeNanoseconds: 250_000, sampleRate: 8000, frameCount: 1, sampleAt: { _ in 2 })
+        XCTAssertNil(ring.failure)
+        XCTAssertEqual(ring.peek()?.samples, [1])
+        XCTAssertTrue(ring.acknowledge(sequence: 0))
+        XCTAssertEqual(ring.peek()?.samples, [2])
+        XCTAssertEqual(ring.peek()?.startNanoseconds, 250_000)
+        XCTAssertEqual(ring.drainCaptureGaps(), [MeetingAudioGap(source: .output, epoch: 1,
+            startNanoseconds: 125_000, endNanoseconds: 250_000, reason: .callbackContention)])
+        gate.close()
+    }
+
+    func testTapCallbacksDuringOffThreadFormatVerificationAreReportedAsMissing() throws {
+        let receiver = Receiver(), hardware = Hardware()
+        let gate = MeetingOutputReceiverGate(receiver)
+        try gate.open()
+        gate.verifyFormat(expected: hardware.format) {
+            gate.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 48000, frameCount: 1, sampleAt: { _ in 1 })
+            return hardware.format
+        }
+        XCTAssertEqual(receiver.received, 0)
+        XCTAssertEqual(receiver.dropped, 1)
+        gate.receive(sampleTime: 1, hostTimeNanoseconds: 20_834, sampleRate: 48000, frameCount: 1, sampleAt: { _ in 2 })
+        XCTAssertEqual(receiver.received, 1)
+        XCTAssertTrue(receiver.failures.isEmpty)
+        gate.close()
+    }
+
+    func testScopeVerificationQuarantinesCallbacksAndQueuedAudioUntilProvenUnchanged() throws {
+        let ring = try MeetingAudioBuffer(source: .output, epoch: 1, originNanoseconds: 0,
+            sampleCapacity: 32, blockCapacity: 4)
+        let gate = MeetingOutputReceiverGate(ring)
+        try gate.open()
+        gate.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 1, sampleAt: { _ in 1 })
+        gate.verifyScope {
+            XCTAssertTrue(ring.isScopeVerificationPending)
+            gate.receive(sampleTime: 1, hostTimeNanoseconds: 125_000, sampleRate: 8000, frameCount: 1, sampleAt: { _ in 2 })
+            return true
+        }
+        XCTAssertFalse(ring.isScopeVerificationPending)
+        XCTAssertNil(ring.failure)
+        XCTAssertEqual(ring.peek()?.samples, [1])
+        XCTAssertEqual(ring.drainCaptureGaps().first?.reason, .callbackContention)
+        gate.verifyScope { false }
+        XCTAssertEqual(ring.failure, .invalidSelection)
+        gate.close()
+    }
+
+    func testMossBundleClassificationKeepsBoundaryAndNewHelperExclusions() {
+        let bundles: Set<String> = ["/Applications/Trail Marker.app"]
+        XCTAssertTrue(MeetingOutputProcessIdentity.isMossProcess(
+            executable: "/Applications/Trail Marker.app/Contents/XPCServices/Helper", bundleIdentifier: nil, mossBundlePaths: bundles))
+        XCTAssertFalse(MeetingOutputProcessIdentity.isMossProcess(
+            executable: "/Applications/Trail Marker.app.fake/Helper", bundleIdentifier: "org.example.app", mossBundlePaths: bundles))
+        XCTAssertTrue(MeetingOutputProcessIdentity.isMossProcess(
+            executable: "/Applications/Moss Desktop.app/Contents/MacOS/Moss", bundleIdentifier: "com.moss.desktop", mossBundlePaths: bundles))
+        XCTAssertEqual(MeetingOutputProcessIdentity.bundlePaths(executable: "/Applications/Other.app/Contents/Helpers/Moss.app/Contents/MacOS/Moss"),
+            ["/Applications/Other.app", "/Applications/Other.app/Contents/Helpers/Moss.app"])
+        XCTAssertTrue(MeetingOutputProcessIdentity.isMossProcess(
+            executable: "/Applications/Other.app/Contents/Helpers/Moss.app/Contents/MacOS/Moss",
+            bundleIdentifier: "com.moss.helper", mossBundlePaths: bundles))
+    }
+
 }

@@ -19,7 +19,9 @@ jobs:
   test:
     name: Build and test
     runs-on: macos-15
-    timeout-minutes: 20
+    # Sequential native mutation/restoration tests need time to finish every control
+    # and preserve their evidence, including on slower hosted Macs.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +32,10 @@ jobs:
       - name: Generate Xcode project
         working-directory: apps/trail-marker
         run: xcodegen generate
+
+      - name: Verify bounded audio mailbox concurrency and negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-audio-portable.py
 
       - name: Verify tap UID ownership in the installed Apple SDK
         run: |
@@ -70,3 +76,39 @@ jobs:
           xcodebuild test \
             -scheme TrailMarker \
             -destination 'platform=macOS'
+
+      # These selected tests inject generated audio/fake devices. Each source mutation must
+      # cause its own XCTest assertion failure, then pass again after byte-for-byte restore.
+      - name: Verify meeting audio negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-negative-controls.py
+
+      - name: Verify meeting visibility and unlink negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-link-negative-controls.py
+
+      - name: Verify native Resume negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-resume-negative-controls.py
+
+      - name: Verify native source selection negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-source-negative-controls.py
+
+      - name: Verify single-link recovery negative controls
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-single-link-controls.py
+
+      - name: Preserve native negative-control evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trail-marker-negative-controls
+          path: |
+            ${{ runner.temp }}/meeting-negative-controls-*/
+            ${{ runner.temp }}/meeting-link-negative-*/
+            ${{ runner.temp }}/meeting-single-link-negative-*/
+            ${{ runner.temp }}/meeting-resume-negative-*/
+            ${{ runner.temp }}/meeting-source-negative-*/
+          if-no-files-found: ignore
+          retention-days: 7

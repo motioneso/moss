@@ -16,6 +16,8 @@ struct CreatePairAttemptRequest: Encodable {
     let appVersion: String
     let osVersion: String
     let verifierHash: String
+    var recordingProofHash: String? = nil
+    var recordingPolicyVersion: Int? = nil
 }
 
 struct CreatePairAttemptResponse: Decodable, Equatable {
@@ -40,11 +42,17 @@ struct RedeemPairAttemptRequest: Encodable {
     let verifier: String
 }
 
+struct RecordingCapabilityApproval: Codable, Equatable {
+    let policyVersion: Int
+    let revision: Int
+}
+
 struct RedeemPairAttemptResponse: Decodable, Equatable {
     let credential: String
     let device: CompanionDeviceSummary
     let account: CompanionAccountSummary
     let expiresAt: String
+    var recordingCapability: RecordingCapabilityApproval? = nil
 }
 
 enum RedeemOutcome: Equatable {
@@ -295,6 +303,24 @@ struct CompanionClient {
         _ = try await sendChecked(request, okStatuses: [204])
     }
 
+    func recordingCapabilityStatus(credential: String, attemptId: String) async throws -> RecordingCapabilityStatus {
+        struct Body: Encodable { let attemptId: String }
+        let request = try jsonRequest(path: "/api/companion/recording-capability/status", method: "POST",
+            body: Body(attemptId: attemptId), credential: credential)
+        return try await recordingReply(RecordingCapabilityStatus.self, request: request)
+    }
+
+    /// Read-only recording recovery preserves this endpoint's Retry-After. Legacy companion
+    /// consumers retain their established error mapping and heartbeat/backtrack behavior.
+    private func recordingReply<Reply: Decodable>(_ type: Reply.Type, request: URLRequest) async throws -> Reply {
+        let (data, response) = try await send(request)
+        if response.statusCode == 429 || (500...599).contains(response.statusCode) {
+            throw MeetingHostError.retryAfter(milliseconds: MeetingCaptureClient.retryDelay(response))
+        }
+        guard response.statusCode == 200 else { throw makeError(status: response.statusCode, data: data) }
+        return try decode(type, from: data)
+    }
+
     func heartbeat(credential: String, app: String, os: String) async throws -> CompanionHeartbeatResponse {
         let body = CompanionHeartbeatRequest(appVersion: app, osVersion: os)
         let request = try jsonRequest(
@@ -313,7 +339,8 @@ struct CompanionClient {
     }
 
     func logout(credential: String) async throws {
-        let request = plainRequest(path: "/api/companion/logout", method: "POST", credential: credential)
+        var request = plainRequest(path: "/api/companion/logout", method: "POST", credential: credential)
+        request.timeoutInterval = 15
         _ = try await sendChecked(request, okStatuses: [204])
     }
 
@@ -459,4 +486,16 @@ struct CompanionClient {
             return .unreachable
         }
     }
+}
+
+struct RecordingCapabilityStatus: Decodable {
+    let status: String
+    let policyVersion: Int
+    let revision: Int?
+}
+struct PendingRecordingProof: Codable {
+    let requestKey: String
+    let proof: String
+    var attemptId: String? = nil
+    var expiresAt: String? = nil
 }

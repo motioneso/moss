@@ -11,6 +11,8 @@ import type {
   CreateMeetingRecordInput,
   MeetingRecordCursor,
   PutMeetingNotesInput,
+  PutMeetingTitleInput,
+  PutMeetingTitleResult,
   PutMeetingNotesResult
 } from "@moss/shared";
 
@@ -33,7 +35,17 @@ function text(value: string, maxBytes: number, required: boolean): string {
   return value;
 }
 
-function record(row: Selectable<MeetingRecordsTable>): MeetingRecord {
+const recordColumns = [
+  "id",
+  "title",
+  "personal_notes",
+  "notes_revision",
+  "created_at",
+  "updated_at"
+] as const;
+function record(
+  row: Pick<Selectable<MeetingRecordsTable>, (typeof recordColumns)[number]>
+): MeetingRecord {
   return {
     id: row.id,
     title: row.title,
@@ -72,13 +84,14 @@ export class MeetingRecordsRepository {
       .selectAll()
       .where("request_key", "=", input.requestKey)
       .executeTakeFirstOrThrow();
-    if (existing.title !== title) throw new MeetingRecordConflictError();
+    if (existing.creation_title !== title) throw new MeetingRecordConflictError();
     // Replay the original creation snapshot, not later edits. Fetch get() for current notes.
     // Both initial timestamps default to the same transaction-stable now() in SQL.
     return {
       created: false,
       meeting: record({
         ...existing,
+        title: existing.creation_title,
         personal_notes: "",
         notes_revision: 0,
         updated_at: existing.created_at
@@ -93,7 +106,10 @@ export class MeetingRecordsRepository {
   ): Promise<MeetingRecord | null> {
     assertDataContextDb(scopedDb);
     assertUuid(id, "Meeting id");
-    let query = scopedDb.db.selectFrom("app.meeting_records").selectAll().where("id", "=", id);
+    let query = scopedDb.db
+      .selectFrom("app.meeting_records")
+      .select(recordColumns)
+      .where("id", "=", id);
     if (options.forUpdate) query = query.forUpdate();
     const row = await query.executeTakeFirst();
     return row ? record(row) : null;
@@ -136,6 +152,25 @@ export class MeetingRecordsRepository {
     return (
       await query.orderBy("created_at", "desc").orderBy("id", "desc").limit(limit).execute()
     ).map(record);
+  }
+
+  async putTitle(db: DataContextDb, input: PutMeetingTitleInput): Promise<PutMeetingTitleResult> {
+    assertDataContextDb(db);
+    assertUuid(input.meetingId, "Meeting id");
+    const title = text(input.title, 240, true).trim();
+    text(input.expectedTitle, 240, true);
+    const current = await this.get(db, input.meetingId, { forUpdate: true });
+    if (!current) return { status: "not-found" };
+    if (current.title !== input.expectedTitle && current.title !== title)
+      return { status: "conflict", meeting: current };
+    if (current.title === title) return { status: "saved", meeting: current };
+    const updated = await db.db
+      .updateTable("app.meeting_records")
+      .set({ title, updated_at: sql<Date>`clock_timestamp()` })
+      .where("id", "=", input.meetingId)
+      .returning(recordColumns)
+      .executeTakeFirstOrThrow();
+    return { status: "saved", meeting: record(updated) };
   }
 
   async putNotes(

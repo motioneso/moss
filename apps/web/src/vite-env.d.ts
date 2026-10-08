@@ -10,7 +10,10 @@ declare module "virtual:moss-module-settings" {
 }
 
 declare module "virtual:moss-module-web" {
-  import type { ModuleWebContribution } from "@moss/module-web-sdk";
+  import type {
+    ModulePersistentControlsContribution,
+    ModuleWebContribution
+  } from "@moss/module-web-sdk";
 
   export interface GeneratedWebRoute {
     readonly moduleId: string;
@@ -28,6 +31,12 @@ declare module "virtual:moss-module-web" {
     readonly load: () => Promise<{ readonly default: ModuleWebContribution }>;
   }
 
+  export interface ModulePersistentControlsEntry {
+    readonly moduleId: string;
+    readonly load: () => Promise<{ readonly default: ModulePersistentControlsContribution }>;
+  }
+
+  export const MODULE_PERSISTENT_CONTROLS: readonly ModulePersistentControlsEntry[];
   export const MODULE_WEB_ROUTES: readonly GeneratedWebRoute[];
   export const MODULE_WEB_CONTRIBUTIONS: readonly ModuleWebContributionEntry[];
 }

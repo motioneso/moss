@@ -21,6 +21,8 @@
 #   docker compose -p moss -f docker-compose.prod.yml --env-file ./env.production.local \
 #     --profile ops run --rm module-install
 
+# The shared runtime env file must include APP, AUTH and WORKER database URLs.
+# API capture maintenance also needs WORKER to claim jobs; setup-prod emits all role URLs.
 x-app-env-file: &app-env-file
   env_file:
     - path: ${JARVIS_ENV_FILE:-./env.production.local}
