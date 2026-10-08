@@ -97,6 +97,11 @@ struct MeetingCaptureDiagnostics {
         return changed ? lines : nil
     }
 
+    mutating func gap(_ detail: String) -> [String] {
+        append(detail)
+        return lines
+    }
+
     mutating func note(_ stage: String, duration: UInt64) -> [String] {
         append("\(stage): \(duration / 1_000_000) ms")
         return lines

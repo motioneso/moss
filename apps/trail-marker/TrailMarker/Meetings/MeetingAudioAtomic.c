@@ -46,15 +46,25 @@ void MeetingAudioDeadlineStore(MeetingAudioAtomicDeadline *deadline, uint64_t va
 }
 
 #define MEETING_AUDIO_DROP_CAPACITY 64
+#define MEETING_AUDIO_DROP_MAXIMUM_CALLBACK_FRAMES 8192
+#define MEETING_AUDIO_DROP_MAXIMUM_COALESCED_FRAMES 11520000
 struct MeetingAudioDropSlot {
-    // 0 = available, 1 = being written, 2 = published. Only the consumer releases a slot.
+    // 0 = available, 1 = producer-owned, 2 = published, 3 = consumer-owned.
+    // Every non-atomic payload access requires exclusive ownership, including reads.
     atomic_uint state;
     MeetingAudioDropRecord record;
+    uint64_t lastHostTimeNanoseconds;
+    uint32_t lastFrameCount;
+    uint64_t order;
+    uint64_t lastOrder;
 };
 struct MeetingAudioDropMailbox {
     struct MeetingAudioDropSlot slots[MEETING_AUDIO_DROP_CAPACITY];
     atomic_uint accepted;
     atomic_uint rejected;
+    atomic_ullong nextOrder;
+    atomic_uint producers;
+    atomic_ullong revision;
 };
 
 MeetingAudioDropMailbox *MeetingAudioDropMailboxCreate(void) {
@@ -62,6 +72,9 @@ MeetingAudioDropMailbox *MeetingAudioDropMailboxCreate(void) {
     if (mailbox) {
         atomic_init(&mailbox->accepted, 0);
         atomic_init(&mailbox->rejected, 0);
+        atomic_init(&mailbox->nextOrder, 0);
+        atomic_init(&mailbox->producers, 0);
+        atomic_init(&mailbox->revision, 0);
         for (unsigned i = 0; i < MEETING_AUDIO_DROP_CAPACITY; ++i) {
             atomic_init(&mailbox->slots[i].state, 0);
         }
@@ -69,34 +82,175 @@ MeetingAudioDropMailbox *MeetingAudioDropMailboxCreate(void) {
     return mailbox;
 }
 void MeetingAudioDropMailboxDestroy(MeetingAudioDropMailbox *mailbox) { free(mailbox); }
+
+static uint64_t MeetingAudioDropDuration(uint32_t frames, double sampleRate) {
+    // Validated integral rates and UInt32 frames keep this multiplication representable.
+    return (uint64_t)frames * UINT64_C(1000000000) / (uint64_t)sampleRate;
+}
+
+static uint64_t MeetingAudioDropEnd(MeetingAudioDropRecord record) {
+    uint64_t rate = (uint64_t)record.sampleRate;
+    return record.hostTimeNanoseconds + ((uint64_t)record.frameCount * UINT64_C(1000000000) + rate - 1) / rate;
+}
+
+static bool MeetingAudioDropIsValid(MeetingAudioDropRecord record) {
+    return isfinite(record.sampleTime) && trunc(record.sampleTime) == record.sampleTime &&
+        fabs(record.sampleTime) <= 9007199254732800.0 &&
+        isfinite(record.sampleRate) && record.sampleRate >= 8000 && record.sampleRate <= 192000 &&
+        trunc(record.sampleRate) == record.sampleRate &&
+        record.frameCount > 0 && record.frameCount <= MEETING_AUDIO_DROP_MAXIMUM_CALLBACK_FRAMES &&
+        record.maximumFrameCount == record.frameCount && record.firstFrameCount == record.frameCount && record.cause <= 1 &&
+        record.hostTimeNanoseconds <= UINT64_MAX - MeetingAudioDropDuration(record.frameCount, record.sampleRate) - 1;
+}
+
+static bool MeetingAudioDropCanAppend(const struct MeetingAudioDropSlot *slot, MeetingAudioDropRecord next) {
+    const MeetingAudioDropRecord previous = slot->record;
+    if (previous.cause != next.cause || previous.sampleRate != next.sampleRate ||
+        previous.sampleTime + (double)previous.frameCount != next.sampleTime ||
+        previous.frameCount > UINT32_MAX - next.frameCount ||
+        previous.frameCount + next.frameCount > MEETING_AUDIO_DROP_MAXIMUM_COALESCED_FRAMES ||
+        previous.hostTimeNanoseconds > UINT64_MAX -
+            MeetingAudioDropDuration(previous.frameCount + next.frameCount, previous.sampleRate) - 1 ||
+        next.hostTimeNanoseconds <= slot->lastHostTimeNanoseconds) { return false; }
+
+    uint64_t duration = MeetingAudioDropDuration(previous.frameCount, previous.sampleRate);
+    uint64_t expected = previous.hostTimeNanoseconds + duration;
+    uint64_t difference = next.hostTimeNanoseconds > expected ?
+        next.hostTimeNanoseconds - expected : expected - next.hostTimeNanoseconds;
+    // Bound cumulative jitter, rather than allowing per-callback drift to accumulate.
+    // Hardware clock skew can move a measured start slightly before or after its
+    // nominal end. Exact sample continuity keeps the represented intervals disjoint.
+    uint64_t callbackDuration = MeetingAudioDropDuration(slot->lastFrameCount, previous.sampleRate);
+    uint64_t tolerance = callbackDuration;
+    if (tolerance > UINT64_C(20000000)) { tolerance = UINT64_C(20000000); }
+    return difference <= tolerance;
+}
+
+static void MeetingAudioDropRelease(MeetingAudioDropMailbox *mailbox, const bool *owned) {
+    for (unsigned i = 0; i < MEETING_AUDIO_DROP_CAPACITY; ++i) {
+        if (owned[i]) { atomic_store_explicit(&mailbox->slots[i].state, 2, memory_order_release); }
+    }
+}
+
+static bool MeetingAudioDropFinishPush(MeetingAudioDropMailbox *mailbox, bool accepted) {
+    atomic_fetch_add_explicit(accepted ? &mailbox->accepted : &mailbox->rejected, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&mailbox->revision, 1, memory_order_release);
+    atomic_fetch_sub_explicit(&mailbox->producers, 1, memory_order_release);
+    return accepted;
+}
+
 bool MeetingAudioDropMailboxPush(MeetingAudioDropMailbox *mailbox, MeetingAudioDropRecord record) {
+    atomic_fetch_add_explicit(&mailbox->producers, 1, memory_order_acq_rel);
+    atomic_fetch_add_explicit(&mailbox->revision, 1, memory_order_release);
+    uint64_t order = atomic_fetch_add_explicit(&mailbox->nextOrder, 1, memory_order_relaxed);
+    if (record.maximumFrameCount == 0) { record.maximumFrameCount = record.frameCount; }
+    if (record.firstFrameCount == 0) { record.firstFrameCount = record.frameCount; }
+    if (!MeetingAudioDropIsValid(record)) {
+        return MeetingAudioDropFinishPush(mailbox, false);
+    }
+    record.observedEndNanoseconds = MeetingAudioDropEnd(record);
+
+    // One bounded try per slot. An active producer/consumer prevents coalescing in
+    // this pass; we can still publish separately into an available slot. Never wait.
+    bool owned[MEETING_AUDIO_DROP_CAPACITY] = { false };
+    bool complete = true;
+    unsigned latest = MEETING_AUDIO_DROP_CAPACITY;
+    for (unsigned i = 0; i < MEETING_AUDIO_DROP_CAPACITY; ++i) {
+        unsigned expected = 2;
+        if (atomic_compare_exchange_strong_explicit(&mailbox->slots[i].state, &expected, 1,
+                memory_order_acquire, memory_order_relaxed)) {
+            owned[i] = true;
+            if (latest == MEETING_AUDIO_DROP_CAPACITY ||
+                mailbox->slots[i].lastOrder > mailbox->slots[latest].lastOrder) { latest = i; }
+        } else if (expected != 0) { complete = false; }
+    }
+    if (complete && latest != MEETING_AUDIO_DROP_CAPACITY &&
+        mailbox->slots[latest].lastOrder == order - 1 &&
+        MeetingAudioDropCanAppend(&mailbox->slots[latest], record)) {
+        struct MeetingAudioDropSlot *slot = &mailbox->slots[latest];
+        slot->record.frameCount += record.frameCount;
+        if (record.maximumFrameCount > slot->record.maximumFrameCount) {
+            slot->record.maximumFrameCount = record.maximumFrameCount;
+        }
+        slot->lastHostTimeNanoseconds = record.hostTimeNanoseconds;
+        slot->lastFrameCount = record.frameCount;
+        slot->lastOrder = order;
+        if (record.observedEndNanoseconds > slot->record.observedEndNanoseconds) {
+            slot->record.observedEndNanoseconds = record.observedEndNanoseconds;
+        }
+        MeetingAudioDropRelease(mailbox, owned);
+        return MeetingAudioDropFinishPush(mailbox, true);
+    }
+    MeetingAudioDropRelease(mailbox, owned);
     for (unsigned i = 0; i < MEETING_AUDIO_DROP_CAPACITY; ++i) {
         unsigned expected = 0;
         if (atomic_compare_exchange_strong_explicit(&mailbox->slots[i].state, &expected, 1,
                 memory_order_acquire, memory_order_relaxed)) {
             mailbox->slots[i].record = record;
+            mailbox->slots[i].lastHostTimeNanoseconds = record.hostTimeNanoseconds;
+            mailbox->slots[i].lastFrameCount = record.frameCount;
+            mailbox->slots[i].order = order;
+            mailbox->slots[i].lastOrder = order;
             atomic_store_explicit(&mailbox->slots[i].state, 2, memory_order_release);
-            atomic_fetch_add_explicit(&mailbox->accepted, 1, memory_order_relaxed);
-            return true;
+            return MeetingAudioDropFinishPush(mailbox, true);
         }
     }
-    atomic_fetch_add_explicit(&mailbox->rejected, 1, memory_order_relaxed);
-    return false;
+    return MeetingAudioDropFinishPush(mailbox, false);
 }
 bool MeetingAudioDropMailboxPop(MeetingAudioDropMailbox *mailbox, MeetingAudioDropRecord *record) {
-    // A single consumer selects sample order, independent of which producer reserved first.
+    return MeetingAudioDropMailboxPopForClock(mailbox, 0, false, record) == 1;
+}
+
+static bool MeetingAudioDropBefore(const struct MeetingAudioDropSlot *left, const struct MeetingAudioDropSlot *right) {
+    return left->record.hostTimeNanoseconds < right->record.hostTimeNanoseconds ||
+        (left->record.hostTimeNanoseconds == right->record.hostTimeNanoseconds && left->order < right->order);
+}
+
+int MeetingAudioDropMailboxPopForClock(MeetingAudioDropMailbox *mailbox, double expectedSampleTime,
+    bool hasExpectedSampleTime, MeetingAudioDropRecord *record) {
+    // Sample counters may reset. Compare measured host times, with stable reservation
+    // order for ties, and own every payload read so an append cannot race a snapshot.
+    bool owned[MEETING_AUDIO_DROP_CAPACITY] = { false };
+    bool complete = true;
+    uint64_t revision = atomic_load_explicit(&mailbox->revision, memory_order_acquire);
+    if (atomic_load_explicit(&mailbox->producers, memory_order_acquire) != 0) { return 2; }
     unsigned selected = MEETING_AUDIO_DROP_CAPACITY;
+    unsigned successor = MEETING_AUDIO_DROP_CAPACITY;
     for (unsigned i = 0; i < MEETING_AUDIO_DROP_CAPACITY; ++i) {
-        if (atomic_load_explicit(&mailbox->slots[i].state, memory_order_acquire) == 2 &&
-            (selected == MEETING_AUDIO_DROP_CAPACITY ||
-             mailbox->slots[i].record.sampleTime < mailbox->slots[selected].record.sampleTime)) {
-            selected = i;
-        }
+        unsigned expected = 2;
+        if (atomic_compare_exchange_strong_explicit(&mailbox->slots[i].state, &expected, 3,
+                memory_order_acquire, memory_order_relaxed)) {
+            owned[i] = true;
+            if (selected == MEETING_AUDIO_DROP_CAPACITY ||
+                MeetingAudioDropBefore(&mailbox->slots[i], &mailbox->slots[selected])) { selected = i; }
+            if (hasExpectedSampleTime && mailbox->slots[i].record.sampleTime == expectedSampleTime &&
+                (successor == MEETING_AUDIO_DROP_CAPACITY ||
+                 MeetingAudioDropBefore(&mailbox->slots[i], &mailbox->slots[successor]))) { successor = i; }
+        } else if (expected != 0) { complete = false; }
     }
-    if (selected == MEETING_AUDIO_DROP_CAPACITY) { return false; }
+    if (!complete || atomic_load_explicit(&mailbox->revision, memory_order_acquire) != revision ||
+        atomic_load_explicit(&mailbox->producers, memory_order_acquire) != 0) {
+        MeetingAudioDropRelease(mailbox, owned);
+        return 2;
+    }
+    if (selected == MEETING_AUDIO_DROP_CAPACITY) { return 0; }
+    if (successor != MEETING_AUDIO_DROP_CAPACITY) {
+        // Host jitter may reverse adjacent callbacks in an established clock segment.
+        // Never jump to an apparent successor across an earlier reset frontier.
+        bool resetBeforeSuccessor = false;
+        for (unsigned i = 0; i < MEETING_AUDIO_DROP_CAPACITY; ++i) {
+            if (owned[i] && mailbox->slots[i].record.sampleTime < expectedSampleTime &&
+                mailbox->slots[i].order < mailbox->slots[successor].order) {
+                resetBeforeSuccessor = true;
+            }
+        }
+        if (!resetBeforeSuccessor) { selected = successor; }
+    }
     *record = mailbox->slots[selected].record;
+    owned[selected] = false;
     atomic_store_explicit(&mailbox->slots[selected].state, 0, memory_order_release);
-    return true;
+    MeetingAudioDropRelease(mailbox, owned);
+    return 1;
 }
 
 MeetingAudioDropCounts MeetingAudioDropMailboxReadCounts(MeetingAudioDropMailbox *mailbox) {

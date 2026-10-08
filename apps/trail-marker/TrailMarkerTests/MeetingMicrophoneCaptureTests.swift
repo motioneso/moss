@@ -590,4 +590,195 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         try capture.stop()
     }
 
+    private func diagnosticBuffer() throws -> MeetingAudioBuffer {
+        try MeetingAudioBuffer(source: .microphone, epoch: 1, originNanoseconds: 0,
+                               sampleCapacity: 32, blockCapacity: 4)
+    }
+
+    private func assertCallbackFailure(_ failure: MeetingAudioFailure,
+                                       diagnostic: MeetingAudioFailureDiagnostic,
+                                       in ring: MeetingAudioBuffer,
+                                       file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(ring.failure, failure, file: file, line: line)
+        XCTAssertEqual(ring.failureDiagnostic, diagnostic, file: file, line: line)
+        XCTAssertNil(ring.peek(), file: file, line: line)
+        XCTAssertFalse(ring.withSendAdmission {}, file: file, line: line)
+    }
+
+    func testMalformedNativeTimestampsPublishMicrophoneTimestampDiagnosticToBuffer() throws {
+        for malformed in 0..<5 {
+            let unit = FakeUnit(), ring = try diagnosticBuffer()
+            let capture = unit.capture()
+            try capture.start(into: ring)
+            let status: OSStatus
+            switch malformed {
+            case 0: status = unit.emit(validHostTime: false)
+            case 1: status = unit.emit(validSampleTime: false)
+            case 2: status = unit.emit(sampleTime: .nan)
+            case 3: status = unit.emit(sampleTime: .infinity)
+            default: status = unit.emit(sampleTime: 0.5)
+            }
+            XCTAssertEqual(status, kAudio_ParamError)
+            assertCallbackFailure(.invalidTimestamp, diagnostic: .init(.microphoneTimestamp), in: ring)
+            XCTAssertEqual(unit.renderCount, 0)
+            try capture.stop()
+        }
+    }
+
+    func testNativeFrameCapacityFailuresPublishMicrophoneCapacityDiagnosticToBuffer() throws {
+        for frames in [UInt32(0), 9, UInt32.max] {
+            let unit = FakeUnit(), ring = try diagnosticBuffer()
+            let capture = unit.capture()
+            try capture.start(into: ring)
+            XCTAssertEqual(unit.emit(frames: frames), kAudioUnitErr_TooManyFramesToProcess)
+            assertCallbackFailure(.bufferFull, diagnostic: .init(.microphoneFrameCapacity), in: ring)
+            XCTAssertEqual(unit.renderCount, 0)
+            try capture.stop()
+        }
+    }
+
+    func testNativeRenderFailurePublishesActualStatusToBufferAndCannotBeOverwritten() throws {
+        let unit = FakeUnit(), ring = try diagnosticBuffer()
+        unit.renderStatus = -77
+        let capture = unit.capture()
+        try capture.start(into: ring)
+        XCTAssertEqual(unit.emit(), -77)
+        unit.renderStatus = -88
+        unit.emit(at: 200)
+        assertCallbackFailure(.deviceFailure(operation: "AudioUnitRender", status: -77),
+                              diagnostic: .init(.microphoneRender, status: -77), in: ring)
+        XCTAssertEqual(unit.renderCount, 1)
+        try capture.stop()
+    }
+
+    func testNativeBufferLayoutFailurePublishesMicrophoneLayoutDiagnosticToBuffer() throws {
+        let unit = FakeUnit(), ring = try diagnosticBuffer()
+        unit.corruptBuffer = { $0.pointee.mBuffers.mNumberChannels = 2 }
+        let capture = unit.capture()
+        try capture.start(into: ring)
+        XCTAssertEqual(unit.emit(), kAudio_ParamError)
+        assertCallbackFailure(.invalidFormat, diagnostic: .init(.microphoneBufferLayout), in: ring)
+        XCTAssertEqual(unit.renderCount, 1)
+        try capture.stop()
+    }
+
+    func testNativeFormatVerificationFailurePublishesMicrophoneFormatDiagnosticToBuffer() throws {
+        for changesOutput in [true, false] {
+            let unit = FakeUnit(), ring = try diagnosticBuffer()
+            let capture = unit.capture()
+            try capture.start(into: ring)
+            if changesOutput {
+                unit.configuredOutput.mSampleRate = 44_100
+            } else {
+                var changed = unit.format
+                changed.mSampleRate = 44_100
+                unit.verifiedFormat = changed
+            }
+            let context = try XCTUnwrap(unit.context)
+            context.formatDidChange()
+            context.verifyFormatIfNeeded()
+            unit.emit()
+            assertCallbackFailure(.invalidFormat, diagnostic: .init(.microphoneFormatVerification), in: ring)
+            XCTAssertEqual(unit.renderCount, 0)
+            try capture.stop()
+        }
+    }
+
+    func testNativeFormatReadFailurePublishesActualStatusToBuffer() throws {
+        let unit = FakeUnit(), ring = try diagnosticBuffer()
+        let capture = unit.capture()
+        try capture.start(into: ring)
+        unit.failAt = ["verifyFormat"]
+        let context = try XCTUnwrap(unit.context)
+        context.formatDidChange()
+        context.verifyFormatIfNeeded()
+        assertCallbackFailure(.invalidFormat, diagnostic: .init(.microphoneFormatRead, status: -99), in: ring)
+        try capture.stop()
+    }
+
+    func testNativeCapacityVerificationFailurePublishesMicrophoneCapacityDiagnosticToBuffer() throws {
+        let unit = FakeUnit(), ring = try diagnosticBuffer()
+        let capture = unit.capture()
+        try capture.start(into: ring)
+        unit.verifiedCapacity = unit.capacity + 1
+        let context = try XCTUnwrap(unit.context)
+        context.formatDidChange()
+        context.verifyFormatIfNeeded()
+        assertCallbackFailure(.bufferFull, diagnostic: .init(.microphoneCapacityVerification), in: ring)
+        try capture.stop()
+    }
+
+    func testNativeDeviceDisappearanceDuringRenderPublishesDeviceGoneDiagnosticToBuffer() throws {
+        let unit = FakeUnit(), ring = try diagnosticBuffer()
+        unit.onRender = { [weak unit] in unit?.context?.deviceDidDisappear() }
+        let capture = unit.capture()
+        try capture.start(into: ring)
+        unit.emit()
+        assertCallbackFailure(.invalidSelection, diagnostic: .init(.microphoneDeviceGone), in: ring)
+        XCTAssertEqual(unit.renderCount, 1)
+        try capture.stop()
+    }
+
+    func testMalformedOverlappingCallbackPublishesContendedTimestampDiagnosticToBuffer() throws {
+        let unit = FakeUnit(), ring = try diagnosticBuffer()
+        unit.onRender = { [weak unit] in _ = unit?.emit(at: 200, validHostTime: false) }
+        let capture = unit.capture()
+        try capture.start(into: ring)
+        unit.emit()
+        assertCallbackFailure(.invalidTimestamp, diagnostic: .init(.microphoneContendedTimestamp), in: ring)
+        XCTAssertEqual(unit.renderCount, 1)
+        try capture.stop()
+    }
+
+    func testRenderHeldBeforeReceiverCannotPublishPreRecheckAudioAfterHostGateReopens() throws {
+        let unit = FakeUnit(), ring = try diagnosticBuffer()
+        unit.format.mSampleRate = 8_000
+        let capture = unit.capture()
+        try capture.start(into: ring)
+        unit.emit(at: 0, frames: 8, sampleTime: 0)
+        XCTAssertEqual(ring.diagnostics.bufferedSamples, 8)
+
+        let enteredRender = DispatchSemaphore(value: 0), releaseRender = DispatchSemaphore(value: 0)
+        let renderFinished = expectation(description: "Late native render returns")
+        unit.onRender = {
+            enteredRender.signal()
+            XCTAssertEqual(releaseRender.wait(timeout: .now() + 5), .success)
+        }
+        defer { releaseRender.signal() }
+        DispatchQueue.global().async {
+            unit.emit(at: 100_000, frames: 8, sampleTime: 8)
+            renderFinished.fulfill()
+        }
+        XCTAssertEqual(enteredRender.wait(timeout: .now() + 2), .success)
+        ring.setHostSourceVerificationPending(true)
+        XCTAssertEqual(ring.discardUnsentStartupAudio(), MeetingAudioGap(source: .microphone,
+            epoch: 1, startNanoseconds: 0, endNanoseconds: 1_000_000, reason: .sourceVerification))
+        ring.setHostSourceVerificationPending(false, confirmedAt: 2_000_000)
+        releaseRender.signal()
+        wait(for: [renderFinished], timeout: 2)
+        unit.onRender = nil
+
+        XCTAssertNil(ring.failure)
+        XCTAssertNil(ring.failureDiagnostic)
+        XCTAssertEqual(ring.diagnostics.bufferedSamples, 0)
+        XCTAssertNil(ring.peek())
+        var sentPackets: [MeetingAudioPacket] = []
+        if let packet = ring.peek() { _ = ring.withSendAdmission { sentPackets.append(packet) } }
+        XCTAssertTrue(sentPackets.isEmpty, "A native callback held before receive must not escape after recheck")
+        XCTAssertEqual(ring.drainCaptureGaps(), [MeetingAudioGap(source: .microphone,
+            epoch: 1, startNanoseconds: 1_000_000, endNanoseconds: 2_000_000, reason: .sourceVerification)])
+
+        unit.sampleOffset = 20
+        unit.emit(at: 200_000, frames: 8, sampleTime: 16)
+        let packet = try XCTUnwrap(ring.peek())
+        XCTAssertEqual(packet.startNanoseconds, 2_000_000)
+        XCTAssertEqual(packet.endNanoseconds, 3_000_000)
+        XCTAssertEqual(packet.samples, (0..<8).map { Float(20 + $0) })
+        XCTAssertTrue(ring.withSendAdmission { sentPackets.append(packet) })
+        XCTAssertEqual(sentPackets, [packet])
+        XCTAssertNil(ring.failure)
+        XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
+        try capture.stop()
+    }
+
 }

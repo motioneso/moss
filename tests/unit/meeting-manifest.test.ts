@@ -165,6 +165,7 @@ describe("meetings composition", () => {
       "meetings.mac_link_controls",
       "meetings.automatic_summary",
       "transcribe.meeting",
+      "meetings.native_startup_recovery",
       "meetings.native_capture",
       "meetings.mac_recording_status",
       "meetings.mac_recording_pill_visibility",

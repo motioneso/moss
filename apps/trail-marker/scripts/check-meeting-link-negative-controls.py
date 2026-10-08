@@ -19,6 +19,36 @@ SPEC = importlib.util.spec_from_file_location("meeting_negative", HERE / "check-
 RUNNER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RUNNER)
 CONTROLS = [
+    ("Meetings/MeetingCaptureRuntime.swift", "MeetingStartupSourceRecoveryTests", {
+        "name": "startup-retry-never-offered", "test": "testAcknowledgedAndUnacknowledgedOffersBothPermanentlyBlockStartupRetry",
+        "before": "                  !currentEpochEverOffered else { return false }",
+        "after": "                  true else { return false }",
+        "assertion": "Retry requires that this epoch never offered PCM, even after receipt emptied the ring",
+    }),
+    ("Meetings/MeetingCaptureRuntime.swift", "MeetingStartupSourceRecoveryTests", {
+        "name": "startup-retry-erases-uncertain-pcm", "test": "testQuarantineErasesBothSourcesAndReportsEveryDroppedIntervalWithoutReadingSamples",
+        "before": "if let gap = entry.buffer.discardUnsentStartupAudio() { retainedGaps.append(gap) }",
+        "after": "if let gap = Optional<MeetingAudioGap>.none { retainedGaps.append(gap) }",
+        "assertion": "PCM captured before the missing-source notice must be erased",
+    }),
+    ("Meetings/MeetingCaptureInventory.swift", "MeetingStartupSourceRecoveryTests", {
+        "name": "startup-retry-rejects-new-moss", "test": "testObservedAdditionalMossCannotQualifyEvenIfItVanishesFromTheNextSnapshot",
+        "before": "        guard excluded.allSatisfy({ original.excluded.contains($0) }) else { return false }",
+        "after": "        // Mutation: ignore a newly observed excluded process.",
+        "assertion": "A newly observed Moss process must never qualify for startup reconfirmation",
+    }),
+    ("Meetings/MeetingAudioBuffer.swift", "MeetingMicrophoneCaptureTests", {
+        "name": "startup-retry-rejects-late-native-render", "test": "testRenderHeldBeforeReceiverCannotPublishPreRecheckAudioAfterHostGateReopens",
+        "before": "        guard host >= sourceVerificationCutoff, interval.start >= sourceVerificationCutoff else {",
+        "after": "        guard true else {",
+        "assertion": "A native callback held before receive must not escape after recheck",
+    }),
+    ("Meetings/MeetingStartupSourceValidation.swift", "MeetingHostLifecycleTests", {
+        "name": "startup-source-one-confirmation", "test": "testFirstStartReconfirmsOneMissingMicrophoneWithoutResumeOrSendingUncertainPCM",
+        "before": "           runtime.beginStartupSourceRecheck(at: ports.now()) {",
+        "after": "           false {",
+        "assertion": "One Start must survive a reconfirmed startup source omission without Resume",
+    }),
     ("Meetings/MeetingRecordingPresentation.swift", "MeetingRecordingPresentationTests", {
         "name": "T12-accepted-start-pill", "test": "testPillAndRedDotShowThroughPauseAndHideResetsOnlyAtNextStart",
         "before": "        active = true", "after": "        active = false", "assertion": "XCTAssertTrue failed",
