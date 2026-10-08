@@ -11,8 +11,9 @@ Runtime baseline and throwaway prototypes were not merged.
 - Start #3125 before expanding concurrent implementation. Fresh implementer dispatch next.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
-- Read-only exploration is revalidating migration/Settings seams and session fit for
-  #3127, #3128, #3132, #3137 and #3142 before dispatch.
+- Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
+  records session sizing, Settings coordination and native reslices #3149–#3152 under
+  #3132/#3137. Originals remain complete-scope containers; downstream blockers are retained.
 - Each ticket uses a fresh TDD implementer, isolated worktree/branch from the integration
   tip, required checks and independent review, real UI/worker demonstration, evidence
   and truthful app-map updates. DB checks use `verify-gate`.
