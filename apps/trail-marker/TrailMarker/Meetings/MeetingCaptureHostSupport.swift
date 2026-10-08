@@ -3,10 +3,16 @@ import Foundation
 /// Stateless device construction and source labels need no access to recorder state.
 extension MeetingCaptureHost {
     nonisolated static func devices(_ selection: MeetingNativeSelection) throws -> [MeetingAudioSource: MeetingAudioCapturing] {
+        try devices(selection, makeMicrophoneUnit: MeetingMicrophoneIOUnit.init(voiceProcessing:))
+    }
+
+    nonisolated static func devices(_ selection: MeetingNativeSelection,
+        makeMicrophoneUnit: @escaping (Bool) throws -> MeetingMicrophoneUnit
+    ) throws -> [MeetingAudioSource: MeetingAudioCapturing] {
         try selection.validate()
         var devices: [MeetingAudioSource: MeetingAudioCapturing] = [:]
         if let microphone = selection.microphoneDeviceID {
-            devices[.microphone] = MeetingMicrophoneCapture(selectedDeviceID: microphone, voiceProcessing: selection.output != nil)
+            devices[.microphone] = MeetingMicrophoneCapture(selectedDeviceID: microphone, voiceProcessing: selection.output != nil, makeUnit: makeMicrophoneUnit)
         }
         if let output = selection.output {
             guard #available(macOS 14.2, *) else { throw MeetingHostError.unavailable }

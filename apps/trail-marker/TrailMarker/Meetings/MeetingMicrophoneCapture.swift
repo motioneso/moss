@@ -10,6 +10,7 @@ protocol MeetingMicrophoneUnit: AnyObject {
     func selectDevice(_ deviceID: AudioDeviceID) throws
     func inputFormat() throws -> AudioStreamBasicDescription
     func outputFormat() throws -> AudioStreamBasicDescription
+    func referenceFormat() throws -> AudioStreamBasicDescription?
     func configureMonoOutput(sampleRate: Double) throws
     func maximumFramesPerSlice() throws -> UInt32
     func installInputCallback(_ context: MeetingMicrophoneRenderContext) throws
@@ -35,70 +36,97 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
 
     let voiceProcessing: Bool
     private let selectedDeviceID: AudioDeviceID
-    private let makeUnit: () throws -> MeetingMicrophoneUnit
+    private let makeUnit: (Bool) throws -> MeetingMicrophoneUnit
     private let hostTimeToNanoseconds: (UInt64) -> UInt64
     private var unit: MeetingMicrophoneUnit?
     private var context: MeetingMicrophoneRenderContext?
     private var initialized = false
     private var startAttempted = false
+    private(set) var startupDiagnostic: String?
 
     init(
         selectedDeviceID: AudioDeviceID,
         voiceProcessing: Bool = false,
-        makeUnit: (() throws -> MeetingMicrophoneUnit)? = nil,
+        makeUnit: @escaping (Bool) throws -> MeetingMicrophoneUnit = MeetingMicrophoneIOUnit.init(voiceProcessing:),
         hostTimeToNanoseconds: @escaping (UInt64) -> UInt64 = AudioConvertHostTimeToNanos
     ) {
         self.voiceProcessing = voiceProcessing
         self.selectedDeviceID = selectedDeviceID
-        self.makeUnit = makeUnit ?? { try MeetingMicrophoneIOUnit(voiceProcessing: voiceProcessing) }
+        self.makeUnit = makeUnit
         self.hostTimeToNanoseconds = hostTimeToNanoseconds
     }
 
     func start(into receiver: MeetingAudioReceiving) throws {
         guard unit == nil else { throw MeetingAudioFailure.invalidTransition }
         guard selectedDeviceID != kAudioObjectUnknown else { throw MeetingAudioFailure.invalidSelection }
+        startupDiagnostic = nil
         do {
-            let acquired = try makeUnit()
-            unit = acquired
-            try acquired.enableInput()
-            try acquired.configureOutput()
-            try acquired.selectDevice(selectedDeviceID)
-            let format = try acquired.inputFormat()
-            guard Self.isUsable(format) else { throw MeetingAudioFailure.invalidFormat }
-            try acquired.configureMonoOutput(sampleRate: format.mSampleRate)
-            let capacity = try acquired.maximumFramesPerSlice()
-            guard capacity > 0, capacity <= Self.maximumBufferedFrames else {
-                throw MeetingAudioFailure.bufferFull
-            }
-            let renderContext = MeetingMicrophoneRenderContext(
-                unit: acquired, receiver: receiver, format: format,
-                capacity: capacity, hostTimeToNanoseconds: hostTimeToNanoseconds, hasVoiceReference: voiceProcessing
-            )
-            context = renderContext
-            try acquired.installInputCallback(renderContext)
-            try acquired.initialize()
-            initialized = true
-            // Install after initialization's own format notifications, then re-read to close
-            // the gap between the original format query and listener installation.
-            try acquired.installFormatListener(renderContext)
-            try acquired.installDeviceListener(renderContext)
-            let verifiedFormat = try acquired.inputFormat()
-            guard Self.matches(verifiedFormat, format) else {
-                throw MeetingAudioFailure.invalidFormat
-            }
-            let verifiedCapacity = try acquired.maximumFramesPerSlice()
-            guard verifiedCapacity > 0, verifiedCapacity <= capacity else {
-                throw MeetingAudioFailure.bufferFull
-            }
-            renderContext.verifyFormatIfNeeded()
-            try renderContext.open()
-            // A failed start may already have handed work to the driver: always try Stop.
-            startAttempted = true
-            try acquired.start()
+            try startUnit(processing: voiceProcessing, into: receiver)
+            startupDiagnostic = voiceProcessing ? "microphone-echo-cancellation=on" : "microphone-echo-cancellation=off reason=microphoneOnly"
         } catch {
             let startupError = error
+            let failedContext = context
+            if voiceProcessing { failedContext?.verifyFormatIfNeeded() }
+            // Disposal is a hard boundary: never open another unit while callbacks or
+            // native resources from the failed attempt might still exist.
             do { try stop() } catch { throw MeetingAudioFailure.cleanupFailed }
-            throw startupError
+            guard failedContext?.startupIsUnsafeForFallback != true else { throw MeetingAudioFailure.invalidFormat }
+            guard voiceProcessing, let unavailable = startupError as? MeetingVoiceProcessingUnavailable else { throw startupError }
+            do {
+                try startUnit(processing: false, into: receiver)
+                startupDiagnostic = "microphone-echo-cancellation=off reason=\(unavailable.diagnostic)"
+            } catch {
+                let fallbackError = error
+                do { try stop() } catch { throw MeetingAudioFailure.cleanupFailed }
+                throw fallbackError
+            }
+        }
+    }
+
+    private func startUnit(processing: Bool, into receiver: MeetingAudioReceiving) throws {
+        let acquired = try makeUnit(processing)
+        unit = acquired
+        try acquired.enableInput()
+        try acquired.configureOutput()
+        try acquired.selectDevice(selectedDeviceID)
+        let format = try acquired.inputFormat()
+        guard Self.isUsable(format) else { throw MeetingAudioFailure.invalidFormat }
+        try acquired.configureMonoOutput(sampleRate: format.mSampleRate)
+        let capacity = try acquired.maximumFramesPerSlice()
+        guard capacity > 0, capacity <= Self.maximumBufferedFrames else {
+            throw MeetingAudioFailure.bufferFull
+        }
+        let renderContext = MeetingMicrophoneRenderContext(
+            unit: acquired, receiver: receiver, format: format,
+            capacity: capacity, hostTimeToNanoseconds: hostTimeToNanoseconds, hasVoiceReference: processing
+        )
+        context = renderContext
+        try acquired.installInputCallback(renderContext)
+        try acquired.initialize()
+        initialized = true
+        // Install after initialization's own format notifications, then re-read to close
+        // the gap between the original format query and listener installation.
+        try acquired.installFormatListener(renderContext)
+        try acquired.installDeviceListener(renderContext)
+        let verifiedFormat = try acquired.inputFormat()
+        guard Self.matches(verifiedFormat, format) else {
+            throw MeetingAudioFailure.invalidFormat
+        }
+        let verifiedCapacity = try acquired.maximumFramesPerSlice()
+        guard verifiedCapacity > 0, verifiedCapacity <= capacity else {
+            throw MeetingAudioFailure.bufferFull
+        }
+        if processing { renderContext.audioUnitFormatDidChange(scope: kAudioUnitScope_Input, element: 0) }
+        renderContext.verifyFormatIfNeeded()
+        // VPIO cannot publish samples before Start succeeds. A failing attempt must
+        // not poison the same receiver that the exact-mic HAL fallback will use.
+        if processing { try renderContext.validateBeforeStart() }
+        else { try renderContext.open() }
+        startAttempted = true
+        try acquired.start()
+        if processing {
+            renderContext.verifyFormatIfNeeded()
+            try renderContext.open()
         }
     }
 
@@ -150,6 +178,7 @@ final class MeetingMicrophoneRenderContext {
     private let sampleRate: Double
     private let format: AudioStreamBasicDescription
     private let formatNotice = MeetingAudioAtomicState()
+    private let referenceNotice = MeetingAudioAtomicState()
     private let capacity: UInt32
     private let hostTimeToNanoseconds: (UInt64) -> UInt64
     private let samples: UnsafeMutablePointer<Float>
@@ -178,6 +207,14 @@ final class MeetingMicrophoneRenderContext {
         ))
     }
 
+    var startupIsUnsafeForFallback: Bool {
+        admission.value & 2 != 0 || formatNotice.value != 0 || referenceNotice.value != 0
+    }
+
+    func validateBeforeStart() throws {
+        guard admission.value == 0 else { throw MeetingAudioFailure.invalidFormat }
+    }
+
     func open() throws {
         guard admission.replace(0, with: 1) else { throw MeetingAudioFailure.invalidFormat }
     }
@@ -190,10 +227,14 @@ final class MeetingMicrophoneRenderContext {
     }
 
     /// The property callback may run on an audio thread: only publish a notice here.
-    func formatDidChange() { formatNotice.insert(1) }
+    func formatDidChange() {
+        guard admission.value & 4 == 0 else { return }
+        formatNotice.insert(1)
+    }
 
     /// Called on the property-monitor queue (or serialized startup), never by render.
     func verifyFormatIfNeeded() {
+        verifyReferenceFormatIfNeeded()
         let notice = formatNotice.value
         guard admission.value & 4 == 0, notice == 1,
               formatNotice.replace(1, with: 2) else { return }
@@ -216,14 +257,38 @@ final class MeetingMicrophoneRenderContext {
         } catch { failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatRead, status: MeetingAudioFailureDiagnostic.status(error))) }
     }
 
+    private func verifyReferenceFormatIfNeeded() {
+        guard hasVoiceReference, admission.value & 4 == 0,
+              referenceNotice.replace(1, with: 2) else { return }
+        defer {
+            if !referenceNotice.replace(2, with: 0) { _ = referenceNotice.replace(3, with: 1) }
+        }
+        do {
+            guard let current = try unit.referenceFormat(),
+                  current.mSampleRate == sampleRate, current.mFormatID == kAudioFormatLinearPCM,
+                  current.mFormatFlags == kAudioFormatFlagsNativeFloatPacked,
+                  current.mChannelsPerFrame == 1, current.mBitsPerChannel == 32,
+                  current.mBytesPerFrame == 4, current.mBytesPerPacket == 4,
+                  current.mFramesPerPacket == 1 else {
+                failFromRender(.invalidFormat, diagnostic: .init(.voiceReferenceFormatVerification)); return
+            }
+        } catch {
+            failFromRender(.invalidFormat, diagnostic: .init(.voiceReferenceFormatRead, status: MeetingAudioFailureDiagnostic.status(error)))
+        }
+    }
+
     func audioUnitFormatDidChange(scope: AudioUnitScope, element: AudioUnitElement) {
-        guard scope == kAudioUnitScope_Input || scope == kAudioUnitScope_Output else { return }
-        if element == 0, hasVoiceReference {
-            failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatVerification))
-        } else if element == 1 {
+        guard admission.value & 4 == 0 else { return }
+        if element == 0, hasVoiceReference, scope == kAudioUnitScope_Input {
+            // Recheck the client format on the control queue. Hardware-side rate
+            // changes are handled by VPIO's resampler and do not alone invalidate it.
+            referenceNotice.insert(1)
+        } else if element == 1, scope == kAudioUnitScope_Input || scope == kAudioUnitScope_Output {
             formatDidChange()
         }
     }
+
+    func referenceDidDisappear() { failFromRender(.invalidSelection, diagnostic: .init(.voiceReferenceRoute)) }
 
     func deviceDidDisappear() { failFromRender(.invalidSelection, diagnostic: .init(.microphoneDeviceGone)) }
 
@@ -255,7 +320,7 @@ final class MeetingMicrophoneRenderContext {
             return kAudio_ParamError
         }
         let hostTime = hostTimeToNanoseconds(timestamp.pointee.mHostTime)
-        if formatNotice.value != 0 {
+        if formatNotice.value != 0 || referenceNotice.value != 0 {
             receiver.drop(sampleTime: timestamp.pointee.mSampleTime, hostTimeNanoseconds: hostTime,
                           sampleRate: sampleRate, frameCount: Int(frameCount))
             return noErr
@@ -279,7 +344,7 @@ final class MeetingMicrophoneRenderContext {
         }
         // Stop/format changes may arrive during AudioUnitRender. Recheck at the copy boundary.
         guard admission.value == 1 else { return noErr }
-        if formatNotice.value != 0 {
+        if formatNotice.value != 0 || referenceNotice.value != 0 {
             receiver.drop(sampleTime: timestamp.pointee.mSampleTime, hostTimeNanoseconds: hostTime,
                           sampleRate: sampleRate, frameCount: Int(frameCount))
             return noErr
@@ -321,16 +386,13 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
 
     init(voiceProcessing: Bool = false) throws {
         self.voiceProcessing = voiceProcessing
-        var description = AudioComponentDescription(
-            componentType: kAudioUnitType_Output,
-            componentSubType: voiceProcessing ? kAudioUnitSubType_VoiceProcessingIO : kAudioUnitSubType_HALOutput,
-            componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0
-        )
+        var description = MeetingVoiceProcessing.componentDescription(voiceProcessing: voiceProcessing)
         guard let component = AudioComponentFindNext(nil, &description) else {
+            if voiceProcessing { throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceComponent, status: nil) }
             throw MeetingAudioFailure.deviceFailure(operation: "find AUHAL", status: kAudio_ParamError)
         }
         var created: AudioUnit?
-        try check(AudioComponentInstanceNew(component, &created), "AudioComponentInstanceNew")
+        try check(AudioComponentInstanceNew(component, &created), "AudioComponentInstanceNew", fallback: .voiceComponent)
         guard let created else { throw MeetingAudioFailure.invalidTransition }
         unit = created
     }
@@ -338,14 +400,15 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
     func enableInput() throws {
         var value: UInt32 = 1
         try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_EnableIO,
-            kAudioUnitScope_Input, 1, &value, UInt32(MemoryLayout<UInt32>.size)), "enable AUHAL input")
+            kAudioUnitScope_Input, 1, &value, UInt32(MemoryLayout<UInt32>.size)), "enable AUHAL input", fallback: .voiceInputEnable)
     }
 
     func configureOutput() throws {
         if voiceProcessing {
             try MeetingVoiceProcessing.configureOutput { property, scope, bus, value, size in
                 try self.check(AudioUnitSetProperty(try self.liveUnit(), property, scope, bus, value, size),
-                               "configure microphone voice processing")
+                               MeetingVoiceProcessing.propertyOperation(property),
+                               fallback: Self.voicePropertyDiagnostic(property))
             }
             return
         }
@@ -355,16 +418,16 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
     }
 
     func selectDevice(_ deviceID: AudioDeviceID) throws {
+        let output: AudioDeviceID?
         if voiceProcessing {
-            let output = try Self.defaultOutputDevice()
-            var reference = output
-            try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_CurrentDevice,
-                kAudioUnitScope_Global, 0, &reference, UInt32(MemoryLayout<AudioDeviceID>.size)), "select voice reference device")
-            referenceDevice = output
+            do { output = try Self.defaultOutputDevice() }
+            catch { throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceReferenceSelection, status: nil) }
+        } else { output = nil }
+        try MeetingVoiceProcessing.configureDevices(microphone: deviceID, output: output) { property, scope, bus, value, size in
+            try self.check(AudioUnitSetProperty(try self.liveUnit(), property, scope, bus, value, size),
+                           "select microphone unit device", fallback: .voiceDeviceSelection)
         }
-        var value = deviceID
-        try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_CurrentDevice,
-            kAudioUnitScope_Global, voiceProcessing ? 1 : 0, &value, UInt32(MemoryLayout<AudioDeviceID>.size)), "select microphone device")
+        referenceDevice = output
         selectedDevice = deviceID
     }
 
@@ -387,27 +450,25 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
         return format
     }
 
+    func referenceFormat() throws -> AudioStreamBasicDescription? {
+        guard voiceProcessing else { return nil }
+        var format = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        try check(AudioUnitGetProperty(try liveUnit(), kAudioUnitProperty_StreamFormat,
+            kAudioUnitScope_Input, 0, &format, &size), "read voice reference client format")
+        guard size == UInt32(MemoryLayout<AudioStreamBasicDescription>.size) else { throw MeetingAudioFailure.invalidFormat }
+        return format
+    }
+
     func configureMonoOutput(sampleRate: Double) throws {
         var format = AudioStreamBasicDescription(
             mSampleRate: sampleRate, mFormatID: kAudioFormatLinearPCM,
             mFormatFlags: kAudioFormatFlagsNativeFloatPacked, mBytesPerPacket: 4, mFramesPerPacket: 1,
             mBytesPerFrame: 4, mChannelsPerFrame: 1, mBitsPerChannel: 32, mReserved: 0
         )
-        try check(AudioUnitSetProperty(try liveUnit(), kAudioUnitProperty_StreamFormat,
-            kAudioUnitScope_Output, 1, &format, UInt32(MemoryLayout<AudioStreamBasicDescription>.size)),
-            "configure AUHAL mono format")
-        if voiceProcessing {
-            // VPIO requires matching client formats on both sides. Its output callback
-            // renders silence only; the independent unmuted process tap is never replayed.
-            try check(AudioUnitSetProperty(try liveUnit(), kAudioUnitProperty_StreamFormat,
-                kAudioUnitScope_Input, 0, &format, UInt32(MemoryLayout<AudioStreamBasicDescription>.size)),
-                "configure voice reference format")
-        }
-        // Mono means the first input channel, not an unapproved device/route fallback.
-        if !voiceProcessing {
-            var channel: Int32 = 0
-            try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_ChannelMap,
-                kAudioUnitScope_Output, 1, &channel, UInt32(MemoryLayout<Int32>.size)), "configure AUHAL channel map")
+        try MeetingVoiceProcessing.configureFormats(format: format, voiceProcessing: voiceProcessing) { property, scope, bus, value, size in
+            try self.check(AudioUnitSetProperty(try self.liveUnit(), property, scope, bus, value, size),
+                           "configure microphone client format", fallback: property == kAudioOutputUnitProperty_ChannelMap ? .voiceChannelMap : .voiceClientFormat)
         }
         var allocate: UInt32 = 0
         try check(AudioUnitSetProperty(try liveUnit(), kAudioUnitProperty_ShouldAllocateBuffer,
@@ -440,7 +501,7 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
             "install AUHAL input callback")
     }
 
-    func initialize() throws { try check(AudioUnitInitialize(try liveUnit()), "AudioUnitInitialize") }
+    func initialize() throws { try check(AudioUnitInitialize(try liveUnit()), "AudioUnitInitialize", fallback: .voiceInitialize) }
 
     func installFormatListener(_ context: MeetingMicrophoneRenderContext) throws {
         guard let callbackContext,
@@ -464,20 +525,22 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
 
     func installDeviceListener(_ context: MeetingMicrophoneRenderContext) throws {
         guard let selectedDevice, deviceListener == nil else { throw MeetingAudioFailure.invalidTransition }
+        guard Self.deviceIsAlive(selectedDevice) else { throw MeetingAudioFailure.invalidSelection }
         if voiceProcessing {
+            guard let referenceDevice, Self.deviceIsAlive(referenceDevice),
+                  try Self.defaultOutputDevice() == referenceDevice else { throw MeetingAudioFailure.invalidSelection }
             // VPIO may construct its own private aggregate. Verify the selected physical
             // endpoints through its documented per-bus CurrentDevice properties.
             guard try currentDevice(bus: 1) == selectedDevice,
-                  try currentDevice(bus: 0) == referenceDevice else { throw MeetingAudioFailure.invalidSelection }
+                  try currentDevice(bus: 0) == referenceDevice else { throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceEndpointReadback, status: nil) }
         }
         var address = Self.devicesAddress()
         let reference = referenceDevice
         let listener: AudioObjectPropertyListenerBlock = { _, _ in
             // Listen on the stable system object so unplug cannot leave an unremovable
             // listener registered on a now-destroyed device. Unrelated device changes are inert.
-            if !Self.deviceIsAlive(selectedDevice) || reference.map({ !Self.deviceIsAlive($0) }) == true {
-                context.deviceDidDisappear()
-            }
+            if !Self.deviceIsAlive(selectedDevice) { context.deviceDidDisappear() }
+            if reference.map({ !Self.deviceIsAlive($0) }) == true { context.referenceDidDisappear() }
         }
         try check(AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
             &address, deviceQueue, listener), "observe microphone devices")
@@ -539,7 +602,7 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
             size == UInt32(MemoryLayout<UInt32>.size) && alive == 1
     }
 
-    func start() throws { try check(AudioOutputUnitStart(try liveUnit()), "AudioOutputUnitStart") }
+    func start() throws { try check(AudioOutputUnitStart(try liveUnit()), "AudioOutputUnitStart", fallback: .voiceStart) }
     func stop() throws {
         stopFormatMonitor()
         try check(AudioOutputUnitStop(try liveUnit()), "AudioOutputUnitStop")
@@ -593,7 +656,24 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
         return unit
     }
 
-    private func check(_ status: OSStatus, _ operation: String) throws {
-        guard status == noErr else { throw MeetingAudioFailure.deviceFailure(operation: operation, status: status) }
+    private static func voicePropertyDiagnostic(_ property: AudioUnitPropertyID) -> MeetingAudioFailureDiagnostic.Code {
+        switch property {
+        case kAudioOutputUnitProperty_EnableIO: return .voiceOutputEnable
+        case kAUVoiceIOProperty_BypassVoiceProcessing: return .voiceBypass
+        case kAUVoiceIOProperty_VoiceProcessingEnableAGC: return .voiceAGC
+        case kAUVoiceIOProperty_OtherAudioDuckingConfiguration: return .voiceDucking
+        case kAudioUnitProperty_SetRenderCallback: return .voiceRenderCallback
+        default: return .voiceClientFormat
+        }
+    }
+
+    private func check(_ status: OSStatus, _ operation: String, fallback: MeetingAudioFailureDiagnostic.Code? = nil) throws {
+        guard status != noErr else { return }
+        // Only direct VPIO setup errors may select the same-mic HAL path.
+        // Semantic admission guards and listener/cleanup errors retain their types.
+        if voiceProcessing, let fallback {
+            throw MeetingVoiceProcessingUnavailable.setupFailure(status: status, operation: operation, diagnostic: fallback)
+        }
+        throw MeetingAudioFailure.deviceFailure(operation: operation, status: status)
     }
 }

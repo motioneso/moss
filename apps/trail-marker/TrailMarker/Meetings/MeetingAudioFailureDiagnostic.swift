@@ -1,3 +1,5 @@
+import AudioToolbox
+import CoreAudio
 import Foundation
 import os
 
@@ -13,6 +15,10 @@ struct MeetingAudioFailureDiagnostic: Equatable {
         case bufferCapacity, bufferSample, bufferDropFrames, bufferDropMailbox
         case bufferFormat, bufferTimestamp, bufferSampleContinuity, bufferClockRange, bufferLease, bufferGapCapacity
         case captureStart
+        case voiceReferenceRoute, voiceReferenceFormatVerification, voiceReferenceFormatRead
+        case voiceComponent, voiceInputEnable, voiceOutputEnable, voiceBypass, voiceAGC
+        case voiceDucking, voiceRenderCallback, voiceReferenceSelection, voiceDeviceSelection
+        case voiceEndpointReadback, voiceChannelMap, voiceClientFormat, voiceInitialize, voiceStart
     }
     let code: Code
     let status: Int32?
@@ -71,4 +77,17 @@ final class MeetingAudioFailureDiagnosticSlot {
     func store(_ diagnostic: MeetingAudioFailureDiagnostic) { MeetingAudioDeadlineStore(value, diagnostic.packed) }
     var latest: MeetingAudioFailureDiagnostic? { MeetingAudioFailureDiagnostic(packed: MeetingAudioDeadlineLoad(value)) }
     deinit { MeetingAudioDeadlineDestroy(value) }
+}
+
+/// Created only for direct voice-processing setup failures, never semantic admission guards.
+struct MeetingVoiceProcessingUnavailable: Error {
+    let diagnostic: MeetingAudioFailureDiagnostic.Code
+    let status: Int32?
+
+    static func setupFailure(status: OSStatus, operation: String, diagnostic: MeetingAudioFailureDiagnostic.Code) -> Error {
+        if status == kAudioUnitErr_Unauthorized || status == kAudioDevicePermissionsError {
+            return MeetingAudioFailure.deviceFailure(operation: operation, status: status)
+        }
+        return MeetingVoiceProcessingUnavailable(diagnostic: diagnostic, status: status)
+    }
 }

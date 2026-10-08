@@ -65,7 +65,24 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
             (.bufferClockRange, "bufferClockRange"),
             (.bufferLease, "bufferLease"),
             (.bufferGapCapacity, "bufferGapCapacity"),
-            (.captureStart, "captureStart")
+            (.captureStart, "captureStart"),
+            (.voiceReferenceRoute, "voiceReferenceRoute"),
+            (.voiceReferenceFormatVerification, "voiceReferenceFormatVerification"),
+            (.voiceReferenceFormatRead, "voiceReferenceFormatRead"),
+            (.voiceComponent, "voiceComponent"),
+            (.voiceInputEnable, "voiceInputEnable"),
+            (.voiceOutputEnable, "voiceOutputEnable"),
+            (.voiceBypass, "voiceBypass"),
+            (.voiceAGC, "voiceAGC"),
+            (.voiceDucking, "voiceDucking"),
+            (.voiceRenderCallback, "voiceRenderCallback"),
+            (.voiceReferenceSelection, "voiceReferenceSelection"),
+            (.voiceDeviceSelection, "voiceDeviceSelection"),
+            (.voiceEndpointReadback, "voiceEndpointReadback"),
+            (.voiceChannelMap, "voiceChannelMap"),
+            (.voiceClientFormat, "voiceClientFormat"),
+            (.voiceInitialize, "voiceInitialize"),
+            (.voiceStart, "voiceStart")
         ]
         let statuses: [Int32?] = [nil, 0, -1, -10863, Int32.min, Int32.max]
         for (code, label) in labels {

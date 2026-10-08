@@ -7,6 +7,53 @@ import Foundation
 enum MeetingVoiceProcessing {
     typealias WriteProperty = (AudioUnitPropertyID, AudioUnitScope, AudioUnitElement, UnsafeRawPointer, UInt32) throws -> Void
 
+    static func componentDescription(voiceProcessing: Bool) -> AudioComponentDescription {
+        AudioComponentDescription(
+            componentType: kAudioUnitType_Output,
+            componentSubType: voiceProcessing ? kAudioUnitSubType_VoiceProcessingIO : kAudioUnitSubType_HALOutput,
+            componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0
+        )
+    }
+
+    static func configureDevices(microphone: AudioDeviceID, output: AudioDeviceID?, write: WriteProperty) throws {
+        if var output {
+            try write(kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                      &output, UInt32(MemoryLayout<AudioDeviceID>.size))
+        }
+        var microphone = microphone
+        try write(kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, output == nil ? 0 : 1,
+                  &microphone, UInt32(MemoryLayout<AudioDeviceID>.size))
+    }
+
+    static func configureFormats(format: AudioStreamBasicDescription, voiceProcessing: Bool,
+                                 write: WriteProperty) throws {
+        var format = format
+        try write(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1,
+                  &format, UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
+        if voiceProcessing {
+            // Both client sides use the same mono format. Only silence reaches output.
+            try write(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0,
+                      &format, UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
+        }
+        // Select the processed first channel explicitly rather than allowing a downmix.
+        // A VPIO unit that rejects this map must use the ordinary startup fallback.
+        var channel: Int32 = 0
+        try write(kAudioOutputUnitProperty_ChannelMap, kAudioUnitScope_Output, 1,
+                  &channel, UInt32(MemoryLayout<Int32>.size))
+    }
+
+    /// Fixed public labels only: errors never include device names or property payloads.
+    static func propertyOperation(_ property: AudioUnitPropertyID) -> String {
+        switch property {
+        case kAudioOutputUnitProperty_EnableIO: return "enable voice reference output"
+        case kAUVoiceIOProperty_BypassVoiceProcessing: return "enable microphone voice processing"
+        case kAUVoiceIOProperty_VoiceProcessingEnableAGC: return "disable microphone voice gain control"
+        case kAUVoiceIOProperty_OtherAudioDuckingConfiguration: return "configure minimum voice ducking"
+        case kAudioUnitProperty_SetRenderCallback: return "install silent voice reference callback"
+        default: return "configure voice processing property"
+        }
+    }
+
     static func configureOutput(write: WriteProperty) throws {
         var enabled: UInt32 = 1
         try write(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0,
@@ -46,6 +93,6 @@ enum MeetingVoiceProcessing {
     /// Route notices run on the serialized property queue, not the render callback.
     static func verifyReference(expected: AudioDeviceID, current: AudioDeviceID?, alive: Bool,
                                 context: MeetingMicrophoneRenderContext) {
-        guard alive, current == expected else { context.deviceDidDisappear(); return }
+        guard alive, current == expected else { context.referenceDidDisappear(); return }
     }
 }

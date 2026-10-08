@@ -368,7 +368,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.speaker_echo_control",
       description:
-        "Mic plus computer audio uses Apple voice processing with minimum playback ducking. Route changes pause for explicit Resume. Mic-only stays unprocessed; computer-audio-only opens no mic. Real-speaker compatibility needs live validation."
+        "Mic + computer audio tries voice processing with minimum playback ducking; unsupported startup falls back to plain HAL on the same mic after full cleanup. Route changes need explicit Resume. Real-speaker live validation pending."
     },
     {
       id: "meetings.native_capture",

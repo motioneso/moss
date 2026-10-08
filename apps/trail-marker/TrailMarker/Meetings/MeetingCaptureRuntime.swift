@@ -125,6 +125,7 @@ final class MeetingCaptureRuntime {
             pending.append(contentsOf: fresh)
             machine = candidate
             epochStart = at
+            if let line = devices[.microphone]?.startupDiagnostic { reportCaptureFailure(line) }
         } catch {
             if let source = startingSource, let entry = fresh.first(where: { $0.buffer.source == source }) {
                 reportCaptureFailure(MeetingAudioFailureDiagnostic.message(source: source, failure: error,

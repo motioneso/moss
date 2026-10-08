@@ -19,11 +19,6 @@ describe("meetings composition", () => {
     const link = CORE_APP_SCREENS.find((item) => item.id === "link-trail-marker")!.description;
     expect(meeting.navigation![0]!.description).toContain("authorized by initial linking");
     expect(native.description).toContain("nav dot");
-    const echo = meeting.features!.find((item) => item.id === "meetings.speaker_echo_control")!;
-    expect(echo.description).toContain("minimum playback ducking");
-    expect(echo.description).toContain("explicit Resume");
-    expect(echo.description).toContain("live validation");
-    expect(echo.description.length).toBeLessThanOrEqual(240);
     expect(native.remediations![0]!.description).toContain("relink through Trail Marker");
     expect(JSON.stringify(native)).not.toMatch(/one-time recording|recording upgrade/);
     expect(profile).toContain("single initial linking approval");
@@ -32,6 +27,19 @@ describe("meetings composition", () => {
     expect(profile).toContain("Meetings navigation dot and top-bar duration");
     expect(profile).not.toMatch(/one-time connection upgrade|persistent recording strip/);
     expect(link).toContain("Record meetings when you choose Start");
+  });
+
+  it("bounds the echo experiment and describes same-mic plain-HAL fallback truthfully", () => {
+    const meeting = getBuiltInModuleManifests().find((item) => item.id === "meetings")!;
+    const echo = meeting.features!.find((item) => item.id === "meetings.speaker_echo_control")!;
+    expect(echo.description).toContain("tries voice processing");
+    expect(echo.description).toContain("minimum playback ducking");
+    expect(echo.description).toContain(
+      "unsupported startup falls back to plain HAL on the same mic after full cleanup"
+    );
+    expect(echo.description).toContain("explicit Resume");
+    expect(echo.description).toContain("Real-speaker live validation pending");
+    expect(echo.description.length).toBeLessThanOrEqual(240);
   });
 
   it("describes the actual passage exit, removable chat context and automatic title", () => {

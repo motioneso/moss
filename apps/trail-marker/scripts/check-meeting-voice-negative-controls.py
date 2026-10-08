@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Hosted-Mac voice-processing mutations; portable checks are not native XCTest proof.
 
-The real property writer, installed silent callback, and reference-route guard each
-have a named behavioral assertion. Run after positive native tests in an isolated
-Mac checkout. The shared runner restores source bytes and requires a positive rerun;
+The production mode switch and fallback, component subtype, device buses, client
+formats, channel map, property writer, silent callback, and reference-route guard
+each have a named behavioral assertion. Run after positive native tests in an
+isolated Mac checkout. The shared runner restores source bytes and requires a positive rerun;
 build failures, crashes, empty runs, and unrelated assertions are never proof.
 """
 import argparse
@@ -20,10 +21,58 @@ HERE = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location("meeting_negative", HERE / "check-meeting-negative-controls.py")
 RUNNER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RUNNER)
-SOURCE = RUNNER.APP / "TrailMarker/Meetings/MeetingVoiceProcessing.swift"
+VOICE_SOURCE = RUNNER.APP / "TrailMarker/Meetings/MeetingVoiceProcessing.swift"
+MICROPHONE_SOURCE = RUNNER.APP / "TrailMarker/Meetings/MeetingMicrophoneCapture.swift"
 VOICE = "MeetingVoiceProcessingTests"
 MICROPHONE = "MeetingMicrophoneCaptureTests"
 CONTROLS = [
+    (MICROPHONE, {
+        "name": "voice-production-mode-forwarding",
+        "source": MICROPHONE_SOURCE,
+        "test": "testProductionCompositionStartsPlainMicAfterVoiceStartFailureAndLogsOnce",
+        "before": "        let acquired = try makeUnit(processing)",
+        "after": "        let acquired = try makeUnit(false)",
+        "assertion": "Production mic plus computer audio must attempt VPIO before HAL fallback",
+    }),
+    (MICROPHONE, {
+        "name": "voice-startup-hal-fallback",
+        "source": MICROPHONE_SOURCE,
+        "test": "testProductionCompositionStartsPlainMicAfterVoiceStartFailureAndLogsOnce",
+        "before": "            guard voiceProcessing, let unavailable = startupError as? MeetingVoiceProcessingUnavailable else { throw startupError }",
+        "after": "            guard false, let unavailable = startupError as? MeetingVoiceProcessingUnavailable else { throw startupError }",
+        "assertion": "Production mic plus computer audio must attempt VPIO before HAL fallback",
+    }),
+    (VOICE, {
+        "name": "voice-concrete-component-subtype",
+        "test": "testComponentDescriptionSelectsVoiceProcessingOnlyWhenRequested",
+        "before": "componentSubType: voiceProcessing ? kAudioUnitSubType_VoiceProcessingIO : kAudioUnitSubType_HALOutput,",
+        "after": "componentSubType: voiceProcessing ? kAudioUnitSubType_HALOutput : kAudioUnitSubType_HALOutput,",
+        "assertion": "Voice processing must select the concrete VPIO component",
+    }),
+    (VOICE, {
+        "name": "voice-microphone-device-bus",
+        "test": "testVoiceDevicesBindOutputBusZeroAndMicrophoneBusOne",
+        "before": "kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, output == nil ? 0 : 1,",
+        "after": "kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, output == nil ? 0 : 0,",
+        "assertion": "Voice processing must bind reference bus zero and microphone bus one",
+    }),
+    (VOICE, {
+        "name": "voice-reference-client-format",
+        "test": "testVoiceClientFormatsMatchAcrossProcessedInputAndReferenceOutput",
+        "before": "            try write(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0,\n"
+                  "                      &format, UInt32(MemoryLayout<AudioStreamBasicDescription>.size))",
+        "after": "            // Mutation: omit the reference-side client format write.",
+        "assertion": "Voice processing must configure the matching mono reference format on input scope bus zero",
+    }),
+    (VOICE, {
+        "name": "voice-processed-channel-map",
+        "test": "testBothModesMapMonoCaptureToFirstInputChannel",
+        "before": "        var channel: Int32 = 0\n"
+                  "        try write(kAudioOutputUnitProperty_ChannelMap, kAudioUnitScope_Output, 1,\n"
+                  "                  &channel, UInt32(MemoryLayout<Int32>.size))",
+        "after": "        // Mutation: omit the explicit processed-channel map.",
+        "assertion": "Both microphone modes must explicitly map capture to channel zero",
+    }),
     (VOICE, {
         "name": "voice-minimum-other-audio-ducking",
         "test": "testAdvancedDuckingUsesMinimumLevel",
@@ -41,15 +90,15 @@ CONTROLS = [
     (MICROPHONE, {
         "name": "voice-reference-route-admission",
         "test": "testReferenceRouteChangesCloseMicrophoneAdmissionWithoutRetargeting",
-        "before": "        guard alive, current == expected else { context.deviceDidDisappear(); return }",
-        "after": "        guard true else { context.deviceDidDisappear(); return }",
+        "before": "        guard alive, current == expected else { context.referenceDidDisappear(); return }",
+        "after": "        guard true else { context.referenceDidDisappear(); return }",
         "assertion": "Changed reference must close microphone admission",
     }),
 ]
 
 
 def select(test_class, control):
-    RUNNER.SOURCE = SOURCE
+    RUNNER.SOURCE = control.get("source", VOICE_SOURCE)
     RUNNER.TEST_CLASS = test_class
     RUNNER.CONTROLS = (control,)
     original = RUNNER.validate_sources()
@@ -68,7 +117,12 @@ def self_test():
     RUNNER.CONTROLS = ({"test": "fixture", "assertion": "XCTAssertNil failed"},)
     RUNNER.self_test()
     for test_class, control in CONTROLS:
-        RUNNER.TEST_CLASS = test_class
+        select(test_class, control)
+        expected_source = MICROPHONE_SOURCE if control["name"] in {
+            "voice-production-mode-forwarding", "voice-startup-hal-fallback"
+        } else VOICE_SOURCE
+        if RUNNER.SOURCE != expected_source:
+            raise RuntimeError("Voice proof did not select the exact production source file")
         failure = {"testCaseName": f"{test_class}.{control['test']}()",
                    "message": "XCTAssertEqual failed - " + control["assertion"]}
         negative = {"metrics": {"testsCount": "1", "testsFailedCount": "1"},

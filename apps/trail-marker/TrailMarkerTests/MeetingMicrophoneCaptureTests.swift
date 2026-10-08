@@ -13,6 +13,10 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         }
         var batches: [Batch] = []
         var failures: [MeetingAudioFailure] = []
+        var diagnostics: [MeetingAudioFailureDiagnostic] = []
+        func fail(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic) {
+            failures.append(failure); diagnostics.append(diagnostic)
+        }
         var droppedSampleTimes: [Double] = []
         var receivedSampleTimes: [Double] = []
         func receive(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double,
@@ -41,6 +45,9 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         ]
         var events: [String] = []
         var failAt: Set<String> = []
+        var failureOverride: Error?
+        var onStart: (() -> Void)?
+        var onDispose: (() -> Void)?
         var selectedDevice: AudioDeviceID?
         var configuredRate: Double?
         var format = AudioStreamBasicDescription(
@@ -71,14 +78,14 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         func step(_ name: String) throws {
             events.append(name)
             if failAt.contains(name) {
-                throw MeetingAudioFailure.deviceFailure(operation: name, status: -99)
+                throw failureOverride ?? MeetingAudioFailure.deviceFailure(operation: name, status: -99)
             }
         }
 
         func capture(device: AudioDeviceID = 42, voiceProcessing: Bool = false) -> MeetingMicrophoneCapture {
             MeetingMicrophoneCapture(
                 selectedDeviceID: device, voiceProcessing: voiceProcessing,
-                makeUnit: { try self.step("create"); return self },
+                makeUnit: { _ in try self.step("create"); return self },
                 hostTimeToNanoseconds: { $0 * 10 }
             )
         }
@@ -91,6 +98,14 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             try step(formatReads == 1 ? "format" : "verifyFormat")
             onFormatRead?()
             return formatReads == 1 ? format : (verifiedFormat ?? format)
+        }
+        var referenceOutput: AudioStreamBasicDescription?
+        var referenceReadError: Error?
+        var referenceReads = 0
+        func referenceFormat() throws -> AudioStreamBasicDescription? {
+            referenceReads += 1
+            if let referenceReadError { throw referenceReadError }
+            return referenceOutput ?? configuredOutput
         }
         func outputFormat() throws -> AudioStreamBasicDescription { configuredOutput }
         func configureMonoOutput(sampleRate: Double) throws {
@@ -112,10 +127,10 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             onListener?()
         }
         func installDeviceListener(_ context: MeetingMicrophoneRenderContext) throws { try step("deviceListener") }
-        func start() throws { try step("start") }
+        func start() throws { onStart?(); try step("start") }
         func stop() throws { try step("stop") }
         func uninitialize() throws { try step("uninitialize") }
-        func dispose() throws { try step("dispose"); context = nil }
+        func dispose() throws { try step("dispose"); context = nil; onDispose?() }
 
         func render(
             flags: UnsafeMutablePointer<AudioUnitRenderActionFlags>, timestamp: UnsafePointer<AudioTimeStamp>,
@@ -177,7 +192,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         for (current, alive) in [(Optional<UInt32>(12), true), (nil, true), (11, false)] {
             let unit = FakeUnit()
             let receiver = Receiver()
-            let capture = unit.capture(device: 71)
+            let capture = unit.capture(device: 71, voiceProcessing: true)
             try capture.start(into: receiver)
             let context = try XCTUnwrap(unit.context)
             unit.emit()
@@ -211,9 +226,13 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         let receiver = Receiver()
         let capture = unit.capture(voiceProcessing: true)
         try capture.start(into: receiver)
-        unit.context?.audioUnitFormatDidChange(scope: kAudioUnitScope_Output, element: 0)
+        unit.referenceOutput = unit.configuredOutput
+        unit.referenceOutput?.mSampleRate = 44_100
+        unit.context?.audioUnitFormatDidChange(scope: kAudioUnitScope_Input, element: 0)
+        unit.context?.verifyFormatIfNeeded()
         unit.emit()
         XCTAssertEqual(receiver.failures, [.invalidFormat])
+        XCTAssertEqual(receiver.diagnostics.last?.code, .voiceReferenceFormatVerification)
         XCTAssertTrue(receiver.batches.isEmpty)
         try capture.stop()
     }
@@ -243,6 +262,186 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             let outputOnly = try MeetingCaptureHost.devices(.init(microphoneDeviceID: nil, output: .excludingProcesses([12])))
             XCTAssertEqual(Set(outputOnly.keys), [.output])
             XCTAssertNil(outputOnly[.microphone])
+        }
+    }
+
+    func testUnchangedReferenceClientNoticeResumesAndHardwareNoticeIsInert() throws {
+        let unit = FakeUnit()
+        let receiver = Receiver()
+        let capture = unit.capture(voiceProcessing: true)
+        try capture.start(into: receiver)
+        let reads = unit.referenceReads
+        unit.context?.audioUnitFormatDidChange(scope: kAudioUnitScope_Output, element: 0)
+        unit.emit()
+        XCTAssertEqual(unit.referenceReads, reads)
+        XCTAssertEqual(receiver.batches.count, 1)
+        unit.context?.audioUnitFormatDidChange(scope: kAudioUnitScope_Input, element: 0)
+        unit.emit()
+        XCTAssertEqual(receiver.batches.count, 1, "Unverified client notice quarantines samples")
+        unit.context?.verifyFormatIfNeeded()
+        unit.emit()
+        XCTAssertEqual(unit.referenceReads, reads + 1)
+        XCTAssertEqual(receiver.batches.count, 2, "Unchanged reference client format must keep recording")
+        XCTAssertTrue(receiver.failures.isEmpty)
+        try capture.stop()
+    }
+
+    func testReferenceReadFailureHasItsOwnDiagnostic() throws {
+        let unit = FakeUnit()
+        let receiver = Receiver()
+        let capture = unit.capture(voiceProcessing: true)
+        try capture.start(into: receiver)
+        unit.referenceReadError = MeetingAudioFailure.deviceFailure(operation: "synthetic", status: -50)
+        unit.context?.audioUnitFormatDidChange(scope: kAudioUnitScope_Input, element: 0)
+        unit.context?.verifyFormatIfNeeded()
+        unit.emit()
+        XCTAssertEqual(receiver.diagnostics.last?.code, .voiceReferenceFormatRead)
+        XCTAssertTrue(receiver.batches.isEmpty)
+        try capture.stop()
+    }
+
+    private final class OutputDevice: MeetingAudioCapturing {
+        var starts = 0
+        func start(into receiver: MeetingAudioReceiving) throws { starts += 1 }
+        func stop() throws {}
+    }
+
+    func testProductionCompositionStartsPlainMicAfterVoiceStartFailureAndLogsOnce() throws {
+        guard #available(macOS 14.2, *) else { return }
+        let cases: [(String, MeetingAudioFailureDiagnostic.Code)] = [("start", .voiceStart), ("deviceListener", .voiceEndpointReadback)]
+        for (stage, diagnostic) in cases {
+            let voice = FakeUnit(), plain = FakeUnit(), output = OutputDevice()
+            voice.failAt = [stage]
+            voice.failureOverride = MeetingVoiceProcessingUnavailable(diagnostic: diagnostic, status: -10875)
+            voice.onStart = {
+                voice.context?.audioUnitFormatDidChange(scope: kAudioUnitScope_Input, element: 0)
+                voice.emit() // Unchanged notice plus a failed Start still cannot publish this sample.
+            }
+            plain.onStart = { plain.emit() }
+            var attempts: [Bool] = []
+            var disposed = false
+            voice.onDispose = { disposed = true }
+            var logs: [String] = []
+            let runtime = MeetingCaptureRuntime(factory: { selection in
+                var devices = try MeetingCaptureHost.devices(selection, makeMicrophoneUnit: { processing in
+                    attempts.append(processing)
+                    if !processing { XCTAssertTrue(disposed, "Failed VPIO must be disposed before HAL opens") }
+                    return processing ? voice : plain
+                })
+                devices[.output] = output
+                return devices
+            }, reportCaptureFailure: { logs.append($0) })
+            let ready = MeetingNativeReadiness(permissionsGranted: true, processingReady: true, meetingDeviceAuthorized: true)
+            let selection = MeetingNativeSelection(microphoneDeviceID: 71, output: .excludingProcesses([12]))
+            runtime.updateCaptureLease(until: UInt64.max)
+            try runtime.prepare(selection: selection, readiness: ready, at: 0)
+            XCTAssertNoThrow(try runtime.start(readiness: ready, at: 0))
+            XCTAssertEqual(attempts, [true, false], "Production mic plus computer audio must attempt VPIO before HAL fallback")
+            XCTAssertEqual(runtime.snapshot.state, .recording, "Unsupported VPIO must still allow exact-source recording")
+            XCTAssertEqual(voice.selectedDevice, 71)
+            XCTAssertEqual(plain.selectedDevice, 71)
+            XCTAssertEqual(runtime.snapshot.selection, selection, "Fallback must preserve the authorized microphone and process scope")
+            XCTAssertEqual(Array(voice.events.suffix(2)), ["uninitialize", "dispose"])
+            XCTAssertEqual(output.starts, 1)
+            XCTAssertEqual(runtime.audioDiagnostics[.microphone]?.acceptedCallbacks, 1, "Failed VPIO must publish no samples into fallback receiver")
+            XCTAssertEqual(logs, ["microphone-echo-cancellation=off reason=\(diagnostic)"])
+            if runtime.snapshot.state == .recording { try runtime.pause(at: 1_000_000) }
+        }
+    }
+
+    func testVoiceSuccessLogsOnOnceAndNeverCreatesFallback() throws {
+        let unit = FakeUnit(), output = OutputDevice()
+        var attempts: [Bool] = [], logs: [String] = []
+        let runtime = MeetingCaptureRuntime(factory: { _ in
+            [.microphone: MeetingMicrophoneCapture(selectedDeviceID: 71, voiceProcessing: true,
+                makeUnit: { processing in attempts.append(processing); return unit }), .output: output]
+        }, reportCaptureFailure: { logs.append($0) })
+        let ready = MeetingNativeReadiness(permissionsGranted: true, processingReady: true, meetingDeviceAuthorized: true)
+        try runtime.prepare(selection: .init(microphoneDeviceID: 71, output: .excludingProcesses([12])), readiness: ready, at: 0)
+        try runtime.start(readiness: ready, at: 0)
+        XCTAssertEqual(attempts, [true])
+        XCTAssertEqual(logs, ["microphone-echo-cancellation=on"])
+        try runtime.pause(at: 1_000_000)
+    }
+
+    func testVoiceConfigurationFailureFallsBackButSemanticAndPermissionFailuresDoNot() throws {
+        let failures: [(Error, Bool)] = [
+            (MeetingVoiceProcessingUnavailable(diagnostic: .voiceDucking, status: -10879), true),
+            (MeetingAudioFailure.invalidSelection, false), (MeetingAudioFailure.invalidFormat, false),
+            (MeetingAudioFailure.leaseExpired, false),
+            (MeetingVoiceProcessingUnavailable.setupFailure(status: kAudioUnitErr_Unauthorized,
+                operation: "permission", diagnostic: .voiceInitialize), false),
+            (MeetingVoiceProcessingUnavailable.setupFailure(status: kAudioDevicePermissionsError,
+                operation: "permission", diagnostic: .voiceStart), false),
+        ]
+        for (failure, fallbackAllowed) in failures {
+            let voice = FakeUnit(), plain = FakeUnit()
+            voice.failAt = ["output"]
+            voice.failureOverride = failure
+            var attempts: [Bool] = []
+            let capture = MeetingMicrophoneCapture(selectedDeviceID: 71, voiceProcessing: true, makeUnit: { processing in
+                attempts.append(processing); return processing ? voice : plain
+            })
+            if fallbackAllowed { try capture.start(into: Receiver()) }
+            else { XCTAssertThrowsError(try capture.start(into: Receiver())) }
+            XCTAssertEqual(attempts, fallbackAllowed ? [true, false] : [true], "Safety and permission failures must not select a fallback")
+            if fallbackAllowed { XCTAssertEqual(plain.selectedDevice, 71) }
+            try capture.stop()
+        }
+    }
+
+    func testVoiceStartFailureCannotMaskConcurrentReferenceOrFormatInvalidation() throws {
+        for disappear in [false, true] {
+            let unit = FakeUnit()
+            unit.failAt = ["start"]
+            unit.failureOverride = MeetingVoiceProcessingUnavailable(diagnostic: .voiceStart, status: -10875)
+            unit.onStart = {
+                if disappear { unit.context?.referenceDidDisappear() }
+                else {
+                    unit.referenceOutput = unit.configuredOutput
+                    unit.referenceOutput?.mSampleRate = 44_100
+                    unit.context?.audioUnitFormatDidChange(scope: kAudioUnitScope_Input, element: 0)
+                }
+            }
+            var attempts: [Bool] = []
+            let capture = MeetingMicrophoneCapture(selectedDeviceID: 71, voiceProcessing: true, makeUnit: { processing in
+                attempts.append(processing); return unit
+            })
+            XCTAssertThrowsError(try capture.start(into: Receiver()))
+            XCTAssertEqual(attempts, [true], "Semantic invalidation must not be masked by a VPIO Start error")
+            try capture.stop()
+        }
+    }
+
+    func testInvalidReferenceClientFormatNeverCallsStartOrFallback() throws {
+        let unit = FakeUnit()
+        unit.referenceOutput = unit.configuredOutput
+        unit.referenceOutput?.mSampleRate = 44_100
+        var attempts: [Bool] = []
+        let capture = MeetingMicrophoneCapture(selectedDeviceID: 71, voiceProcessing: true, makeUnit: { processing in
+            attempts.append(processing); return unit
+        })
+        XCTAssertThrowsError(try capture.start(into: Receiver()))
+        XCTAssertFalse(unit.events.contains("start"))
+        XCTAssertEqual(attempts, [true])
+        try capture.stop()
+    }
+
+    func testFailedVoiceCleanupNeverOpensFallback() throws {
+        for stage in ["stop", "uninitialize", "dispose"] {
+            let unit = FakeUnit()
+            unit.failAt = ["start", stage]
+            unit.failureOverride = MeetingVoiceProcessingUnavailable(diagnostic: .voiceStart, status: -10875)
+            var attempts: [Bool] = []
+            let capture = MeetingMicrophoneCapture(selectedDeviceID: 71, voiceProcessing: true, makeUnit: { processing in
+                attempts.append(processing); return unit
+            })
+            XCTAssertThrowsError(try capture.start(into: Receiver())) {
+                XCTAssertEqual($0 as? MeetingAudioFailure, .cleanupFailed)
+            }
+            XCTAssertEqual(attempts, [true], "Cleanup failure must never open a second unit")
+            unit.failAt = []
+            try capture.stop()
         }
     }
 
