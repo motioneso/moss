@@ -40,6 +40,7 @@ extension MeetingAudioReceiving {
 
 /// Constructors never open devices. The orchestrator serializes start/stop; callbacks use the receiver.
 protocol MeetingAudioCapturing: AnyObject {
+    var startupDiagnostic: String? { get }
     func start(into receiver: MeetingAudioReceiving) throws
     func stop() throws
 }
@@ -63,6 +64,10 @@ enum MeetingOutputScope: Equatable {
             throw MeetingAudioFailure.invalidSelection
         }
     }
+}
+
+extension MeetingAudioCapturing {
+    var startupDiagnostic: String? { nil }
 }
 
 struct MeetingNativeSelection: Equatable {

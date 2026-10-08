@@ -29,6 +29,18 @@ describe("meetings composition", () => {
     expect(link).toContain("Record meetings when you choose Start");
   });
 
+  it("bounds the echo experiment and describes same-mic fallback in plain words", () => {
+    const meeting = getBuiltInModuleManifests().find((item) => item.id === "meetings")!;
+    const echo = meeting.features!.find((item) => item.id === "meetings.speaker_echo_control")!;
+    expect(echo.description).toContain("echo control checked on built-in Mac speakers");
+    expect(echo.description).toContain("Headsets/Bluetooth, Zoom sharing the mic");
+    expect(echo.description).toContain("fallback on Macs rejecting setup are unchecked");
+    expect(echo.description).toContain("same mic after cleanup");
+    expect(echo.description).toContain("route changes need Resume");
+    expect(echo.description).not.toContain("Real-speaker live validation pending");
+    expect(echo.description.length).toBeLessThanOrEqual(240);
+  });
+
   it("describes the actual passage exit, removable chat context and automatic title", () => {
     const features = getBuiltInModuleManifests().find((item) => item.id === "meetings")!.features!;
     const description = (id: string) => features.find((item) => item.id === id)!.description;
@@ -166,6 +178,7 @@ describe("meetings composition", () => {
       "meetings.automatic_summary",
       "transcribe.meeting",
       "meetings.native_startup_recovery",
+      "meetings.speaker_echo_control",
       "meetings.native_capture",
       "meetings.mac_recording_status",
       "meetings.mac_recording_pill_visibility",
