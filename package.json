@@ -117,7 +117,8 @@
     "test:uat:2981-real-providers": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 1909-sports-public-source-completion.uat.spec.ts notes-default-retrieval.uat.spec.ts notes-path-recheck.uat.spec.ts workshop-chat-handover.uat.spec.ts",
     "prototype:scheduled-create": "pnpm --filter @moss/web exec vite --config vite.scheduled-create-prototype.config.ts",
     "prototype:chat": "pnpm --filter @moss/web exec vite --config vite.chat-prototype.config.ts",
-    "prototype:proactive-updates": "pnpm --filter @moss/web exec vite --config vite.proactive-updates-prototype.config.ts"
+    "prototype:proactive-updates": "pnpm --filter @moss/web exec vite --config vite.proactive-updates-prototype.config.ts",
+    "prototype:interruptions": "pnpm --filter @moss/web exec vite --config vite.interruption-prototype.config.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",
