@@ -371,6 +371,11 @@ export const meetingsModuleManifest = {
         "A brief microphone timing hiccup at Start can recover without Resume. Missing startup sources are checked once; uncertain audio is dropped and marked as a gap. Real source changes still pause. The Mac log records audio gaps."
     },
     {
+      id: "meetings.speaker_echo_control",
+      description:
+        "Mic + computer audio echo control checked on built-in Mac speakers. Headsets/Bluetooth, Zoom sharing the mic, and fallback on Macs rejecting setup are unchecked. Unsupported setup uses the same mic after cleanup; route changes need Resume."
+    },
+    {
       id: "meetings.native_capture",
       description:
         "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Only Start or Resume records. Pause and Stop remain available; a nav dot shows recording elsewhere. Mac only.",

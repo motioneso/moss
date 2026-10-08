@@ -65,7 +65,28 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
             (.bufferClockRange, "bufferClockRange"),
             (.bufferLease, "bufferLease"),
             (.bufferGapCapacity, "bufferGapCapacity"),
-            (.captureStart, "captureStart")
+            (.captureStart, "captureStart"),
+            (.voiceReferenceRoute, "voiceReferenceRoute"),
+            (.voiceReferenceFormatVerification, "voiceReferenceFormatVerification"),
+            (.voiceReferenceFormatRead, "voiceReferenceFormatRead"),
+            (.voiceComponent, "voiceComponent"),
+            (.voiceInputEnable, "voiceInputEnable"),
+            (.voiceOutputEnable, "voiceOutputEnable"),
+            (.voiceBypass, "voiceBypass"),
+            (.voiceAGC, "voiceAGC"),
+            (.voiceDucking, "voiceDucking"),
+            (.voiceRenderCallback, "voiceRenderCallback"),
+            (.voiceReferenceSelection, "voiceReferenceSelection"),
+            (.voiceDeviceSelection, "voiceDeviceSelection"),
+            (.voiceEndpointReadback, "voiceEndpointReadback"),
+            (.voiceChannelMap, "voiceChannelMap"),
+            (.voiceClientFormat, "voiceClientFormat"),
+            (.voiceInitialize, "voiceInitialize"),
+            (.voiceStart, "voiceStart"),
+            (.voiceDefaultOutputChanged, "voiceDefaultOutputChanged"),
+            (.voiceBufferOwnership, "voiceBufferOwnership"),
+            (.voiceInputCallback, "voiceInputCallback"),
+            (.voiceMaximumFrames, "voiceMaximumFrames")
         ]
         let statuses: [Int32?] = [nil, 0, -1, -10863, Int32.min, Int32.max]
         for (code, label) in labels {
@@ -84,6 +105,21 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         XCTAssertNil(MeetingAudioFailureDiagnostic(packed: UInt64.max))
     }
 
+    func testNormalMicrophoneModesUseNonErrorLogLevels() {
+        XCTAssertEqual(MeetingAudioFailureDiagnostic.logLevel(for: "microphone-echo-cancellation=on"), .info)
+        XCTAssertEqual(MeetingAudioFailureDiagnostic.logLevel(for: "microphone-echo-cancellation=off reason=microphoneOnly"), .default)
+        for message in [
+            "microphone-echo-cancellation=off reason=microphoneOnly extra",
+            "microphone-echo-cancellation=off reason=voiceStart status=-10863",
+            "microphone-echo-cancellation=on extra",
+            "prefix microphone-echo-cancellation=on",
+            "capture-failure source=microphone callback=microphoneRender reason=deviceFailure status=-50",
+            ""
+        ] {
+            XCTAssertEqual(MeetingAudioFailureDiagnostic.logLevel(for: message), .error, message)
+        }
+    }
+
     func testDiagnosticSlotPublishesCodeAndStatusTogetherAndStartsEmpty() {
         let slot = MeetingAudioFailureDiagnosticSlot()
         XCTAssertNil(slot.latest)
@@ -93,6 +129,89 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
             slot.store(diagnostic)
             XCTAssertEqual(slot.latest, diagnostic)
         }
+    }
+
+    func testStartupSizingMessageUsesFixedLabelsAndNumericUnavailableSentinel() {
+        let diagnostic = MeetingMicrophoneStartupDiagnostic(voiceProcessing: true,
+            before: .init(maximumFramesPerSlice: 128, inputSampleRate: 48000,
+                          clientSampleRate: 48000, referenceSampleRate: 48000,
+                          microphone: .init(bufferFrameSize: 128, nominalSampleRate: 48000),
+                          reference: .init(bufferFrameSize: 256, nominalSampleRate: 44100)),
+            after: .init(maximumFramesPerSlice: 8192, inputSampleRate: 48000,
+                         clientSampleRate: 48000, referenceSampleRate: 48000,
+                         microphone: .init(bufferFrameSize: 512, nominalSampleRate: 48000),
+                         reference: .init(bufferFrameSize: 1024, nominalSampleRate: 48000)),
+            allocationFrames: 8192, firstCallbackFrameCount: 512)
+        XCTAssertEqual(diagnostic.message,
+            "microphone-startup-sizing voiceProcessing=1 maxFramesBeforeInitialize=128 maxFramesAfterInitialize=8192" +
+            " allocationFrames=8192 firstCallbackFrameCount=512" +
+            " microphoneBufferFramesBeforeInitialize=128 microphoneBufferFramesAfterInitialize=512" +
+            " referenceBufferFramesBeforeInitialize=256 referenceBufferFramesAfterInitialize=1024" +
+            " microphoneNominalRateBeforeInitialize=48000.0 microphoneNominalRateAfterInitialize=48000.0" +
+            " referenceNominalRateBeforeInitialize=44100.0 referenceNominalRateAfterInitialize=48000.0" +
+            " inputRateBeforeInitialize=48000.0 inputRateAfterInitialize=48000.0" +
+            " clientRateBeforeInitialize=48000.0 clientRateAfterInitialize=48000.0" +
+            " referenceRateBeforeInitialize=48000.0 referenceRateAfterInitialize=48000.0")
+
+        let unavailable = MeetingMicrophoneStartupDiagnostic(voiceProcessing: false,
+            before: .init(inputSampleRate: .nan, clientSampleRate: .infinity, referenceSampleRate: -5),
+            after: .init(), allocationFrames: nil, firstCallbackFrameCount: nil)
+        let fields = unavailable.message.split(separator: " ")
+        XCTAssertEqual(fields.count, 20)
+        XCTAssertEqual(fields[1], "voiceProcessing=0")
+        for field in fields.dropFirst(2) { XCTAssertEqual(field.split(separator: "=").last, "-1") }
+        XCTAssertTrue(unavailable.message.contains("firstCallbackFrameCount=-1"))
+        let zero = MeetingMicrophoneStartupDiagnostic(voiceProcessing: false, before: .init(), after: .init(),
+                                                      allocationFrames: 0, firstCallbackFrameCount: 0)
+        XCTAssertTrue(zero.message.contains("firstCallbackFrameCount=0"))
+        XCTAssertTrue(zero.message.contains("allocationFrames=0"))
+    }
+
+    func testStartupSizingPublicationWaitsForSnapshotAndNeverLogsOnCallback() throws {
+        var diagnostics: [MeetingMicrophoneStartupDiagnostic] = []
+        let publication = MeetingMicrophoneStartupDiagnostics(voiceProcessing: true, sink: { diagnostics.append($0) })
+        publication.recordFirstCallback(frameCount: UInt32.max)
+        publication.poll()
+        XCTAssertTrue(diagnostics.isEmpty, "A pre-admission callback must wait for completed control-plane observations")
+        publication.recordBeforeInitialize(.init(maximumFramesPerSlice: 128), allocationFrames: 8192)
+        publication.recordAfterInitialize(.init(maximumFramesPerSlice: 8192))
+        publication.completeStartup()
+        publication.recordFirstCallback(frameCount: 7)
+        publication.poll(callbacksFinished: true)
+        XCTAssertEqual(diagnostics.count, 1)
+        let diagnostic = try XCTUnwrap(diagnostics.first)
+        XCTAssertEqual(diagnostic.before.maximumFramesPerSlice, 128)
+        XCTAssertEqual(diagnostic.after.maximumFramesPerSlice, 8192)
+        XCTAssertEqual(diagnostic.firstCallbackFrameCount, UInt32.max, "Record the actual argument even when too large to admit")
+    }
+
+    func testConcurrentStartupSizingPollsPublishExactlyOnceAndKeepTheFirstActualZero() {
+        let lock = NSLock()
+        var diagnostics: [MeetingMicrophoneStartupDiagnostic] = []
+        let publication = MeetingMicrophoneStartupDiagnostics(voiceProcessing: true, sink: {
+            lock.lock(); diagnostics.append($0); lock.unlock()
+        })
+        publication.completeStartup()
+        publication.recordFirstCallback(frameCount: 0)
+        DispatchQueue.concurrentPerform(iterations: 100) { index in
+            publication.recordFirstCallback(frameCount: UInt32(index + 1))
+            publication.poll()
+        }
+        DispatchQueue.concurrentPerform(iterations: 100) { _ in publication.poll(callbacksFinished: true) }
+        XCTAssertEqual(diagnostics.count, 1)
+        XCTAssertEqual(diagnostics.first?.firstCallbackFrameCount, 0)
+    }
+
+    func testStartupSizingNoCallbackRemainsUnknownUntilFinalTeardown() {
+        var diagnostics: [MeetingMicrophoneStartupDiagnostic] = []
+        let publication = MeetingMicrophoneStartupDiagnostics(voiceProcessing: false, sink: { diagnostics.append($0) })
+        publication.completeStartup()
+        for _ in 0..<10 { publication.poll() }
+        XCTAssertTrue(diagnostics.isEmpty)
+        publication.poll(callbacksFinished: true)
+        publication.poll(callbacksFinished: true)
+        XCTAssertEqual(diagnostics.count, 1)
+        XCTAssertNil(diagnostics.first?.firstCallbackFrameCount)
     }
 
     func testMessageDoesNotRenderOperationPathsOrNSErrorDetails() {
@@ -267,7 +386,7 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         let microphone = Device()
         var reports: [String] = []
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone] },
-                                            reportCaptureFailure: { reports.append($0) })
+                                            reportCaptureDiagnostic: { reports.append($0) })
         try start(runtime)
         microphone.emit()
         XCTAssertTrue(try runtime.service(at: 1_000_000).isEmpty)
@@ -284,7 +403,7 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         var reports: [String] = []
         var hadAudioWhenReported = false
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone, .output: output] },
-            reportCaptureFailure: { message in
+            reportCaptureDiagnostic: { message in
                 reports.append(message)
                 hadAudioWhenReported = (output.receiver as? MeetingAudioBuffer)?.peek() != nil
                     && (microphone.receiver as? MeetingAudioBuffer)?.peek() != nil
@@ -335,7 +454,7 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         var reports: [String] = []
         var hadAudioWhenReported = false
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone] },
-            reportCaptureFailure: { message in
+            reportCaptureDiagnostic: { message in
                 reports.append(message)
                 hadAudioWhenReported = (microphone.receiver as? MeetingAudioBuffer)?.peek() != nil
                 XCTAssertEqual(microphone.stops, 0)
@@ -359,7 +478,7 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         }
         var reports: [String] = []
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone, .output: output] },
-                                            reportCaptureFailure: { reports.append($0) })
+                                            reportCaptureDiagnostic: { reports.append($0) })
         XCTAssertThrowsError(try start(runtime, selection: bothSources))
         XCTAssertEqual(reports, ["capture-failure source=output callback=captureStart reason=unknownFailure status=-50"])
         XCTAssertEqual(runtime.snapshot.state, .failed)
