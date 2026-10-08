@@ -1,4 +1,3 @@
-import { createWorkerMeetingSummaryCli } from "./meeting-summary-cli.js";
 import { startMeetingCaptureSupervision } from "./meeting-capture-supervisor.js";
 import { homedir } from "node:os";
 import type { ConstructorOptions, PgBoss } from "pg-boss";
@@ -43,6 +42,7 @@ import {
   getAllQueueDefinitions,
   getBuiltInModuleManifests,
   registerBuiltInModuleWorkers,
+  createWorkerMeetingSummaryCli,
   resolveActorTimezone
 } from "@moss/module-registry";
 import {

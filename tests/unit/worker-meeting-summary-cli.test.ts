@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RpcConnection } from "@moss/chat";
-import { createWorkerMeetingSummaryCli } from "../../apps/worker/src/meeting-summary-cli.js";
+import { createWorkerMeetingSummaryCli } from "@moss/module-registry";
+import { installModelActivityRecorder } from "@moss/ai";
 
 const env = {
   JARVIS_CLI_RUNNER_SOCKET: "/run/jarv1s/cli-runner.sock",
   JARVIS_CLI_RUNNER_RPC_SECRET: "synthetic-test-secret"
 };
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  installModelActivityRecorder(null);
+  vi.restoreAllMocks();
+});
 
 describe("automatic meeting summary CLI transport", () => {
   it("keeps an unconfigured host unavailable without an in-process fallback", async () => {
@@ -63,6 +67,8 @@ describe("automatic meeting summary CLI transport", () => {
   });
 
   it("uses the exact default model and owner through constrained RPC, then kills its session", async () => {
+    const record = vi.fn();
+    installModelActivityRecorder(record);
     const launch = vi.spyOn(RpcConnection.prototype, "launch").mockResolvedValue({ offset: 0 });
     const submit = vi
       .spyOn(RpcConnection.prototype, "submitStructured")
@@ -102,6 +108,47 @@ describe("automatic meeting summary CLI transport", () => {
     const session = launch.mock.calls[0]![0];
     expect(submit).toHaveBeenCalledExactlyOnceWith(session, { text: "Synthetic meeting input" });
     expect(kill).toHaveBeenCalledExactlyOnceWith(session, undefined);
+    expect(record).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        kind: "structured",
+        action: "meetings",
+        actionCode: "structured.meetings",
+        modelName: "chosen-default-model",
+        ownerUserId: "owner",
+        outcome: "ok"
+      })
+    );
+    runtime.close();
+  });
+  it.each([
+    [new Error("Synthetic launch failure"), "error"],
+    [new DOMException("Synthetic cancellation", "AbortError"), "aborted"]
+  ] as const)("records one owner-bound settled failure (%j)", async (error, outcome) => {
+    const record = vi.fn();
+    installModelActivityRecorder(record);
+    vi.spyOn(RpcConnection.prototype, "launch").mockRejectedValue(error);
+    const kill = vi.spyOn(RpcConnection.prototype, "kill").mockResolvedValue({ ok: true });
+    const runtime = createWorkerMeetingSummaryCli(env);
+    await expect(
+      runtime.dependencies.createConstrainedCliStructuredAdapter!("anthropic").generateStructured({
+        actorUserId: "owner",
+        service: "module.meetings",
+        model: { provider_kind: "anthropic", provider_model_id: "chosen-default-model" },
+        schema: { type: "object", properties: { overview: { type: "string" } } },
+        messages: [{ role: "user", content: "Synthetic meeting input" }],
+        maxOutputTokens: 8192
+      })
+    ).rejects.toBe(error);
+    expect(record).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        kind: "structured",
+        action: "meetings",
+        modelName: "chosen-default-model",
+        ownerUserId: "owner",
+        outcome
+      })
+    );
+    expect(kill).toHaveBeenCalledOnce();
     runtime.close();
   });
 });
