@@ -14,8 +14,8 @@ import {
 beforeAll(setupLinkDatabase);
 afterAll(closeLinkDatabase);
 const fixtures: Awaited<ReturnType<typeof linkFixture>>[] = [];
-async function fixture() {
-  const f = await linkFixture();
+async function fixture(initialNow?: Date) {
+  const f = await linkFixture(initialNow);
   fixtures.push(f);
   return f;
 }
@@ -50,7 +50,10 @@ describe("same-source recovery with real auth and storage (isolated gate only)",
     ]);
     expect(first.capture).toMatchObject({ epoch: 2, generation: 2, selection: input.selection });
     expect(replay).toEqual(first);
-    expect(JSON.parse((await active.stored())!.state_json!).epochs).toHaveLength(2);
+    expect(JSON.parse((await active.stored())!.state_json!)).toMatchObject({
+      automaticRecoveryCount: 1,
+      epochs: [expect.anything(), expect.anything()]
+    });
     f.advance(2000);
     const clip = {
       ...active.audio,
@@ -115,33 +118,103 @@ describe("same-source recovery with real auth and storage (isolated gate only)",
     expect((await active.stored())!.state_json).toBe(before);
   });
 
+  it("persists the automatic recovery cap across healthy periods and manual Resume", async () => {
+    const f = await fixture(),
+      active = await f.begin();
+    expect(JSON.parse((await active.stored())!.state_json!).automaticRecoveryCount).toBe(0);
+    for (let count = 1; count <= 8; count++) {
+      const input = {
+        meetingId: f.meeting.id,
+        grantId: active.grantId,
+        requestKey: randomUUID(),
+        command: "recover-sources" as const,
+        expectedGeneration: count,
+        expectedEpoch: count,
+        selection: {
+          mode: "microphone-only" as const,
+          microphone: { deviceId: "fixture-mic", sourceId: "mic" }
+        }
+      };
+      const first = await f.service.nativeControl(active.headers, "recover", input);
+      expect(await f.service.nativeControl(active.headers, "replay", input)).toEqual(first);
+      expect(JSON.parse((await active.stored())!.state_json!).automaticRecoveryCount).toBe(count);
+      f.advance(3000);
+      await f.service.status(active.headers, "healthy-recording", {
+        ...active.statusInput,
+        observed: { generation: count + 1, phase: "recording" }
+      });
+    }
+    const capped = {
+      meetingId: f.meeting.id,
+      grantId: active.grantId,
+      requestKey: randomUUID(),
+      command: "recover-sources" as const,
+      expectedGeneration: 9,
+      expectedEpoch: 9,
+      selection: {
+        mode: "microphone-only" as const,
+        microphone: { deviceId: "fixture-mic", sourceId: "mic" }
+      }
+    };
+    const before = (await active.stored())!.state_json;
+    await expect(f.service.nativeControl(active.headers, "capped", capped)).rejects.toMatchObject({
+      code: "meeting_capture_limit",
+      httpStatus: 413
+    });
+    expect((await active.stored())!.state_json).toBe(before);
+    await f.service.nativeControl(active.headers, "pause", {
+      meetingId: f.meeting.id,
+      grantId: active.grantId,
+      requestKey: randomUUID(),
+      command: "pause",
+      expectedGeneration: 9
+    });
+    const resumed = await f.service.nativeControl(active.headers, "resume", {
+      meetingId: f.meeting.id,
+      grantId: active.grantId,
+      requestKey: randomUUID(),
+      command: "record",
+      expectedGeneration: 10
+    });
+    expect(resumed.capture).toMatchObject({ desired: "recording", epoch: 10, generation: 11 });
+    expect(JSON.parse((await active.stored())!.state_json!).automaticRecoveryCount).toBe(8);
+    await expect(
+      f.service.nativeControl(active.headers, "still-capped", {
+        ...capped,
+        requestKey: randomUUID(),
+        expectedGeneration: 11,
+        expectedEpoch: 10
+      })
+    ).rejects.toMatchObject({ code: "meeting_capture_limit", httpStatus: 413 });
+  });
+
   it.each(["recover", "delayed-resume"] as const)(
     "retires an old pending receipt without blocking or pausing the new epoch after %s",
     async (kind) => {
-      const f = await fixture(),
+      // Start in the past so advancing through retention never puts the service ahead of
+      // PostgreSQL's real clock. Fresh receipt creation time remains immutable and real.
+      const f = await fixture(new Date(Date.now() - 120000)),
         active = await f.begin(),
         repository = new MeetingCaptureRepository();
-      // Advancing the service clock must also advance receipt creation time. PostgreSQL's
-      // real now() would otherwise make newly uploaded audio look more than 60 seconds old.
-      // Keep the real reservation, admission guards and transaction; only align fixture time.
-      const reserve = repository.reserve.bind(repository);
-      vi.spyOn(MeetingCaptureRepository.prototype, "reserve").mockImplementation(
-        async (...args) => {
-          await reserve(...args);
-          const [db, grantId, input] = args;
-          if (grantId === active.grantId && input.kind === "audio")
-            await sql`UPDATE app.meeting_capture_receipts SET created_at=${f.now()}
-            WHERE grant_id=${grantId}::uuid AND request_key=${input.requestKey}::uuid`.execute(
-              db.db
-            );
-        }
-      );
       const original = active.audio;
       const { fingerprint } = decodeCaptureAudio(original);
-      await context.withDataContext(f.browser, async (db) => {
-        const grant = (await repository.grant(db, active.grantId, true))!;
-        await repository.admitAudio(db, grant, original, fingerprint);
-      });
+      // Model an earlier admitted upload whose provider result never returned. Seed only
+      // its metadata through ordinary owner-scoped INSERT; all recovery paths below are real.
+      const metadata = {
+        sourceId: original.sourceId,
+        epoch: original.epoch,
+        generation: original.generation,
+        sequence: original.sequence,
+        startMs: original.startMs,
+        endMs: original.endMs
+      };
+      await context.withDataContext(f.browser, (db) =>
+        sql`INSERT INTO app.meeting_capture_receipts
+          (grant_id,request_key,kind,fingerprint,metadata_json,created_at)
+          VALUES (${active.grantId}::uuid,${original.requestKey}::uuid,'audio',${fingerprint},${JSON.stringify(metadata)},${f.now()})`.execute(
+          db.db
+        )
+      );
       const control = {
         meetingId: f.meeting.id,
         grantId: active.grantId,

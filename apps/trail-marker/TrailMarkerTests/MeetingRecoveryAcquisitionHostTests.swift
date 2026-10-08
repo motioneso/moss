@@ -100,6 +100,62 @@ final class MeetingRecoveryAcquisitionHostTests: XCTestCase {
         XCTAssertEqual(host.phase, .recording)
     }
 
+    func testLateAcquisitionDeadlinePausesWithoutExpiringRecordingAuthorization() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        fixture.server.holdRecordingStatusReplies(forGeneration: 2)
+        let initial = fixture.monotonic
+        let wire = MeetingCaptureInventory(microphones: [
+            .init(deviceId: "mic-uid", sourceId: "mic", label: "Synthetic mic")],
+            applications: [], computerAudio: .init(available: false, excludedProcessTreeIds: []),
+            microphonePermission: .granted, systemAudioPermission: .unknown)
+        let snapshot = MeetingInventorySnapshot(wire: wire, microphones: ["mic-uid": 42],
+            applications: [:], processes: [], audioObjects: [:], excluded: [])
+        var delayed = false
+        let host = fixture.host(readInventory: {
+            if fixture.device.starts == 2, !delayed {
+                delayed = true
+                fixture.monotonic = initial + 11_500_000_000
+                fixture.server.advanceElapsed(to: 12500)
+            }
+            return snapshot
+        }) { false }
+        defer {
+            host.shutdown(reason: "Independent recovery deadline test")
+            fixture.server.releaseRecordingStatusReplies()
+        }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(),
+            credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        fixture.device.receiver?.fail(.sourceReconfigured)
+        host.service()
+        try await waitUntil { fixture.device.starts == 2 && host.phase == .recording }
+        let receiver = try XCTUnwrap(fixture.device.receiver as? MeetingCaptureAcquisitionReceiver)
+        // Starts before the episode deadline and ends after it, but well inside the real lease.
+        receiver.receive(sampleTime: 0, hostTimeNanoseconds: fixture.monotonic,
+            sampleRate: 8000, frameCount: 8000, sampleAt: { _ in 0.25 })
+        XCTAssertNil(receiver.buffer.failure, "Recovery deadline must not become the recording authorization lease")
+        guard receiver.buffer.failure == nil else { return } // A mutated lease must fail above without waiting for Resume.
+        host.service()
+        XCTAssertEqual(host.phase, .recording, "A callback crossing only the recovery deadline must not terminate the recording")
+        XCTAssertEqual(fixture.server.audioCount, 0, "Recording observation is still unacknowledged")
+        fixture.monotonic = initial + 12_100_000_000
+        fixture.server.advanceElapsed(to: 13100)
+        host.service()
+        XCTAssertEqual(host.phase, .paused, "Recovery acknowledgment timeout must remain a resumable pause")
+        fixture.server.releaseRecordingStatusReplies()
+        try await waitUntil { host.canResumeFromUserClick }
+        host.resumeFromUserClick()
+        try await waitUntil { fixture.device.starts == 3 && host.phase == .recording }
+        XCTAssertEqual(fixture.server.claimHashes.count, 1, "Resume must reuse the live recording grant without a fresh Start")
+        // Real authorization expiry remains terminal even after a successful explicit Resume.
+        fixture.monotonic += 31_000_000_000
+        host.service()
+        XCTAssertEqual(host.phase, .stopped)
+        XCTAssertFalse(host.canResumeFromUserClick)
+    }
+
     func testLocalPauseReachesServerWhileAcquisitionRemainsBlocked() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }
@@ -236,6 +292,8 @@ final class MeetingRecoveryAcquisitionHostTests: XCTestCase {
         fixture.permission = .denied
         host.service()
         XCTAssertEqual(host.phase, .paused)
+        XCTAssertEqual(host.diagnostics.filter { $0.contains("capture-paused:") }.count, 1,
+            "A recovery source failure must publish one interruption")
         blocked.unblock()
         try await waitUntil { !host.acquisitionPending }
         fixture.permission = .granted

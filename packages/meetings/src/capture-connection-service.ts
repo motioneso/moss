@@ -356,6 +356,7 @@ export class MeetingCaptureConnectionService {
         throw new MeetingCaptureError("meeting_capture_conflict", 409);
       const state: CaptureStoredState = {
         maintenanceSequence: 0,
+        automaticRecoveryCount: 0,
         gaps: [],
         gapLimitReached: false,
         generation: 0,

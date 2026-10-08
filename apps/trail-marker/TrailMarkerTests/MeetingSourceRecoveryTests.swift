@@ -19,7 +19,8 @@ final class MeetingSourceRecoveryTests: XCTestCase {
     }
 
     func testEpisodeBudgetBoundsRetriesAndRequiresSustainedHealth() {
-        var budget = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 30_000_000_000)
+        var budget = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 30_000_000_000,
+            faultedSources: [.microphone])
         XCTAssertEqual(budget.deadline, origin + 12_000_000_000)
         XCTAssertTrue(budget.beginAttempt(at: origin))
         XCTAssertTrue(budget.beginAttempt(at: origin + 1))
@@ -30,8 +31,73 @@ final class MeetingSourceRecoveryTests: XCTestCase {
         XCTAssertFalse(budget.observeCallbacks([.microphone: 5], at: origin + 3_000_000_000))
         XCTAssertTrue(budget.observeCallbacks([.microphone: 6], at: origin + 5_000_000_000))
         XCTAssertEqual(budget.remaining(at: budget.deadline), 0)
-        var short = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 1)
+        var short = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 1, faultedSources: [.microphone])
         XCTAssertFalse(short.beginAttempt(at: origin + 1), "Lease expiry cannot be extended by recovery")
+    }
+
+    func testHealthyRecoveredMicrophoneDoesNotWaitForCallbackFreeOutput() {
+        var budget = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 30_000_000_000,
+            faultedSources: [.microphone])
+        XCTAssertTrue(budget.beginAttempt(at: origin))
+        XCTAssertFalse(budget.observeCallbacks([.microphone: 1, .output: 0], at: origin))
+        XCTAssertFalse(budget.observeCallbacks([.microphone: 2, .output: 0], at: origin + 1_000_000_000))
+        XCTAssertTrue(budget.observeCallbacks([.microphone: 3, .output: 0], at: origin + 3_000_000_000),
+            "An unchanged callback-free peer must not prevent sustained recovery health")
+    }
+
+    func testStalledFaultedSourceAndEmptyEvidenceNeverFinishEpisode() {
+        let cases: [Set<MeetingAudioSource>] = [[.microphone], []]
+        for faulted in cases {
+            var budget = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 30_000_000_000,
+                faultedSources: faulted)
+            XCTAssertTrue(budget.beginAttempt(at: origin))
+            XCTAssertFalse(budget.observeCallbacks([.microphone: 1, .output: 1], at: origin))
+            XCTAssertFalse(budget.observeCallbacks([.microphone: 1, .output: 2], at: origin + 1_000_000_000))
+            XCTAssertFalse(budget.observeCallbacks([.microphone: 1, .output: 3], at: origin + 3_000_000_000))
+        }
+    }
+
+    func testAlternatingFaultsUnionHealthWithoutRenewingAttemptOrDeadline() {
+        var budget = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 30_000_000_000,
+            faultedSources: [.microphone])
+        XCTAssertTrue(budget.beginAttempt(at: origin))
+        _ = budget.observeCallbacks([.microphone: 1, .output: 0], at: origin)
+        _ = budget.observeCallbacks([.microphone: 2, .output: 0], at: origin + 1_000_000_000)
+        budget.requireHealth(from: [.output])
+        XCTAssertTrue(budget.beginAttempt(at: origin + 2_000_000_000))
+        XCTAssertEqual(budget.attempts, 2)
+        XCTAssertEqual(budget.deadline, origin + 12_000_000_000)
+        XCTAssertFalse(budget.observeCallbacks([.microphone: 1, .output: 1], at: origin + 2_000_000_000))
+        XCTAssertFalse(budget.observeCallbacks([.microphone: 1, .output: 2], at: origin + 3_000_000_000))
+        XCTAssertFalse(budget.observeCallbacks([.microphone: 1, .output: 3], at: origin + 5_000_000_000))
+        XCTAssertFalse(budget.observeCallbacks([.microphone: 2, .output: 4], at: origin + 6_000_000_000))
+        XCTAssertTrue(budget.observeCallbacks([.microphone: 3, .output: 5], at: origin + 8_000_000_000))
+    }
+
+    func testBothFaultedSourcesMustBothDemonstrateSustainedHealth() {
+        var budget = MeetingSourceRecoveryBudget(now: origin, leaseDeadline: origin + 30_000_000_000,
+            faultedSources: [.microphone, .output])
+        XCTAssertTrue(budget.beginAttempt(at: origin))
+        XCTAssertFalse(budget.observeCallbacks([.microphone: 1, .output: 0], at: origin))
+        XCTAssertFalse(budget.observeCallbacks([.microphone: 2, .output: 0], at: origin + 1_000_000_000))
+        XCTAssertFalse(budget.observeCallbacks([.microphone: 3, .output: 0], at: origin + 3_000_000_000))
+        XCTAssertFalse(budget.observeCallbacks([.microphone: 4, .output: 1], at: origin + 4_000_000_000))
+        XCTAssertTrue(budget.observeCallbacks([.microphone: 5, .output: 2], at: origin + 6_000_000_000))
+    }
+
+    func testFaultedSourceEvidenceIncludesPeerReconfigurationDuringTeardown() throws {
+        let microphone = Device(), output = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: microphone, .output: output] }
+        let selection = MeetingNativeSelection(microphoneDeviceID: 42, output: .excludingProcesses([100]))
+        try runtime.prepare(selection: selection, readiness: ready, at: origin)
+        try runtime.start(readiness: ready, at: origin)
+        microphone.receiver?.fail(.sourceReconfigured)
+        output.onStop = { output.receiver?.fail(.sourceReconfigured) }
+        _ = try runtime.service(at: origin + 1)
+        XCTAssertEqual(runtime.recoveryFaultSources, [.microphone, .output])
+        XCTAssertTrue(runtime.canRecoverSources)
+        output.onStop = nil
+        try runtime.terminate(at: origin + 2)
     }
 
     func testRecoveryGapUsesMappedTailWithoutHostJitterOrWireOverlap() throws {

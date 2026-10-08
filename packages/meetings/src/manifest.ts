@@ -373,13 +373,13 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_source_recovery",
       description:
-        "Same-source format or timing changes show Recovering audio… and retry within a fixed budget. Both tracks retain gaps. Sources and permissions stay fixed; Pause and Stop cancel recovery. Persistent interruptions need explicit Resume.",
+        "Recovering audio… retries the same sources up to 8 times per recording. macOS may show its own permission dialog. Pause and Stop cancel recovery. Repeated interruptions need Resume; missed audio is marked as a gap.",
       remediations: [
         {
           id: "meetings.resume_interrupted_audio",
           path: "/meetings",
           description:
-            "If recovery cannot finish, a visible warning restores a hidden recording pill. Check the original sources and macOS permissions, then Resume or Stop. Expired old audio is marked as a gap before Resume; recording authority is not renewed."
+            "A visible warning restores a hidden recording pill if recovery cannot finish. Check the original sources and macOS permissions before Resume, or choose Stop. Missed audio is marked as a gap."
         }
       ]
     },

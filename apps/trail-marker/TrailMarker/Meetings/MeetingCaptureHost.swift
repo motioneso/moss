@@ -212,8 +212,9 @@ final class MeetingCaptureHost: ObservableObject {
                 let lease = min(30000, reply.capture.leaseMs ?? 30000)
                 guard lease >= 15000 else { throw MeetingHostError.invalidResponse }
                 leaseDeadlineNanoseconds = requestSent + lease * 1_000_000
-                runtime.updateCaptureLease(until: min(leaseDeadlineNanoseconds,
-                    recoveryIntent == nil ? UInt64.max : recoveryBudget?.deadline ?? 0))
+                // Recovery has its own admission deadline; it must never shorten the
+                // recording authorization lease shared by adopted and retained buffers.
+                runtime.updateCaptureLease(until: leaseDeadlineNanoseconds)
                 connectivityMessage = nil
                 if reply.capture.processing?.status == "delayed" { processingMessage = "Transcription delayed. Audio capture continues." }
                 else if gapCount == 0 { processingMessage = nil }
@@ -717,6 +718,11 @@ final class MeetingCaptureHost: ObservableObject {
     /// Source churn is an admission failure. Retained resource handles survive a failed teardown,
     /// and both Stop and the service tick can retry them without reopening any source.
     func sourceChanged() {
+        discardUnavailableSources()
+        interrupt(error: MeetingHostError.sourceChanged)
+    }
+
+    private func discardUnavailableSources() {
         if sourceChangeIntent != nil { failSourceChange(MeetingHostError.sourceChanged) }
         if let pending = controlOutbox.pending, pending.command == "record" {
             // Cancel queued Resume, or follow an already-dispatched Resume with Pause.
@@ -731,7 +737,6 @@ final class MeetingCaptureHost: ObservableObject {
         if let interruptedSelection { timeline.pauseGapSelection = interruptedSelection }
         timeline.pauseReason = "interrupted"
         _ = closeCaptureDiscarding(at: now)
-        interrupt(error: MeetingHostError.sourceChanged)
     }
 
     private func closeCaptureDiscarding(at now: UInt64) -> Bool {
@@ -1008,6 +1013,7 @@ final class MeetingCaptureHost: ObservableObject {
         let fresh = try ports.readInventory()
         _ = try fresh.resolve(selection)
         guard selection != currentSourceChoice else { return }
+        cancelSourceRecovery()
         let intent = MeetingSourceChangeIntent(body: .init(meetingId: activation.meetingId,
             grantId: grantId, requestKey: UUID().uuidString.lowercased(), expectedGeneration: remote.generation,
             command: "change-sources", expectedEpoch: remote.epoch, selection: selection), desired: remote.desired)
@@ -1154,10 +1160,12 @@ final class MeetingCaptureHost: ObservableObject {
             throw MeetingHostError.sourceChanged
         }
         if recoveryBudget == nil {
-            recoveryBudget = MeetingSourceRecoveryBudget(now: now, leaseDeadline: leaseDeadlineNanoseconds)
+            recoveryBudget = MeetingSourceRecoveryBudget(now: now, leaseDeadline: leaseDeadlineNanoseconds,
+                faultedSources: runtime.recoveryFaultSources)
         }
+        recoveryBudget?.requireHealth(from: runtime.recoveryFaultSources)
         guard (recoveryBudget?.remaining(at: now) ?? 0) > 0 else { throw MeetingHostError.network }
-        runtime.updateCaptureLease(until: min(leaseDeadlineNanoseconds, recoveryBudget!.deadline))
+        runtime.updateCaptureLease(until: leaseDeadlineNanoseconds)
         uploadAdmitted = false
         sourceChangeRevision += 1
         recordingDuration.pause(at: now)
@@ -1273,12 +1281,19 @@ final class MeetingCaptureHost: ObservableObject {
     }
 
     private func validateRecoverySources() throws {
-        guard let intent = recoveryIntent, let selection = intent.body.selection,
-              (intent.started ? runtime.snapshot.state == .recording : runtime.canRecoverSources),
-              try ports.readInventory().resolve(selection) == intent.original,
-              selection.microphone == nil || ports.microphonePermission() == .granted else {
-            sourceChanged()
-            throw MeetingHostError.sourceChanged
+        do {
+            guard let intent = recoveryIntent, let selection = intent.body.selection,
+                  (intent.started ? runtime.snapshot.state == .recording : runtime.canRecoverSources),
+                  try ports.readInventory().resolve(selection) == intent.original,
+                  selection.microphone == nil || ports.microphonePermission() == .granted else {
+                throw MeetingHostError.sourceChanged
+            }
+            recoveryBudget?.requireHealth(from: runtime.recoveryFaultSources)
+        } catch {
+            // Retire uncertain audio now, but let the caller publish the interruption once
+            // while it still owns the recovery intent needed to converge server control.
+            discardUnavailableSources()
+            throw error
         }
     }
 

@@ -36,6 +36,9 @@ final class MeetingCaptureRuntime {
     var canRecoverSources: Bool {
         queue.sync { canRecoverSourcesLocked }
     }
+    var recoveryFaultSources: Set<MeetingAudioSource> {
+        queue.sync { Set(recoveryEvidence.filter { $0.failure == .sourceReconfigured }.map(\.source)) }
+    }
     private var canRecoverSourcesLocked: Bool {
         machine.state == .paused && devices.isEmpty && !recoveryEvidence.isEmpty &&
             recoveryEvidence.contains { $0.failure == .sourceReconfigured } &&

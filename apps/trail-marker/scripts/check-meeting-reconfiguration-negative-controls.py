@@ -21,6 +21,46 @@ RUNNER = SHARED.RUNNER
 MEETINGS = RUNNER.APP / "TrailMarker/Meetings"
 CONTROLS = [
     ("MeetingRecoveryAcquisitionHostTests", {
+        "name": "recovery-deadline-is-not-authorization-lease",
+        "source": MEETINGS / "MeetingCaptureHost.swift",
+        "test": "testLateAcquisitionDeadlinePausesWithoutExpiringRecordingAuthorization",
+        "before": "                runtime.updateCaptureLease(until: leaseDeadlineNanoseconds)\n                connectivityMessage = nil",
+        "after": "                runtime.updateCaptureLease(until: min(leaseDeadlineNanoseconds, recoveryIntent == nil ? UInt64.max : recoveryBudget?.deadline ?? 0))\n                connectivityMessage = nil",
+        "assertion": "Recovery deadline must not become the recording authorization lease",
+    }),
+    ("MeetingCaptureFailureDiagnosticTests", {
+        "name": "diagnostic-read-does-not-lock-audio-ring",
+        "source": MEETINGS / "MeetingAudioBuffer.swift",
+        "test": "testDiagnosticReadDoesNotWaitForAnInProgressSampleReader",
+        "before": "    var failureDiagnostic: MeetingAudioFailureDiagnostic? {\n        if callbackFailures.value & 1 != 0 { return scopeDiagnostic.latest }",
+        "after": "    var failureDiagnostic: MeetingAudioFailureDiagnostic? {\n        _ = failure // Mutation: reenter the audio ring lock while reading a diagnostic.\n        if callbackFailures.value & 1 != 0 { return scopeDiagnostic.latest }",
+        "assertion": "Diagnostic reads must not wait for the held audio ring lock",
+    }),
+    ("MeetingSourceRecoveryTests", {
+        "name": "recovery-health-does-not-require-quiet-peer",
+        "source": MEETINGS / "MeetingSourceRecovery.swift",
+        "test": "testHealthyRecoveredMicrophoneDoesNotWaitForCallbackFreeOutput",
+        "before": "let requiredCounts = counts.filter { requiredHealth.contains($0.key) }",
+        "after": "let requiredCounts = counts",
+        "assertion": "An unchanged callback-free peer must not prevent sustained recovery health",
+    }),
+    ("MeetingSourceSelectionTests", {
+        "name": "manual-source-edit-cancels-recovery",
+        "source": MEETINGS / "MeetingCaptureHost.swift",
+        "test": "testManualSourceEditSupersedesAdoptedRecoveryAwaitingRecordingAcknowledgment",
+        "before": "        guard selection != currentSourceChoice else { return }\n        cancelSourceRecovery()",
+        "after": "        guard selection != currentSourceChoice else { return }",
+        "assertion": "An explicit source edit must supersede the pending automatic recovery",
+    }),
+    ("MeetingRecoveryAcquisitionHostTests", {
+        "name": "recovery-source-failure-interrupts-once",
+        "source": MEETINGS / "MeetingCaptureHost.swift",
+        "test": "testStagedPermissionLossKeepsGapEpochThroughExplicitResume",
+        "before": "            discardUnavailableSources()\n            throw error",
+        "after": "            sourceChanged()\n            throw error",
+        "assertion": "A recovery source failure must publish one interruption",
+    }),
+    ("MeetingRecoveryAcquisitionHostTests", {
         "name": "recovery-permission-read-race",
         "source": MEETINGS / "MeetingCaptureHost.swift",
         "test": "testRecoveryPermissionFlipBetweenConsecutiveReadsNeverRequestsPermission",

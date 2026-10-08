@@ -47,11 +47,16 @@ describe("meetings composition", () => {
       (item) => item.id === "meetings.native_source_recovery"
     )!;
     expect(recovery.description).toContain("Recovering audio…");
-    expect(recovery.description).toContain("Both tracks retain gaps");
+    expect(recovery.description).toContain("same sources up to 8 times per recording");
+    expect(recovery.description).toContain("macOS may show its own permission dialog");
     expect(recovery.description).toContain("Pause and Stop cancel recovery");
-    expect(recovery.description).toContain("explicit Resume");
+    expect(recovery.description).toContain("Repeated interruptions need Resume");
+    expect(recovery.description).toContain("missed audio is marked as a gap");
     expect(recovery.remediations![0]!.description).toContain("restores a hidden recording pill");
     expect(recovery.remediations![0]!.description).toContain("before Resume");
+    expect(JSON.stringify(recovery)).not.toMatch(
+      /Both tracks retain gaps|authority is not renewed/
+    );
     for (const feature of meeting.features!) {
       expect(feature.description.length, feature.id).toBeLessThanOrEqual(240);
       for (const remediation of feature.remediations ?? [])

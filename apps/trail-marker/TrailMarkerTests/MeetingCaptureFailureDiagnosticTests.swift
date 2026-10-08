@@ -232,6 +232,45 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         XCTAssertNil(MeetingAudioFailureDiagnostic.status(oversized))
     }
 
+    func testDiagnosticReadDoesNotWaitForAnInProgressSampleReader() throws {
+        let ring = try buffer()
+        let diagnostic = MeetingAudioFailureDiagnostic(.microphoneRender, status: -10863)
+        let completed = DispatchSemaphore(value: 0)
+        let joined = expectation(description: "Diagnostic reader returned after sample reader")
+        ring.receive(hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 1) { _ in
+            ring.fail(.sourceReconfigured, diagnostic: .init(.bufferFormat))
+            ring.fail(.deviceFailure(operation: "render", status: -10863), diagnostic: diagnostic)
+            DispatchQueue.global().async {
+                XCTAssertEqual(ring.failureDiagnostic, diagnostic)
+                completed.signal()
+                joined.fulfill()
+            }
+            XCTAssertEqual(completed.wait(timeout: .now() + 1), .success,
+                "Diagnostic reads must not wait for the held audio ring lock")
+            return 0.25
+        }
+        wait(for: [joined], timeout: 2)
+    }
+
+    func testHardAndScopeDiagnosticsOverrideRecoveryWithoutBorrowingItsTag() throws {
+        let ring = try buffer()
+        let soft = MeetingAudioFailureDiagnostic(.bufferFormat)
+        let hard = MeetingAudioFailureDiagnostic(.microphoneRender, status: -50)
+        let scope = MeetingAudioFailureDiagnostic(.outputProcessScope)
+        ring.fail(.sourceReconfigured, diagnostic: soft)
+        XCTAssertEqual(ring.failureDiagnostic, soft)
+        ring.fail(.deviceFailure(operation: "render", status: -50), diagnostic: hard)
+        XCTAssertEqual(ring.failureDiagnostic, hard)
+        ring.fail(.sourceReconfigured, diagnostic: soft)
+        XCTAssertEqual(ring.failureDiagnostic, hard)
+        ring.fail(.invalidSelection, diagnostic: scope)
+        XCTAssertEqual(ring.failureDiagnostic, scope)
+        let unspecified = try buffer()
+        unspecified.fail(.sourceReconfigured, diagnostic: soft)
+        unspecified.fail(.bufferFull)
+        XCTAssertNil(unspecified.failureDiagnostic)
+    }
+
     func testContendedBufferRetainsActualCallbackCodeAndStatusWithoutChangingSemanticFallback() throws {
         let ring = try buffer()
         let diagnostic = MeetingAudioFailureDiagnostic(.microphoneRender, status: -10863)

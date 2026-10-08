@@ -1,16 +1,26 @@
 import Foundation
 
 /// One monotonic budget spans control retries and immediately recurring device faults.
-/// Only sustained healthy callbacks replenish it; a successful RPC alone never does.
+/// Sustained callbacks from every faulted source finish the episode; a quiet, unchanged
+/// peer need not produce audio. The server separately caps recoveries across the recording.
 struct MeetingSourceRecoveryBudget {
     let deadline: UInt64
     private(set) var attempts = 0
     var healthySince: UInt64?
+    private var requiredHealth: Set<MeetingAudioSource>
     private var priorCallbacks: [MeetingAudioSource: UInt64] = [:]
 
-    init(now: UInt64, leaseDeadline: UInt64) {
+    init(now: UInt64, leaseDeadline: UInt64, faultedSources: Set<MeetingAudioSource>) {
         let (end, overflow) = now.addingReportingOverflow(12_000_000_000)
         deadline = min(overflow ? UInt64.max : end, leaseDeadline)
+        requiredHealth = faultedSources
+    }
+
+    mutating func requireHealth(from sources: Set<MeetingAudioSource>) {
+        guard !sources.isSubset(of: requiredHealth) else { return }
+        requiredHealth.formUnion(sources)
+        healthySince = nil
+        priorCallbacks = [:]
     }
 
     mutating func beginAttempt(at now: UInt64) -> Bool {
@@ -26,9 +36,11 @@ struct MeetingSourceRecoveryBudget {
     }
 
     mutating func observeCallbacks(_ counts: [MeetingAudioSource: UInt64], at now: UInt64) -> Bool {
-        let healthy = !counts.isEmpty && Set(counts.keys) == Set(priorCallbacks.keys) &&
-            counts.allSatisfy { source, count in count > (priorCallbacks[source] ?? 0) }
-        priorCallbacks = counts
+        let requiredCounts = counts.filter { requiredHealth.contains($0.key) }
+        let healthy = !requiredHealth.isEmpty && Set(requiredCounts.keys) == requiredHealth &&
+            Set(requiredCounts.keys) == Set(priorCallbacks.keys) &&
+            requiredCounts.allSatisfy { source, count in count > (priorCallbacks[source] ?? 0) }
+        priorCallbacks = requiredCounts
         guard healthy else { healthySince = nil; return false }
         if let start = healthySince { return now >= start && now - start >= 2_000_000_000 }
         healthySince = now

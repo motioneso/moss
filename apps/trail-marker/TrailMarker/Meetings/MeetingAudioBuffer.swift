@@ -32,8 +32,10 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
     private let recoveryDiagnostic = MeetingAudioFailureDiagnosticSlot()
     var failureDiagnostic: MeetingAudioFailureDiagnostic? {
         if callbackFailures.value & 1 != 0 { return scopeDiagnostic.latest }
-        if failure == .sourceReconfigured { return recoveryDiagnostic.latest }
-        return callbackDiagnostic.latest
+        // Reading diagnostics is allowed from an in-progress sample reader. Never enter
+        // the ring lock here, and never label an undiagnosed hard failure with a soft tag.
+        if callbackFailures.value & 255 != 0 { return callbackDiagnostic.latest }
+        return callbackDiagnostic.latest ?? recoveryDiagnostic.latest
     }
     private let closed = MeetingAudioAtomicState()
     private let scopeVerification = MeetingAudioAtomicState()

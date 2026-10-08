@@ -18,6 +18,10 @@ import {
   MEETING_CAPTURE_LEASE_MS
 } from "@moss/shared";
 
+const MAX_CAPTURE_EPOCHS = 64;
+const MAX_AUTOMATIC_RECOVERIES = 8;
+const MANUAL_CAPTURE_EPOCH_RESERVE = 8;
+
 export class MeetingCaptureError extends Error {
   constructor(
     readonly code = "meeting_capture_unavailable",
@@ -40,6 +44,8 @@ export interface CaptureEpoch {
 }
 export interface CaptureStoredState {
   maintenanceSequence?: number;
+  /** Accepted automatic recovery controls on this grant; absent on older recordings. */
+  automaticRecoveryCount?: number;
   revocationReason?: MeetingCaptureRevocationReason;
   gaps: MeetingCaptureGap[];
   gapLimitReached: boolean;
@@ -214,8 +220,18 @@ export function applyCaptureSourceChange(
       captureMetadataJson(input.selection) !== captureMetadataJson(current.selection))
   )
     invalid();
-  if (state.gapLimitReached || state.epochs.length >= 64)
+  if (state.gapLimitReached || state.epochs.length >= MAX_CAPTURE_EPOCHS)
     throw new MeetingCaptureError("meeting_capture_limit", 413);
+  const recoveryCount =
+    state.automaticRecoveryCount === undefined ? 0 : state.automaticRecoveryCount;
+  if (input.command === "recover-sources") {
+    if (!Number.isSafeInteger(recoveryCount) || recoveryCount < 0) invalid();
+    if (
+      recoveryCount >= MAX_AUTOMATIC_RECOVERIES ||
+      state.epochs.length >= MAX_CAPTURE_EPOCHS - MANUAL_CAPTURE_EPOCH_RESERVE
+    )
+      throw new MeetingCaptureError("meeting_capture_limit", 413);
+  }
   if (!state.lastSeenAt || at.getTime() - Date.parse(state.lastSeenAt) > MEETING_CAPTURE_LEASE_MS)
     throw new MeetingCaptureError("meeting_capture_interrupted", 409);
   validateCaptureSelection(input.selection, state.inventory);
@@ -241,6 +257,7 @@ export function applyCaptureSourceChange(
     current.modelRoute,
     state.desired === "paused"
   );
+  if (input.command === "recover-sources") state.automaticRecoveryCount = recoveryCount + 1;
   if (current.endMs === null) current.endMs = atMs;
   state.epochs.push(next);
   state.generation += 1;
@@ -262,7 +279,8 @@ export function applyCaptureControl(
       invalid();
     if (!state.lastSeenAt || at.getTime() - Date.parse(state.lastSeenAt) > MEETING_CAPTURE_LEASE_MS)
       throw new MeetingCaptureError("meeting_capture_interrupted", 409);
-    if (state.epochs.length >= 64) throw new MeetingCaptureError("meeting_capture_limit", 413);
+    if (state.epochs.length >= MAX_CAPTURE_EPOCHS)
+      throw new MeetingCaptureError("meeting_capture_limit", 413);
     validateCaptureSelection(input.selection, state.inventory);
     state.epochs.push(captureEpoch(state, input.selection, atMs, modelRoute));
     state.desired = "recording";
