@@ -49,6 +49,7 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         try initiate()
         return true
     }
+    private let displayLevel: OpaquePointer
     private let droppedCallbacks: OpaquePointer
     private var captureGaps = [MeetingAudioGap?](repeating: nil, count: 64)
     private var captureGapCount = 0
@@ -75,6 +76,11 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         guard epoch > 0, sampleCapacity > 0, sampleCapacity <= 11_520_000,
               blockCapacity > 0, blockCapacity <= 16384 else { throw MeetingAudioFailure.invalidSelection }
         guard let mailbox = MeetingAudioDropMailboxCreate() else { throw MeetingAudioFailure.bufferFull }
+        guard let level = MeetingAudioLevelCreate() else {
+            MeetingAudioDropMailboxDestroy(mailbox)
+            throw MeetingAudioFailure.bufferFull
+        }
+        displayLevel = level
         droppedCallbacks = mailbox
         self.source = source
         self.epoch = epoch
@@ -109,10 +115,12 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
               blockCount == 0 || (interval.end - blocks[blockHead].start <= Self.maximumAgeNanoseconds &&
                 (host < blocks[blockHead].observedStart || host - blocks[blockHead].observedStart < Self.maximumAgeNanoseconds)),
               nextSequence < UInt64.max else { failLocked(.bufferFull); return }
+        var peak: Float = 0
         for index in 0..<frameCount {
             let value = sampleAt(index)
             guard value.isFinite else { failLocked(.invalidFormat); return }
             samples[(sampleTail + index) % sampleCapacity] = value
+            peak = max(peak, abs(value))
         }
         // A close or scope/format fault during copying cannot publish an in-flight callback.
         guard closed.value == 0, callbackFailures.value == 0 else { return }
@@ -124,6 +132,13 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         usedSamples += frameCount
         blockCount += 1
         nextSequence += 1
+        MeetingAudioLevelStore(displayLevel, peak, host)
+    }
+
+    /// UI-only snapshot; closed/faulted epochs never display retained pre-pause audio as live.
+    func capturedLevel(at now: UInt64) -> Float {
+        guard closed.value == 0, callbackFailures.value == 0, !isScopeVerificationPending else { return 0 }
+        return MeetingAudioLevelRead(displayLevel, now)
     }
 
     func drop(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int) {
@@ -452,6 +467,7 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
     }
 
     deinit {
+        MeetingAudioLevelDestroy(displayLevel)
         MeetingAudioDropMailboxDestroy(droppedCallbacks)
         samples.deinitialize(count: sampleCapacity)
         samples.deallocate()

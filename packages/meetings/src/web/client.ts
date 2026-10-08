@@ -4,6 +4,7 @@ import { ApiError, requestJson, clearSessionUnsavedChanges } from "@moss/module-
 import type {
   CreateMeetingRecordInput,
   MeetingCapturePreferences,
+  UpdateMeetingCapturePreferences,
   MeetingRecord,
   MeetingRecordCursor,
   MeetingTranscriptSnapshotResponse,
@@ -35,6 +36,19 @@ export function getMeeting(id: string, signal?: AbortSignal): Promise<{ meeting:
 export function isMeetingAccessDenied(error: unknown): boolean {
   return error instanceof ApiError && [401, 403, 404].includes(error.status);
 }
+/** Clear only this meeting’s private transient state; keep the authoritative record denial. */
+export function discardMeetingPrivateState(client: QueryClient, id: string): void {
+  invalidateOutputAccess(client, id);
+  client.removeQueries({ queryKey: ["meetings", "capture-session", id], exact: true });
+  client.removeQueries({ queryKey: ["meetings", "capture", id], exact: true });
+  clearSessionUnsavedChanges(client, `meetings:${id}:`);
+  client.removeQueries({ queryKey: meetingKeys.editor(id), exact: true });
+  client.removeQueries({ queryKey: ["meetings", "title", id], exact: true });
+  client.removeQueries({ queryKey: ["meetings", "output-session", id] });
+  client.removeQueries({ queryKey: ["meetings", "outputs", id] });
+  client.removeQueries({ queryKey: ["meetings", "exports", id] });
+  client.removeQueries({ queryKey: ["meetings", "output-artifact", id] });
+}
 export function meetingRecordQueryOptions(id: string) {
   return {
     queryKey: meetingKeys.record(id),
@@ -45,15 +59,7 @@ export function meetingRecordQueryOptions(id: string) {
         // Invalidate pending save identities before the denial reaches observers.
         // A later success from an earlier save must not restore inaccessible content.
         if (!signal?.aborted && isMeetingAccessDenied(error)) {
-          invalidateOutputAccess(client, id);
-          client.removeQueries({ queryKey: ["meetings", "capture-session", id], exact: true });
-          client.removeQueries({ queryKey: ["meetings", "capture", id], exact: true });
-          clearSessionUnsavedChanges(client, `meetings:${id}:`);
-          client.removeQueries({ queryKey: meetingKeys.editor(id), exact: true });
-          client.removeQueries({ queryKey: ["meetings", "output-session", id] });
-          client.removeQueries({ queryKey: ["meetings", "outputs", id] });
-          client.removeQueries({ queryKey: ["meetings", "exports", id] });
-          client.removeQueries({ queryKey: ["meetings", "output-artifact", id] });
+          discardMeetingPrivateState(client, id);
         }
         throw error;
       }
@@ -87,7 +93,7 @@ export function getMeetingPreferences(): Promise<MeetingCapturePreferences> {
   return requestJson("/api/meetings/preferences");
 }
 export function putMeetingPreferences(
-  body: MeetingCapturePreferences
+  body: UpdateMeetingCapturePreferences
 ): Promise<MeetingCapturePreferences> {
   return requestJson("/api/meetings/preferences", { method: "PUT", body });
 }

@@ -133,7 +133,7 @@ export const chatModuleManifest = {
     {
       id: "chat.meeting_questions",
       description:
-        "Meeting questions use current transcript and exact citations. API-key models only, no tools. Enabled user choices fail closed; admin pins or locked instance defaults apply. No unrelated memory or automatic export.",
+        "Meeting questions use notes and transcript with exact citations. Failed questions remain above their error in the open chat. API-key only, no tools; enabled choices fail closed and admin pins apply. No unrelated memory or automatic export.",
       featureFlagId: "chat.module",
       errors: [
         {
@@ -141,7 +141,7 @@ export const chatModuleManifest = {
           class: "prerequisite",
           remediationRef: "chat.meeting_questions.configure",
           description:
-            "The required model or enabled override is unavailable or uses unsupported subscription authentication. Choose an available model, or contact an admin when locked. No fallback replaces an unavailable enabled override."
+            "Meeting questions need an available API-key model. Remove the About this meeting chip to continue ordinary subscription chat. Enabled overrides fail closed; contact an admin when locked."
         },
         {
           code: "meeting_context_unavailable",
@@ -166,7 +166,7 @@ export const chatModuleManifest = {
         {
           id: "chat.meeting_questions.configure",
           description:
-            "Choose an allowed active API-key chat model in AI providers. Administrator pins are enforced; subscription meeting chat requires a future supported adapter.",
+            "Remove the About this meeting chip for ordinary subscription chat. To ask about a meeting, choose an allowed active API-key chat model in AI providers; administrator pins still apply.",
           path: "/settings?section=aiproviders"
         }
       ]

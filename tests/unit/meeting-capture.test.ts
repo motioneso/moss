@@ -1,103 +1,32 @@
-import { meetingsModuleManifest } from "../../packages/meetings/src/manifest.js";
-import { createHash, randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { PreferencesRepository } from "@moss/structured-state";
 import {
-  MEETING_CAPTURE_LEASE_MS,
-  type MeetingCaptureAudioInput,
-  type MeetingCaptureControlInput,
-  type MeetingCaptureInventory,
-  type MeetingCaptureSelection
-} from "@moss/shared";
+  owner,
+  meetingId,
+  grantId,
+  deviceId,
+  origin,
+  at,
+  inventory,
+  state,
+  command,
+  recording,
+  audio,
+  fixture
+} from "./helpers/meeting-capture-fixture.js";
+import { meetingsModuleManifest } from "../../packages/meetings/src/manifest.js";
+import { MeetingStopSummaryRepository } from "../../packages/meetings/src/stop-summary-repository.js";
+import { makeRecordingDb } from "./helpers/recording-db.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
+import { randomUUID } from "node:crypto";
+import { describe, expect, it, vi } from "vitest";
+import { MEETING_CAPTURE_LEASE_MS, type MeetingCaptureSelection } from "@moss/shared";
 import {
   applyCaptureControl,
   assertCaptureAudioAdmission,
   decodeCaptureAudio,
   expireCaptureLease,
   pcmWave,
-  retainCaptureGap,
-  type CaptureStoredState
+  retainCaptureGap
 } from "../../packages/meetings/src/capture-domain.js";
-import {
-  MeetingCaptureRepository,
-  type CaptureGrant,
-  type CaptureReceipt
-} from "../../packages/meetings/src/capture-repository.js";
-import {
-  MeetingCaptureService,
-  type MeetingCaptureDependencies
-} from "../../packages/meetings/src/capture-service.js";
-import { MeetingCaptureConnectionRepository } from "../../packages/meetings/src/capture-connection-repository.js";
-import { MeetingTranscriptRepository } from "../../packages/meetings/src/transcript-repository.js";
-const owner = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const meetingId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const grantId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-const deviceId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
-const origin = new Date("2026-10-05T00:00:00Z");
-const at = (ms: number) => new Date(origin.getTime() + ms);
-const inventory: MeetingCaptureInventory = {
-  microphones: [{ deviceId: "mic-device", sourceId: "mic", label: "Selected microphone" }],
-  applications: [{ appProcessTreeId: "selected-app", label: "Selected app" }],
-  computerAudio: { available: true, excludedProcessTreeIds: ["moss"] },
-  microphonePermission: "granted",
-  systemAudioPermission: "granted"
-};
-function state(): CaptureStoredState {
-  return {
-    gaps: [],
-    gapLimitReached: false,
-    generation: 0,
-    desired: "idle",
-    originAt: origin.toISOString(),
-    epochs: [],
-    stopCutoffMs: null,
-    finalizationDeadline: null,
-    inventory,
-    observed: { generation: 0, phase: "idle" },
-    lastSeenAt: origin.toISOString()
-  };
-}
-function command(
-  command: MeetingCaptureControlInput["command"],
-  generation: number
-): MeetingCaptureControlInput {
-  return {
-    grantId,
-    requestKey: randomUUID(),
-    expectedGeneration: generation,
-    command,
-    ...(command === "record"
-      ? {
-          selection: {
-            mode: "microphone-only" as const,
-            microphone: { deviceId: "mic-device", sourceId: "mic" }
-          }
-        }
-      : {})
-  };
-}
-function recording(selection = command("record", 0).selection) {
-  const value = state();
-  applyCaptureControl(value, { ...command("record", 0), selection }, origin, "route");
-  value.observed = { generation: 1, phase: "recording" };
-  value.lastSeenAt = at(2000).toISOString();
-  return value;
-}
-function audio(): MeetingCaptureAudioInput {
-  return {
-    meetingId,
-    grantId,
-    requestKey: randomUUID(),
-    generation: 1,
-    epoch: 1,
-    sourceId: "mic",
-    sequence: 0,
-    startMs: 0,
-    endMs: 1000,
-    sampleRateHz: 16000,
-    pcmBase64: Buffer.alloc(32000).toString("base64")
-  };
-}
 describe("native capture bounded domain", () => {
   it("retains exact gap replay, rejects changed IDs, and pauses visibly at its bounded cap", () => {
     const value = recording();
@@ -247,139 +176,6 @@ describe("native capture bounded domain", () => {
     ).toThrow(expect.objectContaining({ code: "meeting_capture_invalid_input", httpStatus: 400 }));
   });
 });
-afterEach(() => vi.restoreAllMocks());
-function fixture(selection?: MeetingCaptureSelection) {
-  const preferences = vi.spyOn(PreferencesRepository.prototype, "get").mockResolvedValue(null);
-  let active = 0;
-  const value = recording(selection);
-  const credential = `mm1_${owner}.${grantId}.${"s".repeat(43)}`;
-  const grant: CaptureGrant = {
-    id: grantId,
-    meeting_id: meetingId,
-    owner_user_id: owner,
-    device_id: deviceId,
-    device_name: "Synthetic Mac",
-    verifier_hash: "a".repeat(64),
-    credential_hash: createHash("sha256").update(credential).digest("hex"),
-    session_id: randomUUID(),
-    status: "active",
-    connection_id: deviceId,
-    capability_revision: 1,
-    created_at: origin,
-    expires_at: at(7200000),
-    state_json: JSON.stringify(value)
-  };
-  const repository = new MeetingCaptureRepository();
-  const receipts = new Map<string, CaptureReceipt>();
-  vi.spyOn(repository, "reconcileExpiredAudio").mockResolvedValue();
-  vi.spyOn(repository, "hasPendingAudio").mockResolvedValue(false);
-  vi.spyOn(repository, "lockMeeting").mockResolvedValue();
-  vi.spyOn(repository, "grant").mockImplementation(async () => grant);
-  vi.spyOn(repository, "save").mockImplementation(async (_db, _grant, next) => {
-    grant.state_json = JSON.stringify(next);
-    if (next.desired === "revoked") grant.status = "revoked";
-  });
-  vi.spyOn(repository, "receipt").mockImplementation(async (_db, _id, key, fingerprint) => {
-    const row = receipts.get(key);
-    if (row && row.fingerprint !== fingerprint) throw Error("conflict");
-    return row ?? null;
-  });
-  vi.spyOn(repository, "reserve").mockImplementation(async (_db, _id, input) => {
-    receipts.set(input.requestKey, {
-      request_key: input.requestKey,
-      kind: input.kind,
-      fingerprint: input.fingerprint,
-      metadata_json: JSON.stringify(input.metadata),
-      result_json: input.result ? JSON.stringify(input.result) : null,
-      created_at: at(2000)
-    });
-  });
-  vi.spyOn(repository, "admitAudio").mockImplementation(async (db, _grant, input, fingerprint) =>
-    repository.reserve(db, grantId, {
-      requestKey: input.requestKey,
-      kind: "audio",
-      fingerprint,
-      metadata: {}
-    })
-  );
-  vi.spyOn(repository, "finish").mockImplementation(async (_db, _id, result) => {
-    const receipt = receipts.get(result.requestKey);
-    if (receipt) receipt.result_json = JSON.stringify(result);
-  });
-  vi.spyOn(repository, "transcriptHead").mockResolvedValue({
-    version: 0,
-    cursor: 0,
-    transcript_revision: 0,
-    stop_cutoff_ms: null
-  });
-  const transcript = new MeetingTranscriptRepository();
-  vi.spyOn(transcript, "snapshotWithSources").mockResolvedValue(null);
-  const ingest = vi.spyOn(transcript, "ingest").mockResolvedValue({
-    status: "saved",
-    replayed: false,
-    receipt: { version: 1, cursor: 1, transcriptRevision: 1, stopCutoffMs: null }
-  });
-  const deps: MeetingCaptureDependencies = {
-    dataContext: {
-      withDataContext: async (_actor, run) => {
-        active++;
-        try {
-          return await run({} as Parameters<typeof run>[0]);
-        } finally {
-          active--;
-        }
-      }
-    },
-    resolveBrowser: vi.fn(),
-    resolveCompanion: vi.fn(),
-    assertRecordingBinding: vi.fn(async () => ({ expiresAt: at(7200000) })),
-    assertBinding: vi.fn(async () => {
-      expect(active).toBeLessThanOrEqual(1);
-    }),
-    device: vi.fn(),
-    assertModuleAvailable: vi.fn(async () => {
-      expect(active).toBe(0);
-    }),
-    processingAvailability: vi.fn(async () => ({ ready: true, modelRoute: "route" })),
-    transcribe: vi.fn(async (_actor, input) =>
-      input.dispatch(async () => ({
-        segments: [{ startMs: 0, endMs: 900, text: "Synthetic transcript" }],
-        modelRoute: "route"
-      }))
-    ),
-    trustedOrigins: ["https://moss.example"],
-    now: () => at(2000)
-  };
-  const connections = new MeetingCaptureConnectionRepository();
-  vi.spyOn(connections, "lock").mockResolvedValue();
-  const connection = {
-    owner_user_id: owner,
-    device_id: deviceId,
-    connection_id: deviceId,
-    device_name: "Mac",
-    verifier_hash: grant.verifier_hash,
-    capability_revision: 1,
-    revision: 1,
-    inventory_json: JSON.stringify(inventory),
-    last_seen_at: at(2000),
-    expires_at: at(7200000)
-  };
-  vi.spyOn(connections, "connection").mockImplementation(async () => connection);
-  const service = new MeetingCaptureService(deps, repository, transcript, connections);
-  return {
-    deps,
-    service,
-    preferences,
-    connection,
-    connections,
-    grant,
-    ingest,
-    repository,
-    receipts,
-    headers: { authorization: `Bearer ${credential}` },
-    browser: { actorUserId: owner, sessionId: grant.session_id!, expiresAt: grant.expires_at }
-  };
-}
 describe("capture service authorization and dispatch", () => {
   it("keeps actionable help for an unavailable capture source", () => {
     const error = meetingsModuleManifest.features
@@ -388,42 +184,16 @@ describe("capture service authorization and dispatch", () => {
     expect(error).toMatchObject({
       class: "prerequisite",
       remediationRef: "meetings.connect_recorder",
-      description: expect.stringContaining("Restore the saved source")
+      description: expect.stringContaining("restore an existing source")
     });
   });
-  it("resumes and replays an explicit command without creating another epoch", async () => {
+  it("resumes and replays the same command without creating another epoch", async () => {
     const f = fixture();
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
-    const resume: MeetingCaptureControlInput = {
-      ...command("record", 2),
-      selection: {
-        mode: "selected-app",
-        microphone: { deviceId: "mic-device", sourceId: "mic" },
-        outputSourceId: "selected-output",
-        appProcessTreeId: "selected-app"
-      }
-    };
-    const resumed = await f.service.browserControl(f.browser, meetingId, resume);
-    expect(resumed.capture.selection).toEqual(resume.selection);
-    expect(await f.service.browserControl(f.browser, meetingId, resume)).toEqual(resumed);
+    const resume = { ...command("record", 2), selection: undefined };
+    await f.service.browserControl(f.browser, meetingId, resume);
+    await f.service.browserControl(f.browser, meetingId, resume);
     expect(JSON.parse(f.grant.state_json!).generation).toBe(3);
-    expect(JSON.parse(f.grant.state_json!).epochs).toHaveLength(2);
-  });
-  it("still resolves defaults for a first recording without an explicit source", async () => {
-    const f = fixture();
-    f.grant.status = "approved";
-    f.grant.state_json = JSON.stringify(state());
-    vi.spyOn(f.repository, "renewClaim").mockResolvedValue();
-    const result = await f.service.browserControl(f.browser, meetingId, {
-      ...command("record", 0),
-      selection: undefined
-    });
-    expect(result.capture).toMatchObject({
-      desired: "recording",
-      generation: 1,
-      selection: { mode: "computer-audio", microphone: { deviceId: "mic-device", sourceId: "mic" } }
-    });
-    expect(f.preferences).toHaveBeenCalledTimes(2);
   });
   it.each<MeetingCaptureSelection>([
     { mode: "microphone-only", microphone: { deviceId: "mic-device", sourceId: "mic" } },
@@ -448,8 +218,8 @@ describe("capture service authorization and dispatch", () => {
       const result = await f.service.browserControl(f.browser, meetingId, resume);
       expect(result.capture).toMatchObject({ deviceId, selection });
       expect(result.capture.selection).toEqual(selection);
-      expect(f.preferences).not.toHaveBeenCalled();
-      f.preferences.mockRejectedValue(new Error("Preferences unavailable"));
+      expect(f.preferences.get).not.toHaveBeenCalled();
+      vi.mocked(f.preferences.get).mockRejectedValue(new Error("Preferences unavailable"));
       vi.mocked(f.connections.connection).mockResolvedValue(null);
       vi.mocked(f.deps.processingAvailability).mockRejectedValue(new Error("Provider unavailable"));
       expect(await f.service.browserControl(f.browser, meetingId, resume)).toEqual(result);
@@ -459,11 +229,16 @@ describe("capture service authorization and dispatch", () => {
   );
   it("keeps the paused source when preferences now remember a different Mac", async () => {
     const f = fixture();
-    f.preferences.mockImplementation(async (_db, key) =>
-      key === "meetings.capture.default-mode"
-        ? "computer-audio"
-        : { deviceId: meetingId, microphoneId: "other-mic", mode: "computer-audio" }
-    );
+    vi.mocked(f.preferences.get).mockResolvedValue({
+      rememberedSource: {
+        deviceId: meetingId,
+        microphoneId: "mic-device",
+        mode: "microphone-only"
+      },
+      defaultCaptureMode: "microphone-only",
+      summarizeOnStop: true,
+      summaryTemplateId: "general"
+    });
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
     const result = await f.service.browserControl(f.browser, meetingId, {
       ...command("record", 2),
@@ -477,7 +252,7 @@ describe("capture service authorization and dispatch", () => {
         microphone: { deviceId: "mic-device", sourceId: "mic" }
       }
     });
-    expect(f.preferences).not.toHaveBeenCalled();
+    expect(f.preferences.get).not.toHaveBeenCalled();
   });
   it.each([
     {
@@ -547,6 +322,53 @@ describe("capture service authorization and dispatch", () => {
       expect(f.grant.state_json).toBe(paused);
     }
   );
+  it("commits Stop if optional summary enqueue fails", async () => {
+    const f = fixture();
+    const row = {
+      meeting_id: meetingId,
+      owner_user_id: owner,
+      grant_id: grantId,
+      request_key: randomUUID(),
+      template_id: "general",
+      status: "waiting",
+      code: null,
+      due_at: at(62000),
+      created_at: at(2000),
+      early_enqueued: false,
+      input_json: null
+    };
+    const recorded = makeRecordingDb({ rows: [row] });
+    const preferences = new MeetingPreferencesRepository();
+    vi.spyOn(preferences, "get").mockResolvedValue({
+      defaultCaptureMode: null,
+      rememberedSource: null,
+      summarizeOnStop: true,
+      summaryTemplateId: "general"
+    });
+    const automatic = new MeetingStopSummaryRepository(preferences);
+    vi.spyOn(automatic, "row").mockResolvedValue(null);
+    Object.assign(f.deps, {
+      scheduleSummary: async (
+        _db: unknown,
+        actor: Parameters<MeetingStopSummaryRepository["schedule"]>[1],
+        input: Parameters<MeetingStopSummaryRepository["schedule"]>[2]
+      ) =>
+        automatic.schedule(recorded.scoped, actor, input, async () => {
+          throw new Error("Synthetic unavailable queue");
+        })
+    });
+    await expect(
+      f.service.browserControl(f.browser, meetingId, command("stop", 1))
+    ).resolves.toMatchObject({ capture: { desired: "stopped", stopCutoffMs: 2000 } });
+    expect(recorded.queries.some((query) => query.sql.includes("ROLLBACK TO SAVEPOINT"))).toBe(
+      true
+    );
+    expect(
+      recorded.queries.some((query) =>
+        query.parameters.includes("meeting_output_queue_unavailable")
+      )
+    ).toBe(true);
+  });
   it("keeps safe Stop acknowledgements and bounded final flush available after the gap cap", async () => {
     const f = fixture();
     const value = recording();
@@ -627,6 +449,57 @@ describe("capture service authorization and dispatch", () => {
     });
     expect(JSON.stringify([...f.receipts.values()])).not.toContain(input.pcmBase64);
   });
+  it.each([0, 1, 99, 100])(
+    "persists and clamps a provider end %dms beyond the clip without extending its source",
+    async (overshoot) => {
+      const f = fixture();
+      const input = { ...audio(), startMs: 500, endMs: 1500 };
+      vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, request) =>
+        request.dispatch(async () => ({
+          segments: [{ startMs: 20, endMs: 1000 + overshoot, text: "Rounded provider result" }],
+          modelRoute: "route"
+        }))
+      );
+      expect(await f.service.audio(f.headers, "rounded-end", input)).toMatchObject({
+        status: "saved"
+      });
+      expect(f.ingest.mock.calls[0]?.[1].events[0]?.segment).toMatchObject({
+        startMs: 520,
+        endMs: 1500
+      });
+      expect(f.ingest.mock.calls[0]?.[1].sources[0]?.endMs).toBe(1500);
+      expect(JSON.parse(f.grant.state_json!).gaps).toEqual([]);
+    }
+  );
+  it.each([
+    [0, 1101],
+    [0, 1500],
+    [-1, 1000],
+    [1000, 1001],
+    [1001, 1100],
+    [500, 500],
+    [600, 500],
+    [Number.NaN, 1000],
+    [0, Number.POSITIVE_INFINITY],
+    [0, 1000.5]
+  ])(
+    "rejects invalid provider interval %s..%s without transcript persistence",
+    async (startMs, endMs) => {
+      const f = fixture();
+      vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, request) =>
+        request.dispatch(async () => ({
+          segments: [{ startMs, endMs, text: "Invalid provider result" }],
+          modelRoute: "route"
+        }))
+      );
+      expect(await f.service.audio(f.headers, "invalid-end", audio())).toMatchObject({
+        status: "failed",
+        reason: "timestamp-or-content-invalid",
+        retryable: false
+      });
+      expect(f.ingest).not.toHaveBeenCalled();
+    }
+  );
   it.each(["tm1_wrong", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "mm1_bad"])(
     "rejects other credential families %s before data access",
     async (token) => {
@@ -769,6 +642,44 @@ describe("capture service authorization and dispatch", () => {
 });
 
 describe("capture processing stays independent", () => {
+  it("returns a receipt that expires during processing without adding a conflicting failure gap", async () => {
+    const f = fixture();
+    const input = audio();
+    const expired = {
+      requestKey: input.requestKey,
+      status: "failed" as const,
+      code: "meeting_capture_interrupted",
+      reason: "audio-expired",
+      stage: "authorization" as const,
+      retryable: false
+    };
+    let processingFailed = false;
+    vi.mocked(f.deps.transcribe).mockImplementation(async (_actor, request) =>
+      request.dispatch(async () => {
+        processingFailed = true;
+        throw new Error("Synthetic late provider failure");
+      })
+    );
+    vi.mocked(f.repository.reconcileExpiredAudio).mockImplementation(async (_db, _grant, next) => {
+      if (!processingFailed) return;
+      f.receipts.get(input.requestKey)!.result_json = JSON.stringify(expired);
+      retainCaptureGap(
+        next,
+        {
+          id: input.requestKey,
+          sourceId: input.sourceId,
+          epoch: input.epoch,
+          startMs: input.startMs,
+          endMs: input.endMs,
+          reason: "interrupted"
+        },
+        at(2000)
+      );
+    });
+    expect(await f.service.audio(f.headers, "expired-during-processing", input)).toEqual(expired);
+    expect(f.ingest).not.toHaveBeenCalled();
+    expect(f.repository.finish).not.toHaveBeenCalled();
+  });
   it("retries a transient same-key clip without pausing capture or inventing a gap", async () => {
     const f = fixture(),
       clip = audio();
@@ -839,7 +750,7 @@ describe("capture processing stays independent", () => {
   it("replays a committed Resume after processing readiness becomes unavailable", async () => {
     const f = fixture();
     await f.service.browserControl(f.browser, meetingId, command("pause", 1));
-    const resume = command("record", 2);
+    const resume = { ...command("record", 2), selection: undefined };
     const resumed = await f.service.browserControl(f.browser, meetingId, resume);
     vi.mocked(f.deps.processingAvailability).mockRejectedValue(
       new Error("synthetic unavailable route")

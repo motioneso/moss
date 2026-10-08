@@ -10,6 +10,16 @@ export function summaryGenerationFailure(code?: string): {
   readonly remediation?: "ai-providers";
 } {
   switch (code) {
+    case "meeting_output_queue_unavailable":
+      return {
+        status: "failed",
+        message: "Recording stopped, but the summary couldn’t be queued."
+      };
+    case "meeting_output_interrupted":
+      return {
+        status: "failed",
+        message: "The automatic summary was interrupted. Your transcript and notes are kept."
+      };
     case "meeting_output_route_unavailable":
       return {
         status: "failed",

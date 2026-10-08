@@ -39,4 +39,13 @@ bool MeetingAudioDropMailboxPush(MeetingAudioDropMailbox *mailbox, MeetingAudioD
 bool MeetingAudioDropMailboxPop(MeetingAudioDropMailbox *mailbox, MeetingAudioDropRecord *record);
 MeetingAudioDropCounts MeetingAudioDropMailboxReadCounts(MeetingAudioDropMailbox *mailbox);
 
+// Local display telemetry only. A single packed atomic gives the UI a coherent timestamp
+// and quantized captured peak without locks, allocations, sample retention or callback tasks.
+// Never serialize this value or put it in diagnostics.
+typedef struct MeetingAudioLevel MeetingAudioLevel;
+MeetingAudioLevel *MeetingAudioLevelCreate(void);
+void MeetingAudioLevelDestroy(MeetingAudioLevel *level);
+void MeetingAudioLevelStore(MeetingAudioLevel *level, float peak, uint64_t hostNanoseconds);
+float MeetingAudioLevelRead(MeetingAudioLevel *level, uint64_t nowNanoseconds);
+
 #endif

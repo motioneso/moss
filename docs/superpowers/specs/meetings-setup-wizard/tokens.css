@@ -1,0 +1,9 @@
+/* Owner-approved native overlay treatment. These fixed light-surface tokens are intentional:
+   the Mac capsule remains pure white with a neutral grey Pause ring even in dark appearance.
+   Browser page surfaces continue to use the bundled Moss theme tokens. */
+:root {
+  --meeting-pill-surface: var(--white);
+  --meeting-pill-border: #dedede;
+  --meeting-pill-pause-ring: #8a8a8a;
+  --meeting-pill-pause-ink: #707070;
+}

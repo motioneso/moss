@@ -1,3 +1,11 @@
+import type { AbortablePgPool } from "@moss/db";
+import { RecordingCapabilityError } from "./recording-capability-error.js";
+import {
+  acquireCaptureBinding,
+  probeCaptureBinding,
+  type CaptureBindingInput,
+  type CaptureBindingLease
+} from "./capture-binding.js";
 // Legacy mutation helpers remain for isolated compatibility fixtures; public attempt/decide
 // routes are retired. New recording authority is issued only by initial companion pairing.
 import { createHash } from "node:crypto";
@@ -14,17 +22,7 @@ import type { CompanionContext, CompanionDevicesService } from "./companion-devi
 import type { BrowserSessionBinding } from "./session-bindings.js";
 import { digestsMatch } from "./companion-crypto.js";
 
-export class RecordingCapabilityError extends Error {
-  readonly statusCode: number;
-  constructor(
-    readonly httpStatus: 400 | 403 | 409 | 429 = 403,
-    readonly retryAfterSeconds = 60
-  ) {
-    super("Recording connection unavailable");
-    this.name = "RecordingCapabilityError";
-    this.statusCode = httpStatus;
-  }
-}
+export { RecordingCapabilityError } from "./recording-capability-error.js";
 
 export interface RecordingCapabilityContext extends CompanionContext {
   readonly capabilityRevision: number;
@@ -32,6 +30,8 @@ export interface RecordingCapabilityContext extends CompanionContext {
 }
 
 export interface RecordingCapabilitiesService {
+  acquireCaptureBinding(input: CaptureBindingInput): Promise<CaptureBindingLease>;
+  probeCaptureBinding(input: CaptureBindingInput, signal: AbortSignal): Promise<void>;
   resolve(input: {
     headers: IncomingHttpHeaders;
     requestId: string;
@@ -74,6 +74,7 @@ const validProofHash = (hash: string) => /^[a-f0-9]{64}$/.test(hash);
 
 export function createRecordingCapabilitiesService(deps: {
   readonly pool: pg.Pool;
+  readonly maintenancePool: AbortablePgPool;
   readonly companionDevices: CompanionDevicesService;
   readonly now?: () => Date;
 }): RecordingCapabilitiesService {
@@ -154,6 +155,9 @@ export function createRecordingCapabilitiesService(deps: {
     };
   }
   return {
+    acquireCaptureBinding: (input) => acquireCaptureBinding(pool, input),
+    probeCaptureBinding: (input, signal) =>
+      probeCaptureBinding(deps.maintenancePool, input, signal),
     async resolve({ headers, requestId }) {
       const proof = headers["x-moss-recording-proof"];
       if (headers.cookie || typeof proof !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(proof))
@@ -237,7 +241,7 @@ export function createRecordingCapabilitiesService(deps: {
           !digestsMatch(active.proof_hash, row.proof_hash)
         )
           return view(row, true);
-        // Attempt expiry bounds consent, not the lifetime of an already approved proof.
+        // Attempt expiry bounds approval, not the lifetime of an already approved proof.
         return view(row, false);
       }
       return view(row);

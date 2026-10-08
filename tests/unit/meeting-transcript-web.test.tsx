@@ -3,15 +3,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { ApiError } from "@moss/module-web-sdk";
+import type { MeetingCaptureGap } from "@moss/shared";
 import {
   MeetingTranscript,
   TranscriptTimeline
 } from "../../packages/meetings/src/web/meeting-transcript.js";
 import { transcriptTime } from "../../packages/meetings/src/web/transcript-time.js";
-import {
-  parseTranscriptEvidence,
-  TranscriptEvidence
-} from "../../packages/meetings/src/web/transcript-evidence.js";
+import { parseTranscriptEvidence } from "../../packages/meetings/src/web/transcript-evidence.js";
 import {
   getMeetingTranscript,
   getMeetingTranscriptEvidence,
@@ -60,15 +58,120 @@ const fixture: MeetingTranscriptView = {
 };
 afterEach(() => vi.unstubAllGlobals());
 describe("retained transcript review", () => {
+  it.each([
+    [11, "interrupted"],
+    [12, "interrupted"],
+    [249, "interrupted"],
+    [12, "processing-failed"]
+  ] as const)(
+    "hides a %i ms %s range without changing retained diagnostics",
+    (durationMs, reason) => {
+      // Cross a displayed second: visibility depends on exact duration, not timestamp labels.
+      const gaps = Object.freeze([
+        Object.freeze({
+          id: "tiny-gap",
+          sourceId: "mic",
+          epoch: 1,
+          startMs: 3995,
+          endMs: 3995 + durationMs,
+          reason
+        })
+      ]);
+      const original = JSON.stringify(gaps);
+      const html = renderToString(<TranscriptTimeline {...fixture} gaps={gaps} />);
+      expect(html).not.toContain("meetings-transcript-gap");
+      expect(html).not.toContain(" missing");
+      expect(html).toContain("A correction");
+      expect(JSON.stringify(gaps)).toBe(original);
+    }
+  );
+  it.each([250, 900, 1000])(
+    "shows a %i ms missing range alongside hidden tiny gaps",
+    (durationMs) => {
+      const gaps: MeetingCaptureGap[] = [
+        {
+          id: "tiny-gap",
+          sourceId: "mic",
+          epoch: 1,
+          startMs: 2500,
+          endMs: 2512,
+          reason: "interrupted"
+        },
+        {
+          id: "real-gap",
+          sourceId: "mic",
+          epoch: 1,
+          startMs: 3000,
+          endMs: 3000 + durationMs,
+          reason: "interrupted"
+        }
+      ];
+      const html = renderToString(<TranscriptTimeline {...fixture} gaps={gaps} />).replaceAll(
+        "<!-- -->",
+        ""
+      );
+      expect(html.match(/meetings-transcript-gap/g)).toHaveLength(1);
+      if (durationMs < 1000) {
+        expect(html).toContain("Under a second missing at 0:03");
+        expect(html).not.toContain("0:03 to 0:03 missing");
+      } else {
+        expect(html).toContain("0:03 to 0:04 missing");
+      }
+    }
+  );
+  it("shows one missing range for duplicate reports of a failed clip without changing diagnostics", () => {
+    const gap: MeetingCaptureGap = {
+      id: "failed-upload-request",
+      sourceId: "mic",
+      epoch: 1,
+      startMs: 3000,
+      endMs: 4000,
+      reason: "processing-failed"
+    };
+    const gaps = Object.freeze([
+      Object.freeze(gap),
+      Object.freeze({ ...gap, id: "native-report" })
+    ]);
+    const html = renderToString(<TranscriptTimeline {...fixture} gaps={gaps} />).replaceAll(
+      "<!-- -->",
+      ""
+    );
+    expect(html.match(/0:03 to 0:04 missing/g)).toHaveLength(1);
+    expect(gaps).toHaveLength(2);
+    expect(gaps.map((entry) => entry.id)).toEqual(["failed-upload-request", "native-report"]);
+  });
+  it("preserves distinct sources, epochs, precise ranges and failure reasons", () => {
+    const gap: MeetingCaptureGap = {
+      id: "failed-upload-request",
+      sourceId: "mic",
+      epoch: 1,
+      startMs: 3000,
+      endMs: 4000,
+      reason: "processing-failed"
+    };
+    const gaps: MeetingCaptureGap[] = [
+      gap,
+      { ...gap, id: "output-failure", sourceId: "output" },
+      { ...gap, id: "next-epoch", epoch: 2 },
+      { ...gap, id: "different-start", startMs: 3001 },
+      { ...gap, id: "different-end", endMs: 4001 },
+      { ...gap, id: "different-reason", reason: "interrupted" },
+      { ...gap, id: "next-clip", startMs: 4000, endMs: 5000 }
+    ];
+    const html = renderToString(<TranscriptTimeline {...fixture} gaps={gaps} />).replaceAll(
+      "<!-- -->",
+      ""
+    );
+    expect(html.match(/meetings-transcript-gap/g)).toHaveLength(gaps.length);
+    expect(html).toContain("0:04 to 0:05 missing");
+  });
   it("renders source labels, limits, revisions and escaped text without inferred people", () => {
     const html = renderToString(<TranscriptTimeline {...fixture} />).replaceAll("<!-- -->", "");
-    expect(html).toContain("Desk microphone");
-    expect(html).toContain("Source labels only");
-    expect(html).toContain("0:01–0:02");
+    expect(html).toContain("You");
+    expect(html).toContain("0:01");
     expect(html).not.toContain("Epoch ");
-    expect(html).toContain("Provisional");
-    expect(html).toContain("Corrected");
-    expect(html).toContain("segments omitted");
+    expect(html).toContain("Still being finalised");
+    expect(html).toContain("lines are outside");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("anonymous-1");
     expect(html).not.toContain("<script>");
@@ -85,7 +188,9 @@ describe("retained transcript review", () => {
       .setState({ status: "error", error: new ApiError(403, "Forbidden") });
     const html = renderToString(
       <QueryClientProvider client={client}>
-        <MeetingTranscript meetingId="meeting" revision={undefined} onRevisionChange={() => {}} />
+        <MemoryRouter>
+          <MeetingTranscript meetingId="meeting" />
+        </MemoryRouter>
       </QueryClientProvider>
     );
     expect(html).toContain("Transcript access is unavailable");
@@ -110,14 +215,14 @@ describe("retained transcript review", () => {
       renderToString(
         <QueryClientProvider client={client}>
           <MemoryRouter initialEntries={[`/meetings?id=meeting&${query}`]}>
-            <TranscriptEvidence meetingId="meeting" />
+            <MeetingTranscript meetingId="meeting" />
           </MemoryRouter>
         </QueryClientProvider>
       );
     expect(render(search)).toContain("This transcript reference is unavailable");
     expect(render(search)).not.toContain("private old text");
     expect(render("segmentId=s1&segmentRevision=-1")).toContain(
-      "This transcript reference is invalid"
+      "This transcript reference is unavailable"
     );
     client.clear();
   });

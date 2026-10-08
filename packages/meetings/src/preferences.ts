@@ -6,25 +6,76 @@ import {
   type MeetingCapturePreferences,
   type MeetingCaptureInventory,
   type MeetingCaptureSelection,
-  type MeetingRememberedSource
+  type MeetingRememberedSource,
+  type UpdateMeetingCapturePreferences
 } from "@moss/shared";
 import { MeetingCaptureError, validateCaptureSelection } from "./capture-domain.js";
+import { getMeetingOutputTemplate } from "./output-validation.js";
 
 export const MEETING_CAPTURE_DEFAULT_KEY = "meetings.capture.default-mode";
 export const MEETING_CAPTURE_SOURCE_KEY = "meetings.capture.remembered-source";
-export async function readMeetingCapturePreferences(
-  db: DataContextDb,
-  store: Pick<PreferencesRepository, "get"> = new PreferencesRepository()
-): Promise<MeetingCapturePreferences> {
-  const [mode, source] = await Promise.all([
-    store.get(db, MEETING_CAPTURE_DEFAULT_KEY),
-    store.get(db, MEETING_CAPTURE_SOURCE_KEY)
-  ]);
-  const rememberedSource = parseMeetingRememberedSource(source);
-  return {
-    defaultCaptureMode: parseMeetingCaptureMode(mode) ?? rememberedSource?.mode ?? "computer-audio",
-    ...(rememberedSource ? { rememberedSource } : {})
-  };
+export const MEETING_SUMMARIZE_KEY = "meetings.summarize-on-stop";
+export const MEETING_TEMPLATE_KEY = "meetings.summary-template";
+export type MeetingPreferenceStore = Pick<PreferencesRepository, "get" | "upsert">;
+export class MeetingPreferencesRepository {
+  constructor(private readonly store: MeetingPreferenceStore = new PreferencesRepository()) {}
+  async get(db: DataContextDb): Promise<MeetingCapturePreferences> {
+    const [mode, source, summarize, template] = await Promise.all(
+      [
+        MEETING_CAPTURE_DEFAULT_KEY,
+        MEETING_CAPTURE_SOURCE_KEY,
+        MEETING_SUMMARIZE_KEY,
+        MEETING_TEMPLATE_KEY
+      ].map((key) => this.store.get(db, key))
+    );
+    const rememberedSource = parseMeetingRememberedSource(source);
+    return {
+      defaultCaptureMode:
+        parseMeetingCaptureMode(mode) ?? rememberedSource?.mode ?? "computer-audio",
+      rememberedSource,
+      summarizeOnStop: typeof summarize === "boolean" ? summarize : true,
+      summaryTemplateId:
+        typeof template === "string"
+          ? (getMeetingOutputTemplate(template, 1)?.id ?? "general")
+          : "general"
+    };
+  }
+  async update(
+    db: DataContextDb,
+    input: UpdateMeetingCapturePreferences
+  ): Promise<MeetingCapturePreferences> {
+    const current = await this.get(db);
+    const source =
+      input.rememberedSource === undefined
+        ? current.rememberedSource
+        : parseMeetingRememberedSource(input.rememberedSource);
+    if (
+      (input.rememberedSource != null && !source) ||
+      (input.summaryTemplateId !== undefined &&
+        !getMeetingOutputTemplate(input.summaryTemplateId, 1))
+    )
+      throw new MeetingCaptureError("meeting_capture_invalid_input", 400);
+    const next: MeetingCapturePreferences = {
+      ...current,
+      rememberedSource: source,
+      defaultCaptureMode:
+        input.defaultCaptureMode === undefined
+          ? current.defaultCaptureMode
+          : (input.defaultCaptureMode ?? source?.mode ?? "computer-audio"),
+      summarizeOnStop: input.summarizeOnStop ?? current.summarizeOnStop,
+      summaryTemplateId: input.summaryTemplateId ?? current.summaryTemplateId
+    };
+    const writes: [string, unknown][] = [];
+    if (input.defaultCaptureMode !== undefined)
+      writes.push([MEETING_CAPTURE_DEFAULT_KEY, next.defaultCaptureMode]);
+    if (input.rememberedSource !== undefined) writes.push([MEETING_CAPTURE_SOURCE_KEY, source]);
+    if (input.summarizeOnStop !== undefined)
+      writes.push([MEETING_SUMMARIZE_KEY, next.summarizeOnStop]);
+    if (input.summaryTemplateId !== undefined)
+      writes.push([MEETING_TEMPLATE_KEY, next.summaryTemplateId]);
+    for (const [key, value] of writes) await this.store.upsert(db, key, value);
+    return next;
+  }
 }
 /** Resolve defaults without persisting hardware choices or broadening a saved exact source. */
 export function resolveCaptureSource(

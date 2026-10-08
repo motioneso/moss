@@ -53,11 +53,26 @@ struct MeetingCaptureChoice: Codable, Equatable {
         let excludedProcessTreeIds: [String]?
     }
     let mode: String
-    let microphone: Microphone
+    let microphone: Microphone?
     let outputSourceId: String?
     let appProcessTreeId: String?
     let scope: Scope?
     var applicationId: String? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case mode, microphone, outputSourceId, appProcessTreeId, scope, applicationId
+    }
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(mode, forKey: .mode)
+        // Computer-only capture explicitly transmits null; omission is not a source choice.
+        if let microphone { try values.encode(microphone, forKey: .microphone) }
+        else { try values.encodeNil(forKey: .microphone) }
+        try values.encodeIfPresent(outputSourceId, forKey: .outputSourceId)
+        try values.encodeIfPresent(appProcessTreeId, forKey: .appProcessTreeId)
+        try values.encodeIfPresent(scope, forKey: .scope)
+        try values.encodeIfPresent(applicationId, forKey: .applicationId)
+    }
 }
 struct MeetingCaptureObserved: Codable, Equatable {
     let generation: Int
@@ -87,6 +102,17 @@ struct MeetingRemoteCapture: Decodable {
     var processing: MeetingProcessingStatus? = nil
     var transcriptRevision: Int? = nil
     var leaseMs: UInt64? = nil
+    var revocationReason: String? = nil
+
+    var revocationMessage: String {
+        switch revocationReason {
+        case "device-unavailable": return "Recording stopped because this Mac was unlinked or its link expired."
+        case "recording-permission-revoked": return "Recording stopped because recording permission was switched off in Moss."
+        case "session-ended": return "Recording stopped because the starting browser session signed out or expired."
+        case "connection-replaced": return "Recording stopped because this Mac connected again. Press Start in Moss again."
+        default: return MeetingHostError.authorizationExpired.message
+        }
+    }
 
     func validate() throws {
         guard generation >= 0, generation <= 9_007_199_254_740_991, epoch <= 64,
@@ -126,6 +152,8 @@ struct MeetingCaptureControlBody: Encodable {
     let requestKey: String
     let expectedGeneration: Int
     let command: String
+    var expectedEpoch: UInt64? = nil
+    var selection: MeetingCaptureChoice? = nil
 }
 struct MeetingCaptureAudioBody: Encodable {
     let meetingId: String

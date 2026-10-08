@@ -20,6 +20,7 @@ export const meetingExportTables = [
       "owner_user_id",
       "request_key",
       "title",
+      "creation_title",
       "personal_notes",
       "notes_revision",
       "created_at",
@@ -85,7 +86,8 @@ export const meetingExportTables = [
       "history_origin",
       "history_notes_revision",
       "history_transcript_revision",
-      "history_stale"
+      "history_stale",
+      "history_overview"
     ]
   },
   {
@@ -136,6 +138,30 @@ export const meetingExportTables = [
     derived: ["device_id", "connection_id"]
   },
   {
+    key: "capture_start_limits",
+    table: "meeting_capture_start_limits",
+    columns: ["owner_user_id", "started_at"],
+    derived: []
+  },
+  {
+    key: "stop_summaries",
+    table: "meeting_stop_summaries",
+    columns: [
+      "meeting_id",
+      "owner_user_id",
+      "grant_id",
+      "request_key",
+      "template_id",
+      "status",
+      "code",
+      "due_at",
+      "created_at",
+      "early_enqueued",
+      "input_json"
+    ],
+    derived: []
+  },
+  {
     key: "capture_grants",
     table: "meeting_capture_grants",
     columns: [
@@ -157,7 +183,8 @@ export const meetingExportTables = [
       "capability_revision",
       "claim_expires_at",
       "start_request_key",
-      "start_fingerprint"
+      "start_fingerprint",
+      "recorded_duration_ms"
     ]
   }
 ] as const;
@@ -170,14 +197,18 @@ export function camelCase(column: string): string {
 }
 
 export function normalizeStoredRow(row: Record<string, unknown>): Record<string, unknown> {
-  // The selected original columns contain only scalar values, dates, and a JSONB string array.
+  // PostgreSQL returns timestamptz[] as Date[]; account archives contain JSON strings.
+  // Normalize the independent database oracle's arrays as well as scalar timestamps.
   // TEXT JSON must remain text, including whitespace, escaped NUL, and lone surrogates.
   return Object.fromEntries(
-    Object.entries(row).map(([column, value]) => [
-      camelCase(column),
-      value instanceof Date ? value.toISOString() : value
-    ])
+    Object.entries(row).map(([column, value]) => [camelCase(column), normalizeStoredValue(value)])
   );
+}
+
+function normalizeStoredValue(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(normalizeStoredValue);
+  return value;
 }
 
 export function sortExportRows(rows: readonly Record<string, unknown>[]) {
@@ -450,6 +481,9 @@ export async function seedMeetingAccountExport(
   await sql`INSERT INTO app.meeting_capture_connections (device_id,connection_id,device_name,verifier_hash,capability_revision,inventory_json,last_seen_at,expires_at) VALUES (${randomUUID()}::uuid,${randomUUID()}::uuid,${marker + " connection"},${"0".repeat(64)},1,'{}',now(),now()+interval '1 hour')`.execute(
     db.db
   );
+  await sql`INSERT INTO app.meeting_capture_start_limits (started_at) VALUES (ARRAY[clock_timestamp()]) ON CONFLICT(owner_user_id) DO UPDATE SET started_at=EXCLUDED.started_at`.execute(
+    db.db
+  );
   await sql`INSERT INTO app.meeting_capture_start_cancellations (meeting_id,request_key,device_id,connection_id) VALUES (${meeting.id}::uuid,${randomUUID()}::uuid,${randomUUID()}::uuid,${randomUUID()}::uuid)`.execute(
     db.db
   );
@@ -458,6 +492,10 @@ export async function seedMeetingAccountExport(
     VALUES (${meeting.id}::uuid,${randomUUID()}::uuid,${marker + " synthetic Mac"},${"0".repeat(64)},'revoked',
       ${JSON.stringify({ gaps: [{ id: randomUUID(), sourceId: "microphone", epoch: 1, startMs: 0, endMs: 1000, reason: "interrupted" }] })},
       ${new Date("2026-01-01T00:00:00Z")})`.execute(db.db);
+  await sql`INSERT INTO app.meeting_stop_summaries (meeting_id,grant_id,request_key,template_id,status,code,due_at)
+    SELECT ${meeting.id}::uuid,id,${randomUUID()}::uuid,'general','skipped','no-meaningful-transcript',now() FROM app.meeting_capture_grants WHERE meeting_id=${meeting.id}::uuid LIMIT 1`.execute(
+    db.db
+  );
   return {
     marker,
     meetingId: meeting.id,

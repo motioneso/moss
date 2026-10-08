@@ -42,11 +42,22 @@ describe("initial-link active recording revocation (real auth, isolated gate onl
         before
       );
 
-      // On the base branch, the browser observation persists revocation. Do not claim the
-      // denied native upload itself writes the terminal state or a #3082 revocation reason.
+      // The denied upload settles its real auth failure before any browser observation.
+      // Synthetic maintenance never runs, so these assertions prove direct request settlement.
+      const reason =
+        kind === "recording-only" ? "recording-permission-revoked" : "device-unavailable";
+      const immediate = await active.stored();
+      expect(immediate?.status, "revoked-immediate-persisted-grant-status").toBe("revoked");
+      const immediateState = JSON.parse(immediate!.state_json!);
+      expect(immediateState.desired, "revoked-immediate-persisted-capture-state").toBe("revoked");
+      expect(immediateState.revocationReason, "revoked-immediate-persisted-reason").toBe(reason);
+      expect(immediateState.observed).toMatchObject({ phase: "stopped" });
       const observed = await fixture.browserStatus();
       expect(observed.statusCode).toBe(200);
       expect(observed.json().capture.desired, "revoked-browser-capture-state").toBe("revoked");
+      expect(observed.json().capture.revocationReason, "revoked-browser-capture-reason").toBe(
+        reason
+      );
       const stored = await active.stored();
       expect(stored?.status, "revoked-persisted-grant-status").toBe("revoked");
       expect(JSON.parse(stored!.state_json!).desired, "revoked-persisted-capture-state").toBe(

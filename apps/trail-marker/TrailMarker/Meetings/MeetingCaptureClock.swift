@@ -30,16 +30,21 @@ enum MeetingSendAdmission {
     }
 }
 
-/// Both wire ends use the same cumulative sample timeline and rounding rule. Rounding a
-/// start down and a separate duration up invents overlaps at fractional milliseconds.
+/// Cover both cumulative sample-clock boundaries with the same integer millisecond rule.
+/// This avoids truncating the cumulative end, without overlaps or accumulating rounding drift.
+/// An individual wire duration can still differ from the PCM duration by less than 1 ms;
+/// rounding each clip's duration up independently would invent overlaps between adjacent clips.
 struct MeetingWireAudioBoundary: Equatable {
     let startMs: UInt64
     let endMs: UInt64
+    static func milliseconds(coveringNanoseconds nanoseconds: UInt64) -> UInt64 {
+        nanoseconds / 1_000_000 + (nanoseconds % 1_000_000 == 0 ? 0 : 1)
+    }
     init(packet: MeetingAudioPacket, originNanoseconds: UInt64) throws {
         guard packet.startNanoseconds >= originNanoseconds,
               packet.endNanoseconds >= packet.startNanoseconds else { throw MeetingHostError.invalidResponse }
-        startMs = (packet.startNanoseconds - originNanoseconds) / 1_000_000
-        endMs = (packet.endNanoseconds - originNanoseconds) / 1_000_000
+        startMs = Self.milliseconds(coveringNanoseconds: packet.startNanoseconds - originNanoseconds)
+        endMs = Self.milliseconds(coveringNanoseconds: packet.endNanoseconds - originNanoseconds)
         guard endMs > startMs, endMs - startMs <= 10000 else { throw MeetingHostError.invalidResponse }
     }
 }

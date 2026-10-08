@@ -22,7 +22,7 @@ const concrete = (path: string) =>
 
 // Offline boundary proof: the production catalog, resolver, gateway and approval flow
 // are unchanged. Only persistence and HTTP dispatch are in-memory stand-ins.
-function actionHarness(yoloMode = false) {
+function actionHarness(yoloMode = false, tainted = false) {
   const { scoped, queries } = makeRecordingDb({ rows: [] });
   const runner = {
     withDataContext: async <T>(_actor: AccessContext, work: (db: DataContextDb) => Promise<T>) =>
@@ -36,7 +36,7 @@ function actionHarness(yoloMode = false) {
       runner,
       appActions: { catalog: () => buildRouteCatalog(getBuiltInModuleManifests(), []), call },
       provenance: {
-        isTainted: async () => false,
+        isTainted: async () => tainted,
         recordAdmission: async () => undefined,
         runAutomatic: async (_actor, _thread, run) => ({ kind: "ran", value: await run() })
       },
@@ -139,5 +139,79 @@ describe("record, mail and weather chat policies", () => {
       expect(matchChatBlockedPathRule(method, path)?.category).toBe("identity_auth_registration");
       expect(catalog.resolve(method, path)).toBeNull();
     }
+  });
+
+  it("classifies rename as an ordinary write and availability as a read", () => {
+    const catalog = buildRouteCatalog(manifests(), []);
+    expect(
+      catalog.resolve("PUT", concrete("/api/meetings/records/:id/title"))?.route.policy
+    ).toMatchObject({ access: "write", title: "Rename your meeting", content: "user_authored" });
+    expect(catalog.resolve("GET", "/api/meetings/output-availability")?.route.policy).toMatchObject(
+      { access: "read", content: "outside" }
+    );
+  });
+
+  it.each([false, true])(
+    "runs an ordinary rename in a clean conversation (YOLO=%s)",
+    async (yoloMode) => {
+      const h = actionHarness(yoloMode);
+      const input = {
+        method: "PUT" as const,
+        path: concrete("/api/meetings/records/:id/title"),
+        body: { title: "Weekly planning", expectedTitle: "Untitled meeting" }
+      };
+      expect(await h.call(input)).toMatchObject({ ok: true });
+      expect(h.events.filter((event) => event.kind === "action_request")).toEqual([]);
+      expect(h.callSpy).toHaveBeenCalledExactlyOnceWith(input, expect.anything());
+    }
+  );
+
+  it.each([false, true])(
+    "requires rename approval when the conversation is tainted (YOLO=%s)",
+    async (yoloMode) => {
+      const h = actionHarness(yoloMode, true);
+      const input = {
+        method: "PUT" as const,
+        path: concrete("/api/meetings/records/:id/title"),
+        body: { title: "Weekly planning", expectedTitle: "Untitled meeting" }
+      };
+      const pending = h.call(input);
+      await vi.waitFor(() =>
+        expect(h.events.some((event) => event.kind === "action_request")).toBe(true)
+      );
+      const card = h.events.find((event) => event.kind === "action_request")!;
+      expect(card).toMatchObject({ summary: "Rename your meeting" });
+      expect(h.callSpy).not.toHaveBeenCalled();
+      h.confirmations.resolve(card.actionRequestId, "confirmed");
+      expect(await pending).toMatchObject({ ok: true });
+      expect(h.callSpy).toHaveBeenCalledExactlyOnceWith(input, expect.anything());
+    }
+  );
+
+  it.each([false, true])(
+    "does not rename when tainted-call approval is rejected (YOLO=%s)",
+    async (yoloMode) => {
+      const h = actionHarness(yoloMode, true);
+      const pending = h.call({
+        method: "PUT",
+        path: concrete("/api/meetings/records/:id/title"),
+        body: { title: "Weekly planning", expectedTitle: "Untitled meeting" }
+      });
+      await vi.waitFor(() =>
+        expect(h.events.some((event) => event.kind === "action_request")).toBe(true)
+      );
+      const card = h.events.find((event) => event.kind === "action_request")!;
+      h.confirmations.resolve(card.actionRequestId, "rejected");
+      expect(await pending).toMatchObject({ ok: false });
+      expect(h.callSpy).not.toHaveBeenCalled();
+    }
+  );
+
+  it("reads output availability without approval or an output-generation call", async () => {
+    const h = actionHarness();
+    const input = { method: "GET" as const, path: "/api/meetings/output-availability" };
+    expect(await h.call(input)).toMatchObject({ ok: true });
+    expect(h.events.filter((event) => event.kind === "action_request")).toEqual([]);
+    expect(h.callSpy).toHaveBeenCalledExactlyOnceWith(input, expect.anything());
   });
 });

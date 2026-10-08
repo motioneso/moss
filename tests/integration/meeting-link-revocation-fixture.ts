@@ -11,6 +11,7 @@ import { registerMeetingCaptureRoutes } from "../../packages/meetings/src/captur
 import type { MeetingCaptureDependencies } from "../../packages/meetings/src/capture-service.js";
 import { MeetingCaptureRepository } from "../../packages/meetings/src/capture-repository.js";
 import { MeetingRecordsRepository } from "../../packages/meetings/src/repository.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import {
   connectionStrings,
   resetEmptyFoundationDatabase,
@@ -19,6 +20,7 @@ import {
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const inventory = {
+  defaultMicrophoneId: "fixture-mic",
   microphones: [{ deviceId: "fixture-mic", sourceId: "mic", label: "Synthetic microphone" }],
   applications: [],
   computerAudio: { available: false, excludedProcessTreeIds: [] },
@@ -112,11 +114,15 @@ export async function meetingLinkRevocationFixture() {
     resolveCompanion: runtime.companionDevices.resolve,
     resolveRecording: runtime.recordingCapabilities.resolve,
     assertRecordingBinding: runtime.recordingCapabilities.assertLive,
+    acquireRecordingBinding: runtime.recordingCapabilities.acquireCaptureBinding,
+    // Synthetic maintenance deliberately does not run. This proves request-driven settlement,
+    // not background revocation timing or durable maintenance scheduling.
+    scheduleMaintenance: async () => {},
     assertBinding: runtime.sessionBindings.assertLive,
     device: runtime.sessionBindings.device,
     trustedOrigins: runtime.trustedOrigins,
-    // Only module/provider availability and transcription are synthetic. Auth, cookies,
-    // initial consent, proof, session/device checks, RLS, capture and storage are real.
+    // Module/provider availability and transcription are also synthetic. Auth, cookies,
+    // initial linking approval, proof, session/device checks, the auth fence, RLS and storage are real.
     assertModuleAvailable: async () => {},
     processingAvailability: async () => ({ ready: true, modelRoute: "synthetic-transcription" }),
     transcribe,
@@ -131,6 +137,12 @@ export async function meetingLinkRevocationFixture() {
           requestKey: randomUUID()
         })
       ).meeting
+  );
+  await context.withDataContext(browser, (db) =>
+    new MeetingPreferencesRepository().update(db, {
+      defaultCaptureMode: "microphone-only",
+      rememberedSource: { deviceId, microphoneId: "fixture-mic", mode: "microphone-only" }
+    })
   );
   const server = Fastify({ logger: false });
   registerMeetingCaptureRoutes(server, dependencies);
@@ -156,18 +168,13 @@ export async function meetingLinkRevocationFixture() {
       method: "POST",
       url: `/api/meetings/records/${meeting.id}/capture/start`,
       headers: browserHeaders,
-      payload: {
-        deviceId,
-        connectionId,
-        expectedRevision: registered.json().revision,
-        requestKey: randomUUID(),
-        selection: {
-          mode: "microphone-only",
-          microphone: { deviceId: "fixture-mic", sourceId: "mic" }
-        }
-      }
+      payload: { requestKey: randomUUID() }
     });
     expect(started.statusCode, "explicit-browser-start").toBe(200);
+    expect(started.json().capture.selection, "server-resolved-synthetic-microphone").toEqual({
+      mode: "microphone-only",
+      microphone: { deviceId: "fixture-mic", sourceId: "mic" }
+    });
     const grantId = started.json<{ capture: { grantId: string } }>().capture.grantId;
     const credential = `mm1_${browser.actorUserId}.${grantId}.${"s".repeat(43)}`;
     const claimed = await server.inject({
@@ -251,13 +258,7 @@ export async function meetingLinkRevocationFixture() {
         headers: browserHeaders,
         payload: { deviceId }
       }),
-    unlink: async () =>
-      runtime.companionDevices.logout(
-        await runtime.companionDevices.resolve({
-          headers: native,
-          requestId: "unlink-active-recording"
-        })
-      ),
+    unlink: async () => runtime.companionDevices.logoutCredential({ headers: native }),
     ordinaryLink: () =>
       runtime.companionDevices.resolve({
         headers: native,

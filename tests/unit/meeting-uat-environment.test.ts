@@ -44,13 +44,14 @@ describe("credential-free meeting draft UAT", () => {
 });
 
 describe("bounded credential-free UAT group selection", () => {
-  it("keeps the five bounded Meetings specs by default", () => {
+  it("keeps the six bounded Meetings specs by default", () => {
     expect(meetingUatSpecs()).toEqual([
       "2981-meeting-drafts.uat.spec.ts",
       "2981-meeting-chat.uat.spec.ts",
       "2981-meeting-outputs.uat.spec.ts",
       "2981-meeting-history.uat.spec.ts",
-      "2981-meeting-capture.uat.spec.ts"
+      "2981-meeting-capture.uat.spec.ts",
+      "2981-meeting-automatic-summary.uat.spec.ts"
     ]);
   });
   it("selects only fixed groups and never includes real-provider conditional specs", () => {
@@ -61,8 +62,8 @@ describe("bounded credential-free UAT group selection", () => {
       "model-fixtures"
     ]);
     const specs = Object.keys(MEETING_UAT_GROUPS).flatMap((group) => [...meetingUatSpecs(group)]);
-    expect(specs).toHaveLength(18);
-    expect(new Set(specs).size).toBe(18);
+    expect(specs).toHaveLength(19);
+    expect(new Set(specs).size).toBe(19);
     expect(specs).toContain("2956-activity-history.uat.spec.ts");
     expect(specs).not.toContain("2889-model-activity-log.uat.spec.ts");
     for (const spec of [

@@ -19,6 +19,7 @@ HARNESS = r'''
 #include <stdio.h>
 #include <stdlib.h>
 #include <sched.h>
+#include <math.h>
 #define CHECK(c) do { if (!(c)) { fprintf(stderr, "ASSERTION: %s:%d: %s\n", __FILE__, __LINE__, #c); exit(23); } } while (0)
 #define PRODUCERS 4
 #define RECORDS 5000
@@ -50,6 +51,29 @@ static void validate(MeetingAudioDropRecord value) {
     seen[i] = true;
 }
 int main(void) {
+    MeetingAudioLevel *level = MeetingAudioLevelCreate();
+    CHECK(level != NULL);
+    CHECK(MeetingAudioLevelRead(level, 0) == 0);
+    MeetingAudioLevelStore(level, 0.5f, UINT64_C(1000000000));
+    CHECK(MeetingAudioLevelRead(level, UINT64_C(1100000000)) > 0.4999f);
+    CHECK(MeetingAudioLevelRead(level, UINT64_C(1100000000)) <= 0.5f);
+    CHECK(MeetingAudioLevelRead(level, UINT64_C(1499999999)) > 0);
+    CHECK(MeetingAudioLevelRead(level, UINT64_C(1500000000)) == 0);
+    CHECK(MeetingAudioLevelRead(level, UINT64_C(999999999)) == 0);
+    MeetingAudioLevelStore(level, 0.75f, UINT64_C(2000000000));
+    CHECK(MeetingAudioLevelRead(level, UINT64_C(2000000000)) > 0.74f);
+    MeetingAudioLevelStore(level, 0, UINT64_C(2100000000));
+    CHECK(MeetingAudioLevelRead(level, UINT64_C(2200000000)) == 0);
+    MeetingAudioLevelStore(level, NAN, UINT64_C(2000000000));
+    CHECK(MeetingAudioLevelRead(level, UINT64_C(2100000000)) == 0);
+    MeetingAudioLevelStore(level, INFINITY, UINT64_C(2000000000));
+    CHECK(MeetingAudioLevelRead(level, UINT64_C(2100000000)) == 0);
+    MeetingAudioLevelStore(level, -1, UINT64_C(2000000000));
+    CHECK(MeetingAudioLevelRead(level, UINT64_C(2100000000)) == 0);
+    MeetingAudioLevelStore(level, 2, UINT64_MAX);
+    CHECK(MeetingAudioLevelRead(level, UINT64_MAX) == 1);
+    CHECK(MeetingAudioLevelRead(level, 0) == 0);
+    MeetingAudioLevelDestroy(level);
     MeetingAudioAtomicDeadline *deadline = MeetingAudioDeadlineCreate(UINT64_MAX);
     CHECK(deadline != NULL);
     CHECK(MeetingAudioDeadlineLoad(deadline) == UINT64_MAX);
@@ -136,6 +160,14 @@ def run(folder, name, source, negative=False):
 def main():
     original = SOURCE.read_text()
     mutations = [
+        ("level-silence-publication", "    uint64_t milliseconds = hostNanoseconds / UINT64_C(1000000);",
+         "    if (peak == 0) { return; }\n    uint64_t milliseconds = hostNanoseconds / UINT64_C(1000000);"),
+        ("level-staleness", "if (now < captured || now - captured >= 500) { return 0; }",
+         "if (now < captured) { return 0; }"),
+        ("level-clock-rollback", "if (now < captured || now - captured >= 500) { return 0; }",
+         "if (now >= captured && now - captured >= 500) { return 0; }"),
+        ("level-captured-amplitude", "(milliseconds << 16) | magnitude",
+         "(milliseconds << 16) | (magnitude > 0 ? UINT64_C(65535) : 0)"),
         ("unpublished-drop", "atomic_store_explicit(&mailbox->slots[i].state, 2, memory_order_release);",
          "atomic_store_explicit(&mailbox->slots[i].state, 0, memory_order_release);"),
         ("silent-capacity-overflow", "    return false;\n}\nbool MeetingAudioDropMailboxPop",

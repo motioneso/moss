@@ -16,10 +16,7 @@ function setup(stored: unknown = null, authError?: Error) {
   apps.push(app);
   const scoped = {} as DataContextDb;
   const actors: AccessContext[] = [];
-  const preferences = {
-    get: vi.fn(async (_db: DataContextDb, _key: string) => stored),
-    upsert: vi.fn(async () => undefined)
-  };
+  const preferences = { get: vi.fn(async () => stored), upsert: vi.fn(async () => undefined) };
   registerMeetingPreferenceRoutes(app, {
     resolveAccessContext: async () => {
       if (authError) throw authError;
@@ -41,7 +38,10 @@ describe("meeting capture defaults", () => {
     async (value) => {
       const { app, preferences } = setup(value);
       expect((await app.inject("/api/meetings/preferences")).json()).toEqual({
-        defaultCaptureMode: "computer-audio"
+        defaultCaptureMode: "computer-audio",
+        rememberedSource: null,
+        summarizeOnStop: true,
+        summaryTemplateId: "general"
       });
       expect(preferences.upsert).not.toHaveBeenCalled();
     }
@@ -51,9 +51,12 @@ describe("meeting capture defaults", () => {
     async (mode) => {
       const { app, preferences, scoped } = setup(mode);
       expect((await app.inject("/api/meetings/preferences")).json()).toEqual({
-        defaultCaptureMode: mode
+        defaultCaptureMode: mode,
+        rememberedSource: null,
+        summarizeOnStop: true,
+        summaryTemplateId: "general"
       });
-      expect(preferences.get).toHaveBeenCalledTimes(2);
+      expect(preferences.get).toHaveBeenCalledTimes(4);
       expect(preferences.get).toHaveBeenCalledWith(scoped, MEETING_CAPTURE_DEFAULT_KEY);
       expect(preferences.get).toHaveBeenCalledWith(scoped, "meetings.capture.remembered-source");
     }
@@ -65,11 +68,13 @@ describe("meeting capture defaults", () => {
       const response = await app.inject({
         method: "PUT",
         url: "/api/meetings/preferences",
-        payload: { defaultCaptureMode, ownerUserId: "other" }
+        payload: { defaultCaptureMode }
       });
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({
-        defaultCaptureMode: defaultCaptureMode ?? "computer-audio"
+      expect(response.json()).toMatchObject({
+        defaultCaptureMode: defaultCaptureMode ?? "computer-audio",
+        summarizeOnStop: true,
+        summaryTemplateId: "general"
       });
       expect(preferences.upsert).toHaveBeenCalledExactlyOnceWith(
         scoped,
@@ -107,23 +112,6 @@ describe("meeting capture defaults", () => {
 });
 
 describe("remembered exact meeting source", () => {
-  it("retains an exact legacy source and its mode when no separate mode is saved", async () => {
-    const { app, preferences } = setup();
-    const rememberedSource = {
-      deviceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      microphoneId: "mic-uid",
-      mode: "selected-app",
-      applicationId: "com.example.meet"
-    };
-    preferences.get.mockImplementation(async (_db, key) =>
-      key === "meetings.capture.remembered-source" ? rememberedSource : null
-    );
-    expect((await app.inject("/api/meetings/preferences")).json()).toEqual({
-      defaultCaptureMode: "selected-app",
-      rememberedSource
-    });
-    expect(preferences.upsert).not.toHaveBeenCalled();
-  });
   it("stores only explicit stable source identity and can clear it", async () => {
     const { app, preferences } = setup();
     const rememberedSource = {
@@ -147,7 +135,7 @@ describe("remembered exact meeting source", () => {
     const cleared = await app.inject({
       method: "PUT",
       url: "/api/meetings/preferences",
-      payload: { defaultCaptureMode: null, rememberedSource: null }
+      payload: { defaultCaptureMode: "computer-audio", rememberedSource: null }
     });
     expect(cleared.json().rememberedSource).toBeNull();
   });

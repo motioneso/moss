@@ -40,7 +40,14 @@ export interface MeetingCaptureGap {
     | "interrupted"
     | "discarded";
 }
+export type MeetingCaptureRevocationReason =
+  | "device-unavailable"
+  | "recording-permission-revoked"
+  | "session-ended"
+  | "connection-replaced"
+  | "expired";
 export interface MeetingCaptureState {
+  readonly revocationReason?: MeetingCaptureRevocationReason;
   readonly revision?: string;
   readonly transcriptRevision?: number;
   readonly leaseMs?: number;
@@ -112,6 +119,24 @@ export interface MeetingCaptureControlInput {
   readonly command: "record" | "pause" | "stop" | "revoke";
   readonly selection?: MeetingCaptureSelection;
 }
+/** Only the claimed native recorder may explicitly change this recording's sources. */
+export type MeetingCaptureNativeControlInput = {
+  readonly meetingId: string;
+  readonly grantId: string;
+  readonly requestKey: string;
+  readonly expectedGeneration: number;
+} & (
+  | {
+      readonly command: "record" | "pause" | "stop";
+      readonly selection?: never;
+      readonly expectedEpoch?: never;
+    }
+  | {
+      readonly command: "change-sources";
+      readonly expectedEpoch: number;
+      readonly selection: MeetingCaptureSelection;
+    }
+);
 export interface MeetingCaptureAudioInput {
   readonly meetingId: string;
   readonly grantId: string;
@@ -199,12 +224,17 @@ export interface MeetingCaptureDevicesResult {
   readonly processingReady: boolean;
 }
 export interface MeetingCaptureStartInput {
+  readonly requestKey: string;
+}
+/** Accepted only to replay an already-issued pre-minimal Start with its exact fingerprint. */
+export interface MeetingCaptureLegacyStartInput {
   readonly deviceId: string;
   readonly connectionId: string;
   readonly expectedRevision: number;
   readonly requestKey: string;
-  readonly selection?: MeetingCaptureSelection;
+  readonly selection: MeetingCaptureSelection;
 }
+export type MeetingCaptureStartRequest = MeetingCaptureStartInput | MeetingCaptureLegacyStartInput;
 export interface MeetingCaptureCommandsInput {
   readonly connectionId: string;
   readonly verifier: string;
@@ -242,8 +272,8 @@ export interface MeetingCaptureClaimResult {
 export type MeetingCaptureDevicesResponse = MeetingCaptureDevicesResult;
 
 export interface MeetingCaptureCancelStartInput {
-  readonly deviceId: string;
-  readonly connectionId: string;
+  readonly deviceId?: string;
+  readonly connectionId?: string;
   /** Original explicit Start key. Cancels even when Start has not reached the server. */
   readonly requestKey: string;
 }

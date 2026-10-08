@@ -1,24 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, randomUuid } from "@moss/module-web-sdk";
-import {
-  Badge,
-  Button,
-  Divider,
-  Eyebrow,
-  Field,
-  FormLabel,
-  Note,
-  SectionHead,
-  Select
-} from "@moss/ui";
+import { Button, Divider, Eyebrow, Field, FormLabel, Note, SectionHead, Select } from "@moss/ui";
 import type {
   GenerateMeetingOutputInput,
   MeetingOutputArtifact,
-  MeetingRecord
+  MeetingRecord,
+  MeetingCaptureBrowserStatus
 } from "@moss/shared";
 import { outputAccessEpoch, recoverOutputAccess } from "./output-access.js";
-import { isMeetingAccessDenied } from "./client.js";
+import { getMeetingPreferences, meetingKeys, isMeetingAccessDenied } from "./client.js";
+import { captureKeys } from "./capture-client.js";
+import { MeetingMarkdownCopy } from "./meeting-markdown-copy.js";
 import { generateMeetingOutput, getMeetingOutputs, outputKeys } from "./output-client.js";
 import { operationError, useOutputSession, type OutputOperation } from "./output-session.js";
 import { OutputEvidence } from "./output-evidence.js";
@@ -26,6 +19,7 @@ import { MeetingCandidateSource } from "./meeting-candidate-source.js";
 import { MeetingOutputEditor, hasKeptOutputEdits } from "./meeting-output-editor.js";
 import { MeetingVaultExport } from "./meeting-vault-export.js";
 import { summaryGenerationFailure, SummaryModelRecovery } from "./summary-generation-error.js";
+export type SummaryTool = "rewrite" | "versions" | "vault" | "copy";
 interface SummaryState {
   readonly generatedVersion?: number;
   readonly pinnedArtifact?: MeetingOutputArtifact;
@@ -67,13 +61,22 @@ export function MeetingSummary({
   meeting,
   transcriptRevision,
   sourceLoading,
-  unsavedNotes
+  unsavedNotes,
+  tool = null,
+  onCloseTool
 }: {
   readonly meeting: MeetingRecord;
   readonly transcriptRevision: number;
   readonly sourceLoading: boolean;
   readonly unsavedNotes: boolean;
+  readonly tool?: SummaryTool | null;
+  readonly onCloseTool?: () => void;
 }) {
+  const preferences = useQuery({
+    queryKey: meetingKeys.preferences,
+    queryFn: getMeetingPreferences,
+    retry: false
+  });
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -85,6 +88,18 @@ export function MeetingSummary({
     templateId: ""
   }));
   const { state, update, client } = session;
+  useEffect(() => {
+    if (state && !state.templateId && preferences.data?.summaryTemplateId)
+      update((current) => ({ ...current, templateId: preferences.data!.summaryTemplateId }));
+  }, [state?.templateId, preferences.data?.summaryTemplateId, update]);
+  const capture = useQuery<MeetingCaptureBrowserStatus>({
+    queryKey: captureKeys.status(meeting.id),
+    enabled: false
+  });
+  useEffect(() => {
+    if (capture.data?.capture?.desired === "stopped")
+      void client.invalidateQueries({ queryKey: outputKeys.list(meeting.id) });
+  }, [client, meeting.id, capture.data?.capture?.desired, capture.data?.capture?.finalization]);
   const outputs = useQuery({
     queryKey: outputKeys.list(meeting.id),
     queryFn: async ({ signal }) => {
@@ -101,8 +116,25 @@ export function MeetingSummary({
     retry: false,
     staleTime: 0,
     gcTime: 0,
-    refetchOnWindowFocus: "always"
+    refetchOnWindowFocus: "always",
+    refetchInterval: (query) => {
+      const automatic = query.state.data?.automaticSummary;
+      return automatic && (automatic.status === "waiting" || automatic.status === "pending")
+        ? 3000
+        : false;
+    }
   });
+  const refreshedAutomaticTitle = useRef<string | null>(null);
+  const automatic = outputs.data?.automaticSummary;
+  useEffect(() => {
+    if (automatic?.status !== "saved" || !session.authorized()) return;
+    const identity = `${meeting.id}:${automatic.requestKey}`;
+    if (refreshedAutomaticTitle.current === identity) return;
+    refreshedAutomaticTitle.current = identity;
+    // The worker may rename an untouched default title along with its saved artifact.
+    void client.invalidateQueries({ queryKey: meetingKeys.record(meeting.id) });
+    void client.invalidateQueries({ queryKey: meetingKeys.history });
+  }, [automatic?.status, automatic?.requestKey, client, meeting.id, session]);
   const [selected, setSelected] = useState<number | undefined>(
     () => state?.pinnedArtifact?.version
   );
@@ -146,7 +178,7 @@ export function MeetingSummary({
     update((current) => ({
       ...current,
       generatedVersion: undefined,
-      operation: { input, status: "running", message: "Generating a proposed version…" }
+      operation: { input, status: "running", message: "Writing summary…" }
     }));
     try {
       const result = await generateMeetingOutput(meeting.id, input);
@@ -173,7 +205,7 @@ export function MeetingSummary({
                       message:
                         result.status === "saved"
                           ? `Version ${result.artifact.version} saved. Earlier versions remain available.`
-                          : "Generation is still pending. Check this request again."
+                          : "The summary is still being written. Check again shortly."
                     }
             }
       );
@@ -181,6 +213,10 @@ export function MeetingSummary({
         setSelected(result.artifact.version);
         setEditing(false);
         setCompare(false);
+      }
+      if (result.status === "saved") {
+        void client.invalidateQueries({ queryKey: meetingKeys.record(meeting.id) });
+        void client.invalidateQueries({ queryKey: meetingKeys.history });
       }
       void client.invalidateQueries({ queryKey: outputKeys.list(meeting.id) });
     } catch (error) {
@@ -202,12 +238,23 @@ export function MeetingSummary({
   }
   return (
     <section className="meetings-section" aria-label="Summary and actions">
-      <SectionHead
-        number="01"
-        title="Summary and actions"
-        rule
-        meta={artifact ? `Version ${artifact.version}` : undefined}
-      />
+      {tool ? (
+        <div className="meetings-actions">
+          <Eyebrow>
+            {tool === "rewrite"
+              ? "Rewrite summary"
+              : tool === "versions"
+                ? "Earlier versions"
+                : tool === "vault"
+                  ? "Save to vault"
+                  : "Copy as Markdown"}
+          </Eyebrow>
+          <Button variant="link" onClick={onCloseTool}>
+            Done
+          </Button>
+        </div>
+      ) : null}
+      {tool === "copy" ? <MeetingMarkdownCopy meeting={meeting} artifact={artifact} /> : null}
       {outputs.isFetching && !data ? (
         <p role="status" className="jds-hint">
           Loading summaries…
@@ -230,47 +277,79 @@ export function MeetingSummary({
         </>
       ) : data ? (
         <>
-          <div className="meetings-actions">
-            <Field>
-              <FormLabel htmlFor="meeting-template">Summary template</FormLabel>
-              <Select
-                id="meeting-template"
-                value={state.templateId}
-                disabled={busy || retry}
-                onChange={(event) =>
-                  update((current) => ({
-                    ...current,
-                    templateId: event.target.value as SummaryState["templateId"]
-                  }))
-                }
-              >
-                <option value="">Choose a template</option>
-                {data.templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name} · v{template.version}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button
-              disabled={
-                busy ||
-                (!retry &&
-                  (generationBlocked || !state.templateId || sourceLoading || unsavedNotes))
-              }
-              onClick={() => void generate()}
-            >
-              {retry
-                ? "Check or retry generation"
-                : data.headVersion
-                  ? "Generate new version"
-                  : "Generate summary"}
-            </Button>
-            <Button variant="quiet" disabled={busy} onClick={() => void outputs.refetch()}>
-              Refresh summaries
-            </Button>
-          </div>
-          {generationBlocked ? (
+          {data.automaticSummary?.status === "waiting" ? (
+            <p role="status" className="jds-hint">
+              Finishing the transcript before writing the summary…
+            </p>
+          ) : null}
+          {data.automaticSummary?.status === "pending" ? (
+            <p role="status" className="jds-hint">
+              Writing summary…
+            </p>
+          ) : null}
+          {data.automaticSummary?.status === "failed" ? (
+            <div>
+              <p role="status" className="jds-hint">
+                {summaryGenerationFailure(data.automaticSummary.code).message} Use Rewrite summary
+                to try again.
+              </p>
+              {data.automaticSummary.code === "meeting_output_route_unavailable" ? (
+                <SummaryModelRecovery />
+              ) : null}
+            </div>
+          ) : null}
+          {data.automaticSummary?.status === "skipped" && !artifact ? (
+            <p className="jds-hint">
+              {data.automaticSummary.code === "setting-off"
+                ? "Automatic summaries are off in Settings."
+                : "There wasn’t enough finalized transcript to write a summary."}
+            </p>
+          ) : null}
+          {tool === "rewrite" ? (
+            <>
+              <div className="meetings-actions">
+                <Field>
+                  <FormLabel htmlFor="meeting-template">Summary style</FormLabel>
+                  <Select
+                    id="meeting-template"
+                    value={state.templateId}
+                    disabled={busy || retry}
+                    onChange={(event) =>
+                      update((current) => ({
+                        ...current,
+                        templateId: event.target.value as SummaryState["templateId"]
+                      }))
+                    }
+                  >
+                    <option value="">Choose a style</option>
+                    {data.templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Button
+                  disabled={
+                    busy ||
+                    (!retry &&
+                      (generationBlocked || !state.templateId || sourceLoading || unsavedNotes))
+                  }
+                  onClick={() => void generate()}
+                >
+                  {retry
+                    ? "Check or retry generation"
+                    : data.headVersion
+                      ? "Rewrite summary"
+                      : "Write summary"}
+                </Button>
+                <Button variant="quiet" disabled={busy} onClick={() => void outputs.refetch()}>
+                  Refresh summaries
+                </Button>
+              </div>
+            </>
+          ) : null}
+          {generationBlocked && tool === "rewrite" ? (
             <p role="status" className="jds-hint">
               {generationAvailability === "checking"
                 ? "Checking summary model availability…"
@@ -279,9 +358,9 @@ export function MeetingSummary({
                   : "Couldn’t check summary model availability. Refresh summaries to try again."}
             </p>
           ) : null}
-          {unsavedNotes ? (
+          {unsavedNotes && tool === "rewrite" ? (
             <Note variant="practical">
-              Generation uses saved personal notes. Save your edits first.
+              Waiting for your notes to finish saving before rewriting.
             </Note>
           ) : null}
           {state.operation ? (
@@ -289,7 +368,7 @@ export function MeetingSummary({
               {state.operation.message}
             </p>
           ) : null}
-          {generationAvailability === "model-unavailable" ||
+          {(generationAvailability === "model-unavailable" && tool === "rewrite") ||
           state.operation?.remediation === "ai-providers" ? (
             <SummaryModelRecovery />
           ) : null}
@@ -317,34 +396,36 @@ export function MeetingSummary({
             </p>
           ) : null}
           {data.artifacts.length ? (
-            <Field>
-              <FormLabel htmlFor="meeting-output-version">Saved version</FormLabel>
-              <Select
-                id="meeting-output-version"
-                value={artifact?.version ?? ""}
-                onChange={(event) => {
-                  setSelected(Number(event.target.value));
-                  setEditing(false);
-                }}
-              >
-                {pinned && !data.artifacts.some((item) => item.version === pinned.version) ? (
-                  <option value={pinned.version}>Version {pinned.version} · Kept edits</option>
-                ) : null}
-                {data.artifacts.map((item) => (
-                  <option key={item.version} value={item.version}>
-                    Version {item.version} ·{" "}
-                    {item.origin === "manual" ? "Manual edits" : "Generated"}
-                    {item.version === data.headVersion ? " · Latest" : ""}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          ) : (
+            <div hidden={tool !== "versions"}>
+              <Field>
+                <FormLabel htmlFor="meeting-output-version">Saved version</FormLabel>
+                <Select
+                  id="meeting-output-version"
+                  value={artifact?.version ?? ""}
+                  onChange={(event) => {
+                    setSelected(Number(event.target.value));
+                    setEditing(false);
+                  }}
+                >
+                  {pinned && !data.artifacts.some((item) => item.version === pinned.version) ? (
+                    <option value={pinned.version}>Version {pinned.version} · Kept edits</option>
+                  ) : null}
+                  {data.artifacts.map((item) => (
+                    <option key={item.version} value={item.version}>
+                      Version {item.version} ·{" "}
+                      {item.origin === "manual" ? "Manual edits" : "Generated"}
+                      {item.version === data.headVersion ? " · Latest" : ""}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          ) : !artifact && tool !== "rewrite" ? (
             <p className="jds-hint">
-              Choose a template to create the first summary from saved personal notes and retained
-              transcript.
+              A summary appears after Stop when enabled in Settings. Use Rewrite summary to create
+              one yourself.
             </p>
-          )}
+          ) : null}
           {artifact ? (
             <>
               <p className="jds-hint">
@@ -358,7 +439,7 @@ export function MeetingSummary({
                 </Note>
               ) : null}
               {artifact.inputs.transcript?.containsProvisional ? (
-                <Badge tone="amber">Includes provisional transcript</Badge>
+                <p className="jds-hint">Still being finalised</p>
               ) : null}
               {(artifact.inputs.transcript?.omittedSegments ?? 0) > 0 ? (
                 <Note variant="practical">
@@ -376,11 +457,9 @@ export function MeetingSummary({
                     setEditing(!editing);
                   }}
                 >
-                  {artifact.version === data.headVersion
-                    ? "Edit this version"
-                    : "Review kept edits"}
+                  {artifact.version === data.headVersion ? "Edit summary" : "Review kept edits"}
                 </Button>
-                {latest && latest.version !== artifact.version ? (
+                {tool === "versions" && latest && latest.version !== artifact.version ? (
                   <Button variant="quiet" onClick={() => setCompare(!compare)}>
                     {compare ? "Hide latest comparison" : "Compare with latest"}
                   </Button>
@@ -405,11 +484,16 @@ export function MeetingSummary({
                   }}
                 />
               ) : null}
-              <SectionHead number="02" title="Suggested Tasks" rule />
-              <p className="jds-hint">
-                Review each suggestion before accepting. Accepted Tasks are managed in Tasks;
-                regeneration does not edit them.
-              </p>
+              {data.candidates.some(
+                (item) =>
+                  item.artifactVersion === artifact.version ||
+                  item.reviewState === "accepted" ||
+                  artifact.content.actions.some(
+                    (action) => JSON.stringify(action) === JSON.stringify(item.proposal)
+                  )
+              ) ? (
+                <SectionHead title="Suggested tasks" rule />
+              ) : null}
               {data.candidates
                 .filter(
                   (item) =>
@@ -428,11 +512,13 @@ export function MeetingSummary({
                     )}
                   />
                 ))}
-              <MeetingVaultExport
-                key={`export:${artifact.version}`}
-                meetingId={meeting.id}
-                version={artifact.version}
-              />
+              <div hidden={tool !== "vault"}>
+                <MeetingVaultExport
+                  key={`export:${artifact.version}`}
+                  meetingId={meeting.id}
+                  version={artifact.version}
+                />
+              </div>
             </>
           ) : null}
         </>

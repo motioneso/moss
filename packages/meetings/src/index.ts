@@ -23,3 +23,7 @@ export * from "./capture-routes.js";
 export * from "./capture-service.js";
 
 export { readMeetingCaptureCompleteness } from "./capture-repository.js";
+
+export * from "./stop-summary-jobs.js";
+
+export * from "./capture-maintenance.js";

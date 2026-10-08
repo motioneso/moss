@@ -1,3 +1,4 @@
+import { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextRunner } from "@moss/db";
 import { handleRouteError } from "@moss/module-sdk";
@@ -41,6 +42,17 @@ export function registerMeetingOutputRoutes(
     dependencies.generator,
     repository
   );
+  server.get("/api/meetings/output-availability", async (request, reply) => {
+    try {
+      const actor = await dependencies.resolveAccessContext(request);
+      return {
+        generationAvailability: await dependencies.generationAvailability(actor),
+        templates: MEETING_OUTPUT_TEMPLATES.map(({ id, version, name }) => ({ id, version, name }))
+      };
+    } catch (error) {
+      return routeError(error, reply);
+    }
+  });
   server.get<{ Params: { id: string } }>(
     "/api/meetings/records/:id/outputs",
     { schema: { params } },
@@ -49,7 +61,10 @@ export function registerMeetingOutputRoutes(
         const actor = await dependencies.resolveAccessContext(request);
         // Read the owner-scoped record before looking up advisory model configuration.
         const outputs = await dependencies.dataContext.withDataContext(actor, (db) =>
-          repository.list(db, request.params.id)
+          Promise.all([
+            repository.list(db, request.params.id),
+            new MeetingStopSummaryRepository().status(db, request.params.id)
+          ]).then(([outputs, automaticSummary]) => ({ ...outputs, automaticSummary }))
         );
         return {
           ...outputs,

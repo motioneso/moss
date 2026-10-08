@@ -1,34 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ApiError, useMeetingChat } from "@moss/module-web-sdk";
+import { Button, EmptyState, Menu, Tabs } from "@moss/ui";
+import type {
+  MeetingRecord as MeetingRecordDto,
+  MeetingCaptureBrowserStatus,
+  MeetingOutputsResponse
+} from "@moss/shared";
 import {
-  ApiError,
-  randomUuid,
-  useMeetingChat,
-  setSessionUnsavedChanges
-} from "@moss/module-web-sdk";
-import { Badge, Button, EmptyState, Field, FormLabel, SectionHead, Tabs } from "@moss/ui";
-import type { MeetingRecord as MeetingRecordDto } from "@moss/shared";
-import {
-  getMeeting,
+  discardMeetingPrivateState,
   isMeetingAccessDenied,
-  meetingKeys,
-  meetingRecordQueryOptions,
-  saveMeetingNotes
+  meetingRecordQueryOptions
 } from "./client.js";
-import {
-  beginNoteSave,
-  finishNoteSave,
-  hasUnsavedNotes,
-  newEditor,
-  rebaseNoteEdits,
-  type MeetingEditorState
-} from "./editor-state.js";
-import { TranscriptEvidence } from "./transcript-evidence.js";
 import { MeetingTranscript, useMeetingTranscript } from "./meeting-transcript.js";
-import { MeetingSummary } from "./meeting-summary.js";
+import { MeetingSummary, type SummaryTool } from "./meeting-summary.js";
 import { DeleteMeetingDialog } from "./delete-meeting-dialog.js";
 import { CapturePanel } from "./capture-panel.js";
-import { useSessionDraft } from "./session-draft.js";
+import { captureKeys } from "./capture-client.js";
+import { outputKeys } from "./output-client.js";
+import { MeetingTitle } from "./meeting-title.js";
+import { MeetingNotesPane } from "./meeting-notes-pane.js";
+import { useMeetingNotesEditor } from "./use-meeting-notes.js";
+import { useMeetingDate } from "./locale.js";
 
 export function MeetingRecord({
   id,
@@ -39,351 +33,192 @@ export function MeetingRecord({
   readonly onBack: () => void;
   readonly onDeleted: () => void;
 }) {
-  const [transcriptRevision, setTranscriptRevision] = useState<number>();
-  const [captureActive, setCaptureActive] = useState(false);
+  const client = useQueryClient();
   const record = useQuery(meetingRecordQueryOptions(id));
   const { clearMeetingChat } = useMeetingChat();
-  const accessDenied = isMeetingAccessDenied(record.error);
+  const denied = isMeetingAccessDenied(record.error);
   useEffect(() => {
-    if (accessDenied) clearMeetingChat(id);
-  }, [accessDenied, clearMeetingChat, id]);
+    if (denied) {
+      clearMeetingChat(id);
+      // Run after the denied view commits: sibling query notifications must not recreate
+      // a mounted editor's initial private draft between fetch rejection and unmount.
+      discardMeetingPrivateState(client, id);
+    }
+  }, [denied, clearMeetingChat, client, id]);
   if (record.isPending && !record.data)
     return (
       <p role="status" className="jds-hint">
-        Loading your draft…
+        Loading meeting…
       </p>
     );
-  if (record.isError && (accessDenied || !record.data))
+  if (record.isError && (denied || !record.data))
     return (
       <EmptyState
         title={
           record.error instanceof ApiError && record.error.status === 404
-            ? "This draft is unavailable"
-            : "Couldn’t load this draft"
+            ? "This meeting is unavailable"
+            : "Couldn’t load this meeting"
         }
-        description="Return to history or try again."
       >
-        <div className="meetings-actions">
-          <Button onClick={() => void record.refetch()}>Retry loading draft</Button>
-          <Button variant="secondary" onClick={onBack}>
-            Back to history
-          </Button>
-        </div>
+        <Button onClick={() => void record.refetch()}>Try again</Button>
+        <Button variant="link" onClick={onBack}>
+          Meetings
+        </Button>
       </EmptyState>
     );
   if (!record.data) return null;
   return (
     <>
-      {record.isFetching ? (
-        <p role="status" className="jds-hint">
-          Refreshing meeting…
-        </p>
-      ) : null}
       {record.isError ? (
         <p role="status" className="jds-hint">
-          Couldn’t refresh this meeting. Your open review is kept.{" "}
+          Couldn’t refresh this meeting.{" "}
           <Button variant="link" onClick={() => void record.refetch()}>
-            Retry
+            Try again
           </Button>
         </p>
       ) : null}
-      <CapturePanel meeting={record.data.meeting} onLiveChange={setCaptureActive} />
-      <MeetingNotes
-        captureActive={captureActive}
-        meeting={record.data.meeting}
-        onDeleted={onDeleted}
-        transcriptRevision={transcriptRevision}
-        onTranscriptRevisionChange={setTranscriptRevision}
-      />
+      <MeetingNotes meeting={record.data.meeting} onDeleted={onDeleted} onBack={onBack} />
     </>
   );
 }
 
 export function MeetingNotes({
   meeting,
-  captureActive = false,
   onDeleted,
-  transcriptRevision,
-  onTranscriptRevisionChange
+  onBack
 }: {
   readonly meeting: MeetingRecordDto;
-  readonly captureActive?: boolean;
   readonly onDeleted: () => void;
-  readonly transcriptRevision: number | undefined;
-  readonly onTranscriptRevisionChange: (revision: number | undefined) => void;
+  readonly onBack?: () => void;
 }) {
-  const [tab, setTab] = useState<"summary" | "transcript" | "notes">("summary");
-  useEffect(() => {
-    if (captureActive) setTab("transcript");
-  }, [captureActive]);
-  const { openMeetingChat } = useMeetingChat();
-  const transcript = useMeetingTranscript(meeting.id);
-  const snapshot = transcript.isError ? undefined : transcript.data?.snapshot;
-  const canAsk = !transcript.isError && !transcript.isFetching && !!snapshot?.segments.length;
-  const client = useQueryClient();
-  const key = useMemo(() => meetingKeys.editor(meeting.id), [meeting.id]);
-  // Deliberately memory-only: recovery across app navigation without putting private notes in localStorage.
-  const editor = useSessionDraft<MeetingEditorState>(key, () => newEditor(meeting));
-  const state = editor.data;
+  const [captureActive, setCaptureActive] = useState(false);
+  const [tab, setTab] = useState<"transcript" | "notes" | "summary">("notes");
+  const [tool, setTool] = useState<SummaryTool | null>(null);
+  const [search, setSearch] = useState<string | null>(null);
   const [showDelete, setShowDelete] = useState(false);
-  const [conflictLoading, setConflictLoading] = useState(false);
-  const [conflictError, setConflictError] = useState(false);
-  const dirty = hasUnsavedNotes(state);
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== "undefined" && !!window.matchMedia?.("(max-width: 760px)").matches
+  );
   useEffect(() => {
-    setSessionUnsavedChanges(client, `meetings:${meeting.id}:notes`, dirty);
-  }, [client, meeting.id, dirty]);
-  const notesValid =
-    !state.text.includes("\0") && new TextEncoder().encode(state.text).length <= 64000;
-  function update(change: (current: MeetingEditorState) => MeetingEditorState) {
-    const next = editor.update(change);
-    // A pending save can finish after navigation unmounts this editor. Keep the shell's
-    // marker aligned with the cached edits without depending on a mounted-view effect.
-    if (next)
-      setSessionUnsavedChanges(client, `meetings:${meeting.id}:notes`, hasUnsavedNotes(next));
-  }
-  useEffect(() => {
-    editor.update((current) =>
-      current &&
-      current.phase === "idle" &&
-      !hasUnsavedNotes(current) &&
-      meeting.notesRevision > current.base.notesRevision
-        ? newEditor(meeting)
-        : current
-    );
-  }, [meeting, editor.update]);
-  async function loadCurrent() {
-    const pendingKey = client.getQueryData<MeetingEditorState>(key)?.pending?.requestKey;
-    setConflictLoading(true);
-    setConflictError(false);
-    try {
-      const { meeting: latest } = await getMeeting(meeting.id);
-      if (!editor.currentSession()) return;
-      update((current) =>
-        current.phase === "conflict" && current.pending?.requestKey === pendingKey
-          ? { ...current, latest }
-          : current
-      );
-    } catch {
-      if (editor.currentSession()) setConflictError(true);
-    } finally {
-      if (editor.currentSession()) setConflictLoading(false);
-    }
-  }
-  async function save() {
-    const current = client.getQueryData<MeetingEditorState>(key);
-    if (!current) return;
-    if (current.phase === "saving" || current.phase === "conflict") return;
-    if (!current.pending && (!notesValid || !hasUnsavedNotes(current))) return;
-    const next = beginNoteSave(current, randomUuid());
-    const stillCurrent = () =>
-      editor.currentSession() &&
-      !isMeetingAccessDenied(client.getQueryState(meetingKeys.record(meeting.id))?.error) &&
-      client.getQueryData<MeetingEditorState>(key)?.pending?.requestKey ===
-        next.pending?.requestKey;
-    update(() => next);
-    try {
-      const result = await saveMeetingNotes(next.pending!);
-      if (!stillCurrent()) return;
-      const known = client.getQueryData<{ meeting: MeetingRecordDto }>(
-        meetingKeys.record(meeting.id)
-      )?.meeting;
-      const acknowledged =
-        known && known.notesRevision > result.meeting.notesRevision ? known : result.meeting;
-      update((current) => {
-        const saved = finishNoteSave(current, result.meeting);
-        return acknowledged.notesRevision > result.meeting.notesRevision
-          ? { ...saved, phase: "conflict", latest: acknowledged }
-          : saved;
-      });
-      client.setQueryData(meetingKeys.record(meeting.id), { meeting: acknowledged });
-      void client.invalidateQueries({ queryKey: meetingKeys.history });
-    } catch (error) {
-      if (!stillCurrent()) return;
-      const rejected = error instanceof ApiError && error.status === 400;
-      const conflict = error instanceof ApiError && error.status === 409;
-      update((current) => ({
-        ...current,
-        pending: rejected ? undefined : current.pending,
-        phase: conflict ? "conflict" : "failed"
-      }));
-      if (conflict) await loadCurrent();
-    }
-  }
+    const media = window.matchMedia?.("(max-width: 760px)");
+    if (!media) return;
+    const change = () => setNarrow(media.matches);
+    change();
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
+  const capture = useQuery<MeetingCaptureBrowserStatus>({
+    queryKey: captureKeys.status(meeting.id),
+    enabled: false
+  });
+  const outputs = useQuery<MeetingOutputsResponse>({
+    queryKey: outputKeys.list(meeting.id),
+    enabled: false
+  });
+  const showSummary =
+    capture.data?.capture?.desired === "stopped" ||
+    !!outputs.data?.headVersion ||
+    tool !== null ||
+    tab === "summary";
+  const transcript = useMeetingTranscript(meeting.id);
+  const editor = useMeetingNotesEditor(meeting);
+  const date = useMeetingDate({
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+  const transcriptPane = (
+    <MeetingTranscript
+      meetingId={meeting.id}
+      search={search}
+      onSearch={setSearch}
+      onReference={() => {
+        if (narrow) setTab("transcript");
+      }}
+    />
+  );
+  const notesPane = <MeetingNotesPane editor={editor} />;
+  const summaryPane = (
+    <MeetingSummary
+      meeting={meeting}
+      transcriptRevision={transcript.data?.snapshot.transcriptRevision ?? 0}
+      sourceLoading={transcript.isFetching}
+      unsavedNotes={editor.dirty}
+      tool={tool}
+      onCloseTool={() => setTool(null)}
+    />
+  );
+  const items = [
+    ...(narrow
+      ? [{ value: "transcript" as const, label: "Transcript", content: transcriptPane }]
+      : []),
+    { value: "notes" as const, label: "Notes", content: notesPane },
+    ...(showSummary ? [{ value: "summary" as const, label: "Summary", content: summaryPane }] : [])
+  ];
   return (
-    <div className="meetings-section">
-      <div className="meetings-actions meetings-review-status">
-        <Badge tone={snapshot?.containsProvisional ? "amber" : "neutral"}>
-          {captureActive
-            ? "Live transcript"
-            : snapshot?.segments.length
-              ? "Ready to review"
-              : "Draft"}
-        </Badge>
-        <span className="jds-hint">
-          {snapshot?.containsProvisional
-            ? "Some transcript text is still provisional"
-            : snapshot?.segments.length
-              ? "Retained transcript available"
-              : captureActive
-                ? "Waiting for transcript text"
-                : "No retained transcript"}
-        </span>
-        <Button variant="link" onClick={() => setTab("transcript")}>
-          View transcript
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={!canAsk}
-          aria-describedby="meeting-chat-unavailable"
-          onClick={() => openMeetingChat({ meetingId: meeting.id, title: meeting.title })}
-        >
-          Ask Moss
-        </Button>
-        <Button
-          variant="quiet"
-          disabled={state.phase === "saving" || captureActive}
-          onClick={() => setShowDelete(true)}
-        >
-          Delete draft
-        </Button>
-      </div>
-      {!canAsk ? (
-        <p id="meeting-chat-unavailable" className="jds-hint">
-          Ask Moss needs an available transcript.
-        </p>
-      ) : (
-        <span id="meeting-chat-unavailable" className="jds-hint">
-          Ask about this meeting in Moss chat.
-        </span>
-      )}
-      <TranscriptEvidence meetingId={meeting.id} />
-      <Tabs
-        id="meeting-review"
-        ariaLabel="Meeting review sections"
-        value={tab}
-        onChange={setTab}
-        items={[
-          {
-            value: "summary",
-            label: "Summary and actions",
-            content: (
-              <MeetingSummary
-                meeting={meeting}
-                transcriptRevision={transcript.data?.snapshot.transcriptRevision ?? 0}
-                sourceLoading={
-                  transcript.isFetching ||
-                  (transcript.isError &&
-                    !(transcript.error instanceof ApiError && transcript.error.status === 404))
-                }
-                unsavedNotes={dirty}
-              />
-            )
-          },
-          {
-            value: "transcript",
-            label: "Transcript",
-            count: transcript.data
-              ? `${transcript.data.snapshot.segments.length}${transcript.data.snapshot.omittedSegments ? "+" : ""} turns`
-              : undefined,
-            content: (
-              <MeetingTranscript
-                meetingId={meeting.id}
-                revision={transcriptRevision}
-                onRevisionChange={onTranscriptRevisionChange}
-              />
-            )
-          },
-          {
-            value: "notes",
-            label: "My notes",
-            content: (
-              <section className="meetings-section">
-                <SectionHead number="01" title="My notes" rule />
-                <Field>
-                  <FormLabel htmlFor="meeting-personal-notes">Personal notes</FormLabel>
-                  <textarea
-                    id="meeting-personal-notes"
-                    className="jds-textarea meetings-input meetings-notes"
-                    maxLength={64000}
-                    value={state.text}
-                    onChange={(event) =>
-                      update((current) => ({ ...current, text: event.target.value }))
-                    }
-                  />
-                </Field>
-                <p role="status" className="jds-hint">
-                  {state.phase === "saving"
-                    ? "Saving…"
-                    : state.phase === "failed"
-                      ? "Save failed. Correct any invalid notes, then retry."
-                      : state.phase === "conflict"
-                        ? "Notes changed elsewhere. Review the saved version before retrying."
-                        : dirty
-                          ? "Unsaved changes. Kept while you navigate this signed-in session; save before closing or signing out."
-                          : "Saved"}
-                </p>
-                {state.phase === "conflict" ? (
-                  <div className="meetings-section">
-                    {conflictLoading ? (
-                      <p role="status" className="jds-hint">
-                        Loading the current saved notes…
-                      </p>
-                    ) : null}
-                    {conflictError ? (
-                      <p role="alert" className="jds-hint jds-hint--error">
-                        Couldn’t load the current notes. Your edits have not been replaced.
-                      </p>
-                    ) : null}
-                    {state.latest ? (
-                      <>
-                        <Field>
-                          <FormLabel htmlFor="meeting-current-notes">Current saved notes</FormLabel>
-                          <textarea
-                            id="meeting-current-notes"
-                            className="jds-textarea meetings-input"
-                            readOnly
-                            value={state.latest.personalNotes}
-                            rows={6}
-                          />
-                        </Field>
-                        <Button variant="secondary" onClick={() => update(rebaseNoteEdits)}>
-                          Keep my version
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        disabled={conflictLoading}
-                        onClick={() => void loadCurrent()}
-                      >
-                        Load current notes
-                      </Button>
-                    )}
-                  </div>
-                ) : null}
-                {!notesValid ? (
-                  <p role="alert" className="jds-hint jds-hint--error">
-                    Shorten these notes or remove unsupported characters before saving.
-                  </p>
-                ) : null}
-                <div className="meetings-actions">
-                  <Button
-                    disabled={
-                      !dirty ||
-                      (!notesValid && !state.pending) ||
-                      state.phase === "saving" ||
-                      state.phase === "conflict"
-                    }
-                    onClick={() => void save()}
-                  >
-                    {state.phase === "failed" ? "Retry save" : "Save notes"}
-                  </Button>
-                </div>
-              </section>
-            )
-          }
-        ]}
+    <section className="meetings-section" aria-label="Meeting workspace">
+      <header className="meetings-record-heading">
+        <div>
+          {onBack ? (
+            <Button variant="link" onClick={onBack}>
+              Meetings
+            </Button>
+          ) : null}
+        </div>
+        <div className="meetings-actions meetings-record-tools">
+          <Link to="/settings?section=modules&module=meetings">Settings</Link>
+          <Menu
+            triggerIcon={<span aria-hidden="true">•••</span>}
+            triggerLabel="Meeting actions"
+            items={[
+              { id: "search", label: "Search transcript" },
+              { id: "rewrite", label: "Rewrite summary", disabled: captureActive },
+              { id: "versions", label: "Earlier versions" },
+              { id: "vault", label: "Save to vault" },
+              { id: "copy", label: "Copy as Markdown" },
+              {
+                id: "delete",
+                label: "Delete meeting",
+                disabled: captureActive || editor.state.phase === "saving"
+              }
+            ]}
+            onSelect={(action) => {
+              if (action === "delete") setShowDelete(true);
+              else if (action === "search") {
+                setSearch("");
+                if (narrow) setTab("transcript");
+              } else {
+                setTool(action as SummaryTool);
+                setTab("summary");
+              }
+            }}
+          />
+        </div>
+      </header>
+      <CapturePanel
+        meeting={meeting}
+        onLiveChange={setCaptureActive}
+        heading={
+          <>
+            <MeetingTitle meeting={meeting} />
+            {meeting.title !== "Untitled meeting" ? (
+              <p className="jds-hint">{date(meeting.createdAt)}</p>
+            ) : null}
+          </>
+        }
       />
+      <div className="meetings-workspace">
+        {!narrow ? transcriptPane : null}
+        <Tabs
+          id="meeting-review"
+          ariaLabel="Meeting sections"
+          value={!narrow && tab === "transcript" ? "notes" : tab}
+          onChange={setTab}
+          items={items}
+        />
+      </div>
+      {!showSummary ? <div hidden>{summaryPane}</div> : null}
       {showDelete ? (
         <DeleteMeetingDialog
           meeting={meeting}
@@ -391,6 +226,6 @@ export function MeetingNotes({
           onDeleted={onDeleted}
         />
       ) : null}
-    </div>
+    </section>
   );
 }

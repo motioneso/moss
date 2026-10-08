@@ -332,12 +332,17 @@ describe("meeting selected-model HTTP boundary", () => {
       for (const args of h.credential.mock.calls) expect(args).toEqual([db, "selected-provider"]);
     }
   );
-  it("rejects CLI-auth selected model instead of selecting a fallback or contacting a provider", async () => {
+  it("rejects CLI-auth with an ordinary-chat escape instead of contacting a fallback provider", async () => {
     const h = setup();
     h.selected.mockResolvedValue({ ...model, provider_auth_method: "cli" });
     await expect(
       h.service.submit(access, meetingChatSurface(meetingId), selection, "Question")
-    ).rejects.toMatchObject({ code: "meeting_chat_unsupported" });
+    ).rejects.toMatchObject({
+      code: "meeting_chat_unsupported",
+      message:
+        "Meeting questions currently require an API-key chat model. " +
+        "Remove the ‘About this meeting’ chip to continue ordinary chat with your selected model."
+    });
     expect(h.fetch).not.toHaveBeenCalled();
     expect(h.saved).not.toHaveBeenCalled();
   });

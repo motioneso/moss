@@ -1,8 +1,10 @@
-import { PreferencesRepository } from "@moss/structured-state";
+import { createPgBossClient } from "@moss/jobs";
 import {
-  MEETING_CAPTURE_DEFAULT_KEY,
-  MEETING_CAPTURE_SOURCE_KEY
-} from "../../packages/meetings/src/preferences-routes.js";
+  createMeetingStopSummaryScheduler,
+  registerMeetingStopSummaryWorker
+} from "../../packages/meetings/src/stop-summary-jobs.js";
+import { MeetingStopSummaryRepository } from "../../packages/meetings/src/stop-summary-repository.js";
+import { MeetingPreferencesRepository } from "../../packages/meetings/src/preferences.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql, type Kysely } from "kysely";
@@ -64,6 +66,9 @@ async function fixture(fresh = false) {
       )
     ).meeting;
   const meeting = await createMeeting();
+  await sql`DELETE FROM app.meeting_capture_start_limits WHERE owner_user_id=${owner.actorUserId}::uuid`.execute(
+    bootstrap
+  );
   // Auth and provider ports are synthetic. Storage, RLS, locks, receipts and transcript are real.
   const deps: MeetingCaptureDependencies = {
     dataContext: context,
@@ -75,6 +80,8 @@ async function fixture(fresh = false) {
       capabilityRevision: revision,
       expiresAt: browser.expiresAt
     }),
+    acquireRecordingBinding: async () => ({ release: async () => {} }),
+    scheduleMaintenance: async () => {},
     assertRecordingBinding: async (input) => {
       if (
         input.actorUserId !== owner.actorUserId ||
@@ -118,16 +125,14 @@ async function fixture(fresh = false) {
         : inventory
     });
   await register();
-  const startInput = {
-    deviceId,
-    connectionId,
-    expectedRevision: 1,
-    requestKey: randomUUID(),
-    selection: {
-      mode: "microphone-only" as const,
-      microphone: { deviceId: "mic-device", sourceId: "mic" }
-    }
-  };
+  const startInput = { requestKey: randomUUID() };
+  if (!fresh)
+    await context.withDataContext(owner, async (db) => {
+      await new MeetingPreferencesRepository().update(db, {
+        defaultCaptureMode: "microphone-only",
+        rememberedSource: { deviceId, microphoneId: "mic-device", mode: "microphone-only" }
+      });
+    });
   const start = (target = meeting.id, input = startInput) =>
     connections.start(browser, target, input);
   const begin = async () => {
@@ -159,45 +164,159 @@ async function fixture(fresh = false) {
   };
 }
 describe("shared meeting recording protocol (isolated gate only)", () => {
-  it("starts and resumes a fresh account using its OS default microphone and system audio", async () => {
+  it("starts and resumes a fresh account with its OS default microphone and system audio", async () => {
     const f = await fixture(true);
-    const preferences = new PreferencesRepository();
-    const readPreferences = () =>
-      context.withDataContext(f.owner, async (db) =>
-        Promise.all([
-          preferences.get(db, MEETING_CAPTURE_DEFAULT_KEY),
-          preferences.get(db, MEETING_CAPTURE_SOURCE_KEY)
-        ])
-      );
-    expect(await readPreferences()).toEqual([null, null]);
-    const request = {
-      deviceId: f.deviceId,
-      connectionId: f.connectionId,
-      expectedRevision: 1,
-      requestKey: randomUUID()
-    };
-    const started = await f.connections.start(f.browser, f.meeting.id, request);
+    const preferences = new MeetingPreferencesRepository();
+    expect(await context.withDataContext(f.owner, (db) => preferences.get(db))).toMatchObject({
+      rememberedSource: null,
+      defaultCaptureMode: "computer-audio"
+    });
+    const started = await f.start();
     expect(started.capture.selection).toMatchObject({
       mode: "computer-audio",
       microphone: { deviceId: "os-default", sourceId: "os-default-mic" }
     });
-    expect(await f.connections.start(f.browser, f.meeting.id, request)).toEqual(started);
+    expect(await f.start()).toEqual(started);
     await f.service.browserControl(f.browser, f.meeting.id, {
       grantId: started.capture.grantId,
       requestKey: randomUUID(),
       expectedGeneration: 1,
       command: "pause"
     });
-    const resume = {
+    const resumed = await f.service.browserControl(f.browser, f.meeting.id, {
       grantId: started.capture.grantId,
       requestKey: randomUUID(),
       expectedGeneration: 2,
-      command: "record" as const
-    };
-    const resumed = await f.service.browserControl(f.browser, f.meeting.id, resume);
+      command: "record"
+    });
     expect(resumed.capture.selection).toEqual(started.capture.selection);
-    expect(await f.service.browserControl(f.browser, f.meeting.id, resume)).toEqual(resumed);
-    expect(await readPreferences()).toEqual([null, null]);
+    expect(await context.withDataContext(f.owner, (db) => preferences.get(db))).toMatchObject({
+      rememberedSource: null,
+      defaultCaptureMode: "computer-audio"
+    });
+  });
+  it("runs the real Stop/finalized-status queue path in the dedicated owner-scoped worker", async () => {
+    const enqueueBoss = createPgBossClient(connectionStrings.app),
+      workerBoss = createPgBossClient(connectionStrings.worker);
+    await enqueueBoss.start();
+    await workerBoss.start();
+    const f = await fixture(),
+      active = await f.begin();
+    const summaries = new MeetingStopSummaryRepository();
+    Object.assign(f.deps, { scheduleSummary: createMeetingStopSummaryScheduler(enqueueBoss) });
+    const generate = vi.fn(async () => ({
+      content: {
+        overview: "Synthetic captured meeting summary.",
+        decisions: [],
+        openQuestions: [],
+        actions: [],
+        warnings: []
+      },
+      modelRoute: "synthetic-configured-route"
+    }));
+    try {
+      await registerMeetingStopSummaryWorker(workerBoss, workerContext, generate);
+      // Claim authorizes the recorder; audio still requires its explicit recording acknowledgement.
+      await f.service.status(active.headers, "recording", {
+        meetingId: f.meeting.id,
+        grantId: active.grantId,
+        inventory,
+        observed: { generation: 1, phase: "recording" }
+      });
+      f.advance(2000);
+      expect(
+        await f.service.audio(active.headers, "summary-evidence", {
+          meetingId: f.meeting.id,
+          grantId: active.grantId,
+          requestKey: randomUUID(),
+          generation: 1,
+          epoch: 1,
+          sourceId: "mic",
+          sequence: 0,
+          startMs: 0,
+          endMs: 1000,
+          sampleRateHz: 16000,
+          pcmBase64: Buffer.alloc(32000, 1).toString("base64")
+        })
+      ).toMatchObject({ status: "saved" });
+      const stop = {
+        grantId: active.grantId,
+        requestKey: randomUUID(),
+        expectedGeneration: 1,
+        command: "stop" as const
+      };
+      await f.service.browserControl(f.browser, f.meeting.id, stop);
+      await f.service.browserControl(f.browser, f.meeting.id, stop);
+      await f.service.status(active.headers, "finalized", {
+        meetingId: f.meeting.id,
+        grantId: active.grantId,
+        inventory,
+        observed: { generation: 2, phase: "stopped" },
+        finalized: true,
+        recordedDurationMs: 1000
+      });
+      await f.service.status(active.headers, "repeat-finalized", {
+        meetingId: f.meeting.id,
+        grantId: active.grantId,
+        inventory,
+        observed: { generation: 2, phase: "stopped" },
+        finalized: true,
+        recordedDurationMs: 1000
+      });
+      await expect
+        .poll(() => context.withDataContext(f.owner, (db) => summaries.status(db, f.meeting.id)), {
+          timeout: 20000,
+          interval: 100
+        })
+        .toMatchObject({ status: "saved" });
+      expect(generate).toHaveBeenCalledOnce();
+      expect(
+        (
+          await context.withDataContext(f.owner, (db) =>
+            sql`SELECT recorded_duration_ms FROM app.meeting_capture_grants WHERE id=${active.grantId}::uuid`.execute(
+              db.db
+            )
+          )
+        ).rows
+      ).toEqual([{ recorded_duration_ms: 1000 }]);
+    } finally {
+      await workerBoss.stop({ graceful: true });
+      await enqueueBoss.stop({ graceful: true });
+    }
+  });
+  it("commits Stop and its immutable cutoff when optional queue SQL fails", async () => {
+    const f = await fixture(),
+      active = await f.begin();
+    const summaries = new MeetingStopSummaryRepository();
+    Object.assign(f.deps, {
+      scheduleSummary: async (
+        db: Parameters<MeetingStopSummaryRepository["schedule"]>[0],
+        actor: Parameters<MeetingStopSummaryRepository["schedule"]>[1],
+        input: Parameters<MeetingStopSummaryRepository["schedule"]>[2]
+      ) =>
+        summaries.schedule(db, actor, input, async (transaction) => {
+          await sql`SELECT * FROM app.synthetic_unavailable_summary_queue`.execute(transaction.db);
+        })
+    });
+    f.advance(1000);
+    const stopped = await f.service.browserControl(f.browser, f.meeting.id, {
+      grantId: active.grantId,
+      requestKey: randomUUID(),
+      expectedGeneration: 1,
+      command: "stop"
+    });
+    expect(stopped.capture).toMatchObject({ desired: "stopped", stopCutoffMs: 1000 });
+    await context.withDataContext(f.owner, async (db) => {
+      const grant = await new MeetingCaptureRepository().grant(db, active.grantId);
+      expect(JSON.parse(grant!.state_json!)).toMatchObject({
+        desired: "stopped",
+        stopCutoffMs: 1000
+      });
+      expect(await summaries.status(db, f.meeting.id)).toMatchObject({
+        status: "failed",
+        code: "meeting_output_queue_unavailable"
+      });
+    });
   });
   it("connection registration does not create meeting authority; Start enforces owner RLS", async () => {
     const f = await fixture();
@@ -248,6 +367,95 @@ describe("shared meeting recording protocol (isolated gate only)", () => {
     await expect(
       f.connections.claim(f.native, "changed", { ...claim, credentialHash: "a".repeat(64) })
     ).rejects.toThrow();
+  });
+  it("cancels the freshly claimed grant after waiting behind a concurrent claim", async () => {
+    const f = await fixture();
+    const started = await f.start();
+    f.advance(1500);
+    let release!: () => void,
+      blocked!: () => void,
+      claimQueued!: () => void,
+      cancelRead!: () => void;
+    const holding = new Promise<void>((resolve) => {
+      blocked = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const claimWaiting = new Promise<void>((resolve) => {
+      claimQueued = resolve;
+    });
+    const readWaiting = new Promise<void>((resolve) => {
+      cancelRead = resolve;
+    });
+    const blocker = context.withDataContext(f.owner, async (db) => {
+      await new MeetingCaptureConnectionRepository().lock(db, f.deviceId);
+      blocked();
+      await gate;
+    });
+    await holding;
+    const originalLock = f.connections.connections.lock.bind(f.connections.connections);
+    vi.spyOn(f.connections.connections, "lock").mockImplementationOnce(async (db, id) => {
+      claimQueued();
+      await originalLock(db, id);
+    });
+    const claim = f.connections.claim(f.native, "concurrent-claim", {
+      connectionId: f.connectionId,
+      verifier: f.verifier,
+      grantId: started.capture.grantId,
+      credentialHash: hash(`mm1_${ids.userA}.${started.capture.grantId}.${"s".repeat(43)}`)
+    });
+    try {
+      await Promise.race([claimWaiting, claim.then(() => undefined)]);
+      await expect
+        .poll(
+          async () =>
+            (
+              await sql<{
+                waiting: number;
+              }>`SELECT count(*)::int AS waiting FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory' AND query LIKE '%meeting-device:%'`.execute(
+                bootstrap
+              )
+            ).rows[0]?.waiting ?? 0,
+          { timeout: 5000, interval: 20 }
+        )
+        .toBeGreaterThan(0);
+      const connections = new MeetingCaptureConnectionRepository();
+      const originalRead = connections.byRequest.bind(connections);
+      vi.spyOn(connections, "byRequest").mockImplementationOnce(async (db, key) => {
+        const row = await originalRead(db, key);
+        cancelRead();
+        expect(row?.status).toBe("approved");
+        return row;
+      });
+      const cancellation = new MeetingCaptureService(
+        f.deps,
+        new MeetingCaptureRepository(),
+        undefined,
+        connections
+      ).cancelStart(f.browser, f.meeting.id, { requestKey: f.startInput.requestKey });
+      await Promise.race([readWaiting, cancellation.then(() => undefined)]);
+      release();
+      await blocker;
+      await claim;
+      expect((await cancellation).capture).toMatchObject({
+        desired: "stopped",
+        stopCutoffMs: 0,
+        finalization: "pending"
+      });
+      const stored = await context.withDataContext(f.owner, (db) =>
+        new MeetingCaptureRepository().grant(db, started.capture.grantId)
+      );
+      expect(stored?.credential_hash).not.toBeNull();
+      expect(JSON.parse(stored!.state_json!)).toMatchObject({
+        desired: "stopped",
+        stopCutoffMs: 0
+      });
+    } finally {
+      release();
+      await blocker;
+      await claim.catch(() => undefined);
+    }
   });
   it("rejects old launch generations, changed proofs and capability reapproval", async () => {
     const f = await fixture();
@@ -373,7 +581,7 @@ describe("shared meeting recording protocol (isolated gate only)", () => {
       requestKey: randomUUID(),
       expectedGeneration: 2,
       command: "record",
-      selection: f.startInput.selection
+      selection: undefined
     });
     const claim = {
       connectionId: f.connectionId,

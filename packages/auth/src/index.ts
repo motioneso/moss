@@ -11,6 +11,7 @@ import pg from "pg";
 
 import {
   AuthSessionResolver,
+  AbortablePgPool,
   getMossDatabaseUrls,
   resolveMossEnv,
   resolveTrustProxy,
@@ -211,6 +212,12 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
     options: "-c search_path=app,public"
   });
 
+  // Dedicated bounded maintenance capacity cannot consume interactive auth's pool.
+  const maintenancePool = new AbortablePgPool({
+    ...pool.options,
+    application_name: "moss-capture-auth-maintenance"
+  });
+
   // A server-side disconnect of an idle client (database restart, failover) is emitted
   // here. Without a listener Node treats it as uncaught and the process exits. The pool
   // has already discarded the client, and the next query opens a fresh connection.
@@ -262,6 +269,7 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
     sessionBindings: createSessionBindingsService({ pool, auth }),
     recordingCapabilities: createRecordingCapabilitiesService({
       pool,
+      maintenancePool,
       companionDevices: createCompanionDevicesService({ pool })
     }),
     verifySelfPassword: async ({ actorUserId, password }) => {
@@ -289,7 +297,10 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
       );
       return result.rows[0]?.exists ?? false;
     },
-    close: () => pool.end()
+    close: async () => {
+      await maintenancePool.close();
+      await pool.end();
+    }
   };
 }
 

@@ -1,8 +1,9 @@
 import type { ModulePersistentControlsContribution } from "@moss/module-web-sdk";
-import { MeetingCaptureStrip } from "./capture-strip.js";
+import { MeetingCaptureStrip, MeetingCaptureNavigationIndicator } from "./capture-strip.js";
 
 const meetingsPersistentControls: ModulePersistentControlsContribution = {
   moduleId: "meetings",
-  element: <MeetingCaptureStrip />
+  element: <MeetingCaptureStrip />,
+  navigationIndicator: <MeetingCaptureNavigationIndicator />
 };
 export default meetingsPersistentControls;

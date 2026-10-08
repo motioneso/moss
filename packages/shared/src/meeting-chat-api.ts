@@ -5,6 +5,9 @@ import {
   type ChatSurface
 } from "./chat-api.js";
 
+/** Shared cache namespace: meeting-id prefixes cover every selection of that meeting. */
+export const MEETING_CHAT_TITLE_QUERY_KEY = "meeting-chat-title";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Full 128-bit identity, without hashing/truncation; fits the existing 32-character surface limit. */
@@ -41,6 +44,10 @@ export interface MeetingChatCoverage extends MeetingChatSelection {
   readonly throughMs: number | null;
   readonly containsProvisional: boolean;
   readonly omittedSegments: number;
+  /** Present on answers including saved personal notes; older answers have transcript only. */
+  readonly notesRevision?: number;
+  readonly notesCharacters?: number;
+  readonly notesTruncated?: boolean;
 }
 
 export interface MeetingChatCitation extends MeetingTranscriptEvidence {

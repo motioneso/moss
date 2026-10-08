@@ -26,7 +26,9 @@ export const meetingsModuleManifest = {
       "sql/0280_meeting_history.sql",
       "sql/0283_meeting_account_export.sql",
       "sql/0284_meeting_capture.sql",
-      "sql/0288_meeting_recording_connections.sql"
+      "sql/0288_meeting_recording_connections.sql",
+      "sql/0292_meeting_minimal.sql",
+      "sql/0295_meeting_capture_start_limits.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -43,23 +45,25 @@ export const meetingsModuleManifest = {
       "app.meeting_capture_grants",
       "app.meeting_capture_receipts",
       "app.meeting_capture_connections",
-      "app.meeting_capture_start_cancellations"
+      "app.meeting_capture_start_cancellations",
+      "app.meeting_stop_summaries",
+      "app.meeting_capture_start_limits"
     ]
   },
   permissions: [
     {
       id: "meetings.read",
-      label: "Read meeting drafts",
+      label: "Read meetings",
       description:
-        "Read the signed-in person's meeting drafts, personal notes, and retained transcript evidence.",
+        "Read the signed-in person's meetings, personal notes, and retained transcript evidence.",
       scope: "user",
       actions: ["view"]
     },
     {
       id: "meetings.write",
-      label: "Manage meeting drafts",
+      label: "Manage meetings",
       description:
-        "Create and delete drafts, save personal notes with version checks, manage capture defaults, and ingest transcript text.",
+        "Create and delete meetings, save personal notes with version checks, manage capture defaults, and ingest transcript text.",
       scope: "user",
       actions: ["create", "update", "delete"]
     }
@@ -76,7 +80,32 @@ export const meetingsModuleManifest = {
       permissionId: "meetings.read"
     }
   ],
+  settings: [
+    {
+      id: "meetings.module-settings",
+      label: "Meetings",
+      description:
+        "See your Mac link status, choose microphone plus system audio or microphone only, switch automatic summaries after Stop on or off, and unlink the Mac.",
+      path: "/settings?section=modules&module=meetings",
+      scope: "user",
+      permissionId: "meetings.write",
+      entry: "./settings"
+    }
+  ],
+  jobs: [{ queueName: "meetings.stop-summary", metadataOnly: true }],
   routes: [
+    {
+      method: "PUT",
+      path: "/api/meetings/records/:id/title",
+      chat: { access: "write", title: "Rename your meeting", content: "user_authored" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/output-availability",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
     {
       method: "POST",
       path: "/api/meetings/capture/connection",
@@ -275,7 +304,30 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.chat_app_actions",
       description:
-        "App actions read retained meetings and save drafts, notes, transcript corrections and summaries. Generation and export stay in Meetings; deleting a meeting and linked Moss chats asks first."
+        "App actions read retained meetings and your output availability, and save drafts, titles, notes, transcripts and summaries. Generation, export and capture stay in Meetings; deleting a meeting and linked chats asks first."
+    },
+    {
+      id: "meetings.link_state",
+      description:
+        "When no Mac is linked, Meetings points to Trail Marker’s existing connect-in-browser flow. Download app has no destination yet. A linked Mac opens a ready workspace without source questions; linking, creating and opening never record."
+    },
+    {
+      id: "meetings.mac_link_controls",
+      description:
+        "Settings → Meetings shows link status, audio source, automatic summary and confirmed Unlink for the exact Mac. Pending and failed changes are explicit. Recording-capability revocation stays enforced; Unlink keeps retained meetings.",
+      remediations: [
+        {
+          id: "meetings.restore_mac_link",
+          path: "/settings?section=modules&module=meetings",
+          description:
+            "For missing or revoked recording access, unlink this Mac in Settings → Meetings and relink through Trail Marker. If Unlink is unconfirmed, use local Stop, check the connection and retry. Linking never starts capture."
+        }
+      ]
+    },
+    {
+      id: "meetings.automatic_summary",
+      description:
+        "Automatic summaries default on. Turn off Summarize automatically after Stop in Settings → Meetings. Only automatic summaries rename Untitled meeting. Rewrite summary remains available."
     },
     {
       id: "transcribe.meeting",
@@ -285,33 +337,33 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.native_capture",
       description:
-        "Link your Mac once and grant OS audio permissions, then choose Start. New recordings use the default mic and system audio. Saved exact sources remain; ambiguous sources fail closed. Persistent Pause/Stop and bounded finalization. Mac only.",
+        "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Only Start or Resume records. Pause and Stop remain available; a nav dot shows recording elsewhere. Mac only.",
       errors: [
         {
           code: "meeting_capture_source_unavailable",
           class: "prerequisite",
           remediationRef: "meetings.connect_recorder",
           description:
-            "The Mac or exact audio source is missing or ambiguous. Restore the saved source, check the macOS default microphone and permissions, or resolve multiple available Macs. Moss never broadens capture automatically."
+            "The Mac or exact audio source is missing or ambiguous. Check the linked Mac and macOS default microphone, restore an existing source, or adjust recording mode in Settings. Moss never chooses between multiple available Macs."
         },
         {
           code: "meeting_capture_processing_failed",
           class: "transient",
           description:
-            "A transcription clip failed. Capture continues while transient failures retry within the memory limit; an unrecoverable clip leaves a visible gap."
+            "Transient transcription failures retry while capture continues. Terminal failed clips retain one gap, shown at 250ms or longer. Provider end rounding up to 100ms is clamped to the clip; other invalid intervals are rejected."
         },
         {
           code: "meeting_capture_rate_limited",
           class: "transient",
           description:
-            "Capture transport is temporarily rate limited. Moss honors Retry-After while keeping Pause and Stop available."
+            "Start is limited per account to 10 requests per minute and 60 per hour, alongside transport limits. Moss honors Retry-After while keeping Pause and Stop available."
         },
         {
           code: "meeting_capture_unavailable",
           class: "prerequisite",
           remediationRef: "meetings.connect_recorder",
           description:
-            "The recording connection is unavailable, expired or revoked. Check the companion connection. For missing or revoked recording access, sign the Mac out under Settings → Active sessions and reconnect through Trail Marker."
+            "The recording connection is unavailable, expired or revoked. Check the Mac in Settings → Meetings. For missing or revoked recording access, unlink the Mac and reconnect through Trail Marker."
         },
         {
           code: "meeting_capture_processing_unavailable",
@@ -324,7 +376,7 @@ export const meetingsModuleManifest = {
           code: "meeting_capture_interrupted",
           class: "transient",
           description:
-            "The recorder or its connection was interrupted. Check the native recorder, review any gap, and explicitly resume with the intended sources."
+            "Recording was interrupted by unlink, device expiry, permission revoke, session end, connection replacement or capture expiry. Check the Mac connection and create a new meeting after recording authority ends."
         },
         {
           code: "meeting_capture_conflict",
@@ -348,17 +400,32 @@ export const meetingsModuleManifest = {
       remediations: [
         {
           id: "meetings.connect_recorder",
-          path: "/meetings",
+          path: "/settings?section=modules&module=meetings",
           description:
-            "Connect Trail Marker through its existing browser-link approval. For missing or revoked recording access, sign the Mac out under Settings → Active sessions and relink. Check OS audio permissions, then choose Start recording."
+            "Check the Mac and audio in Settings → Meetings. For missing or revoked recording access, unlink and relink through Trail Marker. Check macOS audio permissions, then press Start in New meeting."
         },
         {
           id: "meetings.configure_transcription",
           path: "/settings?section=aiproviders",
           description:
-            "An admin configures an OpenAI-compatible transcription endpoint and model in AI providers. The selected route must return clip timestamps; unsupported responses stop processing without provider fallback."
+            "An admin configures the transcription endpoint and model in AI providers. The selected route must return clip timestamps; unsupported responses stop processing without provider fallback."
         }
       ]
+    },
+    {
+      id: "meetings.mac_recording_status",
+      description:
+        "White 222 × 32 pill with three live audio bars, source menu, Pause/Resume, Stop and Hide X. Silence/stale audio flattens the bars. Resume keeps the current sources. Stop clears the pill and red menu item."
+    },
+    {
+      id: "meetings.mac_recording_pill_visibility",
+      description:
+        "X only hides the pill. Recording and the red Meeting menu continue, with Pause/Stop and Show recording pill available. Showing a paused pill never resumes it. Each new Start shows the pill."
+    },
+    {
+      id: "meetings.mac_audio_sources",
+      description:
+        "Select a mic or None and toggle computer audio for this recording. System-only skips mic permission. Both-off is rejected; select audio. Paused edits stay paused. Changes await confirmation and keep Settings defaults."
     },
     {
       id: "meetings.account_export",
@@ -368,7 +435,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.history",
       description:
-        "Search current titles, notes and transcripts; filter review and export receipts. Open Review or Ask Moss. Capture needs a connected Mac authorized by the initial linking approval. Receipts do not verify current Tasks or vault files.",
+        "The Meetings list searches titles, notes and transcripts. Rows grouped by week open the meeting directly and show the latest summary excerpt and acknowledged recording length when available.",
       errors: [
         {
           code: "meeting_history_access_denied",
@@ -403,7 +470,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.referenced_evidence",
       description:
-        "Open an exact cited passage beside the current transcript. Close evidence returns to review. Invalid links and unavailable revisions show an explanation; they never redirect a citation to newer text."
+        "Citations scroll to an exact passage beside your notes. Continue editing there, or use Meetings to return to the list. Invalid links and unavailable revisions explain the problem; citations never substitute newer text."
     },
     {
       id: "meetings.private_exports",
@@ -504,6 +571,12 @@ export const meetingsModuleManifest = {
             "Tasks is unavailable for this owner. Enable Tasks in module settings before accepting this candidate."
         },
         {
+          code: "meeting_output_queue_unavailable",
+          class: "transient",
+          description:
+            "Recording stopped, but its summary could not be queued. Review the finalized transcript and use Rewrite summary for a new explicit attempt."
+        },
+        {
           code: "meeting_output_interrupted",
           class: "transient",
           description:
@@ -577,8 +650,25 @@ export const meetingsModuleManifest = {
     },
     {
       id: "meetings.questions",
+      remediations: [
+        {
+          id: "meetings.remove_chat_context",
+          path: "/meetings",
+          description:
+            "Remove the About this meeting chip in the chat drawer to continue ordinary subscription chat, or choose an API-key chat model for meeting questions."
+        }
+      ],
+      errors: [
+        {
+          code: "meeting_chat_unsupported",
+          class: "prerequisite",
+          remediationRef: "meetings.remove_chat_context",
+          description:
+            "Selected-meeting questions need an API-key chat model. Remove the About this meeting chip to continue ordinary chat with your subscription model."
+        }
+      ],
       description:
-        "Ask Moss uses current meeting evidence and exact citations in shared chat. Admin pins/locked defaults apply; unavailable enabled overrides fail closed. API-key only, no actions. Transient refresh errors preserve open drafts."
+        "Chat attaches the open meeting’s notes and transcript; its chip announces the title. API-key only, no actions. Remove About this meeting for ordinary subscription chat. Admin pins and locked defaults apply."
     },
     {
       id: "meetings.transcript_storage",
@@ -620,33 +710,39 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.transcript_review",
       description:
-        "Read retained transcripts with source labels, timestamps, revision and provisional status, and omitted counts. Refresh manually or inspect previous/latest revisions. Recording requires an explicitly approved native Mac recorder."
+        "Transcript timestamps and sources sit beside notes or in phone tabs. Gaps under 250ms and exact duplicates hide; same-second gaps say under a second. Diagnostics stay intact. Chat links scroll to cited evidence, including older text."
     },
     {
       id: "meetings.capture_default",
       description:
-        "New recordings use the sole available Mac’s OS-default microphone and system audio. Existing stored mode and exact Mac, microphone and app choices remain; missing or ambiguous sources never broaden capture."
+        "New recordings use the sole available Mac’s default microphone and system audio. Settings can switch to microphone-only. Existing exact source choices are preserved; missing or ambiguous sources never broaden capture."
     },
     {
       id: "meetings.notes_recovery",
       description:
-        "Unsaved notes survive signed-in app navigation in memory. Save before closing or signing out. On a version conflict, compare current saved notes before explicitly rebasing your edits."
+        "Notes autosave and remain in signed-in memory across navigation. Failed saves can retry the same request. Conflicts keep edits and show saved notes before an explicit Keep my version choice. Unsaved work warns before sign-out."
     },
     {
       id: "meetings.delete_draft",
       description:
-        "Permanently delete a draft, personal notes, retained transcript revisions and meeting chat, generated outputs and candidates after confirmation; accepted Tasks remain. Cancellation preserves unsaved edits; deletion cannot be undone."
+        "Delete meeting in the overflow menu permanently removes its notes, transcript, chat and summaries after confirmation. Accepted Tasks and vault copies remain. Cancel keeps unsaved edits."
     },
     {
       id: "meetings.draft_records",
       description:
-        "Review Summary and actions, Transcript and My notes. Search titles, notes and transcripts in History. Accept reviewed Tasks and save private copies. Native Mac recording needs a linked Mac and an explicit Start.",
+        "Untitled meeting has the same title in its page, list and chat chip. Rename inline; Notes and Summary sit beside the transcript. Overflow has search, rewrite, versions, export, copy and deletion. Add to Tasks requires owner review.",
       errors: [
         {
           code: "meeting_request_conflict",
           class: "validation",
           description:
             "A request key was already used with different input. Use a new key for a new change."
+        },
+        {
+          code: "meeting_title_conflict",
+          class: "transient",
+          description:
+            "The title changed elsewhere. Your draft is kept; review the current title before choosing to keep your version or load the saved title."
         },
         {
           code: "meeting_notes_conflict",
@@ -658,12 +754,12 @@ export const meetingsModuleManifest = {
           code: "meeting_invalid_input",
           class: "validation",
           description:
-            "The meeting draft or notes exceed the allowed size or contain invalid fields. Correct the input and retry."
+            "The meeting or notes exceed the allowed size or contain invalid fields. Correct the input and retry."
         },
         {
           code: "meeting_not_found",
           class: "validation",
-          description: "This meeting draft is unavailable to the signed-in person."
+          description: "This meeting is unavailable to the signed-in person."
         }
       ]
     }
@@ -691,7 +787,9 @@ export const meetingsModuleManifest = {
         {
           table: "app.meeting_capture_start_cancellations",
           countPredicate: "owner_user_id = $1::uuid"
-        }
+        },
+        { table: "app.meeting_stop_summaries", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_start_limits", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }

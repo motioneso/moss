@@ -58,14 +58,13 @@ describe("Trail Marker approval page copy", () => {
 
 it("includes recording in supported pairing and keeps legacy pairing unapproved", () => {
   const html = renderApproval(1);
-  expect(html).toContain(
-    "record your selected microphone and app or computer audio for your configured transcription service when you choose Start"
-  );
+  expect(html).toContain("<li>Record meetings when you choose Start</li>");
   expect(html.match(/<li>/g)).toHaveLength(5);
   expect(html.match(/>Approve<\/button>/g)).toHaveLength(1);
   expect(html).not.toContain("Connecting never starts recording");
   expect(html).not.toContain("Enable meeting recording");
-  expect(renderApproval()).not.toContain("configured transcription service");
+  expect(html).not.toContain("configured transcription service");
+  expect(renderApproval()).not.toContain("Record meetings when you choose Start");
 });
 
 describe("Trail Marker Settings group", () => {

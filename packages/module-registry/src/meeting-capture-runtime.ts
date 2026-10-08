@@ -1,3 +1,5 @@
+import type { PgBoss } from "@moss/jobs";
+import { createMeetingCaptureMaintenanceScheduler } from "@moss/meetings";
 import {
   ConfiguredTranscriptionError,
   createConfiguredTranscription,
@@ -13,6 +15,7 @@ export type MeetingCaptureAuthorization = Pick<
   | "resolveCompanion"
   | "resolveRecording"
   | "assertRecordingBinding"
+  | "acquireRecordingBinding"
   | "assertBinding"
   | "device"
   | "trustedOrigins"
@@ -21,6 +24,7 @@ export type MeetingCaptureAuthorization = Pick<
 /** Auth proves device/session identity; Meetings owns its own narrowly approved grant. */
 export function createMeetingCaptureRuntime(deps: {
   readonly dataContext: DataContextRunner;
+  readonly boss: PgBoss;
   readonly resolveActiveModules: ActiveModulesResolver;
   readonly meetingCaptureAuthorization?: MeetingCaptureAuthorization;
 }): MeetingCaptureDependencies {
@@ -32,12 +36,14 @@ export function createMeetingCaptureRuntime(deps: {
     resolveBrowser: unavailable,
     resolveCompanion: unavailable,
     assertBinding: unavailable,
+    acquireRecordingBinding: unavailable,
     device: unavailable,
     trustedOrigins: []
   };
   return {
     ...authorization,
     dataContext: deps.dataContext,
+    scheduleMaintenance: createMeetingCaptureMaintenanceScheduler(deps.boss),
     async assertModuleAvailable(actor) {
       const modules = await deps.resolveActiveModules(actor.actorUserId);
       if (!modules.some((module) => module.id === "meetings"))
