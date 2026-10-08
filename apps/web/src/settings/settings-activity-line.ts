@@ -47,6 +47,8 @@ export function activityTitle(actionCode: string | null, modelName: string): str
       return "Answered a chat message";
     case "chat.tool_check":
       return `${modelName} guessed which tool to use`;
+    case "transcribe.meeting":
+      return "Transcribed a meeting clip";
     case "transcribe.voice_note":
       return "Transcribed a voice note";
     case "module.build":

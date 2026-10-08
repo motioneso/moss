@@ -171,20 +171,21 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
     expect(route?.route.policy.coveredBy).toBe("memory.forget");
   });
 
-  it("refuses the recording notice acknowledgement before any transport or approval", async () => {
-    const meetings = appActionManifests.find((module) => module.id === "meetings")!;
+  it("refuses user-only action permission changes before any transport or approval", async () => {
+    const settings = appActionManifests.find((module) => module.id === "settings")!;
+    const route = settings.routes!.find(
+      (route) => route.method === "PUT" && route.path === "/api/me/yolo"
+    )!;
     const catalog = buildRouteCatalog(
       [
         {
-          ...meetings,
+          ...settings,
           routes: [
             {
-              method: "PUT",
-              path: "/api/meetings/recording-notice",
-              permissionId: "meetings.view",
+              ...route,
               chat: {
                 access: "write",
-                title: "Acknowledge recording notice",
+                title: "Change action permissions",
                 content: "user_authored"
               }
             }
@@ -201,8 +202,8 @@ describe("app actions: real gateway/manifest boundary with fake persistence and 
     expectRefusal(
       await h.call({
         method: "PUT",
-        path: "/api/meetings/recording-notice",
-        body: { policyVersion: "current" }
+        path: "/api/me/yolo",
+        body: { enabled: true }
       }),
       "blocked"
     );

@@ -32,7 +32,7 @@ struct PermissionsPane: View {
                 )
                 PermissionSettingsRow(
                     symbol: "rectangle.inset.filled.and.person.filled", name: "Screen Recording",
-                    scope: "Needed for future screen-aware features.",
+                    scope: ObservationStatement.screenRecordingScope,
                     state: permissions.screenRecording,
                     openSystemSettings: {
                         if permissions.screenRecording != .granted { permissions.requestScreenRecording() }

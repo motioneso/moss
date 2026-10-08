@@ -100,3 +100,5 @@ export { Tabs } from "./tabs.js";
 export type { TabsProps, TabsItem } from "./tabs.js";
 export { RadioCardGroup } from "./radio-card-group.js";
 export type { RadioCardGroupProps, RadioCardOption } from "./radio-card-group.js";
+export * from "./control-pill.js";
+export * from "./highlight.js";

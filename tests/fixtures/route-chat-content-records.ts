@@ -6,6 +6,19 @@ export const RECORDS_MODULE_IDS: ReadonlySet<string> = new Set([
 ]);
 
 export const RECORDS_EXPECTED_ROWS = [
+  "meetings POST /api/meetings/capture/connection blocked external_effect",
+  "meetings POST /api/meetings/capture/commands blocked external_effect",
+  "meetings POST /api/meetings/capture/claim blocked external_effect",
+  "meetings GET /api/meetings/capture/devices blocked external_effect",
+  "meetings POST /api/meetings/records/:id/capture/cancel-start blocked external_effect",
+  "meetings POST /api/meetings/capture/status blocked external_effect",
+  "meetings POST /api/meetings/capture/control blocked external_effect",
+  "meetings POST /api/meetings/capture/audio blocked external_effect",
+  "meetings GET /api/meetings/records/:id/capture blocked external_effect",
+  "meetings POST /api/meetings/records/:id/capture/start blocked external_effect",
+  "meetings POST /api/meetings/records/:id/capture/control blocked external_effect",
+  "meetings PUT /api/meetings/records/:id/title write user_authored",
+  "meetings GET /api/meetings/output-availability read",
   "meetings POST /api/meetings/history/search read",
   "meetings GET /api/meetings/history/:id read",
   "meetings GET /api/meetings/records/:id/exports read",
@@ -41,7 +54,22 @@ export const RECORDS_EXPECTED_ROWS = [
   "weather GET /api/weather/today read"
 ] as const;
 
+export const MEETING_CAPTURE_NAMED_BLOCKED = [
+  ["POST", "/api/meetings/capture/connection", "external_effect"],
+  ["POST", "/api/meetings/capture/commands", "external_effect"],
+  ["POST", "/api/meetings/capture/claim", "external_effect"],
+  ["GET", "/api/meetings/capture/devices", "external_effect"],
+  ["POST", "/api/meetings/records/:id/capture/cancel-start", "external_effect"],
+  ["POST", "/api/meetings/capture/status", "external_effect"],
+  ["POST", "/api/meetings/capture/control", "external_effect"],
+  ["POST", "/api/meetings/capture/audio", "external_effect"],
+  ["GET", "/api/meetings/records/:id/capture", "external_effect"],
+  ["POST", "/api/meetings/records/:id/capture/start", "external_effect"],
+  ["POST", "/api/meetings/records/:id/capture/control", "external_effect"]
+] as const;
+
 export const RECORDS_NAMED_BLOCKED = [
+  ...MEETING_CAPTURE_NAMED_BLOCKED,
   ["POST", "/api/meetings/records/:id/exports", "external_effect"],
   ["POST", "/api/meetings/records/:id/outputs", "external_effect"],
   ["POST", "/api/meetings/records/:id/actions/:candidateId/review", "self_authority"],

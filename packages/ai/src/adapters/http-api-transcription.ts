@@ -1,3 +1,5 @@
+import { TranscriptionTransportError } from "../transcription-errors.js";
+
 /** Clip-relative ASR timestamps. Source labels and diarization are separate capabilities. */
 export interface TranscriptionSegment {
   readonly start: number;
@@ -12,6 +14,7 @@ export interface TranscribeAudioInput {
   readonly timestamps?: "segment";
   /** Activity attribution; never sent as provider request content. */
   readonly ownerUserId?: string;
+  readonly actionCode?: "transcribe.voice_note" | "transcribe.meeting";
   readonly turnId?: string;
   readonly parentId?: string;
 }
@@ -26,7 +29,7 @@ const MAX_SEGMENTS = 10000;
 const MAX_TEXT_LENGTH = 1024 * 1024;
 
 function invalidResponse(): Error {
-  return new Error("Invalid or unsupported timestamped transcription response");
+  return new TranscriptionTransportError("provider-response-invalid", "validation");
 }
 
 /** Discard a late response even when an injected transport ignored its abort signal. */
@@ -63,7 +66,11 @@ export async function readTimestampedTranscription(
     }
   } catch (error) {
     void reader.cancel().catch(() => undefined);
-    throw error;
+    signal?.throwIfAborted();
+    if (error instanceof TranscriptionTransportError) throw error;
+    // A connection may fail after headers arrived. Keep it retryable without the
+    // transport exception, which may quote a destination, credentials or payload.
+    throw new TranscriptionTransportError("provider-network", "response");
   } finally {
     signal?.removeEventListener("abort", onAbort);
     reader.releaseLock();

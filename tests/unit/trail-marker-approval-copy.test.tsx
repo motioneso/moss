@@ -20,11 +20,12 @@ import {
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { MacCompanion } from "../../apps/web/src/settings/settings-profile-subviews.js";
 
-function renderApproval(): string {
+function renderApproval(recordingPolicyVersion?: 1): string {
   const client = new QueryClient();
   client.setQueryData(queryKeys.companionPairAttempt("abc"), {
     deviceName: "Ben's MacBook",
-    status: "pending"
+    status: "pending",
+    recordingPolicyVersion
   });
   return renderToStaticMarkup(
     createElement(
@@ -55,17 +56,36 @@ describe("Trail Marker approval page copy", () => {
   });
 });
 
+it("includes recording in supported pairing and keeps legacy pairing unapproved", () => {
+  const html = renderApproval(1);
+  expect(html).toContain("<li>Record meetings when you choose Start</li>");
+  expect(html.match(/<li>/g)).toHaveLength(5);
+  expect(html.match(/>Approve<\/button>/g)).toHaveLength(1);
+  expect(html).not.toContain("Connecting never starts recording");
+  expect(html).not.toContain("Enable meeting recording");
+  expect(html).not.toContain("configured transcription service");
+  expect(renderApproval()).not.toContain("Record meetings when you choose Start");
+});
+
 describe("Trail Marker Settings group", () => {
-  it("says how to connect, using the address the person is on", () => {
-    const html = renderToStaticMarkup(createElement(MacCompanion));
+  it("says how to connect without showing a Moss address or another approval", () => {
+    const html = renderToStaticMarkup(
+      createElement(QueryClientProvider, { client: new QueryClient() }, createElement(MacCompanion))
+    );
     expect(html).toContain("How to connect");
-    expect(html).toContain(window.location.origin);
+    expect(html).not.toContain(window.location.origin);
+    expect(html).not.toContain("enter ");
+    expect(html).not.toContain("Enable meeting recording");
+    expect(html).not.toContain("Recording access needs an update");
+    expect(html).not.toContain("one-time recording");
     expect(html).toContain("Connect in Browser");
     expect(html).toContain("nothing to download yet");
   });
 
   it("describes the focus access a linked Mac gets, not just check-in", () => {
-    const html = renderToStaticMarkup(createElement(MacCompanion));
+    const html = renderToStaticMarkup(
+      createElement(QueryClientProvider, { client: new QueryClient() }, createElement(MacCompanion))
+    );
     expect(html).toContain("which focus block you have on");
   });
 });

@@ -1,19 +1,44 @@
 import Foundation
 import Security
 
-/// One generic-password Keychain item per linked identity. The account string binds the
-/// credential to a specific instance host and device id, so a leftover item from a previous
-/// instance is never picked up by a new link (§9 client).
-struct KeychainStore {
+/// Generic-password storage. Legacy companion items retain their host/device account key.
+/// Independent recording namespaces additionally bind the full canonical origin below.
+protocol CompanionCredentialStore {
+    func read(for identity: LinkedIdentity) -> String?
+    func store(credential: String, for identity: LinkedIdentity) throws
+    @discardableResult func delete(for identity: LinkedIdentity) -> Bool
+    func readRecordingProof(for identity: LinkedIdentity) -> String?
+    func storeRecordingProof(_ proof: String, for identity: LinkedIdentity) throws
+    @discardableResult func deleteRecordingProof(for identity: LinkedIdentity) -> Bool
+    func readPendingRecordingProof(for identity: LinkedIdentity) -> PendingRecordingProof?
+    func storePendingRecordingProof(_ value: PendingRecordingProof, for identity: LinkedIdentity) throws
+    func deletePendingRecordingProof(for identity: LinkedIdentity)
+}
+
+// Future hardware binding belongs at the credential/proof boundary and its server verifier.
+// The current link remains the existing bearer plus recording proof; no hardware key is created.
+struct KeychainStore: CompanionCredentialStore {
     private let service: String
+    private let recordingOrigin: String?
 
     /// Tests pass their own service, so they never read or prompt for the person's real items.
     init(service: String = "com.moss.trailmarker") {
         self.service = service
+        recordingOrigin = nil
+    }
+
+    private init(service: String, recordingOrigin: String) {
+        self.service = service
+        self.recordingOrigin = recordingOrigin
+    }
+
+    private func accountKey(for identity: LinkedIdentity) -> String {
+        if let recordingOrigin { return "\(recordingOrigin)|\(identity.deviceId)" }
+        return Self.account(for: identity)
     }
 
     func store(credential: String, for identity: LinkedIdentity) throws {
-        let account = Self.account(for: identity)
+        let account = accountKey(for: identity)
         delete(for: identity)
 
         let query: [String: Any] = [
@@ -33,7 +58,7 @@ struct KeychainStore {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: Self.account(for: identity),
+            kSecAttrAccount as String: accountKey(for: identity),
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
@@ -48,7 +73,7 @@ struct KeychainStore {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: Self.account(for: identity)
+            kSecAttrAccount as String: accountKey(for: identity)
         ]
         let status = SecItemDelete(query as CFDictionary)
         return status == errSecSuccess || status == errSecItemNotFound
@@ -148,5 +173,43 @@ extension KeychainStore: BacktrackBufferKeyStoring {
         ]
         let status = SecItemDelete(query as CFDictionary)
         return status == errSecSuccess || status == errSecItemNotFound
+    }
+}
+
+/// Independent capability proof. A copied legacy companion credential cannot reconstruct it.
+/// It is namespaced separately so replacing a heartbeat credential preserves explicit approval.
+extension KeychainStore {
+    private func recordingStore(for identity: LinkedIdentity, pending: Bool = false) -> KeychainStore {
+        let origin = identity.instance.origin
+        let scheme = origin.scheme?.lowercased() ?? ""
+        let host = origin.host?.lowercased() ?? ""
+        let port = origin.port ?? (scheme == "https" ? 443 : 80)
+        let canonicalOrigin = "\(scheme)://\(host):\(port)"
+        return KeychainStore(service: service + (pending ? ".meeting-recording-pending" : ".meeting-recording"),
+                             recordingOrigin: canonicalOrigin)
+    }
+
+    func storeRecordingProof(_ proof: String, for identity: LinkedIdentity) throws {
+        try recordingStore(for: identity).store(credential: proof, for: identity)
+    }
+    func readRecordingProof(for identity: LinkedIdentity) -> String? {
+        recordingStore(for: identity).read(for: identity)
+    }
+    @discardableResult func deleteRecordingProof(for identity: LinkedIdentity) -> Bool {
+        let removed = recordingStore(for: identity).delete(for: identity)
+        let pending = recordingStore(for: identity, pending: true).delete(for: identity)
+        return removed && pending
+    }
+    func storePendingRecordingProof(_ value: PendingRecordingProof, for identity: LinkedIdentity) throws {
+        let data = try JSONEncoder().encode(value)
+        guard let text = String(data: data, encoding: .utf8) else { throw MeetingHostError.invalidResponse }
+        try recordingStore(for: identity, pending: true).store(credential: text, for: identity)
+    }
+    func readPendingRecordingProof(for identity: LinkedIdentity) -> PendingRecordingProof? {
+        guard let text = recordingStore(for: identity, pending: true).read(for: identity) else { return nil }
+        return try? JSONDecoder().decode(PendingRecordingProof.self, from: Data(text.utf8))
+    }
+    func deletePendingRecordingProof(for identity: LinkedIdentity) {
+        recordingStore(for: identity, pending: true).delete(for: identity)
     }
 }

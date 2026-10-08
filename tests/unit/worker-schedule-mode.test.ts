@@ -21,7 +21,11 @@ describe("worker cron-engine ownership (F14 one-cron-owner)", () => {
   it("builds the worker boss with schedule:true and supervise:true", () => {
     // The worker is the SOLE cron + supervisor owner. migrate/createSchema stay
     // at createPgBossClient's defaults (false).
-    expect(WORKER_BOSS_OPTIONS).toEqual({ schedule: true, supervise: true });
+    expect(WORKER_BOSS_OPTIONS, "capture-global-default-cadence").toEqual({
+      schedule: true,
+      supervise: true,
+      monitorIntervalSeconds: 1
+    });
   });
 
   it("emits an observable pgboss.schedule_mode startup log", () => {
@@ -41,6 +45,8 @@ describe("worker cron-engine ownership (F14 one-cron-owner)", () => {
     // of this default would silently give the API a second cron engine.
     const apiOptions = resolvePgBossConstructorOptions("postgres://unused:5432/none");
     expect(apiOptions.schedule).toBe(false);
+    expect(apiOptions.supervise).toBe(false);
+    expect(WORKER_BOSS_OPTIONS.superviseIntervalSeconds).toBeUndefined();
 
     // The worker passes WORKER_BOSS_OPTIONS — must flip cron and supervision ON
     // without enabling schema mutation.

@@ -324,6 +324,32 @@ final class CompanionClientTests: XCTestCase {
         }
     }
 
+    func testRecordingCapabilityStatusPreservesRetryAfterForRateLimitAndTransientFailure() async {
+        for status in [429, 503] {
+            let transport = FakeTransport()
+            transport.statusCode = status
+            transport.headers = ["Retry-After": "120"]
+            transport.body = jsonData(["error": "Recording connection unavailable"])
+            do {
+                _ = try await makeClient(transport).recordingCapabilityStatus(credential: "tm1_synthetic",
+                    attemptId: "5372c777-bb4e-4d83-a42e-4df01b9f4144")
+                XCTFail("Expected bounded recording-capability retry")
+            } catch {
+                XCTAssertEqual(error as? MeetingHostError, .retryAfter(milliseconds: 120000))
+            }
+        }
+    }
+
+    func testRecordingRetryMappingLeavesLegacyCompanionHeartbeatUnchanged() async {
+        let transport = FakeTransport()
+        transport.statusCode = 429
+        transport.headers = ["Retry-After": "120"]
+        transport.body = jsonData(["error": "busy"])
+        await assertThrows(.rateLimited) {
+            _ = try await self.makeClient(transport).heartbeat(credential: "tm1_synthetic", app: "test", os: "test")
+        }
+    }
+
     private func assertThrows(
         _ expected: CompanionError, file: StaticString = #filePath, line: UInt = #line,
         _ work: () async throws -> Void

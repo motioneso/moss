@@ -11,6 +11,7 @@ import pg from "pg";
 
 import {
   AuthSessionResolver,
+  AbortablePgPool,
   getMossDatabaseUrls,
   resolveMossEnv,
   resolveTrustProxy,
@@ -32,9 +33,26 @@ import {
   createCompanionPairingService,
   type CompanionPairingService
 } from "./companion-pairing.js";
+import {
+  createRecordingCapabilitiesService,
+  type RecordingCapabilitiesService
+} from "./recording-capabilities.js";
+export {
+  createRecordingCapabilitiesService,
+  RecordingCapabilityError,
+  type RecordingCapabilitiesService,
+  type RecordingCapabilityContext
+} from "./recording-capabilities.js";
 import { readBearerToken, toWebHeaders } from "./headers.js";
 import { resolveAuthOriginConfig } from "./runtime-config.js";
 import { createMeSessionsService, type MeSessionsRuntimeService } from "./session-service.js";
+
+import { createSessionBindingsService, type SessionBindingsService } from "./session-bindings.js";
+export {
+  createSessionBindingsService,
+  SessionBindingError,
+  type SessionBindingsService
+} from "./session-bindings.js";
 
 const { Pool } = pg;
 
@@ -135,6 +153,9 @@ export interface MossAuthRuntime {
   readonly companionPairing: CompanionPairingService;
   /** Companion credential resolution and own-device operations (#2560). */
   readonly companionDevices: CompanionDevicesService;
+  /** Fresh cookie-session/device binding checks for separately approved capabilities. */
+  readonly sessionBindings: SessionBindingsService;
+  readonly recordingCapabilities: RecordingCapabilitiesService;
   readonly close: () => Promise<void>;
 }
 
@@ -191,6 +212,12 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
     options: "-c search_path=app,public"
   });
 
+  // Dedicated bounded maintenance capacity cannot consume interactive auth's pool.
+  const maintenancePool = new AbortablePgPool({
+    ...pool.options,
+    application_name: "moss-capture-auth-maintenance"
+  });
+
   // A server-side disconnect of an idle client (database restart, failover) is emitted
   // here. Without a listener Node treats it as uncaught and the process exits. The pool
   // has already discarded the client, and the next query opens a fresh connection.
@@ -239,6 +266,12 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
     // companion tables to jarvis_auth_runtime alone.
     companionPairing: createCompanionPairingService({ pool }),
     companionDevices: createCompanionDevicesService({ pool }),
+    sessionBindings: createSessionBindingsService({ pool, auth }),
+    recordingCapabilities: createRecordingCapabilitiesService({
+      pool,
+      maintenancePool,
+      companionDevices: createCompanionDevicesService({ pool })
+    }),
     verifySelfPassword: async ({ actorUserId, password }) => {
       // Scope strictly to the actor's own credential row. provider_id='credential'
       // AND a non-null password define "this account owns a password credential"
@@ -264,7 +297,10 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
       );
       return result.rows[0]?.exists ?? false;
     },
-    close: () => pool.end()
+    close: async () => {
+      await maintenancePool.close();
+      await pool.end();
+    }
   };
 }
 

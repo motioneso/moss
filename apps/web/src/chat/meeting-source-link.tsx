@@ -16,12 +16,17 @@ export function validMeetingEvidencePath(path: unknown): path is string {
   if (typeof path !== "string" || !path.startsWith("/meetings?")) return false;
   const query = new URLSearchParams(path.slice(path.indexOf("?") + 1));
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const segmentId = query.get("segmentId");
   const revision = Number(query.get("segmentRevision"));
   const start = Number(query.get("startCharacter"));
   const end = Number(query.get("endCharacter"));
   return (
+    !path.includes("#") &&
+    query.getAll("id").length === 1 &&
     uuid.test(query.get("id") ?? "") &&
-    uuid.test(query.get("segmentId") ?? "") &&
+    query.getAll("segmentId").length === 1 &&
+    !!segmentId?.trim() &&
+    segmentId.length <= 256 &&
     ["segmentRevision", "startCharacter", "endCharacter"].every(
       (key) => query.getAll(key).length === 1 && /^\d+$/.test(query.get(key) ?? "")
     ) &&

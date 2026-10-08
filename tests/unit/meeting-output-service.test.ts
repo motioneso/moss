@@ -1,3 +1,4 @@
+import { MeetingStopSummaryRepository } from "../../packages/meetings/src/stop-summary-repository.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isDeepStrictEqual } from "node:util";
 import type { AccessContext, DataContextDb } from "@moss/db";
@@ -15,6 +16,7 @@ import {
   MeetingOutputService,
   type MeetingOutputGenerator
 } from "../../packages/meetings/src/output-service.js";
+import { MeetingRecordsRepository } from "../../packages/meetings/src/repository.js";
 
 const MEETING_ID = "11111111-1111-4111-8111-111111111111";
 const ACTOR: AccessContext = { actorUserId: "owner", requestId: "request" };
@@ -64,11 +66,13 @@ function deferred<T>() {
 
 function setup() {
   const state: {
+    title: string;
     inputs: MeetingOutputInputs;
     head: MeetingOutputArtifact | null;
     artifacts: MeetingOutputArtifact[];
     inTransaction: boolean;
   } = {
+    title: "Meeting",
     inputs: { meetingId: MEETING_ID, transcript: null, personalNotes: NOTES, notesRevision: 1 },
     head: null,
     artifacts: [],
@@ -80,14 +84,22 @@ function setup() {
   >();
   // Every database-facing method used by the service is replaced below. No database is created.
   const repository = new MeetingOutputsRepository();
-  const lock = vi.spyOn(repository, "lock").mockImplementation(async () => ({
+  const meeting = () => ({
     id: MEETING_ID,
-    title: "Meeting",
+    title: state.title,
     personalNotes: state.inputs.personalNotes,
     notesRevision: state.inputs.notesRevision,
     createdAt: "2026-10-03T10:00:00.000Z",
     updatedAt: "2026-10-03T10:00:00.000Z"
-  }));
+  });
+  const lock = vi.spyOn(repository, "lock").mockImplementation(async () => meeting());
+  const putTitle = vi
+    .spyOn(MeetingRecordsRepository.prototype, "putTitle")
+    .mockImplementation(async (_db, input) => {
+      if (state.title !== input.expectedTitle) return { status: "conflict", meeting: meeting() };
+      state.title = input.title;
+      return { status: "saved", meeting: meeting() };
+    });
   const request = vi
     .spyOn(repository, "request")
     .mockImplementation(async (_db, meetingId, key, encoded) => {
@@ -140,9 +152,6 @@ function setup() {
         request_key: key,
         input_json: encoded,
         result_json: null,
-        history_kind: "generate",
-        history_result_status: null,
-        history_result_code: null,
         expires_at: new Date(Date.now() + 180_000)
       });
     });
@@ -189,15 +198,20 @@ function setup() {
   const generator = vi
     .fn<MeetingOutputGenerator>()
     .mockResolvedValue({ content: CONTENT, modelRoute: "configured-route" });
-  const service = new MeetingOutputService(dataContext, generator, repository);
+  const summaries = new MeetingStopSummaryRepository();
+  const admit = vi.spyOn(summaries, "admit").mockResolvedValue(INPUT);
+  const service = new MeetingOutputService(dataContext, generator, repository, summaries);
   return {
     service,
+    admit,
     generator,
     state,
     requests,
     actors,
+    dataContext,
     scopedDb,
     lock,
+    putTitle,
     request,
     head,
     inputs,
@@ -346,9 +360,6 @@ describe("meeting output generation service", () => {
       request_key: INPUT.requestKey,
       input_json: JSON.stringify({ kind: "generate", ...INPUT }),
       result_json: null,
-      history_kind: "generate",
-      history_result_status: null,
-      history_result_code: null,
       expires_at: new Date(0)
     });
     const result = await harness.service.generate(ACTOR, MEETING_ID, INPUT);
@@ -626,5 +637,197 @@ describe("meeting output generation service", () => {
     expect(harness.inputs).not.toHaveBeenCalled();
     expect(harness.reserve).not.toHaveBeenCalled();
     expect(harness.generator).not.toHaveBeenCalled();
+  });
+});
+
+describe("meeting titles derived only from automatic summaries", () => {
+  it.each([0, 1])(
+    "preserves an untitled meeting during manual generation or Rewrite at output version %s",
+    async (expectedOutputVersion) => {
+      const f = setup();
+      f.state.title = "Untitled meeting";
+      if (expectedOutputVersion) {
+        f.state.head = {
+          id: "existing-output",
+          meetingId: MEETING_ID,
+          version: expectedOutputVersion,
+          inputs: f.state.inputs,
+          templateId: "general",
+          templateVersion: 1,
+          modelRoute: "configured-route",
+          content: CONTENT,
+          origin: "generated",
+          stale: false,
+          createdAt: "2026-10-03T10:00:00.000Z"
+        };
+        f.state.artifacts.push(f.state.head);
+      }
+
+      expect(
+        await f.service.generate(ACTOR, MEETING_ID, { ...INPUT, expectedOutputVersion })
+      ).toMatchObject({
+        status: "saved",
+        artifact: { stale: false, version: expectedOutputVersion + 1 }
+      });
+      expect(f.generator).toHaveBeenCalledOnce();
+      expect(f.putTitle).not.toHaveBeenCalled();
+      expect(f.state.title).toBe("Untitled meeting");
+    }
+  );
+
+  it("names an untitled meeting from a fresh Stop summary, only once on replay", async () => {
+    const f = setup();
+    f.state.title = "Untitled meeting";
+    f.generator.mockResolvedValue({
+      content: { ...CONTENT, overview: `${CONTENT.overview} Additional detail.` },
+      modelRoute: "configured-route"
+    });
+
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "saved",
+      artifact: { stale: false }
+    });
+    expect(f.putTitle).toHaveBeenCalledExactlyOnceWith(f.scopedDb, {
+      meetingId: MEETING_ID,
+      expectedTitle: "Untitled meeting",
+      title: CONTENT.overview
+    });
+    expect(f.state.title).toBe(CONTENT.overview);
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "saved",
+      replayed: true
+    });
+    expect(f.putTitle).toHaveBeenCalledOnce();
+    expect(f.generator).toHaveBeenCalledOnce();
+  });
+
+  it.each(["before", "during"])(
+    "preserves a user title set %s automatic summary generation",
+    async (when) => {
+      const f = setup();
+      f.state.title = when === "before" ? "Project planning" : "Untitled meeting";
+      f.generator.mockImplementation(async () => {
+        f.state.title = "Project planning";
+        return { content: CONTENT, modelRoute: "configured-route" };
+      });
+
+      expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+        status: "saved",
+        artifact: { stale: false }
+      });
+      expect(f.putTitle).not.toHaveBeenCalled();
+      expect(f.state.title).toBe("Project planning");
+    }
+  );
+
+  it("preserves an untitled meeting when its automatic summary becomes stale", async () => {
+    const f = setup();
+    f.state.title = "Untitled meeting";
+    f.generator.mockImplementation(async () => {
+      f.state.inputs = { ...f.state.inputs, notesRevision: f.state.inputs.notesRevision + 1 };
+      return { content: CONTENT, modelRoute: "configured-route" };
+    });
+
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "saved",
+      artifact: { stale: true }
+    });
+    expect(f.putTitle).not.toHaveBeenCalled();
+    expect(f.state.title).toBe("Untitled meeting");
+  });
+});
+
+describe("automatic summary shares durable output reservation", () => {
+  it("finishes a queued summary whose meeting was deleted without admission or dispatch", async () => {
+    const f = setup();
+    f.lock.mockRejectedValue(new MeetingOutputError("meeting_not_found", 404));
+    await expect(f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).resolves.toBeNull();
+    expect(f.admit).not.toHaveBeenCalled();
+    expect(f.reserve).not.toHaveBeenCalled();
+    expect(f.generator).not.toHaveBeenCalled();
+  });
+  it.each([
+    new Error("Database unavailable"),
+    new MeetingOutputError("meeting_forbidden", 403),
+    new MeetingOutputError("meeting_not_found", 500)
+  ])("does not hide an unrelated meeting-lock failure: %s", async (error) => {
+    const f = setup();
+    f.lock.mockRejectedValue(error);
+    await expect(f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).rejects.toBe(error);
+    expect(f.admit).not.toHaveBeenCalled();
+    expect(f.generator).not.toHaveBeenCalled();
+  });
+  it("does not treat a later admission error as a deleted meeting", async () => {
+    const f = setup();
+    const error = new MeetingOutputError("meeting_not_found", 404);
+    f.admit.mockRejectedValue(error);
+    await expect(f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).rejects.toBe(error);
+    expect(f.generator).not.toHaveBeenCalled();
+  });
+  it("does not swallow a context authorization failure before the meeting lookup", async () => {
+    const f = setup();
+    const error = new MeetingOutputError("meeting_not_found", 404);
+    vi.spyOn(f.dataContext, "withDataContext").mockRejectedValue(error);
+    await expect(f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).rejects.toBe(error);
+    expect(f.lock).not.toHaveBeenCalled();
+    expect(f.generator).not.toHaveBeenCalled();
+  });
+  it("keeps provider failure durable rather than swallowing it as a deleted meeting", async () => {
+    const f = setup();
+    f.generator.mockRejectedValue(new MeetingOutputError("meeting_not_found", 404));
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "failed",
+      code: "meeting_not_found"
+    });
+    expect(f.generator).toHaveBeenCalledOnce();
+    expect(f.finish).toHaveBeenCalledOnce();
+  });
+  it("reserves before dispatch and never charges again for repeated Stop or status jobs", async () => {
+    const f = setup();
+    f.generator.mockImplementation(async () => {
+      expect(f.state.inTransaction).toBe(false);
+      expect(f.requests.has(INPUT.requestKey)).toBe(true);
+      return { content: CONTENT, modelRoute: "configured-route" };
+    });
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "saved"
+    });
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "saved",
+      replayed: true
+    });
+    expect(f.generator).toHaveBeenCalledOnce();
+    expect(f.reserve).toHaveBeenCalledOnce();
+  });
+  it("returns a durable configured-route failure without a retry dispatch", async () => {
+    const f = setup();
+    f.generator.mockRejectedValue(new MeetingOutputError("meeting_output_route_unavailable"));
+    const failed = await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey);
+    expect(failed).toMatchObject({ status: "failed", code: "meeting_output_route_unavailable" });
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toEqual(failed);
+    expect(f.generator).toHaveBeenCalledOnce();
+  });
+  it("reports a process-interrupted reservation without a second provider attempt", async () => {
+    const f = setup();
+    f.requests.set(INPUT.requestKey, {
+      meeting_id: MEETING_ID,
+      owner_user_id: ACTOR.actorUserId,
+      request_key: INPUT.requestKey,
+      input_json: JSON.stringify({ kind: "generate", ...INPUT }),
+      expires_at: new Date(0),
+      result_json: null
+    });
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toMatchObject({
+      status: "failed",
+      code: "meeting_output_interrupted"
+    });
+    expect(f.generator).not.toHaveBeenCalled();
+  });
+  it("does not reserve or dispatch when finalization admission skips the attempt", async () => {
+    const f = setup();
+    f.admit.mockResolvedValue(null);
+    expect(await f.service.generateOnStop(ACTOR, MEETING_ID, INPUT.requestKey)).toBeNull();
+    expect(f.reserve).not.toHaveBeenCalled();
+    expect(f.generator).not.toHaveBeenCalled();
   });
 });

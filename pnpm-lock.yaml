@@ -845,6 +845,9 @@ importers:
       '@moss/db':
         specifier: workspace:*
         version: link:../db
+      '@moss/jobs':
+        specifier: workspace:*
+        version: link:../jobs
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk
@@ -863,6 +866,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
       fastify:
         specifier: ^5.6.2
         version: 5.8.5

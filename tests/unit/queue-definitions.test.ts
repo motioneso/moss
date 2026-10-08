@@ -50,6 +50,8 @@ describe("registered queue definitions", () => {
       "news.refresh",
       "news.revalidate",
       "notes.sync",
+      "meetings.stop-summary",
+      "meetings.capture-maintenance",
       "proactive-scan-source",
       "commitment-extraction",
       "commitment-email-judgement",

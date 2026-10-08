@@ -7,21 +7,21 @@ const manifests = getBuiltInModuleManifests();
 const catalog = buildRouteCatalog(manifests, []);
 
 describe("slice 4 review corrections", () => {
-  it("cannot acknowledge the separately developed recording notice through app actions", () => {
-    const meetings = manifests.find((module) => module.id === "meetings")!;
-    // Compatibility fixture only: the real endpoint lives on the separate capture branch.
+  it("keeps user-only action permissions blocked even with permissive route metadata", () => {
+    const settings = manifests.find((module) => module.id === "settings")!;
+    const route = settings.routes!.find(
+      (route) => route.method === "PUT" && route.path === "/api/me/yolo"
+    )!;
     const combined = buildRouteCatalog(
       [
         {
-          ...meetings,
+          ...settings,
           routes: [
             {
-              method: "PUT",
-              path: "/api/meetings/recording-notice",
-              permissionId: "meetings.view",
+              ...route,
               chat: {
                 access: "write",
-                title: "Acknowledge recording notice",
+                title: "Change action permissions",
                 content: "user_authored"
               }
             }
@@ -30,9 +30,9 @@ describe("slice 4 review corrections", () => {
       ],
       []
     );
-    expect(combined.resolve("PUT", "/api/meetings/recording-notice")?.route.policy).toMatchObject({
+    expect(combined.resolve("PUT", "/api/me/yolo")?.route.policy).toMatchObject({
       access: "blocked",
-      blockedBecause: "data_scope_consent"
+      blockedBecause: "self_authority"
     });
   });
 

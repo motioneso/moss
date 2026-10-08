@@ -27,6 +27,7 @@ import {
   type TranscribeAudioResult
 } from "./http-api-transcription.js";
 import type { ProviderKind } from "./transcript-reader.js";
+import { transcriptionHttpFailure } from "../transcription-errors.js";
 
 // ---------------------------------------------------------------------------
 // HttpApiAdapter
@@ -161,7 +162,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         kind: "transcription",
         action: "transcription",
         modelName: input.model.provider_model_id,
-        actionCode: "transcribe.voice_note",
+        actionCode: input.actionCode ?? "transcribe.voice_note",
         ...(input.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
         ...(input.turnId ? { turnId: input.turnId } : {}),
         ...(input.parentId ? { parentId: input.parentId } : {})
@@ -191,8 +192,8 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         rejectAbortedTranscription(response, input.signal);
         if (!response.ok) {
           void response.body?.cancel().catch(() => undefined);
-          // Never include the API key in error messages (security invariant)
-          throw new Error(`HTTP ${response.status}`);
+          // Keep only allow-listed status/retry facts, never the provider response body.
+          throw transcriptionHttpFailure(response);
         }
 
         if (input.timestamps === "segment") {

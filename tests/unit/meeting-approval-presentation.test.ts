@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
-import { dataContextBrand } from "@moss/db";
+import { dataContextBrand, type DataContextDb } from "@moss/db";
+import { PreferencesRepository } from "@moss/structured-state";
 import type { RouteApprovalInput, RouteApprovalPresentation } from "@moss/module-sdk";
 import type {
   IngestMeetingTranscriptInput,
@@ -13,17 +14,27 @@ import {
   meetingNotesPresentation,
   meetingPreferencesPresentation,
   meetingSummaryPresentation,
+  meetingTitlePresentation,
   meetingTranscriptPresentation
 } from "../../packages/meetings/src/action-presentations.js";
 import { meetingsModuleManifest } from "../../packages/meetings/src/manifest.js";
 import { MeetingRecordsRepository } from "../../packages/meetings/src/repository.js";
 import { MeetingOutputsRepository } from "../../packages/meetings/src/output-repository.js";
+import {
+  MeetingPreferencesRepository,
+  MEETING_CAPTURE_DEFAULT_KEY,
+  MEETING_CAPTURE_SOURCE_KEY
+} from "../../packages/meetings/src/preferences.js";
+import {
+  MeetingCaptureConnectionRepository,
+  type CaptureConnection
+} from "../../packages/meetings/src/capture-connection-repository.js";
 import { MeetingTranscriptRepository } from "../../packages/meetings/src/transcript-repository.js";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const key = "22222222-2222-4222-8222-222222222222";
 const foreign = "33333333-3333-4333-8333-333333333333";
-const db = { [dataContextBrand]: true, db: {} };
+const db = { [dataContextBrand]: true, db: {} } as unknown as DataContextDb;
 const ctx = { actorUserId: "owner", requestId: "request", chatSessionId: "session" };
 const meeting: MeetingRecord = {
   id,
@@ -166,10 +177,50 @@ const summaryBody = () => ({
   expectedOutputVersion: 2,
   content: artifact().content as Mutable<MeetingOutputArtifact["content"]>
 });
+const preferenceState = {
+  defaultCaptureMode: "computer-audio" as const,
+  rememberedSource: null,
+  summarizeOnStop: true,
+  summaryTemplateId: "general" as const
+};
+const recorder = (): CaptureConnection => ({
+  owner_user_id: "owner",
+  device_id: foreign,
+  connection_id: key,
+  device_name: "Office Mac",
+  verifier_hash: "never disclose this recorder credential",
+  capability_revision: 1,
+  revision: 2,
+  inventory_json: JSON.stringify({
+    microphones: [
+      { deviceId: "internal-mic", sourceId: "internal-source", label: "Studio microphone" }
+    ],
+    applications: [
+      { applicationId: "internal-app", appProcessTreeId: "internal-process", label: "Meeting app" }
+    ],
+    computerAudio: { available: true, excludedProcessTreeIds: ["internal-self"] },
+    microphonePermission: "granted",
+    systemAudioPermission: "granted"
+  }),
+  last_seen_at: new Date("2026-10-08T01:00:00Z"),
+  expires_at: new Date("2030-01-01T00:00:00Z")
+});
+let connection: MockInstance<MeetingCaptureConnectionRepository["connection"]>;
+let persistedDefault: MockInstance<MeetingPreferencesRepository["getPersistedDefaultCaptureMode"]>;
+let readPreferences: MockInstance<MeetingPreferencesRepository["get"]>;
 let get: MockInstance<MeetingRecordsRepository["get"]>;
 let getArtifact: MockInstance<MeetingOutputsRepository["getArtifact"]>;
 let snapshot: MockInstance<MeetingTranscriptRepository["approvalSnapshot"]>;
 beforeEach(() => {
+  persistedDefault = vi
+    .spyOn(MeetingPreferencesRepository.prototype, "getPersistedDefaultCaptureMode")
+    .mockResolvedValue(null);
+  connection = vi
+    .spyOn(MeetingCaptureConnectionRepository.prototype, "connection")
+    .mockResolvedValue(recorder());
+  readPreferences = vi
+    .spyOn(MeetingPreferencesRepository.prototype, "get")
+    .mockResolvedValue(preferenceState);
   get = vi.spyOn(MeetingRecordsRepository.prototype, "get").mockResolvedValue(meeting);
   getArtifact = vi
     .spyOn(MeetingOutputsRepository.prototype, "getArtifact")
@@ -200,10 +251,10 @@ function noInternalIds(result: Awaited<ReturnType<RouteApprovalPresentation>>) {
 }
 
 describe("Meetings authored action disclosures", () => {
-  it("covers exactly all six callable mutations and preserves blocked routes", () => {
+  it("covers all seven callable mutations and preserves blocked routes", () => {
     const routes = meetingsModuleManifest.routes;
     const writable = routes.filter((route) => ["write", "destructive"].includes(route.chat.access));
-    expect(writable).toHaveLength(6);
+    expect(writable).toHaveLength(7);
     for (const route of writable) {
       expect(route.chat).toHaveProperty("title", expect.any(String));
       expect(route.chat).toHaveProperty("presentation", expect.any(Function));
@@ -211,6 +262,17 @@ describe("Meetings authored action disclosures", () => {
     expect(
       routes.filter((route) => route.chat.access === "blocked").map((route) => route.path)
     ).toEqual([
+      "/api/meetings/capture/connection",
+      "/api/meetings/capture/commands",
+      "/api/meetings/capture/claim",
+      "/api/meetings/capture/devices",
+      "/api/meetings/records/:id/capture/cancel-start",
+      "/api/meetings/capture/status",
+      "/api/meetings/capture/control",
+      "/api/meetings/capture/audio",
+      "/api/meetings/records/:id/capture",
+      "/api/meetings/records/:id/capture/start",
+      "/api/meetings/records/:id/capture/control",
       "/api/meetings/records/:id/exports",
       "/api/meetings/records/:id/outputs",
       "/api/meetings/records/:id/actions/:candidateId/review"
@@ -251,6 +313,272 @@ describe("Meetings authored action disclosures", () => {
       expect(result?.fields).toHaveLength(1);
     }
   );
+
+  it("discloses the exact rename and revalidates the owner-scoped title", async () => {
+    const body = { title: "Renamed planning", expectedTitle: meeting.title };
+    const before = await meetingTitlePresentation(db, call(body), ctx);
+    expect(before).toMatchObject({
+      target: meeting.title,
+      fields: [
+        { label: "New title", value: body.title },
+        { label: "Current title", value: meeting.title }
+      ]
+    });
+    noInternalIds(before);
+    get.mockResolvedValue({ ...meeting, title: "Changed elsewhere" });
+    const after = await meetingTitlePresentation(db, call(body), ctx);
+    expect(after?.version).not.toBe(before?.version);
+    expect(after?.target).toBe("Changed elsewhere");
+    for (const invalid of [
+      { title: "x" },
+      { expectedTitle: "x" },
+      { title: " ", expectedTitle: "x" },
+      { title: "x".repeat(241), expectedTitle: "x" },
+      { title: "é".repeat(121), expectedTitle: "x" },
+      { title: "x", expectedTitle: "é".repeat(121) },
+      { title: "x\0", expectedTitle: "x" },
+      { title: "x", expectedTitle: 1 }
+    ])
+      expect(await meetingTitlePresentation(db, call(invalid), ctx)).toBeNull();
+  });
+
+  it.each([true, false])(
+    "discloses automatic Stop summary preference %s",
+    async (summarizeOnStop) => {
+      expect(
+        await meetingPreferencesPresentation(db, call({ summarizeOnStop }, false), ctx)
+      ).toMatchObject({
+        fields: [
+          { label: "Summarize automatically after Stop", value: summarizeOnStop ? "Yes" : "No" }
+        ]
+      });
+    }
+  );
+  it.each([
+    ["general", "General meeting"],
+    ["one-to-one", "One-to-one"],
+    ["project-review", "Project review"],
+    ["interview", "Interview"]
+  ])("names summary style %s", async (summaryTemplateId, value) => {
+    expect(
+      await meetingPreferencesPresentation(db, call({ summaryTemplateId }, false), ctx)
+    ).toMatchObject({ fields: [{ label: "Summary style", value }] });
+  });
+  it("names the effective reset default and pins preference changes", async () => {
+    const body = { defaultCaptureMode: null };
+    const before = await meetingPreferencesPresentation(db, call(body, false), ctx);
+    expect(before?.fields).toEqual([
+      { label: "Default capture source", value: "Computer audio and microphone" }
+    ]);
+    readPreferences.mockResolvedValue({
+      ...preferenceState,
+      rememberedSource: { deviceId: foreign, microphoneId: "internal-mic", mode: "microphone-only" }
+    });
+    const after = await meetingPreferencesPresentation(db, call(body, false), ctx);
+    expect(after?.fields).toEqual([{ label: "Default capture source", value: "Microphone only" }]);
+    expect(after?.version).not.toBe(before?.version);
+  });
+  const rememberedSource = {
+    deviceId: foreign,
+    microphoneId: "internal-mic",
+    mode: "selected-app",
+    applicationId: "internal-app"
+  };
+  it("resolves every saved recorder reference to readable owner-scoped names", async () => {
+    const result = await meetingPreferencesPresentation(
+      db,
+      call({ rememberedSource, summarizeOnStop: false, summaryTemplateId: "interview" }, false),
+      ctx
+    );
+    expect(result?.fields).toEqual(
+      expect.arrayContaining([
+        { label: "Recording Mac", value: "Office Mac" },
+        { label: "Microphone", value: "Studio microphone" },
+        { label: "Application", value: "Meeting app" },
+        { label: "Remembered audio source", value: "Selected app and microphone" }
+      ])
+    );
+    expect(connection).toHaveBeenCalledWith(db, foreign);
+    for (const token of [
+      foreign,
+      key,
+      "internal-mic",
+      "internal-app",
+      "internal-process",
+      "never disclose"
+    ])
+      expect(visible(result)).not.toContain(token);
+    connection.mockResolvedValue({ ...recorder(), revision: 3 });
+    expect(
+      (
+        await meetingPreferencesPresentation(
+          db,
+          call({ rememberedSource, summarizeOnStop: false, summaryTemplateId: "interview" }, false),
+          ctx
+        )
+      )?.version
+    ).not.toBe(result?.version);
+  });
+  it("discloses clearing remembered sources without a device lookup", async () => {
+    const result = await meetingPreferencesPresentation(
+      db,
+      call({ rememberedSource: null }, false),
+      ctx
+    );
+    expect(visible(result)).toContain("Clear the saved Mac, microphone and application");
+    expect(connection).not.toHaveBeenCalled();
+  });
+  it.each([
+    [{ summarizeOnStop: false }, "Turn off automatic summaries"],
+    [{ summarizeOnStop: true }, "Turn on automatic summaries"],
+    [{ summaryTemplateId: "interview" }, "Change the summary style"],
+    [{ rememberedSource: null }, "Clear the saved recording source"],
+    [{ defaultCaptureMode: "microphone-only" }, "Change the default recording audio"],
+    [
+      { summarizeOnStop: false, summaryTemplateId: "interview", rememberedSource: null },
+      "Clear the saved recording source; Turn off automatic summaries; Change the summary style"
+    ]
+  ])("titles this exact preference change %j", async (body, title) => {
+    expect(await meetingPreferencesPresentation(db, call(body, false), ctx)).toMatchObject({
+      title
+    });
+  });
+  it("discloses source clearing widening from an inherited microphone-only mode", async () => {
+    readPreferences.mockResolvedValue({
+      ...preferenceState,
+      defaultCaptureMode: "microphone-only",
+      rememberedSource: { deviceId: foreign, microphoneId: "internal-mic", mode: "microphone-only" }
+    });
+    const result = await meetingPreferencesPresentation(
+      db,
+      call({ rememberedSource: null }, false),
+      ctx
+    );
+    expect(result?.fields).toContainEqual({
+      label: "Next recording audio",
+      value: "Computer audio and microphone"
+    });
+    persistedDefault.mockResolvedValue("microphone-only");
+    const savedDefault = await meetingPreferencesPresentation(
+      db,
+      call({ rememberedSource: null }, false),
+      ctx
+    );
+    expect(savedDefault?.fields).toContainEqual({
+      label: "Next recording audio",
+      value: "Microphone only"
+    });
+    expect(savedDefault?.version).not.toBe(result?.version);
+  });
+  it.each([
+    [null, "computer-audio", "Computer audio and microphone"],
+    ["microphone-only", "microphone-only", "Microphone only"]
+  ] as const)(
+    "matches the next persisted read after source clearing with saved default %s",
+    async (savedMode, nextMode, nextLabel) => {
+      readPreferences.mockRestore();
+      persistedDefault.mockRestore();
+      const stored = new Map<string, unknown>([
+        [
+          MEETING_CAPTURE_SOURCE_KEY,
+          { deviceId: foreign, microphoneId: "internal-mic", mode: "microphone-only" }
+        ],
+        [MEETING_CAPTURE_DEFAULT_KEY, savedMode]
+      ]);
+      vi.spyOn(PreferencesRepository.prototype, "get").mockImplementation(
+        async (_db, key) => stored.get(key) ?? null
+      );
+      const write = vi
+        .spyOn(PreferencesRepository.prototype, "upsert")
+        .mockImplementation(async (_db, key, value) => {
+          stored.set(key, value);
+        });
+      const repository = new MeetingPreferencesRepository();
+      expect((await repository.get(db)).defaultCaptureMode).toBe("microphone-only");
+      const card = await meetingPreferencesPresentation(
+        db,
+        call({ rememberedSource: null }, false),
+        ctx
+      );
+      expect(card?.fields).toContainEqual({ label: "Next recording audio", value: nextLabel });
+      expect(write).not.toHaveBeenCalled();
+      await repository.update(db, { rememberedSource: null });
+      expect(write).toHaveBeenCalledExactlyOnceWith(db, MEETING_CAPTURE_SOURCE_KEY, null);
+      expect((await repository.get(db)).defaultCaptureMode).toBe(nextMode);
+      expect(await repository.getPersistedDefaultCaptureMode(db)).toBe(savedMode);
+    }
+  );
+  it("discloses explicit source/default combinations and unavailable selected-app recovery", async () => {
+    for (const [defaultCaptureMode, value] of [
+      [null, "Computer audio and microphone"],
+      ["microphone-only", "Microphone only"]
+    ] as const) {
+      const result = await meetingPreferencesPresentation(
+        db,
+        call({ rememberedSource: null, defaultCaptureMode }, false),
+        ctx
+      );
+      expect(result?.fields).toContainEqual({ label: "Next recording audio", value });
+    }
+    persistedDefault.mockResolvedValue("selected-app");
+    expect(
+      (await meetingPreferencesPresentation(db, call({ rememberedSource: null }, false), ctx))
+        ?.fields
+    ).toContainEqual({
+      label: "Next recording audio",
+      value: "Selected app and microphone; choose an application before recording"
+    });
+  });
+  it("accepts exactly 240 UTF-8 title bytes", async () => {
+    expect(
+      await meetingTitlePresentation(db, call({ title: "é".repeat(120), expectedTitle: "x" }), ctx)
+    ).not.toBeNull();
+  });
+  it("refuses missing, foreign, ambiguous or malformed recorder references", async () => {
+    const input = call({ rememberedSource }, false);
+    connection.mockResolvedValue(null);
+    expect(await meetingPreferencesPresentation(db, input, ctx)).toBeNull();
+    connection.mockResolvedValue({ ...recorder(), device_id: id });
+    expect(await meetingPreferencesPresentation(db, input, ctx)).toBeNull();
+    connection.mockResolvedValue({ ...recorder(), owner_user_id: "someone-else" });
+    expect(await meetingPreferencesPresentation(db, input, ctx)).toBeNull();
+    connection.mockResolvedValue({ ...recorder(), expires_at: new Date("2000-01-01T00:00:00Z") });
+    expect(await meetingPreferencesPresentation(db, input, ctx)).toBeNull();
+    connection.mockResolvedValue({ ...recorder(), inventory_json: "not JSON" });
+    expect(await meetingPreferencesPresentation(db, input, ctx)).toBeNull();
+    for (const property of ["microphones", "applications"]) {
+      const record = recorder();
+      const inventory = JSON.parse(record.inventory_json);
+      inventory[property].push(inventory[property][0]);
+      connection.mockResolvedValue({ ...record, inventory_json: JSON.stringify(inventory) });
+      expect(await meetingPreferencesPresentation(db, input, ctx)).toBeNull();
+    }
+    connection.mockResolvedValue(recorder());
+    for (const patch of [
+      { microphoneId: "missing" },
+      { applicationId: "missing" },
+      { applicationId: undefined },
+      { unknown: true },
+      { deviceId: "invalid" }
+    ])
+      expect(
+        await meetingPreferencesPresentation(
+          db,
+          call({ rememberedSource: { ...rememberedSource, ...patch } }, false),
+          ctx
+        )
+      ).toBeNull();
+    for (const body of [
+      { summarizeOnStop: "yes" },
+      { summaryTemplateId: "unknown" },
+      { rememberedSource: [] }
+    ])
+      expect(await meetingPreferencesPresentation(db, call(body, false), ctx)).toBeNull();
+    expect(
+      await meetingPreferencesPresentation(db, { ...input, query: { hidden: "value" } }, ctx)
+    ).toBeNull();
+    expect(await meetingPreferencesPresentation(db, { ...input, params: { id } }, ctx)).toBeNull();
+  });
 
   it("reads the actual deletion target instead of trusting caller text", async () => {
     const result = await deleteMeetingPresentation(db, call(), ctx);
@@ -390,6 +718,11 @@ describe("Meetings authored action disclosures", () => {
   });
 
   const existing: readonly [string, RouteApprovalPresentation, () => unknown][] = [
+    [
+      "title",
+      meetingTitlePresentation,
+      () => ({ title: "New title", expectedTitle: meeting.title })
+    ],
     ["delete", deleteMeetingPresentation, () => undefined],
     [
       "notes",
