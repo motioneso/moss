@@ -107,6 +107,53 @@ function holdResume(h: ReturnType<typeof harness>) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("chat conversation identity binding", () => {
+  it("stops during verified-unavailable healing without canceling shared replacement warmup", async () => {
+    const launching = deferred<void>();
+    const released = deferred<void>();
+    const h = harness();
+    await h.manager.ensureSession("owner", "Owner");
+    vi.mocked(h.engine.submit).mockRejectedValue(
+      new CliChatUnavailableError("verified pre-entry failure")
+    );
+    const replacement = {
+      ...h.engine,
+      launch: vi.fn(async () => {
+        launching.resolve();
+        await released.promise;
+        return { offset: 0 };
+      }),
+      submit: vi.fn(async () => {}),
+      kill: vi.fn(async () => {})
+    };
+    h.engineFactory.mockReturnValue(replacement);
+    let reply: string | undefined;
+    const turn = h.manager
+      .submitTurn("owner", "Owner", "Cancel this healing wait")
+      .then((result) => {
+        reply = result.reply;
+      });
+    await launching.promise;
+    const prestart = h.manager.ensureSession("owner", "Owner");
+    try {
+      await h.manager.stopTurn("owner");
+      await vi.waitFor(() => expect(reply).toBe(""), { timeout: 100 });
+      expect(h.engine.submit).toHaveBeenCalledTimes(1);
+      expect(replacement.submit).not.toHaveBeenCalled();
+      expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+      expect(replacement.kill).not.toHaveBeenCalled();
+      const next = h.manager.submitTurn("owner", "Owner", "The healing wait released its lock");
+      await h.manager.stopTurn("owner");
+      expect(await next).toEqual({ reply: "" });
+    } finally {
+      released.resolve();
+      await Promise.all([prestart, turn]);
+    }
+    expect((await prestart).threadId).toBe("thread-A");
+    expect(replacement.launch).toHaveBeenCalledTimes(1);
+    expect(replacement.submit).not.toHaveBeenCalled();
+    expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+  });
+
   it("stops a turn waiting on shared prestart without canceling the shared engine launch", async () => {
     const launching = deferred<void>();
     const released = deferred<void>();

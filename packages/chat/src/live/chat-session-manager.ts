@@ -405,18 +405,19 @@ export class ChatSessionManager {
           throw err;
         }
         if (err instanceof CliChatUnavailableError) {
-          // #1157: unavailable = the text verifiably never entered the engine (paste failed
-          // pre-entry, or the daemon has no live session). Safe to heal + resubmit ONCE.
+          // #1157: verified pre-entry failure permits one heal and resubmit.
           await assertProviderIdentityForPendingTurn(
             turnProviderIdentity,
             this.deps.persistence.resolveActiveProvider(actorUserId)
           );
-          session = await healAndRelaunchSession(
+          controller.signal.throwIfAborted();
+          const recovery = healAndRelaunchSession(
             this.lifecycleHost,
             actorUserId,
             userName,
             session
           );
+          session = await waitForChatAdmission(recovery, controller.signal);
           // A new chat inside the heal: re-check stop, identity and privacy before resubmit.
           if (controller.signal.aborted)
             return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
