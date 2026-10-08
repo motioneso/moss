@@ -307,6 +307,11 @@ export const meetingsModuleManifest = {
       ]
     },
     {
+      id: "meetings.summary.validation",
+      description: "Checked a meeting summary",
+      errors: []
+    },
+    {
       id: "meetings.grounded_outputs",
       description:
         "Generate evidence-checked summaries with your default model, without fallback. Claude availability depends on this server setup. Compare versions and exact sources; refresh to check availability without generating a summary.",
@@ -378,39 +383,37 @@ export const meetingsModuleManifest = {
         },
         ...(
           [
-            ["json_parse", "The model reply was not valid JSON."],
-            ["schema_validation", "The model reply did not match the required summary format."],
-            ["oversized_output", "The model reply exceeded the response limit."],
-            ["schema_invalid", "The summary structure was invalid."],
-            ["length_exceeded", "The summary exceeded its content limits."],
-            ["source_binding_missing", "A claim was missing required evidence."],
-            ["source_binding_invalid", "A claim had invalid evidence references."],
-            [
-              "source_identity_mismatch",
-              "Evidence referred to a different meeting or missing source."
-            ],
-            ["source_revision_mismatch", "Evidence referred to the wrong source revision."],
-            ["utf16_range_invalid", "Evidence did not identify a valid exact source range."],
-            ["owner_phrase_unsupported", "A suggested owner phrase was absent from its evidence."],
-            ["due_phrase_unsupported", "A suggested due phrase was absent from its evidence."],
-            ["inputs_invalid", "The retained evidence was invalid."]
+            "json_parse",
+            "schema_validation",
+            "oversized_output",
+            "schema_invalid",
+            "length_exceeded",
+            "source_binding_missing",
+            "source_binding_invalid",
+            "source_identity_mismatch",
+            "source_revision_mismatch",
+            "utf16_range_invalid",
+            "owner_phrase_unsupported",
+            "due_phrase_unsupported",
+            "inputs_invalid"
           ] as const
-        ).map(([reason, description]) => ({
+        ).map((reason) => ({
           code: `meeting_output_rejected_${reason}`,
-          class: "validation" as const,
-          description: `${description} Only the rejection code is recorded; review inputs and explicitly retry.`
+          class: "transient" as const,
+          description:
+            "The summary couldn’t be checked against your meeting notes or transcript. Try generating it again."
         })),
         {
           code: "meeting_output_provider_failed",
           class: "transient",
           description:
-            "The selected model could not complete the request. No replacement was used. Review its connection and explicitly retry."
+            "Your model couldn’t complete the summary. Check its connection in Settings → AI providers, or ask an admin, then try again. No other model was used."
         },
         {
           code: "meeting_output_generation_failed",
           class: "transient",
           description:
-            "The summary could not be generated. Review your settings and try again when you’re ready. No other model was used."
+            "The summary could not be generated. Try again when you’re ready. No other model was used."
         },
         {
           code: "meeting_output_busy",

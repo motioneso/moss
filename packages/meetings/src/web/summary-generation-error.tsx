@@ -33,6 +33,13 @@ export function summaryGenerationFailure(code?: string): {
           "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used.",
         remediation: "ai-providers"
       };
+    case "meeting_output_provider_failed":
+      return {
+        status: "failed",
+        message:
+          "Your model couldn’t complete the summary. Check its connection and try again. No other model was used.",
+        remediation: "ai-providers"
+      };
     case "meeting_output_timed_out":
       return {
         status: "failed",
@@ -48,7 +55,8 @@ export function summaryGenerationFailure(code?: string): {
     default:
       return {
         status: "failed",
-        message: "Generation failed. Review the saved inputs before starting a new request."
+        message:
+          "The summary could not be generated. Try again when you’re ready. No other model was used."
       };
   }
 }

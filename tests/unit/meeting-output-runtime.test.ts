@@ -12,7 +12,11 @@ import {
   type AiConfiguredModelSafeRow,
   type AiProviderWithSealedCredential
 } from "@moss/ai";
-import { getMeetingOutputTemplate, meetingsModuleManifest } from "@moss/meetings";
+import {
+  MeetingOutputValidationError,
+  getMeetingOutputTemplate,
+  meetingsModuleManifest
+} from "@moss/meetings";
 import { ConstrainedProcessError } from "../../packages/chat/src/live/constrained-structured-process.js";
 import { parseConstrainedClaudeOutput } from "../../packages/chat/src/live/constrained-claude-profile.js";
 import { TasksRepository, tasksModuleManifest } from "@moss/tasks";
@@ -830,7 +834,7 @@ describe("meeting output rejection diagnostics", () => {
     await expect(h.generator(actor, input())).rejects.toMatchObject({ code, message: code });
     expect(activity).toHaveBeenCalledExactlyOnceWith({
       kind: "structured_validation",
-      action: "Validate meeting summary",
+      action: "Checked a meeting summary",
       actionCode: "meetings.summary.validation",
       ownerUserId: "owner",
       turnId: "synthetic",
@@ -907,4 +911,27 @@ it("keeps an outer deadline distinct from user cancellation before dispatch", as
     { code: "meeting_output_timed_out" }
   );
   expect(h.fetch).not.toHaveBeenCalled();
+});
+
+it("does not record a made-up model when validation fails before model selection", async () => {
+  const h = setup();
+  const activity = vi.fn();
+  installModelActivityRecorder(activity);
+  h.route.mockRejectedValueOnce(new MeetingOutputValidationError("inputs_invalid"));
+  await expect(h.generator(actor, input())).rejects.toMatchObject({
+    code: "meeting_output_rejected_inputs_invalid"
+  });
+  expect(activity).not.toHaveBeenCalled();
+  expect(h.fetch).not.toHaveBeenCalled();
+});
+
+it("describes every summary rejection as a retryable generation failure", () => {
+  const errors = meetingsModuleManifest.features.map((feature) => feature.errors ?? []).flat();
+  const rejections = errors.filter((error) => error.code.startsWith("meeting_output_rejected_"));
+  expect(rejections).toHaveLength(13);
+  for (const error of rejections) {
+    expect(error.class).toBe("transient");
+    expect(error.description).toContain("Try generating it again.");
+    expect(error.description).not.toMatch(/JSON|UTF-16|schema|revision|rejection code/);
+  }
 });

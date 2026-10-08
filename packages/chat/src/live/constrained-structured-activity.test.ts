@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CONSTRAINED_CLAUDE_TIMEOUT_MS,
   createDbModelActivityRecorder,
   installModelActivityRecorder,
   type ModelActivityEntry,
@@ -54,7 +55,7 @@ describe("constrained adapter real-child activity recording", () => {
       const deadline = new AbortController();
       const originalTimeout = AbortSignal.timeout;
       vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) =>
-        ms === 105_000 ? deadline.signal : originalTimeout(ms)
+        ms === CONSTRAINED_CLAUDE_TIMEOUT_MS ? deadline.signal : originalTimeout(ms)
       );
       const expire = () => deadline.abort(new DOMException("Timed out", "TimeoutError"));
       const logs = ["log", "info", "warn", "error", "debug"] as const;

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  CONSTRAINED_CLAUDE_TIMEOUT_MS,
   assertBoundedStructuredPrompt,
   abortErrorFor,
   StructuredTransportUnavailableError,
@@ -84,7 +85,7 @@ async function generate(
     userId: input.actorUserId,
     acpAgentId: input.acpAgentId
   });
-  const deadline = AbortSignal.timeout(105_000);
+  const deadline = AbortSignal.timeout(CONSTRAINED_CLAUDE_TIMEOUT_MS);
   const signal = AbortSignal.any([...(input.signal ? [input.signal] : []), deadline]);
   // Preserve the first abort source: our deadline is a failure, while caller aborts retain
   // their cancellation (or classifier-gate) reason for the activity recorder.

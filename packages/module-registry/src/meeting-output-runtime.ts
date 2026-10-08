@@ -216,17 +216,18 @@ export function createMeetingOutputRuntime(deps: {
       const code = `meeting_output_rejected_${reasonCode}`;
       // This is a validation event, separate from the recorded provider call. Both its result
       // and request receipt contain only fixed reason codes, never source or generated text.
-      recordModelActivity({
-        kind: "structured_validation",
-        action: "Validate meeting summary",
-        actionCode: "meetings.summary.validation",
-        ownerUserId: actor.actorUserId,
-        ...(actor.requestId ? { turnId: actor.requestId } : {}),
-        outcome: "error",
-        modelName: modelName ?? "",
-        result: code,
-        failureCode: "bad_shape"
-      });
+      if (modelName)
+        recordModelActivity({
+          kind: "structured_validation",
+          action: "Checked a meeting summary",
+          actionCode: "meetings.summary.validation",
+          ownerUserId: actor.actorUserId,
+          ...(actor.requestId ? { turnId: actor.requestId } : {}),
+          outcome: "error",
+          modelName,
+          result: code,
+          failureCode: "bad_shape"
+        });
       return new MeetingOutputError(code);
     };
     try {

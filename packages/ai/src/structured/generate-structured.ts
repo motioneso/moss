@@ -25,6 +25,7 @@ import {
   assertBoundedStructuredPrompt,
   assertBoundedStructuredSchema
 } from "./schema-bounds.js";
+import { CLI_STRUCTURED_TIMEOUT_MESSAGE } from "./transport-timeouts.js";
 import { raceAbort, unfence } from "./run-helpers.js";
 
 export const STRUCTURED_MAX_REPAIR_RETRIES = 2;
@@ -613,7 +614,7 @@ function isStructuredTimeout(error: unknown): boolean {
     error.name === "TimeoutError" ||
     (error.name === "ConstrainedProcessError" && code === "timeout") ||
     (error.name === "CliChatUnavailableError" &&
-      error.message === "CLI structured generation timed out") ||
+      error.message === CLI_STRUCTURED_TIMEOUT_MESSAGE) ||
     code === "ETIMEDOUT" ||
     code === "UND_ERR_CONNECT_TIMEOUT" ||
     code === "UND_ERR_HEADERS_TIMEOUT"

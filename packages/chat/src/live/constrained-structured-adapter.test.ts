@@ -1,3 +1,4 @@
+import { CONSTRAINED_CLAUDE_TIMEOUT_MS } from "@moss/ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GenerateStructuredProviderInput, ProviderKind } from "@moss/ai";
 import { createConstrainedCliStructuredAdapterFactory } from "./constrained-structured-adapter.js";
@@ -155,7 +156,7 @@ describe("explicit constrained adapter", () => {
           input("anthropic")
         )
       ).rejects.toMatchObject({ name: "ConstrainedProcessError", code: "timeout" });
-      expect(timeout).toHaveBeenCalledWith(105_000);
+      expect(timeout).toHaveBeenCalledWith(CONSTRAINED_CLAUDE_TIMEOUT_MS);
       expect(f.kill).toHaveBeenCalled();
       if (phase === "launch") expect(f.submitStructured).not.toHaveBeenCalled();
     }

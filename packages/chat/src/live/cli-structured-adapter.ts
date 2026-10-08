@@ -15,6 +15,7 @@ import type {
   StructuredTelemetryEvent
 } from "@moss/ai";
 import {
+  CLI_STRUCTURED_TIMEOUT_MESSAGE,
   abortErrorFor,
   dedupeStructuredSources,
   modelActivityAction,
@@ -178,7 +179,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
           timedOut = true;
           cancelled = true;
           emit({ kind: "timeout" });
-          reject(new CliChatUnavailableError("CLI structured generation timed out"));
+          reject(new CliChatUnavailableError(CLI_STRUCTURED_TIMEOUT_MESSAGE));
         }, this.timeoutMs);
         abort = () => {
           cancelled = true;
@@ -329,7 +330,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
           timedOut = true;
           emit({ kind: "timeout" });
           controller.abort();
-          reject(new CliChatUnavailableError("CLI structured generation timed out"));
+          reject(new CliChatUnavailableError(CLI_STRUCTURED_TIMEOUT_MESSAGE));
         }, this.timeoutMs);
       });
       try {

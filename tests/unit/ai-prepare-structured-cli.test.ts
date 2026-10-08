@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  CLI_STRUCTURED_TIMEOUT_MESSAGE,
   prepareStructuredGeneration,
   createAiSecretCipher,
   STRUCTURED_PROMPT_MAX_BYTES,
@@ -273,7 +274,7 @@ it.each([
   [new ConstrainedProcessError("output_limit"), "oversized_output"],
   [new DOMException("Private diagnostic", "TimeoutError"), "timeout"],
   [
-    Object.assign(new Error("CLI structured generation timed out"), {
+    Object.assign(new Error(CLI_STRUCTURED_TIMEOUT_MESSAGE), {
       name: "CliChatUnavailableError"
     }),
     "timeout"

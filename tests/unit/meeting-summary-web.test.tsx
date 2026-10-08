@@ -370,11 +370,15 @@ describe("meeting summary owner review", () => {
     }
   );
 
-  it.each([true, false, "unavailable"] as const)(
-    "offers AI provider settings only with confirmed admin access: %s",
-    async (admin) => {
+  it.each(
+    ["meeting_output_route_unavailable", "meeting_output_provider_failed"].flatMap((code) =>
+      ([true, false, "unavailable"] as const).map((admin) => ({ code, admin }))
+    )
+  )(
+    "offers AI provider settings only with confirmed admin access: $code / $admin",
+    async ({ code, admin }) => {
       vi.mocked(api.generateMeetingOutput).mockRejectedValueOnce(
-        new ApiError(422, "Private provider error", "meeting_output_route_unavailable")
+        new ApiError(422, "Private provider error", code)
       );
       vi.stubGlobal(
         "fetch",
@@ -422,7 +426,9 @@ describe("meeting summary owner review", () => {
       await click("Generate new version");
       const rendered = JSON.stringify(renderer.toJSON());
       expect(rendered).not.toContain(code);
-      expect(rendered).toContain("Generation failed. Review the saved inputs");
+      expect(rendered).toContain(
+        "The summary could not be generated. Try again when you’re ready."
+      );
       expect(fetch).not.toHaveBeenCalled();
       expect(button("Check or retry generation")).toBeUndefined();
     }
