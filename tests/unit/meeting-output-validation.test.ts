@@ -8,6 +8,8 @@ import type {
 import {
   getMeetingOutputTemplate,
   MEETING_OUTPUT_TEMPLATES,
+  MeetingOutputValidationError,
+  type MeetingOutputValidationReasonCode,
   validateMeetingOutput
 } from "../../packages/meetings/src/output-validation.js";
 
@@ -85,6 +87,111 @@ function decisionWith(evidence: unknown) {
 }
 
 describe("meeting output validation", () => {
+  it("classifies failures with bounded reason codes and a fixed error message", () => {
+    const actionWith = (change: Record<string, unknown>) => ({
+      ...output(),
+      actions: [{ ...output().actions[0], ...change }]
+    });
+    const note = {
+      kind: "personal-note",
+      meetingId: "meeting",
+      notesRevision: 3,
+      startCharacter: 0,
+      endCharacter: 8
+    };
+    const cases: Array<{
+      value: unknown;
+      reasonCode: MeetingOutputValidationReasonCode;
+      source?: MeetingOutputInputs;
+    }> = [
+      { value: null, reasonCode: "schema_invalid" },
+      { value: { ...output(), overview: "" }, reasonCode: "schema_invalid" },
+      { value: { ...output(), overview: "x".repeat(4_001) }, reasonCode: "length_exceeded" },
+      {
+        value: { ...output(), warnings: Array(51).fill("warning") },
+        reasonCode: "length_exceeded"
+      },
+      {
+        value: { ...output(), openQuestions: Array(21).fill("x".repeat(2_000)) },
+        reasonCode: "length_exceeded"
+      },
+      { value: decisionWith([]), reasonCode: "source_binding_missing" },
+      {
+        value: { ...output(), decisions: [{ text: "Decision" }] },
+        reasonCode: "source_binding_missing"
+      },
+      { value: decisionWith(null), reasonCode: "source_binding_invalid" },
+      { value: decisionWith([null]), reasonCode: "source_binding_invalid" },
+      {
+        value: decisionWith([citation({ kind: "external" })]),
+        reasonCode: "source_binding_invalid"
+      },
+      {
+        value: decisionWith([citation({ segmentRevision: -1 })]),
+        reasonCode: "source_binding_invalid"
+      },
+      {
+        value: decisionWith([citation({ meetingId: "private-meeting-id" })]),
+        reasonCode: "source_identity_mismatch"
+      },
+      {
+        value: decisionWith([citation({ segmentId: "private-segment-id" })]),
+        reasonCode: "source_identity_mismatch"
+      },
+      {
+        value: decisionWith([citation({ segmentRevision: 1 })]),
+        reasonCode: "source_revision_mismatch"
+      },
+      {
+        value: decisionWith([{ ...note, notesRevision: 2 }]),
+        reasonCode: "source_revision_mismatch"
+      },
+      {
+        value: decisionWith([{ ...note, meetingId: "other" }]),
+        reasonCode: "source_identity_mismatch"
+      },
+      {
+        value: decisionWith([citation({ startCharacter: 0.5 })]),
+        reasonCode: "utf16_range_invalid"
+      },
+      {
+        value: decisionWith([citation({ endCharacter: SEGMENT.text.length + 1 })]),
+        reasonCode: "utf16_range_invalid"
+      },
+      {
+        value: decisionWith([citation({ endCharacter: SEGMENT.text.length - 1 })]),
+        reasonCode: "utf16_range_invalid"
+      },
+      {
+        value: actionWith({ ownerPhrase: "private-unsupported-owner" }),
+        reasonCode: "owner_phrase_unsupported"
+      },
+      {
+        value: actionWith({ duePhrase: "private-unsupported-due" }),
+        reasonCode: "due_phrase_unsupported"
+      },
+      { value: output(), source: { ...inputs(), notesRevision: -1 }, reasonCode: "inputs_invalid" }
+    ];
+    for (const { value, source = inputs(), reasonCode } of cases) {
+      let caught: unknown;
+      try {
+        validateMeetingOutput(value, source);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(MeetingOutputValidationError);
+      expect(caught).toMatchObject({
+        name: "MeetingOutputValidationError",
+        message: "Invalid meeting output",
+        reasonCode
+      });
+      expect(JSON.parse(JSON.stringify(caught))).toEqual({
+        name: "MeetingOutputValidationError",
+        reasonCode
+      });
+    }
+  });
+
   it("accepts revision-pinned decisions and review-only owner and due phrases", () => {
     const value = output();
     const result = validateMeetingOutput(value, inputs());

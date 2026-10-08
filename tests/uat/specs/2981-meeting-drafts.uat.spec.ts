@@ -120,7 +120,7 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
     const persisted = await page.request.get(`/api/meetings/records/${fixtureId}`);
     expect((await persisted.json()).meeting.personalNotes).toBe(notesText);
 
-    // The solo-admin fixture has no configured summary model. Check the real server's
+    // The solo-admin fixture has no configured default model. Check the real server's
     // availability result and the real button after choosing an otherwise valid template.
     const outputsResponse = await page.request.get(`/api/meetings/records/${fixtureId}/outputs`);
     expect(outputsResponse.status()).toBe(200);
@@ -138,7 +138,10 @@ test("Meetings draft setup, notes, history, defaults and deletion use the real b
       page.getByRole("button", { name: "Generate summary", exact: true })
     ).toBeDisabled();
     await expect(
-      page.getByText("No supported summary model is available.", { exact: false })
+      page.getByText(
+        "Your default model is unavailable or cannot produce structured summaries. Check its connection and try again. No other model will be used.",
+        { exact: true }
+      )
     ).toBeVisible();
     await page.getByRole("tab", { name: "My notes", exact: true }).click();
 

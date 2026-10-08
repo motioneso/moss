@@ -25,6 +25,7 @@ import {
   assertBoundedStructuredPrompt,
   assertBoundedStructuredSchema
 } from "./schema-bounds.js";
+import { CLI_STRUCTURED_TIMEOUT_MESSAGE } from "./transport-timeouts.js";
 import { raceAbort, unfence } from "./run-helpers.js";
 
 export const STRUCTURED_MAX_REPAIR_RETRIES = 2;
@@ -157,6 +158,23 @@ export type GenerateStructuredExplicitModel = {
 
 export type StructuredServedBy = "sorting" | "main";
 
+/** A selected transport cannot provide the requested constrained execution profile. */
+export class StructuredTransportUnavailableError extends Error {
+  constructor() {
+    super("Structured transport is unavailable");
+    this.name = "StructuredTransportUnavailableError";
+  }
+}
+
+/** Fixed diagnostic codes; never provider messages, prompts, or output. */
+export type StructuredFailureReason =
+  | "unsupported_transport"
+  | "timeout"
+  | "json_parse"
+  | "schema_validation"
+  | "oversized_output"
+  | "provider_failure";
+
 type StructuredFailure = "needs_config" | "validation_failed" | "provider_error" | "aborted";
 
 export type GenerateStructuredResult =
@@ -168,16 +186,22 @@ export type GenerateStructuredResult =
       /** Always set by generateStructured. Optional so hand-built results in tests compile. */
       readonly servedBy?: StructuredServedBy;
     }
-  | { readonly ok: false; readonly error: StructuredFailure };
+  | {
+      readonly ok: false;
+      readonly error: StructuredFailure;
+      readonly reason?: StructuredFailureReason;
+    };
 
 type SortingFailure = Exclude<StructuredFailure, "aborted">;
 
 type RunOptions = {
   readonly maxAttempts: number;
+  /** Prepared callers receive diagnostics without changing legacy generation result shapes. */
+  readonly detailedFailureReasons?: true;
   readonly signal: AbortSignal | undefined;
   readonly servedBy: StructuredServedBy;
-  /** Prepared API calls capture their activity owner before the actor transaction closes. */
-  readonly actorUserId?: string;
+  /** Prepared calls capture their activity owner before the actor transaction closes; null means absent. */
+  readonly actorUserId?: string | null;
 };
 
 export async function generateStructured(
@@ -245,12 +269,12 @@ export async function generateStructured(
 }
 
 /**
- * Prepare one API-key structured attempt while a short actor transaction is open. The
+ * Prepare one structured attempt while a short actor transaction is open. The
  * returned one-shot closure owns transport state, but performs no database work and may
  * only be invoked after that transaction completes. Caller owns route authorization and
  * must use a freshly checked explicit model plus a guarded credential lookup.
  */
-export async function prepareStructuredApiGeneration(
+export async function prepareStructuredGeneration(
   scopedDb: DataContextDb,
   input: Pick<
     GenerateStructuredInput,
@@ -258,17 +282,18 @@ export async function prepareStructuredApiGeneration(
   > & {
     readonly explicitModel: GenerateStructuredExplicitModel;
   },
-  deps: Pick<GenerateStructuredDeps, "cipher"> & {
+  deps: Pick<GenerateStructuredDeps, "cipher" | "createAdapter" | "createCliStructuredAdapter"> & {
     readonly repository: Pick<AiRepository, "selectProviderWithCredential">;
   }
 ): Promise<() => Promise<GenerateStructuredResult>> {
+  const explicitModel = { ...input.explicitModel };
   const request: GenerateStructuredInput = {
     service: input.service,
-    schema: input.schema,
+    schema: structuredClone(input.schema),
     prompt: input.prompt,
     maxOutputTokens: input.maxOutputTokens,
     signal: input.signal,
-    explicitModel: input.explicitModel,
+    explicitModel,
     singleAttempt: true
   };
   assertBoundedStructuredSchema(request.schema);
@@ -278,30 +303,61 @@ export async function prepareStructuredApiGeneration(
     request,
     {
       cipher: deps.cipher,
+      createAdapter: deps.createAdapter,
+      createCliStructuredAdapter: deps.createCliStructuredAdapter,
       repository: {
         async resolveModelForService() {
           throw new Error("Prepared generation cannot resolve another route");
         },
         async selectProviderWithCredential(db, id) {
-          const provider = await deps.repository.selectProviderWithCredential(db, id);
-          return provider?.auth_method === "api_key" ? provider : undefined;
+          return deps.repository.selectProviderWithCredential(db, id);
         }
       }
     },
-    input.explicitModel,
+    explicitModel,
     {
       maxAttempts: 1,
+      detailedFailureReasons: true,
       signal: input.signal,
       servedBy: "main",
-      actorUserId: await readScopedActorUserId(scopedDb)
+      actorUserId: (await readScopedActorUserId(scopedDb)) ?? null
     }
   );
   let consumed = false;
   return async () => {
-    if (consumed) return { ok: false, error: "provider_error" };
+    if (consumed) return { ok: false, error: "provider_error", reason: "provider_failure" };
     consumed = true;
     const result = await run();
-    return result.ok ? { ...result, servedBy: "main" } : result;
+    if (result.ok) return { ...result, servedBy: "main" };
+    return result.error === "provider_error" && !result.reason
+      ? { ...result, reason: "provider_failure" }
+      : result;
+  };
+}
+
+/** Compatibility entry point for callers that deliberately allow API-key providers only. */
+export async function prepareStructuredApiGeneration(
+  scopedDb: DataContextDb,
+  input: Parameters<typeof prepareStructuredGeneration>[1],
+  deps: Pick<GenerateStructuredDeps, "cipher"> & {
+    readonly repository: Pick<AiRepository, "selectProviderWithCredential">;
+  }
+): Promise<() => Promise<GenerateStructuredResult>> {
+  const run = await prepareStructuredGeneration(scopedDb, input, {
+    cipher: deps.cipher,
+    repository: {
+      async selectProviderWithCredential(db, id) {
+        const provider = await deps.repository.selectProviderWithCredential(db, id);
+        return provider?.auth_method === "api_key" ? provider : undefined;
+      }
+    }
+  });
+  return async () => {
+    const result = await run();
+    // Keep this API-only compatibility entry point's pre-diagnostic failure shapes.
+    return !result.ok && result.reason !== "unsupported_transport"
+      ? { ok: false, error: result.error }
+      : result;
   };
 }
 
@@ -341,14 +397,14 @@ async function prepareRunOnModel(
   }
   const providerKind = model.provider_kind as ProviderKind;
   let adapter: StructuredProviderAdapter;
-  let actorUserId = options.actorUserId;
+  let actorUserId = options.actorUserId ?? undefined;
   if (provider.auth_method === "cli") {
     // #982/#869/#981 D3: CLI credentials are sealed markers, not API keys. Route before decrypt so
     // AES-GCM can never see `{ cli: true }`; composition root supplies chat's CLI implementation.
     if (!deps.createCliStructuredAdapter) return async () => ({ ok: false, error: "needs_config" });
     adapter = deps.createCliStructuredAdapter(providerKind);
     // #2674: the CLI runs in this user's per-user slot.
-    actorUserId = await readScopedActorUserId(scopedDb);
+    if (options.actorUserId === undefined) actorUserId = await readScopedActorUserId(scopedDb);
   } else {
     let credential;
     try {
@@ -394,6 +450,17 @@ async function runPreparedModel(
 ): Promise<GenerateStructuredResult> {
   const { adapter, providerKind, actorUserId, acpAgentId } = transport;
   const signal = options.signal;
+  const failure = (
+    error: StructuredFailure,
+    reason?: StructuredFailureReason
+  ): GenerateStructuredResult => ({
+    ok: false,
+    error,
+    ...(options.detailedFailureReasons && reason ? { reason } : {})
+  });
+  const aborted = () =>
+    failure("aborted", isStructuredTimeout(signal?.reason) ? "timeout" : undefined);
+  let validationReason: StructuredFailureReason = "schema_validation";
   const ajv = new Ajv({ strict: false, validateFormats: false });
   const validate = ajv.compile(input.replySchema ?? input.schema);
   const maxOutputTokens = input.maxOutputTokens ?? STRUCTURED_DEFAULT_MAX_OUTPUT_TOKENS;
@@ -401,7 +468,7 @@ async function runPreparedModel(
   const usage = { inputTokens: 0, outputTokens: 0 };
 
   for (let attempt = 0; attempt < options.maxAttempts; attempt += 1) {
-    if (signal?.aborted) return { ok: false, error: "aborted" };
+    if (signal?.aborted) return aborted();
 
     let result: Extract<StructuredProviderResult, { readonly rawObject: unknown }>;
     try {
@@ -426,8 +493,12 @@ async function runPreparedModel(
         }),
         signal
       );
-      if (signal?.aborted) return { ok: false, error: "aborted" };
+      if (signal?.aborted) return aborted();
       if ("rawText" in generated) {
+        // Bound the original reply before unfencing or parsing, including whitespace/fence bytes.
+        if (Buffer.byteLength(generated.rawText, "utf8") > STRUCTURED_RESULT_MAX_BYTES) {
+          return failure("validation_failed", "oversized_output");
+        }
         try {
           result = {
             rawObject: JSON.parse(unfence(generated.rawText)),
@@ -448,9 +519,13 @@ async function runPreparedModel(
       }
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
-        return { ok: false, error: "aborted" };
+        return aborted();
+      }
+      if (error instanceof StructuredTransportUnavailableError) {
+        return { ok: false, error: "provider_error", reason: "unsupported_transport" };
       }
       if (error instanceof StructuredOutputParseError) {
+        validationReason = "json_parse";
         input.telemetry?.emit({ kind: "parse" });
         usage.inputTokens += error.usage.inputTokens;
         usage.outputTokens += error.usage.outputTokens;
@@ -477,13 +552,24 @@ async function runPreparedModel(
         },
         "ai.structured provider error"
       );
-      return { ok: false, error: "provider_error" };
+      return failure(
+        "provider_error",
+        isStructuredTimeout(error)
+          ? "timeout"
+          : error instanceof SyntaxError
+            ? "json_parse"
+            : isStructuredOutputLimit(error)
+              ? "oversized_output"
+              : "provider_failure"
+      );
     }
 
     usage.inputTokens += result.usage.inputTokens;
     usage.outputTokens += result.usage.outputTokens;
     const serialized = JSON.stringify(result.rawObject) ?? "";
-    if (Buffer.byteLength(serialized, "utf8") > STRUCTURED_RESULT_MAX_BYTES) break;
+    if (Buffer.byteLength(serialized, "utf8") > STRUCTURED_RESULT_MAX_BYTES) {
+      return failure("validation_failed", "oversized_output");
+    }
 
     if (validate(result.rawObject)) {
       logger?.info(
@@ -501,12 +587,13 @@ async function runPreparedModel(
       return { ok: true, object: result.rawObject, usage, ...(sources ? { sources } : {}) };
     }
 
+    validationReason = "schema_validation";
     messages.push({ role: "assistant", content: serialized.slice(0, 4000) });
     messages.push({ role: "user", content: formatValidationErrors(validate.errors ?? []) });
     input.telemetry?.emit({ kind: "repair" });
   }
 
-  return { ok: false, error: "validation_failed" };
+  return failure("validation_failed", validationReason);
 }
 
 function formatValidationErrors(errors: readonly ErrorObject[]): string {
@@ -516,5 +603,28 @@ function formatValidationErrors(errors: readonly ErrorObject[]): string {
   return `The JSON did not match the required schema:\n${lines.join("\n")}\nRespond again with ONLY a corrected JSON object matching the schema.`.slice(
     0,
     1000
+  );
+}
+
+/** Match only known transport timeout shapes, never return exception text. */
+function isStructuredTimeout(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return (
+    error.name === "TimeoutError" ||
+    (error.name === "ConstrainedProcessError" && code === "timeout") ||
+    (error.name === "CliChatUnavailableError" &&
+      error.message === CLI_STRUCTURED_TIMEOUT_MESSAGE) ||
+    code === "ETIMEDOUT" ||
+    code === "UND_ERR_CONNECT_TIMEOUT" ||
+    code === "UND_ERR_HEADERS_TIMEOUT"
+  );
+}
+
+function isStructuredOutputLimit(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.name === "ConstrainedProcessError" &&
+    (error as { code?: unknown }).code === "output_limit"
   );
 }

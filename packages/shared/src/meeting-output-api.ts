@@ -89,6 +89,8 @@ export type MeetingOutputResult =
 export type MeetingOutputGenerationAvailability =
   | "available"
   | "model-unavailable"
+  | "subscription-unsupported"
+  | "subscription-isolation-unavailable"
   | "check-failed";
 export interface MeetingOutputsResponse {
   readonly artifacts: readonly MeetingOutputArtifact[];

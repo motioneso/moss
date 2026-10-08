@@ -51,6 +51,8 @@ export function activityTitle(actionCode: string | null, modelName: string): str
       return "Transcribed a voice note";
     case "module.build":
       return "Built a module draft";
+    case "meetings.summary.validation":
+      return "Checked a meeting summary";
     case "probe.reachable":
       return "Checked that a model is reachable";
     default:

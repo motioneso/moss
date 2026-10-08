@@ -15,6 +15,7 @@ import {
   CliChatUnavailableError,
   VerifiedSubmitError,
   createStructuredEngine,
+  probeConstrainedClaudeProvider,
   deriveNeutralDir,
   invalidateProviderProbeCache,
   killMuxSessionByName,
@@ -41,6 +42,7 @@ import {
   type RpcListProviderModelsResult,
   type RpcPollLoginResult,
   type RpcProbeProviderResult,
+  type RpcProbeProviderParams,
   type RpcProviderKind,
   type RpcReadNewResult,
   type RpcReadStructuredResult,
@@ -58,6 +60,7 @@ import { AcpHost, type AcpExecPollResult, type AcpReadResult } from "./acp-host.
 import { ACP_DEADLINE_DIR } from "./exec-records.js";
 import { ACP_PRIVATE_MARKER_DIR } from "./acp-private-markers.js";
 import { Mutex } from "./mutex.js";
+import { withLaunchTimeout } from "./engine-host-timeout.js";
 import {
   BadSubmitAttemptError,
   NotLaunchedError,
@@ -341,6 +344,7 @@ export class CliChatEngineHost {
       ownsDrain: true,
       executionMode: params.executionMode,
       needsStructuredOutput: params.needsStructuredOutput,
+      constrainedStructured: params.constrainedStructured,
       // #1554: the pin is lifted — the RPC root selects the persistent adapter when a pool was
       // wired in AND `chat.persistent_runtime.enabled` is currently on. The flag arrives per
       // launch in the RPC params (the plan's live-reload channel for this topology), so flipping
@@ -408,7 +412,7 @@ export class CliChatEngineHost {
 
     let timedOut = false;
     try {
-      const result = await this.withTimeout(launchPromise, this.launchTimeoutMs, () => {
+      const result = await withLaunchTimeout(launchPromise, this.launchTimeoutMs, () => {
         timedOut = true;
       });
       // mux-create SUCCEEDED in time: register the engine so submit/readNew/kill route here.
@@ -671,11 +675,15 @@ export class CliChatEngineHost {
   // ─── probeProvider (§4.8) — no token, no replay ───────────────────────────────
   async probeProvider(
     provider: RpcProviderKind,
-    userIdOrOpts?: string | { readonly forceFresh?: boolean },
-    maybeOpts?: { readonly forceFresh?: boolean }
+    userIdOrOpts?: string | Omit<RpcProbeProviderParams, "provider">,
+    maybeOpts?: Omit<RpcProbeProviderParams, "provider">
   ): Promise<RpcProbeProviderResult> {
     const userId = typeof userIdOrOpts === "string" ? userIdOrOpts : undefined;
     const opts = typeof userIdOrOpts === "string" ? maybeOpts : userIdOrOpts;
+    if (opts?.constrainedStructured)
+      return this.deps.perUserUid && this.deps.homeBase && userId
+        ? probeConstrainedClaudeProvider(provider)
+        : { status: "error", constrainedUnavailableReason: "per_user_isolation_required" };
     const cacheScope = provider === "openai-compatible" ? userId : undefined;
     const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;
     const homeBase = runtime?.homeBase ?? this.deps.homeBase;
@@ -967,27 +975,6 @@ export class CliChatEngineHost {
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────────
-
-  private async withTimeout<T>(
-    promise: Promise<T>,
-    ms: number,
-    onTimeout?: () => void
-  ): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      return await Promise.race([
-        promise,
-        new Promise<T>((_, reject) => {
-          timer = setTimeout(() => {
-            onTimeout?.();
-            reject(new Error("launch timed out"));
-          }, ms);
-        })
-      ]);
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  }
 
   /** Test/introspection helper: how many engines are registered. */
   liveEngineCount(): number {
