@@ -107,6 +107,90 @@ function holdResume(h: ReturnType<typeof harness>) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("chat conversation identity binding", () => {
+  it("stops a turn waiting for resume without waiting for the retiring engine", async () => {
+    const killing = deferred<void>();
+    const released = deferred<void>();
+    const h = harness();
+    await h.manager.ensureSession("owner", "Owner");
+    vi.mocked(h.engine.kill).mockImplementation(async () => {
+      killing.resolve();
+      await released.promise;
+    });
+    const resume = h.manager.resumeThread("owner", "thread-B");
+    await killing.promise;
+    let reply: string | undefined;
+    const turn = h.manager
+      .submitTurn("owner", "Owner", "Cancel this waiting turn")
+      .then((result) => {
+        reply = result.reply;
+      });
+    try {
+      await h.manager.stopTurn("owner");
+      await vi.waitFor(() => expect(reply).toBe(""), { timeout: 100 });
+      expect(h.engine.submit).not.toHaveBeenCalled();
+      expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+    } finally {
+      released.resolve();
+      await Promise.all([resume, turn]);
+    }
+  });
+
+  it("waits for an overlapping resume before submitting the next turn to its selected engine", async () => {
+    const killing = deferred<void>();
+    const released = deferred<void>();
+    const h = harness();
+    const fresh = {
+      ...h.engine,
+      submit: vi.fn(async () => {}),
+      kill: vi.fn(async () => {})
+    };
+    await h.manager.ensureSession("owner", "Owner");
+    vi.mocked(h.engine.kill).mockImplementation(async () => {
+      killing.resolve();
+      await released.promise;
+    });
+    vi.mocked(h.engine.submit).mockRejectedValue(new Error("retiring transport"));
+    h.engineFactory.mockReturnValue(fresh);
+    h.engineFactory.mockClear();
+    h.deps.persistence.getMainThreadState = async () => ({ id: "thread-A", incognito: false });
+    h.persistence.listPriorTurns.mockClear();
+    const resume = h.manager.resumeThread("owner", "thread-B");
+    await killing.promise;
+    const prestart = h.manager.ensureSession("owner", "Owner");
+    const turn = h.manager.submitTurn("owner", "Owner", "Continue the selected chat");
+    const result = turn.catch((error: unknown) => error);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(h.engine.submit).not.toHaveBeenCalled();
+    } finally {
+      released.resolve();
+      await resume;
+    }
+    expect(await result).toEqual({ reply: "Done." });
+    expect((await prestart).threadId).toBe("thread-B");
+    expect(h.engineFactory).toHaveBeenCalledExactlyOnceWith(
+      "anthropic",
+      "owner:drawer",
+      expect.objectContaining({ conversationId: "thread-B" })
+    );
+    expect(h.persistence.listPriorTurns).toHaveBeenCalledExactlyOnceWith(
+      "owner",
+      { forceReplay: true, threadId: "thread-B" },
+      "drawer"
+    );
+    expect(fresh.submit).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining("Continue the selected chat")
+    );
+    expect(h.persistence.recordTurn).toHaveBeenCalledWith(
+      "owner",
+      "Continue the selected chat",
+      "Done.",
+      expect.anything(),
+      expect.objectContaining({ threadId: "thread-B" }),
+      "drawer"
+    );
+  });
+
   it("keeps New chat chosen during awaited Main launch validation (#3125)", async () => {
     const entered = deferred<void>();
     const release = deferred<void>();
@@ -197,6 +281,8 @@ describe("chat conversation identity binding", () => {
     await vi.waitFor(() => expect(render).toHaveBeenCalledOnce());
     const resume = h.manager.resumeThread("user-1", "thread-B");
     persona.resolve("Moss");
+    releaseResume.resolve();
+    await resume;
     const session = await launch;
 
     expect(mintedOrigins).toEqual(["thread-A", "thread-B"]);
@@ -214,9 +300,6 @@ describe("chat conversation identity binding", () => {
       expect.objectContaining({ threadId: "thread-A" }),
       "drawer"
     );
-
-    releaseResume.resolve();
-    await resume;
   });
 
   it("binds a newly opened conversation and leaves an unavailable identity null", async () => {
@@ -253,6 +336,9 @@ describe("chat conversation identity binding", () => {
     await vi.waitFor(() => expect(readMode).toHaveBeenCalledOnce());
     const resume = h.manager.resumeThread("user-1", "thread-B");
     mode.resolve("on");
+    await vi.waitFor(() => expect(evaluate).toHaveBeenCalledOnce());
+    releaseResume.resolve();
+    await resume;
     expect(await turn).toEqual({ reply: "" });
 
     expect(evaluate).toHaveBeenCalledWith(
@@ -264,8 +350,6 @@ describe("chat conversation identity binding", () => {
     );
     expect(h.engine.submit).not.toHaveBeenCalled();
     expect(h.persistence.recordTurn).not.toHaveBeenCalled();
-    releaseResume.resolve();
-    await resume;
   });
 
   it("keeps missing gate and shadow identities null even when launch creates a thread", async () => {

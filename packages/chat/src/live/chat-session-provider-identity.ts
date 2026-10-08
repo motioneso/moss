@@ -131,6 +131,7 @@ export async function ensureSessionForCurrentProvider(input: {
   >;
   readonly sessions: ReadonlyMap<string, UserSession>;
   readonly pendingForcedReplay: Set<string>;
+  readonly waitForSelection: () => Promise<void>;
   readonly discardSession: (session: UserSession) => Promise<void>;
   readonly launchSession: (
     opts: { readonly forceReplay: boolean },
@@ -165,6 +166,7 @@ async function resolveSessionForCurrentProvider(input: {
   >;
   readonly sessions: ReadonlyMap<string, UserSession>;
   readonly pendingForcedReplay: Set<string>;
+  readonly waitForSelection: () => Promise<void>;
   readonly discardSession: (session: UserSession) => Promise<void>;
   readonly launchSession: (
     opts: { readonly forceReplay: boolean },
@@ -173,6 +175,8 @@ async function resolveSessionForCurrentProvider(input: {
 }): Promise<UserSession> {
   let forceReplay = input.opts?.forceReplay ?? input.pendingForcedReplay.has(input.sessionKey);
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    await input.waitForSelection();
+    forceReplay ||= input.pendingForcedReplay.has(input.sessionKey);
     const providerIdentity = await input.persistence.resolveActiveProvider(input.actorUserId);
     const existing = input.sessions.get(input.sessionKey);
     if (existing && sameActiveChatProvider(existing.providerIdentity, providerIdentity)) {

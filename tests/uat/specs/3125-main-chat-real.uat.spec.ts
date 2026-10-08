@@ -1,4 +1,11 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type Request,
+  type Response
+} from "@playwright/test";
 
 import { restartUatStack } from "../provisioner.js";
 import {
@@ -107,12 +114,29 @@ test("real model preserves Main across warm/cold reopen and explicit side/privat
   });
 
   await test.step("warm side engine reload hydrates Main and its next real reply", async () => {
+    const order: string[] = [];
+    const resumed = (response: Response) => {
+      if (
+        new URL(response.url()).pathname === `/api/chat/threads/${mainId}/resume` &&
+        response.ok()
+      )
+        order.push("resume");
+    };
+    const submitted = (request: Request) => {
+      if (new URL(request.url()).pathname === "/api/chat/turn" && request.method() === "POST")
+        order.push("turn");
+    };
+    page.on("response", resumed);
+    page.on("request", submitted);
     await page.reload();
     drawer = await openChat(page);
-    await expect(drawer.getByText(MAIN, { exact: true })).toBeVisible();
-    await expect(drawer.getByText(SIDE, { exact: true })).toHaveCount(0);
     const continuation = "UAT-3125 warm Main continuation. Reply briefly: Warm Main.";
     await sendReal(page, drawer, continuation);
+    page.off("response", resumed);
+    page.off("request", submitted);
+    expect(order).toEqual(["resume", "turn"]);
+    await expect(drawer.getByText(MAIN, { exact: true })).toBeVisible();
+    await expect(drawer.getByText(SIDE, { exact: true })).toHaveCount(0);
     const stored = await threadsWithHistory(page);
     expect(stored.find((thread) => thread.id === mainId)?.messages).toContainEqual(
       expect.objectContaining({ body: continuation })
@@ -120,7 +144,9 @@ test("real model preserves Main across warm/cold reopen and explicit side/privat
     expect(stored.find((thread) => thread.id === sideId)?.messages).not.toContainEqual(
       expect.objectContaining({ body: continuation })
     );
-    console.log("[3125 assertion] warm reopen and next real reply remain on original Main");
+    console.log(
+      `[3125 assertion] immediate next reply follows public resume and remains on Main=${mainId}; side=${sideId}`
+    );
   });
 
   await test.step("preserved side resumes, then cold server reopen restores original Main", async () => {

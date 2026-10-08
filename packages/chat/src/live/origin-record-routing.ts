@@ -8,6 +8,32 @@ import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 export interface OriginThreadTransition {
   readonly version: number;
   readonly pending: number;
+  readonly settled: Promise<void>;
+}
+
+/** Wait for selection changes, never for the model turn that Stop must interrupt. */
+export async function waitForOriginThreadTransition(
+  transitions: ReadonlyMap<string, OriginThreadTransition>,
+  key: string,
+  signal?: AbortSignal
+): Promise<void> {
+  while (transitions.get(key)?.pending && !signal?.aborted) {
+    const settled = transitions.get(key)!.settled;
+    if (!signal) {
+      await settled;
+      continue;
+    }
+    let cancel!: () => void;
+    const cancelled = new Promise<void>((resolve) => {
+      cancel = resolve;
+    });
+    signal.addEventListener("abort", cancel, { once: true });
+    try {
+      await Promise.race([settled, cancelled]);
+    } finally {
+      signal.removeEventListener("abort", cancel);
+    }
+  }
 }
 
 /** Suppress old-surface fan-out throughout a real new-chat/resume, including its awaits. */
@@ -17,15 +43,25 @@ export async function withOriginThreadTransition<T>(
   work: () => Promise<T>
 ): Promise<T> {
   const previous = transitions.get(key);
+  let complete!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    complete = resolve;
+  });
   transitions.set(key, {
     version: (previous?.version ?? 0) + 1,
-    pending: (previous?.pending ?? 0) + 1
+    pending: (previous?.pending ?? 0) + 1,
+    settled: Promise.all([previous?.settled, pending]).then(() => undefined)
   });
   try {
     return await work();
   } finally {
     const current = transitions.get(key)!;
-    transitions.set(key, { version: current.version + 1, pending: current.pending - 1 });
+    transitions.set(key, {
+      ...current,
+      version: current.version + 1,
+      pending: current.pending - 1
+    });
+    complete();
   }
 }
 

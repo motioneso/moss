@@ -117,6 +117,13 @@ export const chatModuleManifest = {
   ],
   features: [
     {
+      id: "chat.main_conversation",
+      description:
+        "Reopening Moss returns to your stable Main chat and saved history. The composer waits while Main is restored, " +
+        "and the next turn waits for an active conversation resume to finish. Explicit new and private chats keep their selection.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.pending_action_disclosure",
       description:
         "App cards show exact server targets and human-readable changes. Memory and note deletion use red Approve. " +

@@ -117,10 +117,12 @@ export function useChatStream(
   readonly records: readonly TranscriptRecord[];
   readonly clearRecords: () => void;
   readonly streamErrorCount: number;
+  readonly selectionPending: boolean;
 } {
   const [records, setRecords] = useState<readonly TranscriptRecord[]>([]);
   const [streamErrorCount, setStreamErrorCount] = useState(0);
   const [streamGeneration, setStreamGeneration] = useState(0);
+  const [hydratedSurface, setHydratedSurface] = useState<ChatSurface>();
   const hydrationGeneration = useRef(0);
   const streamScope = useRef({ surface, enabled });
   streamScope.current = { surface, enabled };
@@ -129,6 +131,7 @@ export function useChatStream(
     hydrationGeneration.current += 1;
     setRecords([]);
     setStreamGeneration(hydrationGeneration.current);
+    setHydratedSurface(streamScope.current.surface);
   }, []);
 
   useEffect(() => {
@@ -200,6 +203,7 @@ export function useChatStream(
   }, [enabled, surface, streamGeneration]);
 
   useEffect(() => {
+    setHydratedSurface(undefined);
     if (!surface || !enabled) return;
     let active = true;
     const generation = hydrationGeneration.current;
@@ -283,6 +287,8 @@ export function useChatStream(
         );
       } catch {
         // The live stream remains authoritative; an unavailable history read must not block chat.
+      } finally {
+        if (active && generation === hydrationGeneration.current) setHydratedSurface(surface);
       }
     })();
     const timer = setInterval(() => void refreshWorkflowApprovals(), 5_000);
@@ -292,7 +298,12 @@ export function useChatStream(
     };
   }, [enabled, surface]);
 
-  return { records, clearRecords, streamErrorCount };
+  return {
+    records,
+    clearRecords,
+    streamErrorCount,
+    selectionPending: enabled && surface !== undefined && hydratedSurface !== surface
+  };
 }
 
 function mergeHydratedRecords(

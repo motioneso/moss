@@ -221,7 +221,7 @@ export function AppShell(props: AppShellProps) {
   // the user navigates between pages — the chat follows the user. Always pass the defaulted
   // `activeSurface`, never the raw `activeModuleSurfaceBranded ?? undefined` — the latter left
   // useChatStream's rehydration effect permanently gated off for the default drawer (#1449).
-  const { records, clearRecords, streamErrorCount } = useChatStream(
+  const { records, clearRecords, streamErrorCount, selectionPending } = useChatStream(
     activeSurface,
     meetingSelection === null
   );
@@ -475,6 +475,7 @@ export function AppShell(props: AppShellProps) {
         records={recordsForSurface(activeSurface)}
         clearRecords={clearRecords}
         streamErrorCount={streamErrorCount}
+        selectionPending={selectionPending}
         isFounder={props.me.user.isBootstrapOwner}
         initialText={moduleDraft}
         focusActionRequestId={focusActionRequestId}

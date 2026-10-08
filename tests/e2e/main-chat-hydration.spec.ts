@@ -28,13 +28,21 @@ test("drawer hydrates the owner's Main before a newer shared foreign Main (#3125
     tasks: []
   });
   let resumedThread = "";
+  let finishResume!: () => void;
+  const resumeFinished = new Promise<void>((resolve) => {
+    finishResume = resolve;
+  });
   await page.route(/\/api\/chat\/threads\/[^/]+\/resume/, async (route) => {
     resumedThread = route.request().url().includes("/own-main/") ? "own-main" : "foreign-main";
+    await resumeFinished;
     await route.fulfill({ status: resumedThread === "own-main" ? 204 : 404, body: "" });
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+  await expect.poll(() => resumedThread).toBe("own-main");
+  await expect(drawer.getByLabel("Message Moss")).toBeDisabled();
+  finishResume();
   await expect(drawer.getByText("My preserved history", { exact: true })).toBeVisible();
   await expect(drawer.getByText("Legitimately shared history", { exact: true })).toHaveCount(0);
   expect(resumedThread).toBe("own-main");

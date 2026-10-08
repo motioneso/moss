@@ -74,6 +74,7 @@ export function ChatDrawer(props: {
   readonly records: readonly TranscriptRecord[];
   readonly clearRecords: () => void;
   readonly streamErrorCount: number;
+  readonly selectionPending?: boolean;
   /** #369: the founder set the instance up — tailors the empty-chat connect copy. */
   readonly isFounder: boolean;
   /**
@@ -304,6 +305,7 @@ export function ChatDrawer(props: {
         privateEnded ||
         activatingPrivate ||
         transition.pending ||
+        props.selectionPending ||
         historyActivationPending ||
         (Boolean(props.meetingContext) && reviewThreadId !== null)
       ) {
@@ -415,18 +417,27 @@ export function ChatDrawer(props: {
       queryClient,
       reviewThreadId,
       props.surface,
+      props.selectionPending,
       props.meetingContext,
       props.onMeetingUnavailable
     ]
   );
 
   useEffect(() => {
-    if (isSending || transition.pending || queuedSendText === null) return;
+    if (isSending || transition.pending || props.selectionPending || queuedSendText === null)
+      return;
     const queued = queuedSendText;
     setQueuedSendText(null);
     if (queued.surface !== props.surface) return;
     sendMessage(queued.text);
-  }, [queuedSendText, isSending, transition.pending, props.surface, sendMessage]);
+  }, [
+    queuedSendText,
+    isSending,
+    transition.pending,
+    props.selectionPending,
+    props.surface,
+    sendMessage
+  ]);
 
   const reviewing = reviewThreadId !== null;
   const displayRecords = reviewing
@@ -950,6 +961,7 @@ export function ChatDrawer(props: {
         }
         readOnly={
           privateEnded ||
+          props.selectionPending ||
           historyActivationPending ||
           (transition.pending && !activatingPrivate) ||
           (Boolean(props.meetingContext) && reviewing)

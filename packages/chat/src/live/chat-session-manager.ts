@@ -76,6 +76,7 @@ import {
   routeOriginRecord,
   routeLiveOriginRecord,
   withOriginThreadTransition,
+  waitForOriginThreadTransition,
   type OriginRecordReceipt,
   type OriginThreadTransition
 } from "./origin-record-routing.js";
@@ -140,7 +141,8 @@ export class ChatSessionManager {
   ): Promise<UserSession> {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    return ensureSessionForCurrentProvider({
+    const transition = this.originTransitions.get(sessionKey);
+    const session = await ensureSessionForCurrentProvider({
       actorUserId,
       userName,
       opts,
@@ -150,11 +152,15 @@ export class ChatSessionManager {
       persistence: this.deps.persistence,
       sessions: this.sessions,
       pendingForcedReplay: this.pendingForcedReplay,
+      waitForSelection: () => waitForOriginThreadTransition(this.originTransitions, sessionKey),
       discardSession: (session) =>
         discardChatSession(sessionKey, session, this.sessions, this.deps.revokeMcpToken),
       launchSession: (launchOpts, providerIdentity) =>
         this.launchSession(actorUserId, userName, launchOpts, chatSurface, providerIdentity)
     });
+    return this.originTransitions.get(sessionKey) === transition
+      ? session
+      : this.ensureSession(actorUserId, userName, opts, surface);
   }
 
   private async launchSession(
@@ -289,6 +295,9 @@ export class ChatSessionManager {
     // #2907 (plan 3.5) — the turn's shadow tracker; created once its own session is resolved.
     let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
     try {
+      await waitForOriginThreadTransition(this.originTransitions, sessionKey, controller.signal);
+      if (controller.signal.aborted)
+        return this.finishRefusedTurn(actorUserId, surface, sessionKey, undefined, undefined);
       // #2901: the gate may handle the turn before engine launch; decline keeps the model path.
       // #2934 — the gate captures this turn's privacy before its mode wait and returns it.
       const {
