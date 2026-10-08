@@ -9,15 +9,14 @@ import {
   Button,
   EmptyState,
   Eyebrow,
-  Field,
-  FormLabel,
   IconButton,
   Note,
   SectionHead,
+  RowButton,
   Select,
   Thread
 } from "@moss/ui";
-import { Menu, Moon, Sun, X } from "lucide-react";
+import { Bell, Mail, Menu, Moon, Newspaper, Package, Sun, Tag, X } from "lucide-react";
 import type { TranscriptRecord } from "@moss/shared";
 import "../styles/index.css";
 import "../styles/kit-chat.css";
@@ -25,6 +24,7 @@ import "../styles/settings.css";
 import "./scheduled-task-management.prototype.css";
 
 type Status = "Active" | "Paused" | "Completed" | "Expired" | "Failed";
+type Run = { summary: string; source: string; result: string; message?: string };
 type Task = {
   id: string;
   title: string;
@@ -37,7 +37,7 @@ type Task = {
   status: Status;
   outcome: string;
   next: string;
-  history: string[];
+  runs: Run[];
 };
 const samples: Task[] = [
   {
@@ -52,23 +52,40 @@ const samples: Task[] = [
     status: "Active",
     outcome: "Saved today at 2:00 PM. Hasn't run yet.",
     next: "Tomorrow at 9:00 AM PDT",
-    history: ["Today, 2:00 PM · Saved from main chat."]
+    runs: []
   },
   {
     id: "news",
-    title: "Keep an eye on AI news",
+    title: "Latest AI News",
     kind: "Recurring check",
     instruction: "Check AI news and tell me only when something significant changes.",
-    timing: "Every hour",
+    timing: "Every day at 8:00 AM PDT",
     stop: "Until I stop it",
     destination: "AI reading",
     actions: "Read AI news; report significant changes",
     status: "Active",
-    outcome: "2:00 PM · Checked successfully. Nothing significant to report.",
-    next: "Today at 3:00 PM PDT",
-    history: [
-      "Today, 2:00 PM · Successful quiet check. No message sent.",
-      "Today, 1:00 PM · Shared one useful update in AI reading."
+    outcome: "Today, 8:00 AM · Checked successfully. Nothing significant to report.",
+    next: "Tomorrow at 8:00 AM PDT",
+    runs: [
+      {
+        summary: "Today, 8:00 AM · Checked successfully; nothing to report",
+        source: "Connected AI news feeds",
+        result:
+          "The check completed. No significant change met your instruction, so no chat message was sent."
+      },
+      {
+        summary: "Yesterday, 8:00 AM · Update shared",
+        source: "Connected AI news feeds",
+        result: "One significant update was found and posted in AI reading.",
+        message:
+          "A new AI model release appeared in your news feeds this morning. I've gathered the announcement for your reading."
+      },
+      {
+        summary: "Tuesday, 8:00 AM · Checked successfully; nothing to report",
+        source: "Connected AI news feeds",
+        result:
+          "The check completed. No significant change met your instruction, so no chat message was sent."
+      }
     ]
   },
   {
@@ -83,9 +100,12 @@ const samples: Task[] = [
     status: "Paused",
     outcome: "1:45 PM · No reply yet. Paused at 1:50 PM.",
     next: "Paused · no future checks",
-    history: [
-      "Today, 1:50 PM · Paused by you.",
-      "Today, 1:45 PM · Checked successfully. No matching reply."
+    runs: [
+      {
+        summary: "Today, 1:45 PM · Checked successfully; no reply",
+        source: "Connected inbox · replies from Maya about the proposal",
+        result: "No matching reply was found. No message was sent."
+      }
     ]
   },
   {
@@ -101,9 +121,21 @@ const samples: Task[] = [
     status: "Failed",
     outcome: "Friday, 4:00 PM · Couldn't access email. No changes made.",
     next: "Waiting for you to reconnect email",
-    history: [
-      "Friday, 4:00 PM · Email access revoked. No changes made; task needs attention.",
-      "Previous Friday, 4:00 PM · Archived 3 newsletters and deleted 2 promotional emails."
+    runs: [
+      {
+        summary: "Friday, 4:00 PM · Failed; no changes made",
+        source: "Connected email · Field Notes messages",
+        result:
+          "Email access had been revoked. The run stopped before reading or changing any emails."
+      },
+      {
+        summary: "Previous Friday, 4:00 PM · Completed",
+        source: "Connected email · Field Notes messages",
+        result:
+          "Archived 3 newsletters older than 7 days. Permanently deleted 2 promotional emails older than 30 days.",
+        message:
+          "I archived 3 older Field Notes newsletters and permanently deleted 2 promotional emails, within the actions you approved."
+      }
     ]
   },
   {
@@ -118,9 +150,15 @@ const samples: Task[] = [
     status: "Completed",
     outcome: "Yesterday, 11:10 AM · Carrier confirmed delivery. Watch stopped.",
     next: "Finished · no future checks",
-    history: [
-      "Yesterday, 11:10 AM · Carrier tracking confirmed delivery. Watch completed.",
-      "Yesterday, 11:10 AM · Posted the result in Home projects."
+    runs: [
+      {
+        summary: "Yesterday, 11:10 AM · Delivery confirmed; watch completed",
+        source: "Carrier tracking · delivery status",
+        result:
+          "Recorded carrier status: Delivered, yesterday at 11:10 AM. That confirmed the goal and stopped the watch.",
+        message:
+          "The carrier confirmed your parcel was delivered at 11:10 AM. I've stopped the delivery watch."
+      }
     ]
   },
   {
@@ -135,20 +173,42 @@ const samples: Task[] = [
     status: "Expired",
     outcome: "Sunday, 6:00 PM · Deadline reached without a sale.",
     next: "Expired · no future checks",
-    history: ["Sunday, 6:00 PM · Deadline reached. Watch stopped without a match."]
+    runs: [
+      {
+        summary: "Sunday, 6:00 PM · Watch expired",
+        source: "Lamp product listing · sale price",
+        result:
+          "The deadline passed without a matching sale. No sale alert was sent, and future checks stopped."
+      }
+    ]
   }
 ];
 const destinations = ["Main chat", "AI reading", "Home projects"];
+const groups = ["Reminders", "Daily", "Weekly", "More often", "Watches", "Past tasks"];
+const taskIcons = {
+  proposal: Bell,
+  news: Newspaper,
+  maya: Mail,
+  cleanup: Mail,
+  delivery: Package,
+  sale: Tag
+};
+function taskGroup(task: Task) {
+  if (task.status === "Completed" || task.status === "Expired") return "Past tasks";
+  if (task.kind === "Reminder") return "Reminders";
+  if (task.kind === "Watch") return "Watches";
+  // ponytail: fictional timing labels; production groups use structured schedule fields.
+  if (/week|monday|tuesday|wednesday|thursday|friday|saturday|sunday/i.test(task.timing))
+    return "Weekly";
+  return /\bday\b|daily/i.test(task.timing) ? "Daily" : "More often";
+}
 const params = new URLSearchParams(location.search);
 
 function Prototype() {
   const [tasks, setTasks] = useState(() => structuredClone(samples));
   const [selectedId, setSelectedId] = useState<string | null>(params.get("task"));
   const selected = tasks.find((t) => t.id === selectedId);
-  const [draft, setDraft] = useState<Task | null>(null);
-  const [approval, setApproval] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [filter, setFilter] = useState("All");
   const [screen, setScreen] = useState(params.get("state") ?? "ready");
   const [notice, setNotice] = useState("");
   const [dark, setDark] = useState(false);
@@ -161,13 +221,75 @@ function Prototype() {
   const [records, setRecords] = useState<TranscriptRecord[]>([
     {
       kind: "reply",
-      text: "You can change or stop any of these tasks here or in chat. Try ‘pause AI news’, ‘resume AI news’, or ‘delete AI news’."
+      text: "You can pause or stop tasks here. Tell me in chat whenever you’d like to change one."
     }
   ]);
   const [chatDelete, setChatDelete] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
+  const detailHeading = useRef<HTMLHeadingElement>(null);
+  const paneHeading = useRef<HTMLHeadingElement>(null);
+  const keepTaskButton = useRef<HTMLButtonElement>(null);
+  const lastTask = useRef<string | null>(selectedId);
+  const chatReturn = useRef<HTMLElement | null>(null);
+  const chatPanel = useRef<HTMLElement>(null);
+  const [phone, setPhone] = useState(() => matchMedia("(max-width: 700px)").matches);
+  useEffect(() => {
+    const media = matchMedia("(max-width: 700px)");
+    const change = () => setPhone(media.matches);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
+  useEffect(() => {
+    if (selectedId) {
+      lastTask.current = selectedId;
+      (deleting ? keepTaskButton.current : detailHeading.current)?.focus();
+    } else if (lastTask.current) {
+      const row = document.querySelector<HTMLElement>(
+        `[data-task-id="${CSS.escape(lastTask.current)}"]`
+      );
+      (row ?? paneHeading.current)?.focus();
+    }
+  }, [selectedId, deleting]);
+  useEffect(() => {
+    if (!chatOpen) return;
+    composer.current?.focus();
+    return () => {
+      requestAnimationFrame(() => chatReturn.current?.focus());
+    };
+  }, [chatOpen]);
+  useEffect(() => {
+    if (!chatOpen || chatMenu) return;
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setChatOpen(false);
+        return;
+      }
+      if (!phone || event.key !== "Tab") return;
+      const controls = [
+        ...(chatPanel.current?.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), textarea, a[href]"
+        ) ?? [])
+      ];
+      const first = controls[0],
+        last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [chatOpen, phone, chatMenu]);
+  function openChat() {
+    chatReturn.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setChatOpen(true);
+  }
   useEffect(() => {
     document.documentElement.dataset.colorMode = dark ? "dark" : "light";
     document.documentElement.dataset.theme = theme;
@@ -177,8 +299,8 @@ function Prototype() {
     if (selectedId) url.searchParams.set("task", selectedId);
     else url.searchParams.delete("task");
     history.replaceState(null, "", url);
-    console.info("Management preview state", { tasks, selectedId, approval, deleting, screen });
-  }, [tasks, selectedId, approval, deleting, screen]);
+    console.info("Management preview state", { tasks, selectedId, deleting, screen });
+  }, [tasks, selectedId, deleting, screen]);
   useEffect(() => {
     if (!chatMenu) return;
     menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
@@ -212,11 +334,7 @@ function Prototype() {
       {
         ...task,
         status,
-        next: status === "Paused" ? "Paused · no future checks" : task.timing,
-        history: [
-          `Today, 2:00 PM · ${status === "Paused" ? "Paused" : "Resumed"} by you.`,
-          ...task.history
-        ]
+        next: status === "Paused" ? "Paused · no future checks" : task.timing
       },
       `${task.title} ${status === "Paused" ? "paused" : "resumed"}.`
     );
@@ -226,34 +344,13 @@ function Prototype() {
     setNotice(`${task.title} deleted. Future work has stopped; completed actions are unchanged.`);
     setSelectedId(null);
     setDeleting(false);
-    setDraft(null);
-  }
-  function save() {
-    if (!draft || !selected) return;
-    if (draft.actions.trim() !== selected.actions.trim() && !approval) {
-      setApproval(true);
-      return;
-    }
-    update(
-      {
-        ...draft,
-        next: draft.status === "Active" ? draft.timing : draft.next,
-        history: [
-          `Today, 2:00 PM · ${approval ? "New actions approved; edits saved. No run started." : "Edits saved. Allowed actions unchanged."}`,
-          ...selected.history
-        ]
-      },
-      "Changes saved. The task hasn't been run again."
-    );
-    setDraft(null);
-    setApproval(false);
   }
   function send() {
     const request = text.trim();
     if (!request) return;
     setText("");
     let reply =
-      "This preview simulates ‘pause AI news’, ‘resume AI news’, and ‘delete AI news’. Use Settings for other edits.";
+      "Try ‘make AI news weekly’, ‘pause AI news’, ‘resume AI news’, or ‘delete AI news’ in this preview.";
     const task = tasks.find((t) => t.id === "news");
     if (chatDelete) {
       if (/^(yes|yes please|delete it)[.!]?$/i.test(request) && task) {
@@ -268,18 +365,24 @@ function Prototype() {
         {
           ...task,
           status,
-          next: status === "Paused" ? "Paused · no future checks" : task.timing,
-          history: [
-            `Today, 2:00 PM · ${status === "Paused" ? "Paused" : "Resumed"} from chat.`,
-            ...task.history
-          ]
+          next: status === "Paused" ? "Paused · no future checks" : task.timing
         },
         "Updated from chat."
       );
       reply =
         status === "Paused"
           ? "I've paused the AI news check. I won't check again until you resume it."
-          : "I've resumed the AI news check. I'll check every hour and only tell you when something significant changes.";
+          : `I've resumed the AI news check. I'll check ${task.timing.toLowerCase()} and only tell you when something significant changes.`;
+    } else if (task && /^(make AI news|change AI news to) (weekly|daily)[.!]?$/i.test(request)) {
+      const weekly = /weekly/i.test(request);
+      const timing = weekly ? "Every Friday at 8:00 AM PDT" : "Every day at 8:00 AM PDT";
+      update(
+        { ...task, timing, next: task.status === "Active" ? timing : task.next },
+        "Schedule changed in chat."
+      );
+      reply = weekly
+        ? "I'll check AI news every Friday at 8 AM PDT instead. The same actions and destination still apply."
+        : "I'll check AI news every day at 8 AM PDT instead. The same actions and destination still apply.";
     } else if (task && /^delete AI news[.!]?$/i.test(request)) {
       setChatDelete(true);
       reply = "Delete the AI news check? That stops future checks and keeps previous messages.";
@@ -291,10 +394,10 @@ function Prototype() {
       { kind: "reply", text: reply }
     ]);
   }
-  const visible = tasks.filter((t) => filter === "All" || t.status === filter);
+
   return (
     <div className="manage-preview">
-      <div className="manage-review">
+      <div className="manage-review" inert={chatOpen && phone}>
         <Eyebrow>Design preview · #3101 · fictional data</Eyebrow>
         <div className="manage-actions">
           <Select
@@ -321,12 +424,9 @@ function Prototype() {
             onClick={() => {
               setTasks(structuredClone(samples));
               setSelectedId(null);
-              setDraft(null);
-              setApproval(false);
               setDeleting(false);
               setNotice("");
               setScreen("ready");
-              setFilter("All");
               setChatDelete(false);
             }}
           >
@@ -335,7 +435,7 @@ function Prototype() {
         </div>
       </div>
       <div className="manage-shell">
-        <aside className="manage-appnav">
+        <aside className="manage-appnav" inert={chatOpen && phone}>
           <div className="brand-lockup">
             <BrandMark size={28} />
             <strong className="brand-wordmark">Moss</strong>
@@ -348,10 +448,13 @@ function Prototype() {
             ))}
           </div>
         </aside>
-        <main className="set2">
+        <main className="set2" inert={chatOpen && phone}>
           <div className="set2__mast">
             <h1 className="set2__masttitle">Settings</h1>
-            <Button variant="secondary" onClick={() => setChatOpen(!chatOpen)}>
+            <Button
+              variant="secondary"
+              onClick={() => (chatOpen ? setChatOpen(false) : openChat())}
+            >
               {chatOpen ? "Close chat" : "Open chat"}
             </Button>
           </div>
@@ -369,7 +472,9 @@ function Prototype() {
               ))}
             </nav>
             <section className="manage-pane" aria-label="Scheduled tasks">
-              <SectionHead title="Scheduled tasks" />
+              <h2 className="manage-pane-title" ref={paneHeading} tabIndex={-1}>
+                Scheduled tasks
+              </h2>
               <p className="manage-lede">What Moss is keeping an eye on for you.</p>
               <p className="manage-notice" role="status">
                 {notice}
@@ -377,19 +482,7 @@ function Prototype() {
               {!selected && (
                 <>
                   <div className="manage-filter">
-                    <Field>
-                      <FormLabel htmlFor="status-filter">Show</FormLabel>
-                      <Select
-                        id="status-filter"
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value)}
-                      >
-                        {["All", "Active", "Paused", "Completed", "Expired", "Failed"].map((s) => (
-                          <option key={s}>{s}</option>
-                        ))}
-                      </Select>
-                    </Field>
-                    <Button variant="link" onClick={() => setChatOpen(true)}>
+                    <Button variant="link" onClick={openChat}>
                       Ask Moss to set something up
                     </Button>
                   </div>
@@ -402,53 +495,48 @@ function Prototype() {
                     >
                       <Button onClick={() => setScreen("ready")}>Try again</Button>
                     </EmptyState>
-                  ) : screen === "empty" || visible.length === 0 ? (
+                  ) : screen === "empty" || tasks.length === 0 ? (
                     <EmptyState
-                      title={
-                        filter === "All"
-                          ? "Nothing scheduled yet"
-                          : `No ${filter.toLowerCase()} tasks`
-                      }
+                      title="Nothing scheduled yet"
                       description="Ask Moss in chat to remind you, check for updates, or watch for something."
                     >
-                      <Button onClick={() => setChatOpen(true)}>Open chat</Button>
+                      <Button onClick={openChat}>Open chat</Button>
                     </EmptyState>
                   ) : (
-                    <div className="manage-list">
-                      {visible.map((task) => (
-                        <article className="set-row" key={task.id}>
-                          <div className="set-row__main">
-                            <div className="manage-rowhead">
-                              <Button
-                                variant="link"
-                                onClick={() => {
-                                  setSelectedId(task.id);
-                                  setDraft(null);
-                                  setDeleting(false);
-                                }}
-                              >
-                                {task.title}
-                              </Button>
-                              <span
-                                className={`manage-status manage-status--${task.status.toLowerCase()}`}
-                              >
-                                {task.status}
-                              </span>
-                            </div>
-                            <p>{task.instruction}</p>
-                            <p className="manage-meta">
-                              {task.kind} · {task.timing} · {task.destination}
-                            </p>
-                            <p className="manage-outcome">{task.outcome}</p>
-                          </div>
-                          {(task.status === "Active" || task.status === "Paused") && (
-                            <Button variant="secondary" size="sm" onClick={() => pause(task)}>
-                              {task.status === "Paused" ? "Resume" : "Pause"}
-                              <span className="manage-sr"> {task.title}</span>
-                            </Button>
-                          )}
-                        </article>
-                      ))}
+                    <div className="manage-groups">
+                      {groups.map((group) => {
+                        const entries = tasks.filter((task) => taskGroup(task) === group);
+                        if (!entries.length) return null;
+                        const rows = entries.map((task) => {
+                          const Icon = taskIcons[task.id as keyof typeof taskIcons] ?? Bell;
+                          return (
+                            <RowButton
+                              key={task.id}
+                              data-task-id={task.id}
+                              className="manage-task-row"
+                              onClick={() => {
+                                setNotice("");
+                                setSelectedId(task.id);
+                                setDeleting(false);
+                              }}
+                            >
+                              <Icon size={21} strokeWidth={1.6} aria-hidden="true" />
+                              <span>{task.title}</span>
+                            </RowButton>
+                          );
+                        });
+                        return group === "Past tasks" ? (
+                          <details className="manage-group manage-past" key={group}>
+                            <summary>{group}</summary>
+                            <div className="manage-list">{rows}</div>
+                          </details>
+                        ) : (
+                          <section className="manage-group" key={group} aria-label={group}>
+                            <SectionHead title={group} titleAs="h3" />
+                            <div className="manage-list">{rows}</div>
+                          </section>
+                        );
+                      })}
                     </div>
                   )}
                 </>
@@ -458,23 +546,24 @@ function Prototype() {
                   <Button
                     variant="link"
                     onClick={() => {
+                      setNotice("");
                       setSelectedId(null);
-                      setDraft(null);
-                      setApproval(false);
                       setDeleting(false);
                     }}
                   >
                     Back to all tasks
                   </Button>
                   <div className="manage-detail-head">
-                    <h2>{selected.title}</h2>
+                    <h2 ref={detailHeading} tabIndex={-1}>
+                      {selected.title}
+                    </h2>
                     <span
                       className={`manage-status manage-status--${selected.status.toLowerCase()}`}
                     >
                       {selected.status}
                     </span>
                   </div>
-                  {!draft && !deleting && (
+                  {!deleting && (
                     <>
                       <p>{selected.instruction}</p>
                       <dl className="manage-facts">
@@ -484,19 +573,14 @@ function Prototype() {
                         <dd>{selected.stop}</dd>
                         <dt>Results go to</dt>
                         <dd>{selected.destination}</dd>
-                        <dt>Next</dt>
-                        <dd>{selected.next}</dd>
-                        <dt>Allowed actions</dt>
-                        <dd>{selected.actions}</dd>
                       </dl>
                       {selected.status === "Failed" && (
                         <Note variant="practical">
-                          Reconnect email in Connections, then resume this task. Saving edits won't
-                          retry it or repeat previous changes.
+                          Reconnect email in Connections, then ask Moss in chat to resume this task.
+                          Previous changes won't be repeated.
                         </Note>
                       )}
                       <div className="manage-actions">
-                        <Button onClick={() => setDraft({ ...selected })}>Edit task</Button>
                         {(selected.status === "Active" || selected.status === "Paused") && (
                           <Button variant="secondary" onClick={() => pause(selected)}>
                             {selected.status === "Paused" ? "Resume" : "Pause"}
@@ -506,129 +590,50 @@ function Prototype() {
                           Delete task
                         </Button>
                       </div>
+                      <details className="manage-scope">
+                        <summary>What Moss may do</summary>
+                        <p>{selected.actions}</p>
+                      </details>
                       <section className="manage-history">
-                        <SectionHead title="Recent activity" />
-                        <ul>
-                          {selected.history.map((entry, i) => (
-                            <li key={i}>{entry}</li>
-                          ))}
-                        </ul>
+                        <SectionHead title="Run history" />
+                        {selected.runs.length ? (
+                          <ul>
+                            {selected.runs.map((run, i) => (
+                              <li key={i}>
+                                <details>
+                                  <summary>{run.summary}</summary>
+                                  <div className="manage-run-result">
+                                    <p>
+                                      <strong>Checked:</strong> {run.source}
+                                    </p>
+                                    <p>
+                                      <strong>Result:</strong> {run.result}
+                                    </p>
+                                    {run.message && (
+                                      <Button
+                                        variant="link"
+                                        onClick={() => {
+                                          setTopic(selected.destination);
+                                          setRecords([{ kind: "reply", text: run.message! }]);
+                                          openChat();
+                                        }}
+                                      >
+                                        View message
+                                      </Button>
+                                    )}
+                                  </div>
+                                </details>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="manage-meta">Hasn't run yet.</p>
+                        )}
                       </section>
                     </>
                   )}
-                  {draft && (
-                    <form
-                      className="manage-form"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        save();
-                      }}
-                    >
-                      {approval ? (
-                        <>
-                          <SectionHead title="Approve changed actions" />
-                          <p>
-                            These are the actions Moss will be allowed to perform without asking
-                            again. The task keeps its current actions until you approve.
-                          </p>
-                          <h3>Currently allowed</h3>
-                          <p>{selected.actions}</p>
-                          <h3>New allowed actions</h3>
-                          <p>{draft.actions}</p>
-                          <Note variant="practical">
-                            Approving saves this edit. It won't run the task again or restore a
-                            finished task.
-                          </Note>
-                          <div className="manage-actions">
-                            <Button type="submit">Approve and save</Button>
-                            <Button variant="secondary" onClick={() => setApproval(false)}>
-                              Back to edit
-                            </Button>
-                            <Button
-                              variant="quiet"
-                              onClick={() => {
-                                setDraft(null);
-                                setApproval(false);
-                              }}
-                            >
-                              Discard changes
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <Field>
-                            <FormLabel htmlFor="instruction">Instruction</FormLabel>
-                            <textarea
-                              id="instruction"
-                              className="jds-textarea"
-                              required
-                              value={draft.instruction}
-                              onChange={(e) => setDraft({ ...draft, instruction: e.target.value })}
-                            />
-                          </Field>
-                          <Field>
-                            <FormLabel htmlFor="timing">Timing</FormLabel>
-                            <input
-                              id="timing"
-                              className="jds-input"
-                              required
-                              value={draft.timing}
-                              onChange={(e) => setDraft({ ...draft, timing: e.target.value })}
-                            />
-                          </Field>
-                          <Field>
-                            <FormLabel htmlFor="stop">Stop condition or deadline</FormLabel>
-                            <input
-                              id="stop"
-                              className="jds-input"
-                              required
-                              value={draft.stop}
-                              onChange={(e) => setDraft({ ...draft, stop: e.target.value })}
-                            />
-                          </Field>
-                          <Field>
-                            <FormLabel htmlFor="destination">Results go to</FormLabel>
-                            <Select
-                              id="destination"
-                              value={draft.destination}
-                              onChange={(e) => setDraft({ ...draft, destination: e.target.value })}
-                            >
-                              {destinations.map((d) => (
-                                <option key={d}>{d}</option>
-                              ))}
-                            </Select>
-                          </Field>
-                          <Field>
-                            <FormLabel htmlFor="actions">Allowed actions</FormLabel>
-                            <textarea
-                              id="actions"
-                              className="jds-textarea"
-                              required
-                              value={draft.actions}
-                              onChange={(e) => setDraft({ ...draft, actions: e.target.value })}
-                            />
-                          </Field>
-                          <p className="manage-meta">
-                            Changing allowed actions needs your approval. Timing and destination
-                            changes don't. Instructions stay within the allowed actions.
-                          </p>
-                          <div className="manage-actions">
-                            <Button type="submit">
-                              {draft.actions.trim() !== selected.actions.trim()
-                                ? "Review changed actions"
-                                : "Save changes"}
-                            </Button>
-                            <Button variant="secondary" onClick={() => setDraft(null)}>
-                              Cancel
-                            </Button>
-                          </div>
-                        </>
-                      )}
-                    </form>
-                  )}
                   {deleting && (
-                    <div className="manage-form">
+                    <div className="manage-delete">
                       <SectionHead title="Delete this task?" />
                       <p>
                         Moss will stop future work for “{selected.title}”. Previous messages and
@@ -637,9 +642,13 @@ function Prototype() {
                       </p>
                       <div className="manage-actions">
                         <Button variant="danger" onClick={() => remove(selected)}>
-                          Delete schedule
+                          Delete task
                         </Button>
-                        <Button variant="secondary" onClick={() => setDeleting(false)}>
+                        <Button
+                          ref={keepTaskButton}
+                          variant="secondary"
+                          onClick={() => setDeleting(false)}
+                        >
                           Keep task
                         </Button>
                       </div>
@@ -651,7 +660,13 @@ function Prototype() {
           </div>
         </main>
         {chatOpen && (
-          <aside className="manage-chat" aria-label="Moss chat">
+          <aside
+            ref={chatPanel}
+            className="manage-chat"
+            aria-label="Moss chat"
+            role={phone ? "dialog" : undefined}
+            aria-modal={phone ? true : undefined}
+          >
             <header>
               <IconButton
                 ref={menuButton}
