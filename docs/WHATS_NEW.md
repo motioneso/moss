@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Cleaner meeting transcripts during silence.** Silent and near-silent recording chunks no longer create repeated transcript lines. [PR #3104](https://github.com/motioneso/moss/pull/3104)
 - **Meeting recording on Mac.** Meeting recording on the mac no longer stops itself a moment after starting. [PR #3099](https://github.com/motioneso/moss/pull/3099)
 
 ### 2026-10-07
