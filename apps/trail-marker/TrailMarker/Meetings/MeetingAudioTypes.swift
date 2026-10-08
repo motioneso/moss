@@ -136,6 +136,8 @@ struct MeetingAudioPacket: Equatable {
 
 enum MeetingAudioGapReason: Equatable {
     case callbackContention
+    case startupTimestamp
+    case sourceVerification
     case paused
     case expired
     case bufferFull

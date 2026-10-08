@@ -20,6 +20,60 @@ struct MeetingAudioFailureDiagnostic: Equatable {
         case voiceDucking, voiceRenderCallback, voiceReferenceSelection, voiceDeviceSelection
         case voiceEndpointReadback, voiceChannelMap, voiceClientFormat, voiceInitialize, voiceStart
         case voiceDefaultOutputChanged
+
+        var label: String {
+            switch self {
+            case .outputStart: return "outputStart"
+            case .outputTimestamp: return "outputTimestamp"
+            case .outputBufferLayout: return "outputBufferLayout"
+            case .outputFrameCapacity: return "outputFrameCapacity"
+            case .outputDeviceAlive: return "outputDeviceAlive"
+            case .outputDeviceList: return "outputDeviceList"
+            case .outputDefaultRoute: return "outputDefaultRoute"
+            case .outputSystemRoute: return "outputSystemRoute"
+            case .outputProcessRoute: return "outputProcessRoute"
+            case .outputFormatVerification: return "outputFormatVerification"
+            case .outputProcessScope: return "outputProcessScope"
+            case .microphoneFormatVerification: return "microphoneFormatVerification"
+            case .microphoneCapacityVerification: return "microphoneCapacityVerification"
+            case .microphoneFormatRead: return "microphoneFormatRead"
+            case .microphoneDeviceGone: return "microphoneDeviceGone"
+            case .microphoneContendedTimestamp: return "microphoneContendedTimestamp"
+            case .microphoneFrameCapacity: return "microphoneFrameCapacity"
+            case .microphoneTimestamp: return "microphoneTimestamp"
+            case .microphoneRender: return "microphoneRender"
+            case .microphoneBufferLayout: return "microphoneBufferLayout"
+            case .bufferCapacity: return "bufferCapacity"
+            case .bufferSample: return "bufferSample"
+            case .bufferDropFrames: return "bufferDropFrames"
+            case .bufferDropMailbox: return "bufferDropMailbox"
+            case .bufferFormat: return "bufferFormat"
+            case .bufferTimestamp: return "bufferTimestamp"
+            case .bufferSampleContinuity: return "bufferSampleContinuity"
+            case .bufferClockRange: return "bufferClockRange"
+            case .bufferLease: return "bufferLease"
+            case .bufferGapCapacity: return "bufferGapCapacity"
+            case .captureStart: return "captureStart"
+            case .voiceReferenceRoute: return "voiceReferenceRoute"
+            case .voiceReferenceFormatVerification: return "voiceReferenceFormatVerification"
+            case .voiceReferenceFormatRead: return "voiceReferenceFormatRead"
+            case .voiceComponent: return "voiceComponent"
+            case .voiceInputEnable: return "voiceInputEnable"
+            case .voiceOutputEnable: return "voiceOutputEnable"
+            case .voiceBypass: return "voiceBypass"
+            case .voiceAGC: return "voiceAGC"
+            case .voiceDucking: return "voiceDucking"
+            case .voiceRenderCallback: return "voiceRenderCallback"
+            case .voiceReferenceSelection: return "voiceReferenceSelection"
+            case .voiceDeviceSelection: return "voiceDeviceSelection"
+            case .voiceEndpointReadback: return "voiceEndpointReadback"
+            case .voiceChannelMap: return "voiceChannelMap"
+            case .voiceClientFormat: return "voiceClientFormat"
+            case .voiceInitialize: return "voiceInitialize"
+            case .voiceStart: return "voiceStart"
+            case .voiceDefaultOutputChanged: return "voiceDefaultOutputChanged"
+            }
+        }
     }
     let code: Code
     let status: Int32?
@@ -58,7 +112,7 @@ struct MeetingAudioFailureDiagnostic: Equatable {
         case .cleanupFailed: reason = "cleanupFailed"
         case nil: reason = "unknownFailure"
         }
-        let callback = diagnostic.map { String(describing: $0.code) } ?? "unspecifiedCaptureFailure"
+        let callback = diagnostic.map { $0.code.label } ?? "unspecifiedCaptureFailure"
         let status = diagnostic?.status ?? Self.status(failure)
         return "capture-failure source=\(source.rawValue) callback=\(callback) reason=\(reason) status=\(status.map { String($0) } ?? "unavailable")"
     }

@@ -82,7 +82,7 @@ struct MeetingCaptureTimeline {
         case .expired: reason = "expired"
         case .bufferFull: reason = "buffer-full"
         case .captureFailure: reason = "source-unavailable"
-        case .callbackContention: reason = "interrupted"
+        case .callbackContention, .startupTimestamp, .sourceVerification: reason = "interrupted"
         case .retentionDeclined, .cutoffChanged: reason = "discarded"
         }
         return makeGap(source: source, epoch: epoch.remoteEpoch, start: gap.startNanoseconds,

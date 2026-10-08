@@ -78,7 +78,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
             guard voiceProcessing, let unavailable = startupError as? MeetingVoiceProcessingUnavailable else { throw startupError }
             do {
                 try startUnit(processing: false, into: receiver)
-                startupDiagnostic = "microphone-echo-cancellation=off reason=\(unavailable.diagnostic) status=\(unavailable.status.map { String($0) } ?? "unavailable")"
+                startupDiagnostic = "microphone-echo-cancellation=off reason=\(unavailable.diagnostic.label) status=\(unavailable.status.map { String($0) } ?? "unavailable")"
             } catch {
                 let fallbackError = error
                 do { try stop() } catch { throw MeetingAudioFailure.cleanupFailed }

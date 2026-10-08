@@ -52,6 +52,7 @@ final class MeetingCaptureHost: ObservableObject {
     private var observed = MeetingCaptureObserved(generation: 0, phase: "idle", errorCode: nil)
     @Published private(set) var remote: MeetingRemoteCapture?
     private var selected: MeetingInventorySnapshot.Resolved?
+    private var selectedNativeSnapshot: MeetingInventorySnapshot?
     private var selectedSourceDiagnostics: MeetingCaptureSourceDiagnostics?
     private var choice: MeetingCaptureChoice?
     private var recordingDuration = MeetingRecordingDuration()
@@ -170,9 +171,8 @@ final class MeetingCaptureHost: ObservableObject {
             do {
                 guard let client, let activation, let credential, let grantId, let grantExpiry,
                       self.ports.wallNow() < grantExpiry else { throw MeetingHostError.authorizationExpired }
-                let fresh = try ports.readInventory()
+                let fresh = validateCurrentSources(try ports.readInventory())
                 inventory = fresh.wire
-                validateCurrentSources(fresh)
                 let sentObservation = observed
                 let requestSent = self.now()
                 let reply = try await client.status(.init(meetingId: activation.meetingId, grantId: grantId,
@@ -358,6 +358,7 @@ final class MeetingCaptureHost: ObservableObject {
         pausedCaptureCutoff = nil
         startCommandDeadline = nil
         selected = resolved
+        selectedNativeSnapshot = sourceSnapshot
         selectedSourceDiagnostics = MeetingCaptureSourceDiagnostics(snapshot: sourceSnapshot)
         choice = selection
         observed = .init(generation: next.generation, phase: "recording", errorCode: nil)
@@ -452,26 +453,17 @@ final class MeetingCaptureHost: ObservableObject {
         } catch { interrupt(error: error) }
     }
 
-    private func validateCurrentSources(_ fresh: MeetingInventorySnapshot) {
-        guard phase == .recording, let choice, let selected else { return }
-        guard choice.microphone == nil || ports.microphonePermission() == .granted else {
-            noteSourceValidationFailure(.microphonePermissionNotGranted, fresh: fresh)
+    @discardableResult private func validateCurrentSources(_ fresh: MeetingInventorySnapshot) -> MeetingInventorySnapshot {
+        guard phase == .recording, let choice, let selected else { return fresh }
+        switch MeetingStartupSourceValidation.validate(fresh, choice: choice, selected: selected,
+            original: selectedNativeSnapshot, runtime: runtime, ports: ports) {
+        case .valid(let confirmed, let recovered):
+            if recovered { noteDiagnostic("startup-source-reconfirmed", duration: 0) }
+            return confirmed
+        case .invalid(let reason):
+            noteSourceValidationFailure(reason, fresh: fresh)
             sourceChanged()
-            return
-        }
-        let current: MeetingInventorySnapshot.Resolved
-        do { current = try fresh.resolve(choice) }
-        catch {
-            noteSourceValidationFailure(.resolveThrew, fresh: fresh)
-            sourceChanged()
-            return
-        }
-        guard current == selected else {
-            noteSourceValidationFailure(.resolvedNotEqual, fresh: fresh)
-            // Drop pending audio on membership change, including newly appearing Moss helpers.
-            // This never replaces a failed app-scoped route with computer capture.
-            sourceChanged()
-            return
+            return fresh
         }
     }
 
@@ -592,7 +584,7 @@ final class MeetingCaptureHost: ObservableObject {
         timer?.invalidate(); timer = nil
         for (center, observer) in observers { center.removeObserver(observer) }
         observers.removeAll()
-        choice = nil; selected = nil; selectedSourceDiagnostics = nil; remote = nil; timeline = MeetingCaptureTimeline()
+        choice = nil; selected = nil; selectedNativeSnapshot = nil; selectedSourceDiagnostics = nil; remote = nil; timeline = MeetingCaptureTimeline()
         pausedCaptureCutoff = nil
         fence = MeetingCommandFence(); controlInFlight = false; controlRetryAtNanoseconds = 0; controlOutbox = MeetingControlOutbox()
         observed = .init(generation: 0, phase: "idle", errorCode: nil)
@@ -671,7 +663,7 @@ final class MeetingCaptureHost: ObservableObject {
     }
 
     private func record(_ gap: MeetingAudioGap) {
-        if let mapped = timeline.map(gap) { queueGap(mapped) }
+        if let mapped = timeline.map(gap) { queueGap(mapped, cause: gap.reason) }
     }
 
     private func recordDiscardedTail(at now: UInt64, reason: String) {
@@ -682,7 +674,13 @@ final class MeetingCaptureHost: ObservableObject {
 
     /// Bounded metadata admission, separate from clock mapping so its terminal UI state can be
     /// exercised with generated ranges and no capture device or authenticated transport.
-    func queueGap(_ gap: MeetingCaptureGap) {
+    func queueGap(_ gap: MeetingCaptureGap, cause: MeetingAudioGapReason? = nil) {
+        let epochs = timeline.epochs.values.filter { $0.remoteEpoch == gap.epoch }
+        let source: MeetingAudioSource? = epochs.contains { $0.choice.microphone?.sourceId == gap.sourceId }
+            ? .microphone : (epochs.contains { $0.choice.outputSourceId == gap.sourceId } ? .output : nil)
+        let detail = MeetingCaptureGapDiagnostics.line(gap, source: source, cause: cause)
+        captureLog.notice("\(detail, privacy: .public)")
+        diagnostics = diagnosticLog.gap(detail)
         gapCount += 1
         if gapCoverageIncomplete { return }
         guard timeline.pendingGaps.count < 256 else {
@@ -993,6 +991,7 @@ final class MeetingCaptureHost: ObservableObject {
             localEpoch: runtime.snapshot.epoch, stoppedByUser: stoppedByUser) { queueGap(gap) }
         choice = selection
         selected = nil
+        selectedNativeSnapshot = nil
         selectedSourceDiagnostics = nil
         let currentInventory = try ports.readInventory().wire
         sourceDescription = Self.describe(selection, inventory: currentInventory)

@@ -363,7 +363,12 @@ export const meetingsModuleManifest = {
     {
       id: "transcribe.meeting",
       description:
-        "Capture duration uses native acknowledgement. Transcription delay is separate; transient clips retry within bounded memory. Activity records clip model, duration and outcome without audio or transcript text."
+        "Capture time uses native acknowledgement. Silent/near-silent clips skip transcription and clear settled delays. Transient clips retry in bounded memory. Activity records model, duration and outcome without audio or transcript text."
+    },
+    {
+      id: "meetings.native_startup_recovery",
+      description:
+        "A brief microphone timing hiccup at Start can recover without Resume. Missing startup sources are checked once; uncertain audio is dropped and marked as a gap. Real source changes still pause. The Mac log records audio gaps."
     },
     {
       id: "meetings.speaker_echo_control",

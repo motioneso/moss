@@ -21,6 +21,8 @@ final class MeetingCaptureRuntime {
     private var pending: [PendingSource] = []
     private var retainedGaps: [MeetingAudioGap] = []
     private var epochStart: UInt64 = 0
+    private var currentEpochEverOffered = false
+    private var startupSourceRecheckUsed = false
     private var nextSessionEpoch: UInt64 = 1
     private var dispatchCursor = 0
     private var hadExpiredAudio = false
@@ -110,7 +112,8 @@ final class MeetingCaptureRuntime {
         guard Set(created.keys) == expected else { throw MeetingAudioFailure.invalidSelection }
         let sourceOrder = MeetingAudioSource.allCases.filter { expected.contains($0) }
         let fresh = try sourceOrder.map { source in
-            PendingSource(buffer: try MeetingAudioBuffer(source: source, epoch: candidate.epoch, originNanoseconds: at, lease: captureLease),
+            PendingSource(buffer: try MeetingAudioBuffer(source: source, epoch: candidate.epoch, originNanoseconds: at, lease: captureLease,
+                permitsStartupClockRecovery: source == .microphone),
                           cutoff: nil, inFlightSequence: nil, offeredChunk: nil)
         }
         devices = created
@@ -125,6 +128,8 @@ final class MeetingCaptureRuntime {
             pending.append(contentsOf: fresh)
             machine = candidate
             epochStart = at
+            startupSourceRecheckUsed = false
+            currentEpochEverOffered = false
             if let line = devices[.microphone]?.startupDiagnostic { reportCaptureFailure(line) }
         } catch {
             if let source = startingSource, let entry = fresh.first(where: { $0.buffer.source == source }) {
@@ -135,6 +140,34 @@ final class MeetingCaptureRuntime {
             machine.fail()
             do { try stopDevices() } catch { throw MeetingAudioFailure.cleanupFailed }
             throw error
+        }
+    }
+
+    /// One missing-metadata retry is allowed only before this startup epoch ever offered PCM.
+    /// Positive source changes are rejected by the host before reaching this quarantine.
+    func beginStartupSourceRecheck(at: UInt64) -> Bool {
+        queue.sync {
+            guard machine.state == .recording, !startupSourceRecheckUsed,
+                  at >= epochStart, at - epochStart <= 500_000_000,
+                  !currentEpochEverOffered else { return false }
+            startupSourceRecheckUsed = true
+            let current = pending.filter { $0.buffer.epoch == machine.epoch && $0.cutoff == nil }
+            guard !current.isEmpty, current.allSatisfy({ $0.buffer.failure == nil }) else { return false }
+            current.forEach { $0.buffer.setHostSourceVerificationPending(true) }
+            for entry in current {
+                if let gap = entry.buffer.discardUnsentStartupAudio() { retainedGaps.append(gap) }
+            }
+            return current.allSatisfy { $0.buffer.failure == nil }
+        }
+    }
+
+    func finishStartupSourceRecheck(at: UInt64, unchanged: Bool) -> Bool {
+        queue.sync {
+            let current = pending.filter { $0.buffer.epoch == machine.epoch && $0.cutoff == nil }
+            guard unchanged, startupSourceRecheckUsed, machine.state == .recording, at >= epochStart, at - epochStart <= 500_000_000,
+                  !current.isEmpty, current.allSatisfy({ $0.buffer.failure == nil }) else { return false }
+            current.forEach { $0.buffer.setHostSourceVerificationPending(false, confirmedAt: at) }
+            return true
         }
     }
 
@@ -338,8 +371,14 @@ final class MeetingCaptureRuntime {
             let gaps = try serviceLocked(at: at)
             retainedGaps = gaps
             guard !pending.isEmpty else { return false }
+            // Recovery makes a short first clock segment sendable. Hold it (and its paired
+            // source) until startup ends, so a same-Start inventory omission can still be
+            // quarantined before any uncertain epoch audio has escaped.
+            let holdStartupOffers = machine.state == .recording && at >= epochStart && at - epochStart < 500_000_000 &&
+                pending.contains { $0.buffer.epoch == machine.epoch && $0.buffer.source == .microphone && $0.buffer.hasRecoveredStartupClock }
             for offset in pending.indices {
                 let index = (dispatchCursor + offset) % pending.count
+                if holdStartupOffers, pending[index].buffer.epoch == machine.epoch { continue }
                 guard pending[index].inFlightSequence == nil,
                       !pending[index].buffer.isScopeVerificationPending,
                       eligibleSources.contains(pending[index].buffer.source) else { continue }
@@ -358,6 +397,12 @@ final class MeetingCaptureRuntime {
                       latestEndNanoseconds.map({ chunk.packet.endNanoseconds <= $0 }) ?? true,
                       machine.permitsSend(epoch: chunk.packet.epoch, endNanoseconds: chunk.packet.endNanoseconds,
                                           now: at) else { continue }
+                // A callback may have created this short segment while peekChunk ran.
+                // Recheck after obtaining it, before the first offer becomes irrevocable.
+                if chunk.packet.epoch == machine.epoch, machine.state == .recording,
+                   at >= epochStart, at - epochStart < 500_000_000,
+                   pending.contains(where: { $0.buffer.epoch == machine.epoch && $0.buffer.source == .microphone && $0.buffer.hasRecoveredStartupClock }) { continue }
+                if chunk.packet.epoch == machine.epoch { currentEpochEverOffered = true }
                 pending[index].offeredChunk = chunk
                 pending[index].inFlightSequence = chunk.packet.sequence
                 dispatchCursor = (index + 1) % pending.count
@@ -402,6 +447,7 @@ final class MeetingCaptureRuntime {
         pending.forEach { $0.buffer.discard() }
         pending.removeAll()
         retainedGaps.removeAll()
+        currentEpochEverOffered = false
         pauseBoundary = nil
         try stopDevices()
     }

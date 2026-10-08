@@ -195,8 +195,10 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
                 ring.drop(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 0)
             }),
             (.bufferFull, .bufferDropMailbox, { ring in
+                // Contiguous drops coalesce. Leave a sample between records so this tests
+                // genuine metadata exhaustion, with the capacity/failure label unchanged.
                 for index in 0...64 {
-                    ring.drop(sampleTime: Double(index), hostTimeNanoseconds: UInt64(index) * 125_000,
+                    ring.drop(sampleTime: Double(index * 2), hostTimeNanoseconds: UInt64(index * 2) * 125_000,
                               sampleRate: 8000, frameCount: 1)
                 }
             }),
