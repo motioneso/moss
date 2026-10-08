@@ -128,11 +128,17 @@ export const chatModuleManifest = {
             "Invalid fields or impossible target changes return a correction before approval; nothing executes. The quiet row says details need correcting. Extra-field errors identify safe field names, never values. Correct the fields and ask again."
         },
         {
-          code: "approval_preparation_failed",
+          code: "approval_setup_required",
           class: "prerequisite",
           remediationRef: "chat.configure_action_source",
           description:
             "Required setup is missing before this action can be prepared. Follow its safe prerequisite reason; notes need a linked folder in Settings, Connections."
+        },
+        {
+          code: "approval_preparation_failed",
+          class: "transient",
+          description:
+            "An unexpected error prevented the app or connected tool from preparing this action. Try again; private dependency details stay hidden. This does not mean setup is missing."
         },
         {
           code: "approval_unavailable",
@@ -151,7 +157,7 @@ export const chatModuleManifest = {
         },
         {
           id: "chat.request_fresh_action",
-          description: "Reject the request and ask again, or make the change in its app screen.",
+          description: "Reject the request and ask Moss to find the action again.",
           path: "/today"
         }
       ],

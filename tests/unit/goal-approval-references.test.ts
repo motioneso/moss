@@ -75,7 +75,7 @@ it("resolves configured note paths and memory facts through their owning public 
       sourceKind: "note",
       sourceRef: "Projects/Plans/today.md"
     })
-  ).toEqual({ label: "today.md\nFolder 1: Projects\nFolder 2: Plans", version: "note-version" });
+  ).toEqual({ label: "today.md\nFolder: Projects/Plans", version: "note-version" });
   expect(note).toHaveBeenCalledWith(db, "Projects/Plans/today.md", false);
   expect(await resolve(db, { actorUserId: actor, sourceKind: "memory", sourceRef: id })).toEqual({
     label: "Full\nmemory text",
@@ -145,4 +145,21 @@ it("distinguishes a vanished note from a note-root or path-scope refusal", async
   await expect(
     denied(db, { actorUserId: actor, sourceKind: "note", sourceRef: "private.md" })
   ).rejects.toThrow("Approval source unavailable");
+});
+
+it.each([
+  ["today.md", "today.md"],
+  ["Folder 1/today.md", "today.md\nFolder: Folder 1"],
+  ["Work/Plans › personal/today.md", "today.md\nFolder: Work/Plans › personal"]
+])("uses the real cited-note folder path for %s", async (relative, label) => {
+  const resolve = createApprovalSourceReferences({
+    note: vi.fn().mockResolvedValue({ relative, version: "note-version" })
+  });
+  expect(
+    await resolve(db, {
+      actorUserId: actor,
+      sourceKind: "note",
+      sourceRef: "/private/root/today.md"
+    })
+  ).toEqual({ label, version: "note-version" });
 });

@@ -169,7 +169,7 @@ describe("new memory provenance references", () => {
           sourceKind === "email"
             ? `${label}\nMira`
             : sourceKind === "note"
-              ? "actual.md\nFolder 1: Notes"
+              ? "actual.md\nFolder: Notes"
               : label
       });
       expect(reader).toHaveBeenCalledOnce();

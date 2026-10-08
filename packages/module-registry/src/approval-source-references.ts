@@ -61,7 +61,7 @@ export function createApprovalSourceReferences(
         const parts = resolved.relative.split("/");
         const name = parts.pop()!;
         return {
-          label: [name, ...parts.map((value, index) => `Folder ${index + 1}: ${value}`)].join("\n"),
+          label: [name, ...(parts.length ? [`Folder: ${parts.join("/")}`] : [])].join("\n"),
           version: resolved.version
         };
       } catch (error) {

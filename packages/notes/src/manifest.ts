@@ -94,7 +94,7 @@ export const notesModuleManifest = {
     {
       id: "note_changes",
       label: "Note changes",
-      description: "Create and update notes.",
+      description: "Create and update notes. Deleting a note always asks for approval.",
       defaultTier: "ask_each_time",
       allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
     }
@@ -231,7 +231,7 @@ export const notesModuleManifest = {
     {
       id: "notes.approval_folder_path",
       description:
-        "Note approval cards show the exact folder path within your linked notes source under Folder. Absolute server paths stay private."
+        "Note approval cards and cited note sources in goal and memory cards show the exact relative folder path under Folder. Absolute server paths stay private."
     },
     {
       id: "notes.assistant_authoring",

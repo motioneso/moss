@@ -33,11 +33,11 @@ describe("app-map integrity and truthfulness", () => {
     );
   });
 
-  it("links approval setup failures to Settings Connections", () => {
+  it("distinguishes linked setup fixes from unexpected preparation failures", () => {
     const feature = getBuiltInModuleManifests()
       .find((module) => module.id === "chat")
       ?.features?.find((entry) => entry.id === "chat.pending_action_disclosure");
-    const setup = feature?.errors?.find((entry) => entry.code === "approval_preparation_failed");
+    const setup = feature?.errors?.find((entry) => entry.code === "approval_setup_required");
     expect(setup).toMatchObject({
       class: "prerequisite",
       remediationRef: "chat.configure_action_source"
@@ -45,6 +45,16 @@ describe("app-map integrity and truthfulness", () => {
     expect(
       feature?.remediations?.find((entry) => entry.id === setup?.remediationRef)
     ).toMatchObject({ path: "/settings?section=sources" });
+    const unexpected = feature?.errors?.find(
+      (entry) => entry.code === "approval_preparation_failed"
+    );
+    expect(unexpected).toMatchObject({ class: "transient" });
+    expect(unexpected?.description).toContain("Try again");
+    expect(unexpected?.remediationRef).toBeUndefined();
+    expect(unexpected?.description).not.toContain("Settings");
+    const fresh = feature?.remediations?.find((entry) => entry.id === "chat.request_fresh_action");
+    expect(fresh?.description).toContain("ask Moss to find the action again");
+    expect(fresh?.description).not.toContain("app screen");
     const notes = getBuiltInModuleManifests()
       .find((module) => module.id === "notes")
       ?.features?.find((entry) => entry.id === "notes.approval_prerequisites");
@@ -54,6 +64,13 @@ describe("app-map integrity and truthfulness", () => {
     expect(notes?.remediations).toContainEqual(
       expect.objectContaining({ id: "notes.configure_folder", path: "/settings?section=sources" })
     );
+  });
+
+  it("makes the deletion exception visible beside the note trust setting", () => {
+    const notes = getBuiltInModuleManifests().find((module) => module.id === "notes");
+    expect(
+      notes?.assistantActionFamilies?.find((family) => family.id === "note_changes")?.description
+    ).toContain("Deleting a note always asks for approval.");
   });
 
   it("describes exact server disclosure, raw permission exceptions and quiet outcomes", () => {

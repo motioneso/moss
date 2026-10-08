@@ -17,39 +17,54 @@ const tool = () =>
   });
 
 describe("approval preparation lifecycle", () => {
-  it("cleans the waiter and persisted pending row if delivery throws", async () => {
-    const h = admissionFixture([tool()], {
-      deps: {
-        notifier: {
-          emit: () => {
+  it.each([false, true])(
+    "cleans failed delivery with retry guidance for external=%s",
+    async (isExternal) => {
+      const h = admissionFixture([{ ...tool(), isExternal }], {
+        deps: {
+          notifier: {
+            emit: () => {
+              throw new Error("PRIVATE_FAILURE");
+            }
+          }
+        }
+      });
+      const result = await h.gateway.callTool(h.token, "example.write", {});
+      expect(result).toEqual({
+        ok: false,
+        error: "Action details are unavailable. Ask Moss to find the action again."
+      });
+      expect(JSON.stringify(result)).not.toContain("PRIVATE_FAILURE");
+      expect(h.confirmations.isAwaiting("action-1")).toBe(false);
+      expect(h.deps.repository.resolveAssistantAction).toHaveBeenCalledWith(
+        expect.anything(),
+        "action-1",
+        { status: "cancelled" }
+      );
+    }
+  );
+  it.each([false, true])(
+    "withholds malformed cards with retry guidance for external=%s",
+    async (isExternal) => {
+      const h = admissionFixture([
+        {
+          ...tool(),
+          isExternal,
+          summarize: () => {
             throw new Error("PRIVATE_FAILURE");
           }
         }
-      }
-    });
-    const result = await h.gateway.callTool(h.token, "example.write", {});
-    expect(result.ok).toBe(false);
-    expect(JSON.stringify(result)).not.toContain("PRIVATE_FAILURE");
-    expect(h.confirmations.isAwaiting("action-1")).toBe(false);
-    expect(h.deps.repository.resolveAssistantAction).toHaveBeenCalledWith(
-      expect.anything(),
-      "action-1",
-      { status: "cancelled" }
-    );
-  });
-  it("creates no waiter or row when server summary normalization throws", async () => {
-    const h = admissionFixture([
-      {
-        ...tool(),
-        summarize: () => {
-          throw new Error("PRIVATE_FAILURE");
-        }
-      }
-    ]);
-    expect((await h.gateway.callTool(h.token, "example.write", {})).ok).toBe(false);
-    expect(h.createPending).not.toHaveBeenCalled();
-    expect(h.confirmations.isAwaiting("action-1")).toBe(false);
-  });
+      ]);
+      expect(await h.gateway.callTool(h.token, "example.write", {})).toEqual({
+        ok: false,
+        denied: true,
+        reason:
+          "approval_unavailable: Complete action details are unavailable. Ask Moss to find the action again."
+      });
+      expect(h.createPending).not.toHaveBeenCalled();
+      expect(h.confirmations.isAwaiting("action-1")).toBe(false);
+    }
+  );
   it("admits display content independently of a user-authored result declaration", async () => {
     const h = admissionFixture([tool()]);
     const pending = h.gateway.callTool(h.token, "example.write", {});

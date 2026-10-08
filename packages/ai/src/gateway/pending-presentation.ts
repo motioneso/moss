@@ -195,7 +195,7 @@ export async function cancelFailedPresentation(
   }
   return {
     ok: false as const,
-    error: "Action details are unavailable. Use the relevant app screen."
+    error: "Action details are unavailable. Ask Moss to find the action again."
   };
 }
 
@@ -227,7 +227,7 @@ export async function prepareApprovalCard(
       ok: false,
       denied: true,
       reason:
-        "approval_unavailable: Complete action details are unavailable. Use the relevant app screen, or ask Moss to find the action again."
+        "approval_unavailable: Complete action details are unavailable. Ask Moss to find the action again."
     } satisfies GatewayToolResponse
   };
   let actionSummary: string;
