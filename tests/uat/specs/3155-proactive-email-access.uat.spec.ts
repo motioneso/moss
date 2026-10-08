@@ -111,13 +111,19 @@ test("real access controls and API refresh reach the worker without selecting em
   expect(settings.status()).toBe(200);
   await refresh(page, 1);
   await page.goto(`${env("JARVIS_UAT_BASE_URL")}/settings?section=connections`);
-  const sibling = await accountRow(page, ACCOUNT_B);
+  let sibling = await accountRow(page, ACCOUNT_B);
   const saved = page.waitForResponse(
     (r) => r.url().includes(`${ACCOUNT_B}/feature-grants`) && r.request().method() === "PUT"
   );
   await sibling.getByRole("checkbox", { name: "Email access" }).click();
   expect((await saved).status()).toBe(200);
   await expect(sibling.getByRole("checkbox", { name: "Email access" })).not.toBeChecked();
+  await page.reload();
+  sibling = await accountRow(page, ACCOUNT_B);
+  await expect(sibling.getByRole("checkbox", { name: "Email access" })).not.toBeChecked();
+  const grants = await page.request.get(`/api/connectors/accounts/${ACCOUNT_B}/feature-grants`);
+  expect(grants.status()).toBe(200);
+  expect(await grants.json()).toMatchObject({ email: false });
   await refresh(page, 1);
 
   const revoked = page.waitForResponse(
@@ -126,6 +132,10 @@ test("real access controls and API refresh reach the worker without selecting em
   await sibling.getByRole("button", { name: "Revoke", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke", exact: true }).click();
   expect((await revoked).status()).toBe(200);
+  const accounts = await page.request.get("/api/connectors/accounts");
+  const accountState = (await accounts.json()) as { accounts: { id: string; status: string }[] };
+  expect(accountState.accounts.find((account) => account.id === ACCOUNT_B)?.status).toBe("revoked");
+  expect(accountState.accounts.find((account) => account.id === ACCOUNT_A)?.status).toBe("active");
   await refresh(page, 1);
 
   await page.goto(`${env("JARVIS_UAT_BASE_URL")}/settings?section=modules`);
