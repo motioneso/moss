@@ -128,22 +128,22 @@ describe("conversation-bound session reuse", () => {
 
   it.each([
     { threadId: "different-thread", incognito: false },
-    { threadId: "origin-thread", incognito: true }
+    { threadId: "private-thread", incognito: true }
   ])(
-    "does not reuse cached engine with mismatched $threadId/privacy=$incognito",
+    "keeps the warm selection after later activity in $threadId/privacy=$incognito",
     async (selected) => {
       const h = harness(false);
       h.releaseLaunch.resolve();
       const original = await h.manager.ensureSession("user-a", "User");
       h.select(selected.threadId, selected.incognito);
 
-      const replacement = await h.manager.ensureSession("user-a", "User");
+      const resumed = await h.manager.ensureSession("user-a", "User");
 
-      expect(replacement).not.toBe(original);
-      expect(replacement.threadId).toBe(selected.threadId);
-      expect(replacement.incognito).toBe(selected.incognito);
-      expect(h.engines).toHaveLength(2);
-      expect(h.engines[0]!.kill).toHaveBeenCalledOnce();
+      expect(resumed).toBe(original);
+      expect(resumed.threadId).toBe("origin-thread");
+      expect(resumed.incognito).toBe(false);
+      expect(h.engines).toHaveLength(1);
+      expect(h.engines[0]!.kill).not.toHaveBeenCalled();
       expect(h.openNewConversation).not.toHaveBeenCalled();
       expect(h.touchExistingThread).not.toHaveBeenCalled();
     }
