@@ -75,10 +75,4 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Task 3100 — choose a task creation layout
-
-The clickable task creation preview is ready for review on `prototype/scheduled-task-creation`.
-Choose A (conversation), B (task sheet), C (focused review), or a combination. Recommendation:
-B, because its labelled fields make the timing and approved actions easy to scan in narrow chat.
-No creation layout is accepted yet. Task 3100 stays open; the task-management design can use the
-accepted fields after this decision. Private preview addresses and browser evidence are in the vault.
+Nothing open.

@@ -1,6 +1,9 @@
 /* THROWAWAY: creation layout; shared Moss tokens and primitives supply visuals. */
+.create-preview {
+  padding-bottom: var(--space-5);
+}
 .create-preview .proto-stage {
-  height: calc(100dvh - 310px);
+  height: calc(100dvh - 210px);
 }
 .create-demo-controls {
   display: flex;
@@ -23,94 +26,6 @@
 }
 .create-preview .proto-today-body > .jds-section-head {
   margin-top: var(--space-6);
-}
-.create-conversational,
-.create-sheet,
-.create-receipt,
-.create-review {
-  margin-top: var(--space-5);
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-  overflow-wrap: anywhere;
-}
-.create-sheet,
-.create-receipt {
-  border-block: 1px solid var(--border);
-  padding-block: var(--space-4);
-}
-.create-sheet-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-.create-preview h2 {
-  font-family: var(--font-display);
-  font-weight: var(--weight-heavy);
-  font-size: var(--text-xl);
-  line-height: var(--leading-snug);
-  margin: var(--space-3) 0;
-}
-.create-sheet dl {
-  margin: var(--space-4) 0;
-}
-.create-sheet dl > div {
-  display: grid;
-  grid-template-columns: 74px minmax(0, 1fr);
-  gap: var(--space-3);
-  padding-block: var(--space-3);
-  border-top: 1px solid var(--border);
-}
-.create-sheet dt {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-.create-sheet dd {
-  margin: 0;
-}
-.create-preview ul {
-  padding-left: var(--space-5);
-  margin-block: var(--space-3);
-}
-.create-preview li + li {
-  margin-top: var(--space-2);
-}
-.create-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-}
-.create-permission {
-  margin-block: var(--space-4);
-}
-.create-permission p + p {
-  margin-top: var(--space-3);
-}
-.create-review {
-  margin-top: 0;
-}
-.create-review > .jds-eyebrow {
-  display: block;
-  margin-top: var(--space-5);
-}
-.create-review .jds-section-head {
-  margin-top: var(--space-6);
-}
-.create-review .jds-section-head__title {
-  font-size: var(--text-lg);
-}
-.create-receipt > .jds-btn,
-.create-review > .jds-btn {
-  margin-block: var(--space-3);
-}
-.create-switcher .jds-btn {
-  min-width: 44px;
-  min-height: 44px;
-  color: var(--hero-fg);
-}
-.create-switcher .jds-btn[aria-pressed="true"] {
-  outline: 1px solid var(--hero-fg);
 }
 .create-preview .jds-iconbtn,
 .create-preview .jds-btn {
@@ -151,9 +66,5 @@
   }
   .create-preview .proto-conversation-title h1 {
     font-size: var(--text-xl);
-  }
-  .create-switcher {
-    padding: var(--space-2);
-    bottom: var(--space-2);
   }
 }

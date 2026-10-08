@@ -1,12 +1,10 @@
-/** THROWAWAY #3100: three creation layouts in accepted chat; ?variant=A|B|C.
+/** THROWAWAY #3100: ordinary chat replies for task creation, as selected by Ben.
  * Fictional samples and memory-only state. Never imported by the production app.
  */
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowDown,
-  ArrowLeft,
-  ArrowRight,
   CalendarDays,
   CheckCheck,
   FileText,
@@ -21,7 +19,6 @@ import {
 } from "lucide-react";
 import {
   Avatar,
-  Badge,
   BrandMark,
   Button,
   EmptyState,
@@ -32,7 +29,6 @@ import {
   Masthead,
   NavIndex,
   NavIndexItem,
-  Note,
   SectionHead,
   Select,
   Thread
@@ -43,7 +39,6 @@ import "../styles/kit-chat.css";
 import "./main-side-chats.prototype.css";
 import "./scheduled-task-creation.prototype.css";
 
-type Variant = "A" | "B" | "C";
 type Scenario = "reminder" | "watch" | "suggestion" | "cleanup";
 type Status = "ready" | "proposed" | "approval" | "saved" | "declined";
 type Task = {
@@ -96,181 +91,12 @@ const examples: Record<Scenario, Task> = {
     changes: true
   }
 };
-const layouts = [
-  { key: "A", name: "Conversation", description: "A plain reply, with the decision in chat." },
-  { key: "B", name: "Task sheet", description: "A structured summary inside the conversation." },
-  { key: "C", name: "Focused review", description: "A dedicated task view inside the same chat." }
-] as const;
 const params = new URLSearchParams(location.search);
-const initialVariant = layouts.find((v) => v.key === params.get("variant"))?.key ?? "A";
 const initialScenario = Object.keys(examples).find((key) => key === params.get("example")) as
   | Scenario
   | undefined;
 
-type FlowProps = {
-  task: Task;
-  status: Status;
-  destination: string;
-  accept: () => void;
-  decline: () => void;
-};
-function Decision({ task, status, accept, decline }: FlowProps) {
-  if (status !== "approval" && status !== "proposed") return null;
-  return (
-    <div className="create-actions">
-      <Button onClick={accept}>
-        {task.changes ? "Approve actions & save" : "Yes, watch for her reply"}
-      </Button>
-      <Button variant="quiet" onClick={decline}>
-        {task.changes ? "Don’t save" : "No thanks"}
-      </Button>
-    </div>
-  );
-}
-function PermissionNote({ task }: { task: Task }) {
-  if (!task.changes) return null;
-  return (
-    <Note variant="practical" className="create-permission">
-      <p>Saving approves these actions for this task. It will run without asking again.</p>
-      <p>Other actions won’t run. Turning off access still stops it.</p>
-    </Note>
-  );
-}
-function VariantA(props: FlowProps) {
-  const { task, status, destination } = props;
-  return (
-    <section className="create-conversational" aria-label="Task summary">
-      <Eyebrow tone="accent">
-        {status === "saved" ? "Saved" : task.changes ? "Approve once" : "Moss suggests"}
-      </Eyebrow>
-      <p>
-        {status === "saved"
-          ? "I’ve saved this:"
-          : task.changes
-            ? "Before I save this, approve the actions it will take:"
-            : "Want me to watch for her reply for the next three hours?"}
-      </p>
-      <p>
-        <strong>{task.instruction}</strong> {task.when}. {task.end && <>Watch ends: {task.end}.</>}{" "}
-        Results go to <strong>{destination}</strong>.
-      </p>
-      {task.changes ? (
-        <>
-          <p>{status === "saved" ? "Approved actions:" : "This task will:"}</p>
-          <ul>
-            {task.actions.map((action) => (
-              <li key={action}>{action}</li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        <p>
-          What I’ll do: {task.actions.join("; ")}.{" "}
-          {task.end && "I’ll only message when her reply arrives."}
-        </p>
-      )}
-      {status !== "saved" && <PermissionNote task={task} />}
-      {status === "saved" && task.changes && (
-        <p>It will run without asking again, within these approved actions.</p>
-      )}
-      <Decision {...props} />
-    </section>
-  );
-}
-function VariantB(props: FlowProps) {
-  const { task, status, destination } = props;
-  return (
-    <section className="create-sheet" aria-label="Task summary">
-      <div className="create-sheet-head">
-        <Eyebrow tone="accent">
-          {task.changes ? "Scheduled task" : task.end ? "Inbox watch" : "Reminder"}
-        </Eyebrow>
-        <Badge tone={status === "saved" ? "forest" : "amber"}>
-          {status === "saved" ? "Saved" : status === "approval" ? "Needs approval" : "Suggestion"}
-        </Badge>
-      </div>
-      <h2>{task.title}</h2>
-      <dl>
-        <div>
-          <dt>Instruction</dt>
-          <dd>{task.instruction}</dd>
-        </div>
-        <div>
-          <dt>When</dt>
-          <dd>{task.when}</dd>
-        </div>
-        {task.end && (
-          <div>
-            <dt>Stops</dt>
-            <dd>{task.end}</dd>
-          </div>
-        )}
-        <div>
-          <dt>Results in</dt>
-          <dd>{destination}</dd>
-        </div>
-      </dl>
-      <Eyebrow tone="muted">
-        {task.changes
-          ? status === "saved"
-            ? "Approved actions"
-            : "Actions to approve"
-          : "What Moss will do"}
-      </Eyebrow>
-      <ul>
-        {task.actions.map((action) => (
-          <li key={action}>{action}</li>
-        ))}
-      </ul>
-      {task.end && <p>Quiet unless her reply arrives.</p>}
-      <PermissionNote task={task} />
-      <Decision {...props} />
-    </section>
-  );
-}
-function VariantC(props: FlowProps & { back: () => void }) {
-  const { task, status, destination } = props;
-  return (
-    <section className="create-review" aria-label="Task summary">
-      <Button variant="link" icon={<ArrowLeft size={16} />} onClick={props.back}>
-        Back to chat
-      </Button>
-      <Eyebrow tone="accent">
-        {status === "saved" ? "Saved task" : task.changes ? "One-time approval" : "Suggested watch"}
-      </Eyebrow>
-      <h2>{task.title}</h2>
-      <p>{task.instruction}</p>
-      <SectionHead number="01" title="Timing & destination" />
-      <p>{task.when}</p>
-      {task.end && <p>{task.end}</p>}
-      <p>
-        Results in <strong>{destination}</strong>.
-      </p>
-      <SectionHead
-        number="02"
-        title={
-          task.changes
-            ? status === "saved"
-              ? "Approved actions"
-              : "Actions to approve"
-            : "What Moss will do"
-        }
-      />
-      <ul>
-        {task.actions.map((action) => (
-          <li key={action}>{action}</li>
-        ))}
-      </ul>
-      {task.end && <p>Quiet unless her reply arrives.</p>}
-      <PermissionNote task={task} />
-      <Decision {...props} />
-      {status === "saved" && <Button onClick={props.back}>Return to chat</Button>}
-    </section>
-  );
-}
-
 function Prototype() {
-  const [variant, setVariant] = useState<Variant>(initialVariant);
   const [scenario, setScenario] = useState<Scenario>(initialScenario ?? "reminder");
   const [status, setStatus] = useState<Status>("ready");
   const [view, setView] = useState(params.get("view") === "phone" ? "phone" : "docked");
@@ -291,7 +117,6 @@ function Prototype() {
   });
   const [draft, setDraft] = useState(examples[scenario].request);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [taskChat, setTaskChat] = useState("main");
   const [dark, setDark] = useState(false);
   const [park, setPark] = useState("default");
@@ -300,28 +125,17 @@ function Prototype() {
   const composer = useRef<HTMLTextAreaElement>(null);
   const title =
     active === "main" ? "Main chat" : (topics.find((t) => t.id === active)?.title ?? "Side chat");
-  const layout = layouts.find((item) => item.key === variant)!;
-  const showTask = active === taskChat && ["proposed", "approval", "saved"].includes(status);
-  const flow: FlowProps = {
-    task,
-    status,
-    destination,
-    accept: () => decide(true),
-    decline: () => decide(false)
-  };
-
   useEffect(() => {
     document.documentElement.dataset.colorMode = dark ? "dark" : "light";
     document.documentElement.dataset.theme = park;
   }, [dark, park]);
   useEffect(() => {
     const url = new URL(location.href);
-    url.searchParams.set("variant", variant);
+    url.searchParams.delete("variant");
     url.searchParams.set("example", scenario);
     url.searchParams.set("view", view);
     history.replaceState(null, "", url);
     console.info("Creation preview state", {
-      variant,
       scenario,
       status,
       saved: status === "saved",
@@ -331,11 +145,10 @@ function Prototype() {
       destination,
       actions: task.actions
     });
-  }, [variant, scenario, view, status, task, destination]);
+  }, [scenario, view, status, task, destination]);
   useEffect(() => {
-    if (thread.current)
-      thread.current.scrollTop = variant === "C" && reviewOpen ? 0 : thread.current.scrollHeight;
-  }, [records, status, active, variant, reviewOpen]);
+    if (thread.current) thread.current.scrollTop = thread.current.scrollHeight;
+  }, [records, status, active]);
   useEffect(() => {
     if (menuOpen)
       document
@@ -349,15 +162,6 @@ function Prototype() {
         closeMenu();
         return;
       }
-      if (
-        !(event.target instanceof Element) ||
-        event.target.closest("input, textarea, select, [contenteditable], #conversation-menu")
-      )
-        return;
-      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-        event.preventDefault();
-        cycle(event.key === "ArrowRight" ? 1 : -1);
-      }
     }
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
@@ -366,19 +170,9 @@ function Prototype() {
     setMenuOpen(false);
     menuButton.current?.focus();
   }
-  function cycle(direction: number) {
-    const index = layouts.findIndex((item) => item.key === variant);
-    chooseVariant(layouts[(index + direction + 3) % 3]!.key);
-  }
-  function chooseVariant(next: Variant) {
-    setVariant(next);
-    setReviewOpen(next === "C" && showTask);
-    closeMenu();
-  }
   function load(next: Scenario, side = sideDestination) {
     setScenario(next);
     setStatus("ready");
-    setReviewOpen(false);
     setTask(examples[next]);
     setRecords({
       main: [
@@ -394,33 +188,52 @@ function Prototype() {
   function append(items: TranscriptRecord[]) {
     setRecords((previous) => ({ ...previous, [active]: [...(previous[active] ?? []), ...items] }));
   }
+  function savedReply(target: string) {
+    const text = task.changes
+      ? "Okay, I’ll tidy the Field Notes emails every Friday at 4 PM PDT, starting 9 October, using those actions. I’ll tell you what changed."
+      : scenario === "reminder"
+        ? "I’ll remind you tomorrow, Thursday 8 October, at 9 AM PDT to send Maya the proposal."
+        : "I’ll check for Maya’s reply every 15 minutes for the next three hours, until 5 PM PDT today. I’ll let you know when it arrives, then stop watching.";
+    return target === "Main chat" ? text : `${text} I’ll put the results in ${target}.`;
+  }
   function send() {
     const text = draft.trim();
     if (!text) return;
     setDraft("");
-    if (
+    let reply: string;
+    if ((status === "approval" || status === "proposed") && active === taskChat) {
+      if (
+        /^(yes|sure|go ahead|yes please|yes, please|yes, save it|yes, approve those actions and save it|please do)[.!]?$/i.test(
+          text
+        )
+      ) {
+        setStatus("saved");
+        reply = savedReply(destination);
+      } else if (
+        /^(no|no thanks|no, thanks|don't save it|don’t save it|cancel)[.!]?$/i.test(text)
+      ) {
+        setStatus("declined");
+        reply = "No problem. I haven’t saved a task.";
+      } else {
+        reply = "I haven’t saved it yet. Let me know whether you want me to go ahead.";
+      }
+    } else if (
       status === "ready" &&
       text ===
         examples[scenario].request + (sideDestination ? " Put the results in AI reading." : "")
     ) {
+      const target = sideDestination ? "AI reading" : "Main chat";
       const nextStatus =
         scenario === "suggestion" ? "proposed" : task.changes ? "approval" : "saved";
-      setDestination(sideDestination ? "AI reading" : "Main chat");
+      setDestination(target);
       setTaskChat(active);
       setStatus(nextStatus);
-      setReviewOpen(variant === "C");
-      append([
-        { kind: "user", text },
-        {
-          kind: "reply",
-          text:
-            nextStatus === "saved"
-              ? "Saved. Here’s what I’ll do."
-              : task.changes
-                ? "I can do that. Let’s agree the actions once before I save it."
-                : "I could watch your inbox for Maya’s reply for the next three hours."
-        }
-      ]);
+      reply =
+        nextStatus === "saved"
+          ? savedReply(target)
+          : task.changes
+            ? "Before I save this: every Friday at 4 PM PDT, starting 9 October, I’ll read emails from Field Notes, archive their newsletters over 7 days old, permanently delete their promotional emails over 30 days old, and tell you what changed. Permanent deletion can’t be undone. Once you agree, I’ll do this without asking again. Shall I go ahead?"
+            : "Want me to check your inbox for Maya’s reply every 15 minutes for the next three hours, until 5 PM PDT today? I’ll let you know when it arrives, then stop watching.";
     } else {
       if (active.startsWith("new-") && !records[active]?.length)
         setTopics((previous) =>
@@ -430,40 +243,17 @@ function Prototype() {
               : topic
           )
         );
-      append([
-        { kind: "user", text },
-        {
-          kind: "reply",
-          text: "This preview only creates the sample requests. Use the example selector and Send to try a task."
-        }
-      ]);
+      reply =
+        "This preview only creates the sample requests. Use the example selector and Send to try a task.";
     }
-  }
-  function decide(approved: boolean) {
-    if (status !== "approval" && status !== "proposed") return;
-    setStatus(approved ? "saved" : "declined");
-    setReviewOpen(false);
     append([
-      {
-        kind: "user",
-        text: approved
-          ? task.changes
-            ? "Yes, approve those actions and save it."
-            : "Yes, watch for her reply."
-          : task.changes
-            ? "Don’t save it."
-            : "No thanks."
-      },
-      {
-        kind: "reply",
-        text: approved ? "Saved. Here’s what I’ll do." : "No problem. I haven’t saved a task."
-      }
+      { kind: "user", text },
+      { kind: "reply", text: reply }
     ]);
   }
   function selectChat(id: string) {
     setActive(id);
     setDraft("");
-    setReviewOpen(false);
     closeMenu();
   }
   function newChat() {
@@ -549,12 +339,7 @@ function Prototype() {
                 : "0 sample tasks saved"}
         </span>
       </div>
-      <div
-        className="proto-stage"
-        data-view={view}
-        data-variant="A"
-        data-creation-variant={variant}
-      >
+      <div className="proto-stage" data-view={view}>
         <aside className="sidebar proto-app-nav">
           <div className="brand-lockup">
             <BrandMark size={28} />
@@ -699,47 +484,13 @@ function Prototype() {
                     </div>
                   </div>
                   <div ref={thread} className="proto-thread" aria-live="polite">
-                    {variant === "C" && reviewOpen && showTask ? (
-                      <VariantC {...flow} back={() => setReviewOpen(false)} />
+                    {records[active]?.length ? (
+                      <Thread records={records[active] ?? []} working={false} />
                     ) : (
-                      <>
-                        {records[active]?.length ? (
-                          <Thread records={records[active] ?? []} working={false} />
-                        ) : (
-                          <EmptyState
-                            title="What’s on your mind?"
-                            description="Start typing. Moss will name this chat as you go."
-                          />
-                        )}
-                        {showTask &&
-                          (variant === "A" ? (
-                            <VariantA {...flow} />
-                          ) : variant === "B" ? (
-                            <VariantB {...flow} />
-                          ) : (
-                            <div className="create-receipt">
-                              <Badge tone={status === "saved" ? "forest" : "amber"}>
-                                {status === "saved" ? "Saved" : "Not saved yet"}
-                              </Badge>
-                              <h2>{task.title}</h2>
-                              <p>{task.instruction}</p>
-                              <p>
-                                {task.when}
-                                {task.end && <> · {task.end}</>}
-                              </p>
-                              <p>Results in {destination}.</p>
-                              {status === "saved" && (
-                                <p>
-                                  {task.changes ? "Approved actions" : "What Moss will do"}:{" "}
-                                  {task.actions.join("; ")}.
-                                </p>
-                              )}
-                              <Button variant="secondary" onClick={() => setReviewOpen(true)}>
-                                {status === "saved" ? "View saved task" : "Review task"}
-                              </Button>
-                            </div>
-                          ))}
-                      </>
+                      <EmptyState
+                        title="What’s on your mind?"
+                        description="Start typing. Moss will name this chat as you go."
+                      />
                     )}
                   </div>
                   <form
@@ -777,35 +528,6 @@ function Prototype() {
           </div>
         </div>
       </div>
-      {import.meta.env.DEV && (
-        <div className="proto-switcher create-switcher" aria-label="Compare creation designs">
-          <IconButton aria-label="Previous design" onClick={() => cycle(-1)}>
-            <ArrowLeft size={18} />
-          </IconButton>
-          <div>
-            <div className="proto-option-buttons">
-              {layouts.map((option) => (
-                <Button
-                  key={option.key}
-                  variant="quiet"
-                  aria-label={`Option ${option.key}: ${option.name}`}
-                  aria-pressed={variant === option.key}
-                  onClick={() => chooseVariant(option.key)}
-                >
-                  {option.key}
-                </Button>
-              ))}
-            </div>
-            <strong>
-              {variant} · {layout.name}
-            </strong>
-            <span>{layout.description}</span>
-          </div>
-          <IconButton aria-label="Next design" onClick={() => cycle(1)}>
-            <ArrowRight size={18} />
-          </IconButton>
-        </div>
-      )}
     </div>
   );
 }
