@@ -136,7 +136,10 @@ final class MeetingSourceSelectionTests: XCTestCase {
             cutoffNanoseconds: nil, allowPartial: false)?.packet)
         XCTAssertEqual(packet.samples.count, 40_000, "The acknowledgment proof must queue a complete five-second chunk")
         let capture = try XCTUnwrap(host.remote)
-        let bounds = try MeetingWireAudioBoundary(packet: packet, originNanoseconds: 9_000_000_000)
+        // Use the host's synchronized origin, not the initial fixture estimate, so
+        // this precondition checks the same server-time fence as the real upload.
+        let origin = try XCTUnwrap(host.synchronizedOriginNanoseconds)
+        let bounds = try MeetingWireAudioBoundary(packet: packet, originNanoseconds: origin)
         XCTAssertLessThanOrEqual(bounds.endMs, capture.elapsedMs,
             "The server-time fence must already permit the replacement chunk before its recording acknowledgment")
         XCTAssertTrue(fixture.runtime.snapshot.permitsSend(epoch: packet.epoch,

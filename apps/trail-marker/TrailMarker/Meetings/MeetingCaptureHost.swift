@@ -79,6 +79,7 @@ final class MeetingCaptureHost: ObservableObject {
     var sourceChangeAcknowledged: Bool { sourceChangeIntent?.acknowledged == true }
     var sourceChangeInFlight: Bool { sourceChangeTask != nil }
     var pendingGaps: [MeetingCaptureGap] { timeline.pendingGaps }
+    var synchronizedOriginNanoseconds: UInt64? { timeline.originNanoseconds }
     var uploadsInFlight: Bool { !uploadTasks.isEmpty }
     var sourceChangeCompletion: MeetingCaptureTaskProgress? { sourceChangeTask.map(MeetingCaptureTaskProgress.init) }
     var controlCompletion: MeetingCaptureTaskProgress? { controlTask.map(MeetingCaptureTaskProgress.init) }

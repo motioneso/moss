@@ -19,7 +19,9 @@ jobs:
   test:
     name: Build and test
     runs-on: macos-15
-    timeout-minutes: 45
+    # Sequential native mutation/restoration tests need time to finish every control
+    # and preserve their evidence, including on slower hosted Macs.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
