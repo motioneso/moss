@@ -14,4 +14,6 @@ typedef struct {
 /* Read-only process metadata. No audio resources, permissions, or process mutation. */
 int MMListProcesses(int32_t *pids, size_t capacity);
 int MMReadProcess(int32_t pid, MMProcessIdentity *result);
+/* Path-only lookup: BSD metadata may be denied for another user’s process. */
+int MMReadProcessPath(int32_t pid, char *path, size_t capacity);
 #endif

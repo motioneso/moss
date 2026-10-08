@@ -446,7 +446,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.mac_recording_status",
       description:
-        "White 222 × 32 pill with three live audio bars, source menu, Pause/Resume, Stop and Hide X. Silence/stale audio flattens the bars. Resume keeps the current sources. Stop clears the pill and red menu item."
+        "White 222 × 32 pill with three live audio bars, a source menu readable in light and dark macOS appearance, Pause/Resume, Stop and Hide X. Silence/stale audio flattens the bars. Resume keeps the current sources. Stop clears the pill and red menu item."
     },
     {
       id: "meetings.mac_recording_pill_visibility",
@@ -456,7 +456,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.mac_audio_sources",
       description:
-        "Select a mic or None and toggle computer audio for this recording. System-only skips mic permission. Both-off is rejected; select audio. Paused edits stay paused. Changes await confirmation and keep Settings defaults."
+        "Select a mic or None and toggle computer audio for this recording. System-only skips mic permission. Computer audio identifies Moss exclusions by executable path without requiring other users’ process metadata; an unreadable live path still pauses capture. Pause diagnostics include the native failure reason. Both-off is rejected; select audio. Paused edits stay paused. Changes await confirmation and keep Settings defaults."
     },
     {
       id: "meetings.account_export",

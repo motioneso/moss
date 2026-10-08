@@ -37,6 +37,19 @@ struct MeetingCaptureDiagnostics {
 
     mutating func resetAudio() { audio.removeAll() }
 
+    /// Native failures contain fixed operation labels/statuses. Never render arbitrary NSError
+    /// descriptions or userInfo: networking errors may carry private URLs or response content.
+    static func interruptionReason(_ error: Error) -> String {
+        if let failure = error as? MeetingAudioFailure { return String(describing: failure) }
+        if let failure = error as? MeetingHostError { return String(describing: failure) }
+        return "unexpectedError(code: \((error as NSError).code))"
+    }
+
+    mutating func interrupted(reason: String) -> [String] {
+        append("capture-paused: \(reason)")
+        return lines
+    }
+
     mutating func recordAudio(_ snapshots: [MeetingAudioSource: MeetingAudioBuffer.Diagnostics]) -> [String]? {
         var changed = false
         for (source, value) in snapshots {

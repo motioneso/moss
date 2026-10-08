@@ -329,51 +329,13 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
     }
 
     private static func mossAudioProcesses(original: [AudioObjectID: Int32]) throws -> [AudioObjectID: Int32] {
-        var bundles = Set<String>()
-        for pid in original.values {
-            let executable = try executablePath(pid)
-            guard let bundle = MeetingOutputProcessIdentity.bundlePath(executable: executable) else {
-                throw MeetingAudioFailure.invalidSelection
-            }
-            bundles.insert(bundle)
-        }
-        let system = AudioObjectID(kAudioObjectSystemObject)
-        let listed = try routeObjects(system, selector: kAudioHardwarePropertyProcessObjectList)
-        var current: [AudioObjectID: Int32] = [:]
-        // Core Audio can translate a process before listing it. Keep proving those original
-        // exclusions too, while inspecting every newly visible process for a Moss bundle.
-        for object in listed.union(original.keys) {
-            do {
+        try MeetingOutputProcessIdentity.mossAudioProcesses(original: original,
+            readList: { try routeObjects(AudioObjectID(kAudioObjectSystemObject), selector: kAudioHardwarePropertyProcessObjectList) },
+            readPID: { object in
                 let identity = try processIdentity(scope: .selectedProcesses([object]))
                 guard let pid = identity[object] else { throw MeetingAudioFailure.invalidSelection }
-                let executable = try executablePath(pid)
-                let ancestors = MeetingOutputProcessIdentity.bundlePaths(executable: executable)
-                let identifiers = ancestors.compactMap { Bundle(path: $0)?.bundleIdentifier }
-                if !ancestors.isEmpty, !ancestors.contains(where: bundles.contains), identifiers.isEmpty {
-                    throw MeetingAudioFailure.invalidSelection
-                }
-                // A separately launched nested Moss app may live inside another app's bundle;
-                // inspect every containing app identity, not only the outer package.
-                let identifier = identifiers.first { $0.hasPrefix("com.moss.") } ?? identifiers.first
-                if MeetingOutputProcessIdentity.isMossProcess(executable: executable, bundleIdentifier: identifier,
-                                                             mossBundlePaths: bundles) { current[object] = pid }
-            } catch {
-                // A raced exit is harmless only after the stable system list proves it gone.
-                if original[object] != nil { throw MeetingAudioFailure.invalidSelection }
-                let remaining = try routeObjects(system, selector: kAudioHardwarePropertyProcessObjectList)
-                if remaining.contains(object) { throw MeetingAudioFailure.invalidSelection }
-            }
-        }
-        return current
-    }
-
-    private static func executablePath(_ pid: Int32) throws -> String {
-        var process = MMProcessIdentity()
-        guard MMReadProcess(pid, &process) == 1 else { throw MeetingAudioFailure.invalidSelection }
-        let path = withUnsafePointer(to: &process.executable) { pointer in
-            pointer.withMemoryRebound(to: CChar.self, capacity: 4096) { String(cString: $0) }
-        }
-        return URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+                return pid
+            })
     }
 
     func stop() throws {
@@ -409,6 +371,55 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
 /// Read only identities in the original scope. App/helper membership is resolved by the host;
 /// selected-app validation ignores unrelated processes and never edits the original object list.
 enum MeetingOutputProcessIdentity {
+    /// Shared by startup and process-list revalidation. Unreadable live paths remain uncertain.
+    static func mossAudioProcesses(original: [UInt32: Int32],
+                                   readList: () throws -> Set<UInt32>,
+                                   readPID: (UInt32) throws -> Int32,
+                                   readPath: (Int32) throws -> String = executablePath,
+                                   readBundleIdentifier: (String) -> String? = { Bundle(path: $0)?.bundleIdentifier }) throws -> [UInt32: Int32] {
+        var bundles = Set<String>()
+        for pid in original.values {
+            let executable = try readPath(pid)
+            guard let bundle = MeetingOutputProcessIdentity.bundlePath(executable: executable) else {
+                throw MeetingAudioFailure.invalidSelection
+            }
+            bundles.insert(bundle)
+        }
+        let listed = try readList()
+        var current: [UInt32: Int32] = [:]
+        // Core Audio can translate a process before listing it. Keep proving those original
+        // exclusions too, while inspecting every newly visible process for a Moss bundle.
+        for object in listed.union(original.keys) {
+            do {
+                let pid = try readPID(object)
+                guard pid > 0 else { throw MeetingAudioFailure.invalidSelection }
+                let executable = try readPath(pid)
+                let ancestors = MeetingOutputProcessIdentity.bundlePaths(executable: executable)
+                let identifiers = ancestors.compactMap { readBundleIdentifier($0) }
+                if !ancestors.isEmpty, !ancestors.contains(where: bundles.contains), identifiers.isEmpty {
+                    throw MeetingAudioFailure.invalidSelection
+                }
+                // A separately launched nested Moss app may live inside another app's bundle;
+                // inspect every containing app identity, not only the outer package.
+                let identifier = identifiers.first { $0.hasPrefix("com.moss.") } ?? identifiers.first
+                if MeetingOutputProcessIdentity.isMossProcess(executable: executable, bundleIdentifier: identifier,
+                                                             mossBundlePaths: bundles) { current[object] = pid }
+            } catch {
+                // A raced exit is harmless only after the stable system list proves it gone.
+                if original[object] != nil { throw MeetingAudioFailure.invalidSelection }
+                let remaining = try readList()
+                if remaining.contains(object) { throw MeetingAudioFailure.invalidSelection }
+            }
+        }
+        return current
+    }
+
+    static func executablePath(_ pid: Int32) throws -> String {
+        var path = [CChar](repeating: 0, count: 4096)
+        guard MMReadProcessPath(pid, &path, 4096) == 1 else { throw MeetingAudioFailure.invalidSelection }
+        return URL(fileURLWithPath: String(cString: path)).resolvingSymlinksInPath().path
+    }
+
     static func invalidates(scope: MeetingOutputScope, original: [UInt32: Int32],
                             readCurrent: () throws -> [UInt32: Int32],
                             readExclusions: (() throws -> [UInt32: Int32])? = nil) -> Bool {

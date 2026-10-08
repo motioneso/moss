@@ -2,6 +2,7 @@ import AppKit
 import AudioToolbox
 import Combine
 import Foundation
+import os
 
 /// App-lifetime capture host. The shared connection advertises sources without opening them.
 /// Initial capture requires a fresh browser Start; native Resume retains that claimed session.
@@ -67,6 +68,7 @@ final class MeetingCaptureHost: ObservableObject {
 
     private var timeline = MeetingCaptureTimeline()
     private var diagnosticLog = MeetingCaptureDiagnostics()
+    private let captureLog = Logger(subsystem: "com.moss.trailmarker", category: "meeting-capture")
 
     init(connection: ConnectionRuntime, runtime: MeetingCaptureRuntime? = nil, ports: MeetingCaptureHostPorts? = nil, factory: @escaping MeetingCaptureRuntime.DeviceFactory = MeetingCaptureHost.devices) {
         self.connection = connection
@@ -511,6 +513,9 @@ final class MeetingCaptureHost: ObservableObject {
     }
 
     func interrupt(error: Error) {
+        let reason = MeetingCaptureDiagnostics.interruptionReason(error)
+        captureLog.error("Capture paused: \(reason, privacy: .public)")
+        diagnostics = diagnosticLog.interrupted(reason: reason)
         recordingDuration.pause(at: self.now())
         outputMessage = nil
         uploadAdmitted = false

@@ -124,6 +124,16 @@ final class MeetingHostLifecycleTests: XCTestCase {
         XCTAssertEqual(fixture.device.starts, 1, "Closing the resumed session must not acquire the source again")
     }
 
+    func testPauseDiagnosticsExposeNativeFailureButNotArbitraryErrorContent() {
+        XCTAssertEqual(MeetingCaptureDiagnostics.interruptionReason(MeetingAudioFailure.invalidSelection), "invalidSelection")
+        XCTAssertEqual(MeetingCaptureDiagnostics.interruptionReason(
+            MeetingAudioFailure.deviceFailure(operation: "start-output-io", status: -77)),
+            "deviceFailure(operation: \"start-output-io\", status: -77)")
+        let error = NSError(domain: "private-instance", code: 42,
+            userInfo: [NSLocalizedDescriptionKey: "private URL, credential or transcript"])
+        XCTAssertEqual(MeetingCaptureDiagnostics.interruptionReason(error), "unexpectedError(code: 42)")
+    }
+
     func testAlreadyPausedCaptureAcknowledgesNewPauseGenerationWithoutTouchingDevices() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }
@@ -133,6 +143,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         try host.acceptStart(fixture.server.command, claim: await fixture.claim(), credential: fixture.pending.credential, origin: 9_000_000_000)
         try await waitUntil { host.phase == .recording }
         host.sourceChanged()
+        XCTAssertTrue(host.diagnostics.contains("capture-paused: sourceChanged"))
         XCTAssertEqual(host.phase, .paused)
         let stops = fixture.device.stops
         try await waitUntil(timeout: 4) { fixture.server.lastObservation?.phase == "paused" }

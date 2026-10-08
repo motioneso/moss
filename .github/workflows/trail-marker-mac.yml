@@ -36,6 +36,10 @@ jobs:
         working-directory: apps/trail-marker
         run: python3 scripts/check-meeting-audio-portable.py
 
+      - name: Verify path-only process reads and BSD-denial regression
+        working-directory: apps/trail-marker
+        run: python3 scripts/check-meeting-process-path-portable.py
+
       - name: Verify tap UID ownership in the installed Apple SDK
         run: |
           python3 - <<'PY'

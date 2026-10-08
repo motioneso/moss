@@ -23,3 +23,11 @@ int MMReadProcess(int32_t pid, MMProcessIdentity *result) {
     result->start_microseconds = info.pbi_start_tvusec;
     return 1;
 }
+
+int MMReadProcessPath(int32_t pid, char *path, size_t capacity) {
+    if (pid <= 0 || !path || capacity < PROC_PIDPATHINFO_MAXSIZE || capacity > INT_MAX) return 0;
+    memset(path, 0, capacity);
+    int length = proc_pidpath(pid, path, (uint32_t)capacity);
+    return length > 0 && (size_t)length < capacity && path[0] == '/' &&
+        memchr(path, '\0', capacity) != NULL;
+}
