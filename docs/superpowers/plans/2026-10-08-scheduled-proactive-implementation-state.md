@@ -9,8 +9,8 @@ Runtime baseline and throwaway prototypes were not merged.
 - Native tracker graph verified: 24 open subissues, 28 blocking edges; initial frontier
   #3125, #3129 and #3130. Ticket bodies and graph snapshot are stored outside the repo.
 - Start #3125 before expanding concurrent implementation. Fresh implementer dispatch next.
-- Main-chat migration approved explicitly in this session. Remaining three migration decisions
-  under source review. See `docs/coordination/AWAITING-BEN.md`.
+- All four migration decisions approved explicitly in this session. See
+  [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration is revalidating migration/Settings seams and session fit for
   #3127, #3128, #3132, #3137 and #3142 before dispatch.
 - Each ticket uses a fresh TDD implementer, isolated worktree/branch from the integration
@@ -29,7 +29,8 @@ drawer conversation once (`last_active_at` descending, ID ascending for ties), r
 eligible transcripts as side chats, exclude incognito/module/shared foreign conversations,
 and create Main only when none qualifies. Later activity never changes Main. Current-source
 eligibility: `owner_user_id = actor`, `surface = 'drawer'`, `incognito = false`.
-The other three migration recommendations remain unapproved.
+All remaining migration recommendations were then explicitly approved as recorded in the
+migration-decisions document. No migration decision is pending.
 
 ## Resources
 

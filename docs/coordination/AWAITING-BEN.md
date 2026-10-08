@@ -75,14 +75,4 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### Scheduled/proactive migration decisions — implementation #3096
-
-Agent: scheduled-implementation. Affects #3125, #3129–#3131 and #3146–#3147.
-
-- Main-chat migration was explicitly approved in this implementation session and is no
-  longer blocked. The ruling is recorded in the implementation state.
-- Legacy email choice, canonical quiet hours and legacy cap/card accounting: current-source
-  review in progress; bring concrete decisions to Ben before affected migration code.
-
-Ticket publication and accepted mockups did not approve these migrations. No affected
-migration code is authorized until Ben resolves the relevant recommendation.
+Nothing open.
