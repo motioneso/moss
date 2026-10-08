@@ -20,6 +20,7 @@ struct MeetingAudioFailureDiagnostic: Equatable {
         case voiceDucking, voiceRenderCallback, voiceReferenceSelection, voiceDeviceSelection
         case voiceEndpointReadback, voiceChannelMap, voiceClientFormat, voiceInitialize, voiceStart
         case voiceDefaultOutputChanged
+        case voiceBufferOwnership, voiceInputCallback, voiceMaximumFrames
 
         var label: String {
             switch self {
@@ -72,6 +73,9 @@ struct MeetingAudioFailureDiagnostic: Equatable {
             case .voiceInitialize: return "voiceInitialize"
             case .voiceStart: return "voiceStart"
             case .voiceDefaultOutputChanged: return "voiceDefaultOutputChanged"
+            case .voiceBufferOwnership: return "voiceBufferOwnership"
+            case .voiceInputCallback: return "voiceInputCallback"
+            case .voiceMaximumFrames: return "voiceMaximumFrames"
             }
         }
     }
@@ -91,6 +95,7 @@ struct MeetingAudioFailureDiagnostic: Equatable {
     }
 
     static func status(_ error: Error) -> Int32? {
+        if let unavailable = error as? MeetingVoiceProcessingUnavailable { return unavailable.status }
         if let failure = error as? MeetingAudioFailure {
             if case .deviceFailure(_, let status) = failure { return status }
             return nil
@@ -119,7 +124,11 @@ struct MeetingAudioFailureDiagnostic: Equatable {
 
     private static let logger = Logger(subsystem: "com.moss.trailmarker", category: "meeting-capture")
     static func logLevel(for message: String) -> OSLogType {
-        message == "microphone-echo-cancellation=on" ? .info : .error
+        switch message {
+        case "microphone-echo-cancellation=on": return .info
+        case "microphone-echo-cancellation=off reason=microphoneOnly": return .default
+        default: return .error
+        }
     }
     static func log(_ message: String) {
         logger.log(level: logLevel(for: message), "\(message, privacy: .public)")
@@ -266,7 +275,8 @@ struct MeetingVoiceProcessingUnavailable: Error {
     let status: Int32?
 
     static func setupFailure(status: OSStatus, operation: String, diagnostic: MeetingAudioFailureDiagnostic.Code) -> Error {
-        if status == kAudioUnitErr_Unauthorized || status == kAudioDevicePermissionsError {
+        if status == kAudioUnitErr_Unauthorized || status == kAudioDevicePermissionsError ||
+            status == kAudioHardwareBadDeviceError || status == kAudioHardwareBadObjectError {
             return MeetingAudioFailure.deviceFailure(operation: operation, status: status)
         }
         return MeetingVoiceProcessingUnavailable(diagnostic: diagnostic, status: status)

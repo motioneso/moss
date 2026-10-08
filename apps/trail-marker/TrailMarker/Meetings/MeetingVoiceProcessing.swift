@@ -83,12 +83,14 @@ enum MeetingVoiceProcessing {
     static func renderSilence(flags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
                               frames: UInt32, buffers: UnsafeMutablePointer<AudioBufferList>?) -> OSStatus {
         flags.pointee.insert(.unitRenderAction_OutputIsSilence)
-        guard frames <= MeetingMicrophoneCapture.maximumBufferedFrames,
-              let buffers, buffers.pointee.mNumberBuffers == 1,
-              buffers.pointee.mBuffers.mNumberChannels == 1,
-              buffers.pointee.mBuffers.mDataByteSize == frames * 4,
-              let data = buffers.pointee.mBuffers.mData else { return kAudio_ParamError }
-        memset(data, 0, Int(frames) * MemoryLayout<Float>.size)
+        // A malformed count is not permission to traverse a variable-length list.
+        // Touch only its inline first buffer and keep the existing mono byte ceiling.
+        guard let buffers, buffers.pointee.mNumberBuffers > 0,
+              let data = buffers.pointee.mBuffers.mData else { return noErr }
+        let boundedFrames = min(frames, MeetingMicrophoneCapture.maximumBufferedFrames)
+        let byteCount = min(Int(buffers.pointee.mBuffers.mDataByteSize),
+                            Int(boundedFrames) * MemoryLayout<Float>.size)
+        memset(data, 0, byteCount)
         return noErr
     }
 

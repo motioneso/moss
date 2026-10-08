@@ -50,6 +50,30 @@ CONTROLS = [
         "after": "        let allocationCapacity = capacity // Mutation: trust the provisional frame maximum.",
         "assertion": "Voice processing must reserve the bounded callback ceiling across initialization growth",
     }),
+    (MICROPHONE, {
+        "name": "voice-buffer-ownership-fallback",
+        "source": MICROPHONE_SOURCE,
+        "test": "testConcreteVoiceSetupFailuresFallBackAfterCleanupAndPreservePermissionFailures",
+        "before": '"configure AUHAL buffer ownership", fallback: .voiceBufferOwnership)',
+        "after": '"configure AUHAL buffer ownership")',
+        "assertion": "Direct VPIO setup must classify capability errors for fallback",
+    }),
+    (MICROPHONE, {
+        "name": "voice-input-callback-fallback",
+        "source": MICROPHONE_SOURCE,
+        "test": "testConcreteVoiceSetupFailuresFallBackAfterCleanupAndPreservePermissionFailures",
+        "before": '"install AUHAL input callback", fallback: .voiceInputCallback)',
+        "after": '"install AUHAL input callback")',
+        "assertion": "Direct VPIO setup must classify capability errors for fallback",
+    }),
+    (MICROPHONE, {
+        "name": "voice-endpoint-readback-fallback",
+        "source": MICROPHONE_SOURCE,
+        "test": "testConcreteVoiceSetupFailuresFallBackAfterCleanupAndPreservePermissionFailures",
+        "before": '"verify microphone route", fallback: .voiceEndpointReadback)',
+        "after": '"verify microphone route")',
+        "assertion": "Direct VPIO setup must classify capability errors for fallback",
+    }),
     (VOICE, {
         "name": "voice-concrete-component-subtype",
         "test": "testComponentDescriptionSelectsVoiceProcessingOnlyWhenRequested",
@@ -98,7 +122,7 @@ CONTROLS = [
     (VOICE, {
         "name": "voice-zero-output-reference",
         "test": "testInstalledCallbackWritesSilenceWithoutPlayingCapturedAudio",
-        "before": "        memset(data, 0, Int(frames) * MemoryLayout<Float>.size)",
+        "before": "        memset(data, 0, byteCount)",
         "after": "        _ = data // Mutation: advertise silence without clearing the audio buffer.",
         "assertion": "Playback reference must write zero bytes instead of replaying captured audio",
     }),
@@ -134,7 +158,8 @@ def self_test():
     for test_class, control in CONTROLS:
         select(test_class, control)
         expected_source = MICROPHONE_SOURCE if control["name"] in {
-            "voice-production-mode-forwarding", "voice-startup-hal-fallback", "voice-initialized-frame-capacity"
+            "voice-production-mode-forwarding", "voice-startup-hal-fallback", "voice-initialized-frame-capacity",
+            "voice-buffer-ownership-fallback", "voice-input-callback-fallback", "voice-endpoint-readback-fallback"
         } else VOICE_SOURCE
         if RUNNER.SOURCE != expected_source:
             raise RuntimeError("Voice proof did not select the exact production source file")

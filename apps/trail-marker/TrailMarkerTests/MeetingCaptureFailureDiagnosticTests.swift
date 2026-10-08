@@ -83,7 +83,10 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
             (.voiceClientFormat, "voiceClientFormat"),
             (.voiceInitialize, "voiceInitialize"),
             (.voiceStart, "voiceStart"),
-            (.voiceDefaultOutputChanged, "voiceDefaultOutputChanged")
+            (.voiceDefaultOutputChanged, "voiceDefaultOutputChanged"),
+            (.voiceBufferOwnership, "voiceBufferOwnership"),
+            (.voiceInputCallback, "voiceInputCallback"),
+            (.voiceMaximumFrames, "voiceMaximumFrames")
         ]
         let statuses: [Int32?] = [nil, 0, -1, -10863, Int32.min, Int32.max]
         for (code, label) in labels {
@@ -102,10 +105,11 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         XCTAssertNil(MeetingAudioFailureDiagnostic(packed: UInt64.max))
     }
 
-    func testOnlyExactEchoCancellationOnDiagnosticUsesInfoLogLevel() {
+    func testNormalMicrophoneModesUseNonErrorLogLevels() {
         XCTAssertEqual(MeetingAudioFailureDiagnostic.logLevel(for: "microphone-echo-cancellation=on"), .info)
+        XCTAssertEqual(MeetingAudioFailureDiagnostic.logLevel(for: "microphone-echo-cancellation=off reason=microphoneOnly"), .default)
         for message in [
-            "microphone-echo-cancellation=off reason=microphoneOnly",
+            "microphone-echo-cancellation=off reason=microphoneOnly extra",
             "microphone-echo-cancellation=off reason=voiceStart status=-10863",
             "microphone-echo-cancellation=on extra",
             "prefix microphone-echo-cancellation=on",
@@ -382,7 +386,7 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         let microphone = Device()
         var reports: [String] = []
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone] },
-                                            reportCaptureFailure: { reports.append($0) })
+                                            reportCaptureDiagnostic: { reports.append($0) })
         try start(runtime)
         microphone.emit()
         XCTAssertTrue(try runtime.service(at: 1_000_000).isEmpty)
@@ -399,7 +403,7 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         var reports: [String] = []
         var hadAudioWhenReported = false
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone, .output: output] },
-            reportCaptureFailure: { message in
+            reportCaptureDiagnostic: { message in
                 reports.append(message)
                 hadAudioWhenReported = (output.receiver as? MeetingAudioBuffer)?.peek() != nil
                     && (microphone.receiver as? MeetingAudioBuffer)?.peek() != nil
@@ -450,7 +454,7 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         var reports: [String] = []
         var hadAudioWhenReported = false
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone] },
-            reportCaptureFailure: { message in
+            reportCaptureDiagnostic: { message in
                 reports.append(message)
                 hadAudioWhenReported = (microphone.receiver as? MeetingAudioBuffer)?.peek() != nil
                 XCTAssertEqual(microphone.stops, 0)
@@ -474,7 +478,7 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         }
         var reports: [String] = []
         let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone, .output: output] },
-                                            reportCaptureFailure: { reports.append($0) })
+                                            reportCaptureDiagnostic: { reports.append($0) })
         XCTAssertThrowsError(try start(runtime, selection: bothSources))
         XCTAssertEqual(reports, ["capture-failure source=output callback=captureStart reason=unknownFailure status=-50"])
         XCTAssertEqual(runtime.snapshot.state, .failed)

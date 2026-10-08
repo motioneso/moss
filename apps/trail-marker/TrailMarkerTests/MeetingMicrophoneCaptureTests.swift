@@ -108,13 +108,17 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         }
         var referenceOutput: AudioStreamBasicDescription?
         var referenceReadError: Error?
+        var outputReadError: Error?
         var referenceReads = 0
         func referenceFormat() throws -> AudioStreamBasicDescription? {
             referenceReads += 1
             if let referenceReadError { throw referenceReadError }
             return referenceOutput ?? configuredOutput
         }
-        func outputFormat() throws -> AudioStreamBasicDescription { configuredOutput }
+        func outputFormat() throws -> AudioStreamBasicDescription {
+            if let outputReadError { throw outputReadError }
+            return configuredOutput
+        }
         func configureMonoOutput(sampleRate: Double) throws {
             try step("mono"); configuredRate = sampleRate; configuredOutput.mSampleRate = sampleRate
         }
@@ -346,7 +350,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
                 })
                 devices[.output] = output
                 return devices
-            }, reportCaptureFailure: { logs.append($0) })
+            }, reportCaptureDiagnostic: { logs.append($0) })
             let ready = MeetingNativeReadiness(permissionsGranted: true, processingReady: true, meetingDeviceAuthorized: true)
             let selection = MeetingNativeSelection(microphoneDeviceID: 71, output: .excludingProcesses([12]))
             runtime.updateCaptureLease(until: UInt64.max)
@@ -371,7 +375,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         let runtime = MeetingCaptureRuntime(factory: { _ in
             [.microphone: MeetingMicrophoneCapture(selectedDeviceID: 71, voiceProcessing: true,
                 makeUnit: { processing in attempts.append(processing); return unit }), .output: output]
-        }, reportCaptureFailure: { logs.append($0) })
+        }, reportCaptureDiagnostic: { logs.append($0) })
         let ready = MeetingNativeReadiness(permissionsGranted: true, processingReady: true, meetingDeviceAuthorized: true)
         try runtime.prepare(selection: .init(microphoneDeviceID: 71, output: .excludingProcesses([12])), readiness: ready, at: 0)
         try runtime.start(readiness: ready, at: 0)
@@ -649,6 +653,184 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             XCTAssertEqual(Array(unit.events.suffix(2)), ["uninitialize", "dispose"])
             XCTAssertFalse(unit.events.contains("start"))
         }
+    }
+
+    func testConcreteVoiceSetupFailuresFallBackAfterCleanupAndPreservePermissionFailures() throws {
+        typealias Step = (String, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement,
+                          MeetingAudioFailureDiagnostic.Code, (MeetingMicrophoneIOUnit) throws -> Void)
+        let context = MeetingMicrophoneRenderContext(unit: FakeUnit(), receiver: Receiver(),
+            format: FakeUnit().format, capacity: 8, hostTimeToNanoseconds: { $0 })
+        let steps: [Step] = [
+            ("buffer ownership", kAudioUnitProperty_ShouldAllocateBuffer, kAudioUnitScope_Output, 1, .voiceBufferOwnership,
+             { try $0.configureMonoOutput(sampleRate: 48000) }),
+            ("input callback", kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, .voiceInputCallback,
+             { try $0.installInputCallback(context) }),
+            ("input format", kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, .voiceClientFormat,
+             { _ = try $0.inputFormat() }),
+            ("output format", kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, .voiceClientFormat,
+             { _ = try $0.outputFormat() }),
+            ("reference format", kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, .voiceReferenceFormatRead,
+             { _ = try $0.referenceFormat() }),
+            ("maximum frames", kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, .voiceMaximumFrames,
+             { _ = try $0.maximumFramesPerSlice() }),
+            ("microphone readback", kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 1, .voiceEndpointReadback,
+             { _ = try $0.currentDevice(bus: 1) }),
+            ("reference readback", kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, .voiceEndpointReadback,
+             { _ = try $0.currentDevice(bus: 0) }),
+        ]
+        for (name, property, scope, bus, label, operation) in steps {
+            for status in [kAudioUnitErr_InvalidProperty, kAudioUnitErr_Unauthorized, kAudioDevicePermissionsError,
+                           kAudioHardwareBadDeviceError, kAudioHardwareBadObjectError] {
+                let native = MeetingMicrophoneIOUnit(voiceProcessing: true, propertySet: { p, s, b, _, _ in
+                    p == property && s == scope && b == bus ? status : noErr
+                }, propertyGet: { p, s, b, _, _ in
+                    p == property && s == scope && b == bus ? status : noErr
+                })
+                var failure: Error?
+                XCTAssertThrowsError(try operation(native), name) { failure = $0 }
+                try native.dispose()
+                let error = try XCTUnwrap(failure, name)
+                let permitted = status == kAudioUnitErr_InvalidProperty
+                XCTAssertEqual((error as? MeetingVoiceProcessingUnavailable)?.diagnostic, permitted ? label : nil,
+                    "Direct VPIO setup must classify capability errors for fallback")
+                if !permitted { XCTAssertEqual(MeetingAudioFailureDiagnostic.status(error), status, name) }
+
+                let voice = FakeUnit(), plain = FakeUnit(), receiver = Receiver()
+                voice.failAt = ["initialize"]
+                voice.failureOverride = error
+                var modes: [Bool] = []
+                let capture = MeetingMicrophoneCapture(selectedDeviceID: 42, voiceProcessing: true, makeUnit: { mode in
+                    modes.append(mode)
+                    if !mode {
+                        XCTAssertEqual(voice.events.last, "dispose", name)
+                        XCTAssertNil(voice.context, name)
+                        XCTAssertTrue(receiver.batches.isEmpty, name)
+                        XCTAssertTrue(receiver.failures.isEmpty, name)
+                    }
+                    return mode ? voice : plain
+                })
+                if permitted {
+                    XCTAssertNoThrow(try capture.start(into: receiver),
+                        "Every direct VPIO setup capability failure must reach the cleaned-up same-mic fallback")
+                    XCTAssertEqual(modes, [true, false], name)
+                    XCTAssertEqual(plain.selectedDevice, 42, name)
+                    plain.emit()
+                    XCTAssertEqual(receiver.batches.count, 1, name)
+                } else {
+                    XCTAssertThrowsError(try capture.start(into: receiver), name)
+                    XCTAssertEqual(modes, [true], name)
+                    XCTAssertTrue(receiver.batches.isEmpty, name)
+                }
+                try capture.stop()
+            }
+        }
+    }
+
+    func testMalformedVoiceReadbackCanFallBackButActualReferenceLossCannot() throws {
+        for processing in [false, true] {
+            let native = MeetingMicrophoneIOUnit(voiceProcessing: processing, propertySet: { _, _, _, _, _ in noErr },
+                propertyGet: { _, _, _, _, size in size.pointee = 0; return noErr })
+            XCTAssertThrowsError(try native.currentDevice(bus: 1)) {
+                XCTAssertEqual($0 is MeetingVoiceProcessingUnavailable, processing)
+            }
+            try native.dispose()
+        }
+        XCTAssertFalse(try MeetingMicrophoneIOUnit.validateReferenceAliveRead(status: noErr, size: 4, alive: 0))
+        XCTAssertTrue(try MeetingMicrophoneIOUnit.validateReferenceAliveRead(status: noErr, size: 4, alive: 1))
+        for status in [kAudioUnitErr_InvalidProperty, kAudioUnitErr_Unauthorized, kAudioDevicePermissionsError,
+                           kAudioHardwareBadDeviceError, kAudioHardwareBadObjectError] {
+            let referenceFailure = MeetingMicrophoneIOUnit.referenceSetupError(
+                MeetingAudioFailure.deviceFailure(operation: "read default output", status: status))
+            XCTAssertEqual(referenceFailure is MeetingVoiceProcessingUnavailable, status == kAudioUnitErr_InvalidProperty)
+            XCTAssertEqual(MeetingAudioFailureDiagnostic.status(referenceFailure), status)
+            XCTAssertThrowsError(try MeetingMicrophoneIOUnit.validateReferenceAliveRead(status: status, size: 4, alive: 1)) {
+                XCTAssertEqual($0 is MeetingVoiceProcessingUnavailable, status == kAudioUnitErr_InvalidProperty)
+            }
+        }
+        XCTAssertEqual(MeetingMicrophoneIOUnit.referenceSetupError(MeetingAudioFailure.invalidSelection) as? MeetingAudioFailure,
+                       .invalidSelection, "A missing default output is actual source loss, not compatibility")
+        XCTAssertFalse(MeetingMicrophoneIOUnit.referenceSetupError(NSError(domain: "unknown", code: -1)) is MeetingVoiceProcessingUnavailable)
+        XCTAssertThrowsError(try MeetingMicrophoneIOUnit.validateReferenceAliveRead(status: noErr, size: 0, alive: 1)) {
+            XCTAssertTrue($0 is MeetingVoiceProcessingUnavailable)
+        }
+    }
+
+    func testCapabilityReadsBeforeAdmissionFallBackButPermissionReadsDoNot() throws {
+        for reference in [false, true] {
+            for permitted in [false, true] {
+                let voice = FakeUnit(), plain = FakeUnit(), receiver = Receiver()
+                let error: Error
+                if permitted { error = MeetingVoiceProcessingUnavailable(diagnostic: .voiceClientFormat, status: kAudioUnitErr_InvalidProperty) }
+                else { error = MeetingAudioFailure.deviceFailure(operation: "read format", status: kAudioUnitErr_Unauthorized) }
+                if reference { voice.referenceReadError = error }
+                else {
+                    voice.outputReadError = error
+                    voice.onListener = { [weak voice] in voice?.context?.formatDidChange() }
+                }
+                var modes: [Bool] = []
+                let capture = MeetingMicrophoneCapture(selectedDeviceID: 42, voiceProcessing: true, makeUnit: { mode in
+                    modes.append(mode)
+                    if !mode { XCTAssertEqual(voice.events.last, "dispose"); XCTAssertNil(voice.context) }
+                    return mode ? voice : plain
+                })
+                if permitted {
+                    XCTAssertNoThrow(try capture.start(into: receiver), "A pre-admission capability read may use the clean same-mic fallback")
+                    XCTAssertEqual(modes, [true, false])
+                    XCTAssertTrue(capture.startupDiagnostic?.contains("status=-10879") == true)
+                    XCTAssertEqual(plain.selectedDevice, 42)
+                } else {
+                    XCTAssertThrowsError(try capture.start(into: receiver))
+                    XCTAssertEqual(modes, [true], "Permission read failure must not trigger compatibility fallback")
+                }
+                XCTAssertTrue(receiver.batches.isEmpty)
+                XCTAssertTrue(receiver.failures.isEmpty)
+                try capture.stop()
+            }
+        }
+    }
+
+    func testCapabilityReadAfterAdmissionPausesWithoutFallback() throws {
+        for reference in [false, true] {
+            let unit = FakeUnit(), receiver = Receiver()
+            var modes: [Bool] = []
+            let capture = MeetingMicrophoneCapture(selectedDeviceID: 42, voiceProcessing: true, makeUnit: { mode in
+                modes.append(mode); return unit
+            })
+            try capture.start(into: receiver)
+            let context = try XCTUnwrap(unit.context)
+            let error = MeetingVoiceProcessingUnavailable(diagnostic: .voiceClientFormat, status: kAudioUnitErr_InvalidProperty)
+            if reference {
+                unit.referenceReadError = error
+                context.audioUnitFormatDidChange(scope: kAudioUnitScope_Input, element: 0)
+            } else {
+                unit.outputReadError = error
+                context.formatDidChange()
+            }
+            context.verifyFormatIfNeeded()
+            XCTAssertEqual(receiver.failures, [.invalidFormat])
+            XCTAssertEqual(receiver.diagnostics.last?.status, kAudioUnitErr_InvalidProperty)
+            XCTAssertEqual(modes, [true], "An admitted recording must never switch to fallback on a read failure")
+            unit.emit()
+            XCTAssertTrue(receiver.batches.isEmpty)
+            try capture.stop()
+        }
+    }
+
+    func testObservedMacStartupMaximumGrowthKeepsFirst512FrameCallback() throws {
+        // Live proof 6065930437: maxima 512 -> 960; the observed first callback was 512, not 960.
+        let unit = FakeUnit(), receiver = Receiver()
+        unit.capacity = 512
+        unit.verifiedCapacity = 960
+        var diagnostics: [MeetingMicrophoneStartupDiagnostic] = []
+        let capture = unit.capture(voiceProcessing: true, diagnosticSink: { diagnostics.append($0) })
+        XCTAssertNoThrow(try capture.start(into: receiver), "The observed Mac startup maxima must fit the reserved buffer")
+        XCTAssertEqual(unit.emit(frames: 512), noErr)
+        try capture.stop()
+        XCTAssertEqual(receiver.batches.first?.samples.count, 512)
+        XCTAssertTrue(receiver.failures.isEmpty)
+        XCTAssertEqual(diagnostics.first?.before.maximumFramesPerSlice, 512)
+        XCTAssertEqual(diagnostics.first?.after.maximumFramesPerSlice, 960)
+        XCTAssertEqual(diagnostics.first?.firstCallbackFrameCount, 512)
     }
 
     func testSyntheticVoiceInitializationGrowthFitsReservedCallbackCeiling() throws {

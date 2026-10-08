@@ -32,13 +32,12 @@ describe("meetings composition", () => {
   it("bounds the echo experiment and describes same-mic fallback in plain words", () => {
     const meeting = getBuiltInModuleManifests().find((item) => item.id === "meetings")!;
     const echo = meeting.features!.find((item) => item.id === "meetings.speaker_echo_control")!;
-    expect(echo.description).toContain("tries voice processing");
-    expect(echo.description).toContain("minimum playback ducking");
-    expect(echo.description).toContain(
-      "unsupported startup uses the standard microphone path on the same mic after full cleanup"
-    );
-    expect(echo.description).toContain("explicit Resume");
-    expect(echo.description).toContain("Real-speaker live validation pending");
+    expect(echo.description).toContain("echo control checked on built-in Mac speakers");
+    expect(echo.description).toContain("Headsets/Bluetooth, Zoom sharing the mic");
+    expect(echo.description).toContain("fallback on Macs rejecting setup are unchecked");
+    expect(echo.description).toContain("same mic after cleanup");
+    expect(echo.description).toContain("route changes need Resume");
+    expect(echo.description).not.toContain("Real-speaker live validation pending");
     expect(echo.description.length).toBeLessThanOrEqual(240);
   });
 

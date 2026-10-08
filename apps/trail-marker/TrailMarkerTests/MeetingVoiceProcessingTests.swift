@@ -348,7 +348,7 @@ final class MeetingVoiceProcessingTests: XCTestCase {
         }
     }
 
-    func testMalformedRenderRequestsAreRejectedWithoutTouchingAudio() {
+    func testUnexpectedRenderShapesZeroOnlyTheBoundedInlineBuffer() {
         let cases: [(String, UInt32, UInt32, UInt32, UInt32, Bool)] = [
             ("above frame capacity", MeetingMicrophoneCapture.maximumBufferedFrames + 1, 1, 1, 16, false),
             ("overflow frame count", .max, 1, 1, 16, false),
@@ -374,20 +374,40 @@ final class MeetingVoiceProcessingTests: XCTestCase {
                                       mData: missingData ? nil : storage.advanced(by: 16)))
             var flags: AudioUnitRenderActionFlags = .unitRenderAction_PreRender
             XCTAssertEqual(MeetingVoiceProcessing.renderSilence(flags: &flags, frames: frames, buffers: &buffers),
-                           kAudio_ParamError, name)
+                           noErr, name)
             XCTAssertTrue(flags.contains(.unitRenderAction_OutputIsSilence), name)
             XCTAssertTrue(flags.contains(.unitRenderAction_PreRender), name)
+            let cleared = count == 0 || missingData ? 0 : min(Int(byteCount), Int(min(frames, MeetingMicrophoneCapture.maximumBufferedFrames)) * 4)
+            var expected = [UInt8](repeating: 0xA5, count: 48)
+            for index in 0..<cleared { expected[16 + index] = 0 }
             XCTAssertEqual(Array(UnsafeBufferPointer(start: storage.assumingMemoryBound(to: UInt8.self), count: 48)),
-                           [UInt8](repeating: 0xA5, count: 48), name)
+                           expected, name)
             XCTAssertEqual(buffers.mNumberBuffers, count, name)
             XCTAssertEqual(buffers.mBuffers.mNumberChannels, channels, name)
             XCTAssertEqual(buffers.mBuffers.mDataByteSize, byteCount, name)
         }
     }
 
-    func testMissingBufferListIsRejected() {
+    func testUnexpectedCountsCannotExpandTheSilentWriteBeyondExistingMonoCeiling() {
+        let ceiling = Int(MeetingMicrophoneCapture.maximumBufferedFrames) * MemoryLayout<Float>.size
+        let storage = UnsafeMutableRawPointer.allocate(byteCount: ceiling + 32, alignment: 16)
+        defer { storage.deallocate() }
+        storage.initializeMemory(as: UInt8.self, repeating: 0xA5, count: ceiling + 32)
+        // Only the inline buffer exists: a forged count must not cause list traversal.
+        var buffers = AudioBufferList(mNumberBuffers: .max,
+            mBuffers: AudioBuffer(mNumberChannels: .max, mDataByteSize: .max, mData: storage.advanced(by: 16)))
         var flags: AudioUnitRenderActionFlags = []
-        XCTAssertEqual(MeetingVoiceProcessing.renderSilence(flags: &flags, frames: 4, buffers: nil), kAudio_ParamError)
+        XCTAssertEqual(MeetingVoiceProcessing.renderSilence(flags: &flags, frames: .max, buffers: &buffers), noErr)
+        let bytes = Array(UnsafeBufferPointer(start: storage.assumingMemoryBound(to: UInt8.self), count: ceiling + 32))
+        XCTAssertEqual(Array(bytes.prefix(16)), [UInt8](repeating: 0xA5, count: 16))
+        XCTAssertEqual(Array(bytes[16..<(16 + ceiling)]), [UInt8](repeating: 0, count: ceiling))
+        XCTAssertEqual(Array(bytes.suffix(16)), [UInt8](repeating: 0xA5, count: 16))
+        XCTAssertTrue(flags.contains(.unitRenderAction_OutputIsSilence))
+    }
+
+    func testMissingBufferListStillReportsSilence() {
+        var flags: AudioUnitRenderActionFlags = []
+        XCTAssertEqual(MeetingVoiceProcessing.renderSilence(flags: &flags, frames: 4, buffers: nil), noErr)
         XCTAssertTrue(flags.contains(.unitRenderAction_OutputIsSilence))
     }
 }

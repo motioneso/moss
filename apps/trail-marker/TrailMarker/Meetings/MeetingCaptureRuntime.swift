@@ -14,7 +14,7 @@ final class MeetingCaptureRuntime {
 
     private let queue = DispatchQueue(label: "com.moss.meeting.capture-control")
     private let factory: DeviceFactory
-    private let reportCaptureFailure: (String) -> Void
+    private let reportCaptureDiagnostic: (String) -> Void
     private let captureLease = MeetingAudioLease()
     private var machine = MeetingCaptureMachine()
     private var devices: [MeetingAudioSource: MeetingAudioCapturing] = [:]
@@ -29,12 +29,12 @@ final class MeetingCaptureRuntime {
     private var pauseBoundary: (at: UInt64, epoch: UInt64, sources: [MeetingAudioSource])?
 
     convenience init(factory: @escaping DeviceFactory) {
-        self.init(factory: factory, reportCaptureFailure: MeetingAudioFailureDiagnostic.log)
+        self.init(factory: factory, reportCaptureDiagnostic: MeetingAudioFailureDiagnostic.log)
     }
 
-    init(factory: @escaping DeviceFactory, reportCaptureFailure: @escaping (String) -> Void) {
+    init(factory: @escaping DeviceFactory, reportCaptureDiagnostic: @escaping (String) -> Void) {
         self.factory = factory
-        self.reportCaptureFailure = reportCaptureFailure
+        self.reportCaptureDiagnostic = reportCaptureDiagnostic
     }
 
     func updateCaptureLease(until deadline: UInt64) { captureLease.update(deadline: deadline) }
@@ -130,10 +130,10 @@ final class MeetingCaptureRuntime {
             epochStart = at
             startupSourceRecheckUsed = false
             currentEpochEverOffered = false
-            if let line = devices[.microphone]?.startupDiagnostic { reportCaptureFailure(line) }
+            if let line = devices[.microphone]?.startupDiagnostic { reportCaptureDiagnostic(line) }
         } catch {
             if let source = startingSource, let entry = fresh.first(where: { $0.buffer.source == source }) {
-                reportCaptureFailure(MeetingAudioFailureDiagnostic.message(source: source, failure: error,
+                reportCaptureDiagnostic(MeetingAudioFailureDiagnostic.message(source: source, failure: error,
                     diagnostic: entry.buffer.failureDiagnostic ?? .init(.captureStart)))
             }
             fresh.forEach { $0.buffer.close(); $0.buffer.discard() }
@@ -280,7 +280,7 @@ final class MeetingCaptureRuntime {
         if machine.state == .recording,
            let failed = pending.first(where: { $0.cutoff == nil && $0.buffer.failure != nil }),
            let reason = failed.buffer.failure {
-            reportCaptureFailure(MeetingAudioFailureDiagnostic.message(source: failed.buffer.source, failure: reason,
+            reportCaptureDiagnostic(MeetingAudioFailureDiagnostic.message(source: failed.buffer.source, failure: reason,
                 diagnostic: failed.buffer.failureDiagnostic))
             try machine.pause(at: at)
             rememberPause(at: at)

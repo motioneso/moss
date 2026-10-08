@@ -234,6 +234,7 @@ final class MeetingMicrophoneRenderContext {
     // Startup-only failure kinds: 1 = format, 2 = default speaker changed, 4 = other.
     // Published by callbacks and read only after complete teardown before fallback.
     private let startupFailureKinds = MeetingAudioAtomicState()
+    private let startupFormatDiagnostic = MeetingAudioFailureDiagnosticSlot()
     private let sizingDiagnostics: MeetingMicrophoneStartupDiagnostics?
 
     init(
@@ -269,7 +270,7 @@ final class MeetingMicrophoneRenderContext {
     var startupCompatibilityFailure: MeetingVoiceProcessingUnavailable? {
         guard hasVoiceReference, !startupIsUnsafeForFallback else { return nil }
         let kinds = startupFailureKinds.value
-        if kinds & 1 != 0 { return .init(diagnostic: .voiceClientFormat, status: nil) }
+        if kinds & 1 != 0 { return .init(diagnostic: .voiceClientFormat, status: startupFormatDiagnostic.latest?.status) }
         if kinds & 2 != 0 { return .init(diagnostic: .voiceDefaultOutputChanged, status: nil) }
         return nil
     }
@@ -318,7 +319,10 @@ final class MeetingMicrophoneRenderContext {
                   output.mFramesPerPacket == 1 else { failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatVerification), startupCompatibility: 1); return }
             let currentCapacity = try unit.maximumFramesPerSlice()
             guard currentCapacity > 0, currentCapacity <= capacity else { failFromRender(.bufferFull, diagnostic: .init(.microphoneCapacityVerification)); return }
-        } catch { failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatRead, status: MeetingAudioFailureDiagnostic.status(error))) }
+        } catch {
+            failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatRead, status: MeetingAudioFailureDiagnostic.status(error)),
+                           startupCompatibility: error is MeetingVoiceProcessingUnavailable ? 1 : 0)
+        }
     }
 
     private func verifyReferenceFormatIfNeeded() {
@@ -337,7 +341,8 @@ final class MeetingMicrophoneRenderContext {
                 failFromRender(.invalidFormat, diagnostic: .init(.voiceReferenceFormatVerification), startupCompatibility: 1); return
             }
         } catch {
-            failFromRender(.invalidFormat, diagnostic: .init(.voiceReferenceFormatRead, status: MeetingAudioFailureDiagnostic.status(error)))
+            failFromRender(.invalidFormat, diagnostic: .init(.voiceReferenceFormatRead, status: MeetingAudioFailureDiagnostic.status(error)),
+                           startupCompatibility: error is MeetingVoiceProcessingUnavailable ? 1 : 0)
         }
     }
 
@@ -432,6 +437,7 @@ final class MeetingMicrophoneRenderContext {
         let previous = admission.insert(2)
         if previous == 1 { receiver.fail(failure, diagnostic: diagnostic) }
         else if previous == 0 || previous == 2 {
+            if hasVoiceReference, startupCompatibility == 1 { startupFormatDiagnostic.store(diagnostic) }
             startupFailureKinds.insert(hasVoiceReference && startupCompatibility != 0 ? startupCompatibility : 4)
         }
     }
@@ -450,6 +456,10 @@ final class MeetingMicrophoneRenderContext {
 /// https://developer.apple.com/library/archive/technotes/tn2091/_index.html
 /// https://developer.apple.com/library/archive/qa/qa1777/_index.html
 final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
+    typealias PropertySet = (AudioUnitPropertyID, AudioUnitScope, AudioUnitElement, UnsafeRawPointer, UInt32) -> OSStatus
+    typealias PropertyGet = (AudioUnitPropertyID, AudioUnitScope, AudioUnitElement, UnsafeMutableRawPointer, UnsafeMutablePointer<UInt32>) -> OSStatus
+    private let propertySet: PropertySet?
+    private let propertyGet: PropertyGet?
     private var unit: AudioUnit?
     private let voiceProcessing: Bool
     private var referenceDevice: AudioDeviceID?
@@ -462,6 +472,8 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
 
     init(voiceProcessing: Bool = false) throws {
         self.voiceProcessing = voiceProcessing
+        propertySet = nil
+        propertyGet = nil
         var description = MeetingVoiceProcessing.componentDescription(voiceProcessing: voiceProcessing)
         guard let component = AudioComponentFindNext(nil, &description) else {
             if voiceProcessing { throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceComponent, status: nil) }
@@ -473,34 +485,57 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
         unit = created
     }
 
+    /// A property-only seam: tests exercise the concrete setup calls without creating audio hardware.
+    init(voiceProcessing: Bool, propertySet: @escaping PropertySet, propertyGet: @escaping PropertyGet) {
+        self.voiceProcessing = voiceProcessing
+        self.propertySet = propertySet
+        self.propertyGet = propertyGet
+    }
+
+    private func setProperty(_ property: AudioUnitPropertyID, _ scope: AudioUnitScope, _ bus: AudioUnitElement,
+                             _ value: UnsafeRawPointer, _ size: UInt32) throws -> OSStatus {
+        if let propertySet { return propertySet(property, scope, bus, value, size) }
+        return AudioUnitSetProperty(try liveUnit(), property, scope, bus, value, size)
+    }
+
+    private func getProperty(_ property: AudioUnitPropertyID, _ scope: AudioUnitScope, _ bus: AudioUnitElement,
+                             _ value: UnsafeMutableRawPointer, _ size: UnsafeMutablePointer<UInt32>) throws -> OSStatus {
+        if let propertyGet { return propertyGet(property, scope, bus, value, size) }
+        return AudioUnitGetProperty(try liveUnit(), property, scope, bus, value, size)
+    }
+
+    private func invalidSetupRead(_ diagnostic: MeetingAudioFailureDiagnostic.Code) -> Error {
+        if voiceProcessing { return MeetingVoiceProcessingUnavailable(diagnostic: diagnostic, status: nil) }
+        return MeetingAudioFailure.invalidFormat
+    }
+
     func enableInput() throws {
         var value: UInt32 = 1
-        try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_EnableIO,
+        try check(setProperty(kAudioOutputUnitProperty_EnableIO,
             kAudioUnitScope_Input, 1, &value, UInt32(MemoryLayout<UInt32>.size)), "enable AUHAL input", fallback: .voiceInputEnable)
     }
 
     func configureOutput() throws {
         if voiceProcessing {
             try MeetingVoiceProcessing.configureOutput { property, scope, bus, value, size in
-                try self.check(AudioUnitSetProperty(try self.liveUnit(), property, scope, bus, value, size),
+                try self.check(self.setProperty(property, scope, bus, value, size),
                                MeetingVoiceProcessing.propertyOperation(property),
                                fallback: Self.voicePropertyDiagnostic(property))
             }
             return
         }
         var value: UInt32 = 0
-        try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_EnableIO,
+        try check(setProperty(kAudioOutputUnitProperty_EnableIO,
             kAudioUnitScope_Output, 0, &value, UInt32(MemoryLayout<UInt32>.size)), "disable AUHAL output")
     }
 
     func selectDevice(_ deviceID: AudioDeviceID) throws {
         let output: AudioDeviceID?
         if voiceProcessing {
-            do { output = try Self.defaultOutputDevice() }
-            catch { throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceReferenceSelection, status: nil) }
+            output = try startupDefaultOutputDevice()
         } else { output = nil }
         try MeetingVoiceProcessing.configureDevices(microphone: deviceID, output: output) { property, scope, bus, value, size in
-            try self.check(AudioUnitSetProperty(try self.liveUnit(), property, scope, bus, value, size),
+            try self.check(self.setProperty(property, scope, bus, value, size),
                            "select microphone unit device", fallback: .voiceDeviceSelection)
         }
         referenceDevice = output
@@ -510,19 +545,19 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
     func inputFormat() throws -> AudioStreamBasicDescription {
         var format = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        try check(AudioUnitGetProperty(
-            try liveUnit(), kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, &format, &size
-        ), "read AUHAL input format")
-        guard size == UInt32(MemoryLayout<AudioStreamBasicDescription>.size) else { throw MeetingAudioFailure.invalidFormat }
+        try check(getProperty(
+            kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, &format, &size
+        ), "read AUHAL input format", fallback: .voiceClientFormat)
+        guard size == UInt32(MemoryLayout<AudioStreamBasicDescription>.size) else { throw invalidSetupRead(.voiceClientFormat) }
         return format
     }
 
     func outputFormat() throws -> AudioStreamBasicDescription {
         var format = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        try check(AudioUnitGetProperty(try liveUnit(), kAudioUnitProperty_StreamFormat,
-            kAudioUnitScope_Output, 1, &format, &size), "read AUHAL output format")
-        guard size == UInt32(MemoryLayout<AudioStreamBasicDescription>.size) else { throw MeetingAudioFailure.invalidFormat }
+        try check(getProperty(kAudioUnitProperty_StreamFormat,
+            kAudioUnitScope_Output, 1, &format, &size), "read AUHAL output format", fallback: .voiceClientFormat)
+        guard size == UInt32(MemoryLayout<AudioStreamBasicDescription>.size) else { throw invalidSetupRead(.voiceClientFormat) }
         return format
     }
 
@@ -530,9 +565,9 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
         guard voiceProcessing else { return nil }
         var format = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        try check(AudioUnitGetProperty(try liveUnit(), kAudioUnitProperty_StreamFormat,
-            kAudioUnitScope_Input, 0, &format, &size), "read voice reference client format")
-        guard size == UInt32(MemoryLayout<AudioStreamBasicDescription>.size) else { throw MeetingAudioFailure.invalidFormat }
+        try check(getProperty(kAudioUnitProperty_StreamFormat,
+            kAudioUnitScope_Input, 0, &format, &size), "read voice reference client format", fallback: .voiceReferenceFormatRead)
+        guard size == UInt32(MemoryLayout<AudioStreamBasicDescription>.size) else { throw invalidSetupRead(.voiceClientFormat) }
         return format
     }
 
@@ -543,21 +578,21 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
             mBytesPerFrame: 4, mChannelsPerFrame: 1, mBitsPerChannel: 32, mReserved: 0
         )
         try MeetingVoiceProcessing.configureFormats(format: format, voiceProcessing: voiceProcessing) { property, scope, bus, value, size in
-            try self.check(AudioUnitSetProperty(try self.liveUnit(), property, scope, bus, value, size),
+            try self.check(self.setProperty(property, scope, bus, value, size),
                            "configure microphone client format", fallback: property == kAudioOutputUnitProperty_ChannelMap ? .voiceChannelMap : .voiceClientFormat)
         }
         var allocate: UInt32 = 0
-        try check(AudioUnitSetProperty(try liveUnit(), kAudioUnitProperty_ShouldAllocateBuffer,
-            kAudioUnitScope_Output, 1, &allocate, UInt32(MemoryLayout<UInt32>.size)), "configure AUHAL buffer ownership")
+        try check(setProperty(kAudioUnitProperty_ShouldAllocateBuffer,
+            kAudioUnitScope_Output, 1, &allocate, UInt32(MemoryLayout<UInt32>.size)), "configure AUHAL buffer ownership", fallback: .voiceBufferOwnership)
     }
 
     func maximumFramesPerSlice() throws -> UInt32 {
         var frames: UInt32 = 0
         var size = UInt32(MemoryLayout<UInt32>.size)
-        try check(AudioUnitGetProperty(
-            try liveUnit(), kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &frames, &size
-        ), "read AUHAL maximum frames")
-        guard size == UInt32(MemoryLayout<UInt32>.size) else { throw MeetingAudioFailure.invalidFormat }
+        try check(getProperty(
+            kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &frames, &size
+        ), "read AUHAL maximum frames", fallback: .voiceMaximumFrames)
+        guard size == UInt32(MemoryLayout<UInt32>.size) else { throw invalidSetupRead(.voiceMaximumFrames) }
         return frames
     }
 
@@ -601,9 +636,9 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
             },
             inputProcRefCon: retained.toOpaque()
         )
-        try check(AudioUnitSetProperty(try liveUnit(), kAudioOutputUnitProperty_SetInputCallback,
+        try check(setProperty(kAudioOutputUnitProperty_SetInputCallback,
             kAudioUnitScope_Global, 0, &callback, UInt32(MemoryLayout<AURenderCallbackStruct>.size)),
-            "install AUHAL input callback")
+            "install AUHAL input callback", fallback: .voiceInputCallback)
     }
 
     func initialize() throws { try check(AudioUnitInitialize(try liveUnit()), "AudioUnitInitialize", fallback: .voiceInitialize) }
@@ -632,8 +667,9 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
         guard let selectedDevice, deviceListener == nil else { throw MeetingAudioFailure.invalidTransition }
         guard Self.deviceIsAlive(selectedDevice) else { throw MeetingAudioFailure.invalidSelection }
         if voiceProcessing {
-            guard let referenceDevice, Self.deviceIsAlive(referenceDevice) else { throw MeetingAudioFailure.invalidSelection }
-            if try Self.defaultOutputDevice() != referenceDevice {
+            guard let referenceDevice else { throw MeetingAudioFailure.invalidSelection }
+            guard try Self.referenceIsAliveForStartup(referenceDevice) else { throw MeetingAudioFailure.invalidSelection }
+            if try startupDefaultOutputDevice() != referenceDevice {
                 throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceDefaultOutputChanged, status: nil)
             }
             // VPIO may construct its own private aggregate. Verify the selected physical
@@ -669,20 +705,57 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
             try check(AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
                 &routeAddress, deviceQueue, routeListener), "observe voice reference route")
             referenceListener = routeListener
-            guard Self.deviceIsAlive(reference) else { throw MeetingAudioFailure.invalidSelection }
-            if try Self.defaultOutputDevice() != reference {
+            guard try Self.referenceIsAliveForStartup(reference) else { throw MeetingAudioFailure.invalidSelection }
+            if try startupDefaultOutputDevice() != reference {
                 throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceDefaultOutputChanged, status: nil)
             }
         }
     }
 
-    private func currentDevice(bus: AudioUnitElement) throws -> AudioDeviceID {
+    func currentDevice(bus: AudioUnitElement) throws -> AudioDeviceID {
         var device = AudioDeviceID(kAudioObjectUnknown)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        try check(AudioUnitGetProperty(try liveUnit(), kAudioOutputUnitProperty_CurrentDevice,
-            kAudioUnitScope_Global, bus, &device, &size), "verify microphone route")
-        guard size == UInt32(MemoryLayout<AudioDeviceID>.size) else { throw MeetingAudioFailure.invalidSelection }
+        try check(getProperty(kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global, bus, &device, &size), "verify microphone route", fallback: .voiceEndpointReadback)
+        guard size == UInt32(MemoryLayout<AudioDeviceID>.size) else { throw invalidSetupRead(.voiceEndpointReadback) }
         return device
+    }
+
+    private func startupDefaultOutputDevice() throws -> AudioDeviceID {
+        do { return try Self.defaultOutputDevice() }
+        catch { throw Self.referenceSetupError(error) }
+    }
+
+    static func referenceSetupError(_ error: Error) -> Error {
+        guard let failure = error as? MeetingAudioFailure else { return error }
+        if case let .deviceFailure(operation, status) = failure {
+            return MeetingVoiceProcessingUnavailable.setupFailure(status: status, operation: operation,
+                                                                  diagnostic: .voiceReferenceSelection)
+        }
+        if failure == .invalidFormat {
+            return MeetingVoiceProcessingUnavailable(diagnostic: .voiceReferenceSelection, status: nil)
+        }
+        return failure
+    }
+
+    static func validateReferenceAliveRead(status: OSStatus, size: UInt32, alive: UInt32) throws -> Bool {
+        if status != noErr {
+            throw MeetingVoiceProcessingUnavailable.setupFailure(status: status, operation: "read voice reference liveness",
+                                                                  diagnostic: .voiceEndpointReadback)
+        }
+        guard size == UInt32(MemoryLayout<UInt32>.size) else {
+            throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceEndpointReadback, status: nil)
+        }
+        return alive == 1
+    }
+
+    private static func referenceIsAliveForStartup(_ device: AudioDeviceID) throws -> Bool {
+        var alive: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsAlive,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &alive)
+        return try validateReferenceAliveRead(status: status, size: size, alive: alive)
     }
 
     private static func outputAddress() -> AudioObjectPropertyAddress {
@@ -695,9 +768,9 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
         var device = AudioDeviceID(kAudioObjectUnknown)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device)
-        guard status == noErr, size == UInt32(MemoryLayout<AudioDeviceID>.size), device != kAudioObjectUnknown else {
-            throw MeetingAudioFailure.invalidSelection
-        }
+        guard status == noErr else { throw MeetingAudioFailure.deviceFailure(operation: "read default output", status: status) }
+        guard size == UInt32(MemoryLayout<AudioDeviceID>.size) else { throw MeetingAudioFailure.invalidFormat }
+        guard device != kAudioObjectUnknown else { throw MeetingAudioFailure.invalidSelection }
         return device
     }
 
@@ -726,6 +799,11 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
     }
 
     func dispose() throws {
+        if propertySet != nil {
+            callbackContext?.release()
+            callbackContext = nil
+            return
+        }
         guard let unit else { return }
         stopFormatMonitor()
         if let deviceListener {
