@@ -30,12 +30,60 @@ extension MeetingCaptureHost {
     }
 }
 
+/// Read-only numeric metadata from the exact inventory used to select the capture scope.
+/// It never participates in Resolved equality or changes which processes are excluded.
+struct MeetingCaptureSourceDiagnostics {
+    enum Reason: String {
+        case microphonePermissionNotGranted = "microphone-permission-not-granted"
+        case resolveThrew = "resolve-threw"
+        case resolvedNotEqual = "resolved-not-equal"
+    }
+    private let count: Int
+    private let exclusions: [(pid: Int32, audioObject: UInt32)]
+
+    init(snapshot: MeetingInventorySnapshot) {
+        count = snapshot.excluded.count
+        exclusions = snapshot.excluded.sorted { $0.pid < $1.pid }.prefix(128).map {
+            (pid: $0.pid, audioObject: snapshot.audioObjects[$0.pid] ?? 0)
+        }
+    }
+
+    private var summary: String {
+        let pairs = exclusions.map { "pid=\($0.pid)/audio-object=\($0.audioObject)" }.joined(separator: ",")
+        // Object 0 means no mapping; count makes bounded/truncated output explicit.
+        return "count=\(count),excluded=[\(pairs)]"
+    }
+
+    static func failure(_ reason: Reason, before: Self?, after: Self) -> String {
+        guard reason == .resolvedNotEqual else { return reason.rawValue }
+        return "\(reason.rawValue) before(\(before?.summary ?? "unavailable")) after(\(after.summary))"
+    }
+}
+
 /// Bounded metadata only: no credentials, PCM, URLs or transcript text.
 struct MeetingCaptureDiagnostics {
     private var lines: [String] = []
     private var audio: [MeetingAudioSource: String] = [:]
 
     mutating func resetAudio() { audio.removeAll() }
+
+    /// Native failures contain fixed operation labels/statuses. Never render arbitrary NSError
+    /// descriptions or userInfo: networking errors may carry private URLs or response content.
+    static func interruptionReason(_ error: Error) -> String {
+        if let failure = error as? MeetingAudioFailure { return String(describing: failure) }
+        if let failure = error as? MeetingHostError { return String(describing: failure) }
+        return "unexpectedError(code: \((error as NSError).code))"
+    }
+
+    mutating func sourceValidationFailed(_ detail: String) -> [String] {
+        append("source-validation-failed: \(detail)")
+        return lines
+    }
+
+    mutating func interrupted(reason: String) -> [String] {
+        append("capture-paused: \(reason)")
+        return lines
+    }
 
     mutating func recordAudio(_ snapshots: [MeetingAudioSource: MeetingAudioBuffer.Diagnostics]) -> [String]? {
         var changed = false

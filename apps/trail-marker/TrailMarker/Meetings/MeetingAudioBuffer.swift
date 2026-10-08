@@ -27,6 +27,12 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
     private let lease: MeetingAudioLease?
     private let lock = NSLock()
     private let callbackFailures = MeetingAudioAtomicState()
+    private let callbackDiagnostic = MeetingAudioFailureDiagnosticSlot()
+    private let scopeDiagnostic = MeetingAudioFailureDiagnosticSlot()
+    var failureDiagnostic: MeetingAudioFailureDiagnostic? {
+        if callbackFailures.value & 1 != 0 { return scopeDiagnostic.latest }
+        return callbackDiagnostic.latest
+    }
     private let closed = MeetingAudioAtomicState()
     private let scopeVerification = MeetingAudioAtomicState()
     private let sendLock = NSLock()
@@ -114,11 +120,11 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         guard frameCount <= sampleCapacity - usedSamples, blockCount < blocks.count,
               blockCount == 0 || (interval.end - blocks[blockHead].start <= Self.maximumAgeNanoseconds &&
                 (host < blocks[blockHead].observedStart || host - blocks[blockHead].observedStart < Self.maximumAgeNanoseconds)),
-              nextSequence < UInt64.max else { failLocked(.bufferFull); return }
+              nextSequence < UInt64.max else { failLocked(.bufferFull, diagnostic: .init(.bufferCapacity)); return }
         var peak: Float = 0
         for index in 0..<frameCount {
             let value = sampleAt(index)
-            guard value.isFinite else { failLocked(.invalidFormat); return }
+            guard value.isFinite else { failLocked(.invalidFormat, diagnostic: .init(.bufferSample)); return }
             samples[(sampleTail + index) % sampleCapacity] = value
             peak = max(peak, abs(value))
         }
@@ -143,10 +149,13 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
 
     func drop(sampleTime: Double, hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int) {
         guard closed.value == 0 else { return }
-        guard frameCount > 0, frameCount <= Self.maximumCallbackFrames else { fail(.invalidFormat); return }
+        guard frameCount > 0, frameCount <= Self.maximumCallbackFrames else { fail(.invalidFormat, diagnostic: .init(.bufferDropFrames)); return }
         let record = MeetingAudioDropRecord(sampleTime: sampleTime, hostTimeNanoseconds: hostTimeNanoseconds,
                                            sampleRate: sampleRate, frameCount: UInt32(frameCount))
-        if !MeetingAudioDropMailboxPush(droppedCallbacks, record) { callbackFailures.insert(8) }
+        if !MeetingAudioDropMailboxPush(droppedCallbacks, record) {
+            callbackDiagnostic.store(.init(.bufferDropMailbox))
+            callbackFailures.insert(8)
+        }
     }
 
     /// The first measured hardware timestamp anchors the sample clock to the monotonic host clock.
@@ -156,26 +165,26 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
                                     frames: Int) -> (start: UInt64, end: UInt64, offset: UInt64)? {
         guard sampleRate.isFinite, (8000...192000).contains(sampleRate), sampleRate.rounded() == sampleRate,
               frames > 0, frames <= Self.maximumCallbackFrames,
-              rate.map({ $0 == sampleRate }) ?? true else { failLocked(.invalidFormat); return nil }
+              rate.map({ $0 == sampleRate }) ?? true else { failLocked(.invalidFormat, diagnostic: .init(.bufferFormat)); return nil }
         guard sampleTime.isFinite, sampleTime.rounded() == sampleTime,
               abs(sampleTime) <= 9_007_199_254_732_800, host >= origin,
               let duration = MeetingAudioSampleClock.nanoseconds(frames: UInt64(frames), sampleRate: sampleRate),
-              host <= UInt64.max - duration else { failLocked(.invalidTimestamp); return nil }
+              host <= UInt64.max - duration else { failLocked(.invalidTimestamp, diagnostic: .init(.bufferTimestamp)); return nil }
         if sampleOrigin == nil { sampleOrigin = sampleTime; clockOrigin = host }
         guard nextSampleTime.map({ sampleTime == $0 }) ?? true,
               let first = sampleOrigin, sampleTime >= first else {
             if sampleDiscontinuities < UInt32.max { sampleDiscontinuities += 1 }
-            failLocked(.invalidTimestamp)
+            failLocked(.invalidTimestamp, diagnostic: .init(.bufferSampleContinuity))
             return nil
         }
         let offset = UInt64(sampleTime - first)
         guard let startOffset = MeetingAudioSampleClock.nanoseconds(frames: offset, sampleRate: sampleRate),
               let endOffset = MeetingAudioSampleClock.nanoseconds(frames: offset + UInt64(frames), sampleRate: sampleRate),
-              clockOrigin <= UInt64.max - endOffset else { failLocked(.invalidTimestamp); return nil }
+              clockOrigin <= UInt64.max - endOffset else { failLocked(.invalidTimestamp, diagnostic: .init(.bufferClockRange)); return nil }
         if let lease {
             let deadline = lease.deadline
             guard host + duration <= deadline, clockOrigin + endOffset <= deadline else {
-                failLocked(.leaseExpired)
+                failLocked(.leaseExpired, diagnostic: .init(.bufferLease))
                 return nil
             }
         }
@@ -203,7 +212,7 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
             } else if captureGapCount < captureGaps.count {
                 captureGaps[captureGapCount] = gap
                 captureGapCount += 1
-            } else { failLocked(.bufferFull) }
+            } else { failLocked(.bufferFull, diagnostic: .init(.bufferGapCapacity)) }
         }
     }
 
@@ -227,6 +236,12 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         return result
     }
 
+    func fail(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic) {
+        if failure == .invalidSelection { scopeDiagnostic.store(diagnostic) }
+        else { callbackDiagnostic.store(diagnostic) }
+        fail(failure)
+    }
+
     func fail(_ failure: MeetingAudioFailure) {
         // Reporting a real fault is independent of lock availability. Scope failure always wins.
         let bit: UInt32
@@ -247,7 +262,8 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         failLocked(failure)
     }
 
-    private func failLocked(_ failure: MeetingAudioFailure) {
+    private func failLocked(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic? = nil) {
+        if let diagnostic { callbackDiagnostic.store(diagnostic) }
         if storedFailure == nil { storedFailure = failure }
         accepting = false
     }

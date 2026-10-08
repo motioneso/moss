@@ -386,4 +386,55 @@ final class MeetingOutputCaptureTests: XCTestCase {
             bundleIdentifier: "com.moss.helper", mossBundlePaths: bundles))
     }
 
+    func testExclusionScanAcceptsListedSystemProcessWithPathButNoBSDInfo() throws {
+        // Other-user processes may deny BSD metadata while allowing proc_pidpath.
+        // The C regression exercises that OS boundary; this exercises the same scan used
+        // by startup and the live process-list listener, without opening audio hardware.
+        let processes: [UInt32: (pid: Int32, bsdInfo: Int?, path: String)] = [
+            7: (101, 1, "/Applications/Trail Marker.app/Contents/MacOS/Trail Marker"),
+            8: (202, nil, "/usr/sbin/coreaudiod")
+        ]
+        XCTAssertNil(processes[8]?.bsdInfo)
+        let original: [UInt32: Int32] = [7: 101]
+        let scan = {
+            try MeetingOutputProcessIdentity.mossAudioProcesses(original: original,
+                readList: { Set(processes.keys) },
+                readPID: { try XCTUnwrap(processes[$0]?.pid) },
+                readPath: { pid in try XCTUnwrap(processes.values.first { $0.pid == pid }?.path) },
+                readBundleIdentifier: { _ in nil })
+        }
+        XCTAssertEqual(try scan(), original)
+        XCTAssertFalse(MeetingOutputProcessIdentity.invalidates(scope: .excludingProcesses([7]),
+            original: original, readCurrent: { original }, readExclusions: scan))
+        let receiver = Receiver(), gate = MeetingOutputReceiverGate(receiver)
+        try gate.open()
+        gate.verifyScope { (try? scan()) == original }
+        gate.receive(hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 1, sampleAt: { _ in 0 })
+        XCTAssertEqual(receiver.received, 1)
+        XCTAssertTrue(receiver.failures.isEmpty)
+        gate.close()
+    }
+
+    func testExclusionScanRejectsUnreadableLivePathAndOnlyAllowsProvenUnrelatedExit() throws {
+        let original: [UInt32: Int32] = [7: 101]
+        for remainsListed in [true, false] {
+            var lists = 0
+            func scan() throws -> [UInt32: Int32] {
+                try MeetingOutputProcessIdentity.mossAudioProcesses(original: original,
+                    readList: { lists += 1; return lists == 1 || remainsListed ? [7, 8] : [7] },
+                    readPID: { $0 == 7 ? 101 : 202 },
+                    readPath: { pid in
+                        if pid == 202 { throw MeetingAudioFailure.invalidSelection }
+                        return "/Applications/Trail Marker.app/Contents/MacOS/Trail Marker"
+                    }, readBundleIdentifier: { _ in nil })
+            }
+            if remainsListed { XCTAssertThrowsError(try scan()) }
+            else { XCTAssertEqual(try scan(), original) }
+            XCTAssertEqual(lists, 2, "An unreadable unrelated process needs a fresh list")
+        }
+        XCTAssertThrowsError(try MeetingOutputProcessIdentity.mossAudioProcesses(original: original,
+            readList: { [] }, readPID: { _ in 101 },
+            readPath: { _ in throw MeetingAudioFailure.invalidSelection }))
+    }
+
 }
