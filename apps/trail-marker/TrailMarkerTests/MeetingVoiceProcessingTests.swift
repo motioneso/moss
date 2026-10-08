@@ -135,9 +135,9 @@ final class MeetingVoiceProcessingTests: XCTestCase {
             try MeetingVoiceProcessing.configureFormats(format: monoFormat(), voiceProcessing: true, write: $0)
         }
         XCTAssertEqual(writes.map(\.property), [kAudioUnitProperty_StreamFormat,
-            kAudioUnitProperty_StreamFormat, kAudioOutputUnitProperty_ChannelMap])
-        XCTAssertEqual(writes.map(\.scope), [kAudioUnitScope_Output, kAudioUnitScope_Input, kAudioUnitScope_Output])
-        XCTAssertEqual(writes.map(\.element), [1, 0, 1])
+            kAudioUnitProperty_StreamFormat])
+        XCTAssertEqual(writes.map(\.scope), [kAudioUnitScope_Output, kAudioUnitScope_Input])
+        XCTAssertEqual(writes.map(\.element), [1, 0])
         let processed = writes.filter { $0.property == kAudioUnitProperty_StreamFormat &&
             $0.scope == kAudioUnitScope_Output && $0.element == 1 }
         let reference = writes.filter { $0.property == kAudioUnitProperty_StreamFormat &&
@@ -162,19 +162,38 @@ final class MeetingVoiceProcessingTests: XCTestCase {
         XCTAssertEqual(writes.first?.size, UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
     }
 
-    func testBothModesMapMonoCaptureToFirstInputChannel() throws {
-        for voiceProcessing in [true, false] {
-            let writes = try record {
-                try MeetingVoiceProcessing.configureFormats(format: monoFormat(), voiceProcessing: voiceProcessing, write: $0)
+    func testVoiceFormatsSucceedWhenChannelMapIsUnsupported() {
+        var writes: [PropertyWrite] = []
+        XCTAssertNoThrow(writes = try record { recordWrite in
+            try MeetingVoiceProcessing.configureFormats(format: monoFormat(), voiceProcessing: true) {
+                property, scope, element, value, size in
+                // Match VPIO's live kAudioUnitErr_InvalidProperty (-10879) response.
+                if property == kAudioOutputUnitProperty_ChannelMap {
+                    throw NSError(domain: NSOSStatusErrorDomain, code: Int(kAudioUnitErr_InvalidProperty))
+                }
+                try recordWrite(property, scope, element, value, size)
             }
-            let maps = writes.filter { $0.property == kAudioOutputUnitProperty_ChannelMap }
-            XCTAssertEqual(maps.count, 1,
-                           "Both microphone modes must explicitly map capture to channel zero")
-            XCTAssertEqual(maps.first?.scope, kAudioUnitScope_Output)
-            XCTAssertEqual(maps.first?.element, 1)
-            XCTAssertEqual(maps.first?.size, UInt32(MemoryLayout<Int32>.size))
-            XCTAssertEqual(maps.first?.channel, 0)
+        }, "Voice processing must configure mono clients without the unsupported channel map")
+        XCTAssertEqual(writes.map(\.property), [kAudioUnitProperty_StreamFormat, kAudioUnitProperty_StreamFormat])
+        XCTAssertEqual(writes.map(\.scope), [kAudioUnitScope_Output, kAudioUnitScope_Input])
+        XCTAssertEqual(writes.map(\.element), [1, 0])
+        for write in writes {
+            assertMonoFormat(write.format)
+            XCTAssertEqual(write.size, UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
         }
+    }
+
+    func testPlainMicrophoneMapsMonoCaptureToFirstInputChannel() throws {
+        let writes = try record {
+            try MeetingVoiceProcessing.configureFormats(format: monoFormat(), voiceProcessing: false, write: $0)
+        }
+        let maps = writes.filter { $0.property == kAudioOutputUnitProperty_ChannelMap }
+        XCTAssertEqual(maps.count, 1,
+                       "Plain microphone capture must explicitly map capture to channel zero")
+        XCTAssertEqual(maps.first?.scope, kAudioUnitScope_Output)
+        XCTAssertEqual(maps.first?.element, 1)
+        XCTAssertEqual(maps.first?.size, UInt32(MemoryLayout<Int32>.size))
+        XCTAssertEqual(maps.first?.channel, 0)
     }
 
     func testDeviceAndFormatWriteFailuresPropagateWithoutFurtherWrites() {
@@ -184,7 +203,7 @@ final class MeetingVoiceProcessingTests: XCTestCase {
             { try MeetingVoiceProcessing.configureFormats(format: self.monoFormat(), voiceProcessing: true, write: $0) },
             { try MeetingVoiceProcessing.configureFormats(format: self.monoFormat(), voiceProcessing: false, write: $0) },
         ]
-        for (configure, count) in zip(configurations, [2, 1, 3, 2]) {
+        for (configure, count) in zip(configurations, [2, 1, 2, 2]) {
             for stage in 0..<count {
                 var attempts = 0
                 XCTAssertThrowsError(try configure { _, _, _, _, _ in

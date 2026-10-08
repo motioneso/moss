@@ -2,7 +2,7 @@
 """Hosted-Mac voice-processing mutations; portable checks are not native XCTest proof.
 
 The production mode switch and fallback, component subtype, device buses, client
-formats, channel map, property writer, silent callback, and reference-route guard
+formats, HAL-only channel map, property writer, silent callback, and reference-route guard
 each have a named behavioral assertion. Run after positive native tests in an
 isolated Mac checkout. The shared runner restores source bytes and requires a positive rerun;
 build failures, crashes, empty runs, and unrelated assertions are never proof.
@@ -42,6 +42,14 @@ CONTROLS = [
         "after": "            guard false, let unavailable = startupError as? MeetingVoiceProcessingUnavailable else { throw startupError }",
         "assertion": "Production mic plus computer audio must attempt VPIO before HAL fallback",
     }),
+    (MICROPHONE, {
+        "name": "voice-initialized-frame-capacity",
+        "source": MICROPHONE_SOURCE,
+        "test": "testSyntheticVoiceInitializationGrowthFitsReservedCallbackCeiling",
+        "before": "        let allocationCapacity = processing ? Self.maximumBufferedFrames : capacity",
+        "after": "        let allocationCapacity = capacity // Mutation: trust the provisional frame maximum.",
+        "assertion": "Voice processing must reserve the bounded callback ceiling across initialization growth",
+    }),
     (VOICE, {
         "name": "voice-concrete-component-subtype",
         "test": "testComponentDescriptionSelectsVoiceProcessingOnlyWhenRequested",
@@ -65,13 +73,20 @@ CONTROLS = [
         "assertion": "Voice processing must configure the matching mono reference format on input scope bus zero",
     }),
     (VOICE, {
-        "name": "voice-processed-channel-map",
-        "test": "testBothModesMapMonoCaptureToFirstInputChannel",
-        "before": "        var channel: Int32 = 0\n"
-                  "        try write(kAudioOutputUnitProperty_ChannelMap, kAudioUnitScope_Output, 1,\n"
-                  "                  &channel, UInt32(MemoryLayout<Int32>.size))",
-        "after": "        // Mutation: omit the explicit processed-channel map.",
-        "assertion": "Both microphone modes must explicitly map capture to channel zero",
+        "name": "voice-no-unsupported-channel-map",
+        "test": "testVoiceFormatsSucceedWhenChannelMapIsUnsupported",
+        "before": "        if !voiceProcessing {",
+        "after": "        if true { // Mutation: send the HAL channel map to VPIO too.",
+        "assertion": "Voice processing must configure mono clients without the unsupported channel map",
+    }),
+    (VOICE, {
+        "name": "hal-first-input-channel-map",
+        "test": "testPlainMicrophoneMapsMonoCaptureToFirstInputChannel",
+        "before": "            var channel: Int32 = 0\n"
+                  "            try write(kAudioOutputUnitProperty_ChannelMap, kAudioUnitScope_Output, 1,\n"
+                  "                      &channel, UInt32(MemoryLayout<Int32>.size))",
+        "after": "            // Mutation: omit the explicit HAL channel map.",
+        "assertion": "Plain microphone capture must explicitly map capture to channel zero",
     }),
     (VOICE, {
         "name": "voice-minimum-other-audio-ducking",
@@ -119,7 +134,7 @@ def self_test():
     for test_class, control in CONTROLS:
         select(test_class, control)
         expected_source = MICROPHONE_SOURCE if control["name"] in {
-            "voice-production-mode-forwarding", "voice-startup-hal-fallback"
+            "voice-production-mode-forwarding", "voice-startup-hal-fallback", "voice-initialized-frame-capacity"
         } else VOICE_SOURCE
         if RUNNER.SOURCE != expected_source:
             raise RuntimeError("Voice proof did not select the exact production source file")

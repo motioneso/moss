@@ -35,11 +35,13 @@ enum MeetingVoiceProcessing {
             try write(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0,
                       &format, UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
         }
-        // Select the processed first channel explicitly rather than allowing a downmix.
-        // A VPIO unit that rejects this map must use the ordinary startup fallback.
-        var channel: Int32 = 0
-        try write(kAudioOutputUnitProperty_ChannelMap, kAudioUnitScope_Output, 1,
-                  &channel, UInt32(MemoryLayout<Int32>.size))
+        if !voiceProcessing {
+            // AUHAL selects the first hardware channel explicitly. VPIO exposes its
+            // processed mono client format above and does not support this channel map.
+            var channel: Int32 = 0
+            try write(kAudioOutputUnitProperty_ChannelMap, kAudioUnitScope_Output, 1,
+                      &channel, UInt32(MemoryLayout<Int32>.size))
+        }
     }
 
     /// Fixed public labels only: errors never include device names or property payloads.

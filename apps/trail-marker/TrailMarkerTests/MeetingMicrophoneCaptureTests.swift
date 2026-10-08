@@ -47,6 +47,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         var failAt: Set<String> = []
         var failureOverride: Error?
         var onStart: (() -> Void)?
+        var onInitialize: (() -> Void)?
         var onDispose: (() -> Void)?
         var selectedDevice: AudioDeviceID?
         var configuredRate: Double?
@@ -72,6 +73,11 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         var sampleOffset: Float = 0
         var formatReads = 0
         var capacityReads = 0
+        var initializationAttempted = false
+        var measurementsBefore: MeetingMicrophoneStartupMeasurements?
+        var measurementsAfter: MeetingMicrophoneStartupMeasurements?
+        var measurementError: Error?
+        var measurementReads = 0
         var lastFlags: AudioUnitRenderActionFlags?
         var lastTimestamp: UInt64?
 
@@ -82,11 +88,12 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             }
         }
 
-        func capture(device: AudioDeviceID = 42, voiceProcessing: Bool = false) -> MeetingMicrophoneCapture {
+        func capture(device: AudioDeviceID = 42, voiceProcessing: Bool = false,
+                     diagnosticSink: @escaping (MeetingMicrophoneStartupDiagnostic) -> Void = { _ in }) -> MeetingMicrophoneCapture {
             MeetingMicrophoneCapture(
                 selectedDeviceID: device, voiceProcessing: voiceProcessing,
                 makeUnit: { _ in try self.step("create"); return self },
-                hostTimeToNanoseconds: { $0 * 10 }
+                hostTimeToNanoseconds: { $0 * 10 }, diagnosticSink: diagnosticSink
             )
         }
 
@@ -116,12 +123,21 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             try step(capacityReads == 1 ? "capacity" : "verifyCapacity")
             return capacityReads == 1 ? capacity : (verifiedCapacity ?? capacity)
         }
+        func startupMeasurements() throws -> MeetingMicrophoneStartupMeasurements {
+            measurementReads += 1
+            if let measurementError { throw measurementError }
+            if let measurements = initializationAttempted ? measurementsAfter : measurementsBefore { return measurements }
+            return MeetingMicrophoneStartupMeasurements(
+                maximumFramesPerSlice: initializationAttempted ? (verifiedCapacity ?? capacity) : capacity,
+                inputSampleRate: format.mSampleRate, clientSampleRate: configuredOutput.mSampleRate,
+                referenceSampleRate: referenceOutput?.mSampleRate)
+        }
         func installInputCallback(_ context: MeetingMicrophoneRenderContext) throws {
             // Emulate partial registration: even a failing install can retain the context.
             self.context = context
             try step("callback")
         }
-        func initialize() throws { try step("initialize") }
+        func initialize() throws { initializationAttempted = true; onInitialize?(); try step("initialize") }
         func installFormatListener(_ context: MeetingMicrophoneRenderContext) throws {
             try step("listener")
             onListener?()
@@ -601,18 +617,22 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
     }
 
     func testUnboundedOrEmptyHardwareSliceFailsBeforeAllocation() {
-        for capacity in [UInt32(0), MeetingMicrophoneCapture.maximumBufferedFrames + 1, UInt32.max] {
-            let unit = FakeUnit()
-            unit.capacity = capacity
-            let capture = unit.capture()
-            XCTAssertThrowsError(try capture.start(into: Receiver())) {
-                XCTAssertEqual($0 as? MeetingAudioFailure, .bufferFull)
+        for processing in [false, true] {
+            for capacity in [UInt32(0), MeetingMicrophoneCapture.maximumBufferedFrames + 1, UInt32.max] {
+                let unit = FakeUnit()
+                unit.capacity = capacity
+                let capture = unit.capture(voiceProcessing: processing)
+                XCTAssertThrowsError(try capture.start(into: Receiver())) {
+                    XCTAssertEqual($0 as? MeetingAudioFailure, .bufferFull)
+                }
+                XCTAssertFalse(unit.events.contains("callback"))
+                XCTAssertEqual(unit.events.filter { $0 == "create" }.count, 1, "Invalid capacity must not select HAL fallback")
+                XCTAssertNil(unit.context)
             }
-            XCTAssertFalse(unit.events.contains("callback"))
         }
     }
 
-    func testInitializationCannotSilentlyChangeRateOrRequiredBufferCapacity() {
+    func testHALInitializationCannotSilentlyChangeRateOrRequiredBufferCapacity() {
         for changesRate in [true, false] {
             let unit = FakeUnit()
             if changesRate {
@@ -629,6 +649,205 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             XCTAssertEqual(Array(unit.events.suffix(2)), ["uninitialize", "dispose"])
             XCTAssertFalse(unit.events.contains("start"))
         }
+    }
+
+    func testSyntheticVoiceInitializationGrowthFitsReservedCallbackCeiling() throws {
+        // Synthetic sizes, not hardware measurements. The hard ceiling remains 8192.
+        let sizes: [(UInt32, UInt32)] = [(128, 512), (512, 4096), (4096, 8192)]
+        for (before, after) in sizes {
+            let unit = FakeUnit(), receiver = Receiver()
+            unit.capacity = before
+            unit.verifiedCapacity = after
+            let capture = unit.capture(voiceProcessing: true)
+            XCTAssertNoThrow(try capture.start(into: receiver),
+                "Voice processing must reserve the bounded callback ceiling across initialization growth")
+            guard unit.context != nil else { continue }
+            XCTAssertEqual(unit.emit(frames: after), noErr)
+            XCTAssertEqual(receiver.batches.count, 1)
+            XCTAssertEqual(receiver.batches.first?.samples.count, Int(after))
+            XCTAssertTrue(receiver.failures.isEmpty)
+            try capture.stop()
+        }
+    }
+
+    func testVoicePostInitializeMaximumStillRejectsZeroAndAboveCeilingWithoutFallback() {
+        for capacity in [UInt32(0), MeetingMicrophoneCapture.maximumBufferedFrames + 1, UInt32.max] {
+            let unit = FakeUnit()
+            unit.verifiedCapacity = capacity
+            let capture = unit.capture(voiceProcessing: true)
+            XCTAssertThrowsError(try capture.start(into: Receiver())) {
+                XCTAssertEqual($0 as? MeetingAudioFailure, .bufferFull)
+            }
+            XCTAssertFalse(unit.events.contains("start"))
+            XCTAssertEqual(Array(unit.events.suffix(2)), ["uninitialize", "dispose"])
+            XCTAssertEqual(unit.events.filter { $0 == "create" }.count, 1)
+            XCTAssertNil(unit.context)
+        }
+    }
+
+    func testVoiceRuntimeCallbackAndCapacityVerificationKeepExistingCeiling() throws {
+        for verifyProperty in [false, true] {
+            let unit = FakeUnit(), receiver = Receiver()
+            let capture = unit.capture(voiceProcessing: true)
+            try capture.start(into: receiver)
+            let context = try XCTUnwrap(unit.context)
+            // A supported increase after Start fits the same preallocated storage.
+            unit.verifiedCapacity = MeetingMicrophoneCapture.maximumBufferedFrames
+            context.formatDidChange()
+            context.verifyFormatIfNeeded()
+            XCTAssertEqual(unit.emit(frames: MeetingMicrophoneCapture.maximumBufferedFrames), noErr)
+            XCTAssertTrue(receiver.failures.isEmpty)
+            if verifyProperty {
+                unit.verifiedCapacity = MeetingMicrophoneCapture.maximumBufferedFrames + 1
+                context.formatDidChange()
+                context.verifyFormatIfNeeded()
+            } else {
+                XCTAssertEqual(unit.emit(frames: MeetingMicrophoneCapture.maximumBufferedFrames + 1),
+                               kAudioUnitErr_TooManyFramesToProcess)
+            }
+            XCTAssertEqual(receiver.failures, [.bufferFull])
+            XCTAssertEqual(receiver.diagnostics.last?.code,
+                           verifyProperty ? .microphoneCapacityVerification : .microphoneFrameCapacity)
+            XCTAssertEqual(unit.renderCount, 1, "Oversized callbacks must not reach AudioUnitRender")
+            try capture.stop()
+        }
+    }
+
+    func testNumericStartupDiagnosticsPublishActualFirstCallbackOnceWithoutFormatNotices() throws {
+        let unit = FakeUnit(), receiver = Receiver()
+        var diagnostics: [MeetingMicrophoneStartupDiagnostic] = []
+        unit.capacity = 128
+        unit.verifiedCapacity = 8192
+        unit.measurementsBefore = MeetingMicrophoneStartupMeasurements(
+            inputSampleRate: 48000, clientSampleRate: 48000, referenceSampleRate: 48000,
+            microphone: .init(bufferFrameSize: 128, nominalSampleRate: 48000),
+            reference: .init(bufferFrameSize: 256, nominalSampleRate: 44100))
+        unit.measurementsAfter = MeetingMicrophoneStartupMeasurements(
+            inputSampleRate: 48000, clientSampleRate: 48000, referenceSampleRate: 48000,
+            microphone: .init(bufferFrameSize: 512, nominalSampleRate: 48000),
+            reference: .init(bufferFrameSize: 1024, nominalSampleRate: 48000))
+        let capture = unit.capture(voiceProcessing: true, diagnosticSink: { diagnostics.append($0) })
+        try capture.start(into: receiver)
+        let context = try XCTUnwrap(unit.context)
+        context.verifyFormatIfNeeded()
+        XCTAssertTrue(diagnostics.isEmpty, "No callback count may be invented at Start")
+        unit.emit(frames: 512)
+        XCTAssertTrue(diagnostics.isEmpty, "The audio callback must not invoke the diagnostic sink")
+        context.verifyFormatIfNeeded()
+        unit.emit(frames: 1024)
+        context.verifyFormatIfNeeded()
+        try capture.stop()
+        try capture.stop()
+        XCTAssertEqual(diagnostics.count, 1)
+        let diagnostic = try XCTUnwrap(diagnostics.first)
+        XCTAssertTrue(diagnostic.voiceProcessing)
+        XCTAssertEqual(diagnostic.before.maximumFramesPerSlice, 128)
+        XCTAssertEqual(diagnostic.after.maximumFramesPerSlice, 8192)
+        XCTAssertEqual(diagnostic.allocationFrames, 8192)
+        XCTAssertEqual(diagnostic.firstCallbackFrameCount, 512)
+        XCTAssertEqual(diagnostic.before.microphone, unit.measurementsBefore?.microphone)
+        XCTAssertEqual(diagnostic.after.microphone, unit.measurementsAfter?.microphone)
+        XCTAssertEqual(diagnostic.before.reference, unit.measurementsBefore?.reference)
+        XCTAssertEqual(diagnostic.after.reference, unit.measurementsAfter?.reference)
+        XCTAssertEqual(unit.measurementReads, 2)
+    }
+
+    func testNumericDiagnosticsRecordPreAdmissionCallbacksIncludingActualZeroOnFailure() throws {
+        for frames in [UInt32(0), UInt32(1024)] {
+            let unit = FakeUnit(), receiver = Receiver()
+            var diagnostics: [MeetingMicrophoneStartupDiagnostic] = []
+            unit.onInitialize = { [weak unit] in unit?.emit(frames: frames) }
+            unit.failAt = ["initialize"]
+            let capture = unit.capture(voiceProcessing: true, diagnosticSink: { diagnostics.append($0) })
+            XCTAssertThrowsError(try capture.start(into: receiver))
+            XCTAssertEqual(diagnostics.count, 1)
+            XCTAssertEqual(diagnostics.first?.firstCallbackFrameCount, frames)
+            XCTAssertEqual(unit.renderCount, 0)
+            XCTAssertTrue(receiver.batches.isEmpty)
+            XCTAssertTrue(receiver.failures.isEmpty, "Pre-admission diagnostic capture must not change fallback guards")
+            try capture.stop()
+            XCTAssertEqual(diagnostics.count, 1)
+        }
+    }
+
+    func testNumericDiagnosticsFlushWithoutCallbacksOnStopAndEveryStartupFailure() throws {
+        let stages: [String?] = [nil] + FakeUnit.startup.map { Optional($0) }
+        for stage in stages {
+            let unit = FakeUnit()
+            var diagnostics: [MeetingMicrophoneStartupDiagnostic] = []
+            if let stage { unit.failAt = [stage] }
+            let capture = unit.capture(diagnosticSink: { diagnostics.append($0) })
+            if stage != nil { XCTAssertThrowsError(try capture.start(into: Receiver())) }
+            else {
+                try capture.start(into: Receiver())
+                XCTAssertTrue(diagnostics.isEmpty)
+            }
+            try capture.stop()
+            XCTAssertEqual(diagnostics.count, 1, stage ?? "successful Start then Stop")
+            XCTAssertNil(diagnostics.first?.firstCallbackFrameCount)
+            XCTAssertTrue(diagnostics.first?.message.contains("firstCallbackFrameCount=-1") == true)
+        }
+    }
+
+    func testNumericDiagnosticReadsCannotFailCaptureOrEnableFallback() throws {
+        for processing in [false, true] {
+            let unit = FakeUnit(), receiver = Receiver()
+            unit.measurementError = MeetingAudioFailure.deviceFailure(operation: "private-device-name", status: -50)
+            var diagnostics: [MeetingMicrophoneStartupDiagnostic] = []
+            let capture = unit.capture(voiceProcessing: processing, diagnosticSink: { diagnostics.append($0) })
+            try capture.start(into: receiver)
+            unit.emit()
+            try capture.stop()
+            XCTAssertEqual(receiver.batches.count, 1)
+            XCTAssertTrue(receiver.failures.isEmpty)
+            XCTAssertEqual(unit.events.filter { $0 == "create" }.count, 1)
+            let diagnostic = try XCTUnwrap(diagnostics.first)
+            XCTAssertEqual(diagnostic.before.maximumFramesPerSlice, unit.capacity)
+            XCTAssertEqual(diagnostic.after.maximumFramesPerSlice, unit.capacity)
+            XCTAssertNil(diagnostic.before.microphone.bufferFrameSize)
+            XCTAssertNil(diagnostic.after.reference.nominalSampleRate)
+            XCTAssertFalse(diagnostic.message.contains("private-device-name"))
+            XCTAssertFalse(diagnostic.message.contains("-50"))
+        }
+    }
+
+    func testNumericDiagnosticsAreFreshForFallbackAndExplicitRestart() throws {
+        let voice = FakeUnit(), fallback = FakeUnit(), restarted = FakeUnit()
+        voice.failAt = ["initialize"]
+        voice.failureOverride = MeetingVoiceProcessingUnavailable(diagnostic: .voiceInitialize, status: -10863)
+        var diagnostics: [MeetingMicrophoneStartupDiagnostic] = []
+        var createdModes: [Bool] = []
+        let capture = MeetingMicrophoneCapture(selectedDeviceID: 42, voiceProcessing: true, makeUnit: { mode in
+            createdModes.append(mode)
+            return createdModes.count == 1 ? voice : (createdModes.count == 2 ? fallback : restarted)
+        }, diagnosticSink: { diagnostics.append($0) })
+        try capture.start(into: Receiver())
+        fallback.emit(frames: 3)
+        try capture.stop()
+        try capture.start(into: Receiver())
+        restarted.emit(frames: 7)
+        try capture.stop()
+        XCTAssertEqual(createdModes, [true, false, true])
+        XCTAssertEqual(diagnostics.map { $0.voiceProcessing }, [true, false, true])
+        XCTAssertEqual(diagnostics.map { $0.firstCallbackFrameCount }, [nil, 3, 7])
+        XCTAssertEqual(diagnostics.map { $0.allocationFrames }, [8192, 8, 8192])
+    }
+
+    func testCleanupFailureDoesNotInventUnavailableCallbackBeforeDisposalSucceeds() throws {
+        let unit = FakeUnit()
+        var diagnostics: [MeetingMicrophoneStartupDiagnostic] = []
+        let capture = unit.capture(voiceProcessing: true, diagnosticSink: { diagnostics.append($0) })
+        try capture.start(into: Receiver())
+        unit.failAt = ["stop"]
+        XCTAssertThrowsError(try capture.stop())
+        XCTAssertTrue(diagnostics.isEmpty, "Failed teardown cannot prove callbacks have finished")
+        unit.emit(frames: 512)
+        XCTAssertTrue(diagnostics.isEmpty, "Even a closed-admission callback only publishes atomics")
+        unit.failAt = []
+        try capture.stop()
+        XCTAssertEqual(diagnostics.count, 1)
+        XCTAssertEqual(diagnostics.first?.firstCallbackFrameCount, 512)
+        XCTAssertEqual(unit.renderCount, 0)
     }
 
     func testUnchangedFormatNotificationDuringStartupAllowsStart() throws {

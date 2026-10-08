@@ -124,6 +124,10 @@ struct MeetingAudioFailureDiagnostic: Equatable {
     static func log(_ message: String) {
         logger.log(level: logLevel(for: message), "\(message, privacy: .public)")
     }
+    static func logStartup(_ diagnostic: MeetingMicrophoneStartupDiagnostic) {
+        // Keep the one numeric troubleshooting snapshot in normal persisted logs.
+        logger.notice("\(diagnostic.message, privacy: .public)")
+    }
 }
 
 /// Preallocated lock-free packed publication; callbacks never log, format, allocate or dispatch.
@@ -137,6 +141,122 @@ final class MeetingAudioFailureDiagnosticSlot {
     func store(_ diagnostic: MeetingAudioFailureDiagnostic) { MeetingAudioDeadlineStore(value, diagnostic.packed) }
     var latest: MeetingAudioFailureDiagnostic? { MeetingAudioFailureDiagnostic(packed: MeetingAudioDeadlineLoad(value)) }
     deinit { MeetingAudioDeadlineDestroy(value) }
+}
+
+/// Optional numeric observations only. Neither device identities nor property-read errors
+/// enter diagnostics, and a failed observation must never change capture admission.
+struct MeetingMicrophoneDeviceMeasurements: Equatable {
+    var bufferFrameSize: UInt32?
+    var nominalSampleRate: Double?
+}
+
+struct MeetingMicrophoneStartupMeasurements: Equatable {
+    var maximumFramesPerSlice: UInt32?
+    var inputSampleRate: Double?
+    var clientSampleRate: Double?
+    var referenceSampleRate: Double?
+    var microphone = MeetingMicrophoneDeviceMeasurements()
+    var reference = MeetingMicrophoneDeviceMeasurements()
+}
+
+struct MeetingMicrophoneStartupDiagnostic: Equatable {
+    let voiceProcessing: Bool
+    let before: MeetingMicrophoneStartupMeasurements
+    let after: MeetingMicrophoneStartupMeasurements
+    let allocationFrames: UInt32?
+    let firstCallbackFrameCount: UInt32?
+
+    /// Control-plane formatting only. -1 means unavailable; an observed zero stays zero.
+    var message: String {
+        func frames(_ value: UInt32?) -> String { value.map { String($0) } ?? "-1" }
+        func rate(_ value: Double?) -> String {
+            guard let value, value.isFinite, value >= 0 else { return "-1" }
+            return String(value)
+        }
+        return "microphone-startup-sizing voiceProcessing=\(voiceProcessing ? 1 : 0)" +
+            " maxFramesBeforeInitialize=\(frames(before.maximumFramesPerSlice))" +
+            " maxFramesAfterInitialize=\(frames(after.maximumFramesPerSlice))" +
+            " allocationFrames=\(frames(allocationFrames))" +
+            " firstCallbackFrameCount=\(frames(firstCallbackFrameCount))" +
+            " microphoneBufferFramesBeforeInitialize=\(frames(before.microphone.bufferFrameSize))" +
+            " microphoneBufferFramesAfterInitialize=\(frames(after.microphone.bufferFrameSize))" +
+            " referenceBufferFramesBeforeInitialize=\(frames(before.reference.bufferFrameSize))" +
+            " referenceBufferFramesAfterInitialize=\(frames(after.reference.bufferFrameSize))" +
+            " microphoneNominalRateBeforeInitialize=\(rate(before.microphone.nominalSampleRate))" +
+            " microphoneNominalRateAfterInitialize=\(rate(after.microphone.nominalSampleRate))" +
+            " referenceNominalRateBeforeInitialize=\(rate(before.reference.nominalSampleRate))" +
+            " referenceNominalRateAfterInitialize=\(rate(after.reference.nominalSampleRate))" +
+            " inputRateBeforeInitialize=\(rate(before.inputSampleRate))" +
+            " inputRateAfterInitialize=\(rate(after.inputSampleRate))" +
+            " clientRateBeforeInitialize=\(rate(before.clientSampleRate))" +
+            " clientRateAfterInitialize=\(rate(after.clientSampleRate))" +
+            " referenceRateBeforeInitialize=\(rate(before.referenceSampleRate))" +
+            " referenceRateAfterInitialize=\(rate(after.referenceSampleRate))"
+    }
+}
+
+/// Allocated before callback registration. The existing sequentially consistent atomics
+/// provide release/acquire publication: claim once, store the payload, then publish ready.
+/// No callback formats a message, invokes a sink, allocates, waits, or takes this lock.
+final class MeetingMicrophoneStartupDiagnostics {
+    private let callbackState = MeetingAudioAtomicState()
+    private let callbackFrames = MeetingAudioAtomicState()
+    private let controlLock = NSLock()
+    private let voiceProcessing: Bool
+    private let sink: (MeetingMicrophoneStartupDiagnostic) -> Void
+    private var before = MeetingMicrophoneStartupMeasurements()
+    private var after = MeetingMicrophoneStartupMeasurements()
+    private var allocationFrames: UInt32?
+    private var startupComplete = false
+    private var published = false
+
+    init(voiceProcessing: Bool, sink: @escaping (MeetingMicrophoneStartupDiagnostic) -> Void) {
+        self.voiceProcessing = voiceProcessing
+        self.sink = sink
+    }
+
+    func recordFirstCallback(frameCount: UInt32) {
+        guard callbackState.replace(0, with: 1) else { return }
+        callbackFrames.exchange(frameCount)
+        callbackState.exchange(2)
+    }
+
+    func recordBeforeInitialize(_ measurements: MeetingMicrophoneStartupMeasurements, allocationFrames: UInt32? = nil) {
+        controlLock.lock()
+        before = measurements
+        self.allocationFrames = allocationFrames
+        controlLock.unlock()
+    }
+
+    func recordAfterInitialize(_ measurements: MeetingMicrophoneStartupMeasurements) {
+        controlLock.lock()
+        after = measurements
+        controlLock.unlock()
+    }
+
+    func completeStartup() {
+        controlLock.lock()
+        startupComplete = true
+        controlLock.unlock()
+        poll()
+    }
+
+    /// Poll on the control plane, including when there are no format notices. Only
+    /// successful disposal proves that an unavailable first callback can be finalized.
+    func poll(callbacksFinished: Bool = false) {
+        controlLock.lock()
+        let state = callbackState.value
+        guard startupComplete, !published, state == 2 || (callbacksFinished && state == 0) else {
+            controlLock.unlock()
+            return
+        }
+        published = true
+        let diagnostic = MeetingMicrophoneStartupDiagnostic(voiceProcessing: voiceProcessing,
+            before: before, after: after, allocationFrames: allocationFrames,
+            firstCallbackFrameCount: state == 2 ? callbackFrames.value : nil)
+        controlLock.unlock()
+        sink(diagnostic)
+    }
 }
 
 /// VPIO setup incompatibility, including explicitly allowed format/route surprises before admission.

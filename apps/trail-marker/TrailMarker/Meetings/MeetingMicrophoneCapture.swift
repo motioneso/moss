@@ -13,6 +13,7 @@ protocol MeetingMicrophoneUnit: AnyObject {
     func referenceFormat() throws -> AudioStreamBasicDescription?
     func configureMonoOutput(sampleRate: Double) throws
     func maximumFramesPerSlice() throws -> UInt32
+    func startupMeasurements() throws -> MeetingMicrophoneStartupMeasurements
     func installInputCallback(_ context: MeetingMicrophoneRenderContext) throws
     func initialize() throws
     func installFormatListener(_ context: MeetingMicrophoneRenderContext) throws
@@ -29,6 +30,10 @@ protocol MeetingMicrophoneUnit: AnyObject {
     ) -> OSStatus
 }
 
+extension MeetingMicrophoneUnit {
+    func startupMeasurements() throws -> MeetingMicrophoneStartupMeasurements { MeetingMicrophoneStartupMeasurements() }
+}
+
 /// Inert until start. Its owner serializes lifecycle calls and never calls them from a receiver.
 /// The selected ID belongs to this unit only; no system-default device property is changed.
 final class MeetingMicrophoneCapture: MeetingAudioCapturing {
@@ -38,6 +43,8 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
     private let selectedDeviceID: AudioDeviceID
     private let makeUnit: (Bool) throws -> MeetingMicrophoneUnit
     private let hostTimeToNanoseconds: (UInt64) -> UInt64
+    private let diagnosticSink: (MeetingMicrophoneStartupDiagnostic) -> Void
+    private var sizingDiagnostics: MeetingMicrophoneStartupDiagnostics?
     private var unit: MeetingMicrophoneUnit?
     private var context: MeetingMicrophoneRenderContext?
     private var initialized = false
@@ -48,12 +55,14 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
         selectedDeviceID: AudioDeviceID,
         voiceProcessing: Bool = false,
         makeUnit: @escaping (Bool) throws -> MeetingMicrophoneUnit = MeetingMicrophoneIOUnit.init(voiceProcessing:),
-        hostTimeToNanoseconds: @escaping (UInt64) -> UInt64 = AudioConvertHostTimeToNanos
+        hostTimeToNanoseconds: @escaping (UInt64) -> UInt64 = AudioConvertHostTimeToNanos,
+        diagnosticSink: @escaping (MeetingMicrophoneStartupDiagnostic) -> Void = MeetingAudioFailureDiagnostic.logStartup
     ) {
         self.voiceProcessing = voiceProcessing
         self.selectedDeviceID = selectedDeviceID
         self.makeUnit = makeUnit
         self.hostTimeToNanoseconds = hostTimeToNanoseconds
+        self.diagnosticSink = diagnosticSink
     }
 
     func start(into receiver: MeetingAudioReceiving) throws {
@@ -88,6 +97,9 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
     }
 
     private func startUnit(processing: Bool, into receiver: MeetingAudioReceiving) throws {
+        let diagnostics = MeetingMicrophoneStartupDiagnostics(voiceProcessing: processing, sink: diagnosticSink)
+        sizingDiagnostics = diagnostics
+        defer { diagnostics.completeStartup() }
         let acquired = try makeUnit(processing)
         unit = acquired
         try acquired.enableInput()
@@ -99,18 +111,34 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
             throw MeetingAudioFailure.invalidFormat
         }
         try acquired.configureMonoOutput(sampleRate: format.mSampleRate)
+        var before = (try? acquired.startupMeasurements()) ?? MeetingMicrophoneStartupMeasurements()
+        diagnostics.recordBeforeInitialize(before)
         let capacity = try acquired.maximumFramesPerSlice()
+        before.maximumFramesPerSlice = capacity
+        diagnostics.recordBeforeInitialize(before)
         guard capacity > 0, capacity <= Self.maximumBufferedFrames else {
             throw MeetingAudioFailure.bufferFull
         }
+        // VPIO's provisional maximum may grow during initialization's format/route
+        // negotiation. Reserve the existing bounded ceiling first.
+        let allocationCapacity = processing ? Self.maximumBufferedFrames : capacity
+        diagnostics.recordBeforeInitialize(before, allocationFrames: allocationCapacity)
         let renderContext = MeetingMicrophoneRenderContext(
             unit: acquired, receiver: receiver, format: format,
-            capacity: capacity, hostTimeToNanoseconds: hostTimeToNanoseconds, hasVoiceReference: processing
+            capacity: allocationCapacity, hostTimeToNanoseconds: hostTimeToNanoseconds,
+            hasVoiceReference: processing, sizingDiagnostics: diagnostics
         )
         context = renderContext
         try acquired.installInputCallback(renderContext)
-        try acquired.initialize()
+        do {
+            try acquired.initialize()
+        } catch {
+            diagnostics.recordAfterInitialize((try? acquired.startupMeasurements()) ?? MeetingMicrophoneStartupMeasurements())
+            throw error
+        }
         initialized = true
+        var after = (try? acquired.startupMeasurements()) ?? MeetingMicrophoneStartupMeasurements()
+        diagnostics.recordAfterInitialize(after)
         // Install after initialization's own format notifications, then re-read to close
         // the gap between the original format query and listener installation.
         try acquired.installFormatListener(renderContext)
@@ -121,7 +149,9 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
             throw MeetingAudioFailure.invalidFormat
         }
         let verifiedCapacity = try acquired.maximumFramesPerSlice()
-        guard verifiedCapacity > 0, verifiedCapacity <= capacity else {
+        after.maximumFramesPerSlice = verifiedCapacity
+        diagnostics.recordAfterInitialize(after)
+        guard verifiedCapacity > 0, verifiedCapacity <= allocationCapacity else {
             throw MeetingAudioFailure.bufferFull
         }
         if processing { renderContext.audioUnitFormatDidChange(scope: kAudioUnitScope_Input, element: 0) }
@@ -140,7 +170,12 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
 
     func stop() throws {
         context?.close()
-        guard let unit else { return }
+        guard let unit else {
+            sizingDiagnostics?.poll(callbacksFinished: true)
+            sizingDiagnostics = nil
+            return
+        }
+        defer { sizingDiagnostics?.poll() }
         // Do not proceed to freeing memory if a release fails. The next Stop retries the
         // remaining stage; start is refused until disposal has actually succeeded.
         if startAttempted {
@@ -153,6 +188,8 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
             initialized = false
         }
         try unit.dispose()
+        sizingDiagnostics?.poll(callbacksFinished: true)
+        sizingDiagnostics = nil
         context = nil
         self.unit = nil
     }
@@ -197,10 +234,12 @@ final class MeetingMicrophoneRenderContext {
     // Startup-only failure kinds: 1 = format, 2 = default speaker changed, 4 = other.
     // Published by callbacks and read only after complete teardown before fallback.
     private let startupFailureKinds = MeetingAudioAtomicState()
+    private let sizingDiagnostics: MeetingMicrophoneStartupDiagnostics?
 
     init(
         unit: MeetingMicrophoneUnit, receiver: MeetingAudioReceiving, format: AudioStreamBasicDescription,
-        capacity: UInt32, hostTimeToNanoseconds: @escaping (UInt64) -> UInt64, hasVoiceReference: Bool = false
+        capacity: UInt32, hostTimeToNanoseconds: @escaping (UInt64) -> UInt64, hasVoiceReference: Bool = false,
+        sizingDiagnostics: MeetingMicrophoneStartupDiagnostics? = nil
     ) {
         self.unit = unit
         self.receiver = receiver
@@ -209,6 +248,7 @@ final class MeetingMicrophoneRenderContext {
         self.format = format
         self.capacity = capacity
         self.hostTimeToNanoseconds = hostTimeToNanoseconds
+        self.sizingDiagnostics = sizingDiagnostics
         samples = .allocate(capacity: Int(capacity))
         samples.initialize(repeating: 0, count: Int(capacity))
         buffers = .allocate(capacity: 1)
@@ -257,6 +297,7 @@ final class MeetingMicrophoneRenderContext {
 
     /// Called on the property-monitor queue (or serialized startup), never by render.
     func verifyFormatIfNeeded() {
+        sizingDiagnostics?.poll()
         verifyReferenceFormatIfNeeded()
         let notice = formatNotice.value
         guard admission.value & 4 == 0, notice == 1,
@@ -325,6 +366,8 @@ final class MeetingMicrophoneRenderContext {
         timestamp: UnsafePointer<AudioTimeStamp>,
         frameCount: UInt32
     ) -> OSStatus {
+        // Record even initialization/start callbacks that admission deliberately rejects.
+        sizingDiagnostics?.recordFirstCallback(frameCount: frameCount)
         // AUHAL normally serializes renders. A collision is a bounded missing interval,
         // never a reason to wait on the audio thread or invent a full sample ring.
         guard renderLock.try() else {
@@ -516,6 +559,35 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
         ), "read AUHAL maximum frames")
         guard size == UInt32(MemoryLayout<UInt32>.size) else { throw MeetingAudioFailure.invalidFormat }
         return frames
+    }
+
+    func startupMeasurements() throws -> MeetingMicrophoneStartupMeasurements {
+        // Read the selected physical endpoints, not VPIO's private aggregate. These
+        // observations are optional and must not alter permission/fallback decisions.
+        MeetingMicrophoneStartupMeasurements(
+            maximumFramesPerSlice: try? maximumFramesPerSlice(),
+            inputSampleRate: (try? inputFormat())?.mSampleRate,
+            clientSampleRate: (try? outputFormat())?.mSampleRate,
+            referenceSampleRate: (try? referenceFormat())?.mSampleRate,
+            microphone: Self.deviceMeasurements(selectedDevice),
+            reference: Self.deviceMeasurements(referenceDevice)
+        )
+    }
+
+    private static func deviceMeasurements(_ device: AudioDeviceID?) -> MeetingMicrophoneDeviceMeasurements {
+        guard let device, device != kAudioObjectUnknown else { return MeetingMicrophoneDeviceMeasurements() }
+        var frames: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyBufferFrameSize,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        let framesStatus = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &frames)
+        let observedFrames = framesStatus == noErr && size == UInt32(MemoryLayout<UInt32>.size) ? frames : nil
+        var rate: Float64 = 0
+        size = UInt32(MemoryLayout<Float64>.size)
+        address.mSelector = kAudioDevicePropertyNominalSampleRate
+        let rateStatus = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &rate)
+        let observedRate = rateStatus == noErr && size == UInt32(MemoryLayout<Float64>.size) ? rate : nil
+        return MeetingMicrophoneDeviceMeasurements(bufferFrameSize: observedFrames, nominalSampleRate: observedRate)
     }
 
     func installInputCallback(_ context: MeetingMicrophoneRenderContext) throws {
