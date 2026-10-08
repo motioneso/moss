@@ -136,11 +136,12 @@ export class ChatSessionManager {
   async ensureSession(
     actorUserId: string,
     userName: string,
-    opts?: { readonly forceReplay?: boolean },
+    opts?: { readonly forceReplay?: boolean; readonly signal?: AbortSignal },
     surface?: string
   ): Promise<UserSession> {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
+    opts?.signal?.throwIfAborted();
     const transition = this.originTransitions.get(sessionKey);
     const session = await ensureSessionForCurrentProvider({
       actorUserId,
@@ -152,12 +153,16 @@ export class ChatSessionManager {
       persistence: this.deps.persistence,
       sessions: this.sessions,
       pendingForcedReplay: this.pendingForcedReplay,
-      waitForSelection: () => waitForOriginThreadTransition(this.originTransitions, sessionKey),
+      waitForSelection: async () => {
+        await waitForOriginThreadTransition(this.originTransitions, sessionKey, opts?.signal);
+        opts?.signal?.throwIfAborted();
+      },
       discardSession: (session) =>
         discardChatSession(sessionKey, session, this.sessions, this.deps.revokeMcpToken),
       launchSession: (launchOpts, providerIdentity) =>
         this.launchSession(actorUserId, userName, launchOpts, chatSurface, providerIdentity)
     });
+    opts?.signal?.throwIfAborted();
     return this.originTransitions.get(sessionKey) === transition
       ? session
       : this.ensureSession(actorUserId, userName, opts, surface);
@@ -262,6 +267,7 @@ export class ChatSessionManager {
     // File this session's tool rows under the turn; cleared in the finally below.
     this.deps.setCurrentTurnId?.(sessionKey, turnId);
     const controller = new AbortController();
+    const ensureOpts = { signal: controller.signal };
     this.turnControllers.set(sessionKey, controller);
     this.actionResultsBySession.set(sessionKey, []);
     const turnActivityRecords: TranscriptRecord[] = [];
@@ -318,7 +324,7 @@ export class ChatSessionManager {
       if (controller.signal.aborted)
         return this.finishRefusedTurn(actorUserId, surface, sessionKey, undefined, undefined);
       try {
-        session = await this.ensureSession(actorUserId, userName, undefined, surface);
+        session = await this.ensureSession(actorUserId, userName, ensureOpts, surface);
       } catch (err) {
         if (
           !(err instanceof CliChatUnavailableError) ||
@@ -328,7 +334,7 @@ export class ChatSessionManager {
           throw err;
         }
         this.pendingForcedReplay.add(sessionKey);
-        session = await this.ensureSession(actorUserId, userName, undefined, surface);
+        session = await this.ensureSession(actorUserId, userName, ensureOpts, surface);
       }
       // Refuse another conversation's model, including a same-privacy resume during the mode wait.
       if (
@@ -518,8 +524,7 @@ export class ChatSessionManager {
       }
 
       if (stopped) {
-        // Coordinator ruling (a): emit a status record over SSE, persist NOTHING. The user message
-        // and any partial reply are discarded — the turn never completed.
+        // Stopped turns emit status and discard the user message and any partial reply.
         this.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
         gateShadow?.cancel();
         session.lastActivity = this.deps.clock.now();
@@ -601,8 +606,7 @@ export class ChatSessionManager {
       session.lastActivity = this.deps.clock.now();
       this.deps.touchMcpToken?.(sessionKey);
 
-      // #2956: only stored turns get an answer line; refused/stopped/private steps have no
-      // parent. The line holds tool counts; later Jev agreement joins its shadow detail row.
+      // #2956: only stored turns get an answer line for later agreement and tool-count joins.
       if (stored) {
         this.recordAnswerLine(actorUserId, turnId, {
           modelName: session.model,
@@ -634,11 +638,13 @@ export class ChatSessionManager {
         assistantMessageId: stored?.assistantMessageId,
         sourceFreshness: stored?.sourceFreshness
       };
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+      return this.finishRefusedTurn(actorUserId, surface, sessionKey, undefined, gateShadow);
     } finally {
       // #2907 — record a no-model-tool turn distinctly. A recorded cancel outranks this in the runner.
       gateShadow?.finish();
-      // #2956: release the turn's filing slot in the same finally that drops
-      // every other per-turn state, so later tool calls cannot join this turn.
+      // #2956: release the filing slot so later tool calls cannot join this turn.
       this.deps.clearCurrentTurnId?.(sessionKey);
       flushPending();
       this.turnActivityBySession.delete(sessionKey);
@@ -649,12 +655,7 @@ export class ChatSessionManager {
     }
   }
 
-  /**
-   * #2956: one owned answer line per completed chat turn. Fire-and-forget like
-   * every other writer: the installed recorder routes the owned write through
-   * the owner's scope, and a failed write is logged and dropped, never thrown
-   * into the turn.
-   */
+  /** #2956: record each completed answer in the owner's scope without blocking the turn. */
   private recordAnswerLine(
     actorUserId: string,
     turnId: string,

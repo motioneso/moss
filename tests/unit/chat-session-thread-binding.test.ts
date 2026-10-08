@@ -107,6 +107,49 @@ function holdResume(h: ReturnType<typeof harness>) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("chat conversation identity binding", () => {
+  it("stops when resume begins during provider validation before the later selection retry", async () => {
+    const validating = deferred<void>();
+    const providerReleased = deferred<void>();
+    const killing = deferred<void>();
+    const killReleased = deferred<void>();
+    const h = harness();
+    await h.manager.ensureSession("owner", "Owner");
+    h.persistence.resolveActiveProvider.mockImplementationOnce(async () => {
+      validating.resolve();
+      await providerReleased.promise;
+      return { provider: "anthropic", model: "test-model" };
+    });
+    vi.mocked(h.engine.kill).mockImplementation(async () => {
+      killing.resolve();
+      await killReleased.promise;
+    });
+    let reply: string | undefined;
+    const turn = h.manager
+      .submitTurn("owner", "Owner", "Cancel this late selection wait")
+      .then((result) => {
+        reply = result.reply;
+      });
+    await validating.promise;
+    const resume = h.manager.resumeThread("owner", "thread-B");
+    await killing.promise;
+    try {
+      providerReleased.resolve();
+      await h.manager.stopTurn("owner");
+      await vi.waitFor(() => expect(reply).toBe(""), { timeout: 100 });
+      expect(h.engine.submit).not.toHaveBeenCalled();
+      expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+      const next = h.manager.submitTurn("owner", "Owner", "The canceled turn released its lock");
+      await h.manager.stopTurn("owner");
+      expect(await next).toEqual({ reply: "" });
+      expect(h.engine.submit).not.toHaveBeenCalled();
+      expect(h.persistence.recordTurn).not.toHaveBeenCalled();
+    } finally {
+      providerReleased.resolve();
+      killReleased.resolve();
+      await Promise.all([resume, turn]);
+    }
+  });
+
   it("stops a turn waiting for resume without waiting for the retiring engine", async () => {
     const killing = deferred<void>();
     const released = deferred<void>();
