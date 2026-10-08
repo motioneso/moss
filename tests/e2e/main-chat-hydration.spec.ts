@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { createMockChatMessage, createMockChatThread } from "./mock-chat-api.js";
+import { createMockConnectorProviders } from "./mock-api.js";
 import { mockApi } from "./mock-chat-model.js";
 
 test("drawer hydrates the owner's Main before a newer shared foreign Main (#3125)", async ({
@@ -22,6 +23,7 @@ test("drawer hydrates the owner's Main before a newer shared foreign Main (#3125
       ]
     },
     connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
     notifications: [],
     tasks: []
   });

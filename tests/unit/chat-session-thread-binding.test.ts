@@ -107,6 +107,55 @@ function holdResume(h: ReturnType<typeof harness>) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("chat conversation identity binding", () => {
+  it("honors New chat chosen during a cold Main stream launch (#3125)", async () => {
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const h = harness();
+    h.deps.persistence.getMainThreadState = async () => ({ id: "thread-A", incognito: false });
+    vi.mocked(h.engine.launch).mockImplementation(async () => {
+      started.resolve();
+      await release.promise;
+      return { offset: 0 };
+    });
+    const prestart = h.manager.ensureSession("user-1", "Ben");
+    await started.promise;
+    await h.manager.clear("user-1");
+    release.resolve();
+    expect((await prestart).threadId).toBe("new-thread");
+    expect(await h.manager.submitTurn("user-1", "Ben", "My new conversation")).toMatchObject({
+      reply: "Done."
+    });
+  });
+
+  it("keeps the first side turn bound while its stream pre-start is still launching (#3125)", async () => {
+    const started = deferred<void>();
+    const release = deferred<void>();
+    const readMode = vi.fn(async () => "off" as const);
+    const h = harness({ classifierGate: buildClassifierGateRunner({ readMode }) });
+    h.deps.persistence.getMainThreadState = async () => ({ id: "thread-A", incognito: false });
+    vi.mocked(h.engine.launch).mockImplementation(async () => {
+      started.resolve();
+      await release.promise;
+      return { offset: 0 };
+    });
+    await h.manager.clear("user-1");
+    const prestart = h.manager.ensureSession("user-1", "Ben");
+    await started.promise;
+    const turn = h.manager.submitTurn("user-1", "Ben", "First side message");
+    await vi.waitFor(() => expect(readMode).toHaveBeenCalledOnce());
+    release.resolve();
+    expect((await prestart).threadId).toBe("new-thread");
+    expect(await turn).toMatchObject({ reply: "Done." });
+    expect(h.persistence.recordTurn).toHaveBeenCalledWith(
+      "user-1",
+      "First side message",
+      "Done.",
+      expect.anything(),
+      expect.objectContaining({ threadId: "new-thread" }),
+      "drawer"
+    );
+  });
+
   it("preserves the old launch binding but returns a fresh session after resume during persona await", async () => {
     const persona = deferred<string>();
     const render = vi.fn(() => persona.promise);

@@ -171,7 +171,7 @@ async function resolveSessionForCurrentProvider(input: {
     providerIdentity: ActiveChatProvider
   ) => Promise<UserSession>;
 }): Promise<UserSession> {
-  let forceReplay = input.opts?.forceReplay ?? input.pendingForcedReplay.delete(input.sessionKey);
+  let forceReplay = input.opts?.forceReplay ?? input.pendingForcedReplay.has(input.sessionKey);
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const providerIdentity = await input.persistence.resolveActiveProvider(input.actorUserId);
     const existing = input.sessions.get(input.sessionKey);
@@ -196,9 +196,15 @@ async function resolveSessionForCurrentProvider(input: {
       const providerAfterLaunch = await input.persistence.resolveActiveProvider(input.actorUserId);
       if (
         sameActiveChatProvider(session.providerIdentity, providerAfterLaunch) &&
-        (await sessionMatchesCurrentConversation(input, session, !forceReplay))
-      )
+        (await sessionMatchesCurrentConversation(
+          input,
+          session,
+          !forceReplay && !input.pendingForcedReplay.has(input.sessionKey)
+        ))
+      ) {
+        input.pendingForcedReplay.delete(input.sessionKey);
         return session;
+      }
     } catch (error) {
       await input.discardSession(session);
       throw error;

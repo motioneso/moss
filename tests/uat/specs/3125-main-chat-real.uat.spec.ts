@@ -31,7 +31,9 @@ async function sendReal(page: Page, drawer: Locator, text: string): Promise<void
   );
   await drawer.getByLabel("Message Moss").fill(text);
   await drawer.getByLabel("Message Moss").press("Enter");
-  const result = (await readUatJson(await completed)) as { reply?: string };
+  const response = await completed;
+  expect(response.ok(), `real UI turn returned ${response.status()}`).toBe(true);
+  const result = (await response.json()) as { reply?: string };
   expect(typeof result.reply).toBe("string");
   expect(result.reply?.trim().length).toBeGreaterThan(0);
   await expect(drawer.getByText(text, { exact: true })).toBeVisible();
