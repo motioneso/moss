@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""Hosted-Mac source-reconfiguration controls; --check is portable anchor validation only.
+
+Reuse the existing runner's strict semantic XCTest recognition, source restoration,
+and restored-positive rerun. No synthetic result is reported as native proof.
+"""
+import argparse
+import importlib.util
+import os
+from pathlib import Path
+import signal
+import sys
+import tempfile
+
+sys.dont_write_bytecode = True
+HERE = Path(__file__).resolve().parent
+SPEC = importlib.util.spec_from_file_location("meeting_voice_negative", HERE / "check-meeting-voice-negative-controls.py")
+SHARED = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(SHARED)
+RUNNER = SHARED.RUNNER
+MEETINGS = RUNNER.APP / "TrailMarker/Meetings"
+CONTROLS = [
+    ("MeetingSourceReconfigurationTests", {
+        "name": "output-teardown-hard-fault-priority",
+        "source": MEETINGS / "CoreAudioMeetingOutput.swift",
+        "test": "testQueuedOutputHardEvidenceSurvivesClosedCaptureUntilDisposed",
+        "before": "return state & 16 == 0 && (state & 4 == 0 || state & 8 != 0)",
+        "after": "return state & 16 == 0 && state & 4 == 0",
+        "assertion": "Output teardown must retain all hard failures",
+    }),
+    ("MeetingMicrophoneCaptureTests", {
+        "name": "microphone-teardown-verification-drain",
+        "source": MEETINGS / "MeetingMicrophoneCapture.swift",
+        "test": "testPendingMicrophoneCapacityAndReadFaultsDrainBeforeDisposal",
+        "before": "        context?.verifyFormatIfNeeded()",
+        "after": "        // Mutation: lose the pending old-unit verification.",
+        "assertion": "Pending hard verification must run before closing the peer unit",
+    }),
+    ("MeetingOutputCaptureTests", {
+        "name": "output-post-acquisition-physical-routes",
+        "source": MEETINGS / "CoreAudioMeetingOutput.swift",
+        "test": "testPinnedOutputRoutesRejectChangesBeforeAndDuringAcquisition",
+        "before": "            try installed.start()\n            try hardware.verifyOutputRoutes(defaultOutput: expectedDefaultOutputDeviceID, systemOutput: expectedSystemOutputDeviceID)",
+        "after": "            try installed.start()",
+        "assertion": "Both physical output routes must be verified after acquisition",
+    }),
+    ("MeetingSourceReconfigurationTests", {
+        "name": "supported-new-rate-evidence",
+        "source": MEETINGS / "MeetingAudioBuffer.swift",
+        "test": "testRateChangeDoesNotRemapOldCounterOrInventLeaseExpiry",
+        "before": "failLocked(.sourceReconfigured, diagnostic: .init(.bufferFormat)); return nil",
+        "after": "failLocked(.invalidFormat, diagnostic: .init(.bufferFormat)); return nil",
+        "assertion": "A slower rate must not map the previous counter to an artificial 180-second lease boundary",
+    }),
+    ("MeetingSourceRecoveryTests", {
+        "name": "old-epoch-expiry-does-not-pause-replacement",
+        "source": MEETINGS / "MeetingCaptureRuntime.swift",
+        "test": "testResumeAfterUnknownReceiptExpiryKeepsFreshCaptureRecording",
+        "before": "lostUnknownReceipt = lostUnknownReceipt || pending[index].buffer.epoch == machine.epoch",
+        "after": "lostUnknownReceipt = true",
+        "assertion": "Old expiry and late receipts cannot pause a new stream",
+    }),
+    ("MeetingSourceRecoveryTests", {
+        "name": "recovery-hard-evidence-priority",
+        "source": MEETINGS / "MeetingCaptureRuntime.swift",
+        "test": "testHardFailureOnEitherClosedSourceWinsAfterSoftFault",
+        "before": "recoveryEvidence.allSatisfy { $0.failure == nil || $0.failure == .sourceReconfigured }",
+        "after": "true",
+        "assertion": "A later hard fault must invalidate retained evidence",
+    }),
+    ("MeetingSourceRecoveryTests", {
+        "name": "bounded-recovery-attempts",
+        "source": MEETINGS / "MeetingSourceRecovery.swift",
+        "test": "testEpisodeBudgetBoundsRetriesAndRequiresSustainedHealth",
+        "before": "guard now < deadline, attempts < 3 else { return false }",
+        "after": "guard now < deadline else { return false }",
+        "assertion": "Recovery attempts must share a bounded episode",
+    }),
+]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--self-test", action="store_true")
+    args = parser.parse_args()
+    RUNNER.self_test()
+    for test_class, control in CONTROLS:
+        SHARED.select(test_class, control)
+    if args.check or args.self_test:
+        print(f"Validated {len(CONTROLS)} reconfiguration anchors. Native XCTest execution remains required.")
+        return
+    if sys.platform != "darwin" or os.environ.get("GITHUB_ACTIONS") != "true":
+        raise RuntimeError("Run only in the isolated hosted Mac workflow; use --check locally")
+    for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, RUNNER.interrupted)
+    folder = Path(tempfile.mkdtemp(prefix="meeting-reconfiguration-negative-", dir=os.environ.get("RUNNER_TEMP")))
+    for test_class, control in CONTROLS:
+        original = SHARED.select(test_class, control)
+        RUNNER.run_control(control, original, folder)
+    print("Reconfiguration mutations failed named assertions and passed after source restoration.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        raise SystemExit(1)

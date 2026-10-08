@@ -41,6 +41,26 @@ describe("meetings composition", () => {
     expect(echo.description.length).toBeLessThanOrEqual(240);
   });
 
+  it("describes bounded same-source recovery and visible interruption remediation", () => {
+    const meeting = getBuiltInModuleManifests().find((item) => item.id === "meetings")!;
+    const recovery = meeting.features!.find(
+      (item) => item.id === "meetings.native_source_recovery"
+    )!;
+    expect(recovery.description).toContain("Recovering audio…");
+    expect(recovery.description).toContain("Both tracks retain gaps");
+    expect(recovery.description).toContain("Pause and Stop cancel recovery");
+    expect(recovery.description).toContain("explicit Resume");
+    expect(recovery.remediations![0]!.description).toContain("restores a hidden recording pill");
+    expect(recovery.remediations![0]!.description).toContain("before Resume");
+    for (const feature of meeting.features!) {
+      expect(feature.description.length, feature.id).toBeLessThanOrEqual(240);
+      for (const remediation of feature.remediations ?? [])
+        expect(remediation.description.length, remediation.id).toBeLessThanOrEqual(240);
+      for (const error of feature.errors ?? [])
+        expect(error.description.length, error.code).toBeLessThanOrEqual(240);
+    }
+  });
+
   it("describes the actual passage exit, removable chat context and automatic title", () => {
     const features = getBuiltInModuleManifests().find((item) => item.id === "meetings")!.features!;
     const description = (id: string) => features.find((item) => item.id === id)!.description;
@@ -178,6 +198,7 @@ describe("meetings composition", () => {
       "meetings.automatic_summary",
       "transcribe.meeting",
       "meetings.native_startup_recovery",
+      "meetings.native_source_recovery",
       "meetings.speaker_echo_control",
       "meetings.native_capture",
       "meetings.mac_recording_status",

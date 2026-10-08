@@ -148,6 +148,43 @@ describe("capture route credential boundaries", () => {
   });
 });
 
+describe("native recovery status", () => {
+  it("preserves recovering as a distinct non-recording observation", async () => {
+    const server = Fastify();
+    const status = vi
+      .spyOn(MeetingCaptureService.prototype, "status")
+      .mockImplementation(async (_headers, _request, body) => ({
+        capture: body as never,
+        changed: true
+      }));
+    registerMeetingCaptureRoutes(server, dependencies());
+    const observed = { generation: 1, phase: "recovering" };
+    try {
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/meetings/capture/status",
+        payload: {
+          meetingId,
+          grantId: meetingId,
+          observed,
+          inventory: {
+            microphones: [],
+            applications: [],
+            computerAudio: { available: false, excludedProcessTreeIds: [] },
+            microphonePermission: "granted",
+            systemAudioPermission: "granted"
+          }
+        }
+      });
+      expect(response.statusCode).toBe(200);
+      expect(status.mock.calls[0]![2].observed).toEqual(observed);
+    } finally {
+      status.mockRestore();
+      await server.close();
+    }
+  });
+});
+
 describe("native default microphone inventory", () => {
   it.each([undefined, null, "os-default"])(
     "accepts the optional exact default UID %s",

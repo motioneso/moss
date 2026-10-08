@@ -639,7 +639,10 @@ final class MeetingHostLifecycleTests: XCTestCase {
                 host.service()
                 XCTAssertEqual(host.phase, .stopped)
             }
-            XCTAssertFalse(host.recordingPresentation.showsPill)
+            XCTAssertEqual(host.recordingPresentation.showsPill, cleanupFailure,
+                "A retained driver handle must surface a cleanup warning even after recording stops")
+            XCTAssertEqual(host.recordingPresentation.interruptionWarning,
+                cleanupFailure ? MeetingHostError.cleanupFailed.message : nil)
             XCTAssertFalse(host.recordingPresentation.showsRedDot)
             XCTAssertNil(buffer.peek())
             buffer.receive(hostTimeNanoseconds: fixture.monotonic + 100_000_000, sampleRate: 8000, frameCount: 800, sampleAt: { _ in 0.5 })
@@ -872,14 +875,7 @@ final class MeetingHostLifecycleTests: XCTestCase {
         XCTAssertTrue(condition(), "Synthetic host did not reach the expected lifecycle state")
     }
 
-    final class Device: MeetingAudioCapturing {
-        var starts = 0
-        var stops = 0
-        var failStop = false
-        var receiver: MeetingAudioReceiving?
-        func start(into receiver: MeetingAudioReceiving) throws { starts += 1; self.receiver = receiver }
-        func stop() throws { stops += 1; if failStop { throw MeetingAudioFailure.cleanupFailed } }
-    }
+    typealias Device = MeetingHostFixtureDevice
 
     @MainActor
     final class Fixture {
@@ -891,7 +887,11 @@ final class MeetingHostLifecycleTests: XCTestCase {
         let instance: InstanceURL
         let defaultsName = "com.moss.meeting-host-tests." + UUID().uuidString
         var wall = FixtureServer.baseTime
-        var monotonic: UInt64 = 10_000_000_000
+        let clock = MeetingHostFixtureClock()
+        var monotonic: UInt64 {
+            get { clock.now }
+            set { clock.now = newValue }
+        }
         var permission: MeetingCapturePermission = .unknown
         var permissionReads = 0
         var inventoryOverride: MeetingInventorySnapshot?
@@ -932,7 +932,9 @@ final class MeetingHostLifecycleTests: XCTestCase {
                 makeClient: Self.client, now: { self.monotonic }, wallNow: { self.wall })
             let defaults = UserDefaults(suiteName: defaultsName)!
             let connection = ConnectionRuntime(keychain: KeychainStore(service: defaultsName), preferences: PreferencesStore(defaults: defaults))
-            runtime = MeetingCaptureRuntime(factory: customFactory ?? { _ in [.microphone: self.device] })
+            let clock = self.clock
+            let device = self.device
+            runtime = MeetingCaptureRuntime(factory: customFactory ?? { _ in [.microphone: device] }, monotonicNow: { clock.now })
             return MeetingCaptureHost(connection: connection, runtime: runtime, ports: ports)
         }
         func close() {
@@ -940,5 +942,39 @@ final class MeetingHostLifecycleTests: XCTestCase {
             HostLifecycleProtocol.remove(server.grantId)
             UserDefaults.standard.removePersistentDomain(forName: defaultsName)
         }
+    }
+}
+
+
+/// Recovery acquisition and native callbacks run outside the test's MainActor. Keep their
+/// injected clock and device observations independently synchronized, like the real ports.
+final class MeetingHostFixtureClock {
+    private let lock = NSLock()
+    private var value: UInt64 = 10_000_000_000
+    var now: UInt64 {
+        get { lock.lock(); defer { lock.unlock() }; return value }
+        set { lock.lock(); value = newValue; lock.unlock() }
+    }
+}
+
+final class MeetingHostFixtureDevice: MeetingAudioCapturing {
+    private let lock = NSLock()
+    private var startCount = 0
+    private var stopCount = 0
+    private var refusesStop = false
+    private var target: MeetingAudioReceiving?
+    var starts: Int { lock.lock(); defer { lock.unlock() }; return startCount }
+    var stops: Int { lock.lock(); defer { lock.unlock() }; return stopCount }
+    var receiver: MeetingAudioReceiving? { lock.lock(); defer { lock.unlock() }; return target }
+    var failStop: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return refusesStop }
+        set { lock.lock(); refusesStop = newValue; lock.unlock() }
+    }
+    func start(into receiver: MeetingAudioReceiving) throws {
+        lock.lock(); startCount += 1; target = receiver; lock.unlock()
+    }
+    func stop() throws {
+        lock.lock(); stopCount += 1; let failure = refusesStop; lock.unlock()
+        if failure { throw MeetingAudioFailure.cleanupFailed }
     }
 }

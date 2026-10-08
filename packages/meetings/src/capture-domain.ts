@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { captureMetadataJson } from "./capture-metadata.js";
 import type {
   MeetingCaptureGap,
   MeetingCaptureRevocationReason,
@@ -195,13 +196,24 @@ function captureEpoch(
 /** Explicit native intent creates a new immutable source epoch; paused edits cannot resume. */
 export function applyCaptureSourceChange(
   state: CaptureStoredState,
-  input: Extract<MeetingCaptureNativeControlInput, { command: "change-sources" }>,
+  input: Extract<
+    MeetingCaptureNativeControlInput,
+    { command: "change-sources" | "recover-sources" }
+  >,
   at: Date
 ): void {
   const current = state.epochs.at(-1);
   if (input.expectedGeneration !== state.generation || input.expectedEpoch !== current?.epoch)
     throw new MeetingCaptureError("meeting_capture_conflict", 409);
   if (!["recording", "paused"].includes(state.desired) || !current || !state.inventory) invalid();
+  // Recovery cannot change scope or supply Resume intent for a paused recording.
+  if (
+    input.command === "recover-sources" &&
+    (state.desired !== "recording" ||
+      current.endMs !== null ||
+      captureMetadataJson(input.selection) !== captureMetadataJson(current.selection))
+  )
+    invalid();
   if (state.gapLimitReached || state.epochs.length >= 64)
     throw new MeetingCaptureError("meeting_capture_limit", 413);
   if (!state.lastSeenAt || at.getTime() - Date.parse(state.lastSeenAt) > MEETING_CAPTURE_LEASE_MS)
