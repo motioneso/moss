@@ -7,9 +7,8 @@ type ThreadState = { readonly id: string; readonly incognito: boolean } | undefi
 export function usesMainThreadSelection(input: {
   readonly surface: ChatSurface;
   readonly forceReplay: boolean;
-  readonly hasSession: boolean;
 }): boolean {
-  return input.surface === DEFAULT_CHAT_SURFACE && !input.forceReplay && !input.hasSession;
+  return input.surface === DEFAULT_CHAT_SURFACE && !input.forceReplay;
 }
 
 export async function getSelectedThreadState(input: {

@@ -17,6 +17,7 @@ export type { ActionRequestPreview, ChatRecordKind, TranscriptRecord };
 
 import {
   chatStreamUrl,
+  getMe,
   listChatThreadMessages,
   listChatThreads,
   listPendingActionRequests,
@@ -215,17 +216,21 @@ export function useChatStream(
 
     void (async () => {
       try {
-        const [threadsResult, workflowApprovals] = await Promise.all([
+        const isDrawer = surface === undefined || surface === DEFAULT_CHAT_SURFACE;
+        const [threadsResult, workflowApprovals, viewer] = await Promise.all([
           listChatThreads(surface),
-          listWorkflowApprovals().catch(() => [])
+          listWorkflowApprovals().catch(() => []),
+          isDrawer ? getMe() : undefined
         ]);
         if (!active || generation !== hydrationGeneration.current) return;
         const workflowRecords = workflowApprovals.map(workflowApprovalRecord);
         const { threads } = threadsResult;
-        const thread =
-          surface === undefined || surface === DEFAULT_CHAT_SURFACE
-            ? (threads.find((candidate) => candidate.isMain) ?? threads[0])
-            : threads[0];
+        const ownedThreads = isDrawer
+          ? threads.filter((candidate) => candidate.ownerUserId === viewer?.user.id)
+          : threads;
+        const thread = isDrawer
+          ? (ownedThreads.find((candidate) => candidate.isMain) ?? ownedThreads[0])
+          : threads[0];
         if (!thread) {
           setRecords((current) => (current.length === 0 ? workflowRecords : current));
           return;
@@ -233,7 +238,7 @@ export function useChatStream(
         // The browser's startup is a cold drawer selection even when another tab left a warm
         // side-chat engine behind. Route it through the authenticated resume seam before reading
         // history, so the displayed transcript and the next turn bind to the same Main thread.
-        if ((surface === undefined || surface === DEFAULT_CHAT_SURFACE) && thread.isMain) {
+        if (isDrawer && thread.isMain) {
           await resumeChat(thread.id, surface);
           if (!active || generation !== hydrationGeneration.current) return;
         }

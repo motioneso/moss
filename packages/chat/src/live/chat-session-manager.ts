@@ -767,8 +767,7 @@ export class ChatSessionManager {
           surface: chatSurface,
           useMain: usesMainThreadSelection({
             surface: chatSurface,
-            forceReplay: this.pendingForcedReplay.has(sessionKey),
-            hasSession: false
+            forceReplay: this.pendingForcedReplay.has(sessionKey)
           }),
           persistence: this.deps.persistence
         });

@@ -83,8 +83,7 @@ export async function tryGatedTurn(
         surface,
         useMain: usesMainThreadSelection({
           surface,
-          forceReplay: host.pendingForcedReplay.has(sessionKey),
-          hasSession: false
+          forceReplay: host.pendingForcedReplay.has(sessionKey)
         }),
         persistence: host.deps.persistence
       });

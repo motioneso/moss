@@ -58,8 +58,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   assertLiveCliProvider(providerIdentity);
   const useMain = usesMainThreadSelection({
     surface,
-    forceReplay: opts?.forceReplay ?? false,
-    hasSession: false
+    forceReplay: opts?.forceReplay ?? false
   });
   let threadState = await getSelectedThreadState({
     actorUserId,
