@@ -1,3 +1,4 @@
+import { createWorkerMeetingSummaryCli } from "./meeting-summary-cli.js";
 import { startMeetingCaptureSupervision } from "./meeting-capture-supervisor.js";
 import { homedir } from "node:os";
 import type { ConstructorOptions, PgBoss } from "pg-boss";
@@ -200,6 +201,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     base: { process: "worker" }
   });
 
+  const meetingSummaryCli = createWorkerMeetingSummaryCli();
   const workerDb = createDatabase({
     connectionString,
     maxConnections: Number(resolveMossEnv(process.env, "JARVIS_WORKER_DB_POOL_SIZE") ?? 4)
@@ -467,6 +469,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // clients fall back to global fetch, exactly as the API does today.
   const { createFetch: createBriefingFixtureFetch } = resolveE2eFetchOverride();
   await registerBuiltInModuleWorkers(boss, {
+    ...meetingSummaryCli.dependencies,
     rootDb: workerDb,
     dataContext,
     ...(createBriefingFixtureFetch
@@ -576,6 +579,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
         setTimeout(resolve, GRACEFUL_STOP_TIMEOUT_MS);
       })
     ]);
+    meetingSummaryCli.close();
     await workerDb.destroy();
   }
 

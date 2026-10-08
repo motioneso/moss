@@ -840,6 +840,8 @@ export interface BuiltInRouteDependencies {
 }
 
 export interface BuiltInWorkerDependencies {
+  readonly createConstrainedCliStructuredAdapter?: BuiltInRouteDependencies["createConstrainedCliStructuredAdapter"];
+  readonly probeConstrainedCli?: BuiltInRouteDependencies["probeConstrainedCli"];
   readonly rootDb: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
   readonly focusSignals?: BuiltInRouteDependencies["focusSignals"];
@@ -2938,6 +2940,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         deps.dataContext,
         createMeetingOutputRuntime({
           dataContext: deps.dataContext,
+          createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
+          probeConstrainedCli: deps.probeConstrainedCli,
           resolveActiveModules: createActiveModulesResolver({
             dataContext: deps.dataContext,
             manifests: getBuiltInModuleManifests

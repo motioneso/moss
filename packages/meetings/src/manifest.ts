@@ -357,7 +357,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.automatic_summary",
       description:
-        "Automatic summaries default on. Turn off Summarize automatically after Stop in Settings → Meetings. Only automatic summaries rename Untitled meeting. Rewrite summary remains available."
+        "Automatic summaries default on and use your default model without fallback, including supported Claude. Turn off Summarize automatically after Stop in Settings → Meetings. Only these rename Untitled meeting; Rewrite summary stays available."
     },
     {
       id: "transcribe.meeting",
