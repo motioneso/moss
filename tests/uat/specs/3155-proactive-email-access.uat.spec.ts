@@ -115,7 +115,10 @@ test("real access controls and API refresh reach the worker without selecting em
   const saved = page.waitForResponse(
     (r) => r.url().includes(`${ACCOUNT_B}/feature-grants`) && r.request().method() === "PUT"
   );
-  await sibling.getByRole("checkbox", { name: "Email access" }).click();
+  await sibling
+    .locator("label.jds-switch")
+    .filter({ has: page.getByRole("checkbox", { name: "Email access" }) })
+    .click();
   expect((await saved).status()).toBe(200);
   await expect(sibling.getByRole("checkbox", { name: "Email access" })).not.toBeChecked();
   await page.reload();
