@@ -101,7 +101,7 @@ test("Stop automatically writes one summary after finalization without a generat
         providerConfigId: providerId,
         providerModelId: OUTPUT_FIXTURE_MODEL,
         displayName: "Synthetic automatic summary JSON model",
-        capabilities: ["transcription", "summarization", "json"],
+        capabilities: ["chat", "transcription", "summarization", "json"],
         status: "active",
         tier: "economy"
       }
@@ -109,6 +109,13 @@ test("Stop automatically writes one summary after finalization without a generat
     expect(model.status()).toBe(201);
     modelId = (await model.json()).model.id as string;
     expect((await page.request.put(pinPath, { data: { modelId } })).status()).toBe(200);
+    // Automatic summaries use the effective chat default, not a capability-only worker route.
+    const effective = await page.request.get("/api/ai/chat-model-override");
+    expect(effective.status()).toBe(200);
+    expect((await effective.json()).settings).toMatchObject({
+      defaultModel: { id: modelId },
+      selectedModel: { id: modelId }
+    });
     const paired = await pairCaptureFixture(page, baseURL);
     deviceId = paired.device.id;
     const connection = await connectCaptureFixture(baseURL, paired);
@@ -142,6 +149,9 @@ test("Stop automatically writes one summary after finalization without a generat
     await expect(page.getByRole("button", { name: "Edit meeting title", exact: true })).toHaveText(
       "Untitled meeting"
     );
+    const availability = await page.request.get(`${path}/outputs`);
+    expect(availability.status()).toBe(200);
+    expect((await availability.json()).generationAvailability).toBe("available");
     const starting = page.waitForResponse(
       (response) =>
         response.url().endsWith(`${path}/capture/start`) && response.request().method() === "POST"
@@ -220,11 +230,15 @@ test("Stop automatically writes one summary after finalization without a generat
           const response = await page.request.get(`${path}/outputs`);
           expect(response.status()).toBe(200);
           completed = (await response.json()) as MeetingOutputsResponse;
-          return completed.automaticSummary?.status;
+          // Keep failures actionable without logging the meeting content or provider details.
+          return {
+            status: completed.automaticSummary?.status ?? null,
+            code: completed.automaticSummary?.code ?? null
+          };
         },
         { timeout: 130_000, intervals: [1000, 2000] }
       )
-      .toBe("saved");
+      .toEqual({ status: "saved", code: null });
     expect(completed).toMatchObject({
       headVersion: 1,
       automaticSummary: { status: "saved", requestKey: expect.any(String), expiresAt: null }
