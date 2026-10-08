@@ -32,7 +32,7 @@ devports release "$CHAT_PREVIEW_PORT"
 
 ## Try
 
-Switch to a side chat, start a new topic from the menu, type a message, and return to main chat. Drafts and transcripts stay with their conversation. Use Add an update to main chat while viewing a side chat, then return through navigation to read it. Updates use the navigation unread indicator; there is no update banner in any conversation. The sample email link opens a sample source. The theme button previews the dark theme without changing user preferences.
+Switch to a side chat, start a new topic from the menu, type a message, and return to main chat. Drafts and transcripts stay with their conversation. Use Add an update to main chat while viewing a side chat, then return through navigation to read it. Updates use the navigation unread indicator; there is no update banner in any conversation. Open the email opens the connected provider’s webmail in a new tab. This preview uses a Gmail search for fictional sample content, not a real message. Production links must target the source email using a URL from its connected provider and account; Gmail is only the preview example. Moss does not show an email popup. The theme button previews the dark theme without changing user preferences.
 
 The separate Vite preview entry uses the actual Moss fonts, tokens, shared chat renderer, and UI primitives inside a populated app-frame example. It does not start the application or an API proxy. This allows layout review without a connected account or another session's services. The regular app entry and its authentication/data loading are untouched. Neither the preview entry nor its comparison controls are imported by the production entry; rendering is guarded by the development build flag.
 
@@ -40,4 +40,4 @@ All interactions remain in browser memory. This demonstrates navigation, not sch
 
 ## Design status
 
-The user accepted A with a collapsed three-line menu over the chat and the existing default width preserved. The requested refinements put New side chat inside the menu and remove main-chat update banners entirely. Existing-thread migration, task Settings, task approval, and notification controls remain separate design work. Keep this prototype on its throwaway branch as a primary source; update the spec with the agreed decisions rather than merging prototype code into the app.
+The user accepted A with a collapsed three-line menu over the chat and the existing default width preserved. The requested refinements put New side chat inside the menu and remove main-chat update banners entirely. Email source links open the connected provider’s webmail in a new tab, rather than a popup inside Moss. Existing-thread migration, task Settings, task approval, and notification controls remain separate design work. Keep this prototype on its throwaway branch as a primary source; update the spec with the agreed decisions rather than merging prototype code into the app.

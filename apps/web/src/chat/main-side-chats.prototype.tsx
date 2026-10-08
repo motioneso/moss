@@ -74,7 +74,7 @@ const initialTopics: Topic[] = [
 ];
 const firstUpdate: TranscriptRecord = {
   kind: "reply",
-  text: "Heads up — Maya replied to your proposal. She's happy with the direction and asked for the final version by Friday.\n\n[Open the email](https://example.invalid/moss-preview-email)\n\n*10:12 AM · Inbox watch*"
+  text: "Heads up — Maya replied to your proposal. She's happy with the direction and asked for the final version by Friday.\n\n[Open the email](https://mail.google.com/mail/#search/Moss+preview+Maya+proposal)\n\n*10:12 AM · Inbox watch*"
 };
 const initialRecords: Record<string, TranscriptRecord[]> = {
   main: [
@@ -130,7 +130,6 @@ function Prototype() {
   const [unread, setUnread] = useState(1);
   const [menuOpen, setMenuOpen] = useState(initialVariant === "A" && params.get("menu") === "open");
   const [newChatOpen, setNewChatOpen] = useState(false);
-  const [sourceOpen, setSourceOpen] = useState(false);
   const [topicName, setTopicName] = useState("");
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
@@ -179,7 +178,6 @@ function Prototype() {
         setMenuOpen(false);
         if (menuOpen && variant === "A") menuButtonRef.current?.focus();
         setNewChatOpen(false);
-        setSourceOpen(false);
       }
       if (event.key === "Tab") {
         const dialog = document.querySelector('[role="dialog"]');
@@ -610,20 +608,7 @@ function Prototype() {
                       </IconButton>
                     )}
                   </div>
-                  <div
-                    ref={bodyRef}
-                    className="proto-thread"
-                    onClick={(event) => {
-                      const target = event.target;
-                      if (
-                        target instanceof Element &&
-                        target.closest('a[href="https://example.invalid/moss-preview-email"]')
-                      ) {
-                        event.preventDefault();
-                        setSourceOpen(true);
-                      }
-                    }}
-                  >
+                  <div ref={bodyRef} className="proto-thread">
                     {(records[active]?.length ?? 0) > 0 ? (
                       <>
                         <div className="proto-date">Today</div>
@@ -779,22 +764,6 @@ function Prototype() {
               }}
             />
           </label>
-        </Dialog>
-      )}
-      {sourceOpen && (
-        <Dialog
-          title={<span id="source-title">Maya's reply</span>}
-          aria-labelledby="source-title"
-          description="Sample email · Today, 10:12 AM"
-          onClose={() => setSourceOpen(false)}
-          footer={<Button onClick={() => setSourceOpen(false)}>Back to chat</Button>}
-        >
-          <p>The direction looks great. Could you send the final version by Friday?</p>
-          <p>
-            Thanks,
-            <br />
-            Maya
-          </p>
         </Dialog>
       )}
     </div>
