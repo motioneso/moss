@@ -2,7 +2,7 @@
 
 Tracker: [spec issue #3096](https://github.com/motioneso/moss/issues/3096).
 
-Status: approved product definition and verification boundary; formal spec prepared for independent review. UI design and the delivery-ticket breakdown are pending. This document does not authorize implementation or unattended builder dispatch.
+Status: approved product definition and verification boundary; independent review complete and the user's 2026-10-07 approval ruling applied. UI design and the delivery-ticket breakdown are pending. This document does not authorize implementation or unattended builder dispatch.
 
 ## Problem Statement
 
@@ -35,8 +35,8 @@ Users manage accepted schedules and watches through one Settings list or through
 13. As a user, I want a deadline on time-limited watches, so that monitoring ends when it is no longer relevant.
 14. As a user, I want Moss to suggest useful schedules, so that I do not have to invent every responsibility myself.
 15. As a user, I want a proposed schedule saved only after I agree, so that suggestions do not silently become commitments.
-16. As a user, I want enabled actions to run without repeated approval, so that background assistance remains useful.
-17. As a user, I want approval before Moss-initiated unrecoverable deletion, so that autonomous work cannot silently destroy something I cannot recover.
+16. As a user, I want a background task never to ask for approval once it is created, so that background assistance remains useful while I am away.
+17. As a user, I want the request that creates a task to ask once for the approval its actions need, including deletion, so that I decide what the task may do before it runs unattended.
 18. As a user, I want revoked access and disabled capabilities respected, so that a past schedule cannot override my current permissions.
 19. As a user, I want useful unsolicited email updates enabled by default, so that Moss can notice important developments without a named watch.
 20. As a user, I want to disable unsolicited email alerts separately, so that my requested inbox watches and other proactive tasks keep working.
@@ -82,9 +82,10 @@ These are required behaviors and architectural constraints, not claims that the 
 ### Responsibilities and user controls
 
 - Support one-time tasks, recurring checks, and condition watches. A watch can be time-limited and can end when its requested goal is reliably fulfilled.
-- Persist the agreed instruction, owner, timing or trigger, destination, relevant notification exception, and lifecycle state. Represent enough execution status to distinguish a successful quiet run, an actionable result, and a failure.
+- Persist the agreed instruction, owner, timing or trigger, destination, approved actions, relevant notification exception, and lifecycle state. Represent enough execution status to distinguish a successful quiet run, an actionable result, and a failure.
 - Confirm saved timing in the user's local time zone. Reuse existing timezone-aware scheduling where suitable; resolve time-zone and daylight-saving behavior explicitly in the relevant ticket rather than treating local times as server time.
 - Create a Moss-proposed schedule only after agreement. The initial explicit user request is already authorization to save the requested schedule; do not add a second generic approval step.
+- When a task will change or delete anything, the creation confirmation lists those actions, deletion included, and saving the task approves them. Reminders and read-and-report tasks save without an approval step. Editing a task's actions asks for approval of the new set; editing only its timing or destination does not.
 - Settings and chat manage the same records. One Settings list supports inspection, edit, pause/resume, and direct deletion, including timing/trigger and recent status. Completed and expired watches remain inspectable until the user deletes them.
 - Pausing prevents future runs until resumed. Editing or deleting work must invalidate stale queued instructions. Cancellation/deletion prevents future firings without undoing completed actions; check current task state before execution and before initiating further effects.
 - Stop a fulfilled watch and tell the user once. Completion criteria derive from the user's goal and available reliable evidence. Alert delivery alone does not prove an email was seen. If completion cannot be established, keep the watch active until its deadline or another explicit stop condition.
@@ -94,8 +95,11 @@ These are required behaviors and architectural constraints, not claims that the 
 - Extend existing actor-scoped workers and provider routing where suitable. A closed browser must not prevent work. Use the user's configured provider capabilities; do not hardcode an AI vendor or model.
 - Add an explicit background execution/delivery entry point that accepts trusted internal intent without creating a visible user turn. A hidden instruction is not a hidden grant of authority.
 - Background work must act within the owning user's current access and enabled capabilities. Reuse declared module APIs/events and existing action authorization; do not query another module's private tables or introduce an admin bypass.
-- Do not prompt repeatedly for enabled actions. Moss-initiated unrecoverable deletion requires explicit approval before the action can occur. This exception does not expand authority for other disabled operations.
-- Observed source content cannot alter permissions, recipients, or quiet-hours exceptions. Those come from authenticated user controls and agreed task instructions, with enforcement outside untrusted source text.
+- Approval happens once, at task creation (user's ruling, 2026-10-07). A background run never asks for approval, including for deletion. Its authority is the set of actions approved at creation, stored with the task.
+- The action gateway allows a background run only the actions approved at creation. It refuses any other write or deletion without asking, and the run's result says what was refused. Revoked access and disabled capabilities still win over a stored approval.
+- Background runs do not use the live-chat rule that writes ask once outside content has been read ([#3065](https://github.com/motioneso/moss/issues/3065), `2026-10-05-moss-acts-through-app-design.md`, "Run or ask"). The creation-time approval replaces it for background runs only. Live chat keeps that rule unchanged. A background run's outside-content state stays on the run and does not mark the destination conversation.
+- Observed source content cannot alter permissions, recipients, approved actions, or quiet-hours exceptions. Those come from authenticated user controls and agreed task instructions, with enforcement outside untrusted source text.
+- Accepted risk: within an approved action, untrusted content can still influence which items the action touches, such as a planted email posing as a newsletter in a "delete newsletters" task. The Settings list, where the user can inspect, pause, and delete the task, is the control.
 - Keep queue payloads metadata-only: actor/resource identifiers, job kind, idempotency key, and small command parameters. Retrieve private content and instructions through authorized application paths at execution time. Credentials and secrets must not become prompts, job payloads, frontend responses, or logs.
 - Separate execution outcome, persisted conversational result, and outward notification delivery. A notification failure must not cause a completed action to run again. Use existing idempotency facilities where they fit; uncertain external-action outcomes need reconciliation rather than blind replay.
 
@@ -111,6 +115,7 @@ These are required behaviors and architectural constraints, not claims that the 
 ### Recovery and lifecycle
 
 - Retry transient failed checks quietly with bounded backoff. Repeated failures can create an actionable message and visible status; a failure is never a successful nothing-new outcome.
+- Only a run that made no change may retry automatically. A run that has started any write or deletion and then fails ends as failed or uncertain, with an actionable status and message, and is never rerun on its own; rerunning a model run lets it choose its actions again. Delivery of a run's result message is keyed by the run's identity so it appears at most once.
 - After downtime, perform one fresh recurring check and resume saved cadence. Do not replay every missed interval or report obsolete source snapshots as current.
 - Deliver a missed one-time reminder once with a clear late indication, unless an explicit deadline has expired. Time-limited watches stop at the requested deadline rather than restarting after it.
 - Retries and concurrent workers must not duplicate completed actions or delivered results. Exercise cancellation/deletion against queued work, not only against the management UI.
@@ -139,7 +144,7 @@ The user approved verification through existing application UI/API and backgroun
 - Prefer the existing integration seams to new testing interfaces. Use deterministic model, clock, and source doubles at those boundaries for reproducible automated checks.
 - Existing chat-history/API coverage, actor-scoped briefing worker tests, notification preference/quiet-hours tests, and proactive suppression tests are prior-art candidates. Inspect their applicability before reuse; they do not already prove this feature.
 - Prove persistence after reload/reconnect, separate execution from delivery, and exercise real queued-task lifecycle changes. Use explicit identities and observable message counts to detect duplication and active-turn corruption.
-- Negative coverage must include hidden-trigger visibility, unfulfilled watch goals, revoked capabilities, cross-user reads/delivery, untrusted source instructions, duplicate execution/delivery, deletion before queued firing, and a proactive message during a live reply.
+- Negative coverage must include hidden-trigger visibility, unfulfilled watch goals, revoked capabilities, an action outside the approved set, cross-user reads/delivery, untrusted source instructions, duplicate execution/delivery, automatic retry after a run has acted, deletion before queued firing, and a proactive message during a live reply.
 - For security assertions, observe the test failing when its protection is removed and record the evidence. A passing test that also passes without enforcement is insufficient.
 - Every user-facing slice requires live proof through the actual UI on an isolated dev instance, recorded on its PR with executable assertions and bounded DOM/network/log evidence. Automated doubles do not replace assembled live proof; do not rewrite Moss's own network responses to manufacture evidence.
 - Spec publication requires document checks only. No implementation tests or live feature proof are claimed by this document.
@@ -154,7 +159,7 @@ The user approved verification through existing application UI/API and backgroun
 6. **Independent email preference:** a useful email update produces a main-chat message by default. Disable automatic email alerts and verify unsolicited email updates stop while a requested inbox watch and an unrelated task continue.
 7. **Quiet hours:** run useful work during quiet hours and verify immediate readable chat persistence with outward interruptions deferred. Verify only an explicit task-specific user exception permits a quiet-hours interruption; model-assessed urgency alone does not.
 8. **Failures:** fail a check temporarily and observe quiet retry, then a success. Cause repeated failures and observe actionable status/message rather than a successful nothing-new claim. Recovery must not duplicate a delivered result.
-9. **Authority and cancellation:** verify enabled actions need no repeated approval, Moss-initiated unrecoverable deletion waits for approval, and revoked/disabled capabilities are respected. Delete or cancel queued work and verify it cannot initiate future effects; completed effects remain intact.
+9. **Authority and cancellation:** create a task that deletes something and verify the creation request asks once for approval of that deletion. Verify its runs, including the deletion, never ask again, even after reading email or web content. Verify an action outside the approved set is refused without asking and reported, and revoked/disabled capabilities are respected. Delete or cancel queued work and verify it cannot initiate future effects; completed effects remain intact.
 10. **Concurrent chat and retry safety:** deliver a proactive message during an active user reply. Verify both messages persist with correct identities and neither overwrites the other. Replay a completed run/delivery and verify no duplicate action or message.
 11. **Watch completion:** fulfill the actual goal using reliable evidence and verify one closure explanation and inspectable completed state. Merely delivering an alert must not close a goal requiring the user to have seen the email. An unfulfilled time-limited watch expires at its deadline.
 12. **Downtime:** miss several recurring intervals and observe one fresh check followed by normal cadence. Observe one late-marked missed one-time reminder, and verify expired instructions are skipped.
@@ -164,7 +169,8 @@ The user approved verification through existing application UI/API and backgroun
 
 - New Slack, SMS, Teams, or other external conversation/messaging integrations.
 - A general workflow builder, module marketplace, or new connector/OAuth implementation.
-- Unrestricted autonomous action permissions, repeated approval for already enabled work, or automatic quiet-hours bypass based on model urgency.
+- Unrestricted autonomous action permissions, run-time approval prompts in background tasks, or automatic quiet-hours bypass based on model urgency.
+- Changing when live chat asks for approval. This spec changes approval only for background tasks.
 - Replaying every missed recurring interval, running expired instructions, or undoing completed actions when a schedule is cancelled.
 - Treating side chats as separate assistants with independent long-term memory.
 - A commitment to a new scheduling dependency, provider-specific mechanism, or replacement of existing briefings.
@@ -180,4 +186,6 @@ The candidate delivery areas are stable main conversation/history, invisible con
 
 Next use Matt Pocock's `to-tickets` workflow to propose complete single-session vertical slices with explicit blockers. Have the user review that breakdown before publishing. Resolve minimal module ownership, actual dependencies, resource/retry bounds, briefing interoperability, and local-time edge cases during that work. Finish agreed frontend designs before the corresponding UI tickets become executable. Do not restart the completed product interview.
 
-The requested independent Opus 5.5 review should check contract fidelity, gaps, enforceable trust boundaries, testing sufficiency, and whether the eventual breakdown can stay small. A `ready-for-agent` tracker label is required by `to-spec`; it does not override the implementation prerequisites or authorize a build fleet.
+The independent Opus 5.5 review (2026-10-07, on the spec PR) found that background authority conflicted with #3065 and that approval requests cannot wait for an absent user, because they expire after 150 seconds inside a live chat turn. The user's creation-time approval ruling resolves both. Its remaining findings are for UI design and ticketing.
+
+A `ready-for-agent` tracker label is required by `to-spec`; it does not override the implementation prerequisites or authorize a build fleet.
