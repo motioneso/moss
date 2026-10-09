@@ -118,7 +118,7 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
   await expect(choice).not.toBeChecked();
   expect(
     sql(
-      `SELECT value_json ->> 'automaticEmailAlerts' || ':' || value_json #>> '{sources,calendar,dailyCardCap}' FROM app.preferences WHERE owner_user_id = '${UAT_ADMIN_ID}' AND key = 'proactive.monitoring.v1'`
+      `SELECT (value_json ->> 'automaticEmailAlerts') || ':' || (value_json #>> '{sources,calendar,dailyCardCap}') FROM app.preferences WHERE owner_user_id = '${UAT_ADMIN_ID}' AND key = 'proactive.monitoring.v1'`
     )
   ).toBe("false:2");
   await refresh(page, 0);
