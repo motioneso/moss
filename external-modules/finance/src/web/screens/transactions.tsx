@@ -80,6 +80,8 @@ function afterRun(outcome: RunOutcome, queuedMessage: string, onQueued: () => vo
   }
   if (outcome.kind === "disabled") {
     announce("Finance is turned off on the server.");
+  } else if (outcome.kind === "already-queued") {
+    announce("Request failed: it was dropped. Try again.");
   } else {
     announce(`Request failed: ${outcome.message}`);
   }
