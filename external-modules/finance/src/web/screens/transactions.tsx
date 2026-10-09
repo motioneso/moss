@@ -16,6 +16,7 @@ import {
   Select,
   Switch,
   useEffect,
+  useRef,
   useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
@@ -63,15 +64,22 @@ const SEARCH_DELAY_MS = 300;
 
 const isLook = (tx: Tx): boolean => tx.shared !== true && tx.reviewState === "needs_look";
 
-function afterRun(outcome: RunOutcome, queuedMessage: string): void {
+/** True when the job was queued; false when the request failed and nothing will happen. */
+function afterRun(outcome: RunOutcome, queuedMessage: string, onQueued: () => void): boolean {
   if (outcome.kind === "queued" || outcome.kind === "already-queued") {
     announce(queuedMessage);
-    setTimeout(() => invalidateQueries(), REFETCH_DELAY_MS);
-  } else if (outcome.kind === "disabled") {
+    setTimeout(() => {
+      onQueued();
+      invalidateQueries();
+    }, REFETCH_DELAY_MS);
+    return true;
+  }
+  if (outcome.kind === "disabled") {
     announce("Finance is turned off on the server.");
   } else {
     announce(`Request failed: ${outcome.message}`);
   }
+  return false;
 }
 
 function Amount(props: { tx: Tx }): ReactNodeLike {
@@ -309,15 +317,38 @@ export function TransactionsScreen(): ReactNodeLike {
   const result =
     query.status === "settled" && query.outcome.kind === "ok" ? query.outcome.result : null;
 
+  // Ids whose server answer should replace the optimistic mark once the next read lands.
+  const releaseOnRead = useRef<string[]>([]);
+  const readArmed = useRef(false);
+  const release = (ids: readonly string[]): void =>
+    setConfirmed((previous) => new Set([...previous].filter((id) => !ids.includes(id))));
+
+  // After the post-save read lands, the server's review state wins over the optimistic mark.
+  useEffect(() => {
+    if (!readArmed.current || result === null) return;
+    readArmed.current = false;
+    const ids = releaseOnRead.current;
+    releaseOnRead.current = [];
+    release(ids);
+  }, [query]);
+
   const send = (rows: Tx[], categoryIds: string[], createRule: boolean, message: string): void => {
-    setConfirmed((previous) => new Set([...previous, ...rows.map((row) => row.id)]));
+    const ids = rows.map((row) => row.id);
+    setConfirmed((previous) => new Set([...previous, ...ids]));
     void runQueue("finance.review-apply", "finance.review-apply", {
       transactionIds: rows.map((row) => row.id),
       accountIds: rows.map((row) => row.accountId),
       months: rows.map(() => month),
       categoryIds,
       ...(createRule ? { createRule: true } : {})
-    }).then((outcome) => afterRun(outcome, message));
+    }).then((outcome) => {
+      const queued = afterRun(outcome, message, () => {
+        releaseOnRead.current = [...releaseOnRead.current, ...ids];
+        readArmed.current = true;
+      });
+      // A request that never queued will not change anything, so show the rows again.
+      if (!queued) release(ids);
+    });
   };
 
   const confirmOne = (tx: Tx, categoryId: string, makeRule: boolean): void =>
