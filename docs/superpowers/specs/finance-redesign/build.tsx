@@ -513,6 +513,26 @@ const balances: { name: string; cents: number; stale?: string }[] = [
   { name: "Harbor Visa", cents: -61244 }
 ];
 
+// Accounts groups the same balances by bank.
+const banks: {
+  name: string;
+  stale?: boolean;
+  accounts: { name: string; mask: string; cents: number }[];
+}[] = [
+  {
+    name: "Harbor Credit Union",
+    accounts: [
+      { name: "Checking", mask: "4821", cents: 348210 },
+      { name: "Visa", mask: "1190", cents: -61244 }
+    ]
+  },
+  {
+    name: "Northline Bank",
+    stale: true,
+    accounts: [{ name: "Savings", mask: "7302", cents: 921000 }]
+  }
+];
+
 // Every dollar in the accounts, less card debt, sits in a category or is ready to assign.
 const netWorth = balances.reduce((sum, b) => sum + b.cents, 0);
 const readyToAssign =
@@ -766,6 +786,7 @@ function Transactions({ width }: { width: Width }) {
 // ---- Accounts ----
 
 function Accounts({ width }: { width: Width }) {
+  const phone = width === "phone";
   return (
     <Frame
       width={width}
@@ -780,34 +801,48 @@ function Accounts({ width }: { width: Width }) {
       tab="accounts"
       main={
         <>
-          <section className="stack stack--tight">
-            <SectionHead title="Banks" rule />
-            <RowIndex>
-              <RowIndexItem
-                title="Harbor Credit Union"
-                excerpt={
-                  <div className="stack stack--tight">
-                    <span>Checking · xxx4821 · $3,482.10</span>
-                    <span>Visa · xxx1190 · owes $612.44</span>
-                  </div>
-                }
-                meta={<Indicator status="ready" label="Synced 2 hours ago" />}
-              />
-              <RowIndexItem
-                title="Northline Bank"
-                excerpt="Savings · xxx7302 · $9,210.00 as of October 5"
-                meta={
-                  <div className="stack stack--tight bal-meta">
-                    <Indicator status="error" label="Sign-in expired" />
-                    <Button size="sm">Reconnect</Button>
-                  </div>
-                }
-              />
-            </RowIndex>
-            <div>
-              <Button variant="secondary">Add a bank</Button>
-            </div>
-          </section>
+          {banks.map((b) => {
+            const status = b.stale ? (
+              <span className="row">
+                <Indicator status="error" label="Sign-in expired" />
+                <Button size="sm">Reconnect</Button>
+              </span>
+            ) : (
+              <Indicator status="ready" label="Synced 2 hours ago" />
+            );
+            // Phone puts the status under the bank name so long names keep their line.
+            return (
+              <section key={b.name} className="stack stack--tight">
+                <SectionHead title={b.name} meta={phone ? undefined : status} rule />
+                {phone ? <div className="bank-status">{status}</div> : null}
+                <RowIndex variant="facts">
+                  {b.accounts.map((a) => (
+                    <RowIndexItem
+                      key={a.mask}
+                      title={
+                        <span>
+                          {a.name} <span className="jds-hint">· xxx{a.mask}</span>
+                        </span>
+                      }
+                      meta={
+                        b.stale ? (
+                          <div className="stack stack--tight bal-meta">
+                            <strong>{money(a.cents)}</strong>
+                            <span className="jds-hint">As of October 5</span>
+                          </div>
+                        ) : (
+                          <strong>{money(a.cents)}</strong>
+                        )
+                      }
+                    />
+                  ))}
+                </RowIndex>
+              </section>
+            );
+          })}
+          <div>
+            <Button variant="secondary">Add a bank</Button>
+          </div>
           <section className="stack stack--tight">
             <SectionHead title="Net worth by month" rule />
             <table className="jds-table">

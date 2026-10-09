@@ -316,3 +316,6 @@ h3 {
 .frame--desktop .steps .jds-index {
   grid-template-columns: 16rem minmax(0, 1fr) auto;
 }
+.bank-status {
+  padding-block-start: var(--space-2);
+}
