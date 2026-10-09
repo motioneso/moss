@@ -58,4 +58,10 @@ describe("familyAllowsAutoRun with installed-module tools", () => {
   it("still runs an installed-module tool that names no family", async () => {
     expect(await familyAllowsAutoRun(tool({}), "finance", lookup)).toBe(true);
   });
+
+  it("asks when the tool names a family the lookup cannot find", async () => {
+    expect(await familyAllowsAutoRun(tool({ actionFamilyId: "gone" }), "finance", lookup)).toBe(
+      false
+    );
+  });
 });
