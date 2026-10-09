@@ -11,9 +11,15 @@ the registry's immutable-version guard rejected at the verified integration base
 | Finance | `0.5.14` | `0.5.15` |
 | Food | `0.3.7` | `0.3.8` |
 
-No runtime, UI, worker, or app-map behavior changed. The existing installed
-scheduled-task proof therefore remains the relevant product proof; this repair
-does not claim a new live product demonstration.
+No runtime, UI, worker, or app-map behavior changed. This repair claims no
+scheduled-task proof. It leaves the recorded Main-chat proof at source
+`50c8f807b718d4b251dc57a73fbc8bede8dc517a` with harness
+`7f0fa287754fa993977637a7faff656d11f48bce`, the email-choice proof at
+source/harness `cd264147988a3b4f1484855b23d7cc02e8fbd607`, and the
+quiet-boundary proof at source/harness
+`184dfd4588bcbce2c9abd2c2f97ed7c0c7e1bb0d` unchanged. Those receipts remain
+limited to their documented scenarios and do not establish that scheduled tasks
+exist or were exercised.
 
 ## Published-index provenance
 
@@ -85,10 +91,18 @@ JSON-only test was added for the two one-line version changes; the publisher
 already validates and packages the modified manifests through its production
 seam.
 
-## Review and remaining verification
+## Review, cleanup, and remaining verification
 
 The freeze candidate changes only the two manifest version fields and this
-evidence file. Independent Standards and Spec reviews remain pending from the
-coordinator. The coordinator must obtain the reviewed candidate's
-pull-request `modules-registry-check` result before treating the registry as
-canonically green.
+evidence file. Standards review was green at
+`48fbed288b0a0c1a1a1f0fac1faff7a3fb0bd25f`. The initial Spec review rejected
+only the former overbroad proof sentence; this documentation delta corrects it
+without changing publisher inputs. Its follow-up review remains required.
+
+The disposable Node containers exited and were removed. Private logs, the
+downloaded published index, and the archive used for the red proof remain in
+the task-private evidence directory until coordinator audit; no registry asset,
+shared database, server, browser, development port, or root-held image was
+changed. The coordinator must obtain the reviewed candidate's pull-request
+`modules-registry-check` result before treating the registry as canonically
+green.
