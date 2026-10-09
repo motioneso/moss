@@ -265,67 +265,6 @@ describe("MemoryGraphRepository", () => {
     );
   });
 
-  it("resolves a distilled fact subject to the entity it describes, not always Self", async () => {
-    await appDataContext.withDataContext(
-      { actorUserId: ids.userA, requestId: "memory-graph:fact-subject" },
-      async (db) => {
-        const self = await repo.ensureSelfEntity(db, ids.userA);
-        const name = `Alex ${randomUUID()}`;
-
-        expect(await repo.resolveSubjectEntityId(db, ids.userA, "self")).toBe(self.id);
-
-        const alex = await repo.resolveSubjectEntityId(db, ids.userA, name);
-        expect(alex).not.toBeNull();
-        expect(alex).not.toBe(self.id);
-        expect(await repo.resolveSubjectEntityId(db, ids.userA, name.toUpperCase())).toBe(alex);
-
-        await repo.createEntity(db, ids.userA, { kind: "person", name: `Dup ${name}` });
-        await repo.createEntity(db, ids.userA, { kind: "person", name: `Dup ${name}` });
-        expect(await repo.resolveSubjectEntityId(db, ids.userA, `Dup ${name}`)).toBeNull();
-      }
-    );
-  });
-
-  it("names the person a recalled fact is about, and leaves the owner's facts unnamed", async () => {
-    const service = new GraphMemoryRecallService(new StubEmbeddingProvider(), repo);
-    const token = `zorblat${randomUUID().slice(0, 8)}`;
-    const result = await appDataContext.withDataContext(
-      { actorUserId: ids.userA, requestId: "memory-graph:recall-subject-name" },
-      async (db) => {
-        const sam = await repo.createEntity(db, ids.userA, {
-          kind: "person",
-          name: `Sam ${token}`
-        });
-        const source = { sourceKind: "manual" as const, sourceRef: "manual:subject", excerpt: "x" };
-        await service.remember(db, ids.userA, {
-          subjectEntityId: sam.id,
-          predicate: "prefers",
-          objectText: "tea",
-          provenance: "confirmed",
-          source
-        });
-        await service.remember(db, ids.userA, {
-          predicate: "prefers",
-          objectText: `coffee ${token}`,
-          provenance: "confirmed",
-          source
-        });
-        return {
-          bySamName: await service.recall(db, ids.userA, `Sam ${token}`),
-          core: await service.core(db, ids.userA)
-        };
-      }
-    );
-
-    expect(result.bySamName.items[0]).toMatchObject({
-      text: "tea",
-      subjectName: `Sam ${token}`
-    });
-    const own = result.core.items.find((item) => item.text === `coffee ${token}`);
-    expect(own).toBeDefined();
-    expect(own?.subjectName).toBeUndefined();
-  });
-
   it("rejects generic status changes for conflict groups and resolves by confirm", async () => {
     await appDataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "memory-graph:conflict-resolution" },

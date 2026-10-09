@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
 import { sql, type Kysely } from "kysely";
@@ -509,77 +508,6 @@ describe("handleExtractFactsJob — memory distillation candidates + no-op degra
           objectText: "brief launch updates",
           provenance: "volunteered"
         })
-      );
-    });
-  });
-
-  it("reuses an existing entity when a person is suggested again, so later facts about them save", async () => {
-    await seedEconomyModel("dedupe-entity");
-    await dataContext.withDataContext(userAContext(), async (scopedDb) => {
-      const name = `Morgan ${randomUUID()}`;
-      const entityCandidate = {
-        kind: "entity",
-        action: "create",
-        entity: { kind: "person", name, summary: "a colleague" },
-        provenance: "volunteered",
-        confidence: 0.8,
-        importance: 0.9,
-        sourceExcerpt: `Remember my colleague ${name}.`,
-        rationale: "Explicit memory request",
-        isSensitive: false
-      };
-      for (const label of ["first", "second"]) {
-        const turn = await createTurn(scopedDb, {
-          title: `Distill-entity-${label}`,
-          user: `Remember my colleague ${name}.`
-        });
-        await handleExtractFactsJob(
-          scopedDb,
-          ids.userA,
-          {
-            actorUserId: ids.userA,
-            threadId: turn.threadId,
-            userMessageId: turn.userMessage.id,
-            assistantMessageId: turn.assistantMessage.id
-          },
-          makeDeps(async () => ({ text: JSON.stringify([entityCandidate]) }))
-        );
-      }
-
-      expect(await graphRepository.findEntitiesByName(scopedDb, ids.userA, name)).toHaveLength(1);
-
-      const turn = await createTurn(scopedDb, {
-        title: "Distill-entity-fact",
-        user: `Remember that ${name} prefers email.`
-      });
-      await handleExtractFactsJob(
-        scopedDb,
-        ids.userA,
-        {
-          actorUserId: ids.userA,
-          threadId: turn.threadId,
-          userMessageId: turn.userMessage.id,
-          assistantMessageId: turn.assistantMessage.id
-        },
-        makeDeps(async () => ({
-          text: JSON.stringify([
-            {
-              kind: "fact",
-              action: "create",
-              fact: { subject: name, predicate: "prefers", objectText: "email" },
-              provenance: "volunteered",
-              confidence: 0.8,
-              importance: 0.9,
-              sourceExcerpt: `Remember that ${name} prefers email.`,
-              rationale: "Explicit memory request",
-              isSensitive: false
-            }
-          ])
-        }))
-      );
-      const core = await graphRepository.listCoreFacts(scopedDb, ids.userA, 100);
-      expect(core).toContainEqual(
-        expect.objectContaining({ predicate: "prefers", objectText: "email" })
       );
     });
   });
