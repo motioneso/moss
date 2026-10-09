@@ -9,8 +9,9 @@
 // read), THEN writes the storeSelector marker, THEN deletes only the KV keys
 // it just copied. state:{month} budget caches are deleted here too but never
 // copied (F6-D1 — a throwaway performance projection, never source of
-// truth). cursor:*, link:*, rules, categories, settings, and the
-// finance.shared mirror are never read or touched.
+// truth). cursor:*, link:*, rules, settings, and the
+// finance.shared mirror are never read or touched. The categories taxonomy is
+// copied (never deleted) into app.finance_categories on every run.
 import type {
   AccountRecord,
   BudgetLedger,
@@ -20,7 +21,8 @@ import type {
   TransactionChunk,
   TransactionRecord
 } from "../../domain/index.js";
-import { FinanceKvError, NS } from "../../domain/index.js";
+import type { Category } from "../../domain/index.js";
+import { DEFAULT_CATEGORIES, FinanceKvError, NS, tableGroupFor } from "../../domain/index.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
 import { MIGRATED_MARKER_KEY } from "../store.js";
@@ -132,6 +134,36 @@ async function insertIgnoreAssignment(
   );
 }
 
+/**
+ * Copies the KV category taxonomy (or the 16 defaults when none is stored yet)
+ * into app.finance_categories. Insert-ignore, so it is safe to run on every
+ * reconcile, including for owners whose main migration already finished. The
+ * KV taxonomy is left in place; it stays the read path until later tickets.
+ */
+export async function copyCategoriesToTable(ports: WorkerPorts, db: FinanceDb): Promise<void> {
+  const stored = (await ports.kv.get(NS.categories, "taxonomy")) as {
+    categories: Category[];
+  } | null;
+  const categories = stored?.categories ?? [...DEFAULT_CATEGORIES];
+  const nowIso = ports.now().toISOString();
+  for (const [index, category] of categories.entries()) {
+    await db.query(
+      "INSERT INTO app.finance_categories (owner_user_id, id, group_name, name, sort_order, " +
+        "is_income, archived_at) " +
+        "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6) " +
+        "ON CONFLICT (owner_user_id, id) DO NOTHING",
+      [
+        category.id,
+        tableGroupFor(category.group),
+        category.name,
+        index,
+        category.group === "income",
+        category.archived ? nowIso : null
+      ]
+    );
+  }
+}
+
 async function countRows(db: FinanceDb, table: string): Promise<number> {
   const result = await db.query<{ n: number | string }>(`SELECT count(*)::int AS n FROM ${table}`);
   return Number(result.rows[0]?.n ?? 0);
@@ -148,7 +180,11 @@ async function countRows(db: FinanceDb, table: string): Promise<number> {
  */
 export async function runStorageMigrate(ports: WorkerPorts): Promise<MigrateResult> {
   const marker = await ports.kv.get(NS.meta, MIGRATED_MARKER_KEY);
-  if (marker !== null) return { status: "already-migrated" };
+  if (marker !== null) {
+    // Owners migrated before categories moved to a table still need that copy.
+    if (ports.db !== null) await copyCategoriesToTable(ports, ports.db);
+    return { status: "already-migrated" };
+  }
 
   const db = ports.db;
   if (db === null) {
@@ -230,6 +266,8 @@ export async function runStorageMigrate(ports: WorkerPorts): Promise<MigrateResu
       assignment.amountCents
     );
   }
+
+  await copyCategoriesToTable(ports, db);
 
   // --- Count-verify with >= (a concurrent sync may have added rows this
   // invocation never read). A short count means data is missing — abort
