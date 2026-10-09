@@ -15,9 +15,10 @@ way Moss helps are new.
 
 - **R0** fixes bank syncing. Nothing else ships until it lands.
 - **R1** is the new personal budget. Moss sorts every purchase into a category, builds your first
-  budget from three months of history in one chat, and moves money when you ask it to in chat. A
-  new "Moss's freedom" screen decides how much Moss does without asking: three steps, a dollar
-  limit, and switches for each kind of action.
+  budget from three months of history in one chat, and moves money when you ask it to in chat. Finance
+  gets its own Settings screen, opened from the gear next to the Finance title. It decides how
+  much Moss does alone (the "freedom" setting): three steps, a dollar limit, and switches for each
+  kind of action. The Plaid client ID and secret move there too, for admins only.
 - **R2** adds the shared household budget, phone alerts, the weekly check-in and a money line on
   Today.
 - **R3** adds receipt itemizing from email and saving ahead for trips on your calendar.
@@ -33,7 +34,7 @@ Three questions the issue asked us to settle by reading the code:
    "Customize" shows those same switches. The dollar limit is a new rule that makes any money move
    above it ask, whatever the step. Background sorting, which today ignores those switches, learns
    to read them.
-3. **What goes in Moss's app map?** Six screens, three settings and five features, listed below.
+3. **What goes in Moss's app map?** Five screens, four settings and five features, listed below.
    Today the app map cannot hold entries from add-on modules at all, so R1 adds that ability first.
 
 Things Ben should look at, beyond the mockups:
@@ -78,15 +79,15 @@ seeing transactions arrive.
 In:
 
 - New screens: Budget, Transactions, Accounts, Getting started (no bank, and the first-budget
-  draft), Moss's freedom, Activity.
+  draft), Settings (with the activity list).
 - Category groups, moved from KV into a table.
 - Moss sorting every transaction, with a "Needs a look" review queue.
 - First-budget draft built from three months of history, adjusted in one chat.
 - Chat actions: move money, set an amount, sort a transaction, make a merchant rule, add or
   rename a category.
-- The freedom setting (three steps, dollar limit, custom switches) and the Activity trail that
-  step 3's weekly review reads.
-- Platform additions P1 to P4 (below).
+- The freedom setting (three steps, dollar limit, custom switches) and the activity trail that
+  step 3's weekly review reads, both on Settings.
+- Platform additions P1 to P5 (below).
 
 Out:
 
@@ -100,19 +101,25 @@ Out:
 
 All screens are Park Press and use `@moss/ui` only. Module CSS is layout only. The module keeps a
 single host navigation entry, "Finance". Inside it, a `Segmented` control switches between Budget,
-Transactions, Accounts and Activity. Moss's freedom opens from the Budget rail and from Activity.
+Transactions and Accounts. Settings opens from the gear next to the Finance title in the
+top bar (P5). Chat docks on the right, as in every app.
 
-| Screen                   | Path                      | Built from                                                                                                                                                                                                                                                                                                            | Empty                                                                           | Loading                               | Broken                                                                                 |
-| ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
-| Budget                   | `/m/finance`              | `Masthead tone="field"` (ready to assign, month switcher), `SectionHead` per group, a `jds-table` per group on desktop (assigned, spent with `jds-progress` meter, available) and `RowIndex` rows on phone, `Badge` for overspent, rail blocks (`Eyebrow` plus `SectionHead`) with `StatTile`s and a facts `RowIndex` | No bank: redirect to Getting started. Bank but no budget: Getting started draft | Masthead skeleton, three ghost groups | Sync error `Note variant="plan"` with Reconnect; budget still renders from stored data |
-| Transactions             | `/m/finance/transactions` | `Segmented` filter (All, Needs a look), day `SectionHead`s, `RowIndex` rows, `Badge` "Moss guessed", `Select` for category, `Switch` "Always for this merchant"                                                                                                                                                       | "Nothing yet. Transactions appear after the first sync."                        | Ghost rows                            | Same banner as Budget                                                                  |
-| Accounts                 | `/m/finance/accounts`     | `Masthead` net worth, `RowIndex` per bank with `Indicator` sync status, `Button` Reconnect / Add a bank                                                                                                                                                                                                               | Getting started                                                                 | Ghost rows                            | Per-bank `Indicator status="error"` with the stored display message and Reconnect      |
-| Getting started: no bank | `/m/finance/start`        | `Masthead`, numbered `RowIndex` steps (connect, sort, build budget), primary `Button` "Connect a bank"                                                                                                                                                                                                                | n/a                                                                             | n/a                                   | Plaid credentials missing: admin `Note` naming the settings page                       |
-| Getting started: draft   | `/m/finance/start`        | `Masthead` ("Your first budget"), draft group rows with history average and proposed amount, `Button` "Build my budget with Moss" (opens chat), `Button` "Start this budget"                                                                                                                                          | Under 30 days of history: draft from what exists, with a `Note` saying so       | Draft computing: progress row         | Draft failed: retry `Button`                                                           |
-| Moss's freedom           | `/m/finance/freedom`      | `RadioCardGroup` (three steps), `Field` dollar limit, `SectionHead` "Customize" with a `Switch` per action family, fixed "Always asks" rows                                                                                                                                                                           | n/a                                                                             | Ghost cards                           | Save failed: inline error, switches revert                                             |
-| Activity                 | `/m/finance/activity`     | Week `SectionHead`s, `RowIndex` rows (who, what, when), `Button variant="quiet"` Undo                                                                                                                                                                                                                                 | "Moss hasn't done anything on its own yet."                                     | Ghost rows                            | Retry                                                                                  |
+Screens carry no explanatory, tutorial or reassurance copy ("what Moss can see", "nothing changes
+until you press") because it reads as marketing. How things work belongs in Moss's answers. Section
+heads carry no numbers anywhere in Finance.
 
-Phone: every screen is single column. The rail moves below the main column. Chat stays a drawer
+| Screen                   | Path                      | Built from                                                                                                                                                                                                                                                                                                                                                                                                         | Empty                                                                           | Loading                               | Broken                                                                                 |
+| ------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
+| Budget                   | `/m/finance`              | `Masthead tone="field"` (ready to assign, month switcher), `SectionHead` per group with a drag handle marker (dragging reorders groups; no section numbers), a `jds-table` per group on desktop (assigned, spent with `jds-progress` meter, available) and `RowIndex` rows on phone, `Badge` for overspent, rail blocks (`Eyebrow` plus `SectionHead`) for Needs you (`StatTile`s) and Balances (facts `RowIndex`) | No bank: redirect to Getting started. Bank but no budget: Getting started draft | Masthead skeleton, three ghost groups | Sync error `Note variant="plan"` with Reconnect; budget still renders from stored data |
+| Transactions             | `/m/finance/transactions` | Single column, no rail. `Segmented` filter (All, Needs a look), day `SectionHead`s, `RowIndex` rows, `Badge` "Predicted", `Select` for category, `Switch` "Always for this merchant"                                                                                                                                                                                                                               | "Nothing yet. Transactions appear after the first sync."                        | Ghost rows                            | Same banner as Budget                                                                  |
+| Accounts                 | `/m/finance/accounts`     | Single column. `Masthead` net worth, `RowIndex` per bank with `Indicator` sync status, `Button` Reconnect / Add a bank, sync-error `Note` giving the date balances are current to                                                                                                                                                                                                                                  | Getting started                                                                 | Ghost rows                            | Per-bank `Indicator status="error"` with the stored display message and Reconnect      |
+| Getting started: no bank | `/m/finance/start`        | `Masthead`, numbered `RowIndex` steps (connect, sort, build budget), primary `Button` "Connect a bank"                                                                                                                                                                                                                                                                                                             | n/a                                                                             | n/a                                   | Plaid credentials missing: admin `Note` linking to Finance Settings                    |
+| Getting started: draft   | `/m/finance/start`        | `Masthead` ("Your first budget"), draft group rows with history average and proposed amount, `Button` "Build my budget with Moss" (opens chat), `Button` "Start this budget"                                                                                                                                                                                                                                       | Under 30 days of history: draft from what exists, with a `Note` saying so       | Draft computing: progress row         | Draft failed: retry `Button`                                                           |
+| Settings                 | `/m/finance/settings`     | `RadioCardGroup` "How much Moss does alone" (three steps), `Field` dollar limit, `SectionHead` "Customize" with a `Switch` per action family, fixed "Always asks" rows, admin-only "Bank connection" with the Plaid client ID and secret, rail listing this week's activity (who, what, when) with Undo per row and "Earlier weeks"                                                                                | n/a                                                                             | Ghost cards                           | Save failed: inline error, switches revert                                             |
+
+Phone: every screen is single column. The rail moves below the main column, except on Budget, where
+Needs you and Balances come first and Balances starts collapsed to its total behind a
+`DisclosureToggle`. Chat stays a drawer
 that slides over the page, including on the draft screen. Rows wrap amounts below the title rather
 than shrinking text.
 
@@ -406,12 +413,24 @@ How each path honours the setting:
 | Background sorting during sync | Bypasses the gateway (`apps/worker/src/external-module-job-handler.ts:197-214`); always applies | Reads its own `sorting` and `sorting_new` tiers (P4) to set `review_state`         |
 | YOLO mode                      | Runs any non-destructive installed-module tool (`policy.ts:83-97`)                              | Unchanged. `always_confirm` families still ask; `confirmAbove` still asks          |
 
-Step 3's "review weekly" is the Activity screen in R1. The weekly check-in chat that walks through
+Step 3's "review weekly" is the activity list on Settings in R1. The weekly check-in chat that walks through
 it arrives in R2.
 
 The chat approval card stays Approve and Reject (`apps/web/src/chat/action-request-card.tsx:236-244`).
 Its title for a move above the limit renders from the tool input, for example "Move $250 from
 Dining out to Travel (over your $100 limit)".
+
+### Finance Settings
+
+- One page for everything Finance can configure. The host Settings page keeps no Finance section.
+- "How much Moss does alone" is the freedom setting above. The dollar limit stays a module
+  preference (`freedomLimitDollars`), so the gateway reads it as before (P3).
+- "Bank connection" holds the Plaid client ID and secret. It renders only for admins, because the
+  keys are instance-wide. It reuses the existing instance credential slot routes and
+  `ModuleCredentialsSection` unchanged; no new route reads a stored value.
+- The rail is the activity trail. It lists this week's changes by you and Moss, newest first,
+  with Undo on each row and "Earlier weeks" for older ones. Empty: "Moss hasn't done anything on
+  its own yet." There is no separate Activity screen or tab.
 
 ### Platform additions
 
@@ -464,6 +483,19 @@ Each is a host change with its own tests, built before the finance work that use
   P4 relaxes that check.
 - Test: a worker asking for another module's family gets an error, not a tier.
 
+**P5. A module declares its own settings page.**
+
+- Today the top-bar gear (`apps/web/src/shell/module-settings-button.tsx`) always links to
+  `moduleSettingsHref` (`apps/web/src/settings/module-settings-deep-link.ts:21-23`), the host
+  Settings page, which renders preferences and credential slots generically.
+- Change: an optional manifest field `settingsPath` (module-relative). When set, the gear opens
+  `/m/<moduleId><settingsPath>`, and the host Settings page lists the module as a link to it
+  instead of rendering its preferences and credential slots.
+- The host search (`settings-module-search.ts`) still finds the module by setting and credential
+  names, and the result opens the module's page.
+- Test: with `settingsPath` set, the gear's link is the module page and the host page renders no
+  credential slot for that module. Fails today because the gear link is fixed.
+
 ### App map entries
 
 Declared in the finance manifest `appMap` block (P1). Paths are module-relative.
@@ -476,29 +508,28 @@ Screens:
 | `finance.transactions` | Transactions    | `/transactions` | Every bank transaction by day, with Moss's category guesses and a Needs a look filter.                 |
 | `finance.accounts`     | Accounts        | `/accounts`     | Connected banks, balances, sync status, reconnect, and net worth.                                      |
 | `finance.start`        | Getting started | `/start`        | Connect a first bank and build a first budget from three months of history.                            |
-| `finance.freedom`      | Moss's freedom  | `/freedom`      | How much Moss does in finance without asking: three steps, a dollar limit, and per-action switches.    |
-| `finance.activity`     | Activity        | `/activity`     | What you and Moss changed, by week, with undo.                                                         |
+| `finance.settings`     | Settings        | `/settings`     | How much Moss does alone, a dollar limit, per-action switches, and (admins) the Plaid keys.            |
 
 Settings:
 
-| id                       | label               | path       | scope | description                                                                              |
-| ------------------------ | ------------------- | ---------- | ----- | ---------------------------------------------------------------------------------------- |
-| `finance.freedom-step`   | Freedom step        | `/freedom` | user  | Ask about everything, handle routine and ask about new, or run it all and review weekly. |
-| `finance.freedom-limit`  | Moss's dollar limit | `/freedom` | user  | Moves of money above this amount always ask first. Also on the module preferences page.  |
-| `finance.freedom-custom` | Per-action switches | `/freedom` | user  | Turn each kind of finance action on or off for Moss.                                     |
+| id                        | label                      | path        | scope | description                                                                              |
+| ------------------------- | -------------------------- | ----------- | ----- | ---------------------------------------------------------------------------------------- |
+| `finance.settings-step`   | How much Moss does alone   | `/settings` | user  | Ask about everything, handle routine and ask about new, or run it all and review weekly. |
+| `finance.settings-limit`  | Moss's dollar limit        | `/settings` | user  | Moves of money above this amount always ask first.                                       |
+| `finance.settings-custom` | Per-action switches        | `/settings` | user  | Turn each kind of finance action on or off for Moss.                                     |
+| `finance.settings-plaid`  | Plaid client ID and secret | `/settings` | admin | The instance-wide Plaid keys bank syncing uses. Admins only.                             |
 
-The Plaid credentials stay where they are (admin, module settings page) and are already covered by
-the host's module-settings entry.
+The host's generic module-settings entry no longer covers Finance once P5 points it here.
 
 Features:
 
-| id                     | requires                                            | errors and remediations                                                                                        |
-| ---------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `finance.bank-sync`    | Plaid credentials set by an admin; a connected bank | `ITEM_LOGIN_REQUIRED`: reconnect on Accounts. Credentials missing: ask an admin to set them in module settings |
-| `finance.categorize`   | `finance.bank-sync`; an AI model for new merchants  | No model: rules and the Plaid map still run, everything else waits in Needs a look                             |
-| `finance.first-budget` | `finance.bank-sync` with at least one sync          | Under 30 days of history: draft from what exists                                                               |
-| `finance.chat-actions` | A budget started                                    | Move above the limit: approval card                                                                            |
-| `finance.freedom`      | none                                                | n/a                                                                                                            |
+| id                     | requires                                            | errors and remediations                                                                                   |
+| ---------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `finance.bank-sync`    | Plaid credentials set by an admin; a connected bank | `ITEM_LOGIN_REQUIRED`: reconnect on Accounts. Credentials missing: an admin sets them in Finance Settings |
+| `finance.categorize`   | `finance.bank-sync`; an AI model for new merchants  | No model: rules and the Plaid map still run, everything else waits in Needs a look                        |
+| `finance.first-budget` | `finance.bank-sync` with at least one sync          | Under 30 days of history: draft from what exists                                                          |
+| `finance.chat-actions` | A budget started                                    | Move above the limit: approval card                                                                       |
+| `finance.freedom`      | none                                                | n/a                                                                                                       |
 
 ### Determinism boundary
 
@@ -540,11 +571,11 @@ Features:
 
 ### Build phases and tests
 
-| Phase | Contents                                                                                                 | E2E test (Playwright, real dev instance, Plaid sandbox)                                                                                                                                        |
-| ----- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | P1; migrations 0009-0011; categorization review; Budget, Transactions, Accounts screens; app-map entries | Connect a sandbox bank, see transactions grouped by day, open Needs a look, change one category with "Always for this merchant", see the Budget spent column move                              |
-| 2     | Migrations 0012-0013; draft build and start; Getting started screens; draft chat tools                   | From a fresh account, connect, open Getting started, see a draft, ask Moss in chat to set Groceries to $600, see the line change on screen, press Start, land on Budget with those assignments |
-| 3     | P2, P3, P4; migrations 0014-0015; families; move and category tools; Freedom and Activity screens        | Pick step 2 with a $100 limit; ask Moss to move $50 (runs, appears in Activity, Undo works); ask to move $250 (approval card); switch to step 1 and sync (new rows land in Needs a look)       |
+| Phase | Contents                                                                                                 | E2E test (Playwright, real dev instance, Plaid sandbox)                                                                                                                                                    |
+| ----- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | P1; migrations 0009-0011; categorization review; Budget, Transactions, Accounts screens; app-map entries | Connect a sandbox bank, see transactions grouped by day, open Needs a look, change one category with "Always for this merchant", see the Budget spent column move                                          |
+| 2     | Migrations 0012-0013; draft build and start; Getting started screens; draft chat tools                   | From a fresh account, connect, open Getting started, see a draft, ask Moss in chat to set Groceries to $600, see the line change on screen, press Start, land on Budget with those assignments             |
+| 3     | P2, P3, P4; migrations 0014-0015; families; move and category tools; Settings screen                     | Pick step 2 with a $100 limit; ask Moss to move $50 (runs, appears in the Settings activity list, Undo works); ask to move $250 (approval card); switch to step 1 and sync (new rows land in Needs a look) |
 
 Each phase ships with its e2e test run and observed to pass, and live proof on the PR.
 
@@ -575,7 +606,7 @@ Owner: Ben.
   (`worker.ts:45-52`). Modules have no quiet-hours wiring today; R2 adds it or asks Ben to accept
   that gap.
 - **Weekly check-in.** A schedule (default Sunday 18:00, user-configurable preference) that posts
-  a notification linking to a check-in view built from Activity and the week's numbers. Opening
+  a notification linking to a check-in view built from the activity trail and the week's numbers. Opening
   it offers an editable chat draft, because a module cannot start a chat turn.
 - **Today money line.** Through the manifest `briefing` contribution
   (`external-module.ts:327-335`). There is no UI today to turn on an external module's briefing

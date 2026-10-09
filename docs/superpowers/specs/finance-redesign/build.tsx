@@ -1,13 +1,14 @@
 /** Design artifacts only. Renders the finance R1 screens from shipped @moss/ui primitives. */
 import React, { type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   Badge,
   BrandMark,
   Button,
   ButtonLink,
+  DisclosureToggle,
   Eyebrow,
   Field,
   FormLabel,
@@ -27,14 +28,17 @@ import {
 import {
   ArrowUp,
   Calendar,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  GripVertical,
   Heart,
   House,
   Landmark,
   ListTodo,
   Menu,
   MessageCircle,
+  Settings,
   Newspaper,
   SquarePen,
   Trophy,
@@ -48,7 +52,7 @@ const out = resolve("docs/superpowers/specs/finance-redesign");
 const noop = () => {};
 
 type Width = "desktop" | "phone";
-type Tab = "budget" | "transactions" | "accounts" | "activity";
+type Tab = "budget" | "transactions" | "accounts";
 
 // ---- Made-up example data ----
 
@@ -199,6 +203,17 @@ function Nav() {
   );
 }
 
+function TopbarTitle() {
+  return (
+    <span className="topbar__title">
+      Finance
+      <IconButton aria-label="Finance settings" size="sm">
+        <Settings aria-hidden="true" size={15} />
+      </IconButton>
+    </span>
+  );
+}
+
 function Topbar({ width }: { width: Width }) {
   if (width === "phone") {
     return (
@@ -206,7 +221,7 @@ function Topbar({ width }: { width: Width }) {
         <IconButton aria-label="Open menu">
           <Menu aria-hidden="true" />
         </IconButton>
-        <span className="topbar__title">Finance</span>
+        <TopbarTitle />
         <IconButton aria-label="Open chat">
           <MessageCircle aria-hidden="true" />
         </IconButton>
@@ -215,7 +230,7 @@ function Topbar({ width }: { width: Width }) {
   }
   return (
     <header className="topbar">
-      <span className="topbar__title">Finance</span>
+      <TopbarTitle />
       <IconButton aria-label="Open chat">
         <MessageCircle aria-hidden="true" />
       </IconButton>
@@ -233,8 +248,7 @@ function Tabs({ width, tab }: { width: Width; tab: Tab }) {
         options={[
           { value: "budget", label: "Budget" },
           { value: "transactions", label: "Transactions" },
-          { value: "accounts", label: "Accounts" },
-          { value: "activity", label: "Activity" }
+          { value: "accounts", label: "Accounts" }
         ]}
       />
     </div>
@@ -322,6 +336,11 @@ function AvailableCell({ cents, labelled }: { cents: number; labelled?: boolean 
   );
 }
 
+// Groups reorder by drag; the handle shows that they can.
+function DragHandle() {
+  return <GripVertical className="drag-handle" aria-hidden="true" size={18} />;
+}
+
 function Meter({ line }: { line: Line }) {
   const used = line.assigned === 0 ? 0 : Math.min(1, line.spent / line.assigned);
   return (
@@ -331,12 +350,12 @@ function Meter({ line }: { line: Line }) {
   );
 }
 
-function GroupTable({ group, index }: { group: (typeof groups)[number]; index: number }) {
+function GroupTable({ group }: { group: (typeof groups)[number] }) {
   const assigned = group.lines.reduce((s, l) => s + l.assigned, 0);
   return (
     <section className="stack stack--tight">
       <SectionHead
-        number={String(index + 1).padStart(2, "0")}
+        marker={<DragHandle />}
         title={group.name}
         meta={`${money(assigned)} assigned`}
         rule
@@ -380,10 +399,10 @@ function GroupTable({ group, index }: { group: (typeof groups)[number]; index: n
   );
 }
 
-function GroupRows({ group, index }: { group: (typeof groups)[number]; index: number }) {
+function GroupRows({ group }: { group: (typeof groups)[number] }) {
   return (
     <section className="stack stack--tight">
-      <SectionHead number={String(index + 1).padStart(2, "0")} title={group.name} rule />
+      <SectionHead marker={<DragHandle />} title={group.name} rule />
       <RowIndex density="compact">
         {group.lines.map((l) => (
           <RowIndexItem
@@ -428,29 +447,59 @@ function BudgetHero({ width }: { width: Width }) {
   );
 }
 
+const balances = [
+  { name: "Harbor Checking", cents: 348210 },
+  { name: "Northline Savings", cents: 921000 },
+  { name: "Harbor Visa", cents: -61244 }
+];
+
+function NeedsYou() {
+  return (
+    <RailBlock eyebrow="Needs you" title="Two things">
+      <div className="stat-pair">
+        <StatTile label="Needs a look" value="6" onClick={noop} />
+        <StatTile label="Overspent" value="1" warn onClick={noop} />
+      </div>
+    </RailBlock>
+  );
+}
+
+function Balances() {
+  return (
+    <RowIndex variant="facts">
+      {balances.map((b) => (
+        <RowIndexItem key={b.name} title={b.name} meta={money(b.cents)} />
+      ))}
+    </RowIndex>
+  );
+}
+
+// Phone shows balances collapsed to their total; tapping opens the list.
+function BalancesCollapsed() {
+  const total = balances.reduce((sum, b) => sum + b.cents, 0);
+  return (
+    <section className="stack stack--tight">
+      <Eyebrow tone="gold">Accounts</Eyebrow>
+      <SectionHead
+        title={
+          <DisclosureToggle expanded={false} controls="balances" className="disclosure-head">
+            Balances
+            <ChevronDown aria-hidden="true" size={18} />
+          </DisclosureToggle>
+        }
+        meta={money(total)}
+        rule
+      />
+    </section>
+  );
+}
+
 function BudgetRail() {
   return (
     <>
-      <RailBlock eyebrow="Needs you" title="Two things">
-        <div className="stat-pair">
-          <StatTile label="Needs a look" value="6" onClick={noop} />
-          <StatTile label="Overspent" value="1" warn onClick={noop} />
-        </div>
-      </RailBlock>
+      <NeedsYou />
       <RailBlock eyebrow="Accounts" title="Balances">
-        <RowIndex variant="facts">
-          <RowIndexItem title="Harbor Checking" meta="$3,482.10" />
-          <RowIndexItem title="Northline Savings" meta="$9,210.00" />
-          <RowIndexItem title="Harbor Visa" meta="−$612.44" />
-        </RowIndex>
-      </RailBlock>
-      <RailBlock eyebrow="Moss's freedom" title="Handles routine">
-        <p className="jds-hint">
-          Moss sorts merchants it knows and moves up to $100 on its own. It asks about anything new.
-        </p>
-        <div>
-          <Button variant="link">Change what Moss can do</Button>
-        </div>
+        <Balances />
       </RailBlock>
       <div>
         <Button variant="secondary">
@@ -463,19 +512,37 @@ function BudgetRail() {
 }
 
 function Budget({ width }: { width: Width }) {
-  const phone = width === "phone";
+  if (width === "phone")
+    return (
+      <Frame
+        width={width}
+        hero={<BudgetHero width={width} />}
+        tab="budget"
+        main={
+          <>
+            <NeedsYou />
+            <BalancesCollapsed />
+            {groups.map((g) => (
+              <GroupRows key={g.name} group={g} />
+            ))}
+            <div>
+              <Button variant="secondary">
+                <MessageCircle aria-hidden="true" size={16} />
+                Ask Moss about your budget
+              </Button>
+            </div>
+          </>
+        }
+      />
+    );
   return (
     <Frame
       width={width}
       hero={<BudgetHero width={width} />}
       tab="budget"
-      main={groups.map((g, i) =>
-        phone ? (
-          <GroupRows key={g.name} group={g} index={i} />
-        ) : (
-          <GroupTable key={g.name} group={g} index={i} />
-        )
-      )}
+      main={groups.map((g) => (
+        <GroupTable key={g.name} group={g} />
+      ))}
       rail={<BudgetRail />}
     />
   );
@@ -536,7 +603,7 @@ function TxDayTable({ day }: { day: (typeof days)[number] }) {
                   <span>{t.payee}</span>
                   {t.look ? (
                     <div>
-                      <Badge tone="amber">Moss guessed, needs a look</Badge>
+                      <Badge tone="amber">Predicted</Badge>
                     </div>
                   ) : null}
                 </div>
@@ -567,7 +634,7 @@ function TxDayRows({ day }: { day: (typeof days)[number] }) {
               t.look ? (
                 <div className="stack stack--tight">
                   <div>
-                    <Badge tone="amber">Moss guessed, needs a look</Badge>
+                    <Badge tone="amber">Predicted</Badge>
                   </div>
                   <LookControls tx={t} />
                 </div>
@@ -588,14 +655,7 @@ function Transactions({ width }: { width: Width }) {
   return (
     <Frame
       width={width}
-      hero={
-        <Masthead
-          compact
-          eyebrow="October 2026"
-          title="Transactions"
-          lede="41 this month. Moss sorted all of them and wants you to check 6."
-        />
-      }
+      hero={<Masthead compact eyebrow="October 2026" title="Transactions" />}
       tab="transactions"
       main={
         <>
@@ -609,32 +669,15 @@ function Transactions({ width }: { width: Width }) {
                 { value: "look", label: "Needs a look (6)" }
               ]}
             />
-            <input className="jds-input" placeholder="Search payees" aria-label="Search payees" />
+            <input
+              className="jds-input search"
+              placeholder="Search payees"
+              aria-label="Search payees"
+            />
           </div>
           {days.map((d) =>
             phone ? <TxDayRows key={d.label} day={d} /> : <TxDayTable key={d.label} day={d} />
           )}
-        </>
-      }
-      rail={
-        <>
-          <RailBlock eyebrow="How sorting works" title="Moss checks new merchants">
-            <p className="jds-hint">
-              Merchants Moss has seen before are sorted for you. The first purchase from a new
-              merchant waits here until you confirm it. It still counts toward its category in the
-              meantime.
-            </p>
-            <div>
-              <Button variant="link">Change what Moss can do</Button>
-            </div>
-          </RailBlock>
-          <RailBlock eyebrow="This month" title="Sorted by">
-            <RowIndex variant="facts">
-              <RowIndexItem title="Your rules" meta="22" />
-              <RowIndexItem title="Known merchants" meta="13" />
-              <RowIndexItem title="Waiting on you" meta="6" />
-            </RowIndex>
-          </RailBlock>
         </>
       }
     />
@@ -661,11 +704,11 @@ function Accounts({ width }: { width: Width }) {
           <Note variant="plan">
             <TriangleAlert aria-hidden="true" size={18} />
             <span>
-              Northline Bank needs you to sign in again. Until then its balances stay at Monday's.
+              Northline Bank needs you to sign in again. Balances up to date as of October 5.
             </span>
           </Note>
           <section className="stack stack--tight">
-            <SectionHead number="01" title="Banks" rule />
+            <SectionHead title="Banks" rule />
             <RowIndex>
               <RowIndexItem
                 title="Harbor Credit Union"
@@ -688,7 +731,7 @@ function Accounts({ width }: { width: Width }) {
             </div>
           </section>
           <section className="stack stack--tight">
-            <SectionHead number="02" title="Net worth by month" rule />
+            <SectionHead title="Net worth by month" rule />
             <table className="jds-table">
               <thead>
                 <tr>
@@ -718,14 +761,6 @@ function Accounts({ width }: { width: Width }) {
             </table>
           </section>
         </>
-      }
-      rail={
-        <RailBlock eyebrow="What Moss can see" title="Read only">
-          <p className="jds-hint">
-            Moss reads balances and transactions through Plaid. It never sees your bank password and
-            cannot move real money. Moving money in Moss means moving it between budget categories.
-          </p>
-        </RailBlock>
       }
     />
   );
@@ -764,14 +799,6 @@ function StartConnect({ width }: { width: Width }) {
             />
           </RowIndex>
         </section>
-      }
-      rail={
-        <RailBlock eyebrow="What Moss can see" title="Read only">
-          <p className="jds-hint">
-            Moss reads balances and transactions. It never sees your bank password and cannot move
-            real money.
-          </p>
-        </RailBlock>
       }
     />
   );
@@ -816,10 +843,10 @@ const draft: { name: string; lines: DraftLine[] }[] = [
   }
 ];
 
-function DraftTable({ group, index }: { group: (typeof draft)[number]; index: number }) {
+function DraftTable({ group }: { group: (typeof draft)[number] }) {
   return (
     <section className="stack stack--tight">
-      <SectionHead number={String(index + 1).padStart(2, "0")} title={group.name} rule />
+      <SectionHead title={group.name} rule />
       <table className="jds-table table--fixed">
         <colgroup>
           <col className="col--name" />
@@ -866,10 +893,10 @@ function DraftTable({ group, index }: { group: (typeof draft)[number]; index: nu
   );
 }
 
-function DraftRows({ group, index }: { group: (typeof draft)[number]; index: number }) {
+function DraftRows({ group }: { group: (typeof draft)[number] }) {
   return (
     <section className="stack stack--tight">
-      <SectionHead number={String(index + 1).padStart(2, "0")} title={group.name} rule />
+      <SectionHead title={group.name} rule />
       <RowIndex density="compact">
         {group.lines.map((l) => (
           <RowIndexItem
@@ -973,14 +1000,9 @@ function StartDraft({ width, chat }: { width: Width; chat?: boolean }) {
               <MessageCircle aria-hidden="true" size={16} />
               Build my budget with Moss
             </Button>
-            <span className="jds-hint">Nothing changes until you press Start this budget.</span>
           </div>
-          {draft.map((g, i) =>
-            phone ? (
-              <DraftRows key={g.name} group={g} index={i} />
-            ) : (
-              <DraftTable key={g.name} group={g} index={i} />
-            )
+          {draft.map((g) =>
+            phone ? <DraftRows key={g.name} group={g} /> : <DraftTable key={g.name} group={g} />
           )}
         </>
       }
@@ -989,51 +1011,27 @@ function StartDraft({ width, chat }: { width: Width; chat?: boolean }) {
   );
 }
 
-// ---- Moss's freedom ----
+// ---- Finance settings ----
 
-const families: { label: string; hint: string; on: boolean }[] = [
-  {
-    label: "Sort purchases from merchants you've seen",
-    hint: "Moss does this alone under Handle routine and Run it all",
-    on: true
-  },
-  {
-    label: "Move money between categories",
-    hint: "Moss does this alone under Handle routine and Run it all, within your limit",
-    on: true
-  },
-  {
-    label: "Sort purchases from new merchants",
-    hint: "Moss does this alone only under Run it all",
-    on: false
-  },
-  { label: "Make merchant rules", hint: "Moss does this alone only under Run it all", on: false },
-  {
-    label: "Add, rename or archive categories",
-    hint: "Moss does this alone only under Run it all",
-    on: false
-  }
+const families: { label: string; on: boolean }[] = [
+  { label: "Sort purchases from merchants you've seen", on: true },
+  { label: "Move money between categories", on: true },
+  { label: "Sort purchases from new merchants", on: false },
+  { label: "Make merchant rules", on: false },
+  { label: "Add, rename or archive categories", on: false }
 ];
 
-function Freedom({ width }: { width: Width }) {
+function FinanceSettings({ width }: { width: Width }) {
   return (
     <Frame
       width={width}
-      hero={
-        <Masthead
-          compact={width === "phone"}
-          eyebrow="Moss's freedom"
-          title="How much Moss does"
-          accent="on its own"
-          lede="This covers finance only. Moss never moves real money between banks."
-        />
-      }
+      hero={<Masthead compact={width === "phone"} eyebrow="Finance" title="Settings" />}
       main={
         <>
           <section className="stack stack--tight">
-            <SectionHead number="01" title="Pick a step" rule />
+            <SectionHead title="How much Moss does alone" rule />
             <RadioCardGroup
-              name="freedom-step"
+              name="moss-step"
               ariaLabel="How much Moss does on its own"
               value="routine"
               onChange={noop}
@@ -1052,40 +1050,47 @@ function Freedom({ width }: { width: Width }) {
                 {
                   value: "all",
                   label: "Run it all, review weekly",
-                  description:
-                    "Moss handles everything up to your limit. You look over its week in Activity."
+                  description: "Moss handles everything up to your limit. You look over its week."
                 }
               ]}
             />
           </section>
           <section className="stack stack--tight">
-            <SectionHead number="02" title="Dollar limit" rule />
+            <SectionHead title="Dollar limit" rule />
             <Field>
               <FormLabel htmlFor="limit">Moss can move up to</FormLabel>
               <input id="limit" className="jds-input limit" defaultValue="$100" />
-              <p className="jds-hint">Bigger moves always ask first, at every step.</p>
             </Field>
           </section>
           <section className="stack stack--tight">
-            <SectionHead number="03" title="Customize" rule />
-            <p className="jds-hint">Changing a switch makes your step Custom.</p>
+            <SectionHead title="Customize" rule />
             <div>
               {families.map((f) => (
                 <div key={f.label} className="switch-row">
-                  <div className="switch-row__text">
-                    <span>{f.label}</span>
-                    <span className="jds-hint">{f.hint}</span>
-                  </div>
+                  <span>{f.label}</span>
                   <Switch ariaLabel={f.label} checked={f.on} />
                 </div>
               ))}
               {["Connect a bank", "Share an account"].map((label) => (
                 <div key={label} className="switch-row">
-                  <div className="switch-row__text">
-                    <span>{label}</span>
-                    <span className="jds-hint">Moss always asks first</span>
-                  </div>
+                  <span>{label}</span>
                   <Badge tone="neutral">Always asks</Badge>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="stack stack--tight">
+            <SectionHead title="Bank connection" meta="Admins only" rule />
+            <div>
+              {["Plaid client ID", "Plaid secret"].map((label) => (
+                <div key={label} className="switch-row">
+                  <span>{label}</span>
+                  <div className="row">
+                    <Indicator status="ready" label="Saved" />
+                    <Button variant="secondary" size="sm">
+                      Replace
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1093,23 +1098,33 @@ function Freedom({ width }: { width: Width }) {
         </>
       }
       rail={
-        <>
-          <RailBlock eyebrow="This week" title="Moss did 23 things">
-            <p className="jds-hint">Every change Moss makes is listed in Activity, with undo.</p>
-            <div>
-              <Button variant="link">Open Activity</Button>
-            </div>
-          </RailBlock>
-          <Note variant="practical">
-            When Moss asks, the question shows up in chat with Approve and Reject.
-          </Note>
-        </>
+        <RailBlock eyebrow="Activity" title="This week">
+          <div>
+            {activity.map((a) => (
+              <div key={a.when} className="switch-row">
+                <div className="switch-row__text">
+                  <span>{a.what}</span>
+                  <span className="jds-hint">
+                    {a.who} · {a.when}
+                    {a.via ? ` · ${a.via}` : ""}
+                  </span>
+                </div>
+                <Button variant="quiet" size="sm">
+                  Undo
+                </Button>
+              </div>
+            ))}
+          </div>
+          <div>
+            <Button variant="link">Earlier weeks</Button>
+          </div>
+        </RailBlock>
       }
     />
   );
 }
 
-// ---- Activity ----
+// ---- Activity, listed in the settings rail ----
 
 const activity: { when: string; who: "Moss" | "You"; what: string; via?: string; undo: boolean }[] =
   [
@@ -1153,106 +1168,6 @@ const activity: { when: string; who: "Moss" | "You"; what: string; via?: string;
     }
   ];
 
-function Activity({ width }: { width: Width }) {
-  const phone = width === "phone";
-  return (
-    <Frame
-      width={width}
-      hero={
-        <Masthead
-          compact
-          eyebrow="Activity"
-          title="What changed"
-          lede="You and Moss, newest first."
-        />
-      }
-      tab="activity"
-      main={
-        <>
-          <div>
-            <Segmented
-              ariaLabel="Who made the change"
-              value="everyone"
-              onChange={noop}
-              options={[
-                { value: "everyone", label: "Everyone" },
-                { value: "moss", label: "Moss" },
-                { value: "you", label: "You" }
-              ]}
-            />
-          </div>
-          <section className="stack stack--tight">
-            <SectionHead title="This week" meta="October 5 to 11" rule />
-            {phone ? (
-              <RowIndex density="compact">
-                {activity.map((a) => (
-                  <RowIndexItem
-                    key={a.when}
-                    title={a.what}
-                    excerpt={`${a.who} · ${a.when}${a.via ? ` · ${a.via}` : ""}`}
-                    meta={
-                      <Button variant="quiet" size="sm">
-                        Undo
-                      </Button>
-                    }
-                  />
-                ))}
-              </RowIndex>
-            ) : (
-              <table className="jds-table">
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Who</th>
-                    <th>What</th>
-                    <th className="jds-table__actions">
-                      <span className="jds-sr-only">Undo</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activity.map((a) => (
-                    <tr key={a.when}>
-                      <td className="jds-hint">{a.when}</td>
-                      <td>
-                        <Badge tone={a.who === "Moss" ? "forest" : "neutral"}>{a.who}</Badge>
-                      </td>
-                      <td>
-                        <div className="stack stack--tight">
-                          <span>{a.what}</span>
-                          {a.via ? <span className="jds-hint">{a.via}</span> : null}
-                        </div>
-                      </td>
-                      <td className="jds-table__actions">
-                        <Button variant="quiet" size="sm">
-                          Undo
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-        </>
-      }
-      rail={
-        <>
-          <div className="stat-pair">
-            <StatTile label="By Moss" value="23" onClick={noop} />
-            <StatTile label="By you" value="5" onClick={noop} />
-          </div>
-          <RailBlock eyebrow="Weekly review" title="Look over Moss's week">
-            <p className="jds-hint">
-              On Run it all, this page is your weekly review. Undo anything that looks wrong.
-            </p>
-          </RailBlock>
-        </>
-      }
-    />
-  );
-}
-
 // ---- Pages ----
 
 type Screen = {
@@ -1267,7 +1182,7 @@ const screens: Screen[] = [
   {
     id: "01-budget",
     title: "Budget",
-    what: "This month's budget, with what needs you in the rail.",
+    what: "This month's budget, with what needs you first.",
     render: (w) => <Budget width={w} />
   },
   {
@@ -1296,34 +1211,57 @@ const screens: Screen[] = [
     phoneChat: () => <StartDraft width="phone" chat />
   },
   {
-    id: "06-freedom",
-    title: "Moss's freedom",
-    what: "Three steps, the dollar limit and the switches.",
-    render: (w) => <Freedom width={w} />
-  },
-  {
-    id: "07-activity",
-    title: "Activity",
-    what: "What you and Moss changed, with undo.",
-    render: (w) => <Activity width={w} />
+    id: "06-settings",
+    title: "Finance settings",
+    what: "How much Moss does alone, the Plaid keys, and this week's activity with undo.",
+    render: (w) => <FinanceSettings width={w} />
   }
 ];
 
-function document(title: string, body: string) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Finance mockup</title><link rel="stylesheet" href="moss-ui.css"><link rel="stylesheet" href="frame.css"></head><body>${body}</body></html>\n`;
+function document(title: string, body: string, phone = false) {
+  const ui = phone ? "moss-ui.phone.css" : "moss-ui.css";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Finance mockup</title><link rel="stylesheet" href="${ui}"><link rel="stylesheet" href="frame.css"></head><body>${body}</body></html>\n`;
 }
+
+// The phone frame is 390px wide whatever the window is, so its stylesheet applies every
+// max-width rule wider than that and drops the desktop-only min-width rules.
+function phoneCss(css: string) {
+  let result = "";
+  let at = 0;
+  const query = /@media \((max|min)-width: (\d+)px\) \{/g;
+  for (let m = query.exec(css); m; m = query.exec(css)) {
+    let depth = 1;
+    let end = m.index + m[0].length;
+    while (depth > 0) {
+      if (css[end] === "{") depth++;
+      if (css[end] === "}") depth--;
+      end++;
+    }
+    const inner = css.slice(m.index + m[0].length, end - 1);
+    const width = Number(m[2]);
+    const applies = m[1] === "max" ? width >= 390 : width <= 390;
+    result += css.slice(at, m.index) + (applies ? inner : "");
+    at = end;
+    query.lastIndex = end;
+  }
+  return result + css.slice(at);
+}
+writeFileSync(
+  resolve(out, "moss-ui.phone.css"),
+  phoneCss(readFileSync(resolve(out, "moss-ui.css"), "utf8"))
+);
 
 for (const s of screens) {
   for (const w of ["desktop", "phone"] as const) {
     writeFileSync(
       resolve(out, `${s.id}-${w}.html`),
-      document(`${s.title} (${w})`, renderToStaticMarkup(<>{s.render(w)}</>))
+      document(`${s.title} (${w})`, renderToStaticMarkup(<>{s.render(w)}</>), w === "phone")
     );
   }
   if (s.phoneChat) {
     writeFileSync(
       resolve(out, `${s.id}-phone-chat.html`),
-      document(`${s.title} (phone, chat open)`, renderToStaticMarkup(<>{s.phoneChat()}</>))
+      document(`${s.title} (phone, chat open)`, renderToStaticMarkup(<>{s.phoneChat()}</>), true)
     );
   }
 }
