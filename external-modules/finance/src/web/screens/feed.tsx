@@ -131,7 +131,10 @@ function AccountPill(props: {
       </Card>
     );
   }
-  const badge = STATUS_BADGE[account.itemStatus ?? "error"] ?? STATUS_BADGE.error;
+  const badge = STATUS_BADGE[account.itemStatus ?? "error"] ?? {
+    label: "Connection error",
+    tone: "amber" as const
+  };
   return (
     <Card flush>
       <span className="fnm-pill">
