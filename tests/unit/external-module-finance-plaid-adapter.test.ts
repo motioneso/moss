@@ -362,3 +362,30 @@ describe("plaid adapter error mapping (#1146)", () => {
     expect((error as PlaidError).httpStatus).toBe(502);
   });
 });
+
+describe("PlaidError detail scrubbing (#3161)", () => {
+  it("removes tokens, long digit runs and our own credentials from saved text", async () => {
+    const { fetch } = fakeFetch([
+      {
+        status: 400,
+        body: {
+          error_code: "INVALID_REQUEST",
+          error_type: "INVALID_REQUEST",
+          error_message: `bad access-sandbox-abc-123 acct 123456789 key ${CREDS.secret} ${"x".repeat(600)}`,
+          request_id: "req-1"
+        }
+      }
+    ]);
+    const plaid = createPlaid(fetch, "sandbox", CREDS);
+    const error = await plaid.accountsGet("access-sandbox-tok").then(
+      () => null,
+      (e: unknown) => e as PlaidError
+    );
+    const message = error?.detail.message ?? "";
+    expect(message).not.toContain("access-sandbox-abc-123");
+    expect(message).not.toContain("123456789");
+    expect(message).not.toContain(CREDS.secret);
+    expect(message).toContain("[redacted]");
+    expect(message.endsWith("...[truncated]")).toBe(true);
+  });
+});

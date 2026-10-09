@@ -1,4 +1,5 @@
 // tests/unit/external-module-finance-handlers-sync.test.ts
+import { FinanceFetchError } from "../../external-modules/finance/src/adapters/types.js";
 import { describe, expect, it, vi } from "vitest";
 
 import type {
@@ -205,7 +206,7 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     expect(error).toBeInstanceOf(InputError);
     expect((error as InputError).code).toBe("token_read_failed");
     // No partial writes: the abort happens before any item is touched.
-    expect(kv.ops).toHaveLength(1); // just the seed
+    expect(kv.ops).toHaveLength(2); // the seed, then the sync lease being taken
   });
 
   it("syncs a multi-page run, persisting each cursor only after its chunks", async () => {
@@ -466,7 +467,10 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     expect(plaid.callsTo("transactionsSync")).toHaveLength(20);
     expect(result.items[0]).toMatchObject({ status: "connected", pages: 20, added: 20 });
     // Progress is durable: the 20th cursor is persisted, the next run resumes.
-    expect(await kv.get(NS.connections, "cursor:item-1")).toEqual({ cursor: "c-19" });
+    expect(await kv.get(NS.connections, "cursor:item-1")).toEqual({
+      cursor: "c-19",
+      paginationStart: null
+    });
   });
 });
 
@@ -660,5 +664,77 @@ describe("finance.sync.run (#3161 sync resilience)", () => {
     const result = await syncRunHandler(ports)(ACTOR);
     expect(result.items).toMatchObject([{ status: "error" }]);
     expect(plaid.callsTo("transactionsSync").length).toBeLessThanOrEqual(4);
+  });
+
+  it("falls back when the balance check fails on the network, not just on a Plaid error", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      accountsBalanceGet: async () => {
+        throw new FinanceFetchError("fetch_failed", "network down");
+      },
+      transactionsSync: async () =>
+        syncPage({ added: [tx({ transaction_id: "t1" })], nextCursor: "c1" })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.items).toMatchObject([{ status: "connected", added: 1 }]);
+    expect(plaid.callsTo("accountsGet")).toHaveLength(1);
+  });
+
+  it("keeps the balance-check error on a connected item after falling back", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      accountsBalanceGet: async () => {
+        throw invalidProduct();
+      },
+      transactionsSync: async () => syncPage({ nextCursor: "c1" })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    const stored = await kv.get(NS.connections, "item:item-1");
+    expect(stored).toMatchObject({
+      status: "connected",
+      lastErrorDetail: { code: "INVALID_PRODUCT", requestId: "req-abc123" }
+    });
+    expect(stored).not.toHaveProperty("lastError");
+  });
+
+  it("leaves nothing from an abandoned download after a restart", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    let n = 0;
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        n += 1;
+        if (n === 1) {
+          return syncPage({
+            added: [tx({ transaction_id: "ghost" })],
+            nextCursor: "c-mid",
+            hasMore: true
+          });
+        }
+        if (n === 2) throw new PlaidError("TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION", 400);
+        return syncPage({ added: [tx({ transaction_id: "real" })], nextCursor: "c-end" });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    const chunk = await kv.get(NS.transactions, "acc-1:2026-07");
+    expect((chunk as { transactions: { id: string }[] }).transactions.map((r) => r.id)).toEqual([
+      "real"
+    ]);
+  });
+
+  it("skips a second sync while one holds the lease", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({});
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await kv.set(NS.connections, "lock:sync", { at: ports.now().getTime() });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.status).toBe("busy");
+    expect(plaid.callsTo("transactionsSync")).toHaveLength(0);
   });
 });

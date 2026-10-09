@@ -11,6 +11,7 @@
 // only AFTER that page's chunks are written. A crash between the two writes
 // replays the page on the next run; the reducer makes the replay a no-op.
 import { PlaidError } from "../../adapters/plaid.js";
+import { FinanceFetchError } from "../../adapters/types.js";
 import type { PlaidAccount } from "../../adapters/plaid.js";
 import type {
   AccountRecord,
@@ -54,6 +55,12 @@ const MAX_PAGES_PER_RUN = 20;
 const MUTATION_DURING_PAGINATION = "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION";
 const MAX_PAGINATION_RESTARTS = 3;
 
+// Best-effort lease so the connect poll's first sync and the queued sync never
+// write the same months at once. KV has no compare-and-set, so this narrows
+// the window rather than closing it; a stale lease expires.
+const SYNC_LEASE_KEY = "lock:sync";
+const SYNC_LEASE_MS = 15 * 60 * 1000;
+
 type ItemResult = {
   itemId: string;
   status: ItemRecord["status"];
@@ -62,6 +69,14 @@ type ItemResult = {
   removed: number;
   pages: number;
 };
+
+type BalanceFailure = {
+  code: string;
+  type: string | null;
+  message: string | null;
+  requestId: string | null;
+};
+type ItemSyncOutcome = Omit<ItemResult, "itemId" | "status"> & { balanceFailure?: BalanceFailure };
 
 /** Loaded once per run and shared across items/pages. */
 type CategorizeCtx = { rules: Rule[]; categories: Category[]; ai: CategorizeAi | null };
@@ -110,9 +125,17 @@ async function categorizeChunks(
   return next;
 }
 
-async function readCursor(kv: FinanceKv, itemId: string): Promise<string | null> {
+async function readCursorRecord(
+  kv: FinanceKv,
+  itemId: string
+): Promise<{ cursor: string | null; paginationStart?: string | null }> {
   const record = await kv.get(NS.connections, cursorKey(itemId));
-  return typeof record?.cursor === "string" ? record.cursor : null;
+  const cursor = typeof record?.cursor === "string" ? record.cursor : null;
+  if (record && "paginationStart" in record) {
+    const start = typeof record.paginationStart === "string" ? record.paginationStart : null;
+    return { cursor, paginationStart: start };
+  }
+  return { cursor };
 }
 
 /** Write today's balance into the account's month snapshot, once per day. */
@@ -142,7 +165,7 @@ async function syncItem(
   accessToken: string,
   categorizeCtx: CategorizeCtx,
   actorUserId: string
-): Promise<Omit<ItemResult, "itemId" | "status">> {
+): Promise<ItemSyncOutcome> {
   const nowIso = ports.now().toISOString();
   const today = nowIso.slice(0, 10);
 
@@ -152,13 +175,21 @@ async function syncItem(
   // INVALID_PRODUCT), so any failure except a real login problem falls back
   // to the balances the plain accounts lookup already returns.
   let accounts: PlaidAccount[];
+  let balanceFailure: BalanceFailure | undefined;
   try {
     accounts = (await plaid.accountsBalanceGet(accessToken)).accounts;
   } catch (error) {
-    if (!(error instanceof PlaidError) || error.code === "ITEM_LOGIN_REQUIRED") throw error;
-    console.warn(
-      `finance.sync balance_fallback item=${item.itemId} code=${error.code} http=${error.httpStatus}`
-    );
+    if (error instanceof PlaidError && error.code !== "ITEM_LOGIN_REQUIRED") {
+      console.warn(
+        `finance.sync balance_fallback item=${item.itemId} code=${error.code} http=${error.httpStatus}`
+      );
+      balanceFailure = { code: error.code, ...error.detail };
+    } else if (error instanceof FinanceFetchError) {
+      console.warn(`finance.sync balance_fallback item=${item.itemId} code=${error.code}`);
+      balanceFailure = { code: error.code, type: null, message: null, requestId: null };
+    } else {
+      throw error;
+    }
     accounts = (await plaid.accountsGet(accessToken)).accounts;
   }
   // Accounts this item shares to the household — drives the mirror writes
@@ -188,15 +219,24 @@ async function syncItem(
   }
   await appendSnapshots(store, accounts, today);
 
-  const startCursor = await readCursor(ports.kv, item.itemId);
-  let cursor = startCursor;
-  let counts = { added: 0, modified: 0, removed: 0, pages: 0 };
+  const stored = await readCursorRecord(ports.kv, item.itemId);
+  // Plaid's recovery for a mid-pagination change is to restart from the cursor
+  // the whole pagination began with, which may predate this run.
+  const paginationStart =
+    stored.paginationStart !== undefined ? stored.paginationStart : stored.cursor;
+  let cursor = stored.cursor;
   let restarts = 0;
   let hasMore = true;
-  while (hasMore && counts.pages < MAX_PAGES_PER_RUN) {
-    let page: Awaited<ReturnType<typeof plaid.transactionsSync>>;
+  let pages: Awaited<ReturnType<typeof plaid.transactionsSync>>[] = [];
+
+  // Fetch first, apply after: a restart then discards pages that never
+  // touched storage, so nothing from an abandoned download is left behind.
+  while (hasMore && pages.length < MAX_PAGES_PER_RUN) {
     try {
-      page = await plaid.transactionsSync(accessToken, cursor);
+      const page = await plaid.transactionsSync(accessToken, cursor);
+      pages.push(page);
+      cursor = page.nextCursor;
+      hasMore = page.hasMore;
     } catch (error) {
       if (
         !(error instanceof PlaidError) ||
@@ -207,14 +247,15 @@ async function syncItem(
       }
       restarts += 1;
       console.warn(`finance.sync pagination_restart item=${item.itemId} attempt=${restarts}`);
-      await ports.kv.set(NS.connections, cursorKey(item.itemId), { cursor: startCursor });
-      cursor = startCursor;
-      counts = { added: 0, modified: 0, removed: 0, pages: 0 };
+      pages = [];
+      cursor = paginationStart;
       hasMore = true;
-      continue;
     }
-    counts.pages += 1;
+  }
 
+  const counts = { added: 0, modified: 0, removed: 0, pages: 0 };
+  for (const [index, page] of pages.entries()) {
+    counts.pages += 1;
     // Load exactly the months this page touches, plus each month's
     // predecessor — the only chunk where a posted tx's pending twin can hide.
     // Pairs are tracked alongside the composed keys so the store RMW below
@@ -266,15 +307,20 @@ async function syncItem(
       }
     }
     // Cursor LAST (see header): only after this page's chunks are durable.
-    await ports.kv.set(NS.connections, cursorKey(item.itemId), { cursor: page.nextCursor });
+    // The pagination start is kept while more pages remain so a later run can
+    // still restart from it.
+    const finished = !(index === pages.length - 1 && hasMore);
+    await ports.kv.set(
+      NS.connections,
+      cursorKey(item.itemId),
+      finished ? { cursor: page.nextCursor } : { cursor: page.nextCursor, paginationStart }
+    );
 
     counts.added += page.added.length;
     counts.modified += page.modified.length;
     counts.removed += page.removed.length;
-    cursor = page.nextCursor;
-    hasMore = page.hasMore;
   }
-  return counts;
+  return balanceFailure ? { ...counts, balanceFailure } : counts;
 }
 
 /**
@@ -306,6 +352,24 @@ async function reconcileOwnMirror(
 }
 
 export const syncRunHandler: ToolFactory = (ports) => async (input) => {
+  const lease = await ports.kv.get(NS.connections, SYNC_LEASE_KEY);
+  const heldAt = typeof lease?.at === "number" ? lease.at : 0;
+  if (ports.now().getTime() - heldAt < SYNC_LEASE_MS) {
+    console.warn("finance.sync skipped_busy");
+    return { status: "busy", items: [] };
+  }
+  await ports.kv.set(NS.connections, SYNC_LEASE_KEY, { at: ports.now().getTime() });
+  try {
+    return await runSync(ports, input);
+  } finally {
+    await ports.kv.delete(NS.connections, SYNC_LEASE_KEY);
+  }
+};
+
+const runSync: (
+  ports: WorkerPorts,
+  input: Record<string, unknown>
+) => Promise<Record<string, unknown>> = async (ports, input) => {
   // Host-bound identity (spec delta "Host change 2"): the queue envelope and
   // the API host's tool-input injection both deliver actorUserId — required,
   // because the mirror's own-prefix contract hangs off it.
@@ -350,7 +414,7 @@ export const syncRunHandler: ToolFactory = (ports) => async (input) => {
       continue;
     }
     try {
-      const counts = await syncItem(
+      const { balanceFailure, ...counts } = await syncItem(
         ports,
         store,
         plaid,
@@ -361,11 +425,14 @@ export const syncRunHandler: ToolFactory = (ports) => async (input) => {
       );
       // Success clears any prior failure state — this is also how a
       // reauth-required item returns to connected after Hosted Link update.
+      // A balance-check failure that fell back is still worth reading back, so
+      // its detail is kept while the item itself reports connected.
       const { lastError: _cleared, lastErrorDetail: _clearedDetail, ...rest } = item;
       await store.putItem({
         ...rest,
         status: "connected",
-        lastSyncAt: ports.now().toISOString()
+        lastSyncAt: ports.now().toISOString(),
+        ...(balanceFailure ? { lastErrorDetail: balanceFailure } : {})
       });
       results.push({ itemId: item.itemId, status: "connected", ...counts });
     } catch (error) {

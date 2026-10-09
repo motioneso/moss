@@ -111,8 +111,23 @@ function mapAccount(raw: Json): PlaidAccount {
   };
 }
 
-function capped(value: unknown): string | null {
-  return typeof value === "string" ? value.slice(0, 500) : null;
+const MAX_DETAIL_CHARS = 500;
+
+/**
+ * Plaid text saved or logged for diagnosis. Anything that looks like a token,
+ * a long digit run (account numbers) or one of our own credentials is
+ * replaced, then the text is capped with an explicit truncation marker.
+ */
+function scrubbed(value: unknown, secrets: readonly string[]): string | null {
+  if (typeof value !== "string") return null;
+  let text = value;
+  for (const secret of secrets) {
+    if (secret.length >= 4) text = text.split(secret).join("[redacted]");
+  }
+  text = text
+    .replace(/\b(?:access|public|link|processor)-[A-Za-z0-9-]+/g, "[redacted]")
+    .replace(/\d{6,}/g, "[redacted]");
+  return text.length > MAX_DETAIL_CHARS ? `${text.slice(0, MAX_DETAIL_CHARS)}...[truncated]` : text;
 }
 
 export function createPlaid(
@@ -120,6 +135,8 @@ export function createPlaid(
   env: PlaidEnv,
   creds: PlaidCreds
 ): PlaidClient {
+  const secrets = [creds.clientId, creds.secret];
+
   function request(path: string, body: Json): FinanceFetchRequest {
     const payload = { client_id: creds.clientId, secret: creds.secret, ...body };
     return {
@@ -144,9 +161,9 @@ export function createPlaid(
         typeof json.error_code === "string" ? json.error_code : `http_${response.status}`,
         response.status,
         {
-          type: capped(json.error_type),
-          message: capped(json.error_message),
-          requestId: capped(json.request_id)
+          type: scrubbed(json.error_type, secrets),
+          message: scrubbed(json.error_message, secrets),
+          requestId: scrubbed(json.request_id, secrets)
         }
       );
     }
