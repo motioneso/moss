@@ -1,0 +1,272 @@
+{
+  "issue": 41,
+  "slug": "2026-10-09",
+  "weekOf": "October 5, 2026",
+  "summary": "Meetings you can record from your Mac, a chat that sits beside your page, Moss doing more of the app for you, and a long list of fixes.",
+  "intro": "A big week. Meetings arrived and learned to record from your Mac, chat moved over to sit beside whatever you're looking at, and Moss can now handle a lot more of the app on your behalf. Settings, Activity and Tasks all got a fresh coat too, and the fixes are at the bottom if that's all you came for.",
+  "headline": {
+    "title": "Meetings, recorded from your Mac",
+    "body": [
+      "Moss now has a Meetings page that keeps the live transcript and your own notes side by side, with a summary written when you stop. Link your Mac once, then start, pause or stop recording from a small pill on your screen, choosing whether to capture your microphone, the call audio or both. You can hide the pill and the meeting keeps going. Your notes stay private, past meetings show up in History, and meeting data is included when you export your account.",
+      "The recording also got a lot sturdier over the week. It no longer stops itself a moment after you press Start, rides out microphone hiccups without a Resume, keeps going when you join a Teams or Google Meet call in your browser, cuts down on echo from your speakers, and stops writing repeated lines during silence. Summaries use your default model and tell you plainly when they can't run."
+    ],
+    "prs": [
+      2982,
+      3056,
+      3079,
+      3082,
+      3093,
+      3099,
+      3104,
+      3119,
+      3120,
+      3153
+    ]
+  },
+  "sections": [
+    {
+      "title": "New",
+      "items": [
+        {
+          "title": "Moss can do much more of the app from chat",
+          "body": "Ask in chat and Moss can now find and use many more of the app's own actions, such as reviewing memory suggestions. Anything that deletes, including deleting a note, always shows you a card to approve first, and those cards are calmer and clearer about what happened once you decide.",
+          "prs": [
+            3071,
+            3094,
+            3091
+          ]
+        },
+        {
+          "title": "Chat beside your page",
+          "body": "On a wide screen, chat now makes room for itself next to the page you're on, so you can see your day while you ask about it. An Expand button lets it fill the screen, and History and private chat live in a new More menu.",
+          "prs": [
+            2941,
+            2958,
+            2961
+          ]
+        },
+        {
+          "title": "More say over your theme",
+          "body": "The theme editor has a new look, and your own themes can now set the colour of the navigation bar and of the header at the top of every page. Paste a palette to pick from, or click part of the preview to change that colour.",
+          "prs": [
+            3004,
+            3021
+          ]
+        },
+        {
+          "title": "Choose your decision model",
+          "body": "The model that sorts your mail and judges your focus can now be Cloudflare's Clef or any service compatible with Jev.",
+          "prs": [
+            3059
+          ]
+        },
+        {
+          "title": "A model activity log for admins",
+          "body": "Admins can see every model call Moss makes, from chat replies to background jobs, with the time, kind, model and result, and without any chat content.",
+          "prs": [
+            2900,
+            2904
+          ]
+        },
+        {
+          "title": "Classifier trial tools for admins",
+          "body": "While the classifier runs as a trial, admins can open a report on how often it agreed with the main chat model over the last 7, 30 or 90 days. Anyone can ask Moss in chat to delete the trial records kept about their messages, and Moss confirms before it does.",
+          "prs": [
+            2964,
+            2937
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Improved",
+      "items": [
+        {
+          "title": "Connected tools sort themselves",
+          "body": "When you add or refresh a connection, Moss sorts each of its tools by what it does, in the background, so there's no reviewing them one by one. Tools that only look things up or make ordinary changes run without asking, while sensitive tools still check with you, and tools that send things out do too unless you allow them to send without asking. Each connection page now uses the full width, groups tools by what they do, gives each one a single switch, and shows whether its safety check is ready.",
+          "prs": [
+            3006,
+            3009,
+            3011,
+            3014,
+            3033,
+            3045,
+            2953
+          ]
+        },
+        {
+          "title": "Settings, redesigned",
+          "body": "Settings now matches the rest of Moss and uses the whole screen. Connected accounts, your notes folder and services live together on one Connections page, a few pages have plainer names, and on a phone you pick a section from a menu.",
+          "prs": [
+            2930,
+            2935
+          ]
+        },
+        {
+          "title": "One activity history",
+          "body": "The Activity page shows every kind of work Moss did for you, with what happened, how long it took and the detail of each step. Filter by time, module or model, and your choices are remembered.",
+          "prs": [
+            2976
+          ]
+        },
+        {
+          "title": "Catch-up shows the emails worth your time",
+          "body": "The catch-up on Today lists each email worth knowing about, who it's from and what it says, with buttons to open it, reply, turn it into a task or dismiss it.",
+          "prs": [
+            3031
+          ]
+        },
+        {
+          "title": "A calmer, clearer Today",
+          "body": "The header says the right time of day and explains when a briefing isn't ready yet. Empty days get one quiet line instead of three empty messages, the smallest text is a touch larger, and the faint contour lines behind the header are back.",
+          "prs": [
+            2929,
+            2931,
+            2948,
+            3017
+          ]
+        },
+        {
+          "title": "A refreshed Tasks page",
+          "body": "Tasks has a park-inspired layout with a visible list index, with quick capture and both task views close at hand.",
+          "prs": [
+            2972
+          ]
+        },
+        {
+          "title": "Your assistant, by name",
+          "body": "If you've given your assistant a name, it now shows throughout the app, from the loading screen to the menu and settings.",
+          "prs": [
+            3032
+          ]
+        },
+        {
+          "title": "Nicer waiting and small consistencies",
+          "body": "The loading screen appears straight away instead of a blank page, follows your light or dark setting, and shows a gently animated logo. Every page now has the same date line under its title.",
+          "prs": [
+            2944,
+            3052,
+            3008
+          ]
+        },
+        {
+          "title": "Chat works better with the keyboard",
+          "body": "Opening chat puts the cursor in the message box, Escape closes it and returns you to where you were, and on a phone the Tab key stays inside the chat.",
+          "prs": [
+            2938
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "Transactions from your connected banks arrive even when the bank's live balance check fails, and a first sync runs as soon as you connect.",
+      "prs": [
+        3166
+      ]
+    },
+    {
+      "text": "Moss no longer stalls for minutes while it indexes your notes, and checking email no longer hangs.",
+      "prs": [
+        3030
+      ]
+    },
+    {
+      "text": "With no AI model connected, chat says so and offers to connect one, and your draft no longer vanishes while you type.",
+      "prs": [
+        2926,
+        2965
+      ]
+    },
+    {
+      "text": "Starting a new chat stops the reply still being written, so it can't spill into the new one.",
+      "prs": [
+        2963
+      ]
+    },
+    {
+      "text": "Refreshing the \"On your radar\" nudges on Today works again.",
+      "prs": [
+        2967
+      ]
+    },
+    {
+      "text": "Sports no longer promises a quiet night while one of your teams is playing or has played.",
+      "prs": [
+        2945
+      ]
+    },
+    {
+      "text": "Faint text is easier to read, small controls on Today are easier to tap on a phone, and the Activity filters wrap on narrow screens.",
+      "prs": [
+        2946,
+        2947,
+        3060
+      ]
+    },
+    {
+      "text": "The account menu shows just your name and picture, and fits on a phone without scrolling.",
+      "prs": [
+        2988
+      ]
+    },
+    {
+      "text": "The model button above the chat box shows a readable name instead of a technical code.",
+      "prs": [
+        2980
+      ]
+    },
+    {
+      "text": "Trail Marker's focus checks are deleted after 30 days as promised, and are included in exports and account deletion.",
+      "prs": [
+        2977
+      ]
+    },
+    {
+      "text": "A group switch on a connection turns every tool in the group on or off, and shows the right state.",
+      "prs": [
+        2992
+      ]
+    },
+    {
+      "text": "The notice before preparing a connection's tools says plainly what is sent as written.",
+      "prs": [
+        2996
+      ]
+    },
+    {
+      "text": "The classifier trial counts connected tools correctly, skips look-up tools it can never offer, and logs checks that time out.",
+      "prs": [
+        3037,
+        3050,
+        3062,
+        3064
+      ]
+    },
+    {
+      "text": "Two notices with the same title each keep their own card.",
+      "prs": [
+        3063
+      ]
+    },
+    {
+      "text": "The top bar stays readable in a custom theme with dark mode on.",
+      "prs": [
+        3018
+      ]
+    },
+    {
+      "text": "The task details close button is back in the corner.",
+      "prs": [
+        3007
+      ]
+    },
+    {
+      "text": "The model filter list on Activity looks tidy again.",
+      "prs": [
+        3048
+      ]
+    }
+  ]
+}
