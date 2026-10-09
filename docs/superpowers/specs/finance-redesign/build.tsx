@@ -61,7 +61,15 @@ const money = (cents: number) => {
   return `${sign}$${abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-type Line = { name: string; assigned: number; spent: number; available: number; moved?: number };
+// available = carried + assigned - spent. Unspent money carries into the next month.
+type Line = {
+  name: string;
+  assigned: number;
+  spent: number;
+  available: number;
+  moved?: number;
+  carried?: number;
+};
 const groups: { name: string; lines: Line[] }[] = [
   {
     name: "Bills",
@@ -91,8 +99,8 @@ const groups: { name: string; lines: Line[] }[] = [
   {
     name: "Savings",
     lines: [
-      { name: "Emergency fund", assigned: 30000, spent: 0, available: 214000 },
-      { name: "Travel", assigned: 20000, spent: 0, available: 86000 }
+      { name: "Emergency fund", assigned: 30000, spent: 0, available: 900000, carried: 870000 },
+      { name: "Travel", assigned: 20000, spent: 0, available: 200000, carried: 180000 }
     ]
   }
 ];
@@ -117,7 +125,13 @@ const days: { label: string; txs: Tx[] }[] = [
         amount: 675,
         look: true
       },
-      { payee: "City Transit", category: "Gas and transit", account: "Harbor Visa", amount: 275 }
+      {
+        payee: "City Transit",
+        category: "Gas and transit",
+        account: "Harbor Visa",
+        amount: 275,
+        look: true
+      }
     ]
   },
   {
@@ -160,6 +174,8 @@ const days: { label: string; txs: Tx[] }[] = [
 ];
 
 const categoryNames = groups.flatMap((g) => g.lines.map((l) => l.name));
+const lookCount = days.flatMap((d) => d.txs).filter((t) => t.look).length;
+const overCount = groups.flatMap((g) => g.lines).filter((l) => l.available < 0).length;
 
 // ---- Shell ----
 
@@ -329,6 +345,15 @@ function AvailableCell({ cents, labelled }: { cents: number; labelled?: boolean 
   );
 }
 
+function Carried({ cents }: { cents?: number }) {
+  if (!cents) return null;
+  return (
+    <div>
+      <Badge>{money(cents)} carried over</Badge>
+    </div>
+  );
+}
+
 function MossMove({ cents }: { cents?: number }) {
   if (!cents) return null;
   return (
@@ -399,6 +424,7 @@ function GroupTable({ group, head }: { group: (typeof groups)[number]; head?: bo
                 <div className="stack stack--tight">
                   <span>{l.name}</span>
                   <MossMove cents={l.moved} />
+                  <Carried cents={l.carried} />
                 </div>
               </td>
               <td className="jds-table__num">
@@ -438,6 +464,7 @@ function GroupRows({ group }: { group: (typeof groups)[number] }) {
             excerpt={
               <div className="stack stack--tight">
                 <MossMove cents={l.moved} />
+                <Carried cents={l.carried} />
                 <span>
                   {money(l.spent)} spent of {money(l.assigned)}
                 </span>
@@ -458,13 +485,13 @@ function GroupRows({ group }: { group: (typeof groups)[number] }) {
   );
 }
 
-function BudgetHero() {
+function BudgetHero({ short }: { short?: boolean }) {
   return (
     <Masthead
       tone="field"
       eyebrow="Ready to assign"
-      title="$412.00"
-      lede="Give every dollar a job, or ask Moss to."
+      title={money(readyToAssign)}
+      lede={short ? undefined : "Give every dollar a job, or ask Moss to."}
       aside={
         <div className="row month-step">
           <Button variant="field" size="sm" aria-label="September">
@@ -486,12 +513,17 @@ const balances: { name: string; cents: number; stale?: string }[] = [
   { name: "Harbor Visa", cents: -61244 }
 ];
 
+// Every dollar in the accounts, less card debt, sits in a category or is ready to assign.
+const netWorth = balances.reduce((sum, b) => sum + b.cents, 0);
+const readyToAssign =
+  netWorth - groups.flatMap((g) => g.lines).reduce((sum, l) => sum + l.available, 0);
+
 function NeedsYou() {
   return (
     <RailBlock eyebrow="Needs you" title="Two things">
       <div className="stat-pair">
-        <StatTile label="Needs a look" value="6" onClick={noop} />
-        <StatTile label="Overspent" value="1" warn onClick={noop} />
+        <StatTile label="Needs a look" value={String(lookCount)} onClick={noop} />
+        <StatTile label="Overspent" value={String(overCount)} warn onClick={noop} />
       </div>
     </RailBlock>
   );
@@ -522,7 +554,7 @@ function Balances() {
 
 // Phone shows balances collapsed to their total; tapping opens the list.
 function BalancesCollapsed() {
-  const total = balances.reduce((sum, b) => sum + b.cents, 0);
+  const stale = balances.some((b) => b.stale);
   return (
     <section className="stack stack--tight">
       <SectionHead
@@ -532,7 +564,12 @@ function BalancesCollapsed() {
             <ChevronDown aria-hidden="true" size={18} />
           </DisclosureToggle>
         }
-        meta={money(total)}
+        meta={
+          <span className="row">
+            {stale ? <Indicator status="error" label="Sign-in expired" /> : null}
+            {money(netWorth)}
+          </span>
+        }
         rule
       />
     </section>
@@ -561,15 +598,15 @@ function Budget({ width }: { width: Width }) {
     return (
       <Frame
         width={width}
-        hero={<BudgetHero />}
+        hero={<BudgetHero short />}
         tab="budget"
         main={
           <>
             <NeedsYou />
-            <BalancesCollapsed />
             {groups.map((g) => (
               <GroupRows key={g.name} group={g} />
             ))}
+            <BalancesCollapsed />
           </>
         }
       />
@@ -673,8 +710,9 @@ function TxDayRows({ day }: { day: (typeof days)[number] }) {
             excerpt={
               t.look ? (
                 <div className="stack stack--tight">
-                  <div>
+                  <div className="row row--spread">
                     <Badge tone="amber">Predicted</Badge>
+                    <span>{money(t.amount)}</span>
                   </div>
                   <LookControls tx={t} />
                 </div>
@@ -682,7 +720,8 @@ function TxDayRows({ day }: { day: (typeof days)[number] }) {
                 `${t.category} · ${t.account}`
               )
             }
-            meta={t.income ? <strong>+{money(-t.amount)}</strong> : money(t.amount)}
+            // A row waiting for a look shows its amount beside the badge, above the controls.
+            meta={t.look ? null : t.income ? <strong>+{money(-t.amount)}</strong> : money(t.amount)}
           />
         ))}
       </RowIndex>
@@ -706,10 +745,10 @@ function Transactions({ width }: { width: Width }) {
                 onChange={noop}
                 options={[
                   { value: "all", label: "All" },
-                  { value: "look", label: "Needs a look (6)" }
+                  { value: "look", label: `Needs a look (${lookCount})` }
                 ]}
               />
-              <Button variant="secondary">Confirm all 6</Button>
+              <Button variant="secondary">Confirm all {lookCount}</Button>
             </div>
             <input
               className="jds-input search"
@@ -754,15 +793,15 @@ function Accounts({ width }: { width: Width }) {
                 title="Harbor Credit Union"
                 excerpt={
                   <div className="stack stack--tight">
-                    <span>Checking ending 4821 · $3,482.10</span>
-                    <span>Visa ending 1190 · owes $612.44</span>
+                    <span>Checking · xxx4821 · $3,482.10</span>
+                    <span>Visa · xxx1190 · owes $612.44</span>
                   </div>
                 }
                 meta={<Indicator status="ready" label="Synced 2 hours ago" />}
               />
               <RowIndexItem
                 title="Northline Bank"
-                excerpt="Savings ending 7302 · $9,210.00 as of October 5"
+                excerpt="Savings · xxx7302 · $9,210.00 as of October 5"
                 meta={
                   <div className="stack stack--tight bal-meta">
                     <Indicator status="error" label="Sign-in expired" />
@@ -781,8 +820,8 @@ function Accounts({ width }: { width: Width }) {
               <thead>
                 <tr>
                   <th>Month</th>
-                  <th className="jds-table__num">Have</th>
-                  <th className="jds-table__num">Owe</th>
+                  <th className="jds-table__num">Assets</th>
+                  <th className="jds-table__num">Debts</th>
                   <th className="jds-table__num">Net worth</th>
                 </tr>
               </thead>
@@ -813,7 +852,16 @@ function Accounts({ width }: { width: Width }) {
 
 // ---- Getting started: no bank ----
 
-function StartConnect({ width }: { width: Width }) {
+// Without Plaid keys an admin is sent to add them and everyone else waits on the admin.
+function StartConnect({ width, keys }: { width: Width; keys?: "admin" | "member" }) {
+  const connect =
+    keys === "admin" ? (
+      <Button>Add bank keys</Button>
+    ) : keys === "member" ? (
+      <Indicator status="idle" label="Waiting on your admin" />
+    ) : (
+      <Button>Connect a bank</Button>
+    );
   return (
     <Frame
       width={width}
@@ -830,19 +878,13 @@ function StartConnect({ width }: { width: Width }) {
           <SectionHead title="Three steps" rule />
           <div className="steps">
             <RowIndex density="compact">
-              <RowIndexItem
-                title="1. Connect a bank"
-                excerpt="Sign in through Plaid. It takes about a minute per bank."
-                meta={<Button>Connect a bank</Button>}
-              />
+              <RowIndexItem title="1. Connect a bank" meta={connect} />
               <RowIndexItem
                 title="2. Moss sorts your spending"
-                excerpt="Every purchase lands in a category. You check anything from a new merchant."
                 meta={<Indicator status="idle" label="Next" />}
               />
               <RowIndexItem
                 title="3. Build your budget together"
-                excerpt="Moss proposes an amount for each category from your history. You adjust them in one chat."
                 meta={<Indicator status="idle" label="Then" />}
               />
             </RowIndex>
@@ -1094,7 +1136,7 @@ const families: { label: string; on: boolean }[] = [
   { label: "Sort purchases from merchants you've seen", on: true },
   { label: "Move money between categories", on: true },
   { label: "Sort purchases from new merchants", on: false },
-  { label: "Make merchant rules", on: false },
+  { label: "Make merchant rules", on: true },
   { label: "Add, rename or archive categories", on: false }
 ];
 
@@ -1114,7 +1156,7 @@ function FinanceSettings({ width }: { width: Width }) {
           {
             value: "ask",
             label: "Ask about everything",
-            description: "Moss suggests. Nothing changes until you say yes."
+            description: "Moss suggests every change for you to approve."
           },
           {
             value: "routine",
@@ -1251,13 +1293,13 @@ const activity: { when: string; who: "Moss" | "You"; what: string; via?: string;
     {
       when: "Yesterday 6:45 PM",
       who: "You",
-      what: "Made a rule: Kestrel Hardware goes to Household",
+      what: "Made a rule: Brightwire Internet goes to Phone and internet",
       undo: true
     },
     {
       when: "Yesterday 6:44 PM",
       who: "You",
-      what: "Confirmed Kestrel Hardware, $37.85, as Household",
+      what: "Confirmed Brightwire Internet, $65.00, as Phone and internet",
       undo: true
     },
     {
@@ -1309,6 +1351,12 @@ const screens: Screen[] = [
     title: "Getting started",
     what: "No bank yet.",
     render: (w) => <StartConnect width={w} />
+  },
+  {
+    id: "04-start-no-keys",
+    title: "Getting started, no bank keys",
+    what: "A fresh install. Admin on desktop, everyone else on phone.",
+    render: (w) => <StartConnect width={w} keys={w === "desktop" ? "admin" : "member"} />
   },
   {
     id: "05-first-budget",

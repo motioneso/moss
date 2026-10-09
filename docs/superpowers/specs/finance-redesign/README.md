@@ -14,6 +14,7 @@ All names, banks, merchants and amounts are made up.
 | `02-transactions`            | Transactions by day; predicted categories wait for a look        |
 | `03-accounts`                | Banks, sync status, reconnect, net worth by month                |
 | `04-start`                   | Getting started with no bank connected                           |
+| `04-start-no-keys`           | Getting started before an admin adds the bank keys               |
 | `05-first-budget`            | The draft from three months of history, adjusted in chat         |
 | `05-first-budget-phone-chat` | The same draft on phone with the chat drawer open                |
 | `06-settings`                | Finance settings, Plaid keys, and this week's activity with undo |
@@ -41,5 +42,5 @@ TSX_TSCONFIG_PATH=$PWD/docs/superpowers/specs/finance-redesign/render-tsconfig.j
   node --import tsx docs/superpowers/specs/finance-redesign/build.tsx
 ```
 
-It prints `Built 13 screens.` and exits 0. The pages pick up `moss-ui.css` as frozen; refreshing
+It prints `Built 15 screens.` and exits 0. The pages pick up `moss-ui.css` as frozen; refreshing
 that file is a deliberate step, not part of the rebuild.
