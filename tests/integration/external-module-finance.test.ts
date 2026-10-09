@@ -221,6 +221,7 @@ describe("finance module surface (#1146)", () => {
       {
         itemId: "item-1",
         institutionId: "ins_1",
+        institutionName: null,
         status: "connected",
         lastSyncAt: null,
         message: null
