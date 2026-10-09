@@ -23,6 +23,7 @@ import type {
   FinanceStore,
   ItemRecord,
   ReviewPolicy,
+  TransactionRecord,
   Rule,
   SortingTier
 } from "../../domain/index.js";
@@ -144,17 +145,26 @@ async function categorizeChunks(
   chunks: ChunkMap,
   touched: readonly string[],
   ctx: CategorizeCtx
-): Promise<ChunkMap> {
+): Promise<{ chunks: ChunkMap; autoConfirmed: TransactionRecord[] }> {
   const records = touched.flatMap((key) => chunks[key]?.transactions ?? []);
+  const before = new Map(records.map((record) => [record.id, record]));
   const updated = await categorize(records, ctx.rules, ctx.categories, ctx.ai, ctx.review);
   const byId = new Map(updated.map((record) => [record.id, record]));
+  // Moss's own confirmations: a Plaid-map or AI guess it settled without asking.
+  const autoConfirmed = updated.filter(
+    (record) =>
+      before.get(record.id)?.categoryId === null &&
+      record.categoryId !== null &&
+      record.reviewState === "confirmed" &&
+      (record.categorizedBy === "ai" || record.categorizedBy === "plaid-map")
+  );
   const next: ChunkMap = { ...chunks };
   for (const key of touched) {
     next[key] = {
       transactions: (chunks[key]?.transactions ?? []).map((record) => byId.get(record.id) ?? record)
     };
   }
-  return next;
+  return { chunks: next, autoConfirmed };
 }
 
 async function readCursorRecord(
@@ -343,7 +353,8 @@ async function syncItem(
     }
 
     const reduced = reduceSyncPage(chunks, page);
-    const next = await categorizeChunks(reduced.chunks, reduced.touched, categorizeCtx);
+    const categorized = await categorizeChunks(reduced.chunks, reduced.touched, categorizeCtx);
+    const next = categorized.chunks;
     for (const key of reduced.touched) {
       const pair = pairs.get(key)!;
       await store.putTransactionChunk(pair.accountId, pair.month, next[key]!.transactions);
@@ -355,6 +366,25 @@ async function syncItem(
           toSharedChunk(next[key]!)
         );
       }
+    }
+    for (const record of categorized.autoConfirmed) {
+      await store.appendActivity({
+        actor: "moss",
+        kind: "transaction.categorize",
+        params: {
+          transactionId: record.id,
+          accountId: record.accountId,
+          month: record.date.slice(0, 7),
+          categoryId: record.categoryId,
+          previousCategoryId: null
+        },
+        undo: {
+          transactionId: record.id,
+          accountId: record.accountId,
+          month: record.date.slice(0, 7),
+          categoryId: null
+        }
+      });
     }
     // Cursor LAST (see header): only after this page's chunks are durable.
     // The pagination start is kept while more pages remain so a later run can

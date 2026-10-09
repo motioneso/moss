@@ -1,6 +1,8 @@
 // tests/unit/external-module-finance-web-format.test.ts
 import { describe, expect, it } from "vitest";
 
+import { applyPending, settlePending } from "../../external-modules/finance/src/web/assign.js";
+
 import {
   centsToAmountInput,
   parseAmountToCents
@@ -49,5 +51,23 @@ describe("centsToAmountInput", () => {
     expect(centsToAmountInput(0)).toBe("0.00");
     expect(centsToAmountInput(-2000)).toBe("-20.00");
     expect(parseAmountToCents(centsToAmountInput(37655))).toBe(37655);
+  });
+});
+
+// #3174: typing an assigned amount in place on Budget.
+describe("typed budget amounts", () => {
+  it("a pending amount replaces the assigned total and moves available by the difference", () => {
+    const line = { id: "groceries", assigned: 65_000, available: 23_173 };
+    expect(applyPending(line, { groceries: 70_000 })).toEqual({
+      assigned: 70_000,
+      available: 28_173
+    });
+    expect(applyPending(line, { dining: 1 })).toEqual({ assigned: 65_000, available: 23_173 });
+  });
+
+  it("settling splits pending amounts into confirmed and mismatched by the server totals", () => {
+    expect(
+      settlePending({ groceries: 70_000, dining: 5_000, fun: 0 }, { groceries: 70_000, dining: 1 })
+    ).toEqual({ confirmed: ["groceries", "fun"], mismatched: ["dining"] });
   });
 });
