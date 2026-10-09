@@ -610,7 +610,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0295", name: "0295_meeting_capture_start_limits.sql" },
         { version: "0296", name: "0296_ai_action_origin_and_timeout.sql" },
         { version: "0297", name: "0297_chat_action_history_permissions.sql" },
-        { version: "0298", name: "0298_ai_action_outcome_delivery.sql" }
+        { version: "0298", name: "0298_ai_action_outcome_delivery.sql" },
+        { version: "0300", name: "0300_goals_id_defaults.sql" }
       ]);
     } finally {
       await client.end();
