@@ -26,14 +26,21 @@ const PREF_KEYS = new Set([
 const QUIET_HOURS_KEYS = new Set(["enabled", "startLocalTime", "endLocalTime"]);
 const SOURCE_PREF_KEYS = new Set(["enabled", "dailyCardCap"]);
 
+export interface SavedProactiveMonitoringPreference {
+  readonly raw: Readonly<Record<string, unknown>>;
+  readonly preference: ProactiveMonitoringPreferenceV1;
+  readonly hasLegacyEmailChoice: boolean;
+}
+
 export class ProactiveMonitoringPreferencesRepository {
   async get(scopedDb: DataContextDb): Promise<ProactiveMonitoringPreferenceV1> {
-    return (await this.getSaved(scopedDb)) ?? defaultProactiveMonitoringPreference();
+    const saved = await this.getSaved(scopedDb);
+    return saved?.preference ?? defaultProactiveMonitoringPreference();
   }
 
   async getSaved(
     scopedDb: DataContextDb
-  ): Promise<ProactiveMonitoringPreferenceV1 | null | undefined> {
+  ): Promise<SavedProactiveMonitoringPreference | null | undefined> {
     assertDataContextDb(scopedDb);
     const row = await scopedDb.db
       .selectFrom("app.preferences")
@@ -48,8 +55,12 @@ export class ProactiveMonitoringPreferencesRepository {
     }
   }
 
-  async upsert(scopedDb: DataContextDb, value: ProactiveMonitoringPreferenceV1): Promise<void> {
+  async upsert(
+    scopedDb: DataContextDb,
+    value: Record<string, unknown>
+  ): Promise<SavedProactiveMonitoringPreference> {
     assertDataContextDb(scopedDb);
+    const saved = parse(value);
     await scopedDb.db
       .insertInto("app.preferences")
       .values({
@@ -64,6 +75,7 @@ export class ProactiveMonitoringPreferencesRepository {
           .doUpdateSet({ value_json: jsonb(value), updated_at: new Date() })
       )
       .execute();
+    return saved;
   }
 }
 
@@ -142,14 +154,40 @@ export function validateProactiveMonitoringPreference(
   }
 }
 
-function parse(raw: unknown): ProactiveMonitoringPreferenceV1 {
+function parse(raw: unknown): SavedProactiveMonitoringPreference {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("malformed preference");
   }
   const p = raw as Record<string, unknown>;
   if (p.version !== 1) throw new Error("malformed preference");
-  validateProactiveMonitoringPreference(p);
-  return p;
+  const defaults = defaultProactiveMonitoringPreference();
+  const sources = p.sources;
+  const quietHours = p.quietHours;
+  if (
+    sources !== undefined &&
+    (!sources || typeof sources !== "object" || Array.isArray(sources))
+  ) {
+    throw new Error("malformed preference");
+  }
+  if (
+    quietHours !== undefined &&
+    (!quietHours || typeof quietHours !== "object" || Array.isArray(quietHours))
+  ) {
+    throw new Error("malformed preference");
+  }
+  const preference = {
+    ...defaults,
+    ...p,
+    sources: { ...defaults.sources, ...(sources ?? {}) },
+    quietHours: { ...defaults.quietHours, ...(quietHours ?? {}) }
+  };
+  validateProactiveMonitoringPreference(preference);
+  return {
+    raw: p,
+    preference,
+    hasLegacyEmailChoice:
+      "enabled" in p || (Boolean(sources) && "email" in (sources as Record<string, unknown>))
+  };
 }
 
 function isLocalTime(s: string): boolean {
@@ -169,18 +207,22 @@ export function resolveSourcePreference(
  * explicit email choice.
  */
 export function resolveAutomaticEmailAlertsEnabled(
-  saved: ProactiveMonitoringPreferenceV1 | null | undefined
+  saved: SavedProactiveMonitoringPreference | null | undefined
 ): boolean {
   if (saved === undefined) return true;
   if (saved === null) return false;
-  if (typeof saved.automaticEmailAlerts === "boolean") return saved.automaticEmailAlerts;
-  return saved.enabled && saved.sources.email.enabled;
+  if (typeof saved.preference.automaticEmailAlerts === "boolean") {
+    return saved.preference.automaticEmailAlerts;
+  }
+  return saved.hasLegacyEmailChoice
+    ? saved.preference.enabled && saved.preference.sources.email.enabled
+    : true;
 }
 
 export function isProactiveSourceEnabled(
   preference: ProactiveMonitoringPreferenceV1,
   source: ProactiveSource,
-  saved: ProactiveMonitoringPreferenceV1 | null | undefined = preference
+  saved: SavedProactiveMonitoringPreference | null | undefined
 ): boolean {
   return source === "email"
     ? resolveAutomaticEmailAlertsEnabled(saved)

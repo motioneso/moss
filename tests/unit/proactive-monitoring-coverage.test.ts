@@ -231,10 +231,21 @@ describe("automatic email alert choice", () => {
 
     expect(resolveAutomaticEmailAlertsEnabled(undefined)).toBe(true);
     expect(resolveAutomaticEmailAlertsEnabled(null)).toBe(false);
-    expect(resolveAutomaticEmailAlertsEnabled({ ...legacyOff, enabled: false })).toBe(false);
-    expect(resolveAutomaticEmailAlertsEnabled(explicitEmailOn)).toBe(true);
-    expect(isProactiveSourceEnabled(explicitEmailOn, "email", explicitEmailOn)).toBe(true);
-    expect(isProactiveSourceEnabled(explicitEmailOn, "calendar", explicitEmailOn)).toBe(false);
+    const legacySaved = {
+      raw: { ...legacyOff, enabled: false },
+      preference: { ...legacyOff, enabled: false },
+      hasLegacyEmailChoice: true
+    };
+    const explicitSaved = {
+      raw: { ...explicitEmailOn },
+      preference: explicitEmailOn,
+      hasLegacyEmailChoice: false
+    };
+
+    expect(resolveAutomaticEmailAlertsEnabled(legacySaved)).toBe(false);
+    expect(resolveAutomaticEmailAlertsEnabled(explicitSaved)).toBe(true);
+    expect(isProactiveSourceEnabled(explicitEmailOn, "email", explicitSaved)).toBe(true);
+    expect(isProactiveSourceEnabled(explicitEmailOn, "calendar", explicitSaved)).toBe(false);
   });
 });
 

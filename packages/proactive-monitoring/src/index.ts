@@ -11,6 +11,7 @@ export {
   ProactiveMonitoringPreferencesRepository,
   isProactiveSourceEnabled,
   resolveAutomaticEmailAlertsEnabled,
+  type SavedProactiveMonitoringPreference,
   validateProactiveMonitoringPreference,
   resolveSourcePreference
 } from "./preferences-repository.js";
