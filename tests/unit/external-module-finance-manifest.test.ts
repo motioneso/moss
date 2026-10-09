@@ -129,8 +129,15 @@ describe("finance manifest contract (#1146)", () => {
     ).toEqual([
       ["sorting", "ask_each_time"],
       ["sorting_new", "ask_each_time"],
-      ["bank_connections", "always_confirm"]
+      ["bank_connections", "always_confirm"],
+      ["sharing", "always_confirm"]
     ]);
+    // Sharing balances with the household must always ask, even unattended (review A1).
+    expect(toolByName("finance.account.set-shared").actionFamilyId).toBe("sharing");
+    expect(
+      (result.manifest.assistantActionFamilies ?? []).find((family) => family.id === "sharing")
+        ?.allowedTiers
+    ).toEqual(["always_confirm"]);
     // FIN-03 (#1148): budget reads are free; assigning money is a mutation,
     // so the assistant path confirms (D4) while the web path enqueues
     // finance.budget-apply instead (D3).

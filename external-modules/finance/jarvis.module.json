@@ -280,6 +280,7 @@
         },
         "required": ["accountId", "shared"]
       },
+      "actionFamilyId": "sharing",
       "handler": "account.set-shared"
     },
     {
@@ -330,6 +331,13 @@
       "id": "bank_connections",
       "label": "Connect a bank",
       "description": "Start a bank connection.",
+      "defaultTier": "always_confirm",
+      "allowedTiers": ["always_confirm"]
+    },
+    {
+      "id": "sharing",
+      "label": "Share an account with the household",
+      "description": "Show or hide one of your bank accounts to the people you live with.",
       "defaultTier": "always_confirm",
       "allowedTiers": ["always_confirm"]
     }
