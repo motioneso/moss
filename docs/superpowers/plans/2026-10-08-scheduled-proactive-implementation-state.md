@@ -81,8 +81,15 @@ Runtime baseline and throwaway prototypes were not merged.
   drafts. The final builder delta adds public evidence only. Mocked browser checks supplement
   that installed proof; asynchronous selection and voice races have focused automated
   coverage rather than exhaustive live proof. The recovered unknown-fingerprint recovery
-  failure remains an unresolved observation. Fresh assembled checks require their own
-  integration commit/fingerprint receipt; builder receipts certify only their original inputs.
+  failure remains an unresolved observation. At clean assembled `81decfb143`, static,
+  70 units, 21 chat API checks and 17 Chromium cases passed. Its first configured-model
+  UAT failed after phone reload with a CSS preload error and detached Conversations button.
+  A bounded temporary harness passed 30 phone cycles; the pristine original UAT then passed
+  at the same clean commit/fingerprint and actual image, explicitly skipping its rebuild.
+  No cause, fix or diagnostic source change was established or retained. Both the original
+  failure and later pass remain recorded in the supplement. Final assembled checks require
+  fresh integration commit/fingerprint receipts on draft PR #3154; earlier receipts certify
+  only their original inputs, and the CSS failure is not classified as fixed or flaky.
 - #3156 and #3149 remain eligible after the verified repair; #3157 waits for #3156. #3127 is a scope container until both children pass its
   full acceptance; #3128 remains blocked by #3127. Use one builder
   and sequential independent reviews within available capacity; serialize heavy checks.
