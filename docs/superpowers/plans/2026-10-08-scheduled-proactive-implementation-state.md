@@ -1,10 +1,28 @@
 # Scheduled/proactive implementation state
 
-Parent: #3096. Tickets: #3125–#3148. Integration branch: `integration/scheduled-proactive`.
-Base: current main `2c81aa484`; documentation-only carry from open PR #3097 at `7b422e3ff`.
+Parent: #3096. Original tickets: #3125–#3148, with published native children. Integration branch: `integration/scheduled-proactive`.
+Initial integration base: main `2c81aa484`; documentation-only carry from open PR #3097 at `7b422e3ff`.
 Runtime baseline and throwaway prototypes were not merged.
 
 ## Current state
+
+- Latest 2026-10-09 scope: [Chat repairs and relative-reminder reslices](2026-10-09-chat-repairs-and-relative-reminder-reslices.md)
+  is the pre-dispatch plan for native #3191 → #3192 → #3193 under #3126 and
+  #3194 → #3195 under #3149. #3126 additionally waits for #3193; #3149 additionally
+  waits for #3195; #3194 waits for #3125 and #3126. Original edges and acceptance remain.
+  #3149 is a full acceptance container under #3132; #3150 remains blocked by #3149.
+  Publication establishes scope, not implementation. Live graph: 39 nodes, 50 edges.
+  Next Chat dispatch is #3191 from current committed integration, after fit revalidation.
+- The #3126 core is integrated and scoped proof at clean pushed `fd134e7f1c65de402f661f8f2c899f814d60ea75`
+  passed/audited static, 70 units, 21 chat API, 17 browser and one real-model UAT.
+  [The exact public receipt](https://github.com/motioneso/moss/pull/3154#issuecomment-6084804308)
+  preserves that historical proof. New CI at synthetic merge `06143bf67cb5a402e2dc4f0463a383b871c5891b`
+  (main `5e17e32e616b1626d6eb4f26a1d37bf10a9be4b7` plus `fd134`) failed three units,
+  the owner-Main hydration browser's removed History interaction and Meetings private UAT's
+  removed History interaction. The three units were reproduced at `fd134`; causes are not
+  classified as preexisting/flaky. Native repair children remain pending; #3126 is incomplete.
+  The first CSS reload failure at `81decfb143` also remains unresolved; later passes establish
+  neither its cause nor a fix. Historical receipts do not certify a new documentation fingerprint.
 
 - Original native graph verified: 24 open subissues, 28 blocking edges; initial frontier
   #3125, #3129 and #3130. Ticket bodies and graph snapshot are stored outside the repo.
@@ -20,7 +38,7 @@ Runtime baseline and throwaway prototypes were not merged.
   Main continuation and caller cancellation. See the [repair supplement](../handoffs/2026-10-08-3125-main-reopen-repair-evidence.md)
   for exact pins, checks, runtime provenance and limits. The repair's final clean assembled
   tip `8fecaacae` passed full static, 258 focused units and 184 Main/chat DB regressions,
-  all exit 0. #3126, #3156 and #3149 are released from that repair hold; the coordinator
+  all exit 0. At that point #3126, #3156 and #3149 were released from that repair hold; the coordinator
   owns dispatch and records the verified frontier.
 - #3155 is integrated from `8ef212857`; independent source review and scoped installed
   UI/API/worker proof cleared `cd2641479`, using unchanged image runtime `28c43f5ac`.
@@ -87,10 +105,13 @@ Runtime baseline and throwaway prototypes were not merged.
   A bounded temporary harness passed 30 phone cycles; the pristine original UAT then passed
   at the same clean commit/fingerprint and actual image, explicitly skipping its rebuild.
   No cause, fix or diagnostic source change was established or retained. Both the original
-  failure and later pass remain recorded in the supplement. Final assembled checks require
-  fresh integration commit/fingerprint receipts on draft PR #3154; earlier receipts certify
-  only their original inputs, and the CSS failure is not classified as fixed or flaky.
-- #3156 and #3149 remain eligible after the verified repair; #3157 waits for #3156. #3127 is a scope container until both children pass its
+  failure and later pass remain recorded in the supplement. Final assembled scoped checks
+  passed at `fd134` as recorded above; earlier receipts certify
+  only their original inputs. The CSS failure is not classified as fixed or flaky, and new
+  CI/caller repair children remain pending.
+- #3156 remains eligible after its verified blocker; #3157 waits for #3156. #3149 now remains
+  a full acceptance container for #3194/#3195; neither reminder child is eligible until the
+  stated verified blockers pass. #3127 is a scope container until both children pass its
   full acceptance; #3128 remains blocked by #3127. Use one builder
   and sequential independent reviews within available capacity; serialize heavy checks.
   All other work remains pending its verified blockers. The coordinator owns dispatch
@@ -122,7 +143,8 @@ Runtime baseline and throwaway prototypes were not merged.
   and personal-pane ownership transfer from #3129 to #3130, and native reslices #3149–#3152
   under #3132/#3137, #3156→#3157 under #3127, and #3158→#3164→#3165→#3130 (retaining #3158→#3130). #3155, #3129 and #3158 are integrated and verified
   within their recorded source/live/assembled limits. Original downstream blockers are retained;
-  #3130 is not a scope container. The live-verified current graph has 34 nodes and 42 edges and is acyclic.
+  #3130 is not a scope container. That historical graph had 34 nodes and 42 edges; the latest
+  published scope above has 39 nodes and 50 edges. Revalidate GitHub native relationships before dispatch.
 - Each ticket uses a fresh TDD implementer, isolated worktree/branch from the integration
   tip, required checks and independent review, real UI/worker demonstration, evidence
   and truthful app-map updates. DB checks use `verify-gate`.
@@ -144,5 +166,5 @@ migration-decisions document. No migration decision is pending.
 
 ## Resources
 
-Worktree: `~/Jarv1s-scheduled-integration`. External state/research:
-`/tmp/moss-scheduled-implementation/`. No feature server or browser started.
+Worktree: `~/Jarv1s-scheduled-integration`. Private state, research and raw receipts remain
+outside the repository. No feature server or browser started by this documentation pass.

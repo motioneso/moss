@@ -1,13 +1,16 @@
 # Scheduled tasks and proactive messaging — implementation tickets
 
-Status: **24-ticket breakdown approved for publication on 2026-10-08; published as #3125–#3148. Implementation started with #3125; all four migration recommendations were separately approved. See [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md), [native reslices and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md), and [integration state](2026-10-08-scheduled-proactive-implementation-state.md).**
+Status: **24-ticket breakdown approved for publication on 2026-10-08; published as #3125–#3148. Implementation started with #3125; all four migration recommendations were separately approved. See [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md), [native reslices and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md), [latest Chat/reminder reslices](2026-10-09-chat-repairs-and-relative-reminder-reslices.md), and [integration state](2026-10-08-scheduled-proactive-implementation-state.md).**
 Source: [reconciled feature spec](../specs/2026-10-07-scheduled-tasks-and-proactive-messaging.md), [#3096](https://github.com/motioneso/moss/issues/3096), accepted mockups #3100–#3103. Related [#2388](https://github.com/motioneso/moss/issues/2388) remains open and is linked from every published task; its body/state and the parent body/state were preserved.
 
 The numbered slices below retain their proposal identifiers; use the publication map for GitHub issue numbers. Sizing revision: **24 approved ticket slices replace the original 15 drafts**. Each ticket is bounded to one fresh session including orientation, implementation, relevant checks, review, live demonstration and saved evidence. Session fit is an estimate grounded in existing seams, not a guarantee from a title. Revalidate the stated reuse assumptions against the build branch before dispatch. There is no schema-only, UI-only, final-hardening or final-proof ticket. A slice ships only the responsibility types it actually supports; it must not advertise later slices as available.
 
-## Published issue map
+## Original published issue map
 
-All 24 issues are native sub-issues of #3096, with native blocking relationships and the `task` and `ready-for-agent` labels. They are on project 2, **Issue and Roadmap Work**. Only the initial frontier is Ready; the remaining issues are in Backlog until their blockers are integrated and verified. The triage label does not override dependencies or unresolved migration decisions.
+This map records the initial publication. Later native reslices add prerequisites and scope
+containers; consult the integration state and latest plan before dispatch.
+
+All 24 issues are native sub-issues of #3096, with native blocking relationships and the `task` and `ready-for-agent` labels. They are on project 2, **Issue and Roadmap Work**. At initial publication only the frontier was Ready; the remaining issues were in Backlog until their blockers were integrated and verified. The triage label does not override dependencies or unresolved migration decisions.
 
 | Slice | GitHub issue                                                                                                              | Blocked by                                                                                                                                                             |
 | ----- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -37,6 +40,18 @@ All 24 issues are native sub-issues of #3096, with native blocking relationships
 | 24    | [#3148 — Send results to an explicitly requested side chat](https://github.com/motioneso/moss/issues/3148)                | [#3126](https://github.com/motioneso/moss/issues/3126), [#3135](https://github.com/motioneso/moss/issues/3135)                                                         |
 
 Initial frontier: [#3125](https://github.com/motioneso/moss/issues/3125), [#3129](https://github.com/motioneso/moss/issues/3129) and [#3130](https://github.com/motioneso/moss/issues/3130). Start with #3125 to validate the implementation/integration loop; coordinate file ownership before running #3129 and #3130 concurrently. Apply the separately approved migration rulings before coding.
+
+## Latest Chat/reminder dispatch scope — 2026-10-09
+
+The [committed reslice plan](2026-10-09-chat-repairs-and-relative-reminder-reslices.md)
+records complete native #3191 → #3192 → #3193 repairs under original #3126, then
+#3194 → #3195 under #3149/#3132. Original #3126 keeps #3125 and additionally waits for
+#3193; #3194 waits for #3125 and #3126; #3149 additionally waits for #3195 and retains
+its full acceptance. #3150 still waits for #3149; original #3132 acceptance and downstream
+blockers remain. The #3126 core has historical scoped proof at `fd134`, but new CI repairs
+are pending and the earlier CSS reload failure remains unresolved. No new reminder or
+repair was implemented by publication. These children supersede the earlier single-builder
+assumptions for #3126/#3149; original slice outcomes and all approvals below remain intact.
 
 ## Migration recommendations at publication
 
@@ -445,4 +460,4 @@ Each session includes the smallest relevant behavioral checks at existing seams,
 
 The initial frontier is #1, #5 and #6. The first reminder #8 depends only on stable Main chat, because it produces readable chat without outward interruptions. #10 adds notification policy after conflict resolution; #9 independently adds management. #13 adds the bounded read path independently of recurrence; #14 combines it with cadence. #18 does not wait for condition watches. #23 waits for a working requested watch to prove independent opt-out. #3–#4 are required for full conversation continuity but do not gate short isolated reminder/read runs. Every blocker listed is a direct prerequisite; neither review order nor shared ownership alone creates an edge.
 
-Publication complete: the user approved submitting this 24-ticket breakdown through `to-tickets`. All tickets retain their scope limits, acceptance criteria, live demonstrations and direct blockers; the map above records actual tracker identifiers. Approval to publish is not independent approval of the four migration recommendations. No builders were dispatched, production code changed, or issues/PRs merged or closed. A fresh `implement-spec` session should use current main, safely incorporate the documentation from PR #3097 if it is still unmerged, and work the native dependency frontier on one integration branch. Do not restart the accepted product interview or merge throwaway mockup branches.
+Initial publication receipt (2026-10-08): the user approved submitting this 24-ticket breakdown through `to-tickets`. All tickets retain their scope limits, acceptance criteria, live demonstrations and direct blockers; the map above records actual tracker identifiers. Approval to publish is not independent approval of the four migration recommendations. At that point no builders had been dispatched, production code changed, or issues/PRs merged or closed. Implementation now uses current committed `integration/scheduled-proactive` and the latest native frontier/plan above; the initial main/documentation bootstrap is historical. Do not restart the accepted product interview or merge throwaway mockup branches.
