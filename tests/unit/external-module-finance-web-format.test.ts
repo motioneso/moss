@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyPending,
   checkDelayMs,
+  chunkReviewRows,
   mergeBudgetParams,
   settlePending,
   trackChecks
@@ -113,5 +114,24 @@ describe("typed budget amounts", () => {
       amountsCents: Array.from({ length: 20 }, () => 1)
     };
     expect(mergeBudgetParams(full, a)).toBeNull();
+  });
+
+  it("splits 200 confirm rows into commands that each fit 2048 bytes (review A5)", () => {
+    const rows = Array.from({ length: 200 }, (_, n) => ({
+      transactionId: `plaid-transaction-id-${String(n).padStart(20, "0")}`,
+      accountId: "plaid-account-id-000000000000000000000",
+      month: "2026-07",
+      categoryId: "rent-mortgage"
+    }));
+    const chunks = chunkReviewRows(rows, true);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(JSON.stringify(chunk).length).toBeLessThanOrEqual(2048);
+      expect(chunk.createRule).toBe(true);
+    }
+    expect(chunks.flatMap((chunk) => chunk.transactionIds)).toEqual(
+      rows.map((row) => row.transactionId)
+    );
+    expect(chunkReviewRows([], false)).toEqual([]);
   });
 });

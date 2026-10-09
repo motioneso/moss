@@ -20,7 +20,8 @@ import {
   useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
-import { runQueue, type RunOutcome } from "../api";
+import { runWrite, type RunOutcome } from "../api";
+import { chunkReviewRows } from "../assign";
 import { currentMonth, dayLabel, formatCents, monthLabel, shiftMonth } from "../format";
 import { announce, EmptyState, outcomeGate } from "../states";
 import { invalidateQueries, useToolQuery } from "../store";
@@ -66,7 +67,7 @@ const isLook = (tx: Tx): boolean => tx.shared !== true && tx.reviewState === "ne
 
 /** True when the job was queued; false when the request failed and nothing will happen. */
 function afterRun(outcome: RunOutcome, queuedMessage: string, onQueued: () => void): boolean {
-  if (outcome.kind === "queued" || outcome.kind === "already-queued") {
+  if (outcome.kind === "queued") {
     announce(queuedMessage);
     setTimeout(() => {
       onQueued();
@@ -335,20 +336,29 @@ export function TransactionsScreen(): ReactNodeLike {
   const send = (rows: Tx[], categoryIds: string[], createRule: boolean, message: string): void => {
     const ids = rows.map((row) => row.id);
     setConfirmed((previous) => new Set([...previous, ...ids]));
-    void runQueue("finance.review-apply", "finance.review-apply", {
-      transactionIds: rows.map((row) => row.id),
-      accountIds: rows.map((row) => row.accountId),
-      months: rows.map(() => month),
-      categoryIds,
-      ...(createRule ? { createRule: true } : {})
-    }).then((outcome) => {
-      const queued = afterRun(outcome, message, () => {
-        releaseOnRead.current = [...releaseOnRead.current, ...ids];
-        readArmed.current = true;
-      });
-      // A request that never queued will not change anything, so show the rows again.
-      if (!queued) release(ids);
-    });
+    // One command per batch that fits the host's size limit; the sender spaces them apart.
+    const chunks = chunkReviewRows(
+      rows.map((row, i) => ({
+        transactionId: row.id,
+        accountId: row.accountId,
+        month,
+        categoryId: categoryIds[i] as string
+      })),
+      createRule
+    );
+    for (const chunk of chunks) {
+      const chunkIds = chunk.transactionIds;
+      void runWrite("finance.review-apply", "finance.review-apply", { ...chunk }).then(
+        (outcome) => {
+          const queued = afterRun(outcome, message, () => {
+            releaseOnRead.current = [...releaseOnRead.current, ...chunkIds];
+            readArmed.current = true;
+          });
+          // A command that never ran will not change anything, so show its rows again.
+          if (!queued) release(chunkIds);
+        }
+      );
+    }
   };
 
   const confirmOne = (tx: Tx, categoryId: string, makeRule: boolean): void =>

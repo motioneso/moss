@@ -107,3 +107,56 @@ export function mergeBudgetParams(
   const merged = { month: waiting.month, categoryIds: ids, amountsCents: amounts };
   return JSON.stringify(merged).length > MAX_PARAM_BYTES ? null : merged;
 }
+
+export interface ReviewRow {
+  transactionId: string;
+  accountId: string;
+  month: string;
+  categoryId: string;
+}
+
+export interface ReviewChunk {
+  transactionIds: string[];
+  accountIds: string[];
+  months: string[];
+  categoryIds: string[];
+  createRule?: true;
+}
+
+/**
+ * Splits rows into review-apply commands that each fit the host's 2048-byte limit on
+ * command parameters, keeping the row order.
+ */
+export function chunkReviewRows(rows: readonly ReviewRow[], createRule: boolean): ReviewChunk[] {
+  const fresh = (): ReviewChunk => ({
+    transactionIds: [],
+    accountIds: [],
+    months: [],
+    categoryIds: [],
+    ...(createRule ? { createRule: true as const } : {})
+  });
+  const add = (chunk: ReviewChunk, row: ReviewRow): void => {
+    chunk.transactionIds.push(row.transactionId);
+    chunk.accountIds.push(row.accountId);
+    chunk.months.push(row.month);
+    chunk.categoryIds.push(row.categoryId);
+  };
+  const chunks: ReviewChunk[] = [];
+  let current = fresh();
+  for (const row of rows) {
+    add(current, row);
+    const tooBig =
+      JSON.stringify(current).length > MAX_PARAM_BYTES || current.transactionIds.length > 200;
+    if (tooBig && current.transactionIds.length > 1) {
+      current.transactionIds.pop();
+      current.accountIds.pop();
+      current.months.pop();
+      current.categoryIds.pop();
+      chunks.push(current);
+      current = fresh();
+      add(current, row);
+    }
+  }
+  if (current.transactionIds.length > 0) chunks.push(current);
+  return chunks;
+}
