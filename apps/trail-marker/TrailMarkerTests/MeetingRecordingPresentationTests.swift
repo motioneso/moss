@@ -31,6 +31,79 @@ final class MeetingRecordingPresentationTests: XCTestCase {
         XCTAssertTrue(presentation.showsPill, "A new accepted Start shows it again")
     }
 
+    func testRecoveringOverridesHideWithDistinctVisibleStatusAndPauseControl() {
+        var presentation = MeetingRecordingPresentation()
+        presentation.acceptedStart()
+        presentation.update(phase: .recording, reconnecting: false, elapsedMilliseconds: 1000, level: 0.8)
+        presentation.hide()
+        presentation.update(phase: .recovering, reconnecting: true, elapsedMilliseconds: 1000, level: 0.8)
+        XCTAssertEqual(presentation.state, .recovering)
+        XCTAssertEqual(presentation.state.rawValue, "Recovering audio…")
+        XCTAssertNotEqual(presentation.state, .reconnecting, "Network delay and interrupted capture are different states")
+        XCTAssertTrue(presentation.showsPill, "A hidden pill must surface the audio interruption")
+        XCTAssertTrue(presentation.showsAttention)
+        XCTAssertTrue(presentation.canPause, "Pause remains usable while recovery is pending")
+        XCTAssertFalse(presentation.canHide)
+        XCTAssertEqual(presentation.meterLevels, [0, 0, 0], "Recovery must never imply live input")
+        presentation.hide()
+        XCTAssertTrue(presentation.showsPill)
+        presentation.update(phase: .recording, reconnecting: false, elapsedMilliseconds: 2000, level: 0.2)
+        XCTAssertFalse(presentation.showsPill, "Successful recovery restores the ordinary Hide preference")
+        XCTAssertFalse(presentation.showsAttention)
+        XCTAssertTrue(presentation.canHide)
+    }
+
+    func testInterruptionWarningForcesHiddenPillVisibleUntilExplicitlyCleared() {
+        var presentation = MeetingRecordingPresentation()
+        let reason = "The selected microphone is unavailable. Reconnect it, then press Resume."
+        presentation.acceptedStart()
+        presentation.hide()
+        for _ in 0..<3 {
+            presentation.update(phase: .paused, reconnecting: true, elapsedMilliseconds: 61000,
+                                level: 0.8, interruptionWarning: reason)
+            XCTAssertEqual(presentation.state, .interrupted)
+            XCTAssertEqual(presentation.interruptionWarning, reason)
+            XCTAssertTrue(presentation.showsPill)
+            XCTAssertTrue(presentation.showsRedDot)
+            XCTAssertFalse(presentation.canHide)
+            XCTAssertFalse(presentation.canPause)
+            XCTAssertEqual(presentation.elapsedText, "01:01")
+            XCTAssertEqual(presentation.meterLevels, [0, 0, 0])
+            presentation.hide()
+            XCTAssertTrue(presentation.showsPill, "The warning cannot be dismissed by X or native Close")
+        }
+        presentation.update(phase: .paused, reconnecting: false, elapsedMilliseconds: 61000, level: 0)
+        XCTAssertNil(presentation.interruptionWarning)
+        XCTAssertEqual(presentation.state, .paused)
+        XCTAssertFalse(presentation.showsPill, "Explicitly clearing the warning preserves ordinary user Pause/Hide")
+    }
+
+    func testCleanupErrorRemainsVisibleAfterRecordingSurfacesWereStopped() {
+        var presentation = MeetingRecordingPresentation()
+        presentation.acceptedStart()
+        presentation.hide()
+        presentation.stop()
+        let reason = "Audio cleanup failed. Stop recording and retry before continuing."
+        for _ in 0..<3 {
+            presentation.update(phase: .error, reconnecting: false, elapsedMilliseconds: 1000,
+                                level: 0.8, interruptionWarning: reason)
+            XCTAssertTrue(presentation.showsPill, "A real cleanup error must survive terminal-phase presentation updates")
+            XCTAssertEqual(presentation.state, .error)
+            XCTAssertEqual(presentation.interruptionWarning, reason)
+            XCTAssertFalse(presentation.showsRedDot, "A warning must not claim an active recording")
+            XCTAssertFalse(presentation.canPause)
+            XCTAssertFalse(presentation.canHide)
+            presentation.hide()
+            XCTAssertTrue(presentation.showsPill)
+        }
+        presentation.acceptedStart()
+        XCTAssertNil(presentation.interruptionWarning, "A new accepted Start clears the previous interruption")
+        XCTAssertTrue(presentation.canHide)
+        presentation.stop()
+        XCTAssertFalse(presentation.showsPill)
+        XCTAssertNil(presentation.interruptionWarning)
+    }
+
     func testEveryTerminalPhaseClearsBothSurfacesAndMeter() {
         for phase in [MeetingCaptureHost.Phase.stopping, .stopped, .error, .unprepared] {
             var presentation = MeetingRecordingPresentation()
@@ -146,6 +219,63 @@ final class MeetingRecordingPresentationTests: XCTestCase {
                 }
             }
         }
+    }
+
+    @MainActor
+    func testActualCleanupErrorShowsPanelAndRejectsEveryHideAction() {
+        let host = MeetingCaptureHost(connection: ConnectionRuntime(), factory: { _ in
+            XCTFail("A cleanup warning must not open audio devices")
+            return [:]
+        })
+        let controller = MeetingRecordingPillController(host: host)
+        defer {
+            host.shutdown(reason: "Synthetic cleanup-warning test finished")
+            controller.panel.orderOut(nil)
+        }
+        host.hideRecordingPill()
+        XCTAssertFalse(controller.panel.isVisible)
+        host.interrupt(error: MeetingAudioFailure.cleanupFailed)
+        XCTAssertEqual(host.phase, .error)
+        XCTAssertEqual(host.recordingPresentation.interruptionWarning, MeetingHostError.cleanupFailed.message)
+        XCTAssertTrue(host.canStop, "Cleanup failures retain Stop so disposal can be retried")
+        XCTAssertFalse(host.canResumeFromUserClick, "Cleanup failure must block Resume")
+        let hideActions: [() -> Void] = [host.hideRecordingPill, { controller.panel.close() }, { controller.panel.performClose(nil) }]
+        for hide in hideActions {
+            hide()
+            XCTAssertTrue(controller.panel.isVisible, "The actual cleanup warning cannot be hidden")
+            XCTAssertTrue(host.recordingPresentation.showsPill)
+        }
+    }
+
+    @MainActor
+    func testPanelExpandsForRecoveryAndFullWarningThenReturnsToCompactSize() {
+        let host = MeetingCaptureHost(connection: ConnectionRuntime(), factory: { _ in
+            XCTFail("Presentation must not open audio devices")
+            return [:]
+        })
+        let controller = MeetingRecordingPillController(host: host)
+        defer { controller.panel.orderOut(nil) }
+        var presentation = MeetingRecordingPresentation()
+        presentation.acceptedStart()
+        presentation.hide()
+        controller.present(presentation)
+        XCTAssertFalse(controller.panel.isVisible)
+        presentation.update(phase: .recovering, reconnecting: false, elapsedMilliseconds: 1000, level: 0)
+        controller.present(presentation)
+        XCTAssertTrue(controller.panel.isVisible)
+        XCTAssertEqual(controller.panel.frame.width, TrailMarkerTokens.Layout.menuPopoverWidth)
+        XCTAssertGreaterThan(controller.panel.frame.height, TrailMarkerTokens.Layout.recordingPillHeight)
+        let recoveryHeight = controller.panel.frame.height
+        presentation.update(phase: .paused, reconnecting: false, elapsedMilliseconds: 1000, level: 0,
+            interruptionWarning: "The selected microphone disconnected while capturing audio. Reconnect the same microphone and check its permission in macOS Settings, then press Resume. Capture will remain paused until you choose Resume or Stop.")
+        controller.present(presentation)
+        XCTAssertTrue(controller.panel.isVisible)
+        XCTAssertGreaterThan(controller.panel.frame.height, recoveryHeight, "The full reason must wrap instead of being clipped to pill height")
+        XCTAssertEqual(controller.panel.contentView?.frame.size, controller.panel.frame.size)
+        presentation.update(phase: .paused, reconnecting: false, elapsedMilliseconds: 1000, level: 0)
+        controller.present(presentation)
+        XCTAssertFalse(controller.panel.isVisible)
+        XCTAssertEqual(controller.panel.frame.size, NSSize(width: 222, height: 32))
     }
 
     @MainActor

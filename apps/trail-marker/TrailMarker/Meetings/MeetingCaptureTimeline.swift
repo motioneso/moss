@@ -81,12 +81,14 @@ struct MeetingCaptureTimeline {
         case .paused: reason = pauseReason
         case .expired: reason = "expired"
         case .bufferFull: reason = "buffer-full"
+        case .captureFailure(.sourceReconfigured): reason = "interrupted"
         case .captureFailure: reason = "source-unavailable"
         case .callbackContention, .startupTimestamp, .sourceVerification: reason = "interrupted"
         case .retentionDeclined, .cutoffChanged: reason = "discarded"
         }
         return makeGap(source: source, epoch: epoch.remoteEpoch, start: gap.startNanoseconds,
-            end: min(gap.endNanoseconds, epoch.endNanoseconds ?? gap.endNanoseconds), reason: reason)
+            end: min(gap.endNanoseconds, epoch.endNanoseconds ?? gap.endNanoseconds), reason: reason,
+            afterMappedAudio: gap.reason == .captureFailure(.sourceReconfigured))
     }
 
     func discardedTail(localEpoch: UInt64, at now: UInt64, reason: String) -> [MeetingCaptureGap] {
@@ -99,10 +101,15 @@ struct MeetingCaptureTimeline {
         }
     }
 
-    private func makeGap(source: String, epoch: UInt64, start: UInt64, end: UInt64, reason: String) -> MeetingCaptureGap? {
+    private func makeGap(source: String, epoch: UInt64, start: UInt64, end: UInt64, reason: String,
+                         afterMappedAudio: Bool = false) -> MeetingCaptureGap? {
         guard let origin = originNanoseconds, end > start, start >= origin else { return nil }
+        let startMs = afterMappedAudio ? MeetingWireAudioBoundary.milliseconds(coveringNanoseconds: start - origin)
+            : (start - origin) / 1_000_000
+        let endMs = MeetingWireAudioBoundary.milliseconds(coveringNanoseconds: end - origin)
+        guard endMs > startMs else { return nil }
         return .init(id: UUID().uuidString.lowercased(), sourceId: source, epoch: epoch,
-            startMs: (start - origin) / 1_000_000, endMs: (end - origin + 999_999) / 1_000_000, reason: reason)
+            startMs: startMs, endMs: endMs, reason: reason)
     }
 
     mutating func adoptPausedSources(_ capture: MeetingRemoteCapture, selection: MeetingCaptureChoice,
