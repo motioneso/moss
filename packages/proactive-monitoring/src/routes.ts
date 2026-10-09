@@ -3,7 +3,7 @@ import type { PgBoss } from "pg-boss";
 
 import type { AccessContext, DataContextRunner } from "@moss/db";
 import { handleRouteError } from "@moss/module-sdk";
-import type { ProactiveSource } from "@moss/shared";
+import { defaultProactiveMonitoringPreference, type ProactiveSource } from "@moss/shared";
 
 import { CardRepository, serializeCard } from "./card-repository.js";
 import { enqueueProactiveScan } from "./jobs.js";
@@ -60,8 +60,8 @@ export function registerProactiveMonitoringRoutes(
 
       const { pref, savedPreference, monitorStates } =
         await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
-          const pref = await prefsRepo.get(scopedDb);
           const savedPreference = await prefsRepo.getSaved(scopedDb);
+          const pref = savedPreference?.preference ?? defaultProactiveMonitoringPreference();
           const stateEntries = await Promise.all(
             sources.map(
               async (s) => [s, await monitorStateRepo.get(scopedDb, ctx.actorUserId, s)] as const
@@ -76,7 +76,7 @@ export function registerProactiveMonitoringRoutes(
       const registeredSources = await dependencies.resolveRegisteredSources(ctx.actorUserId);
       let enqueued = 0;
       for (const source of sources) {
-        if (!isProactiveSourceEnabled(pref, source, source === "email" ? savedPreference : pref)) {
+        if (!isProactiveSourceEnabled(pref, source, savedPreference)) {
           continue;
         }
         if (!registeredSources.has(source)) continue;

@@ -6,9 +6,9 @@ import { sessionRateLimitKey } from "@moss/module-sdk/server";
 import {
   ProactiveMonitoringPreferencesRepository,
   resolveAutomaticEmailAlertsEnabled,
-  validateProactiveMonitoringPreference
+  type SavedProactiveMonitoringPreference
 } from "@moss/proactive-monitoring";
-import type { ProactiveMonitoringPreferenceV1, ProactiveSource } from "@moss/shared";
+import type { ProactiveMonitoringPreferenceV1 } from "@moss/shared";
 import { defaultProactiveMonitoringPreference, parsePositiveIntEnv } from "@moss/shared";
 
 const PROACTIVE_SETTINGS_MAX = parsePositiveIntEnv(
@@ -24,7 +24,8 @@ import { handleSettingsRouteError } from "./route-error.js";
  */
 export type ReconcileProactiveScheduleFn = (
   actorUserId: string,
-  pref: ProactiveMonitoringPreferenceV1
+  pref: ProactiveMonitoringPreferenceV1,
+  saved: SavedProactiveMonitoringPreference | null | undefined
 ) => Promise<void>;
 
 interface ProactiveMonitoringSettingsRoutesDependencies {
@@ -45,7 +46,8 @@ export function registerProactiveMonitoringSettingsRoutes(
       const ctx = await dependencies.resolveAccessContext(request);
       const settings = await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
         const saved = await repository.getSaved(scopedDb);
-        return settingsResponse(saved ?? defaultProactiveMonitoringPreference(), saved);
+        if (saved === null) throw new HttpError(409, "Saved alert preference needs recovery");
+        return settingsResponse(saved);
       });
       return reply.send({ settings });
     } catch (error) {
@@ -70,20 +72,19 @@ export function registerProactiveMonitoringSettingsRoutes(
         const patch = parseSettingsPatch(request.body);
 
         const updated = await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
-          const current = await repository.get(scopedDb);
-          const merged = mergePreference(current, patch);
-          validateProactiveMonitoringPreference(merged);
-          await repository.upsert(scopedDb, merged);
-          return merged;
+          const saved = await repository.getSaved(scopedDb);
+          if (saved === null) throw new HttpError(409, "Saved alert preference needs recovery");
+          return repository.upsert(scopedDb, mergePreference(saved?.raw, patch));
         });
 
         await reconcileScheduleSafe(
           dependencies.reconcileProactiveSchedule,
           ctx.actorUserId,
+          updated.preference,
           updated
         );
 
-        return reply.send({ settings: settingsResponse(updated, updated) });
+        return reply.send({ settings: settingsResponse(updated) });
       } catch (error) {
         return handleSettingsRouteError(error, reply);
       }
@@ -111,61 +112,42 @@ function parseSettingsPatch(body: unknown): Partial<ProactiveMonitoringPreferenc
 }
 
 function mergePreference(
-  current: ProactiveMonitoringPreferenceV1,
+  current: Readonly<Record<string, unknown>> | undefined,
   patch: Partial<ProactiveMonitoringPreferenceV1>
-): ProactiveMonitoringPreferenceV1 {
-  const defaults = defaultProactiveMonitoringPreference();
-  const sources = patch.sources
-    ? mergeSources(current.sources, patch.sources, defaults)
-    : current.sources;
+): Record<string, unknown> {
+  const currentSources = objectValue(current?.sources);
+  const currentQuietHours = objectValue(current?.quietHours);
   return {
-    version: 1,
-    ...(typeof patch.automaticEmailAlerts === "boolean"
-      ? { automaticEmailAlerts: patch.automaticEmailAlerts }
-      : typeof current.automaticEmailAlerts === "boolean"
-        ? { automaticEmailAlerts: current.automaticEmailAlerts }
-        : {}),
-    enabled: typeof patch.enabled === "boolean" ? patch.enabled : current.enabled,
-    sources,
-    dailyCardCap:
-      typeof patch.dailyCardCap === "number" ? patch.dailyCardCap : current.dailyCardCap,
-    quietHours: patch.quietHours
-      ? { ...current.quietHours, ...patch.quietHours }
-      : current.quietHours,
+    ...(current ?? { version: 1 }),
+    ...patch,
+    ...(patch.sources ? { sources: { ...currentSources, ...patch.sources } } : {}),
+    ...(patch.quietHours ? { quietHours: { ...currentQuietHours, ...patch.quietHours } } : {}),
     updatedAt: new Date().toISOString()
   };
 }
 
 function settingsResponse(
-  preference: ProactiveMonitoringPreferenceV1,
-  saved: ProactiveMonitoringPreferenceV1 | null | undefined
+  saved: SavedProactiveMonitoringPreference | undefined
 ): ProactiveMonitoringPreferenceV1 {
+  const preference = saved?.preference ?? defaultProactiveMonitoringPreference();
   return { ...preference, automaticEmailAlerts: resolveAutomaticEmailAlertsEnabled(saved) };
 }
 
-function mergeSources(
-  current: ProactiveMonitoringPreferenceV1["sources"],
-  patch: Partial<ProactiveMonitoringPreferenceV1["sources"]>,
-  defaults: ProactiveMonitoringPreferenceV1
-): ProactiveMonitoringPreferenceV1["sources"] {
-  const sources: ProactiveSource[] = ["tasks", "calendar", "email", "notes"];
-  const result = { ...current };
-  for (const src of sources) {
-    if (src in patch) {
-      result[src] = { ...current[src], ...patch[src] } as (typeof current)[typeof src];
-    }
-  }
-  return result;
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 async function reconcileScheduleSafe(
   reconcile: ReconcileProactiveScheduleFn | undefined,
   actorUserId: string,
-  pref: ProactiveMonitoringPreferenceV1
+  pref: ProactiveMonitoringPreferenceV1,
+  saved: SavedProactiveMonitoringPreference
 ): Promise<void> {
   if (!reconcile) return;
   try {
-    await reconcile(actorUserId, pref);
+    await reconcile(actorUserId, pref, saved);
   } catch (err) {
     process.stderr.write(
       `${JSON.stringify({

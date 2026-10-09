@@ -36,5 +36,49 @@ describe("AlertsPane", () => {
     expect(html).toContain(
       "No email can be checked until a connected account is active and permitted."
     );
+    const loadingClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const loadingHtml = renderToString(
+      createElement(
+        QueryClientProvider,
+        { client: loadingClient },
+        createElement(AlertsPane, {
+          me: {} as never,
+          onNavigate: () => {},
+          onSelectSection: () => {}
+        }) as ReactElement
+      )
+    );
+    expect(loadingHtml).toContain('role="status"');
+
+    const revokedGrantClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    revokedGrantClient.setQueryData(queryKeys.proactiveMonitoring.settings, {
+      settings: { ...defaultProactiveMonitoringPreference(), automaticEmailAlerts: true }
+    });
+    revokedGrantClient.setQueryData(queryKeys.connectors.accounts, {
+      accounts: [
+        {
+          id: "account-1",
+          status: "active",
+          scopes: ["gmail.readonly"]
+        }
+      ]
+    });
+    revokedGrantClient.setQueryData(queryKeys.connectors.featureGrants("account-1"), {
+      email: false,
+      calendar: true
+    });
+    const revokedGrantHtml = renderToString(
+      createElement(
+        QueryClientProvider,
+        { client: revokedGrantClient },
+        createElement(AlertsPane, {
+          me: {} as never,
+          onNavigate: () => {},
+          onSelectSection: () => {}
+        }) as ReactElement
+      )
+    );
+    expect(revokedGrantHtml).toContain("Email access is turned off for a connected account.");
+    expect(revokedGrantHtml).toContain("Manage email access");
   });
 });

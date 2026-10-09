@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail, MoonStar } from "lucide-react";
 import { Button } from "@moss/ui";
 
@@ -7,6 +7,7 @@ import {
   patchProactiveMonitoringSettings
 } from "../api/client-proactive.js";
 import { listConnectorAccounts } from "../api/client.js";
+import { getConnectorFeatureGrants } from "../api/connectors-client.js";
 import { queryKeys } from "../api/query-keys.js";
 import type { PaneProps } from "./settings-types.js";
 import { readError } from "./settings-types.js";
@@ -31,11 +32,26 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
   });
   const enabled = settingsQuery.data?.settings.automaticEmailAlerts ?? false;
   const error = settingsQuery.error ?? save.error;
-  const emailAvailable = accountsQuery.data?.accounts.some(
-    (account) =>
-      account.status === "active" &&
+  const emailAccounts =
+    accountsQuery.data?.accounts.filter((account) =>
       account.scopes.some((scope) => scope.includes("gmail") || scope.includes("mail"))
+    ) ?? [];
+  const grantQueries = useQueries({
+    queries: emailAccounts
+      .filter((account) => account.status === "active")
+      .map((account) => ({
+        queryKey: queryKeys.connectors.featureGrants(account.id),
+        queryFn: () => getConnectorFeatureGrants(account.id),
+        retry: false
+      }))
+  });
+  const emailAvailable = grantQueries.some((query) => query.data?.email === true);
+  const emailGrantDisabled = grantQueries.some(
+    (query) => query.isSuccess && query.data?.email === false
   );
+  const emailConnectionRevoked = emailAccounts.some((account) => account.status === "revoked");
+  const emailAccessUnavailable =
+    accountsQuery.isSuccess && !emailAvailable && !grantQueries.some((query) => query.isLoading);
 
   return (
     <>
@@ -61,7 +77,7 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
                 />
               }
             />
-            {settingsQuery.isLoading ? <p>Loading alert choice…</p> : null}
+            {settingsQuery.isLoading ? <p role="status">Loading alert choice…</p> : null}
             {error ? (
               <Note icon={<Mail size={13} aria-hidden="true" />}>
                 {readError(error)}{" "}
@@ -70,12 +86,15 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
                 </Button>
               </Note>
             ) : null}
-            {accountsQuery.isSuccess && !emailAvailable ? (
+            {emailAccessUnavailable ? (
               <Note icon={<Mail size={13} aria-hidden="true" />}>
-                No email can be checked until a connected account is active and permitted. Your
-                alert choice is saved.{" "}
+                {emailGrantDisabled
+                  ? "Email access is turned off for a connected account. Your alert choice is saved."
+                  : emailConnectionRevoked
+                    ? "An email connection was revoked. Your alert choice is saved."
+                    : "No email can be checked until a connected account is active and permitted. Your alert choice is saved."}{" "}
                 <Button variant="link" size="sm" onClick={() => onSelectSection?.("connections")}>
-                  Open connections
+                  {emailGrantDisabled ? "Manage email access" : "Open connections"}
                 </Button>
               </Note>
             ) : null}

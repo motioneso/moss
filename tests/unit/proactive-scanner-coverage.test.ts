@@ -64,6 +64,14 @@ function enabledPref(
   };
 }
 
+function savedPreference(pref: ProactiveMonitoringPreferenceV1) {
+  return {
+    raw: { ...pref },
+    preference: pref,
+    hasLegacyEmailChoice: true
+  };
+}
+
 function calendarSignal(title: string, stableKey: string) {
   return {
     source: "calendar",
@@ -96,7 +104,7 @@ interface ScannerHarness {
 function harness(pref: ProactiveMonitoringPreferenceV1): ScannerHarness {
   const prefsRepo = {
     get: vi.fn().mockResolvedValue(pref),
-    getSaved: vi.fn().mockResolvedValue(pref)
+    getSaved: vi.fn().mockResolvedValue(savedPreference(pref))
   } as unknown as ProactiveMonitoringPreferencesRepository;
   const priorityPrefsRepo = {
     get: vi.fn().mockReturnValue({ anchors: [] })
@@ -165,6 +173,24 @@ describe("scanner skip paths", () => {
   it("scans email when its explicit alert choice is on even if legacy monitoring is off", async () => {
     const pref = { ...defaultProactiveMonitoringPreference(), automaticEmailAlerts: true };
     const { scanner } = harness(pref);
+    const provider = providerReturning([]);
+
+    const result = await scanner.scan(
+      fakeScopedDb(),
+      OWNER_A,
+      "email",
+      provider,
+      "source-sync",
+      NOW
+    );
+
+    expect(result.skipped).toBe(false);
+    expect(provider.collectSignals).toHaveBeenCalled();
+  });
+
+  it("scans email when no preference record has ever been saved", async () => {
+    const { scanner, prefsRepo } = harness(defaultProactiveMonitoringPreference());
+    vi.mocked(prefsRepo.getSaved).mockResolvedValue(undefined);
     const provider = providerReturning([]);
 
     const result = await scanner.scan(
@@ -265,7 +291,8 @@ describe("scanner skip paths", () => {
 
   it("falls back to UTC when no timezone preference exists", async () => {
     const prefsRepo = {
-      get: vi.fn().mockResolvedValue(enabledPref("calendar"))
+      get: vi.fn().mockResolvedValue(enabledPref("calendar")),
+      getSaved: vi.fn().mockResolvedValue(savedPreference(enabledPref("calendar")))
     } as unknown as ProactiveMonitoringPreferencesRepository;
     const priorityPrefsRepo = {
       get: vi.fn().mockReturnValue({ anchors: [] })
@@ -728,7 +755,7 @@ describe("monitoring routes", () => {
     };
     const preferencesRepository = {
       get: vi.fn().mockResolvedValue(enabledPref("calendar")),
-      getSaved: vi.fn().mockResolvedValue(enabledPref("calendar"))
+      getSaved: vi.fn().mockResolvedValue(savedPreference(enabledPref("calendar")))
     };
     const monitorStateRepository = {
       get: vi.fn().mockResolvedValue(null)
@@ -781,6 +808,9 @@ describe("monitoring routes", () => {
   it("enqueues nothing when monitoring is switched off", async () => {
     const { base, preferencesRepository } = depsWith();
     vi.mocked(preferencesRepository.get).mockResolvedValue(defaultProactiveMonitoringPreference());
+    vi.mocked(preferencesRepository.getSaved).mockResolvedValue(
+      savedPreference(defaultProactiveMonitoringPreference())
+    );
     const handlers = captureHandlers(base);
     const { reply: res, status, send } = reply();
     const req = {} as unknown as FastifyRequest;
@@ -806,7 +836,7 @@ describe("monitoring routes", () => {
       resolveRegisteredSources: async () => new Set(["calendar", "email"])
     });
     vi.mocked(preferencesRepository.get).mockResolvedValue(pref);
-    vi.mocked(preferencesRepository.getSaved).mockResolvedValue(pref);
+    vi.mocked(preferencesRepository.getSaved).mockResolvedValue(savedPreference(pref));
     const handlers = captureHandlers(base);
     const { reply: res, send } = reply();
 
@@ -821,6 +851,23 @@ describe("monitoring routes", () => {
       expect.objectContaining({ source: "email" }),
       expect.anything()
     );
+  });
+
+  it("enqueues email when no preference record has ever been saved", async () => {
+    const { base, preferencesRepository } = depsWith({
+      resolveRegisteredSources: async () => new Set(["email"])
+    });
+    vi.mocked(preferencesRepository.get).mockResolvedValue(defaultProactiveMonitoringPreference());
+    vi.mocked(preferencesRepository.getSaved).mockResolvedValue(undefined);
+    const handlers = captureHandlers(base);
+    const { reply: res, send } = reply();
+
+    await (handlers.get("POST /api/me/proactive-cards/refresh") as AnyFn)(
+      {} as FastifyRequest,
+      res
+    );
+
+    expect(send).toHaveBeenCalledWith({ enqueued: 1 });
   });
 
   it("skips a source refreshed inside the cooldown", async () => {

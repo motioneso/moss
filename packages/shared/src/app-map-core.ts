@@ -160,7 +160,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "alerts",
     label: "Alerts & quiet hours",
     description:
-      "Choose whether Moss checks connected email for useful automatic updates. This choice does not grant email access or change requested work; device delivery, module mutes, and email digests remain in Notifications. Quiet hours remain available in Account & preferences while saved schedules are reconciled.",
+      "Choose whether Moss checks connected email for useful automatic updates. With no saved applicable choice, email alerts are on when access is available; a saved off choice remains off. This choice does not grant email access or change requested work; device delivery, module mutes, and email digests remain in Notifications. If loading, saving, or access fails, retry or recover the connection in Connections. Quiet hours remain available in Account & preferences while saved schedules are reconciled.",
     path: "/settings?section=alerts",
     scope: "user"
   },

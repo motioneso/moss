@@ -6,7 +6,7 @@ import {
   type PriorityPreferencesRepository,
   type PrioritySource
 } from "@moss/priority";
-import type { ProactiveSource } from "@moss/shared";
+import { defaultProactiveMonitoringPreference, type ProactiveSource } from "@moss/shared";
 
 import type { AntiSpamPolicy } from "./anti-spam.js";
 import type { CardRepository } from "./card-repository.js";
@@ -55,12 +55,11 @@ export class ProactiveScanner {
     const nowIso = now.toISOString();
 
     // Load monitoring preference.
-    const pref = await this.deps.preferencesRepository.get(scopedDb);
+    const saved = await this.deps.preferencesRepository.getSaved(scopedDb);
+    const pref = saved?.preference ?? defaultProactiveMonitoringPreference();
     if (source !== "email" && !pref.enabled) {
       return skip(source, "monitoring_disabled");
     }
-    const saved =
-      source === "email" ? await this.deps.preferencesRepository.getSaved(scopedDb) : pref;
     if (!isProactiveSourceEnabled(pref, source, saved)) {
       return skip(source, "source_disabled");
     }
