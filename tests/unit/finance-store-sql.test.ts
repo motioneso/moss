@@ -297,11 +297,12 @@ describe("sqlStore (FIN-06b #1166)", () => {
     await store.putItem(item);
     expect(db.calls[0]!.text).toBe(
       "INSERT INTO app.finance_items (owner_user_id, item_id, institution_id, connected_at, status, " +
-        "last_sync_at, last_error) " +
-        "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6) " +
+        "last_sync_at, last_error, last_error_detail) " +
+        "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7) " +
         "ON CONFLICT (owner_user_id, item_id) DO UPDATE SET institution_id = EXCLUDED.institution_id, " +
         "connected_at = EXCLUDED.connected_at, status = EXCLUDED.status, " +
-        "last_sync_at = EXCLUDED.last_sync_at, last_error = EXCLUDED.last_error"
+        "last_sync_at = EXCLUDED.last_sync_at, last_error = EXCLUDED.last_error, " +
+        "last_error_detail = EXCLUDED.last_error_detail"
     );
     expect(db.calls[0]!.params).toEqual([
       "i1",
@@ -309,8 +310,44 @@ describe("sqlStore (FIN-06b #1166)", () => {
       "2026-07-01T00:00:00Z",
       "connected",
       "2026-07-18T00:00:00Z",
+      null,
       null
     ]);
+  });
+
+  it("putItem stores the error detail as JSON and getItem parses it back", async () => {
+    const detail = {
+      type: "INVALID_REQUEST",
+      code: "INVALID_PRODUCT",
+      message: "m",
+      requestId: "r"
+    };
+    const db = fakeDb();
+    await sqlStore(db).putItem({
+      itemId: "i1",
+      institutionId: null,
+      connectedAt: "2026-07-01T00:00:00Z",
+      status: "error",
+      lastError: "INVALID_PRODUCT",
+      lastErrorDetail: detail
+    });
+    expect(db.calls[0]!.params![6]).toBe(JSON.stringify(detail));
+    const read = sqlStore(
+      fakeDb([
+        [
+          {
+            item_id: "i1",
+            institution_id: null,
+            connected_at: "2026-07-01T00:00:00Z",
+            status: "error",
+            last_sync_at: null,
+            last_error: "INVALID_PRODUCT",
+            last_error_detail: JSON.stringify(detail)
+          }
+        ]
+      ])
+    );
+    expect((await read.getItem("i1"))?.lastErrorDetail).toEqual(detail);
   });
 
   it("getItem returns one row by item_id, null when absent", async () => {
@@ -322,7 +359,8 @@ describe("sqlStore (FIN-06b #1166)", () => {
           connected_at: "2026-07-01T00:00:00Z",
           status: "connected",
           last_sync_at: null,
-          last_error: null
+          last_error: null,
+          last_error_detail: null
         }
       ]
     ]);
@@ -333,10 +371,11 @@ describe("sqlStore (FIN-06b #1166)", () => {
       connectedAt: "2026-07-01T00:00:00Z",
       status: "connected",
       lastSyncAt: undefined,
-      lastError: undefined
+      lastError: undefined,
+      lastErrorDetail: undefined
     });
     expect(db.calls[0]!.text).toBe(
-      "SELECT item_id, institution_id, connected_at, status, last_sync_at, last_error " +
+      "SELECT item_id, institution_id, connected_at, status, last_sync_at, last_error, last_error_detail " +
         "FROM app.finance_items WHERE item_id = $1"
     );
     expect(await sqlStore(fakeDb([[]])).getItem("missing")).toBeNull();
@@ -347,7 +386,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
     const store = sqlStore(db);
     await store.listItems();
     expect(db.calls[0]!.text).toBe(
-      "SELECT item_id, institution_id, connected_at, status, last_sync_at, last_error " +
+      "SELECT item_id, institution_id, connected_at, status, last_sync_at, last_error, last_error_detail " +
         "FROM app.finance_items"
     );
   });
