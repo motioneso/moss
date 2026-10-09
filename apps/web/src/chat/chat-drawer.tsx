@@ -78,19 +78,12 @@ export function ChatDrawer(props: {
   readonly isFounder: boolean;
   /** Durable drafts are scoped to this signed-in owner. */
   readonly ownerId?: string;
-  /**
-   * #368: optional pre-filled composer text (the onboarding setup-check starter).
-   * Seeds the input on mount only; it is NEVER auto-sent — the user reviews and presses send.
-   */
+  /** #368: optional pre-filled, never auto-sent composer starter. */
   readonly initialText?: string;
   readonly focusActionRequestId?: string | null;
   readonly onActionRequestFocused?: () => void;
   readonly surface: ChatSurface;
-  /**
-   * #1756: docks the drawer beside a running draft's page instead of opening as the global
-   * overlay. Desktop-width only — the CSS falls back to the ordinary overlay at the mobile
-   * breakpoint, since the phone chat always stays the app's normal pop-up drawer.
-   */
+  /** #1756: docks beside running drafts on desktop; phones keep the normal overlay drawer. */
   readonly docked?: boolean;
   /** Desktop docked chat only. Expanded chat replaces the page; undefined hides the button. */
   readonly expanded?: boolean;
@@ -126,12 +119,7 @@ export function ChatDrawer(props: {
   // #1780: local privacy actions outrank in-flight server reads, which could otherwise overwrite
   // the user's new private session with stale `incognito: false`. Reset this on a surface change.
   const privateModeDecidedLocally = useRef(false);
-  /**
-   * #1521: transient, unlike `privateModeDecidedLocally` above. True only while a
-   * `closePrivateChat` end-request is in flight, so the privacy-query effect below stays
-   * silent for that window but resumes writing server truth once the request settles —
-   * a failed close reverts instead of leaving the UI permanently claiming "closed".
-   */
+  /** #1521: suppress server truth only while private close is in flight, then restore it. */
   const closingPrivateChatRef = useRef(false);
 
   const privacyStateQuery = useQuery({
@@ -202,10 +190,7 @@ export function ChatDrawer(props: {
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [needsProvider, setNeedsProvider] = useState(false);
-  // Lives here, not in the composer, so a queued second message survives the composer
-  // unmounting and remounting mid-turn (e.g. closing and reopening the drawer) — it is drained
-  // by the effect below the instant the turn ends, whether that end came from completion or
-  // from the user clicking Stop.
+  // Kept here so a queued turn survives composer remounts and drains after its first turn ends.
   const [queuedSendText, setQueuedSendText] = useState<{
     readonly text: string;
     readonly surface: ChatSurface;
@@ -296,14 +281,12 @@ export function ChatDrawer(props: {
 
   useEffect(() => {
     if (!props.initialText) return;
-    setDrafts((current) => seedChatDraft(current, fallbackDraftKey, props.initialText));
-  }, [fallbackDraftKey, props.initialText]);
+    setDrafts((current) =>
+      seedChatDraft(current, selectedThreadId ?? fallbackDraftKey, props.initialText)
+    );
+  }, [fallbackDraftKey, props.initialText, selectedThreadId]);
 
-  /**
-   * Unified send path for both the seed buttons and the manual composer (#400).
-   * The IIFE keeps the function signature synchronous so call sites need no `void`/`async`.
-   * try/finally guarantees isSending is ALWAYS cleared — this is the core wedge fix.
-   */
+  /** #400: unified synchronous send entrypoint; its IIFE always clears sending state. */
   const sendMessage = useCallback(
     (text: string, attachments?: readonly ChatAttachmentDto[]): void => {
       const trimmed = text.trim();
@@ -688,10 +671,7 @@ export function ChatDrawer(props: {
     })();
   };
 
-  /** #456 — stop the in-flight turn. The backend kills the engine + emits 'Stopped by user.' over
-   *  SSE; the in-flight POST /turn then settles, clearing isSending in sendMessage's finally.
-   *  Any already-queued next message (see queuedSendText above) is untouched — it still drains
-   *  once isSending clears, stop or no stop. */
+  /** #456: stop lets the pending turn settle; a queued next turn still drains afterward. */
   const stopSending = (): void => {
     void cancelChatTurn(props.surface).catch(() => {
       // best-effort: the turn ends server-side regardless; a network error here just clears isSending.
@@ -751,6 +731,12 @@ export function ChatDrawer(props: {
           onSelect={(id) => {
             const change = props.meetingContext ? undefined : transition.begin();
             if (!props.meetingContext && !change) return;
+            if (isSending) void cancelChatTurn(props.surface);
+            setFallbackRecords([]);
+            setPendingUser(null);
+            setIsSending(false);
+            setQueuedSendText(null);
+            setSendError(null);
             setReviewThreadId(id);
             if (change) {
               resumeMutation.mutate({ threadId: id, surface: props.surface, transition: change });
@@ -841,6 +827,17 @@ export function ChatDrawer(props: {
                 />
               )}
             />
+          ) : messagesQuery.isError ? (
+            <div className="chatd-empty" role="alert">
+              <div className="chatd-empty__title">Could not load conversation.</div>
+              <button
+                aria-label="Retry conversation"
+                type="button"
+                onClick={() => void messagesQuery.refetch()}
+              >
+                Retry
+              </button>
+            </div>
           ) : noModelAvailable ? (
             <ConnectProviderEmpty isFounder={props.isFounder} />
           ) : props.meetingContext ? (

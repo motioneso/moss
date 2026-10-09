@@ -5,6 +5,7 @@ import { Button, Eyebrow, IconButton, NavIndex, NavIndexItem } from "@moss/ui";
 import type { ChatThreadDto } from "@moss/shared";
 
 import { useDismissableMenu } from "../shared/use-dismissable-menu.js";
+import { trapFocus } from "../shell/command-palette";
 
 export function SideChatOverlay(props: {
   readonly threads: readonly ChatThreadDto[];
@@ -65,6 +66,9 @@ export function SideChatOverlay(props: {
           className="chatd-conversations__overlay"
           id="chat-conversations"
           aria-label="Conversations"
+          onKeyDown={(event) => {
+            if (event.key === "Tab") trapFocus(event, ref.current);
+          }}
         >
           <div className="chatd-conversations__head">
             <Eyebrow tone="muted">Your conversations</Eyebrow>
@@ -73,7 +77,9 @@ export function SideChatOverlay(props: {
             </IconButton>
           </div>
           {props.loading ? (
-            <p className="chatd-conversations__empty">Loading conversations…</p>
+            <p className="chatd-conversations__empty" role="status">
+              Loading conversations…
+            </p>
           ) : props.error ? (
             <div className="chatd-conversations__empty" role="alert">
               <p>Could not load conversations.</p>
@@ -129,7 +135,7 @@ export function SideChatOverlay(props: {
               ))}
             </NavIndex>
           ) : !props.loading && !props.error ? (
-            <p className="chatd-conversations__empty">
+            <p className="chatd-conversations__empty" role="status">
               Start a side chat to keep a topic together.
             </p>
           ) : null}

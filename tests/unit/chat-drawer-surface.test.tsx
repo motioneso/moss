@@ -1,19 +1,13 @@
-/** #1533: ChatDrawer routes every API call by surface; private chat remains drawer-only.
- * Interactive `react-test-renderer` drives real handlers because Vitest runs in Node, not jsdom. */
 import { createElement, type ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-// Private-mode tests need the browser listener ChatDrawer registers after privateMode becomes true.
 vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
-
 import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "@moss/shared";
 import { moduleChatSurface } from "../../apps/web/src/shell/chat-surface-key.js";
 import type * as ApiClientModule from "../../apps/web/src/api/client.js";
-
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
   ApiError: (await importOriginal<typeof ApiClientModule>()).ApiError,
   sendChatTurn: vi.fn(async () => ({
@@ -52,22 +46,20 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
   getChatModelFavorites: vi.fn(async () => ({ modelIds: [] })),
   putChatModelFavorites: vi.fn(async (input: { modelIds: string[] }) => input)
 }));
-
 import {
   cancelChatTurn,
   clearChat,
   endPrivateChat,
   getChatPrivacyState,
+  listChatThreadMessages,
   listChatThreads,
   resumeChat,
   sendChatTurn
 } from "../../apps/web/src/api/client.js";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
-
 const moduleSurface = moduleChatSurface("job-search", "profile-1") as ChatSurface;
 const moduleSurfaceB = moduleChatSurface("job-search", "profile-2") as ChatSurface;
-
 async function renderDrawer(surface: ChatSurface): Promise<ReactTestRenderer> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let renderer!: ReactTestRenderer;
@@ -91,42 +83,33 @@ async function renderDrawer(surface: ChatSurface): Promise<ReactTestRenderer> {
         )
       )
     );
-    // Let the persona/route/privacy/threads queries this mount kicks off resolve and re-render.
     await Promise.resolve();
     await Promise.resolve();
   });
   return renderer;
 }
-
 function findByClassName(renderer: ReactTestRenderer, className: string) {
   const matches = renderer.root.findAll((node) => node.props.className === className);
   return matches.length > 0 ? matches[0] : null;
 }
-
 function findByAriaLabel(renderer: ReactTestRenderer, label: string) {
   const matches = renderer.root.findAll((node) => node.props["aria-label"] === label);
   return matches.length > 0 ? matches[0] : null;
 }
-
 function menuIsOpen(renderer: ReactTestRenderer) {
   return renderer.root.findAll((node) => node.props.role === "menu").length > 0;
 }
-
-/** Opens the "More chat options" menu if closed, then returns the item with this accessible name. */
 async function menuItem(renderer: ReactTestRenderer, label: string) {
   if (!menuIsOpen(renderer)) {
     await act(async () => {
       findByAriaLabel(renderer, "More chat options")!.props.onClick();
     });
   }
-  // The private item's name flips with its state, so the start name finds either one.
   if (label === "Start private chat") {
     return findByAriaLabel(renderer, label) ?? findByAriaLabel(renderer, "Leave private chat");
   }
   return findByAriaLabel(renderer, label);
 }
-
-/** Opens the menu and clicks the named item (the menu closes itself after a pick). */
 async function clickMenuItem(renderer: ReactTestRenderer, label: string, flush = false) {
   const item = await menuItem(renderer, label);
   await act(async () => {
@@ -137,7 +120,6 @@ async function clickMenuItem(renderer: ReactTestRenderer, label: string, flush =
     }
   });
 }
-
 async function openConversations(renderer: ReactTestRenderer): Promise<void> {
   await act(async () => {
     findByAriaLabel(renderer, "Open conversations")!.props.onClick();
@@ -230,6 +212,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
     vi.mocked(cancelChatTurn).mockClear();
     vi.mocked(clearChat).mockClear();
     vi.mocked(getChatPrivacyState).mockClear();
+    vi.mocked(listChatThreadMessages).mockClear();
     vi.mocked(listChatThreads).mockClear();
     vi.mocked(resumeChat).mockClear();
   });
@@ -291,7 +274,6 @@ describe("ChatDrawer surface routing (#1533)", () => {
       await Promise.resolve();
     });
 
-    // sendChatTurn remains pending, so the send button has flipped to Stop.
     const stopButton = findByClassName(renderer, "chatd-send")!;
     expect(stopButton.props["aria-label"]).toBe("Stop generating");
     await act(async () => {
@@ -300,7 +282,6 @@ describe("ChatDrawer surface routing (#1533)", () => {
 
     expect(cancelChatTurn).toHaveBeenCalledWith(moduleSurface);
 
-    // Settle the pending send so the test doesn't leave a dangling unresolved promise.
     await act(async () => {
       resolveSend({
         userMessageId: "user-1",
@@ -420,6 +401,10 @@ describe("ChatDrawer surface routing (#1533)", () => {
   });
 
   it("seeds a delayed starter and keeps an unselected module draft separate from Main", async () => {
+    vi.mocked(getChatPrivacyState).mockResolvedValueOnce({
+      incognito: false,
+      threadId: "main-thread"
+    });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const clearRecords = vi.fn();
     let renderer!: ReactTestRenderer;
@@ -619,6 +604,8 @@ describe("ChatDrawer surface routing (#1533)", () => {
       await Promise.resolve();
     });
 
+    expect(findByClassName(renderer, "chatd-send")?.props["aria-label"]).toBe("Send");
+
     await flipSurface(renderer, client, moduleSurface, clearRecords);
 
     expect(findByClassName(renderer, "chatd-empty")).not.toBeNull();
@@ -635,9 +622,36 @@ describe("ChatDrawer surface routing (#1533)", () => {
     });
   });
 
+  it("shows a retry action when the selected conversation transcript cannot load", async () => {
+    vi.mocked(listChatThreads).mockResolvedValueOnce({
+      threads: [
+        {
+          id: "broken-thread",
+          ownerUserId: "user-1",
+          title: "Broken thread",
+          incognito: false,
+          isMain: false,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+          lastActiveAt: "2026-01-01T00:00:00Z",
+          lastMessagePreview: null
+        }
+      ]
+    });
+    vi.mocked(listChatThreadMessages).mockRejectedValueOnce(new Error("offline"));
+    const renderer = await renderDrawer(DEFAULT_CHAT_SURFACE);
+
+    await selectConversation(renderer, "Broken thread");
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(JSON.stringify(renderer.toJSON())).toContain("Could not load conversation.");
+    expect(findByAriaLabel(renderer, "Retry conversation")).not.toBeNull();
+  });
+
   it("shows side chats in the order the server sent them, not resorted by the client", async () => {
-    // Reopening an older conversation makes it most recently active without changing updatedAt;
-    // trust the server's order instead of sorting client-side.
     vi.mocked(listChatThreads).mockResolvedValueOnce({
       threads: [
         {
@@ -800,7 +814,6 @@ describe("ChatDrawer surface routing (#1533)", () => {
     const clearRecords = vi.fn();
     const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, clearRecords);
 
-    // Stage 1: start private chat, then flip before resolution; queue the new surface's thread list.
     vi.mocked(listChatThreads).mockResolvedValueOnce({
       threads: [
         {
@@ -825,7 +838,6 @@ describe("ChatDrawer surface routing (#1533)", () => {
     });
     expect(clearRecords).not.toHaveBeenCalled();
 
-    // Stage 2: resume on moduleSurface, then flip before resolution.
     let resolveResume!: (value: void) => void;
     vi.mocked(resumeChat).mockImplementationOnce(
       () =>
@@ -842,7 +854,6 @@ describe("ChatDrawer surface routing (#1533)", () => {
     });
     expect(clearRecords).not.toHaveBeenCalled();
 
-    // Stage 3: queue a Stop-drained message on moduleSurfaceB, flip before it can drain.
     let resolveSend!: (value: {
       userMessageId: string;
       assistantMessageId: string;
@@ -892,7 +903,6 @@ describe("ChatDrawer surface routing (#1533)", () => {
   });
 
   it("resets state on a flip in both directions", async () => {
-    // moduleSurface -> moduleSurfaceB: conversation overlay + sendError reset.
     const clientA = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const clearRecordsA = vi.fn();
     const rendererA = await mountWithClient(clientA, moduleSurface, clearRecordsA);
@@ -916,7 +926,6 @@ describe("ChatDrawer surface routing (#1533)", () => {
     expect(findByClassName(rendererA, "form-error")).toBeNull();
     expect(findByAriaLabel(rendererA, "Open conversations")?.props["aria-expanded"]).toBe(false);
 
-    // DEFAULT_CHAT_SURFACE -> moduleSurface: privateMode + conversation overlay reset.
     const clientB = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const clearRecordsB = vi.fn();
     const rendererB = await mountWithClient(clientB, DEFAULT_CHAT_SURFACE, clearRecordsB);
@@ -931,8 +940,6 @@ describe("ChatDrawer surface routing (#1533)", () => {
     expect(findByAriaLabel(rendererB, "Open conversations")?.props["aria-expanded"]).toBe(false);
   });
 
-  // #1780: a stale in-flight privacy response must not overwrite a user's private-mode action.
-  // Hold that response until after the click so the ordering regression fails deterministically.
   it("keeps private mode on when a privacy response arrives after the user turned it on", async () => {
     let releasePrivacy!: (state: { incognito: boolean }) => void;
     vi.mocked(getChatPrivacyState).mockImplementationOnce(
@@ -945,11 +952,9 @@ describe("ChatDrawer surface routing (#1533)", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, vi.fn());
 
-    // The user turns private mode on while the privacy fetch is still outstanding.
     await clickMenuItem(renderer, "Start private chat", true);
     expect((await menuItem(renderer, "Start private chat"))?.props["aria-checked"]).toBe(true);
 
-    // The stale answer must not win; React Query needs a macrotask to run its scheduling effect.
     await act(async () => {
       releasePrivacy({ incognito: false });
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -979,13 +984,11 @@ describe("ChatDrawer surface routing (#1533)", () => {
     expect(findByAriaLabel(renderer, "Leave private chat")).toBeNull();
   });
 
-  // Server seeding must still restore private mode when the user has not acted.
   it("still seeds private mode from the server when the user has not touched the toggle", async () => {
     vi.mocked(getChatPrivacyState).mockImplementationOnce(async () => ({ incognito: true }));
 
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, vi.fn());
-    // A macrotask carries the seeded value through query, effect, and re-render.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
