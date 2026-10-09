@@ -13,6 +13,7 @@ import { navigate, useModulePath } from "./router";
 import { BudgetScreen } from "./screens/budget";
 import { FeedScreen } from "./screens/feed";
 import { ReportsScreen } from "./screens/reports";
+import { StartScreen } from "./screens/start";
 import { currentLiveMessage, EmptyState, subscribeLive } from "./states";
 
 export type HostActions = { openAssistant: (input: { starterPrompt: string }) => void };
@@ -45,7 +46,7 @@ function tabFor(path: string): Tab | "none" {
   return "none";
 }
 
-// Stand-ins until the Accounts and Getting started screens land.
+// Stand-in until the Accounts screen lands.
 function PendingScreen(props: { title: string }): ReactNodeLike {
   return <EmptyState title={props.title} body="This screen is not available yet." />;
 }
@@ -84,14 +85,14 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
           ]}
         />
       </div>
-      {path === "/" ? (
+      {path === "/start" ? (
+        <StartScreen hostActions={props.hostActions} />
+      ) : path === "/" ? (
         <BudgetScreen />
       ) : path === "/transactions" ? (
         <FeedScreen hostActions={props.hostActions} />
       ) : path === "/accounts" ? (
         <PendingScreen title="Accounts" />
-      ) : path === "/start" ? (
-        <PendingScreen title="Getting started" />
       ) : path === "/reports" ? (
         <ReportsScreen />
       ) : null}

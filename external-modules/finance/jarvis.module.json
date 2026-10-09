@@ -56,6 +56,18 @@
         "label": "Budget",
         "description": "This month's budget: money ready to assign, and each category's assigned, spent and available amounts.",
         "path": "/"
+      },
+      {
+        "id": "finance.start",
+        "label": "Getting started",
+        "description": "Connect a first bank and build a first budget from three months of history. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin.",
+        "path": "/start"
+      }
+    ],
+    "features": [
+      {
+        "id": "finance.getting-started",
+        "description": "Getting started shows three steps (connect a bank, Moss sorts spending, build a budget together) with each step's state. A bank cannot be connected until an admin sets the bank keys in Finance settings."
       }
     ]
   },
@@ -68,6 +80,14 @@
       "risk": "read",
       "inputSchema": { "type": "object", "additionalProperties": false },
       "handler": "accounts.list"
+    },
+    {
+      "name": "finance.setup.status",
+      "permissionId": "finance.setup.status",
+      "description": "Report whether bank keys are set up and whether a bank is connected.",
+      "risk": "read",
+      "inputSchema": { "type": "object", "additionalProperties": false },
+      "handler": "setup.status"
     },
     {
       "name": "finance.connect.start",

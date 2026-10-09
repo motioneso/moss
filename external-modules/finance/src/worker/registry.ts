@@ -17,6 +17,7 @@ import {
 import { storageMigrateHandler } from "./handlers/migrate.js";
 import { reportsNetWorthHandler, reportsSpendingHandler } from "./handlers/reports.js";
 import { accountSetSharedHandler, shareApplyHandler } from "./handlers/shared.js";
+import { setupStatusHandler } from "./handlers/setup.js";
 import { syncRunHandler } from "./handlers/sync.js";
 import type { WorkerPorts } from "./ports.js";
 import type { ToolHandler } from "./wrap.js";
@@ -27,6 +28,8 @@ export const notImplemented: ToolFactory = () => async () => ({ status: "not-imp
 
 export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "accounts.list": accountsListHandler,
+  // Getting started (#3178): bank keys present, bank linked.
+  "setup.status": setupStatusHandler,
   "connect.start": connectStartHandler,
   "connect.poll": connectPollHandler,
   "sync.run": syncRunHandler,
