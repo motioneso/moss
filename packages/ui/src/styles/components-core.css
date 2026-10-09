@@ -993,20 +993,3 @@
   background: var(--accent-soft);
   color: var(--text);
 }
-
-/* ---------------------------------------------------------------
-   PHONE CONTROL HEIGHT
-   Thumb-sized controls below 720px wide.
-   --------------------------------------------------------------- */
-@media (max-width: 720px) {
-  .jds-btn,
-  .jds-segmented__opt,
-  .jds-input,
-  .jds-select,
-  .jds-iconbtn {
-    min-height: 44px;
-  }
-  .jds-iconbtn {
-    min-width: 44px;
-  }
-}
