@@ -1,4 +1,5 @@
 import type { DataContextDb } from "@moss/db";
+import { deferUntilQuietHoursEnd } from "@moss/module-sdk";
 import type { ProactiveMonitoringPreferenceV1, ProactiveSource } from "@moss/shared";
 
 import type { CardRepository } from "./card-repository.js";
@@ -88,36 +89,17 @@ function quietHoursDeferral(
   qh: { readonly startLocalTime: string; readonly endLocalTime: string }
 ): string | null {
   try {
-    const now = new Date(nowIso);
-    const localTimeStr = now.toLocaleTimeString("en-GB", {
-      timeZone,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false
-    });
-    if (!isInQuietHours(localTimeStr, qh.startLocalTime, qh.endLocalTime)) return null;
-    // Defer to quiet-hours end today (or tomorrow if end < start and we're before midnight).
-    const localDateStr = localDateString(now, timeZone);
-    const endLocal = wallTimeToInstant(localDateStr, qh.endLocalTime, timeZone);
-    // If end is before now (e.g. end=08:00 and now=23:00), defer to tomorrow's end.
-    if (endLocal <= now) {
-      const tomorrow = new Date(`${localDateStr}T00:00:00Z`);
-      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-      return wallTimeToInstant(tomorrowStr, qh.endLocalTime, timeZone).toISOString();
-    }
-    return endLocal.toISOString();
+    return (
+      deferUntilQuietHoursEnd(
+        new Date(nowIso),
+        qh.startLocalTime,
+        qh.endLocalTime,
+        timeZone
+      )?.toISOString() ?? null
+    );
   } catch {
     return null;
   }
-}
-
-function isInQuietHours(localTime: string, start: string, end: string): boolean {
-  if (start < end) {
-    return localTime >= start && localTime < end;
-  }
-  // Wraps midnight.
-  return localTime >= start || localTime < end;
 }
 
 function localDateString(date: Date, timeZone: string): string {

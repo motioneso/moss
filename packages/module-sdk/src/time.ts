@@ -155,6 +155,72 @@ export function addLocalDays(localDate: string, days: number): string {
   return shifted.toISOString().slice(0, 10);
 }
 
+/**
+ * Returns the release instant for a daily local quiet window, or null outside the window.
+ *
+ * Windows include their start and exclude their end. Equal times retain the legacy all-day
+ * meaning. A gap releases at its first valid instant; a fold chooses its later occurrence.
+ */
+export function deferUntilQuietHoursEnd(
+  now: Date,
+  startLocalTime: string,
+  endLocalTime: string,
+  timeZone: string
+): Date | null {
+  const nowParts = localWallClockParts(now, timeZone);
+  const currentMinutes = nowParts.hour * 60 + nowParts.minute;
+  const startMinutes = localTimeMinutes(startLocalTime);
+  const endMinutes = localTimeMinutes(endLocalTime);
+  const inQuietHours =
+    startMinutes >= endMinutes
+      ? currentMinutes >= startMinutes || currentMinutes < endMinutes
+      : currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  if (!inQuietHours) return null;
+
+  const localDate = `${nowParts.year.toString().padStart(4, "0")}-${nowParts.month
+    .toString()
+    .padStart(2, "0")}-${nowParts.day.toString().padStart(2, "0")}`;
+  const endDate = addLocalDays(localDate, endMinutes <= currentMinutes ? 1 : 0);
+  return dailyWallTimeEnd(endDate, endLocalTime, timeZone);
+}
+
+function localTimeMinutes(localTime: string): number {
+  const [hour, minute] = localTime.split(":").map(Number);
+  return (hour ?? 0) * 60 + (minute ?? 0);
+}
+
+function dailyWallTimeEnd(localDate: string, localTime: string, timeZone: string): Date {
+  const [year, month, day] = localDate.split("-").map(Number) as [number, number, number];
+  const [hour, minute] = localTime.split(":").map(Number) as [number, number];
+  const wall: WallClockParts = { year, month, day, hour, minute, second: 0 };
+  const wallAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const offsets = new Set([
+    timeZoneOffsetMinutes(new Date(wallAsUtc - DAY_MS), timeZone),
+    timeZoneOffsetMinutes(new Date(wallAsUtc + DAY_MS), timeZone)
+  ]);
+  const candidates = [...offsets]
+    .map((offset) => wallAsUtc - offset * 60_000)
+    .filter((instant) =>
+      wallClockPartsEqual(localWallClockParts(new Date(instant), timeZone), wall)
+    );
+
+  if (candidates.length > 0) return new Date(Math.max(...candidates));
+
+  const [lower, upper] = [...offsets]
+    .map((offset) => wallAsUtc - offset * 60_000)
+    .sort((a, b) => a - b);
+  let before = lower as number;
+  let after = upper as number;
+  const beforeOffset = timeZoneOffsetMinutes(new Date(before), timeZone);
+  while (after - before > 1) {
+    const middle = Math.floor((before + after) / 2);
+    if (timeZoneOffsetMinutes(new Date(middle), timeZone) === beforeOffset) before = middle;
+    else after = middle;
+  }
+  return new Date(after);
+}
+
 /** #1869 slice 3A: why a wall clock cannot become a naive `.toISOString()` reinterpretation. */
 export type StrictLocalWallClockErrorReason =
   | "invalid-syntax"
