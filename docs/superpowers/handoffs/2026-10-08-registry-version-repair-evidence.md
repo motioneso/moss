@@ -88,11 +88,11 @@ immutable release version.
 
 ## Checks
 
-All commands ran from `~/Jarv1s-scheduled-registry-fix` with Node `24.21.0`
-and pnpm `10.6.2`, except where noted above. The source checks below ran before
-the first evidence document was added, with only the two uncommitted manifest
-version edits. They are meaningful publisher and static/type checks for those
-inputs, not a clean-commit certification.
+Commands used Node `24.21.0` and pnpm `10.6.2`, except where noted above. The
+publisher row is the later, paired `44d381d` archive check described above. The
+unit, lint, format, file-size, and type rows ran before the first evidence
+document was added, with only the two uncommitted manifest version edits. They
+are meaningful checks for those inputs, not a clean-commit certification.
 
 | Command | Result |
 | --- | --- |
