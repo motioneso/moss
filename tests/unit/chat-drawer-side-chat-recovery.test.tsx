@@ -787,14 +787,26 @@ it("keeps delayed caller text and edits through unavailable-provider transitions
   await act(async () => {
     client.setQueryData(queryKeys.ai.capability("chat"), route(false));
     renderer.update(drawer(client, "Delayed caller"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
+  expect(findByClassName(renderer, "chatd__status chatd__status--offline").children).toEqual([
+    "Not connected"
+  ]);
   expect(renderer.root.findByType("textarea").props.value).toBe("Delayed caller");
   await act(async () => {
     renderer.root.findByType("textarea").props.onChange({ target: { value: "My edited caller" } });
     client.setQueryData(queryKeys.ai.capability("chat"), route(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
+  expect(findByClassName(renderer, "chatd__status").children).toEqual(["Here when you need me"]);
   expect(renderer.root.findByType("textarea").props.value).toBe("My edited caller");
-  await act(async () => client.setQueryData(queryKeys.ai.capability("chat"), route(false)));
+  await act(async () => {
+    client.setQueryData(queryKeys.ai.capability("chat"), route(false));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(findByClassName(renderer, "chatd__status chatd__status--offline").children).toEqual([
+    "Not connected"
+  ]);
   expect(renderer.root.findByType("textarea").props.value).toBe("My edited caller");
   await act(async () => {
     renderer.root.findByType("textarea").props.onChange({ target: { value: "" } });
