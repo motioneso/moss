@@ -1,8 +1,6 @@
 // external-modules/finance/src/web/root.tsx
-// FIN-02 (#1147) Task 11: module Root — chrome (eyebrow + heading), one polite
-// live region for the whole surface. FIN-03 (#1148) Task 4 adds the in-module
-// router (job-search idiom): Feed at "/", Budget at "/budget"; jds-*
-// primitives + layout-only fnm-* styles.
+// Module Root: chrome (eyebrow + heading), one polite live region for the whole
+// surface, and the in-module router; jds-* primitives + layout-only fnm-* styles.
 import {
   Segmented,
   useEffect,
