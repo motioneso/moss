@@ -146,11 +146,21 @@ export function createExternalModuleTools(input: {
     // validateToolInput deliberately does not enforce additionalProperties
     // (#133), so a caller CAN smuggle an `actorUserId` key through schema
     // validation — spread order, not schema rejection, is the spoof defense.
+    // Active member ids let a module drop mirror residue left by deleted or
+    // deactivated members (finance household reads). Spread last for the same
+    // reason as actorUserId.
+    const activeUserIds = await input.appDataContext.withDataContext(
+      { actorUserId: context.actorUserId, requestId: context.requestId },
+      async (scopedDb) =>
+        (await input.settingsRepository.listUsers(scopedDb))
+          .filter((user) => user.status === "active")
+          .map((user) => user.id)
+    );
     return externalToolResult(
       await runtime.invoke(
         module,
         tool.handler,
-        { ...toolInput, actorUserId: context.actorUserId },
+        { ...toolInput, actorUserId: context.actorUserId, activeUserIds },
         rpc,
         // #1286 Task 2e: an assistant tool call gets its own child process,
         // separate from this module's queue jobs and briefing invocations.

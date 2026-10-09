@@ -27,7 +27,7 @@ import {
 } from "../../domain/index.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
-import { InputError, readBool, readInt, readString } from "../validate.js";
+import { InputError, readActiveUserIds, readBool, readInt, readString } from "../validate.js";
 import { accountsListHandler } from "./accounts.js";
 
 const MONTH = /^\d{4}-\d{2}$/;
@@ -63,6 +63,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   // and host-bound on queue envelopes — never caller-controlled (#1149).
   const actorUserId = readString(input, "actorUserId", { required: true });
   const month = readMonth(input, ports);
+  const activeUserIds = readActiveUserIds(input);
   const accountId = readString(input, "accountId");
   const categoryId = readString(input, "categoryId");
   const search = readString(input, "search")?.toLowerCase();
@@ -86,6 +87,8 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     const parsed = parseSharedKey(key);
     if (!parsed || parsed.suffix !== month) continue;
     if (parsed.ownerUserId === actorUserId) continue;
+    // Deleted/deactivated owners leave mirror residue; never surface it.
+    if (!activeUserIds.has(parsed.ownerUserId)) continue;
     if (accountId !== undefined && parsed.accountId !== accountId) continue;
     const chunk = (await ports.mirror.get(key)) as TransactionChunk | null;
     if (!chunk || !Array.isArray(chunk.transactions)) continue;
@@ -123,7 +126,10 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   const totalCount = transactions.length;
   transactions = transactions.slice(0, limit);
 
-  const accounts = await accountsListHandler(ports)({ actorUserId });
+  const accounts = await accountsListHandler(ports)({
+    actorUserId,
+    activeUserIds: [...activeUserIds]
+  });
   return {
     month,
     transactions,
