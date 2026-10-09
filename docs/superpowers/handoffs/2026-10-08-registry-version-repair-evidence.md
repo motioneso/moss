@@ -113,8 +113,9 @@ seam.
 The freeze candidate changes only the two manifest version fields and this
 evidence file. Standards review was green at `48fbed288`. The initial Spec
 review rejected only the former overbroad proof sentence; this documentation
-delta corrects it without changing publisher inputs. Its follow-up review
-remains required.
+delta corrects it without changing publisher inputs. Its focused follow-up Spec
+review was green at `eb287e110`; the manifest hashes and publisher inputs are
+unchanged.
 
 The disposable Node containers exited and were removed. Private logs, the
 downloaded published index, and the archive used for the red proof remain in
