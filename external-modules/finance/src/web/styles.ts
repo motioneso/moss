@@ -33,4 +33,12 @@ export const MODULE_STYLES = `
 .fnm-report-bar-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.25rem 0; }
 .fnm-report-bar-row > span:first-child { flex: 0 0 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fnm-report-trend { width: 100%; height: 8rem; display: block; }
+/* #3177 Accounts: status sits in the section head on wide screens and under the bank name on phone. */
+.fnm-bank-status-row { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.fnm-bank-status { display: none; }
+.fnm-bal { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) {
+  .fnm-bank-meta { display: none; }
+  .fnm-bank-status { display: block; }
+}
 `;

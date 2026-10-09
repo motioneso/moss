@@ -5,6 +5,7 @@
 // primitives + layout-only fnm-* styles.
 import { useSyncExternalStore, type ReactNodeLike } from "@moss/module-web-sdk";
 import { ModuleLink, useModulePath } from "./router";
+import { AccountsScreen } from "./screens/accounts";
 import { BudgetScreen } from "./screens/budget";
 import { FeedScreen } from "./screens/feed";
 import { ReportsScreen } from "./screens/reports";
@@ -27,6 +28,7 @@ function LiveRegion(): ReactNodeLike {
 const TABS: ReadonlyArray<{ to: string; label: string }> = [
   { to: "/", label: "Feed" },
   { to: "/budget", label: "Budget" },
+  { to: "/accounts", label: "Accounts" },
   { to: "/reports", label: "Reports" }
 ];
 
@@ -63,6 +65,8 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
       </nav>
       {path === "/budget" ? (
         <BudgetScreen />
+      ) : path === "/accounts" ? (
+        <AccountsScreen hostActions={props.hostActions} />
       ) : path === "/reports" ? (
         <ReportsScreen />
       ) : (

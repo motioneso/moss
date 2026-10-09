@@ -282,5 +282,15 @@
   },
   "fetchHosts": ["production.plaid.com", "sandbox.plaid.com"],
   "web": { "entrypoint": "dist/web/index.js", "contractVersion": 2 },
-  "navigation": [{ "id": "finance", "label": "Finance", "path": "/", "icon": "landmark" }]
+  "navigation": [{ "id": "finance", "label": "Finance", "path": "/", "icon": "landmark" }],
+  "appMap": {
+    "screens": [
+      {
+        "id": "finance.accounts",
+        "label": "Accounts",
+        "path": "/accounts",
+        "description": "Connected banks, balances, sync status, reconnect, and net worth."
+      }
+    ]
+  }
 }
