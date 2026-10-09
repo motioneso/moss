@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { copyFile, mkdtemp, rm } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,19 +16,9 @@ import {
 
 const { Client } = pg;
 
-const sportsFiles = [
-  "0190a_sports_sources_open_for_upgrade.sql",
-  "0191_sports_public_source_runtime.sql",
-  "0191a_sports_sources_force_rls.sql"
-];
-const newsFiles = [
-  "0203a_news_sources_open_for_upgrade.sql",
-  "0204_news_source_health_states.sql",
-  "0218_news_source_kinds.sql",
-  "0218a_news_sources_force_rls.sql"
-];
-const sportsVersions = ["0190a", "0191", "0191a"];
-const newsVersions = ["0203a", "0204", "0218", "0218a"];
+const sportsFile = "0191_sports_public_source_runtime.sql";
+const healthFile = "0204_news_source_health_states.sql";
+const kindsFile = "0218_news_source_kinds.sql";
 
 // Populated-install upgrade: rows exist before the migrations run, and the migrations run as the
 // real migration role (NOBYPASSRLS, subject to FORCE ROW LEVEL SECURITY). A fresh empty database
@@ -92,9 +82,7 @@ describe("populated news and sports source upgrades", () => {
       ALTER TABLE app.sports_custom_sources FORCE ROW LEVEL SECURITY;
       ALTER TABLE app.sports_source_assignments FORCE ROW LEVEL SECURITY;
     `);
-    await bootstrap.query("DELETE FROM app.schema_migrations WHERE version = ANY($1)", [
-      sportsVersions
-    ]);
+    await bootstrap.query("DELETE FROM app.schema_migrations WHERE version = '0191'");
   }
 
   async function rewindNews() {
@@ -116,9 +104,9 @@ describe("populated news and sports source upgrades", () => {
           UNIQUE (owner_user_id, canonical_domain);
       ALTER TABLE app.news_custom_sources FORCE ROW LEVEL SECURITY;
     `);
-    await bootstrap.query("DELETE FROM app.schema_migrations WHERE version = ANY($1)", [
-      newsVersions
-    ]);
+    await bootstrap.query(
+      "DELETE FROM app.schema_migrations WHERE version = ANY(ARRAY['0204', '0218'])"
+    );
   }
 
   async function seedSportsSources() {
@@ -146,41 +134,22 @@ describe("populated news and sports source upgrades", () => {
     return { feed, scrape };
   }
 
-  it("upgrades existing sports sources and keeps row security forced", async () => {
-    await rewindSports();
-    const { feed, scrape } = await seedSportsSources();
-
-    // Without the unforce step the owner role sees no rows and SET NOT NULL fails.
-    await stage("sports", ["0191_sports_public_source_runtime.sql"]);
-    await expect(migrate()).rejects.toThrow(/null values/);
-    expect(await forced("sports_custom_sources")).toBe(true);
-
-    await stage("sports", sportsFiles);
-    await migrate();
-
-    const rows = await bootstrap.query(
-      `SELECT id, recipe_status, health_state, confirmed_fetch_hosts,
-              authorization_confirmed_at = validated_at AS grandfathered
-         FROM app.sports_custom_sources`
+  async function seedAssignments(sources: { feed: string; scrape: string }) {
+    const follow = randomUUID();
+    await bootstrap.query(
+      "INSERT INTO app.sports_follows (id, owner_user_id, competition_key) VALUES ($1, $2, 'nfl')",
+      [follow, owner]
     );
-    const byId = new Map(rows.rows.map((row) => [row.id, row]));
-    expect(byId.get(feed)).toMatchObject({
-      recipe_status: "feed",
-      confirmed_fetch_hosts: ["feed.example"],
-      grandfathered: true
-    });
-    expect(byId.get(scrape)).toMatchObject({
-      recipe_status: "missing",
-      health_state: "failing",
-      confirmed_fetch_hosts: ["scrape.example"],
-      grandfathered: true
-    });
-    expect(await forced("sports_custom_sources")).toBe(true);
-    expect(await forced("sports_source_assignments")).toBe(true);
-  });
+    for (const source of [sources.feed, sources.scrape]) {
+      await bootstrap.query(
+        `INSERT INTO app.sports_source_assignments (owner_user_id, source_id, follow_id)
+         VALUES ($1, $2, $3)`,
+        [owner, source, follow]
+      );
+    }
+  }
 
-  it("upgrades existing news sources and keeps row security forced", async () => {
-    await rewindNews();
+  async function seedNewsSource() {
     const id = randomUUID();
     await bootstrap.query(
       `INSERT INTO app.news_custom_sources
@@ -190,23 +159,139 @@ describe("populated news and sports source upgrades", () => {
                'https://feeds.example/rss', 'feed', 'approved', 'unavailable', 'fp', now())`,
       [id, owner]
     );
+    return id;
+  }
 
-    // Without the fix the owner role sees no rows and the new CHECK constraints reject them.
-    await stage("news", ["0204_news_source_health_states.sql"]);
-    await expect(migrate()).rejects.toThrow(/health_status_check/);
+  async function expectAllForced() {
+    for (const table of [
+      "sports_custom_sources",
+      "sports_source_assignments",
+      "news_custom_sources"
+    ]) {
+      expect(await forced(table)).toBe(true);
+    }
+  }
 
-    await stage("news", newsFiles);
+  it("upgrades sports sources and saved assignments, then a second run changes nothing", async () => {
+    await rewindSports();
+    const sources = await seedSportsSources();
+    await seedAssignments(sources);
+
+    await stage("sports", [sportsFile]);
     await migrate();
 
+    const assignments = await bootstrap.query(
+      `SELECT source_id, target_url, preview_status, health_state, health_reason_code
+         FROM app.sports_source_assignments`
+    );
+    const bySource = new Map(assignments.rows.map((row) => [row.source_id, row]));
+    expect(assignments.rows).toHaveLength(2);
+    expect(bySource.get(sources.feed)).toMatchObject({
+      target_url: "https://feed.example/rss",
+      preview_status: "pending",
+      health_state: "pending",
+      health_reason_code: null
+    });
+    expect(bySource.get(sources.scrape)).toMatchObject({
+      target_url: null,
+      preview_status: "recipe_missing",
+      health_state: "failing",
+      health_reason_code: "recipe_missing"
+    });
+    await expectAllForced();
+
+    await migrate();
+    const again = await bootstrap.query(
+      "SELECT count(*)::int AS n FROM app.sports_source_assignments"
+    );
+    expect(again.rows[0].n).toBe(2);
+    await expectAllForced();
+  });
+
+  it("upgrades news sources in two steps and a later run changes nothing", async () => {
+    await rewindNews();
+    const id = await seedNewsSource();
+
+    // First run stops after 0204, leaving 0218 pending as on a partly upgraded install.
+    await stage("news", [healthFile]);
+    await migrate();
+    const mid = await bootstrap.query(
+      "SELECT health_status FROM app.news_custom_sources WHERE id = $1",
+      [id]
+    );
+    expect(mid.rows[0].health_status).toBe("temporarily_unavailable");
+    await expectAllForced();
+
+    await stage("news", [kindsFile]);
+    await migrate();
     const row = await bootstrap.query(
-      "SELECT health_status, confirmed_fetch_hosts, consecutive_failures FROM app.news_custom_sources WHERE id = $1",
+      "SELECT confirmed_fetch_hosts, consecutive_failures FROM app.news_custom_sources WHERE id = $1",
       [id]
     );
     expect(row.rows[0]).toMatchObject({
-      health_status: "temporarily_unavailable",
       confirmed_fetch_hosts: ["feeds.example", "news.example"],
       consecutive_failures: 0
     });
-    expect(await forced("news_custom_sources")).toBe(true);
+    await expectAllForced();
+
+    await migrate();
+    const count = await bootstrap.query("SELECT count(*)::int AS n FROM app.news_custom_sources");
+    expect(count.rows[0].n).toBe(1);
+    await expectAllForced();
+  });
+
+  it("leaves an already upgraded install untouched", async () => {
+    const sources = await seedSportsSources();
+    await seedAssignments(sources);
+
+    await stage("sports", [sportsFile]);
+    await stage("news", [healthFile, kindsFile]);
+    await migrate();
+    await migrate();
+
+    const sportsRows = await bootstrap.query(
+      "SELECT count(*)::int AS n FROM app.sports_custom_sources"
+    );
+    expect(sportsRows.rows[0].n).toBe(2);
+    await expectAllForced();
+  });
+
+  it("restores forced row security when a shimmed migration fails, and a retry succeeds", async () => {
+    const probe = "9999_shim_probe.sql";
+    const unforced = `DO $$ BEGIN
+  IF (SELECT relforcerowsecurity FROM pg_class WHERE oid = 'app.sports_custom_sources'::regclass) THEN
+    RAISE EXCEPTION 'still forced';
+  END IF;
+END $$;`;
+    const shimFor = (sql: string) => ({
+      [probe]: {
+        checksum: createHash("sha256").update(sql).digest("hex"),
+        relaxForcedRls: ["app.sports_custom_sources", "app.sports_source_assignments"]
+      }
+    });
+    const run = (shims: ReturnType<typeof shimFor>) =>
+      runSqlMigrations({
+        connectionString: connectionStrings.migration,
+        migrationsDirectory: directory,
+        legacyUpgradeShims: shims
+      });
+
+    const failing = `${unforced}\nSELECT 1 / 0;\n`;
+    await writeFile(join(directory, probe), failing);
+    await expect(run(shimFor(failing))).rejects.toThrow(/division by zero/);
+    await expectAllForced();
+    const failed = await bootstrap.query(
+      "SELECT 1 FROM app.schema_migrations WHERE version = '9999'"
+    );
+    expect(failed.rows).toHaveLength(0);
+
+    const working = `${unforced}\n`;
+    await writeFile(join(directory, probe), working);
+    await run(shimFor(working));
+    const recorded = await bootstrap.query(
+      "SELECT 1 FROM app.schema_migrations WHERE version = '9999'"
+    );
+    expect(recorded.rows).toHaveLength(1);
+    await expectAllForced();
   });
 });

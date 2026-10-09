@@ -340,9 +340,7 @@ describe("MVP foundation schema catalog", () => {
         { version: "0189", name: "0189_module_builds.sql" },
         // #1572 — custom sports news sources by team and league.
         { version: "0190", name: "0190_sports_custom_sources.sql" },
-        { version: "0190a", name: "0190a_sports_sources_open_for_upgrade.sql" },
         { version: "0191", name: "0191_sports_public_source_runtime.sql" },
-        { version: "0191a", name: "0191a_sports_sources_force_rls.sql" },
         { version: "0192", name: "0192_sports_legacy_feed_assignments_verified.sql" },
         { version: "0193", name: "0193_sports_legacy_feed_assignment_repair.sql" },
         // #1959 — store all six medication schedule types and a real time zone.
@@ -369,7 +367,6 @@ describe("MVP foundation schema catalog", () => {
         // #2030 (part of #1586) News refresh history — columns added to the existing
         // owner-only FORCE-RLS refresh-state table; no new grant, no new policy.
         { version: "0203", name: "0203_news_refresh_history.sql" },
-        { version: "0203a", name: "0203a_news_sources_open_for_upgrade.sql" },
         { version: "0204", name: "0204_news_source_health_states.sql" },
         { version: "0205", name: "0205_news_credential_status_worker_grant.sql" },
         { version: "0206", name: "0206_outbound_action_risk.sql" },
@@ -395,7 +392,6 @@ describe("MVP foundation schema catalog", () => {
         { version: "0217", name: "0217_sports_follows_source_team_id.sql" },
         // #2282 — News subreddit sources, fetch-host allowlist, workaround failure count.
         { version: "0218", name: "0218_news_source_kinds.sql" },
-        { version: "0218a", name: "0218a_news_sources_force_rls.sql" },
         // #2274 — the email thread judgement reads a whole thread by owner and thread id.
         { version: "0219", name: "0219_email_thread_lookup.sql" },
         // #2274 — email candidates carry proposed actions; one judgement record per thread.
