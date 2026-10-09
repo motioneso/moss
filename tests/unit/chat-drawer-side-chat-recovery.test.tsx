@@ -52,6 +52,9 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
   getChatModelFavorites: vi.fn(async () => ({ modelIds: [] })),
   putChatModelFavorites: vi.fn(async (input: { modelIds: string[] }) => input)
 }));
+vi.mock("../../apps/web/src/api/workflows-client.js", () => ({
+  listWorkflowApprovals: vi.fn(async () => [])
+}));
 
 import {
   getChatPrivacyState,
@@ -61,10 +64,6 @@ import {
   sendChatTurn,
   transcribeAudio
 } from "../../apps/web/src/api/client.js";
-vi.mock("../../apps/web/src/api/workflows-client.js", () => ({
-  listWorkflowApprovals: vi.fn(async () => [])
-}));
-
 import { useChatStream } from "../../apps/web/src/chat/use-chat-stream.js";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { boundDraftKey, unselectedDraftKey } from "../../apps/web/src/chat/chat-draft-storage.js";
@@ -832,6 +831,8 @@ it("keeps delayed caller text and edits through unavailable-provider transitions
 });
 
 it("sends a recovered Main draft after startup history is ready", async () => {
+  const previousEventSource = globalThis.EventSource;
+  const previousStorage = globalThis.localStorage;
   vi.stubGlobal(
     "EventSource",
     class {
@@ -878,6 +879,7 @@ it("sends a recovered Main draft after startup history is ready", async () => {
         expect(renderer.root.findByType("textarea").props.value).toBe("Recovered Main draft");
       });
     });
+    expect(renderer.root.findByType("textarea").props.disabled).toBe(true);
     expect(findByClassName(renderer, "chatd-send").props.disabled).toBe(true);
     await act(async () => {
       renderer.root.findByType("textarea").props.onKeyDown({
@@ -912,6 +914,8 @@ it("sends a recovered Main draft after startup history is ready", async () => {
     await act(async () => renderer?.unmount());
     client.clear();
     vi.mocked(listChatThreads).mockResolvedValue({ threads: [] });
-    vi.unstubAllGlobals();
+    vi.mocked(listChatThreadMessages).mockReset();
+    vi.stubGlobal("EventSource", previousEventSource);
+    vi.stubGlobal("localStorage", previousStorage);
   }
 });
