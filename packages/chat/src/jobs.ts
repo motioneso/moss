@@ -623,10 +623,17 @@ async function maybePromoteCandidate(
   }
 
   if (candidate.fact) {
-    const self = await graphRepository.ensureSelfEntity(scopedDb, ownerUserId);
+    const subjectEntityId = await resolveFactSubjectEntityId(
+      scopedDb,
+      ownerUserId,
+      graphRepository,
+      candidate.fact.subject
+    );
+    // Several entities share the name, so the fact stays staged for review.
+    if (!subjectEntityId) return;
     await graphRepository.createFactFromEpisode(scopedDb, ownerUserId, {
       episodeId,
-      subjectEntityId: self.id,
+      subjectEntityId,
       predicate: candidate.fact.predicate,
       objectText: candidate.fact.objectText ?? candidate.fact.objectName,
       recordKind: recordKindForCandidate(candidate),
@@ -636,6 +643,33 @@ async function maybePromoteCandidate(
     });
     await candidatesRepository.markPromoted(scopedDb, ownerUserId, record.id, decision.reason);
   }
+}
+
+const SELF_SUBJECTS = new Set(["self", "user", "me", "myself", "i", "the user"]);
+
+/**
+ * Maps a distilled fact's subject to the entity it describes: the owner's Self entity for the
+ * user, an existing entity of that name, or a new person entity. Returns null when the name
+ * is ambiguous.
+ */
+export async function resolveFactSubjectEntityId(
+  scopedDb: DataContextDb,
+  ownerUserId: string,
+  graphRepository: MemoryGraphRepository,
+  subject: string
+): Promise<string | null> {
+  const name = subject.trim();
+  if (SELF_SUBJECTS.has(name.toLocaleLowerCase())) {
+    return (await graphRepository.ensureSelfEntity(scopedDb, ownerUserId)).id;
+  }
+  const matches = await graphRepository.findEntitiesByName(scopedDb, ownerUserId, name);
+  if (matches.length > 1) return null;
+  if (matches[0]) return matches[0].id;
+  const created = await graphRepository.createEntity(scopedDb, ownerUserId, {
+    kind: "person",
+    name
+  });
+  return created.id;
 }
 
 function recordKindForCandidate(candidate: MemoryCandidate): MemoryRecordKind {

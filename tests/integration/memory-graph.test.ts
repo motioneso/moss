@@ -14,6 +14,7 @@ import {
   StubEmbeddingProvider,
   type MemoryFactPredicate
 } from "@moss/memory";
+import { resolveFactSubjectEntityId } from "@moss/chat";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -231,6 +232,59 @@ describe("MemoryGraphRepository", () => {
           status: "active",
           provenance: "confirmed"
         });
+      }
+    );
+  });
+
+  it("forgets a corrected memory while its superseded predecessor remains", async () => {
+    await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "memory-graph:forget-corrected" },
+      async (db) => {
+        const self = await repo.ensureSelfEntity(db, ids.userA);
+        const original = await repo.createFact(db, ids.userA, {
+          subjectEntityId: self.id,
+          predicate: "prefers",
+          objectText: `forget corrected original ${randomUUID()}`,
+          confidence: 0.7,
+          provenance: "inferred",
+          source: { sourceKind: "manual", sourceRef: "manual:forget-corrected", excerpt: "x" }
+        });
+        const corrected = await repo.correctFact(db, ids.userA, {
+          targetFactId: original.id,
+          replacementText: `forget corrected replacement ${randomUUID()}`
+        });
+        expect(corrected).not.toBeNull();
+
+        expect(await repo.forgetFact(db, ids.userA, corrected!.id)).toBe(true);
+
+        const rows = await sql<{ status: string; superseded_by_fact_id: string | null }>`
+          SELECT status, superseded_by_fact_id FROM app.memory_facts
+          WHERE owner_user_id = ${ids.userA}::uuid AND id = ${original.id}::uuid
+        `.execute(db.db);
+        expect(rows.rows).toEqual([{ status: "superseded", superseded_by_fact_id: null }]);
+      }
+    );
+  });
+
+  it("resolves a distilled fact subject to the entity it describes, not always Self", async () => {
+    await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "memory-graph:fact-subject" },
+      async (db) => {
+        const self = await repo.ensureSelfEntity(db, ids.userA);
+        const name = `Alex ${randomUUID()}`;
+
+        expect(await resolveFactSubjectEntityId(db, ids.userA, repo, "self")).toBe(self.id);
+
+        const alex = await resolveFactSubjectEntityId(db, ids.userA, repo, name);
+        expect(alex).not.toBeNull();
+        expect(alex).not.toBe(self.id);
+        expect(await resolveFactSubjectEntityId(db, ids.userA, repo, name.toUpperCase())).toBe(
+          alex
+        );
+
+        await repo.createEntity(db, ids.userA, { kind: "person", name: `Dup ${name}` });
+        await repo.createEntity(db, ids.userA, { kind: "person", name: `Dup ${name}` });
+        expect(await resolveFactSubjectEntityId(db, ids.userA, repo, `Dup ${name}`)).toBeNull();
       }
     );
   });

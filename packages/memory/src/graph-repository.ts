@@ -826,6 +826,37 @@ export class MemoryGraphRepository {
     return result.rows[0]?.entity_id ?? null;
   }
 
+  /**
+   * Active non-self entities whose name or alias matches `name` case-insensitively. The caller
+   * decides what to do with zero or several matches.
+   */
+  async findEntitiesByName(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    name: string
+  ): Promise<MemoryEntityRecord[]> {
+    assertDataContextDb(scopedDb);
+    const normalized = normalizeAlias(name);
+    const result = await sql<EntityRow>`
+      SELECT e.*
+      FROM app.memory_entities e
+      WHERE e.owner_user_id = ${ownerUserId}::uuid
+        AND e.status = 'active'
+        AND e.kind <> 'self'
+        AND (
+          lower(e.name) = ${normalized}
+          OR EXISTS (
+            SELECT 1 FROM app.memory_aliases a
+            WHERE a.owner_user_id = e.owner_user_id
+              AND a.entity_id = e.id
+              AND a.normalized_alias = ${normalized}
+          )
+        )
+      ORDER BY e.created_at, e.id
+    `.execute(scopedDb.db);
+    return result.rows.map(mapEntity);
+  }
+
   async updateEntity(
     scopedDb: DataContextDb,
     ownerUserId: string,

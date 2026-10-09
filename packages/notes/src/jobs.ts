@@ -236,6 +236,35 @@ async function resolveAndValidateNoteFile(
   return resolvedFile;
 }
 
+/**
+ * Drops index rows, chunks and links for notes files that no longer exist under the root, so
+ * the folder stays the source of truth and search never returns text from a deleted note.
+ * Files that exist but failed this run are kept because they are still in `mdFiles`.
+ */
+async function purgeDeletedNotes(
+  scopedDb: DataContextDb,
+  actorUserId: string,
+  resolvedRoot: string,
+  mdFiles: readonly string[],
+  repository: MemoryRepository
+): Promise<void> {
+  const present = new Set<string>(mdFiles);
+  for (const file of mdFiles) {
+    try {
+      present.add(await realpath(file));
+    } catch {
+      // The file is still listed by its walked path, which keeps its rows.
+    }
+  }
+  const indexed = await repository.listIndexedPaths(scopedDb, actorUserId, NOTES_SOURCE_KIND);
+  for (const path of indexed) {
+    if (!path.startsWith(resolvedRoot + "/") || present.has(path)) continue;
+    await repository.deleteFileChunks(scopedDb, actorUserId, path, NOTES_SOURCE_KIND);
+    await repository.replaceFileLinks(scopedDb, actorUserId, path, []);
+    await repository.deleteFileIndex(scopedDb, actorUserId, NOTES_SOURCE_KIND, path);
+  }
+}
+
 export async function handleNotesSyncJob(
   job: Job<NotesSyncJobPayload>,
   scopedDb: DataContextDb,
@@ -381,6 +410,8 @@ export async function handleNotesSyncJob(
     }
   }
 
+  await purgeDeletedNotes(scopedDb, actorUserId, resolvedRoot, mdFiles, repository);
+
   // Total failure: surface as a thrown error so the worker catch-path writes
   // `lastError` and the card renders the failure line (Fix 2). Partial success
   // (some ingested OR some skipped-unchanged) is intentionally NOT thrown — that
@@ -525,6 +556,10 @@ export async function handleNotesSyncJobWithDataContext(
       lastErrorMessage = sinkSafeErrorMessage(err);
     }
   }
+
+  await dataContextRunner.withDataContext(accessContext, (scopedDb) =>
+    purgeDeletedNotes(scopedDb, actorUserId, resolvedRoot, mdFiles, repository)
+  );
 
   if (ingested === 0 && skipped === 0 && errors > 0) {
     throw new NotesSyncFailure(
