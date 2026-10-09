@@ -9,12 +9,13 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 // Cross-account binding and late persona-response isolation are covered separately by
 // tests/unit/assistant-name-everywhere.test.tsx; this solo-admin live path uses one account.
 //
-// Deliberately NOT covered here (per the same brief): getting a chat model to actually reply.
-// Chat turns need a live, chat-capable AI provider, which sibling specs (runtime-context,
-// 1089-1090-chat-drawer-private, 1264-settings-self-operation) all document is not seeded at any
-// UAT level. Every assertion below is against rendered text: placeholders, aria-labels, headings,
-// and the brand wordmark — never a model turn.
-export const uatLevel = { level: "solo-admin", without: [] } as const;
+// Seed a chat-capable scripted model so the settled drawer retains its composer. This spec
+// asserts rendered names and placeholders without sending a model turn.
+export const uatLevel = {
+  level: "solo-admin",
+  without: [],
+  chatScript: "phase1-smoke"
+} as const;
 
 const ASSISTANT_NAME = "Alfred";
 
@@ -108,6 +109,7 @@ test.describe
     const drawer = page.getByRole("dialog", { name: `Chat with ${ASSISTANT_NAME}` });
     await expect(drawer).toBeVisible();
     await expect(drawer.locator(".chatd__name")).toHaveText(ASSISTANT_NAME);
+    await expect(drawer.locator(".chatd__status")).toHaveText("Here when you need me");
 
     // Composer placeholder + aria-label.
     const composer = drawer.getByRole("textbox", { name: `Message ${ASSISTANT_NAME}` });
