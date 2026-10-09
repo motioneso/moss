@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Multi-day events show on every day.** Calendar events that last several days, or run past midnight, now appear on each day they cover instead of only the first. [PR #3287](https://github.com/motioneso/moss/pull/3287)
 - **Sending email from chat.** Replying to an email from chat now works for regular mail accounts, and a mail-folder problem no longer makes Moss say a sent email was not sent. [PR #3270](https://github.com/motioneso/moss/pull/3270)
 - **Chat no longer sees hidden page text.** Moss no longer picks up text from parts of a page that are hidden or marked private when it looks at what you are viewing. [PR #3254](https://github.com/motioneso/moss/pull/3254)
 - **Task edits no longer lose data.** Editing a repeating task, moving a task with subtasks to another list, searching in plain words, and saving a task while it is still loading now all keep your changes instead of dropping or overwriting them. [PR #3272](https://github.com/motioneso/moss/pull/3272)
