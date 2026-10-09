@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, useState, type ComponentProps } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
@@ -41,13 +41,20 @@ function openOverlay(renderer: ReactTestRenderer): void {
   trigger.props.onClick();
 }
 
+function ControlledOverlay(
+  props: Omit<ComponentProps<typeof SideChatOverlay>, "open" | "onOpenChange">
+) {
+  const [open, setOpen] = useState(false);
+  return createElement(SideChatOverlay, { ...props, open, onOpenChange: setOpen });
+}
+
 async function renderOverlay(props?: {
   readonly onSelect?: (threadId: string) => void;
 }): Promise<ReactTestRenderer> {
   let renderer!: ReactTestRenderer;
   await act(async () => {
     renderer = create(
-      createElement(SideChatOverlay, {
+      createElement(ControlledOverlay, {
         threads,
         selectedThreadId: "main",
         onSelect: props?.onSelect ?? vi.fn(),
@@ -92,7 +99,7 @@ describe("SideChatOverlay (#3126)", () => {
     let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(
-        createElement(SideChatOverlay, {
+        createElement(ControlledOverlay, {
           threads: [],
           selectedThreadId: null,
           onSelect: vi.fn(),

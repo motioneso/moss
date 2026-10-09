@@ -12,7 +12,9 @@ export function seedChatDraft(
   key: string,
   text: string | undefined
 ): ChatDrafts {
-  return text && drafts[key] === undefined ? { ...drafts, [key]: text } : drafts;
+  return text && (drafts[key] === undefined || drafts[key] === "")
+    ? { ...drafts, [key]: text }
+    : drafts;
 }
 
 export function moveUnselectedDraft(
@@ -26,13 +28,8 @@ export function moveUnselectedDraft(
   return { ...rest, [threadId]: text };
 }
 
-export function initialChatDrafts(
-  ownerId: string | undefined,
-  surface: string,
-  initialText?: string
-): ChatDrafts {
-  const drafts = loadChatDrafts(ownerId);
-  return seedChatDraft(drafts, unselectedDraftKey(surface), initialText);
+export function initialChatDrafts(ownerId: string | undefined): ChatDrafts {
+  return loadChatDrafts(ownerId);
 }
 
 type StoredChatDrafts = {

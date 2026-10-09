@@ -104,6 +104,10 @@
   display: contents;
 }
 
+.chatd-overlay-background {
+  display: contents;
+}
+
 .chatd-conversations__overlay {
   position: absolute;
   inset: 0;

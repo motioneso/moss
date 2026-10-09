@@ -1,5 +1,5 @@
 import { House, Menu, Plus, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { Button, Eyebrow, IconButton, NavIndex, NavIndexItem } from "@moss/ui";
 import type { ChatThreadDto } from "@moss/shared";
@@ -16,31 +16,25 @@ export function SideChatOverlay(props: {
   readonly loading?: boolean;
   readonly error?: boolean;
   readonly onRetry?: () => void;
-  /** When supplied, the drawer owns the open state so a failed selection can reopen the list. */
-  readonly open?: boolean;
-  readonly onOpenChange?: (open: boolean) => void;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
 }) {
-  const [localOpen, setLocalOpen] = useState(false);
-  const open = props.open ?? localOpen;
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const setOpen = (next: boolean | ((current: boolean) => boolean)) => {
-    const value = typeof next === "function" ? next(open) : next;
-    if (props.open === undefined) setLocalOpen(value);
-    props.onOpenChange?.(value);
+    props.onOpenChange(typeof next === "function" ? next(props.open) : next);
   };
   const close = useCallback(() => {
     setOpen(false);
     triggerRef.current?.focus();
   }, []);
-  const { ref } = useDismissableMenu<HTMLDivElement>({ open, onClose: close });
+  const { ref } = useDismissableMenu<HTMLDivElement>({ open: props.open, onClose: close });
   const main = props.threads.find((thread) => thread.isMain);
   const sideChats = props.threads.filter((thread) => !thread.isMain);
 
-  useEffect(() => props.onOpenChange?.(open), [open, props.onOpenChange]);
   useEffect(() => {
-    if (!open) return;
+    if (!props.open) return;
     ref.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
-  }, [open, ref]);
+  }, [props.open, ref]);
 
   const select = (threadId: string) => {
     close();
@@ -52,7 +46,7 @@ export function SideChatOverlay(props: {
       <IconButton
         ref={triggerRef}
         aria-controls="chat-conversations"
-        aria-expanded={open}
+        aria-expanded={props.open}
         aria-label="Open conversations"
         disabled={props.disabled}
         title="Conversations"
@@ -60,7 +54,7 @@ export function SideChatOverlay(props: {
       >
         <Menu aria-hidden="true" />
       </IconButton>
-      {open ? (
+      {props.open ? (
         <div
           ref={ref}
           className="chatd-conversations__overlay"

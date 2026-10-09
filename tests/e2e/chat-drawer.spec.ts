@@ -591,7 +591,9 @@ test("resume failure clears selection and reopens conversations", async ({ page 
   );
 });
 
-test("conversations overlay keeps the transcript background inert while open", async ({ page }) => {
+test("conversations overlay keeps the covered drawer background inert while open", async ({
+  page
+}) => {
   await mockApi(page, {
     authenticated: true,
     chatThreads: [
@@ -620,6 +622,7 @@ test("conversations overlay keeps the transcript background inert while open", a
 
   await expect(drawer.locator(".chatd-empty")).toHaveCount(1);
   await expect(drawer.locator(".chatd__body[inert]")).toHaveCount(1);
+  await expect(drawer.locator(".chatd-overlay-background[inert]")).toHaveCount(3);
   await expect(drawer.locator(".chatd-conversations__overlay")).toBeVisible();
 });
 

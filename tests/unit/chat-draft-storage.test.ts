@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { loadChatDrafts, saveChatDrafts } from "../../apps/web/src/chat/chat-draft-storage.js";
+import {
+  loadChatDrafts,
+  saveChatDrafts,
+  seedChatDraft
+} from "../../apps/web/src/chat/chat-draft-storage.js";
 
 describe("chat draft storage", () => {
   beforeEach(() => localStorage.clear());
@@ -40,5 +44,14 @@ describe("chat draft storage", () => {
 
     expect(loadChatDrafts("owner-a")).toEqual({ "main-thread": "first owner's draft" });
     expect(loadChatDrafts("owner-b")).toEqual({});
+  });
+
+  it("replaces a cleared draft with a new starter but preserves unsent text", () => {
+    expect(seedChatDraft({ selected: "" }, "selected", "New starter")).toEqual({
+      selected: "New starter"
+    });
+    expect(seedChatDraft({ selected: "Unsent text" }, "selected", "New starter")).toEqual({
+      selected: "Unsent text"
+    });
   });
 });

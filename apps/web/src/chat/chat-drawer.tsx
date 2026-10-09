@@ -5,10 +5,10 @@ import {
   initialChatDrafts,
   moveUnselectedDraft,
   saveChatDrafts,
-  seedChatDraft,
   unselectedDraftKey
 } from "./chat-draft-storage";
 import { useChatTransition, type ChatTransition } from "./use-chat-transition";
+import { useInitialCallerDraft } from "./use-initial-caller-draft";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Maximize2, Minimize2, MoreHorizontal, ShieldOff, X } from "lucide-react";
 import {
@@ -20,7 +20,7 @@ import {
   useState
 } from "react";
 
-import { BrandMark, Chip, IconButton, Menu } from "@moss/ui";
+import { BrandMark, Button, Chip, IconButton, Menu } from "@moss/ui";
 
 import {
   cancelChatTurn,
@@ -74,18 +74,13 @@ export function ChatDrawer(props: {
   readonly clearRecords: () => void;
   readonly streamErrorCount: number;
   readonly selectionPending?: boolean;
-  /** #369: the founder set the instance up — tailors the empty-chat connect copy. */
   readonly isFounder: boolean;
-  /** Durable drafts are scoped to this signed-in owner. */
   readonly ownerId?: string;
-  /** #368: optional pre-filled, never auto-sent composer starter. */
   readonly initialText?: string;
   readonly focusActionRequestId?: string | null;
   readonly onActionRequestFocused?: () => void;
   readonly surface: ChatSurface;
-  /** #1756: docks beside running drafts on desktop; phones keep the normal overlay drawer. */
   readonly docked?: boolean;
-  /** Desktop docked chat only. Expanded chat replaces the page; undefined hides the button. */
   readonly expanded?: boolean;
   readonly onToggleExpanded?: () => void;
 }) {
@@ -101,33 +96,25 @@ export function ChatDrawer(props: {
   const assistantName = useAssistantName("");
   const surfaceRef = useRef(props.surface);
   surfaceRef.current = props.surface;
-  // #1520/1139-C: latest-value ref so an SSE-only records tick can't change sendMessage's
-  // identity and retrigger the queued-drain effect below.
   const latestRecordsRef = useRef(props.records);
   latestRecordsRef.current = props.records;
   const [reviewThreadId, setReviewThreadId] = useState<string | null>(null);
   const [conversationOverlayOpen, setConversationOverlayOpen] = useState(false);
-  const [drafts, setDrafts] = useState(() =>
-    initialChatDrafts(props.ownerId, props.surface, props.initialText)
-  );
+  const [drafts, setDrafts] = useState(() => initialChatDrafts(props.ownerId));
+  const callerDraft = useInitialCallerDraft(props.initialText, props.surface, generationRef);
   const focusComposerAfterNewSideChat = useRef(false);
   const [privateMode, setPrivateMode] = useState(false);
   const [privateEnded, setPrivateEnded] = useState(false);
   const [activatingPrivate, setActivatingPrivate] = useState(false);
   const [privateActivationError, setPrivateActivationError] = useState<string | null>(null);
 
-  // #1780: local privacy actions outrank in-flight server reads, which could otherwise overwrite
-  // the user's new private session with stale `incognito: false`. Reset this on a surface change.
   const privateModeDecidedLocally = useRef(false);
-  /** #1521: suppress server truth only while private close is in flight, then restore it. */
   const closingPrivateChatRef = useRef(false);
 
   const privacyStateQuery = useQuery({
     queryKey: queryKeys.chat.privacy(props.surface),
     queryFn: () => getChatPrivacyState(props.surface),
     enabled: props.open,
-    // "always": the global QueryClient has a 15s staleTime; `true` skips a recently invalidated
-    // refetch after focus, exactly when #1521 needs the request to reach the server.
     refetchOnWindowFocus: "always"
   });
 
@@ -136,11 +123,8 @@ export function ChatDrawer(props: {
     if (privateModeDecidedLocally.current) return;
     if (closingPrivateChatRef.current) return;
     setPrivateMode(privacyStateQuery.data.incognito);
-    // `dataUpdatedAt` catches an unchanged refetch after a failed close, where structural sharing
-    // keeps the same `data` reference but #1521 must still apply the server-confirmed state.
   }, [privacyStateQuery.isSuccess, privacyStateQuery.data, privacyStateQuery.dataUpdatedAt]);
 
-  // #633: autoscroll by default; pause on manual scroll-away, resume (jump to latest) on demand.
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
   const AUTOSCROLL_THRESHOLD_PX = 48;
@@ -172,15 +156,15 @@ export function ChatDrawer(props: {
       void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(vars.surface) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.chat.privacy(vars.surface) });
       if (!transition.isCurrent(vars.transition)) return;
+      callerDraft.bind(vars.threadId, vars.surface, vars.transition.generation, true);
       props.clearRecords();
-      // #1090: resumed threads are always non-incognito (ChatRepository.listThreads filters
-      // `incognito = false`) — clear the stale privateMode/privateEnded flags to match server truth.
       privateModeDecidedLocally.current = true;
       setPrivateMode(false);
       setPrivateEnded(false);
     },
     onError: (_error, vars) => {
       if (!transition.isCurrent(vars.transition)) return;
+      callerDraft.retire(vars.surface, vars.transition.generation);
       setReviewThreadId(null);
       setConversationOverlayOpen(true);
     },
@@ -190,14 +174,11 @@ export function ChatDrawer(props: {
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [needsProvider, setNeedsProvider] = useState(false);
-  // Kept here so a queued turn survives composer remounts and drains after its first turn ends.
   const [queuedSendText, setQueuedSendText] = useState<{
     readonly text: string;
     readonly surface: ChatSurface;
   } | null>(null);
 
-  // #1133: object (not bare string) so an attachment-only send — empty text, chips only —
-  // still renders an optimistic user row while the turn is in flight.
   const [pendingUser, setPendingUser] = useState<{
     readonly text: string;
     readonly attachments?: readonly ChatAttachmentDto[];
@@ -211,8 +192,6 @@ export function ChatDrawer(props: {
     return () => window.removeEventListener("beforeunload", endPrivate);
   }, [privateMode]);
 
-  // #399: clear the optimistic record once the SSE stream delivers the matching user record (text
-  // check handles SSE pre-arriving before send). Safe to double-fire in StrictMode — idempotent.
   useEffect(() => {
     if (
       !props.meetingContext &&
@@ -223,10 +202,7 @@ export function ChatDrawer(props: {
     }
   }, [props.records, pendingUser, props.meetingContext]);
 
-  // #1533: switching surfaces (e.g. drawer <-> module-embedded chat) must not leak state from the
-  // previous surface — reset all locally-derived state unconditionally on every surface change.
   useEffect(() => {
-    // #1780: the new surface has its own server truth, so let the privacy query seed it again.
     privateModeDecidedLocally.current = false;
     closingPrivateChatRef.current = false;
     setFallbackRecords([]);
@@ -271,26 +247,50 @@ export function ChatDrawer(props: {
     reviewThreadId ?? privacyStateQuery.data?.threadId ?? mainThreadId ?? null;
   const fallbackDraftKey = unselectedDraftKey(props.surface);
   const draftKey =
-    privateMode || activatingPrivate ? PRIVATE_DRAFT_KEY : (selectedThreadId ?? fallbackDraftKey);
+    privateMode || activatingPrivate
+      ? PRIVATE_DRAFT_KEY
+      : props.surface === DEFAULT_CHAT_SURFACE &&
+          !mainThreadId &&
+          drafts[fallbackDraftKey] !== undefined
+        ? fallbackDraftKey
+        : (selectedThreadId ?? fallbackDraftKey);
+  const visibleCallerDraft = privateMode
+    ? ""
+    : callerDraft.textFor(selectedThreadId, drafts[draftKey]);
   useEffect(() => saveChatDrafts(props.ownerId, drafts), [drafts, props.ownerId]);
 
   useEffect(() => {
-    if (!selectedThreadId) return;
-    setDrafts((current) => moveUnselectedDraft(current, fallbackDraftKey, selectedThreadId));
-  }, [fallbackDraftKey, selectedThreadId]);
+    const target =
+      props.surface === DEFAULT_CHAT_SURFACE
+        ? mainThreadId
+        : privacyStateQuery.isSuccess
+          ? privacyStateQuery.data.threadId
+          : undefined;
+    if (target) setDrafts((current) => moveUnselectedDraft(current, fallbackDraftKey, target));
+  }, [
+    fallbackDraftKey,
+    mainThreadId,
+    privacyStateQuery.data,
+    privacyStateQuery.isSuccess,
+    props.surface
+  ]);
 
   useEffect(() => {
-    if (!props.initialText) return;
-    setDrafts((current) =>
-      seedChatDraft(current, selectedThreadId ?? fallbackDraftKey, props.initialText)
-    );
-  }, [fallbackDraftKey, props.initialText, selectedThreadId]);
+    const threadId = privacyStateQuery.data?.threadId;
+    if (privacyStateQuery.isSuccess && threadId && !transition.pending) {
+      callerDraft.bind(threadId, props.surface, generationRef.current);
+    }
+  }, [
+    callerDraft,
+    privacyStateQuery.data,
+    privacyStateQuery.isSuccess,
+    props.surface,
+    transition.pending
+  ]);
 
-  /** #400: unified synchronous send entrypoint; its IIFE always clears sending state. */
   const sendMessage = useCallback(
     (text: string, attachments?: readonly ChatAttachmentDto[]): void => {
       const trimmed = text.trim();
-      // #1133: attachment-only turns (chips, no text) are legal — block only when BOTH are empty.
       if (
         (!trimmed && !attachments?.length) ||
         sendPending ||
@@ -310,6 +310,7 @@ export function ChatDrawer(props: {
       setPendingUser({ text: trimmed, attachments });
       const initiatingSurface = props.surface;
       const generation = generationRef.current;
+      callerDraft.dispatch(trimmed, initiatingSurface, generation);
       void (async () => {
         try {
           const result = props.meetingContext
@@ -333,6 +334,9 @@ export function ChatDrawer(props: {
           void queryClient.invalidateQueries({
             queryKey: queryKeys.chat.threads(initiatingSurface)
           });
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.chat.privacy(initiatingSurface)
+          });
           if (reviewThreadId !== null) {
             void queryClient.invalidateQueries({
               queryKey: queryKeys.chat.messages(reviewThreadId, initiatingSurface)
@@ -340,6 +344,7 @@ export function ChatDrawer(props: {
           }
           if (surfaceRef.current !== initiatingSurface || generation !== generationRef.current)
             return;
+          callerDraft.retire(initiatingSurface, generation);
           setPendingUser(null);
           const postResponseRecords: readonly TranscriptRecord[] = [
             {
@@ -381,7 +386,6 @@ export function ChatDrawer(props: {
             return;
           }
           if (props.meetingContext) {
-            // Local failed attempts are distinct even when an older saved question matches.
             const failedQuestion = {
               kind: "user" as const,
               text: trimmed,
@@ -429,7 +433,6 @@ export function ChatDrawer(props: {
     : props.records;
   const visibleFallbackRecords = reconcileFallbacks(fallbackRecords, displayRecords);
 
-  // Appended after persisted records so a turn remains visible while its selected thread refetches.
   const effectiveRecords: readonly TranscriptRecord[] = [
     ...displayRecords,
     ...visibleFallbackRecords,
@@ -461,7 +464,6 @@ export function ChatDrawer(props: {
     }
   }, [privateEnded, privateMode, props.streamErrorCount]);
 
-  // Switching conversations (or reopening the drawer) re-pins the newly shown transcript.
   useEffect(() => {
     setStickToBottom(true);
     if (props.open) {
@@ -469,16 +471,12 @@ export function ChatDrawer(props: {
     }
   }, [reviewThreadId, props.open, scrollToLatest]);
 
-  // Jump straight to the bottom whenever a new record/loading indicator lands while the user
-  // hasn't scrolled away.
   useEffect(() => {
     if (stickToBottom) {
       scrollToLatest("auto");
     }
   }, [effectiveRecords.length, isWaiting, reviewThreadId, scrollToLatest, stickToBottom]);
 
-  // Dialog contract: focus enters the message box on open, Escape closes, and focus returns to
-  // whatever opened the chat. On a phone the drawer covers the page, so Tab stays inside it.
   const asideRef = useRef<HTMLElement | null>(null);
   const [phone, setPhone] = useState(
     () => typeof window !== "undefined" && !!window.matchMedia?.(PHONE_QUERY).matches
@@ -503,8 +501,6 @@ export function ChatDrawer(props: {
       aside.focus();
       return false;
     };
-    // The message box can mount (or remount) after the panel while the model check settles, which
-    // drops focus to the page. Pull focus back until the user moves it themselves.
     const watcher = new MutationObserver(() => {
       const active = document.activeElement;
       if (active === aside || active === document.body) focusEntry();
@@ -534,13 +530,10 @@ export function ChatDrawer(props: {
     focusComposerAfterNewSideChat.current = false;
   }, [historyActivationPending, props.open, reviewThreadId, transition.pending]);
 
-  if (!props.open) {
-    return null;
-  }
+  if (!props.open) return null;
 
   const onDialogKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "Escape" && !event.defaultPrevented) {
-      // An open More menu handles its own Escape.
       if (asideRef.current?.querySelector('.chatd__head [aria-expanded="true"]')) return;
       event.stopPropagation();
       props.onClose();
@@ -552,12 +545,15 @@ export function ChatDrawer(props: {
   const startNewSideChat = () => {
     const change = transition.begin();
     if (!change) return;
+    callerDraft.retire(change.surface);
     void (async () => {
       try {
         await clearChat({ surface: change.surface });
         const state = await getChatPrivacyState(change.surface);
         void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(change.surface) });
         if (!transition.isCurrent(change)) return;
+        if (state.threadId)
+          callerDraft.bind(state.threadId, change.surface, change.generation, true);
         setReviewThreadId(state.threadId ?? null);
         focusComposerAfterNewSideChat.current = true;
         setIsSending(false);
@@ -572,6 +568,7 @@ export function ChatDrawer(props: {
         props.clearRecords();
       } catch (caught) {
         if (transition.isCurrent(change)) {
+          callerDraft.retire(change.surface, change.generation);
           setIsSending(false);
           setPendingUser(null);
           setQueuedSendText(null);
@@ -596,6 +593,7 @@ export function ChatDrawer(props: {
   const startPrivateChat = () => {
     const change = transition.begin();
     if (!change) return;
+    callerDraft.retire(change.surface);
     setReviewThreadId(null);
     setIsSending(false);
     setSendError(null);
@@ -606,8 +604,6 @@ export function ChatDrawer(props: {
     setPrivateActivationError(null);
     setActivatingPrivate(true);
     setDrafts(({ [PRIVATE_DRAFT_KEY]: _privateDraft, ...persistentDrafts }) => persistentDrafts);
-    // #1780: claimed at the click, not when the request comes back — the whole point is to outrank a
-    // privacy response that was already in flight before the user asked for a private chat.
     privateModeDecidedLocally.current = true;
     const initiatingSurface = props.surface;
     void (async () => {
@@ -651,9 +647,6 @@ export function ChatDrawer(props: {
         setFallbackRecords([]);
       } catch (caught) {
         if (transition.isCurrent(change)) {
-          // The close never reached the server, so this was never really "decided" — let the
-          // privacy-query effect apply server truth again once the invalidated query refetches,
-          // instead of permanently pinning the optimistic (wrong) "closed" state.
           privateModeDecidedLocally.current = false;
           setPrivateActivationError(
             caught instanceof Error ? caught.message : "Could not end private chat"
@@ -671,16 +664,8 @@ export function ChatDrawer(props: {
     })();
   };
 
-  /** #456: stop lets the pending turn settle; a queued next turn still drains afterward. */
-  const stopSending = (): void => {
-    void cancelChatTurn(props.surface).catch(() => {
-      // best-effort: the turn ends server-side regardless; a network error here just clears isSending.
-    });
-  };
-
-  const queueSend = (text: string): void => {
-    setQueuedSendText({ text, surface: props.surface });
-  };
+  const stopSending = (): void => void cancelChatTurn(props.surface).catch(() => {});
+  const queueSend = (text: string): void => setQueuedSendText({ text, surface: props.surface });
 
   return (
     <aside
@@ -693,30 +678,35 @@ export function ChatDrawer(props: {
       aria-label={assistantName ? `Chat with ${assistantName}` : "Chat"}
     >
       <div className="chatd__head">
-        <span className="chatd__mark">
-          <BrandMark size={16} />
-        </span>
-        <div className="chatd__id">
-          <div className="chatd__name">{assistantName || "Chat"}</div>
-          <div className={`chatd__status${chatUnavailable ? " chatd__status--offline" : ""}`}>
-            {lockedModelUnavailable && chatUnavailable
-              ? "Model unavailable"
-              : noModelAvailable
-                ? "Not connected"
-                : props.meetingContext
-                  ? "Meeting questions only"
-                  : "Here when you need me"}
+        <div
+          className="chatd-overlay-background"
+          inert={conversationOverlayOpen ? true : undefined}
+        >
+          <span className="chatd__mark">
+            <BrandMark size={16} />
+          </span>
+          <div className="chatd__id">
+            <div className="chatd__name">{assistantName || "Chat"}</div>
+            <div className={`chatd__status${chatUnavailable ? " chatd__status--offline" : ""}`}>
+              {lockedModelUnavailable && chatUnavailable
+                ? "Model unavailable"
+                : noModelAvailable
+                  ? "Not connected"
+                  : props.meetingContext
+                    ? "Meeting questions only"
+                    : "Here when you need me"}
+            </div>
           </div>
+          {props.onToggleExpanded ? (
+            <IconButton
+              aria-label={props.expanded ? "Collapse chat" : "Expand chat"}
+              title={props.expanded ? "Collapse" : "Expand"}
+              onClick={props.onToggleExpanded}
+            >
+              {props.expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+            </IconButton>
+          ) : null}
         </div>
-        {props.onToggleExpanded ? (
-          <IconButton
-            aria-label={props.expanded ? "Collapse chat" : "Expand chat"}
-            title={props.expanded ? "Collapse" : "Expand"}
-            onClick={props.onToggleExpanded}
-          >
-            {props.expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
-          </IconButton>
-        ) : null}
         <SideChatOverlay
           key={props.surface}
           disabled={transition.pending}
@@ -731,6 +721,7 @@ export function ChatDrawer(props: {
           onSelect={(id) => {
             const change = props.meetingContext ? undefined : transition.begin();
             if (!props.meetingContext && !change) return;
+            callerDraft.retire(props.surface);
             if (isSending) void cancelChatTurn(props.surface);
             setFallbackRecords([]);
             setPendingUser(null);
@@ -743,33 +734,38 @@ export function ChatDrawer(props: {
             }
           }}
         />
-        <Menu
-          triggerIcon={<MoreHorizontal aria-hidden="true" />}
-          triggerLabel="More chat options"
-          items={[
-            ...(props.surface === DEFAULT_CHAT_SURFACE
-              ? [
-                  {
-                    id: "private",
-                    icon: <ShieldOff aria-hidden="true" />,
-                    label: privateMode ? "Leave private chat" : "Start private chat",
-                    ariaLabel: privateMode ? "Leave private chat" : "Start private chat",
-                    checked: privateMode
-                  }
-                ]
-              : [])
-          ]}
-          onSelect={(id) => {
-            if (id === "private") (privateMode ? closePrivateChat : startPrivateChat)();
-          }}
-        />
-        <IconButton aria-label="Close chat" title="Close" onClick={props.onClose}>
-          <X aria-hidden="true" />
-        </IconButton>
+        <div
+          className="chatd-overlay-background"
+          inert={conversationOverlayOpen ? true : undefined}
+        >
+          <Menu
+            triggerIcon={<MoreHorizontal aria-hidden="true" />}
+            triggerLabel="More chat options"
+            items={[
+              ...(props.surface === DEFAULT_CHAT_SURFACE
+                ? [
+                    {
+                      id: "private",
+                      icon: <ShieldOff aria-hidden="true" />,
+                      label: privateMode ? "Leave private chat" : "Start private chat",
+                      ariaLabel: privateMode ? "Leave private chat" : "Start private chat",
+                      checked: privateMode
+                    }
+                  ]
+                : [])
+            ]}
+            onSelect={(id) => {
+              if (id === "private") (privateMode ? closePrivateChat : startPrivateChat)();
+            }}
+          />
+          <IconButton aria-label="Close chat" title="Close" onClick={props.onClose}>
+            <X aria-hidden="true" />
+          </IconButton>
+        </div>
       </div>
 
       {props.meetingContext ? (
-        <div className="chatd__head">
+        <div className="chatd__head" inert={conversationOverlayOpen ? true : undefined}>
           <Chip
             onRemove={props.onRemoveMeetingContext ?? props.onClose}
             removeLabel="Remove meeting context"
@@ -813,6 +809,20 @@ export function ChatDrawer(props: {
               </button>
             </div>
           ) : null}
+          {messagesQuery.isError ? (
+            <div className="chatd-empty" role="alert">
+              <div className="chatd-empty__title">Could not load conversation.</div>
+              <Button
+                aria-label="Retry conversation"
+                size="sm"
+                type="button"
+                variant="quiet"
+                onClick={() => void messagesQuery.refetch()}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : null}
           {effectiveRecords.length > 0 ? (
             <Thread
               records={effectiveRecords}
@@ -827,17 +837,6 @@ export function ChatDrawer(props: {
                 />
               )}
             />
-          ) : messagesQuery.isError ? (
-            <div className="chatd-empty" role="alert">
-              <div className="chatd-empty__title">Could not load conversation.</div>
-              <button
-                aria-label="Retry conversation"
-                type="button"
-                onClick={() => void messagesQuery.refetch()}
-              >
-                Retry
-              </button>
-            </div>
           ) : noModelAvailable ? (
             <ConnectProviderEmpty isFounder={props.isFounder} />
           ) : props.meetingContext ? (
@@ -913,6 +912,7 @@ export function ChatDrawer(props: {
           <button
             aria-label="Jump to latest message"
             className="chatd__jump"
+            inert={conversationOverlayOpen ? true : undefined}
             type="button"
             onClick={jumpToLatest}
           >
@@ -925,46 +925,51 @@ export function ChatDrawer(props: {
       {props.meetingContext ? (
         <p className="jds-hint">Uses the transcript so far and your saved notes.</p>
       ) : null}
-      <Composer
-        placeholder={props.meetingContext ? "Ask about this meeting…" : undefined}
-        textOnly={Boolean(props.meetingContext)}
-        modelSelector={
-          <ChatModelPill
-            disabled={
-              Boolean(props.meetingContext) ||
-              privateEnded ||
-              isSending ||
-              historyActivationPending ||
-              transition.pending
-            }
-            privateMode={privateMode}
-            surface={props.surface}
-            onCrossProviderSwitch={switchToNewModelChat}
-          />
-        }
-        readOnly={
-          privateEnded ||
-          props.selectionPending ||
-          historyActivationPending ||
-          (transition.pending && !activatingPrivate) ||
-          (Boolean(props.meetingContext) && reviewing)
-        }
-        isFounder={props.isFounder}
-        initialText={props.initialText}
-        draft={drafts[draftKey] ?? ""}
-        onDraftChange={(draft) => setDrafts((current) => ({ ...current, [draftKey]: draft }))}
-        isSending={isSending}
-        sendError={privateEnded ? "Private chat ended. Start a new chat to continue." : sendError}
-        needsProvider={needsProvider}
-        noModelAvailable={noModelAvailable}
-        lockedModelUnavailable={lockedModelUnavailable}
-        privateMode={privateMode}
-        queuedText={queuedSendText?.surface === props.surface ? queuedSendText.text : null}
-        onSend={sendMessage}
-        onQueue={queueSend}
-        onDiscardQueuedText={() => setQueuedSendText(null)}
-        onStop={stopSending}
-      />
+      <div className="chatd-overlay-background" inert={conversationOverlayOpen ? true : undefined}>
+        <Composer
+          placeholder={props.meetingContext ? "Ask about this meeting…" : undefined}
+          textOnly={Boolean(props.meetingContext)}
+          modelSelector={
+            <ChatModelPill
+              disabled={
+                Boolean(props.meetingContext) ||
+                privateEnded ||
+                isSending ||
+                historyActivationPending ||
+                transition.pending
+              }
+              privateMode={privateMode}
+              surface={props.surface}
+              onCrossProviderSwitch={switchToNewModelChat}
+            />
+          }
+          readOnly={
+            privateEnded ||
+            props.selectionPending ||
+            historyActivationPending ||
+            (transition.pending && !activatingPrivate) ||
+            (Boolean(props.meetingContext) && reviewing)
+          }
+          isFounder={props.isFounder}
+          initialText={visibleCallerDraft || undefined}
+          draft={visibleCallerDraft || drafts[draftKey] || ""}
+          onDraftChange={(draft) => {
+            callerDraft.edit(props.surface, generationRef.current);
+            setDrafts((current) => ({ ...current, [draftKey]: draft }));
+          }}
+          isSending={isSending}
+          sendError={privateEnded ? "Private chat ended. Start a new chat to continue." : sendError}
+          needsProvider={needsProvider}
+          noModelAvailable={noModelAvailable}
+          lockedModelUnavailable={lockedModelUnavailable}
+          privateMode={privateMode}
+          queuedText={queuedSendText?.surface === props.surface ? queuedSendText.text : null}
+          onSend={sendMessage}
+          onQueue={queueSend}
+          onDiscardQueuedText={() => setQueuedSendText(null)}
+          onStop={stopSending}
+        />
+      </div>
     </aside>
   );
 }
@@ -975,8 +980,6 @@ function sameTranscriptRecord(a: TranscriptRecord, b: TranscriptRecord): boolean
   return a.text === b.text;
 }
 
-// #1519: consume each matching live record once. Repeated identical text without message IDs
-// (including user SSE echoes) must not retire multiple fallbacks and collapse distinct sends.
 function reconcileFallbacks(
   fallbacks: readonly TranscriptRecord[],
   liveRecords: readonly TranscriptRecord[]
