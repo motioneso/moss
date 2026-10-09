@@ -591,7 +591,12 @@ export function medicationLogBelongsToDate(
   if (log.scheduled_for) {
     const scheduledFor =
       log.scheduled_for instanceof Date ? log.scheduled_for : new Date(log.scheduled_for);
-    return scheduledFor >= scheduledStart && scheduledFor < scheduledEnd;
+    // One day of slack each side: a zoned slot instant can fall outside the UTC day of its
+    // local date, and slot matching is by exact instant anyway.
+    return (
+      scheduledFor.getTime() >= scheduledStart.getTime() - DAY_MS &&
+      scheduledFor.getTime() < scheduledEnd.getTime() + DAY_MS
+    );
   }
   const loggedAt = log.logged_at instanceof Date ? log.logged_at : new Date(log.logged_at);
   return loggedAt >= localStart && loggedAt < localEnd;
