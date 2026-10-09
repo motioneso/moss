@@ -20,7 +20,7 @@ import { InputError } from "../../external-modules/finance/src/worker/validate.j
 // chunks are written (at-least-once + idempotent reducer = no data loss),
 // balance snapshots append once per day, item failures are isolated (a
 // broken bank never blocks the others), the D5 token-map guard aborts the
-// whole run, and the per-run page loop is bounded at 20.
+// whole run, and the per-run page loop is bounded at 100.
 
 const NOW = new Date("2026-07-18T12:00:00Z");
 const TODAY = "2026-07-18";
@@ -792,5 +792,20 @@ describe("finance.sync.run (#3161 sync resilience)", () => {
     await syncRunHandler(ports)(ACTOR);
     expect(kv.ops.some((op) => JSON.stringify(op).includes("lock:sync"))).toBe(true);
     expect(await kv.get(NS.connections, "lock:sync")).toBeNull();
+  });
+
+  it("leaves a replacement lease alone when it finishes", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        // Another owner takes over the lease while this sync is running.
+        await kv.set(NS.connections, "lock:sync", { at: NOW.getTime(), owner: "other" });
+        return syncPage({ nextCursor: "c1" });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    expect(await kv.get(NS.connections, "lock:sync")).toMatchObject({ owner: "other" });
   });
 });
