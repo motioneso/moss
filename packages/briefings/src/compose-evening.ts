@@ -29,7 +29,11 @@ import {
   withinLocalDay
 } from "./compose-shared.js";
 import { collectExternalBriefingContributions } from "./external-contributions.js";
-import { filterEveningCalendar, partitionEveningTasks } from "./evening-lenses.js";
+import {
+  filterEveningCalendar,
+  localDayStartIso,
+  partitionEveningTasks
+} from "./evening-lenses.js";
 import { resolveBriefingFreshness } from "./freshness.js";
 import { resolvePlanContext } from "./plan-context.js";
 import { planSection } from "./plan-prose.js";
@@ -255,6 +259,7 @@ export async function composeEveningBriefing(
   // ── calendar_tomorrow: raw events → tomorrow + rest-of-this-evening ──────────
   const includeCalendar = await sourceIncludedInBriefings(scopedDb, deps, "calendar.briefings");
   const calScratch: BriefingGap[] = [];
+  const calendarStart = localDayStartIso(now, timeZone);
   const rawCalendar = includeCalendar
     ? await gatherToolSection(
         scopedDb,
@@ -267,6 +272,8 @@ export async function composeEveningBriefing(
           toolName: "calendar.listVisibleEvents",
           arrayKey: "events",
           metaKeys: ["accounts", "gaps"],
+          // Start at local midnight so blocks earlier today still find their events.
+          toolInput: calendarStart === null ? {} : { startsAfter: calendarStart },
           format: (e) =>
             [sanitizeExternal(e.startsAt), sanitizeExternal(e.title)].filter(Boolean).join(" · ")
         },
@@ -494,13 +501,17 @@ export async function composeEveningBriefing(
   if (morningPlan) {
     sections.push(morningPlan);
   }
-  // Calendar items are passed only when the calendar was fetched, so a skipped or
-  // failed fetch never reads as "event gone".
+  // Calendar items go to the plan check only when the read succeeded. A switched-off,
+  // unselected or failed read stays undefined so it never reads as "event gone".
+  const calendarLoaded =
+    includeCalendar &&
+    definition.selected_tool_names.includes("calendar.listVisibleEvents") &&
+    !calScratch.some((g) => g.reason === "tool_failed" || g.reason === "module_disabled");
   sections.push(
     planSection(
       plan.planContext,
       tasksReconciliation.rawItems,
-      includeCalendar ? rawCalendar.rawItems : undefined
+      calendarLoaded ? rawCalendar.rawItems : undefined
     )
   );
 

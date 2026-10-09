@@ -33,6 +33,34 @@ export function localDayKey(value: unknown, timeZone: string): string | null {
   }
 }
 
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).formatToParts(new Date(instant));
+  const n = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
+  return (
+    Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"), n("second")) - instant
+  );
+}
+
+/** ISO instant of local midnight at the start of `now`'s day, or null for an unknown tz. */
+export function localDayStartIso(now: Date, timeZone: string): string | null {
+  const key = localDayKey(now, timeZone);
+  if (key === null) return null;
+  const [y, m, d] = key.split("-").map(Number) as [number, number, number];
+  const guess = Date.UTC(y, m - 1, d);
+  let start = guess - zoneOffsetMs(guess, timeZone);
+  start = guess - zoneOffsetMs(start, timeZone);
+  return new Date(start).toISOString();
+}
+
 /** The next local day after `now`. Probes past 24h so a 25h fall-back DST day still lands tomorrow. */
 function nextLocalDayKey(now: Date, timeZone: string): string | null {
   const today = localDayKey(now, timeZone);

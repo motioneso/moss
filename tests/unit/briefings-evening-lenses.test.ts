@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   filterEveningCalendar,
   localDayKey,
+  localDayStartIso,
   partitionEveningTasks
 } from "../../packages/briefings/src/evening-lenses.js";
 
@@ -23,6 +24,22 @@ describe("localDayKey", () => {
     expect(localDayKey("not-a-date", TZ)).toBeNull();
     expect(localDayKey(42, TZ)).toBeNull();
     expect(localDayKey("2026-07-02T12:00:00Z", "Not/AZone")).toBeNull();
+  });
+});
+
+describe("localDayStartIso", () => {
+  it("returns local midnight as a UTC instant", () => {
+    expect(localDayStartIso(NOW, TZ)).toBe("2026-07-02T07:00:00.000Z");
+    expect(localDayStartIso(NOW, "UTC")).toBe("2026-07-03T00:00:00.000Z");
+  });
+  it("uses the day's own offset on the fall-back DST day", () => {
+    // Nov 1 2026 in LA starts at 00:00 PDT (07:00Z) and ends in PST.
+    expect(localDayStartIso(new Date("2026-11-01T20:00:00.000Z"), TZ)).toBe(
+      "2026-11-01T07:00:00.000Z"
+    );
+  });
+  it("returns null for an unknown zone", () => {
+    expect(localDayStartIso(NOW, "Not/AZone")).toBeNull();
   });
 });
 

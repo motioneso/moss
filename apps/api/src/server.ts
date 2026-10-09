@@ -631,6 +631,14 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         externalModuleHolder
           .getDiscoveries()
           .flatMap((d) => (d.manifest.briefing ? [d.manifest.briefing.toolName] : [])),
+      listExternalBriefingSources: () =>
+        externalModuleHolder
+          .getDiscoveries()
+          .flatMap((d) =>
+            d.manifest.briefing
+              ? [{ toolName: d.manifest.briefing.toolName, label: d.manifest.name }]
+              : []
+          ),
       routeCatalog,
       actAsGrants,
       resolveActiveModules: resolveActiveModulesWithIntegrations,

@@ -15,7 +15,10 @@ const actor: AccessContext = {
   requestId: "req-a"
 };
 
-function buildApp(externalNames: readonly string[] | undefined) {
+function buildApp(
+  externalNames: readonly string[] | undefined,
+  externalSources?: readonly { toolName: string; label: string }[]
+) {
   const created: string[][] = [];
   const app = Fastify();
   const dependencies = {
@@ -26,8 +29,11 @@ function buildApp(externalNames: readonly string[] | undefined) {
     } as unknown as DataContextRunner,
     listModuleManifests: () => [],
     ...(externalNames ? { listExternalBriefingToolNames: () => externalNames } : {}),
+    ...(externalSources ? { listExternalBriefingSources: () => externalSources } : {}),
     boss: {} as PgBoss,
     repository: {
+      listDefinitions: async () => [],
+      listOwnedForSchedules: async () => [],
       createDefinition: async (_db: unknown, input: { selectedToolNames: string[] }) => {
         created.push(input.selectedToolNames);
         return {
@@ -69,5 +75,21 @@ describe("briefing definitions and external module briefing tools", () => {
     const { app } = buildApp(["job-search.briefing"]);
     const response = await create(app, ["job-search.other"]);
     expect(response.statusCode).toBe(400);
+  });
+
+  it("lists the installed modules' briefing sources so settings can offer them", async () => {
+    const { app } = buildApp(undefined, [{ toolName: "job-search.briefing", label: "Job Search" }]);
+    const response = await app.inject({ method: "GET", url: "/api/briefings/definitions" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      definitions: [],
+      externalSources: [{ toolName: "job-search.briefing", label: "Job Search" }]
+    });
+  });
+
+  it("returns no external sources when no module offers one", async () => {
+    const { app } = buildApp(undefined);
+    const response = await app.inject({ method: "GET", url: "/api/briefings/definitions" });
+    expect(response.json()).toEqual({ definitions: [], externalSources: [] });
   });
 });
