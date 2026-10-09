@@ -59,6 +59,7 @@
     "test:uat": "tsx tests/uat/run-uat.ts",
     "test:uat:classifier-shadow": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts classifier-shadow.uat.spec.ts",
     "test:uat:3155": "tsx tests/uat/run-uat.ts 3155-proactive-email-access.uat.spec.ts",
+    "test:uat:3129": "tsx tests/uat/run-uat.ts 3129-automatic-email-alerts.uat.spec.ts",
     "test:uat:3065": "tsx tests/uat/run-app-actions-uat.ts scripted",
     "test:uat:3065-real": "tsx tests/uat/run-app-actions-uat.ts real",
     "test:today-briefings-degraded": "tsx tests/uat/run-uat.ts today-briefings-degraded.uat.spec.ts",

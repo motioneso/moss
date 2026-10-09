@@ -17,7 +17,8 @@ import {
   CardRepository,
   MonitorStateRepository,
   ProactiveScanner,
-  ProactiveMonitoringPreferencesRepository
+  ProactiveMonitoringPreferencesRepository,
+  resolveAutomaticEmailAlertsEnabled
 } from "@moss/proactive-monitoring";
 import { PriorityPreferencesRepository } from "@moss/priority";
 import {
@@ -122,8 +123,39 @@ beforeEach(async () => {
     await bootstrap.end();
   }
   await appContext.withDataContext({ actorUserId: ids.userA }, async (scopedDb) => {
+    await scopedDb.db
+      .deleteFrom("app.preferences")
+      .where("key", "=", PROACTIVE_MONITORING_PREFERENCE_KEY)
+      .execute();
     await preferences.upsert(scopedDb, featureGrantsPrefKey(REVOKED), { email: false });
   });
+});
+
+it("records sparse email-alert intent without overwriting a concurrent saved-off choice", async () => {
+  const preferencesRepository = new ProactiveMonitoringPreferencesRepository();
+
+  await Promise.all([
+    context.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+      preferencesRepository.initializeAutomaticEmailAlerts(scopedDb)
+    ),
+    appContext.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+      preferencesRepository.upsert(scopedDb, {
+        version: 1,
+        automaticEmailAlerts: false,
+        updatedAt: new Date().toISOString()
+      })
+    )
+  ]);
+
+  const saved = await context.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+    preferencesRepository.getSaved(scopedDb)
+  );
+
+  expect(saved).not.toBeNull();
+  expect(saved?.raw).toMatchObject({ version: 1, automaticEmailAlerts: false });
+  expect(saved?.raw).not.toHaveProperty("quietHours");
+  expect(saved?.raw).not.toHaveProperty("sources");
+  expect(resolveAutomaticEmailAlertsEnabled(saved)).toBe(false);
 });
 
 it("a permitted account cannot admit a sibling's grant-revoked cached mail", async () => {
