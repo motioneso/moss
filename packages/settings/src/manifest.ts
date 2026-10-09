@@ -422,8 +422,8 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       method: "GET",
       path: "/api/me/proactive-monitoring-settings",
-      chat: { access: "read", content: "user_authored" },
-      permissionId: "settings.view"
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "settings.write"
     },
     {
       method: "PATCH",
