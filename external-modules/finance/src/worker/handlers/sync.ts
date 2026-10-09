@@ -10,6 +10,7 @@
 // idempotent reducer (domain/reduce.ts) and the item's cursor is persisted
 // only AFTER that page's chunks are written. A crash between the two writes
 // replays the page on the next run; the reducer makes the replay a no-op.
+import { randomUUID } from "node:crypto";
 import { PlaidError } from "../../adapters/plaid.js";
 import { FinanceFetchError } from "../../adapters/types.js";
 import type { PlaidAccount } from "../../adapters/plaid.js";
@@ -44,11 +45,11 @@ import type { ToolFactory } from "../registry.js";
 import { InputError, readString } from "../validate.js";
 import { buildPlaid, loadItems } from "./connect.js";
 
-// Plaid pages are capped at count:100 (adapter), so 20 pages = 2000
+// Plaid pages are capped at count:100 (adapter), so 100 pages = 10000
 // transactions per item per run — far above a personal account's churn, low
 // enough to bound a runaway loop. Progress is durable (cursor per page), so
 // a truncated run simply resumes at the next sweep.
-const MAX_PAGES_PER_RUN = 20;
+const MAX_PAGES_PER_RUN = 100;
 
 // Plaid invalidates a pagination run when the data changes under it; the
 // documented recovery is to restart from the cursor the run began with.
@@ -309,7 +310,7 @@ async function syncItem(
     // Cursor LAST (see header): only after this page's chunks are durable.
     // The pagination start is kept while more pages remain so a later run can
     // still restart from it.
-    const finished = !(index === pages.length - 1 && hasMore);
+    const finished = index === pages.length - 1 && !hasMore;
     await ports.kv.set(
       NS.connections,
       cursorKey(item.itemId),
@@ -358,11 +359,20 @@ export const syncRunHandler: ToolFactory = (ports) => async (input) => {
     console.warn("finance.sync skipped_busy");
     return { status: "busy", items: [] };
   }
-  await ports.kv.set(NS.connections, SYNC_LEASE_KEY, { at: ports.now().getTime() });
+  // Take the lease, read it back, and proceed only if it is still ours. This
+  // shrinks the race to near zero but is not atomic (KV has no compare-and-set).
+  const owner = randomUUID();
+  await ports.kv.set(NS.connections, SYNC_LEASE_KEY, { at: ports.now().getTime(), owner });
+  const confirmed = await ports.kv.get(NS.connections, SYNC_LEASE_KEY);
+  if (confirmed?.owner !== owner) {
+    console.warn("finance.sync skipped_busy");
+    return { status: "busy", items: [] };
+  }
   try {
     return await runSync(ports, input);
   } finally {
-    await ports.kv.delete(NS.connections, SYNC_LEASE_KEY);
+    const current = await ports.kv.get(NS.connections, SYNC_LEASE_KEY);
+    if (current?.owner === owner) await ports.kv.delete(NS.connections, SYNC_LEASE_KEY);
   }
 };
 

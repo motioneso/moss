@@ -388,4 +388,28 @@ describe("PlaidError detail scrubbing (#3161)", () => {
     expect(message).toContain("[redacted]");
     expect(message.endsWith("...[truncated]")).toBe(true);
   });
+
+  it("does not trust a provider error code that is not upper snake case", async () => {
+    const { fetch } = fakeFetch([
+      { status: 400, body: { error_code: `oops ${CREDS.secret}`, error_message: "x" } }
+    ]);
+    const plaid = createPlaid(fetch, "sandbox", CREDS);
+    const error = await plaid.accountsGet("t").then(
+      () => null,
+      (e: unknown) => e as PlaidError
+    );
+    expect(error?.code).toBe("http_400");
+  });
+
+  it("removes account numbers written with separators", async () => {
+    const { fetch } = fakeFetch([
+      { status: 400, body: { error_code: "X_Y", error_message: "acct 1234-5678-9012 bad" } }
+    ]);
+    const plaid = createPlaid(fetch, "sandbox", CREDS);
+    const error = await plaid.accountsGet("t").then(
+      () => null,
+      (e: unknown) => e as PlaidError
+    );
+    expect(error?.detail.message).not.toMatch(/\d{4}/);
+  });
 });

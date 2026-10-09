@@ -113,6 +113,13 @@ function mapAccount(raw: Json): PlaidAccount {
 
 const MAX_DETAIL_CHARS = 500;
 
+/** Plaid error codes are upper snake case; anything else is not trusted as one. */
+function safeCode(value: unknown, status: number): string {
+  return typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value)
+    ? value
+    : `http_${status}`;
+}
+
 /**
  * Plaid text saved or logged for diagnosis. Anything that looks like a token,
  * a long digit run (account numbers) or one of our own credentials is
@@ -126,7 +133,7 @@ function scrubbed(value: unknown, secrets: readonly string[]): string | null {
   }
   text = text
     .replace(/\b(?:access|public|link|processor)-[A-Za-z0-9-]+/g, "[redacted]")
-    .replace(/\d{6,}/g, "[redacted]");
+    .replace(/\d[\d -]{4,}\d/g, "[redacted]");
   return text.length > MAX_DETAIL_CHARS ? `${text.slice(0, MAX_DETAIL_CHARS)}...[truncated]` : text;
 }
 
@@ -157,15 +164,11 @@ export function createPlaid(
       throw new FinanceFetchError("malformed_payload", "response was not JSON");
     }
     if (response.status < 200 || response.status >= 300) {
-      throw new PlaidError(
-        typeof json.error_code === "string" ? json.error_code : `http_${response.status}`,
-        response.status,
-        {
-          type: scrubbed(json.error_type, secrets),
-          message: scrubbed(json.error_message, secrets),
-          requestId: scrubbed(json.request_id, secrets)
-        }
-      );
+      throw new PlaidError(safeCode(json.error_code, response.status), response.status, {
+        type: scrubbed(json.error_type, secrets),
+        message: scrubbed(json.error_message, secrets),
+        requestId: scrubbed(json.request_id, secrets)
+      });
     }
     return json;
   }

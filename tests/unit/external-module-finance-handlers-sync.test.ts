@@ -245,7 +245,7 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
       .map((op) => op.key);
     expect(ordered).toEqual(["acc-1:2026-07", "cursor:item-1", "acc-1:2026-07", "cursor:item-1"]);
     const cursorValues = kv.ops.filter((op) => op.key === "cursor:item-1").map((op) => op.value);
-    expect(cursorValues).toEqual([{ cursor: "c1" }, { cursor: "c2" }]);
+    expect(cursorValues).toEqual([{ cursor: "c1", paginationStart: null }, { cursor: "c2" }]);
 
     // Cursor threading: first call starts fresh (null), second resumes at c1.
     const syncCalls = plaid.callsTo("transactionsSync").map((c) => c.args[1]);
@@ -446,7 +446,7 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     expect(taxonomy.categories.map((category) => category.id)).toContain("dining");
   });
 
-  it("bounds a runaway sync at 20 pages per item per run", async () => {
+  it("bounds a runaway sync at 100 pages per item per run", async () => {
     const kv = fakeKv();
     await seedItem(kv, "item-1");
     let call = 0;
@@ -464,11 +464,11 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     })) as {
       items: Record<string, unknown>[];
     };
-    expect(plaid.callsTo("transactionsSync")).toHaveLength(20);
-    expect(result.items[0]).toMatchObject({ status: "connected", pages: 20, added: 20 });
-    // Progress is durable: the 20th cursor is persisted, the next run resumes.
+    expect(plaid.callsTo("transactionsSync")).toHaveLength(100);
+    expect(result.items[0]).toMatchObject({ status: "connected", pages: 100, added: 100 });
+    // Progress is durable: the last cursor is persisted, the next run resumes.
     expect(await kv.get(NS.connections, "cursor:item-1")).toEqual({
-      cursor: "c-19",
+      cursor: "c-99",
       paginationStart: null
     });
   });
@@ -736,5 +736,61 @@ describe("finance.sync.run (#3161 sync resilience)", () => {
     const result = await syncRunHandler(ports)(ACTOR);
     expect(result.status).toBe("busy");
     expect(plaid.callsTo("transactionsSync")).toHaveLength(0);
+  });
+
+  it("keeps the pagination start on every checkpoint until the last page is applied", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    await kv.set(NS.connections, "cursor:item-1", { cursor: "c-start" });
+    let n = 0;
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        n += 1;
+        return syncPage({
+          added: [tx({ transaction_id: `t${n}` })],
+          nextCursor: `c${n}`,
+          hasMore: n < 2
+        });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const sets: unknown[] = [];
+    const realSet = ports.kv.set.bind(ports.kv);
+    ports.kv.set = async (ns, key, value) => {
+      if (key === "cursor:item-1") sets.push(value);
+      return realSet(ns, key, value);
+    };
+    await syncRunHandler(ports)(ACTOR);
+    expect(sets).toEqual([{ cursor: "c1", paginationStart: "c-start" }, { cursor: "c2" }]);
+  });
+
+  it("does not run when another sync took the lease first", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({});
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const realGet = ports.kv.get.bind(ports.kv);
+    ports.kv.get = async (ns, key) => {
+      const value = await realGet(ns, key);
+      // A rival overwrites the lease between our write and our read-back.
+      if (key === "lock:sync" && value?.owner !== undefined) {
+        await ports.kv.set(ns, key, { at: ports.now().getTime(), owner: "rival" });
+        return { at: ports.now().getTime(), owner: "rival" };
+      }
+      return value;
+    };
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.status).toBe("busy");
+    expect(plaid.callsTo("transactionsSync")).toHaveLength(0);
+  });
+
+  it("takes the lease and releases it when done", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({ transactionsSync: async () => syncPage({ nextCursor: "c1" }) });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    expect(kv.ops.some((op) => JSON.stringify(op).includes("lock:sync"))).toBe(true);
+    expect(await kv.get(NS.connections, "lock:sync")).toBeNull();
   });
 });
