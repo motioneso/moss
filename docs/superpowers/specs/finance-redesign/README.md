@@ -8,16 +8,16 @@ All names, banks, merchants and amounts are made up.
 
 ## Pages
 
-| Page                         | Shows                                                            |
-| ---------------------------- | ---------------------------------------------------------------- |
-| `01-budget`                  | This month's budget by group, with what needs you first          |
-| `02-transactions`            | Transactions by day; predicted categories wait for a look        |
-| `03-accounts`                | Banks, sync status, reconnect, net worth by month                |
-| `04-start`                   | Getting started with no bank connected                           |
-| `04-start-no-keys`           | Getting started before an admin adds the bank keys               |
-| `05-first-budget`            | The draft from three months of history, adjusted in chat         |
-| `05-first-budget-phone-chat` | The same draft on phone with the chat drawer open                |
-| `06-settings`                | Finance settings, Plaid keys, and this week's activity with undo |
+| Page                         | Shows                                                             |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `01-budget`                  | This month's budget by group, with what needs you first           |
+| `02-transactions`            | Transactions by day; predicted categories wait for a look         |
+| `03-accounts`                | Banks, sync status, reconnect, net worth by month                 |
+| `04-start`                   | Getting started with no bank connected                            |
+| `04-start-no-keys`           | Getting started before an admin adds the bank keys                |
+| `05-first-budget`            | The draft from three months of history, typed in place or in chat |
+| `05-first-budget-phone-chat` | The same draft on phone with the chat drawer open                 |
+| `06-settings`                | Finance settings, Plaid keys, and this week's activity with undo  |
 
 ## Files
 

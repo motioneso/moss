@@ -992,6 +992,20 @@ function ChatChange({ line }: { line: DraftLine }) {
   );
 }
 
+function DraftInput({ line }: { line: DraftLine }) {
+  return (
+    <input
+      className="jds-input jds-input--sm assign"
+      aria-label={`Plan for ${line.name}`}
+      inputMode="decimal"
+      defaultValue={money(line.proposed)}
+    />
+  );
+}
+
+// Phone edits a plan amount by tapping its row; the mockup shows Car repairs tapped open.
+const draftEditing = "Car repairs";
+
 function DraftTable({ group, head }: { group: (typeof draft)[number]; head?: boolean }) {
   return (
     <section className="stack stack--tight">
@@ -1025,7 +1039,7 @@ function DraftTable({ group, head }: { group: (typeof draft)[number]; head?: boo
                 {l.dropped ? (
                   <span className="jds-hint">Not in budget</span>
                 ) : (
-                  <strong>{money(l.proposed)}</strong>
+                  <DraftInput line={l} />
                 )}
               </td>
             </tr>
@@ -1049,6 +1063,12 @@ function DraftRows({ group }: { group: (typeof draft)[number] }) {
               <div className="stack stack--tight">
                 <ChatChange line={l} />
                 <span>Average {money(l.avg)}</span>
+                {l.name === draftEditing ? (
+                  <div className="row">
+                    <DraftInput line={l} />
+                    <Button size="sm">Save</Button>
+                  </div>
+                ) : null}
               </div>
             }
             meta={l.dropped ? "Not in budget" : <strong>Plan {money(l.proposed)}</strong>}
