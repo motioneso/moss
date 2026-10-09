@@ -520,7 +520,7 @@ const readyToAssign =
 
 function NeedsYou() {
   return (
-    <RailBlock eyebrow="Needs you" title="Two things">
+    <RailBlock eyebrow="Needs you" title={`${lookCount + overCount} things`}>
       <div className="stat-pair">
         <StatTile label="Needs a look" value={String(lookCount)} onClick={noop} />
         <StatTile label="Overspent" value={String(overCount)} warn onClick={noop} />
@@ -583,12 +583,6 @@ function BudgetRail() {
       <RailBlock eyebrow="Accounts" title="Balances">
         <Balances />
       </RailBlock>
-      <div>
-        <Button variant="secondary">
-          <MessageCircle aria-hidden="true" size={16} />
-          Ask Moss about your budget
-        </Button>
-      </div>
     </>
   );
 }
@@ -686,7 +680,7 @@ function TxDayTable({ day, head }: { day: (typeof days)[number]; head?: boolean 
                 </div>
               </td>
               <td>{t.look ? <LookControls tx={t} /> : t.category}</td>
-              <td className="jds-hint">{t.account}</td>
+              <td>{t.account}</td>
               <td className="jds-table__num">
                 {t.income ? <strong>+{money(-t.amount)}</strong> : money(t.amount)}
               </td>
@@ -1215,7 +1209,7 @@ function FinanceSettings({ width }: { width: Width }) {
           <section className="stack stack--tight">
             <SectionHead title="Dollar limit" rule />
             <Field>
-              <FormLabel htmlFor="limit">Moss can move up to</FormLabel>
+              <FormLabel htmlFor="limit">Moss can move up to, per move</FormLabel>
               <input id="limit" className="jds-input limit" defaultValue="$100" />
             </Field>
           </section>
