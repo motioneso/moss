@@ -376,6 +376,17 @@ export function sqlStore(db: FinanceDb): FinanceStore {
           entry.undo ? JSON.stringify(entry.undo) : null
         ]
       );
+    },
+
+    async lastLoggedAssignment(month, categoryId) {
+      const result = await db.query<{ amount: string | number }>(
+        "SELECT params->>'amountCents' AS amount FROM app.finance_activity " +
+          "WHERE kind = 'budget.assign' AND params->>'month' = $1 AND params->>'categoryId' = $2 " +
+          "ORDER BY at DESC LIMIT 1",
+        [month, categoryId]
+      );
+      const row = result.rows[0];
+      return row === undefined ? null : Number(row.amount);
     }
   } satisfies FinanceStore;
 }

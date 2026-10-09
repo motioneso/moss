@@ -26,10 +26,11 @@ import {
   useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
-import { runQueue } from "../api";
+import { runWrite } from "../api";
 import {
   applyPending,
   checkDelayMs,
+  mergeBudgetParams,
   settlePending,
   trackChecks,
   type PendingAssignments
@@ -528,12 +529,13 @@ export function BudgetScreen(): ReactNodeLike {
     setPending((previous) => ({ ...previous, [line.id]: cents }));
     checks.current = { ...checks.current, [line.id]: 0 };
     // Metadata-only params: ids and cents, nothing else.
-    void runQueue("finance.budget-apply", "finance.budget-apply", {
-      month,
-      categoryId: line.id,
-      amountCents: cents
-    }).then((outcome) => {
-      if (outcome.kind === "queued" || outcome.kind === "already-queued") scheduleCheck();
+    void runWrite(
+      "finance.budget-apply",
+      "finance.budget-apply",
+      { month, categoryIds: [line.id], amountsCents: [cents] },
+      mergeBudgetParams
+    ).then((outcome) => {
+      if (outcome.kind === "queued") scheduleCheck();
       else fail(line, "Couldn't save. Put back to the old amount.");
     });
   };

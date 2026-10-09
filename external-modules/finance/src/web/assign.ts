@@ -77,3 +77,33 @@ export function trackChecks(
   }
   return { counts: next, giveUp, retryAttempt };
 }
+
+/** Most categories one budget-apply job carries; matches the manifest bound. */
+export const MAX_BATCH = 20;
+const MAX_PARAM_BYTES = 1900;
+
+/**
+ * Joins two waiting budget-apply commands for the same month into one. A category typed
+ * twice keeps its newest amount. Returns null when the months differ or the result would
+ * pass the batch or size limit, so the caller sends them separately.
+ */
+export function mergeBudgetParams(
+  waiting: Record<string, unknown>,
+  incoming: Record<string, unknown>
+): Record<string, unknown> | null {
+  if (waiting.month !== incoming.month) return null;
+  const ids = [...(waiting.categoryIds as string[])];
+  const amounts = [...(waiting.amountsCents as number[])];
+  (incoming.categoryIds as string[]).forEach((id, i) => {
+    const at = ids.indexOf(id);
+    const amount = (incoming.amountsCents as number[])[i] as number;
+    if (at >= 0) amounts[at] = amount;
+    else {
+      ids.push(id);
+      amounts.push(amount);
+    }
+  });
+  if (ids.length > MAX_BATCH) return null;
+  const merged = { month: waiting.month, categoryIds: ids, amountsCents: amounts };
+  return JSON.stringify(merged).length > MAX_PARAM_BYTES ? null : merged;
+}

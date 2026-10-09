@@ -190,7 +190,11 @@ describe("Budget screen typing (#3174)", () => {
     const queued = calls.find((call) => call.url.includes("/queues/finance.budget-apply/run"));
     expect(queued?.body).toEqual({
       jobKind: "finance.budget-apply",
-      params: { month: expect.any(String), categoryId: "groceries", amountCents: 70_000 }
+      params: {
+        month: expect.any(String),
+        categoryIds: ["groceries"],
+        amountsCents: [70_000]
+      }
     });
     expect(groceriesBox(renderer).props.value).toBe("$700.00");
     // Available moves by the difference: 231.73 plus 50.00.

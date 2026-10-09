@@ -373,7 +373,13 @@
           "fields": {
             "month": { "type": "identifier" },
             "categoryId": { "type": "identifier" },
-            "amountCents": { "type": "integer", "min": -100000000, "max": 100000000 }
+            "amountCents": { "type": "integer", "min": -100000000, "max": 100000000 },
+            "categoryIds": { "type": "array", "maxItems": 20, "items": { "type": "identifier" } },
+            "amountsCents": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "integer", "min": -100000000, "max": 100000000 }
+            }
           }
         }
       },

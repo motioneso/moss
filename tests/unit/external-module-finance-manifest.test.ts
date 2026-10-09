@@ -230,7 +230,14 @@ describe("finance manifest contract (#1146)", () => {
             categoryId: { type: "identifier" },
             // The bounded-integer param type (module-params.ts) is what makes
             // an amount a legal queue param under D6's command-param carve-out.
-            amountCents: { type: "integer", min: -100000000, max: 100000000 }
+            amountCents: { type: "integer", min: -100000000, max: 100000000 },
+            // Batch shape: parallel arrays, at most twenty categories per job.
+            categoryIds: { type: "array", maxItems: 20, items: { type: "identifier" } },
+            amountsCents: {
+              type: "array",
+              maxItems: 20,
+              items: { type: "integer", min: -100000000, max: 100000000 }
+            }
           }
         }
       },

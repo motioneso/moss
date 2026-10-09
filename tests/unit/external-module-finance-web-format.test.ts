@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyPending,
   checkDelayMs,
+  mergeBudgetParams,
   settlePending,
   trackChecks
 } from "../../external-modules/finance/src/web/assign.js";
@@ -95,5 +96,22 @@ describe("typed budget amounts", () => {
     expect(checkDelayMs(1)).toBe(2000);
     expect(checkDelayMs(3)).toBe(6000);
     expect(checkDelayMs(50)).toBe(10_000);
+  });
+
+  it("merges waiting budget commands, newest amount wins, and refuses past the limit", () => {
+    const a = { month: "2026-07", categoryIds: ["groceries"], amountsCents: [100] };
+    const b = { month: "2026-07", categoryIds: ["dining", "groceries"], amountsCents: [5, 300] };
+    expect(mergeBudgetParams(a, b)).toEqual({
+      month: "2026-07",
+      categoryIds: ["groceries", "dining"],
+      amountsCents: [300, 5]
+    });
+    expect(mergeBudgetParams(a, { ...b, month: "2026-08" })).toBeNull();
+    const full = {
+      month: "2026-07",
+      categoryIds: Array.from({ length: 20 }, (_, n) => `c${n}`),
+      amountsCents: Array.from({ length: 20 }, () => 1)
+    };
+    expect(mergeBudgetParams(full, a)).toBeNull();
   });
 });

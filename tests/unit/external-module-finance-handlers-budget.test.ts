@@ -95,6 +95,17 @@ function fakePorts(kv: FinanceKv, activity: ActivityInput[] = []): WorkerPorts {
       ...kvStore(kv),
       appendActivity: async (entry) => {
         activity.push(entry);
+      },
+      // Mirrors the SQL store: the newest budget.assign row for the category.
+      lastLoggedAssignment: async (month, categoryId) => {
+        const rows = activity.filter(
+          (row) =>
+            row.kind === "budget.assign" &&
+            row.params.month === month &&
+            row.params.categoryId === categoryId
+        );
+        const last = rows[rows.length - 1];
+        return last === undefined ? null : Number(last.params.amountCents);
       }
     })
   };
@@ -414,6 +425,64 @@ describe("finance budget activity rows (#3174)", () => {
       amountCents: 20_000
     });
     expect(activity).toEqual([]);
+  });
+
+  it("a retry after a lost activity row adds the missing row (review A10)", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.budgets, "ledger:2026-07", { assignments: { groceries: 20_000 } });
+    const activity: ActivityInput[] = [];
+    // An earlier, fully logged change from 5000 to 20000.
+    activity.push({
+      actor: "user",
+      kind: "budget.assign",
+      params: {
+        month: "2026-07",
+        categoryId: "groceries",
+        amountCents: 20_000,
+        previousCents: 5_000
+      },
+      undo: null
+    });
+    // The total was then set to 50000 but the run died before its row was written.
+    await kv.set(NS.budgets, "ledger:2026-07", { assignments: { groceries: 50_000 } });
+
+    await budgetApplyHandler(fakePorts(kv, activity))({
+      jobKind: "finance.budget-apply",
+      params: { month: "2026-07", categoryId: "groceries", amountCents: 50_000 }
+    });
+
+    expect(activity).toHaveLength(2);
+    expect(activity[1]).toMatchObject({
+      params: { amountCents: 50_000, previousCents: 20_000 }
+    });
+  });
+
+  it("a batch applies every category and logs each change (review A3)", async () => {
+    const kv = fakeKv();
+    const activity: ActivityInput[] = [];
+    await budgetApplyHandler(fakePorts(kv, activity))({
+      jobKind: "finance.budget-apply",
+      params: {
+        month: "2026-07",
+        categoryIds: ["groceries", "dining"],
+        amountsCents: [30_000, 12_000]
+      }
+    });
+    expect((await kv.get(NS.budgets, "ledger:2026-07"))?.assignments).toEqual({
+      groceries: 30_000,
+      dining: 12_000
+    });
+    expect(activity.map((row) => row.params.categoryId)).toEqual(["groceries", "dining"]);
+  });
+
+  it("a batch with mismatched lengths is rejected whole", async () => {
+    const kv = fakeKv();
+    await expect(
+      budgetApplyHandler(fakePorts(kv, []))({
+        jobKind: "finance.budget-apply",
+        params: { month: "2026-07", categoryIds: ["groceries"], amountsCents: [] }
+      })
+    ).rejects.toThrow();
   });
 
   it("logs nothing when the category is rejected", async () => {

@@ -40,6 +40,9 @@ const MONTH = /^[0-9]{4}-[0-9]{2}$/;
 // tool path, which never crosses the queue params schema.
 const AMOUNT_BOUND = 100_000_000;
 
+/** Most categories one budget-apply job may carry (keeps params under the host size cap). */
+export const MAX_BATCH = 20;
+
 function readMonth(input: Record<string, unknown>): string {
   const month = readString(input, "month", { required: true });
   if (!MONTH.test(month)) {
@@ -161,17 +164,25 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
 async function applyAssignment(
   ports: WorkerPorts,
   args: { month: string; categoryId: string; amountCents: number },
-  actor: "user" | "moss"
+  actor: "user" | "moss",
+  liveIds?: ReadonlySet<string>
 ): Promise<Record<string, unknown>> {
-  const live = await loadCategories(ports);
-  if (!live.some((category) => category.id === args.categoryId)) {
+  const live = liveIds ?? new Set((await loadCategories(ports)).map((category) => category.id));
+  if (!live.has(args.categoryId)) {
     throw new InputError("invalid_category", "categoryId is not a live category");
   }
 
   const store = await ports.store();
   const previousCents = (await store.getLedger(args.month))?.assignments[args.categoryId] ?? 0;
   await store.setAssignment(args.month, args.categoryId, args.amountCents);
-  if (previousCents !== args.amountCents) {
+
+  // The total and its activity row are two writes. When a run dies between them, the retry
+  // finds the total already set, so it also checks the newest row logged for this category.
+  const logged = await store.lastLoggedAssignment(args.month, args.categoryId);
+  const changed = previousCents !== args.amountCents;
+  const missingRow = !changed && logged !== null && logged !== args.amountCents;
+  if (changed || missingRow) {
+    const baseline = changed ? previousCents : (logged as number);
     await store.appendActivity({
       actor,
       kind: "budget.assign",
@@ -179,9 +190,9 @@ async function applyAssignment(
         month: args.month,
         categoryId: args.categoryId,
         amountCents: args.amountCents,
-        previousCents
+        previousCents: baseline
       },
-      undo: { month: args.month, categoryId: args.categoryId, amountCents: previousCents }
+      undo: { month: args.month, categoryId: args.categoryId, amountCents: baseline }
     });
   }
 
@@ -211,11 +222,44 @@ export const budgetApplyHandler: ToolFactory = (ports) => async (input) => {
   }
   const command = params as Record<string, unknown>;
   const month = readMonth(command);
+  const liveIds = new Set((await loadCategories(ports)).map((category) => category.id));
+
+  // Batch shape: parallel arrays. The single-category shape stays readable for jobs
+  // queued before the batch shape existed.
+  if (Array.isArray(command.categoryIds)) {
+    const ids = command.categoryIds as unknown[];
+    const amounts = Array.isArray(command.amountsCents) ? (command.amountsCents as unknown[]) : [];
+    if (ids.length === 0 || ids.length !== amounts.length || ids.length > MAX_BATCH) {
+      throw new InputError("categoryIds and amountsCents must be equal-length, 1 to 20 items");
+    }
+    const results: Record<string, unknown>[] = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      const amountCents = amounts[i];
+      if (
+        typeof ids[i] !== "string" ||
+        typeof amountCents !== "number" ||
+        !Number.isInteger(amountCents) ||
+        Math.abs(amountCents) > AMOUNT_BOUND
+      ) {
+        throw new InputError("each batch item needs a category id and an integer amount");
+      }
+      results.push(
+        await applyAssignment(
+          ports,
+          { month, categoryId: ids[i] as string, amountCents },
+          "user",
+          liveIds
+        )
+      );
+    }
+    return { status: "ok", applied: results.length };
+  }
+
   const categoryId = readString(command, "categoryId", { required: true });
   const amountCents = readInt(command, "amountCents", {
     required: true,
     min: -AMOUNT_BOUND,
     max: AMOUNT_BOUND
   });
-  return applyAssignment(ports, { month, categoryId, amountCents }, "user");
+  return applyAssignment(ports, { month, categoryId, amountCents }, "user", liveIds);
 };
