@@ -116,10 +116,16 @@ export async function startMeetingChatFixtureServer(port = MEETING_FIXTURE_PORT)
           });
         if (observation && holdArmed) {
           holdArmed = false;
-          heldTurn = (outcome) =>
+          const held = (outcome: HeldOutcome) =>
             outcome === "success"
               ? answer(MEETING_FIXTURE_LATE_REPLY)
               : send(500, { error: { message: "Synthetic held turn failure" } });
+          heldTurn = held;
+
+          // A caller that hung up is no longer waiting, so a release must not report delivery.
+          response.on("close", () => {
+            if (heldTurn === held) heldTurn = undefined;
+          });
           return;
         }
         answer(

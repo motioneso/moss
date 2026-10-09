@@ -64,9 +64,10 @@ describe("meeting chat third-party stand-in hold controls", () => {
     const server = await startMeetingChatFixtureServer(0);
     stop = server.stop;
     const base = `http://127.0.0.1:${server.port}`;
-    const completion = (question = MEETING_FIXTURE_QUESTION) =>
+    const completion = (question = MEETING_FIXTURE_QUESTION, signal?: AbortSignal) =>
       fetch(`${base}/v1/chat/completions`, {
         method: "POST",
+        signal,
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ model: MEETING_FIXTURE_MODEL, messages: [{ content: question }] })
       });
@@ -115,6 +116,21 @@ describe("meeting chat third-party stand-in hold controls", () => {
     const response = await pending;
     expect(response.status).toBe(500);
     expect(JSON.stringify(await response.json())).not.toContain(MEETING_FIXTURE_LATE_REPLY);
+  });
+
+  it("forgets a held turn whose caller disconnected, so a release reports nothing held", async () => {
+    const { base, completion, held } = await start();
+    await fetch(`${base}/control/hold`, { method: "POST" });
+    const caller = new AbortController();
+    const pending = completion(MEETING_FIXTURE_QUESTION, caller.signal).catch(() => undefined);
+    await expect.poll(held).toBe(true);
+
+    caller.abort();
+    await pending;
+    await expect.poll(held).toBe(false);
+    expect(
+      (await fetch(`${base}/control/release?outcome=failure`, { method: "POST" })).status
+    ).toBe(409);
   });
 
   it("does not hold setup probes, and refuses a release with nothing held", async () => {

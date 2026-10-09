@@ -129,7 +129,7 @@
     "test:spike:pgboss": "vitest run spikes/pg-boss-rls/test/pg-boss-rls.test.ts",
     "prepare": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "test:uat:2981-meetings": "tsx tests/uat/run-meetings-uat.ts",
-    "test:uat:3274": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3274-meeting-new-side-chat.uat.spec.ts 1089-1090-chat-drawer-private.uat.spec.ts",
+    "test:uat:3274": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3274-meeting-new-side-chat.uat.spec.ts 3274-p1-helper-real.uat.spec.ts 1089-1090-chat-drawer-private.uat.spec.ts",
     "test:uat:2981-real-providers": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 1909-sports-public-source-completion.uat.spec.ts notes-default-retrieval.uat.spec.ts notes-path-recheck.uat.spec.ts workshop-chat-handover.uat.spec.ts",
     "test:uat:3125-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3125-main-chat-real.uat.spec.ts",
     "test:uat:3191-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3191-caller-provider-real.uat.spec.ts",

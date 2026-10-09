@@ -6,7 +6,6 @@ import { expect, test, type Locator, type Page, type Response } from "@playwrigh
 import {
   meetingChatSurface,
   type GetChatModelOverrideSettingsResponse,
-  type GetChatPrivacyStateResponse,
   type ListChatThreadMessagesResponse,
   type ListChatThreadsResponse,
   type MeetingChatTurnResponse
@@ -21,8 +20,7 @@ import {
   type MeetingFixtureObservation
 } from "../fixtures/meeting-chat-fixture-server.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
-import { openChatDrawer } from "../visual-parity/shell-navigation.js";
-import { bringUpRealChatModel, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
+import { requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 
 // Repository live-path proof uses executable assertions and bounded text only.
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -32,7 +30,6 @@ const exec = promisify(execFile);
 
 const REPLIES = ".chatd-msg:not(.chatd-msg--me) .chatd-bubble";
 const QUESTIONS = ".chatd-msg--me";
-const P1_QUESTION = "What are my goals?";
 
 /** Runs one request against the stand-in from inside its own container. */
 async function fixture(name: string, method: "GET" | "POST", path: string): Promise<string> {
@@ -89,6 +86,36 @@ async function newSideChat(drawer: Locator): Promise<void> {
   await drawer.getByRole("button", { name: "New side chat", exact: true }).click();
 }
 
+const clearMatcher = (url: URL): boolean => url.pathname.endsWith("/api/chat/clear");
+
+/**
+ * Holds every clear request in the browser until released, then passes it through unchanged,
+ * so a held provider turn can finish before the server cancels it.
+ */
+async function delayClears(page: Page) {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const handlers: Promise<void>[] = [];
+  await page.route(clearMatcher, async (route) => {
+    const handled = released.then(() => route.continue());
+    handlers.push(handled);
+    await handled;
+  });
+  return {
+    seen: () => handlers.length > 0,
+    release,
+
+    /** Lets held clears through before removing the route, so no handler outlives it. */
+    async restore() {
+      release();
+      await Promise.allSettled(handlers);
+      await page.unroute(clearMatcher);
+    }
+  };
+}
+
 /** Maps each persisted message id on a surface to the conversation that holds it. */
 async function persistedMessages(page: Page, surface: string) {
   const query = `surface=${encodeURIComponent(surface)}`;
@@ -104,18 +131,12 @@ async function persistedMessages(page: Page, surface: string) {
   return byId;
 }
 
-async function drawerThreadId(page: Page): Promise<string | undefined> {
-  const response = await page.request.get("/api/chat/privacy?surface=drawer");
-  expect(response.status()).toBe(200);
-  return ((await response.json()) as GetChatPrivacyStateResponse).threadId;
-}
-
 // Evidence scope: real owner login → Meetings UI → docked chat → Conversations → New side chat →
 // real chat API/services → HTTP request to a disclosed local third-party stand-in that holds one
 // turn and answers it late. The browser delays one clear request with route.continue() so a real
 // late success can land before the server cancels the turn; no Moss response is intercepted,
 // replayed or edited. This does not prove hosted-model quality or a real provider credential.
-test("Meeting New side chat ignores a real late success or failure, the P1 helper gets a fresh reply, and Conversations stays inside the panel (#3274, #3282)", async ({
+test("Meeting New side chat ignores a real late success or failure, and Conversations stays inside the panel (#3274, #3282)", async ({
   page
 }) => {
   test.setTimeout(300_000);
@@ -131,6 +152,7 @@ test("Meeting New side chat ignores a real late success or failure, the P1 helpe
   expect(settingsResponse.status()).toBe(200);
   const { settings } = (await settingsResponse.json()) as GetChatModelOverrideSettingsResponse;
   const pinPath = `/api/admin/users/${UAT_ADMIN_ID}/ai-pin`;
+  let bodyError: unknown;
   try {
     await exec("docker", [
       "run",
@@ -250,34 +272,20 @@ test("Meeting New side chat ignores a real late success or failure, the P1 helpe
       await holdNextTurn(fixtureName, () => askMeeting(page));
       await expect(drawer.locator(QUESTIONS)).toHaveCount(1);
 
-      // Delay the clear request in the browser so the provider can answer before the server
-      // cancels the turn. The request itself passes through unchanged.
-      let releaseClear!: () => void;
-      const clearHeld = new Promise<void>((resolve) => {
-        releaseClear = resolve;
-      });
-      let clearSeen = false;
-      await page.route(
-        (url) => url.pathname.endsWith("/api/chat/clear"),
-        async (route) => {
-          clearSeen = true;
-          await clearHeld;
-          await route.continue();
-        }
-      );
+      const clears = await delayClears(page);
       try {
         const clear = page.waitForResponse(isClear);
         await newSideChat(drawer);
-        await expect.poll(() => clearSeen).toBe(true);
+        await expect.poll(clears.seen).toBe(true);
         await fixture(fixtureName, "POST", "/control/release?outcome=success");
         const late = await lateTurn;
         expect(late.status()).toBe(200);
         const lateBody = (await late.json()) as MeetingChatTurnResponse;
         expect(lateBody.reply).toBe(MEETING_FIXTURE_LATE_REPLY);
-        await page.waitForTimeout(1_000);
+        await page.waitForTimeout(2_000);
         await expect(drawer.getByText(MEETING_FIXTURE_LATE_REPLY)).toHaveCount(0);
 
-        releaseClear();
+        clears.release();
         expect((await clear).status()).toBe(204);
         await expect(drawer.locator(QUESTIONS)).toHaveCount(0);
         await expect(drawer.locator(REPLIES)).toHaveCount(0);
@@ -312,8 +320,7 @@ test("Meeting New side chat ignores a real late success or failure, the P1 helpe
         for (const observation of evidence)
           expect(observation).toMatchObject({ hasOld: true, hasTools: false, hasUnrelated: false });
       } finally {
-        releaseClear();
-        await page.unroute((url) => url.pathname.endsWith("/api/chat/clear"));
+        await clears.restore();
       }
     });
 
@@ -322,17 +329,28 @@ test("Meeting New side chat ignores a real late success or failure, the P1 helpe
       await holdNextTurn(fixtureName, () => askMeeting(page));
       await expect(drawer.locator(QUESTIONS)).toHaveCount(2);
 
-      const clear = page.waitForResponse(isClear);
-      await newSideChat(drawer);
-      expect((await clear).status()).toBe(204);
-      await expect(drawer.locator(QUESTIONS)).toHaveCount(0);
-      await expect(drawer.locator(REPLIES)).toHaveCount(0);
+      // The provider fails the held turn before the clear reaches the server, so the browser
+      // receives the provider's own failure, not the server's cancellation.
+      const clears = await delayClears(page);
+      try {
+        const clear = page.waitForResponse(isClear);
+        await newSideChat(drawer);
+        await expect.poll(clears.seen).toBe(true);
+        await fixture(fixtureName, "POST", "/control/release?outcome=failure");
+        const late = await lateTurn;
+        expect(late.status()).toBe(503);
+        expect(await late.json()).toMatchObject({ code: "meeting_chat_failed" });
+        await page.waitForTimeout(2_000);
+        await expect(drawer.locator(".form-error")).toHaveCount(0);
 
-      await fixture(fixtureName, "POST", "/control/release?outcome=failure");
-      expect((await lateTurn).status()).toBeGreaterThanOrEqual(400);
-      await page.waitForTimeout(1_000);
-      await expect(drawer.locator(QUESTIONS)).toHaveCount(0);
-      await expect(drawer.locator(".form-error")).toHaveCount(0);
+        clears.release();
+        expect((await clear).status()).toBe(204);
+        await expect(drawer.locator(QUESTIONS)).toHaveCount(0);
+        await expect(drawer.locator(REPLIES)).toHaveCount(0);
+        await expect(drawer.locator(".form-error")).toHaveCount(0);
+      } finally {
+        await clears.restore();
+      }
 
       const nextTurn = page.waitForResponse(isTurn);
       await askMeeting(page);
@@ -357,85 +375,63 @@ test("Meeting New side chat ignores a real late success or failure, the P1 helpe
       await expect(reloaded.getByText(MEETING_FIXTURE_LATE_REPLY)).toHaveCount(0);
     });
 
-    await test.step("The installed P1 helper opens twice and gets a fresh reply after a clear", async () => {
-      // General drawer chat refuses API-key providers, so the helper runs on the signed-in
-      // economy model instead of the meeting stand-in.
-      expect((await page.request.put(pinPath, { data: { modelId: null } })).status()).toBe(200);
-      await bringUpRealChatModel(page);
-      await page.getByRole("link", { name: "Today", exact: true }).click();
-      const toggle = page.locator(".topbar-actions").getByRole("button", {
-        name: /^(Chat with .+|Open chat)$/
-      });
-      if ((await toggle.getAttribute("aria-pressed")) === "true") await toggle.click();
-      await expect(page.getByRole("button", { name: "Close chat" })).toHaveCount(0);
-
-      const clears: Response[] = [];
-      const onResponse = (response: Response) => {
-        if (isClear(response)) clears.push(response);
-      };
-      page.on("response", onResponse);
-      try {
-        await openChatDrawer(page);
-        const firstThread = await drawerThreadId(page);
-        expect(firstThread).toBeDefined();
-        const clearsBefore = clears.length;
-        await page.getByRole("button", { name: "Close chat" }).click();
-        await expect(page.getByRole("button", { name: "Close chat" })).toHaveCount(0);
-
-        await openChatDrawer(page);
-        expect(clears).toHaveLength(clearsBefore + 1);
-        expect(clears.at(-1)!.status()).toBe(204);
-        expect(new URL(clears.at(-1)!.url()).searchParams.get("surface")).toBe("drawer");
-        await expect(page.locator(REPLIES).filter({ hasText: /\S/ })).toHaveCount(1);
-        const secondThread = await drawerThreadId(page);
-        expect(secondThread).toBeDefined();
-        expect(secondThread).not.toBe(firstThread);
-
-        const kept = await page.request.get(
-          `/api/chat/threads/${firstThread}/messages?surface=drawer`
-        );
-        expect(kept.status()).toBe(200);
-        const keptMessages = ((await kept.json()) as ListChatThreadMessagesResponse).messages;
-        expect(keptMessages.filter((message) => message.role === "user").at(-1)?.body).toBe(
-          P1_QUESTION
-        );
-        expect(
-          keptMessages.some((message) => message.role === "assistant" && message.body.trim())
-        ).toBe(true);
-      } finally {
-        page.off("response", onResponse);
-      }
-    });
     console.log(
-      "MEETING_NEW_SIDE_CHAT_UAT real UI/API; disclosed local HTTP provider held two meeting turns; late success answered after New side chat and before the delayed clear reached the server, never shown or persisted in the current side chat; late failure after the clear left no error; next questions kept the selected meeting; reload showed only the current side chat; P1 helper cleared through Conversations and got a fresh reply in a new conversation; Conversations stayed inside the docked panel at 1440 wide"
+      "MEETING_NEW_SIDE_CHAT_UAT real UI/API; disclosed local HTTP provider held two meeting turns; late success answered after New side chat and before the delayed clear reached the server, never shown or persisted in the current side chat; late failure answered by the provider before the delayed clear reached the server left no error; next questions kept the selected meeting; reload showed only the current side chat; Conversations stayed inside the docked panel at 1440 wide"
     );
-  } finally {
-    try {
-      expect((await page.request.put(pinPath, { data: { modelId: null } })).status()).toBe(200);
-      for (const id of meetingIds)
-        expect((await page.request.delete(`/api/meetings/records/${id}`)).status()).toBe(204);
-      expect(
+  } catch (error) {
+    bodyError = error;
+  }
+  {
+    // Every restore runs even when an earlier one fails. A test failure outranks cleanup failures.
+    const failures: unknown[] = [];
+    const restore = async (status: () => Promise<number>, expected: number) => {
+      try {
+        expect(await status()).toBe(expected);
+      } catch (error) {
+        failures.push(error);
+      }
+    };
+    await restore(
+      async () => (await page.request.put(pinPath, { data: { modelId: null } })).status(),
+      200
+    );
+    for (const id of meetingIds)
+      await restore(
+        async () => (await page.request.delete(`/api/meetings/records/${id}`)).status(),
+        204
+      );
+    await restore(
+      async () =>
         (
           await page.request.put("/api/ai/chat-model-override", {
             data: { modelId: settings.currentOverrideModelId }
           })
-        ).status()
-      ).toBe(200);
-      expect(
+        ).status(),
+      200
+    );
+    await restore(
+      async () =>
         (
           await page.request.put("/api/admin/ai/chat-model-override", {
             data: { enabled: settings.overrideEnabled }
           })
-        ).status()
-      ).toBe(200);
-      if (modelId)
-        expect((await page.request.delete(`/api/ai/models/${modelId}`)).status()).toBe(200);
-      if (providerId)
-        expect((await page.request.post(`/api/ai/providers/${providerId}/revoke`)).status()).toBe(
-          200
-        );
-    } finally {
-      await exec("docker", ["rm", "--force", fixtureName]);
-    }
+        ).status(),
+      200
+    );
+    if (modelId)
+      await restore(
+        async () => (await page.request.delete(`/api/ai/models/${modelId}`)).status(),
+        200
+      );
+    if (providerId)
+      await restore(
+        async () => (await page.request.post(`/api/ai/providers/${providerId}/revoke`)).status(),
+        200
+      );
+    await exec("docker", ["rm", "--force", fixtureName]).catch((error: unknown) => {
+      failures.push(error);
+    });
+    if (bodyError !== undefined) throw bodyError;
+    if (failures.length > 0) throw new AggregateError(failures, "Meeting UAT cleanup failed");
   }
 });

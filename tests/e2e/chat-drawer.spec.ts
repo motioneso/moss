@@ -689,6 +689,9 @@ test("conversations overlay covers the docked chat panel only at desktop width (
   await openConversations(drawer);
   await expect(overlay).toBeVisible();
   await expect(drawer.locator(".chatd-overlay-background[inert]").first()).toBeAttached();
+  const pageBefore = page.url();
   await page.mouse.click(panel.x / 2, panel.y + panel.height / 2);
   await expect(overlay).toHaveCount(0);
+  expect(page.url()).toBe(pageBefore);
+  await expect(page.getByRole("dialog")).toHaveCount(1);
 });
