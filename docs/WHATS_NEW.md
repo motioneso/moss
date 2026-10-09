@@ -42,6 +42,10 @@ feature that is not present in the image you are running.
 - **Finance screens refresh after actions.** Finance pages no longer get stuck on Loading after you sync, change a category, or set a budget. [PR #3203](https://github.com/motioneso/moss/pull/3203)
 - **Bank transactions now sync.** Transactions from your connected banks now arrive even when the bank's live balance check fails, and a first sync runs as soon as you connect. [PR #3166](https://github.com/motioneso/moss/pull/3166)
 
+#### Changed
+
+- **Redesigned Finance budget, transactions and accounts.** Finance has a new budget you can edit in place, a transactions list where Moss sorts new spending for you to check, and a clearer accounts page. [PR #3188](https://github.com/motioneso/moss/pull/3188)
+
 ### 2026-10-08
 
 #### Fixed
