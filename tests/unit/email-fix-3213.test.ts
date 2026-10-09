@@ -5,7 +5,8 @@ import { buildReplyMime, replyThreadHeaders, selectOwnAddresses } from "@moss/em
 import { ImapEmailWriteProvider } from "@moss/connectors";
 import type { ConnectorSecretCipher, ConnectorsRepository } from "@moss/connectors";
 import { cachedEmailInput } from "../../packages/connectors/src/google-sync-phases.js";
-import { parseEmail, replyThreadingMetadata } from "../../packages/connectors/src/email-extract.js";
+import { parseEmail } from "../../packages/connectors/src/email-extract.js";
+import { replyThreadingMetadata } from "../../packages/connectors/src/reply-threading.js";
 import { buildChatToolServices } from "../../packages/chat/src/gateway-services.js";
 
 type Internals = {

@@ -3,6 +3,7 @@ import type { Job, PgBoss, WorkOptions } from "pg-boss";
 import type { EmailThreadJudgementRequester } from "@moss/module-sdk";
 
 import type { ActorScopedJobPayload, QueueDefinition } from "@moss/jobs";
+import { replyThreadingMetadata } from "./reply-threading.js";
 import { registerDataContextWorker } from "@moss/jobs";
 import type { ConnectorSyncStatus, DataContextDb, DataContextRunner } from "@moss/db";
 import { AiRepository, createAiSecretCipher } from "@moss/ai";
@@ -11,12 +12,7 @@ import { EmailRepository } from "@moss/email";
 import { createConnectorSecretCipher, type ConnectorSecretCipher } from "./crypto.js";
 import type { EmailExtractDeps } from "./email-extract.js";
 import { loadOwnAddressesAndSettle, ownSentResult } from "./own-sent.js";
-import {
-  extractEmailSignals,
-  looksLikeOneTimeCodeEmail,
-  replyThreadingMetadata,
-  senderAddress
-} from "./email-extract.js";
+import { extractEmailSignals, looksLikeOneTimeCodeEmail, senderAddress } from "./email-extract.js";
 import { userSentLastInThread } from "./email-sorting.js";
 import { runSortingModelPass, sortingSession } from "./email-sorting-live.js";
 import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extract-deps.js";

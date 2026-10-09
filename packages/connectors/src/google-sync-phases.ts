@@ -1,3 +1,4 @@
+import { replyThreadingMetadata } from "./reply-threading.js";
 import { sql } from "kysely";
 
 import type { ConnectorSyncDeferredReason, ConnectorSyncErrorDetail } from "@moss/shared";
@@ -15,7 +16,6 @@ import {
   extractEmailSignalsBatch,
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
-  replyThreadingMetadata,
   senderAddress,
   type EmailExtractOptions,
   type EmailExtractResult,
