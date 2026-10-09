@@ -119,11 +119,16 @@ async function loadCategorizeCtx(ports: WorkerPorts, store: FinanceStore): Promi
     stored = { categories: [...DEFAULT_CATEGORIES] };
     await ports.kv.set(NS.categories, "taxonomy", stored);
   }
-  const rules: Rule[] = [];
+  // Old-format and new-format keys both load. If one merchant ever holds two
+  // rules, the newest wins so load order cannot pick the loser.
+  const newest = new Map<string, Rule>();
   for (const key of await ports.kv.list(NS.rules)) {
-    const rule = await ports.kv.get(NS.rules, key);
-    if (rule) rules.push(rule as Rule);
+    const rule = (await ports.kv.get(NS.rules, key)) as Rule | null;
+    if (!rule) continue;
+    const held = newest.get(rule.payeeKey);
+    if (!held || rule.createdAt >= held.createdAt) newest.set(rule.payeeKey, rule);
   }
+  const rules = [...newest.values()];
   return {
     rules,
     categories: stored.categories,

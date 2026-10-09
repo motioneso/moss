@@ -83,3 +83,13 @@ export function normalizePayee(name: string): string {
     .replace(/\s+/gu, " ")
     .trim();
 }
+
+/** Current key for a merchant rule. */
+export function ruleKey(payeeKey: string): string {
+  return `rule:${contentHash(payeeKey)}`;
+}
+
+/** Older rules were stored under the bare hash. Still read, never written. */
+export function legacyRuleKey(payeeKey: string): string {
+  return contentHash(payeeKey);
+}

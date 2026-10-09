@@ -18,8 +18,10 @@ import type {
 import {
   contentHash,
   DEFAULT_CATEGORIES,
+  legacyRuleKey,
   normalizePayee,
   NS,
+  ruleKey,
   parseSharedKey,
   toSharedTransaction
 } from "../../domain/index.js";
@@ -146,20 +148,35 @@ function readApplyIds(input: Record<string, unknown>): ApplyIds {
  * "user" (both paths are user-initiated), and returns the updated record so
  * callers can layer notes/rules on top before persisting.
  */
+type ApplyContext = {
+  liveCategoryIds: ReadonlySet<string>;
+  chunks: Map<string, TransactionRecord[] | null>;
+};
+
+async function loadApplyContext(ports: WorkerPorts): Promise<ApplyContext> {
+  const live = (await loadCategories(ports)).filter((category) => !category.archived);
+  return { liveCategoryIds: new Set(live.map((category) => category.id)), chunks: new Map() };
+}
+
 async function applyCategory(
   ports: WorkerPorts,
   store: FinanceStore,
-  ids: ApplyIds
+  ids: ApplyIds,
+  context?: ApplyContext
 ): Promise<{ record: TransactionRecord; previousCategoryId: string | null }> {
-  const live = (await loadCategories(ports)).filter((category) => !category.archived);
-  if (!live.some((category) => category.id === ids.categoryId)) {
+  const { liveCategoryIds, chunks } = context ?? (await loadApplyContext(ports));
+  if (!liveCategoryIds.has(ids.categoryId)) {
     throw new InputError("invalid_category", "categoryId is not a live category");
   }
   // FIN-06c (#1166) Task 9: locate the record via the chunk read, but write
   // it back through store.putTransaction — the store re-derives the same
   // (accountId, month) chunk from the record itself, so there's no chunk to
   // hand back and re-set anymore.
-  const chunk = await store.getTransactionChunk(ids.accountId, ids.month);
+  const chunkKey = `${ids.accountId}:${ids.month}`;
+  if (!chunks.has(chunkKey)) {
+    chunks.set(chunkKey, await store.getTransactionChunk(ids.accountId, ids.month));
+  }
+  const chunk = chunks.get(chunkKey);
   const record = chunk?.find((entry) => entry.id === ids.transactionId);
   if (!chunk || !record) {
     // Names the condition only — ids from a queue payload are still inputs.
@@ -315,28 +332,55 @@ export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
   }
 
   const store = await ports.store();
-  const records: TransactionRecord[] = [];
+  const context = await loadApplyContext(ports);
+  const applied: { record: TransactionRecord; ids: ApplyIds; previousCategoryId: string | null }[] =
+    [];
   for (let index = 0; index < transactionIds.length; index += 1) {
     const month = months[index]!;
     if (!MONTH.test(month)) throw new InputError("month must be YYYY-MM");
-    const { record } = await applyCategory(ports, store, {
+    const ids: ApplyIds = {
       transactionId: transactionIds[index]!,
       accountId: accountIds[index]!,
       month,
       categoryId: categoryIds[index]!
-    });
-    records.push(record);
+    };
+    const { record, previousCategoryId } = await applyCategory(ports, store, ids, context);
+    applied.push({ record, ids, previousCategoryId });
   }
-  for (const record of records) await store.putTransaction(record);
+  for (const { record, ids, previousCategoryId } of applied) {
+    await store.putTransaction(record);
+    if (previousCategoryId === ids.categoryId) {
+      await store.appendActivity({
+        actor: "user",
+        kind: "transaction.confirm",
+        params: {
+          transactionId: ids.transactionId,
+          accountId: ids.accountId,
+          month: ids.month,
+          categoryId: ids.categoryId
+        }
+      });
+    } else {
+      await logCategorize(store, "user", ids, previousCategoryId);
+    }
+  }
   if (createRule) {
-    const payeeKey = normalizePayee(records[0]!.name);
+    const payeeKey = normalizePayee(applied[0]!.record.name);
     if (payeeKey !== "") {
-      await ports.kv.set(NS.rules, `rule:${contentHash(payeeKey)}`, {
+      const hash = contentHash(payeeKey);
+      // One rule per merchant: write the current key format, drop the old bare-hash key.
+      await ports.kv.set(NS.rules, ruleKey(payeeKey), {
         payeeKey,
         categoryId: categoryIds[0]!,
         createdAt: ports.now().toISOString()
       });
+      await ports.kv.delete(NS.rules, legacyRuleKey(payeeKey));
+      await store.appendActivity({
+        actor: "user",
+        kind: "merchant-rule.set",
+        params: { ruleId: hash, categoryId: categoryIds[0]! }
+      });
     }
   }
-  return { status: "ok", confirmed: records.length };
+  return { status: "ok", confirmed: applied.length };
 };
