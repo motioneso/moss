@@ -232,7 +232,7 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
   await refresh(page, 1);
   expect(
     sql(
-      `SELECT cursor_json ? 'checkedAt' AND last_error_class IS NULL AND failure_count = 0 FROM app.proactive_monitor_state WHERE owner_user_id = '${UAT_ADMIN_ID}' AND source = 'email'`
+      `SELECT last_checked_at IS NOT NULL AND cursor_json = '{}'::jsonb AND last_error_class IS NULL AND failure_count = 0 FROM app.proactive_monitor_state WHERE owner_user_id = '${UAT_ADMIN_ID}' AND source = 'email'`
     )
   ).toBe("t");
   expect(
