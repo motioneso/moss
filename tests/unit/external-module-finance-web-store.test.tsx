@@ -9,7 +9,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const invokeTool = vi.fn();
 vi.mock("../../external-modules/finance/src/web/api", () => ({
-  invokeTool: (...args: unknown[]) => invokeTool(...args)
+  invokeTool: (...args: unknown[]) => invokeTool(...args),
+  resetWriteQueues: () => undefined
 }));
 
 import {
