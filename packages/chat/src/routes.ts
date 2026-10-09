@@ -34,7 +34,7 @@ import {
 import { PreferencesRepository } from "@moss/structured-state";
 import type { NotesRecallPort } from "@moss/notes";
 import type { AcpPermissionDecider } from "@moss/acp";
-import { getConnectorSyncAt } from "@moss/connectors";
+import { createConnectorSecretCipher, getConnectorSyncAt } from "@moss/connectors";
 import type {
   ConnectorsRepository,
   FeatureGrantService,
@@ -345,6 +345,7 @@ export function registerChatRoutes(
                 googleConnectionService: dependencies.googleConnectionService,
                 googleApiClient: dependencies.googleApiClient,
                 connectorsRepository: dependencies.connectorsRepository,
+                cipher: createConnectorSecretCipher(),
                 boss: dependencies.boss,
                 featureGrantService: dependencies.featureGrantService,
                 sourceContextService: dependencies.sourceContextService,
