@@ -34,9 +34,13 @@ export function computeSchedule(
   date: Date
 ): ScheduleSlotDto[] {
   const slots: ScheduleSlotDto[] = [];
-  const dayRange = { from: date, to: new Date(date.getTime() + 24 * 60 * 60 * 1000 - 1) };
-
   const requestedDay = date.toISOString().slice(0, 10);
+  // Wide enough to hold the requested civil day in any time zone. Occurrences are then kept by
+  // their own local civil date, so a medication's persisted zone decides which day a dose is on.
+  const dayRange = {
+    from: new Date(date.getTime() - 24 * 60 * 60 * 1000),
+    to: new Date(date.getTime() + 2 * 24 * 60 * 60 * 1000)
+  };
 
   for (const med of medications) {
     if (!med.active) continue;
@@ -58,10 +62,12 @@ export function computeSchedule(
     const occurrences = expandOccurrences(engineInput.schedule, engineInput.anchor, dayRange);
 
     for (const occurrence of occurrences) {
+      if (occurrence.date !== requestedDay) continue;
       slots.push({
         medicationId: med.id,
         name: med.name,
         scheduledFor: occurrence.at.toISOString(),
+        localTime: occurrence.time,
         asNeeded: false,
         status: slotStatusFromLogs(med.id, occurrence.at, logs)
       });
@@ -219,7 +225,7 @@ export function dateKeyFromColumn(value: string | Date): string {
  * date), so it can be precomputed once and handed to the engine as a fixed `daily` schedule
  * instead of extending the engine with an hours-based family.
  */
-function everyNHoursDoseTimes(
+export function everyNHoursDoseTimes(
   intervalHours: number | null,
   anchorTime: string | undefined
 ): string[] {
@@ -228,8 +234,10 @@ function everyNHoursDoseTimes(
   const startMinutes = Number(hourStr ?? 0) * 60 + Number(minuteStr ?? 0);
   const stepMinutes = intervalHours * 60;
 
+  // Start at the earliest dose of the day (the anchor stepped back by whole intervals) so the
+  // interval holds across midnight.
   const times: string[] = [];
-  for (let t = startMinutes; t < 24 * 60; t += stepMinutes) {
+  for (let t = startMinutes % stepMinutes; t < 24 * 60; t += stepMinutes) {
     const hour = Math.floor(t / 60);
     const minute = t % 60;
     times.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
