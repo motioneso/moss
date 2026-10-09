@@ -49,6 +49,15 @@ the real installed Finance package and the configured economy provider. Both of 
 assertion lines printed, and one test passed in 56.8 seconds. The disposable instance's containers,
 volumes and networks were removed afterwards.
 
+## Live proof on the merged scheduled branch
+
+The fix was merged into the shared scheduled branch as `b306945`. The same real live test then
+passed through `scripts/run-gate.sh` with rc 0, on a clean tree with gate fingerprint
+`sha256:66b97408465bdd87caad2ea753e1608f9f1ec1d7da6894a2d870dc395463aea2`. It used a fresh image
+built from that commit, the real installed Finance package and the configured economy provider.
+Both assertion lines printed and one test passed in 52.6 seconds. The disposable instance was
+removed afterwards. The only later commit adds this section.
+
 ## Review
 
 An independent reviewer found one must-fix. The new unit test's cleanup removed the fake browser
