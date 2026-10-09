@@ -221,7 +221,8 @@ export async function composeEveningBriefing(
     key: "tasks_reconciliation",
     label: TASKS_RECONCILIATION_LABEL,
     lines: recon.lines,
-    count: lenses.completedToday.length + lenses.slipped.length + lenses.carryingForward.length
+    count: lenses.completedToday.length + lenses.slipped.length + lenses.carryingForward.length,
+    rawItems: [...(doneGather.rawItems ?? []), ...(openGather.rawItems ?? [])]
   };
 
   // ── commitments: identical to the morning gather ──────────────────────────────
@@ -493,7 +494,15 @@ export async function composeEveningBriefing(
   if (morningPlan) {
     sections.push(morningPlan);
   }
-  sections.push(planSection(plan.planContext, tasksReconciliation.rawItems));
+  // Calendar items are passed only when the calendar was fetched, so a skipped or
+  // failed fetch never reads as "event gone".
+  sections.push(
+    planSection(
+      plan.planContext,
+      tasksReconciliation.rawItems,
+      includeCalendar ? rawCalendar.rawItems : undefined
+    )
+  );
 
   const hasFreshnessDeps = !!(deps.connectorSyncAt ?? deps.vaultLastWriteAt);
   const sourceTimestamps = hasFreshnessDeps

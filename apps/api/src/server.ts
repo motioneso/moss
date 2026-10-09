@@ -627,6 +627,10 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       resolveAccessContext: authRuntime.resolveAccessContext,
       listConfiguredAuthProviders: authRuntime.listConfiguredProviders,
       listModuleManifests: getBuiltInModuleManifests,
+      listExternalBriefingToolNames: () =>
+        externalModuleHolder
+          .getDiscoveries()
+          .flatMap((d) => (d.manifest.briefing ? [d.manifest.briefing.toolName] : [])),
       routeCatalog,
       actAsGrants,
       resolveActiveModules: resolveActiveModulesWithIntegrations,

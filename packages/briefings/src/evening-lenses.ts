@@ -96,6 +96,17 @@ export function partitionEveningTasks(args: {
   return { completedToday, slipped, carryingForward };
 }
 
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+// All-day rows are UTC midnights with an exclusive end date, so they compare
+// as calendar dates, never as local instants.
+function allDayCoversDay(item: Record<string, unknown>, startsAt: string, dayKey: string): boolean {
+  const start = startsAt.slice(0, 10);
+  if (!DATE_KEY.test(start)) return false;
+  const end = typeof item.endsAt === "string" ? item.endsAt.slice(0, 10) : "";
+  return DATE_KEY.test(end) && end > start ? start <= dayKey && dayKey < end : start === dayKey;
+}
+
 export function filterEveningCalendar(
   items: readonly Record<string, unknown>[],
   now: Date,
@@ -109,6 +120,7 @@ export function filterEveningCalendar(
     if (typeof startsAt !== "string") return false;
     const start = new Date(startsAt);
     if (Number.isNaN(start.getTime())) return false;
+    if (item.allDay === true) return allDayCoversDay(item, startsAt, tomorrowKey);
     const key = localDayKey(startsAt, timeZone);
     if (key === tomorrowKey) return true;
     return key === todayKey && start.getTime() > now.getTime();

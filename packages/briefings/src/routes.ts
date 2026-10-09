@@ -60,6 +60,8 @@ export interface BriefingsRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
   readonly listModuleManifests: () => readonly MossModuleManifest[];
+  /** Briefing tool names declared by external (JSON-manifest) modules. */
+  readonly listExternalBriefingToolNames?: () => readonly string[];
   readonly boss: PgBoss;
   readonly dayPlanRead?: DayPlanReadPort;
   readonly repository?: BriefingsRepository;
@@ -143,7 +145,11 @@ export function registerBriefingsRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const input = parseCreateDefinitionBody(request.body, dependencies.listModuleManifests());
+        const input = parseCreateDefinitionBody(
+          request.body,
+          dependencies.listModuleManifests(),
+          dependencies.listExternalBriefingToolNames?.() ?? []
+        );
         const definition = await dependencies.dataContext.withDataContext(
           accessContext,
           (scopedDb) => repository.createDefinition(scopedDb, input)
@@ -166,7 +172,11 @@ export function registerBriefingsRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const input = parseUpdateDefinitionBody(request.body, dependencies.listModuleManifests());
+        const input = parseUpdateDefinitionBody(
+          request.body,
+          dependencies.listModuleManifests(),
+          dependencies.listExternalBriefingToolNames?.() ?? []
+        );
         const definition = await dependencies.dataContext.withDataContext(
           accessContext,
           (scopedDb) => repository.updateDefinition(scopedDb, request.params.id, input)
@@ -529,7 +539,8 @@ function validateScheduleMetadata(
 
 function parseCreateDefinitionBody(
   body: unknown,
-  moduleManifests: readonly MossModuleManifest[]
+  moduleManifests: readonly MossModuleManifest[],
+  externalBriefingToolNames: readonly string[]
 ): CreateBriefingDefinitionInput {
   const value = requireObject(body);
   const briefingType = optionalBriefingType(value.briefingType) ?? "morning";
@@ -542,7 +553,8 @@ function parseCreateDefinitionBody(
   const selectedToolNames = requiredReadToolNames(
     rawToolNames,
     "selectedToolNames",
-    moduleManifests
+    moduleManifests,
+    externalBriefingToolNames
   );
 
   const cadence = optionalBriefingCadence(value.cadence) ?? "manual";
@@ -561,13 +573,19 @@ function parseCreateDefinitionBody(
 
 function parseUpdateDefinitionBody(
   body: unknown,
-  moduleManifests: readonly MossModuleManifest[]
+  moduleManifests: readonly MossModuleManifest[],
+  externalBriefingToolNames: readonly string[]
 ): UpdateBriefingDefinitionRequest {
   const value = requireObject(body);
   const selectedToolNames =
     value.selectedToolNames === undefined
       ? undefined
-      : requiredReadToolNames(value.selectedToolNames, "selectedToolNames", moduleManifests);
+      : requiredReadToolNames(
+          value.selectedToolNames,
+          "selectedToolNames",
+          moduleManifests,
+          externalBriefingToolNames
+        );
 
   const cadence = optionalBriefingCadence(value.cadence);
   const scheduleMetadata = optionalJsonObject(value.scheduleMetadata, "scheduleMetadata");
@@ -598,7 +616,8 @@ function parseRunDefinitionBody(body: unknown): RunBriefingDefinitionRequest {
 function requiredReadToolNames(
   value: unknown,
   fieldName: string,
-  moduleManifests: readonly MossModuleManifest[]
+  moduleManifests: readonly MossModuleManifest[],
+  externalBriefingToolNames: readonly string[]
 ): string[] {
   // An explicit empty list selects no tools. Anything that is not an array
   // (false, null, a lone value that fails membership below) is still 400.
@@ -613,7 +632,7 @@ function requiredReadToolNames(
     ...new Set(value.map((item, index) => requiredArrayString(item, fieldName, index)))
   ];
 
-  const VIRTUAL_SOURCES = new Set(["vault", "chats"]);
+  const VIRTUAL_SOURCES = new Set(["vault", "chats", ...externalBriefingToolNames]);
   if (
     selectedToolNames.some(
       (name) => !VIRTUAL_SOURCES.has(name) && toolsByName.get(name)?.risk !== "read"

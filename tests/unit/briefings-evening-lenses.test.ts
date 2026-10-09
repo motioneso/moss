@@ -66,6 +66,40 @@ describe("filterEveningCalendar", () => {
     );
     expect(kept.map((e) => e.title)).toEqual(["tonight", "tomorrow-mtg"]);
   });
+  it("compares all-day events by calendar date, not by local instant", () => {
+    // Evening of 2026-07-02 in LA. All-day rows are UTC midnights with an exclusive end date.
+    const kept = filterEveningCalendar(
+      [
+        {
+          allDay: true,
+          startsAt: "2026-07-03T00:00:00.000Z",
+          endsAt: "2026-07-04T00:00:00.000Z",
+          title: "tomorrow-all-day"
+        },
+        {
+          allDay: true,
+          startsAt: "2026-07-04T00:00:00.000Z",
+          endsAt: "2026-07-05T00:00:00.000Z",
+          title: "day-after-all-day"
+        },
+        {
+          allDay: true,
+          startsAt: "2026-07-02T00:00:00.000Z",
+          endsAt: "2026-07-03T00:00:00.000Z",
+          title: "today-all-day"
+        },
+        {
+          allDay: true,
+          startsAt: "2026-07-01T00:00:00.000Z",
+          endsAt: "2026-07-04T00:00:00.000Z",
+          title: "multi-day-spanning-tomorrow"
+        }
+      ],
+      NOW,
+      TZ
+    );
+    expect(kept.map((e) => e.title)).toEqual(["tomorrow-all-day", "multi-day-spanning-tomorrow"]);
+  });
   it("resolves 'tomorrow' correctly across the fall-back DST boundary", () => {
     // 2026-11-01 in LA is 25h long. Evening of Oct 31, 21:00 PDT = Nov 1 04:00Z.
     const dstNow = new Date("2026-11-01T04:00:00.000Z");
