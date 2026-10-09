@@ -137,10 +137,14 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
   };
 };
 
-/** Shared write path: validate, then SET the assigned category's total. */
+/**
+ * Shared write path: validate, SET the assigned category's total, and log it.
+ * The activity row carries ids and cents only; undo restores the old total.
+ */
 async function applyAssignment(
   ports: WorkerPorts,
-  args: { month: string; categoryId: string; amountCents: number }
+  args: { month: string; categoryId: string; amountCents: number },
+  actor: "user" | "moss"
 ): Promise<Record<string, unknown>> {
   const live = await loadCategories(ports);
   if (!live.some((category) => category.id === args.categoryId)) {
@@ -148,7 +152,21 @@ async function applyAssignment(
   }
 
   const store = await ports.store();
+  const previousCents = (await store.getLedger(args.month))?.assignments[args.categoryId] ?? 0;
   await store.setAssignment(args.month, args.categoryId, args.amountCents);
+  if (previousCents !== args.amountCents) {
+    await store.appendActivity({
+      actor,
+      kind: "budget.assign",
+      params: {
+        month: args.month,
+        categoryId: args.categoryId,
+        amountCents: args.amountCents,
+        previousCents
+      },
+      undo: { month: args.month, categoryId: args.categoryId, amountCents: previousCents }
+    });
+  }
 
   return { status: "ok", ...args };
 }
@@ -161,7 +179,7 @@ export const budgetAssignHandler: ToolFactory = (ports) => async (input) => {
     min: -AMOUNT_BOUND,
     max: AMOUNT_BOUND
   });
-  return applyAssignment(ports, { month, categoryId, amountCents });
+  return applyAssignment(ports, { month, categoryId, amountCents }, "moss");
 };
 
 /** Queue twin of budget.assign — consumes the host job envelope. */
@@ -182,5 +200,5 @@ export const budgetApplyHandler: ToolFactory = (ports) => async (input) => {
     min: -AMOUNT_BOUND,
     max: AMOUNT_BOUND
   });
-  return applyAssignment(ports, { month, categoryId, amountCents });
+  return applyAssignment(ports, { month, categoryId, amountCents }, "user");
 };

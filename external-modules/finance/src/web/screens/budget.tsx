@@ -1,8 +1,13 @@
 // external-modules/finance/src/web/screens/budget.tsx
 //
-// #3173: the Park Press Budget screen (read-only). One read, finance.budget.status,
-// returns the month's derived state, the categories, the account balances and the
-// reconciled "ready to assign" figure. Typing amounts in place lands in #3174.
+// #3173: the Park Press Budget screen. One read, finance.budget.status, returns the
+// month's derived state, the categories, the account balances and the reconciled
+// "ready to assign" figure.
+//
+// #3174: the Assigned cell is a text box. Enter or leaving the box saves through the
+// finance.budget-apply queue (the same handler as the chat tool, no approval step).
+// The typed amount shows at once; if the refetched total never matches, the box goes
+// back to the old amount with an inline error.
 //
 // Desktop and phone layouts both render; module CSS shows one and hides the other.
 import {
@@ -17,13 +22,23 @@ import {
   SectionHead,
   StatTile,
   useEffect,
+  useRef,
   useState,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
-import { currentMonth, formatCents, monthLabel, shiftMonth } from "../format";
+import { runQueue } from "../api";
+import { applyPending, settlePending, type PendingAssignments } from "../assign";
+import {
+  centsToAmountInput,
+  currentMonth,
+  formatCents,
+  monthLabel,
+  parseAmountToCents,
+  shiftMonth
+} from "../format";
 import { navigate } from "../router";
-import { outcomeGate } from "../states";
-import { useToolQuery } from "../store";
+import { announce, outcomeGate } from "../states";
+import { invalidateQueries, useToolQuery } from "../store";
 
 interface BudgetCategory {
   id: string;
@@ -80,7 +95,7 @@ interface Group {
   lines: Line[];
 }
 
-function buildGroups(result: BudgetStatusResult): Group[] {
+function buildGroups(result: BudgetStatusResult, pending: PendingAssignments): Group[] {
   const states = result.state?.categories ?? {};
   const categories = (result.categories ?? []).filter(
     (category) => !category.archived && !NOT_ENVELOPES.has(category.id)
@@ -91,12 +106,16 @@ function buildGroups(result: BudgetStatusResult): Group[] {
       .filter((category) => category.tableGroup === name)
       .map((category): Line => {
         const row = states[category.id] ?? ZERO;
+        const shown = applyPending(
+          { id: category.id, assigned: row.assignedCents, available: row.availableCents },
+          pending
+        );
         return {
           id: category.id,
           name: category.name,
-          assigned: row.assignedCents,
+          assigned: shown.assigned,
           spent: row.activityCents,
-          available: row.availableCents,
+          available: shown.available,
           // available = carried + assigned - spent
           carried: Math.max(0, row.availableCents - row.assignedCents + row.activityCents)
         };
@@ -136,7 +155,51 @@ function CarriedBadge(props: { cents: number }): ReactNodeLike {
   );
 }
 
-function GroupTable(props: { group: Group; head: boolean }): ReactNodeLike {
+interface AssignProps {
+  errors: Record<string, string>;
+  onAssign: (line: Line, cents: number) => void;
+  onBadAmount: (line: Line) => void;
+}
+
+/** The typing box for a category's assigned amount. Saves on Enter or blur. */
+function AssignCell(props: { line: Line } & AssignProps): ReactNodeLike {
+  const { line, errors } = props;
+  const [draft, setDraft] = useState<string | null>(null);
+  const finish = (): void => {
+    if (draft === null) return;
+    const cents = parseAmountToCents(draft);
+    setDraft(null);
+    if (cents === null) props.onBadAmount(line);
+    else if (cents !== line.assigned) props.onAssign(line, cents);
+  };
+  const error = errors[line.id];
+  return (
+    <div className="fnm-assign">
+      <input
+        className="jds-input jds-input--sm fnm-assign__input"
+        aria-label={`Assigned to ${line.name}`}
+        aria-invalid={error ? "true" : undefined}
+        inputMode="decimal"
+        value={draft ?? money(line.assigned)}
+        onFocus={(event: { currentTarget: { select: () => void } }) => {
+          setDraft(centsToAmountInput(line.assigned));
+          event.currentTarget.select();
+        }}
+        onChange={(event: { currentTarget: { value: string } }) =>
+          setDraft(event.currentTarget.value)
+        }
+        onBlur={finish}
+        onKeyDown={(event: { key: string; currentTarget: { blur: () => void } }) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if (event.key === "Escape") setDraft(null);
+        }}
+      />
+      {error ? <Indicator status="error" label={error} /> : null}
+    </div>
+  );
+}
+
+function GroupTable(props: { group: Group; head: boolean } & AssignProps): ReactNodeLike {
   const { group } = props;
   const assigned = group.lines.reduce((sum, line) => sum + line.assigned, 0);
   return (
@@ -168,7 +231,14 @@ function GroupTable(props: { group: Group; head: boolean }): ReactNodeLike {
                   <CarriedBadge cents={line.carried} />
                 </div>
               </td>
-              <td className="jds-table__num">{money(line.assigned)}</td>
+              <td className="jds-table__num">
+                <AssignCell
+                  line={line}
+                  errors={props.errors}
+                  onAssign={props.onAssign}
+                  onBadAmount={props.onBadAmount}
+                />
+              </td>
               <td className="jds-table__num">
                 <div className="fnm-cell-stack">
                   <span>{money(line.spent)}</span>
@@ -188,7 +258,7 @@ function GroupTable(props: { group: Group; head: boolean }): ReactNodeLike {
   );
 }
 
-function GroupRows(props: { group: Group }): ReactNodeLike {
+function GroupRows(props: { group: Group } & AssignProps): ReactNodeLike {
   return (
     <section className="fnm-block fnm-block--tight">
       <SectionHead title={props.group.name} rule />
@@ -200,9 +270,13 @@ function GroupRows(props: { group: Group }): ReactNodeLike {
             excerpt={
               <div className="fnm-block fnm-block--tight">
                 <CarriedBadge cents={line.carried} />
-                <span>
-                  {money(line.spent)} spent of {money(line.assigned)}
-                </span>
+                <span>{money(line.spent)} spent of</span>
+                <AssignCell
+                  line={line}
+                  errors={props.errors}
+                  onAssign={props.onAssign}
+                  onBadAmount={props.onBadAmount}
+                />
                 <Meter line={line} />
               </div>
             }
@@ -347,7 +421,9 @@ function Hero(props: {
   );
 }
 
-function BudgetBody(props: { result: BudgetStatusResult }): ReactNodeLike {
+function BudgetBody(
+  props: { result: BudgetStatusResult; pending: PendingAssignments } & AssignProps
+): ReactNodeLike {
   const { result } = props;
   // No bank, or a bank with no budget yet: Getting started owns both.
   const sendToStart = result.hasBank === false || result.hasBudget === false;
@@ -356,7 +432,7 @@ function BudgetBody(props: { result: BudgetStatusResult }): ReactNodeLike {
   }, [sendToStart]);
   if (sendToStart) return null;
 
-  const groups = buildGroups(result);
+  const groups = buildGroups(result, props.pending);
   const accounts = result.accounts ?? [];
   const overspent = groups.flatMap((group) => group.lines).filter((l) => l.available < 0).length;
   const needsLook = result.needsLookCount ?? 0;
@@ -369,10 +445,21 @@ function BudgetBody(props: { result: BudgetStatusResult }): ReactNodeLike {
         {groups.map((group, index) => (
           <div key={group.name}>
             <div className="fnm-desktop-only">
-              <GroupTable group={group} head={index === 0} />
+              <GroupTable
+                group={group}
+                head={index === 0}
+                errors={props.errors}
+                onAssign={props.onAssign}
+                onBadAmount={props.onBadAmount}
+              />
             </div>
             <div className="fnm-phone-only">
-              <GroupRows group={group} />
+              <GroupRows
+                group={group}
+                errors={props.errors}
+                onAssign={props.onAssign}
+                onBadAmount={props.onBadAmount}
+              />
             </div>
           </div>
         ))}
@@ -390,13 +477,106 @@ function BudgetBody(props: { result: BudgetStatusResult }): ReactNodeLike {
   );
 }
 
+// Wait between checks that a queued save landed, and how many checks before giving up.
+const CHECK_DELAY_MS = 2000;
+const MAX_CHECKS = 3;
+
 export function BudgetScreen(): ReactNodeLike {
   const [month, setMonth] = useState(currentMonth);
+  const [pending, setPending] = useState<PendingAssignments>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const status = useToolQuery<BudgetStatusResult>("finance.budget.status", { month });
-  const ready =
-    status.status === "settled" && status.outcome.kind === "ok"
-      ? (status.outcome.result.readyToAssignCents ?? null)
-      : null;
+  const armed = useRef(false);
+  const checks = useRef(0);
+  const result =
+    status.status === "settled" && status.outcome.kind === "ok" ? status.outcome.result : null;
+
+  // A pending amount belongs to the month it was typed in.
+  useEffect(() => {
+    setPending({});
+    setErrors({});
+    armed.current = false;
+    checks.current = 0;
+  }, [month]);
+
+  const scheduleCheck = (): void => {
+    setTimeout(() => {
+      armed.current = true;
+      invalidateQueries();
+    }, CHECK_DELAY_MS);
+  };
+
+  const fail = (line: Line, message: string): void => {
+    setPending((previous) => {
+      const next = { ...previous };
+      delete next[line.id];
+      return next;
+    });
+    setErrors((previous) => ({ ...previous, [line.id]: message }));
+    announce(message);
+  };
+
+  const onAssign = (line: Line, cents: number): void => {
+    setErrors((previous) => {
+      const next = { ...previous };
+      delete next[line.id];
+      return next;
+    });
+    setPending((previous) => ({ ...previous, [line.id]: cents }));
+    // Metadata-only params: ids and cents, nothing else.
+    void runQueue("finance.budget-apply", "finance.budget-apply", {
+      month,
+      categoryId: line.id,
+      amountCents: cents
+    }).then((outcome) => {
+      if (outcome.kind === "queued" || outcome.kind === "already-queued") scheduleCheck();
+      else fail(line, "Couldn't save. Put back to the old amount.");
+    });
+  };
+
+  const onBadAmount = (line: Line): void => {
+    setErrors((previous) => ({ ...previous, [line.id]: "Enter an amount like 250 or 250.50." }));
+  };
+
+  // After each armed refetch: drop confirmed amounts, retry a few times, then give up.
+  useEffect(() => {
+    if (!armed.current || result === null) return;
+    armed.current = false;
+    const serverAssigned: Record<string, number> = {};
+    for (const [id, row] of Object.entries(result.state?.categories ?? {})) {
+      serverAssigned[id] = row.assignedCents;
+    }
+    const { confirmed, mismatched } = settlePending(pending, serverAssigned);
+    if (confirmed.length > 0) {
+      setPending((previous) => {
+        const next = { ...previous };
+        for (const id of confirmed) delete next[id];
+        return next;
+      });
+    }
+    if (mismatched.length === 0) {
+      checks.current = 0;
+    } else if (checks.current + 1 < MAX_CHECKS) {
+      checks.current += 1;
+      scheduleCheck();
+    } else {
+      checks.current = 0;
+      const names = new Map((result.categories ?? []).map((c) => [c.id, c.name]));
+      for (const id of mismatched) {
+        fail(
+          { id, name: names.get(id) ?? id, assigned: 0, spent: 0, available: 0, carried: 0 },
+          "Couldn't save. Put back to the old amount."
+        );
+      }
+    }
+  }, [status]);
+
+  const baseReady = result?.readyToAssignCents ?? null;
+  const pendingShift = Object.entries(pending).reduce(
+    (sum, [id, typed]) => sum + (typed - (result?.state?.categories[id]?.assignedCents ?? 0)),
+    0
+  );
+  const ready = baseReady === null ? null : baseReady - pendingShift;
   return (
     <section aria-label="Budget">
       <Hero
@@ -407,8 +587,14 @@ export function BudgetScreen(): ReactNodeLike {
       <div className="fnm-pad">
         {outcomeGate(
           status,
-          (result) => (
-            <BudgetBody result={result} />
+          (body) => (
+            <BudgetBody
+              result={body}
+              pending={pending}
+              errors={errors}
+              onAssign={onAssign}
+              onBadAmount={onBadAmount}
+            />
           ),
           {
             loadingLabel: "Loading budget"

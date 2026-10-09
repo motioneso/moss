@@ -6,6 +6,18 @@
 import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetLedger } from "./envelope.js";
 
+/**
+ * One row of the activity trail (#3174). `params` and `undo` hold ids, cents
+ * and category ids only, never free text; the row's wording renders from
+ * `kind` plus `params` in code.
+ */
+export interface ActivityInput {
+  actor: "user" | "moss";
+  kind: string;
+  params: Record<string, string | number | null>;
+  undo?: Record<string, string | number | null> | null;
+}
+
 export interface FinanceStore {
   listItems(): Promise<ItemRecord[]>;
   getItem(itemId: string): Promise<ItemRecord | null>;
@@ -50,4 +62,7 @@ export interface FinanceStore {
   getLedger(month: string): Promise<BudgetLedger | null>;
   /** Sets the TOTAL for one category (FIN-03 replay-safe semantics). */
   setAssignment(month: string, categoryId: string, amountCents: number): Promise<void>;
+
+  /** Appends one activity row for the acting user, stamped with the current time. */
+  appendActivity(entry: ActivityInput): Promise<void>;
 }

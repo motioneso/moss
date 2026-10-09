@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -46,7 +46,8 @@
       "app.finance_transactions",
       "app.finance_balance_snapshots",
       "app.finance_budget_assignments",
-      "app.finance_categories"
+      "app.finance_categories",
+      "app.finance_activity"
     ]
   },
   "appMap": {
@@ -71,6 +72,10 @@
       }
     ],
     "features": [
+      {
+        "id": "finance.budget-typing",
+        "description": "On Budget, type a dollar amount into a category's Assigned box and press Enter or click away to save it. Saving never asks for approval, and Available updates. If the save fails the box goes back to its old amount with an error. Every change is logged with who made it, and the log keeps only ids and amounts."
+      },
       {
         "id": "finance.getting-started",
         "description": "Getting started shows three steps (connect a bank, Moss sorts spending, build a budget together) with each step's state. A bank cannot be connected until an admin sets the bank keys in Finance settings."
