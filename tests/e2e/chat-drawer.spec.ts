@@ -644,3 +644,51 @@ test("empty conversations explains how to start a side chat", async ({ page }) =
   await expect(drawer.getByText("Start a side chat to keep a topic together.")).toBeVisible();
   await expect(drawer.locator(".chatd-empty")).toHaveCount(1);
 });
+
+test("conversations overlay covers the docked chat panel only at desktop width (#3282)", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockApi(page, {
+    authenticated: true,
+    chatThreads: [],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: []
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
+  const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+  await expect(drawer).toHaveClass(/chatd--docked/);
+  await openConversations(drawer);
+  const overlay = drawer.locator(".chatd-conversations__overlay");
+  await expect(overlay).toBeVisible();
+
+  const panel = (await drawer.boundingBox())!;
+  const box = (await overlay.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(panel.x - 1);
+  expect(box.y).toBeGreaterThanOrEqual(panel.y - 1);
+  expect(box.x + box.width).toBeLessThanOrEqual(panel.x + panel.width + 1);
+  expect(box.y + box.height).toBeLessThanOrEqual(panel.y + panel.height + 1);
+
+  // The page beside the panel stays uncovered.
+  const besidePanel = await page.evaluate(
+    ({ x, y }) => document.elementFromPoint(x, y)?.closest(".chatd-conversations__overlay"),
+    { x: panel.x / 2, y: panel.y + panel.height / 2 }
+  );
+  expect(besidePanel).toBeNull();
+
+  await page.keyboard.press("Escape");
+  await expect(overlay).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: "Open conversations" })).toBeFocused();
+  await expect(drawer.locator(".chatd-overlay-background[inert]")).toHaveCount(0);
+
+  // A click on the page beside the panel still dismisses the open overlay.
+  await openConversations(drawer);
+  await expect(overlay).toBeVisible();
+  await expect(drawer.locator(".chatd-overlay-background[inert]").first()).toBeAttached();
+  await page.mouse.click(panel.x / 2, panel.y + panel.height / 2);
+  await expect(overlay).toHaveCount(0);
+});
