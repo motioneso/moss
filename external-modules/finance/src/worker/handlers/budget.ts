@@ -57,9 +57,13 @@ function readMonth(input: Record<string, unknown>): string {
 async function loadDerivationInput(store: FinanceStore): Promise<{
   ledgers: Record<string, BudgetLedger>;
   transactionsByMonth: Record<string, TransactionRecord[]>;
+  /** Rows by month, before transfer rows are dropped. */
+  allRowsByMonth: Record<string, TransactionRecord[]>;
+  assignmentMonthCount: number;
 }> {
   const ledgers: Record<string, BudgetLedger> = {};
-  for (const month of await store.listAssignmentMonths()) {
+  const assignmentMonths = await store.listAssignmentMonths();
+  for (const month of assignmentMonths) {
     const ledger = await store.getLedger(month);
     if (ledger) ledgers[month] = ledger;
   }
@@ -76,19 +80,29 @@ async function loadDerivationInput(store: FinanceStore): Promise<{
   // in depth — this filter only ever removes MORE rows (paired legs whose
   // category is not "transfers", e.g. a transfer-in miscategorized as
   // income inflating TBB).
+  const allRowsByMonth = { ...transactionsByMonth };
   const excluded = effectiveTransferIds(Object.values(transactionsByMonth).flat());
   for (const month of Object.keys(transactionsByMonth)) {
     transactionsByMonth[month] = transactionsByMonth[month]!.filter((txn) => !excluded.has(txn.id));
   }
-  return { ledgers, transactionsByMonth };
+  return {
+    ledgers,
+    transactionsByMonth,
+    allRowsByMonth,
+    assignmentMonthCount: assignmentMonths.length
+  };
 }
 
 async function computeMonthState(
   ports: WorkerPorts,
   store: FinanceStore,
   month: string
-): Promise<BudgetMonthState> {
-  const input = await loadDerivationInput(store);
+): Promise<{
+  state: BudgetMonthState;
+  monthRows: TransactionRecord[];
+  assignmentMonthCount: number;
+}> {
+  const { allRowsByMonth, assignmentMonthCount, ...input } = await loadDerivationInput(store);
   // Inject the requested month into the derivation union when it has no data
   // of its own: the derivation then rolls carry/TBB forward into it (or
   // yields the all-zero state when there is no data at all).
@@ -96,13 +110,17 @@ async function computeMonthState(
     input.ledgers[month] = { assignments: {} };
   }
   const core = deriveBudgetMonths(input)[month]!;
-  return { computedAt: ports.now().toISOString(), ...core };
+  return {
+    state: { computedAt: ports.now().toISOString(), ...core },
+    monthRows: allRowsByMonth[month] ?? [],
+    assignmentMonthCount
+  };
 }
 
 export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
   const month = readMonth(input);
   const store = await ports.store();
-  const state = await computeMonthState(ports, store, month);
+  const { state, monthRows, assignmentMonthCount } = await computeMonthState(ports, store, month);
   const accounts = await store.listAccounts();
   const itemStatus = new Map<string, string>();
   for (const account of accounts) {
@@ -111,8 +129,7 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
     }
   }
   // The same rows the Transactions screen counts under Needs a look.
-  const monthTransactions = await store.listMonthTransactions(month);
-  const needsLookCount = monthTransactions.filter((txn) => txn.reviewState === "needs_look").length;
+  const needsLookCount = monthRows.filter((txn) => txn.reviewState === "needs_look").length;
   // Taxonomy rides along so the web budget screen renders names and group
   // order from a single call (same shape transactions.query ships).
   const categories = (await loadCategories(ports)).map((category) => ({
@@ -124,7 +141,7 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
     state,
     categories,
     hasBank: accounts.length > 0,
-    hasBudget: (await store.listAssignmentMonths()).length > 0,
+    hasBudget: assignmentMonthCount > 0,
     readyToAssignCents: readyToAssignCents(accounts, state.categories),
     needsLookCount,
     accounts: accounts.map((account) => ({

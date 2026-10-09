@@ -130,6 +130,31 @@ async function seedJuly(kv: FinanceKv): Promise<void> {
 }
 
 describe("finance budget.status (#1148)", () => {
+  it("reads each month and the assignment list once (review finding 9)", async () => {
+    const kv = fakeKv();
+    await seedJuly(kv);
+    const ports = fakePorts(kv);
+    const inner = await ports.store();
+    const reads: string[] = [];
+    const counting: WorkerPorts = {
+      ...ports,
+      store: async () => ({
+        ...inner,
+        listMonthTransactions: async (month) => {
+          reads.push(`month:${month}`);
+          return inner.listMonthTransactions(month);
+        },
+        listAssignmentMonths: async () => {
+          reads.push("assignments");
+          return inner.listAssignmentMonths();
+        }
+      })
+    };
+    await budgetStatusHandler(counting)({ month: "2026-07" });
+    expect(reads.filter((entry) => entry === "month:2026-07")).toHaveLength(1);
+    expect(reads.filter((entry) => entry === "assignments")).toHaveLength(1);
+  });
+
   it("derives the month from ledger + chunks", async () => {
     const kv = fakeKv();
     await seedJuly(kv);
