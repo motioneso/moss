@@ -7,7 +7,7 @@ import { expect, it, vi } from "vitest";
 vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 
-import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "@moss/shared";
 import type * as ApiClientModule from "../../apps/web/src/api/client.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
@@ -58,8 +58,14 @@ import {
 } from "../../apps/web/src/api/client.js";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
+import { moduleChatSurface } from "../../apps/web/src/shell/chat-surface-key.js";
 
-function drawer(client: QueryClient, initialText?: string, ownerId?: string): ReactElement {
+function drawer(
+  client: QueryClient,
+  initialText?: string,
+  ownerId?: string,
+  surface: ChatSurface = DEFAULT_CHAT_SURFACE
+): ReactElement {
   return createElement(
     QueryClientProvider,
     { client },
@@ -75,7 +81,7 @@ function drawer(client: QueryClient, initialText?: string, ownerId?: string): Re
         isFounder: false,
         initialText,
         ownerId,
-        surface: DEFAULT_CHAT_SURFACE
+        surface
       }) as ReactElement
     )
   );
@@ -278,6 +284,75 @@ it("retires a starter supplied during a failed B selection", async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   expect(renderer.root.findByType("textarea").props.value).toBe("");
+});
+
+it("keeps a caller supplied after successful B selection ahead of cached A privacy", async () => {
+  vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false, threadId: "a" });
+  vi.mocked(listChatThreads).mockResolvedValue({
+    threads: [
+      {
+        id: "b",
+        ownerUserId: "owner",
+        title: "Side chat",
+        incognito: false,
+        isMain: false,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+        lastActiveAt: "2026-01-01T00:00:00Z",
+        lastMessagePreview: null
+      }
+    ]
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await act(async () => findByAriaLabel(renderer, "Open conversations")!.props.onClick());
+  await act(async () => {
+    findByAriaLabel(renderer, "Side chat")!.props.onClick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await act(async () => {
+    renderer.update(drawer(client, "Starter"));
+    await Promise.resolve();
+  });
+
+  expect(renderer.root.findByType("textarea").props.value).toBe("Starter");
+});
+
+it("keeps a collided module fallback active without replacing canonical A", async () => {
+  const moduleSurface = moduleChatSurface("job-search", "profile-1") as ChatSurface;
+  const drafts = new Map([
+    [
+      "moss.chatDrafts",
+      JSON.stringify({ ownerId: "owner", drafts: { a: "Canonical A", b: "Canonical B" } })
+    ]
+  ]);
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => drafts.get(key) ?? null,
+    setItem: (key: string, value: string) => drafts.set(key, value),
+    removeItem: (key: string) => drafts.delete(key)
+  });
+  const privacy = deferred<{ incognito: boolean; threadId: string }>();
+  vi.mocked(getChatPrivacyState).mockImplementationOnce(() => privacy.promise);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client, undefined, "owner", moduleSurface));
+    await Promise.resolve();
+  });
+  await act(async () =>
+    renderer.root.findByType("textarea").props.onChange({ target: { value: "Fallback A" } })
+  );
+  await act(async () => {
+    privacy.resolve({ incognito: false, threadId: "a" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(renderer.root.findByType("textarea").props.value).toBe("Fallback A");
+  expect(JSON.parse(drafts.get("moss.chatDrafts")!).drafts.a).toBe("Canonical A");
 });
 
 it("retains a cached transcript and restores the composer after a failed refetch", async () => {

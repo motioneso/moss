@@ -560,3 +560,22 @@ function parseUsage(value: unknown): TranscriptRecord["usage"] {
   }
   return Object.keys(result).length > 0 ? result : undefined;
 }
+
+export function reconcileFallbacks(
+  fallbacks: readonly TranscriptRecord[],
+  liveRecords: readonly TranscriptRecord[]
+): readonly TranscriptRecord[] {
+  const unmatched = [...liveRecords];
+  return fallbacks.filter((fallback) => {
+    const idx = unmatched.findIndex(
+      (record) =>
+        record.kind === fallback.kind &&
+        (record.messageId && fallback.messageId
+          ? record.messageId === fallback.messageId
+          : record.text === fallback.text)
+    );
+    if (idx === -1) return true;
+    unmatched.splice(idx, 1);
+    return false;
+  });
+}

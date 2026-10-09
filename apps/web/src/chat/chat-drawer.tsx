@@ -1,14 +1,11 @@
 import { randomUuid, requestJson } from "@moss/module-web-sdk";
 import type { MeetingChatSelection, MeetingChatTurnResponse } from "@moss/shared";
 import { SideChatOverlay } from "./side-chat-overlay";
-import {
-  initialChatDrafts,
-  moveUnselectedDraft,
-  saveChatDrafts,
-  unselectedDraftKey
-} from "./chat-draft-storage";
+import { loadChatDrafts, saveChatDrafts } from "./chat-draft-storage";
 import { useChatTransition, type ChatTransition } from "./use-chat-transition";
 import { useInitialCallerDraft } from "./use-initial-caller-draft";
+import { useChatSelectionConfirmation } from "./use-chat-selection-confirmation";
+import { useChatDraftBinding } from "./use-chat-draft-binding";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Maximize2, Minimize2, MoreHorizontal, ShieldOff, X } from "lucide-react";
 import {
@@ -52,6 +49,7 @@ import { trapFocus } from "../shell/command-palette";
 import { RecordRow } from "./message-row";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
 import {
+  reconcileFallbacks,
   recordsFromMessages,
   shouldEndPrivateChatOnStreamDisconnect,
   type TranscriptRecord
@@ -100,52 +98,45 @@ export function ChatDrawer(props: {
   latestRecordsRef.current = props.records;
   const [reviewThreadId, setReviewThreadId] = useState<string | null>(null);
   const [conversationOverlayOpen, setConversationOverlayOpen] = useState(false);
-  const [drafts, setDrafts] = useState(() => initialChatDrafts(props.ownerId));
+  const [drafts, setDrafts] = useState(() => loadChatDrafts(props.ownerId));
   const callerDraft = useInitialCallerDraft(props.initialText, props.surface, generationRef);
+  const selection = useChatSelectionConfirmation(props.surface, generationRef);
   const focusComposerAfterNewSideChat = useRef(false);
   const [privateMode, setPrivateMode] = useState(false);
   const [privateEnded, setPrivateEnded] = useState(false);
   const [activatingPrivate, setActivatingPrivate] = useState(false);
   const [privateActivationError, setPrivateActivationError] = useState<string | null>(null);
-
   const privateModeDecidedLocally = useRef(false);
   const closingPrivateChatRef = useRef(false);
-
   const privacyStateQuery = useQuery({
     queryKey: queryKeys.chat.privacy(props.surface),
     queryFn: () => getChatPrivacyState(props.surface),
     enabled: props.open,
     refetchOnWindowFocus: "always"
   });
-
   useEffect(() => {
     if (!privacyStateQuery.isSuccess) return;
     if (privateModeDecidedLocally.current) return;
     if (closingPrivateChatRef.current) return;
     setPrivateMode(privacyStateQuery.data.incognito);
   }, [privacyStateQuery.isSuccess, privacyStateQuery.data, privacyStateQuery.dataUpdatedAt]);
-
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
   const AUTOSCROLL_THRESHOLD_PX = 48;
-
   const handleBodyScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     const el = event.currentTarget;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setStickToBottom(distanceFromBottom <= AUTOSCROLL_THRESHOLD_PX);
   }, []);
-
   const scrollToLatest = useCallback((behavior: ScrollBehavior) => {
     const el = bodyRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior });
   }, []);
-
   const jumpToLatest = useCallback(() => {
     setStickToBottom(true);
     scrollToLatest("smooth");
   }, [scrollToLatest]);
-
   const resumeMutation = useMutation({
     mutationFn: (vars: {
       readonly threadId: string;
@@ -156,6 +147,7 @@ export function ChatDrawer(props: {
       void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(vars.surface) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.chat.privacy(vars.surface) });
       if (!transition.isCurrent(vars.transition)) return;
+      selection.confirm(vars.threadId, vars.transition);
       callerDraft.bind(vars.threadId, vars.surface, vars.transition.generation, true);
       props.clearRecords();
       privateModeDecidedLocally.current = true;
@@ -170,7 +162,6 @@ export function ChatDrawer(props: {
     },
     onSettled: (_data, _error, vars) => transition.finish(vars.transition)
   });
-
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [needsProvider, setNeedsProvider] = useState(false);
@@ -178,20 +169,17 @@ export function ChatDrawer(props: {
     readonly text: string;
     readonly surface: ChatSurface;
   } | null>(null);
-
   const [pendingUser, setPendingUser] = useState<{
     readonly text: string;
     readonly attachments?: readonly ChatAttachmentDto[];
   } | null>(null);
   const [fallbackRecords, setFallbackRecords] = useState<readonly TranscriptRecord[]>([]);
-
   useEffect(() => {
     if (!privateMode) return;
     const endPrivate = () => beaconEndPrivateChat();
     window.addEventListener("beforeunload", endPrivate);
     return () => window.removeEventListener("beforeunload", endPrivate);
   }, [privateMode]);
-
   useEffect(() => {
     if (
       !props.meetingContext &&
@@ -201,7 +189,6 @@ export function ChatDrawer(props: {
       setPendingUser(null);
     }
   }, [props.records, pendingUser, props.meetingContext]);
-
   useEffect(() => {
     privateModeDecidedLocally.current = false;
     closingPrivateChatRef.current = false;
@@ -218,7 +205,6 @@ export function ChatDrawer(props: {
     setPrivateActivationError(null);
     setQueuedSendText(null);
   }, [props.surface]);
-
   const chatRouteQuery = useQuery({
     queryKey: queryKeys.ai.capability("chat"),
     queryFn: () => lookupAiCapabilityRoute("chat"),
@@ -243,51 +229,66 @@ export function ChatDrawer(props: {
   const historyActivationPending =
     reviewThreadId !== null && (resumeMutation.isPending || !messagesQuery.isSuccess);
   const mainThreadId = threadsQuery.data?.threads.find((thread) => thread.isMain)?.id;
+  const confirmedSelection = selection.current;
   const selectedThreadId =
-    reviewThreadId ?? privacyStateQuery.data?.threadId ?? mainThreadId ?? null;
-  const fallbackDraftKey = unselectedDraftKey(props.surface);
-  const draftKey =
-    privateMode || activatingPrivate
-      ? PRIVATE_DRAFT_KEY
-      : props.surface === DEFAULT_CHAT_SURFACE &&
-          !mainThreadId &&
-          drafts[fallbackDraftKey] !== undefined
-        ? fallbackDraftKey
-        : (selectedThreadId ?? fallbackDraftKey);
+    reviewThreadId ??
+    (confirmedSelection
+      ? confirmedSelection.threadId
+      : (privacyStateQuery.data?.threadId ?? mainThreadId ?? null));
+  const draftBinding = useChatDraftBinding({
+    surface: props.surface,
+    drafts,
+    setDrafts,
+    privateMode,
+    activatingPrivate,
+    selectedThreadId,
+    mainThreadId,
+    hasConfirmedSelection: Boolean(confirmedSelection),
+    confirmedThreadId: confirmedSelection?.threadId ?? null,
+    privacyThreadId: privacyStateQuery.isSuccess ? privacyStateQuery.data.threadId : undefined,
+    generation: generationRef
+  });
   const visibleCallerDraft = privateMode
     ? ""
-    : callerDraft.textFor(selectedThreadId, drafts[draftKey]);
+    : callerDraft.textFor(selectedThreadId, drafts[draftBinding.draftKey]);
   useEffect(() => saveChatDrafts(props.ownerId, drafts), [drafts, props.ownerId]);
-
   useEffect(() => {
-    const target =
-      props.surface === DEFAULT_CHAT_SURFACE
-        ? mainThreadId
-        : privacyStateQuery.isSuccess
-          ? privacyStateQuery.data.threadId
-          : undefined;
-    if (target) setDrafts((current) => moveUnselectedDraft(current, fallbackDraftKey, target));
-  }, [
-    fallbackDraftKey,
-    mainThreadId,
-    privacyStateQuery.data,
-    privacyStateQuery.isSuccess,
-    props.surface
-  ]);
-
-  useEffect(() => {
-    const threadId = privacyStateQuery.data?.threadId;
-    if (privacyStateQuery.isSuccess && threadId && !transition.pending) {
-      callerDraft.bind(threadId, props.surface, generationRef.current);
+    const threadId = confirmedSelection
+      ? confirmedSelection.threadId
+      : privacyStateQuery.data?.threadId;
+    if (threadId && !transition.pending) {
+      callerDraft.bind(threadId, props.surface, generationRef.current, Boolean(confirmedSelection));
     }
   }, [
     callerDraft,
+    confirmedSelection,
     privacyStateQuery.data,
     privacyStateQuery.isSuccess,
     props.surface,
     transition.pending
   ]);
-
+  useEffect(() => {
+    if (
+      !confirmedSelection ||
+      confirmedSelection.threadId !== null ||
+      !privacyStateQuery.isSuccess ||
+      !privacyStateQuery.data.threadId ||
+      privacyStateQuery.dataUpdatedAt <= confirmedSelection.confirmedAt
+    ) {
+      return;
+    }
+    selection.confirm(privacyStateQuery.data.threadId, {
+      surface: props.surface,
+      generation: generationRef.current
+    });
+  }, [
+    confirmedSelection,
+    privacyStateQuery.data,
+    privacyStateQuery.dataUpdatedAt,
+    privacyStateQuery.isSuccess,
+    props.surface,
+    selection
+  ]);
   const sendMessage = useCallback(
     (text: string, attachments?: readonly ChatAttachmentDto[]): void => {
       const trimmed = text.trim();
@@ -310,6 +311,7 @@ export function ChatDrawer(props: {
       setPendingUser({ text: trimmed, attachments });
       const initiatingSurface = props.surface;
       const generation = generationRef.current;
+      const initiatingThreadId = confirmedSelection?.threadId ?? reviewThreadId;
       callerDraft.dispatch(trimmed, initiatingSurface, generation);
       void (async () => {
         try {
@@ -344,6 +346,19 @@ export function ChatDrawer(props: {
           }
           if (surfaceRef.current !== initiatingSurface || generation !== generationRef.current)
             return;
+          if (initiatingThreadId === null) {
+            void getChatPrivacyState(initiatingSurface)
+              .then((state) => {
+                if (
+                  state.threadId &&
+                  surfaceRef.current === initiatingSurface &&
+                  generation === generationRef.current
+                ) {
+                  selection.confirm(state.threadId, { surface: initiatingSurface, generation });
+                }
+              })
+              .catch(() => undefined);
+          }
           callerDraft.retire(initiatingSurface, generation);
           setPendingUser(null);
           const postResponseRecords: readonly TranscriptRecord[] = [
@@ -410,6 +425,7 @@ export function ChatDrawer(props: {
       historyActivationPending,
       sendPending,
       messagesQuery.data?.messages,
+      confirmedSelection?.threadId,
       privateEnded,
       queryClient,
       reviewThreadId,
@@ -418,7 +434,6 @@ export function ChatDrawer(props: {
       props.onMeetingUnavailable
     ]
   );
-
   useEffect(() => {
     if (sendPending || queuedSendText === null) return;
     const queued = queuedSendText;
@@ -426,13 +441,11 @@ export function ChatDrawer(props: {
     if (queued.surface !== props.surface) return;
     sendMessage(queued.text);
   }, [queuedSendText, sendPending, props.surface, sendMessage]);
-
   const reviewing = reviewThreadId !== null;
   const displayRecords = reviewing
     ? recordsFromMessages(messagesQuery.data?.messages ?? [])
     : props.records;
   const visibleFallbackRecords = reconcileFallbacks(fallbackRecords, displayRecords);
-
   const effectiveRecords: readonly TranscriptRecord[] = [
     ...displayRecords,
     ...visibleFallbackRecords,
@@ -446,9 +459,7 @@ export function ChatDrawer(props: {
         ]
       : [])
   ];
-
   const isWaiting = isSending || pendingUser !== null;
-
   useEffect(() => {
     if (
       shouldEndPrivateChatOnStreamDisconnect({
@@ -463,20 +474,17 @@ export function ChatDrawer(props: {
       setQueuedSendText(null);
     }
   }, [privateEnded, privateMode, props.streamErrorCount]);
-
   useEffect(() => {
     setStickToBottom(true);
     if (props.open) {
       scrollToLatest("auto");
     }
   }, [reviewThreadId, props.open, scrollToLatest]);
-
   useEffect(() => {
     if (stickToBottom) {
       scrollToLatest("auto");
     }
   }, [effectiveRecords.length, isWaiting, reviewThreadId, scrollToLatest, stickToBottom]);
-
   const asideRef = useRef<HTMLElement | null>(null);
   const [phone, setPhone] = useState(
     () => typeof window !== "undefined" && !!window.matchMedia?.(PHONE_QUERY).matches
@@ -529,9 +537,7 @@ export function ChatDrawer(props: {
     box.focus();
     focusComposerAfterNewSideChat.current = false;
   }, [historyActivationPending, props.open, reviewThreadId, transition.pending]);
-
   if (!props.open) return null;
-
   const onDialogKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "Escape" && !event.defaultPrevented) {
       if (asideRef.current?.querySelector('.chatd__head [aria-expanded="true"]')) return;
@@ -541,7 +547,6 @@ export function ChatDrawer(props: {
     }
     if (event.key === "Tab" && phone) trapFocus(event, asideRef.current);
   };
-
   const startNewSideChat = () => {
     const change = transition.begin();
     if (!change) return;
@@ -552,6 +557,7 @@ export function ChatDrawer(props: {
         const state = await getChatPrivacyState(change.surface);
         void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(change.surface) });
         if (!transition.isCurrent(change)) return;
+        selection.confirm(state.threadId ?? null, change);
         if (state.threadId)
           callerDraft.bind(state.threadId, change.surface, change.generation, true);
         setReviewThreadId(state.threadId ?? null);
@@ -581,7 +587,6 @@ export function ChatDrawer(props: {
       }
     })();
   };
-
   const switchToNewModelChat = (surface: ChatSurface) => {
     if (surface === surfaceRef.current) {
       startNewSideChat();
@@ -589,7 +594,6 @@ export function ChatDrawer(props: {
     }
     void clearChat({ surface });
   };
-
   const startPrivateChat = () => {
     const change = transition.begin();
     if (!change) return;
@@ -629,7 +633,6 @@ export function ChatDrawer(props: {
       }
     })();
   };
-
   const closePrivateChat = () => {
     const change = transition.begin();
     if (!change) return;
@@ -663,7 +666,6 @@ export function ChatDrawer(props: {
       }
     })();
   };
-
   const stopSending = (): void => void cancelChatTurn(props.surface).catch(() => {});
   const queueSend = (text: string): void => setQueuedSendText({ text, surface: props.surface });
 
@@ -952,10 +954,10 @@ export function ChatDrawer(props: {
           }
           isFounder={props.isFounder}
           initialText={visibleCallerDraft || undefined}
-          draft={visibleCallerDraft || drafts[draftKey] || ""}
+          draft={visibleCallerDraft || drafts[draftBinding.draftKey] || ""}
           onDraftChange={(draft) => {
             callerDraft.edit(props.surface, generationRef.current);
-            setDrafts((current) => ({ ...current, [draftKey]: draft }));
+            draftBinding.changeDraft(draft);
           }}
           isSending={isSending}
           sendError={privateEnded ? "Private chat ended. Start a new chat to continue." : sendError}
@@ -972,25 +974,6 @@ export function ChatDrawer(props: {
       </div>
     </aside>
   );
-}
-
-function sameTranscriptRecord(a: TranscriptRecord, b: TranscriptRecord): boolean {
-  if (a.kind !== b.kind) return false;
-  if (a.messageId && b.messageId) return a.messageId === b.messageId;
-  return a.text === b.text;
-}
-
-function reconcileFallbacks(
-  fallbacks: readonly TranscriptRecord[],
-  liveRecords: readonly TranscriptRecord[]
-): readonly TranscriptRecord[] {
-  const unmatched = [...liveRecords];
-  return fallbacks.filter((fallback) => {
-    const idx = unmatched.findIndex((record) => sameTranscriptRecord(record, fallback));
-    if (idx === -1) return true;
-    unmatched.splice(idx, 1);
-    return false;
-  });
 }
 
 export function chatAvailableFromRoute(data: LookupAiCapabilityRouteResponse | undefined): boolean {

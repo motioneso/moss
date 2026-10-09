@@ -2,9 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  bindUnselectedDraft,
+  boundDraftKey,
   loadChatDrafts,
-  saveChatDrafts,
-  seedChatDraft
+  saveChatDrafts
 } from "../../apps/web/src/chat/chat-draft-storage.js";
 
 describe("chat draft storage", () => {
@@ -46,12 +47,23 @@ describe("chat draft storage", () => {
     expect(loadChatDrafts("owner-b")).toEqual({});
   });
 
-  it("replaces a cleared draft with a new starter but preserves unsent text", () => {
-    expect(seedChatDraft({ selected: "" }, "selected", "New starter")).toEqual({
-      selected: "New starter"
-    });
-    expect(seedChatDraft({ selected: "Unsent text" }, "selected", "New starter")).toEqual({
-      selected: "Unsent text"
+  it("keeps canonical and collided fallback drafts in separate thread-bound slots", () => {
+    const firstCollision = bindUnselectedDraft(
+      { "__surface__:module": "Fallback A", a: "Canonical A" },
+      "module",
+      "a"
+    );
+    const secondCollision = bindUnselectedDraft(
+      { ...firstCollision, "__surface__:module": "Fallback B", b: "Canonical B" },
+      "module",
+      "b"
+    );
+
+    expect(secondCollision).toEqual({
+      a: "Canonical A",
+      b: "Canonical B",
+      [boundDraftKey("module", "a")]: "Fallback A",
+      [boundDraftKey("module", "b")]: "Fallback B"
     });
   });
 });

@@ -7,14 +7,8 @@ export function unselectedDraftKey(surface: string): string {
   return surface === "drawer" ? MAIN_DRAFT_KEY : `__surface__:${surface}`;
 }
 
-export function seedChatDraft(
-  drafts: ChatDrafts,
-  key: string,
-  text: string | undefined
-): ChatDrafts {
-  return text && (drafts[key] === undefined || drafts[key] === "")
-    ? { ...drafts, [key]: text }
-    : drafts;
+export function boundDraftKey(surface: string, threadId: string): string {
+  return `${unselectedDraftKey(surface)}:bound:${threadId}`;
 }
 
 export function moveUnselectedDraft(
@@ -28,8 +22,19 @@ export function moveUnselectedDraft(
   return { ...rest, [threadId]: text };
 }
 
-export function initialChatDrafts(ownerId: string | undefined): ChatDrafts {
-  return loadChatDrafts(ownerId);
+/** Moves a genuine unresolved module edit without overwriting a canonical thread draft. */
+export function bindUnselectedDraft(
+  drafts: ChatDrafts,
+  surface: string,
+  threadId: string
+): ChatDrafts {
+  const fallbackKey = unselectedDraftKey(surface);
+  const text = drafts[fallbackKey];
+  if (!text) return drafts;
+  const destination = drafts[threadId] === undefined ? threadId : boundDraftKey(surface, threadId);
+  if (drafts[destination] !== undefined) return drafts;
+  const { [fallbackKey]: _fallback, ...rest } = drafts;
+  return { ...rest, [destination]: text };
 }
 
 type StoredChatDrafts = {
