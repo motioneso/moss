@@ -14,13 +14,44 @@ describe("notification sensitivity", () => {
   let boss: ReturnType<typeof createPgBossClient>;
   let server: Awaited<ReturnType<typeof createApiServer>>;
   const delivered: string[] = [];
+  const summaries: Date[] = [];
 
   const pushQueue: PushQueuePort = {
     enqueueDeliver: async (_db, notificationId) => {
       delivered.push(notificationId);
     },
-    enqueueSummary: async () => undefined
+    enqueueSummary: async (_db, _userId, releaseAt) => {
+      summaries.push(releaseAt);
+    }
   };
+
+  // A window with equal start and end covers the whole day, so every non-urgent item is deferred.
+  const alwaysQuiet = {
+    getSettings: async () => ({ enabled: true, start: "00:00", end: "00:00", timezone: "UTC" }),
+    getLocaleTimezone: async () => "UTC"
+  };
+
+  async function summariesFor(urgency: "normal" | "low") {
+    const repository = new NotificationsRepository(
+      alwaysQuiet,
+      createNotificationPreferencePort(),
+      pushQueue
+    );
+    summaries.length = 0;
+    delivered.length = 0;
+    const row = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: `request:sensitivity-quiet-hours-${urgency}` },
+      (scopedDb) =>
+        repository.create(scopedDb, {
+          moduleId: "briefings",
+          title: `Deferred ${urgency}`,
+          urgency
+        })
+    );
+    expect(row).not.toBeNull();
+    expect(delivered).toHaveLength(0);
+    return summaries.length;
+  }
 
   beforeAll(async () => {
     await resetFoundationDatabase();
@@ -105,5 +136,15 @@ describe("notification sensitivity", () => {
     expect((await pushedFor("low")).pushed).toBe(false);
     await putSensitivity("proactive");
     expect((await pushedFor("low")).pushed).toBe(true);
+  });
+
+  it("end-of-quiet-hours summary follows the level", async () => {
+    await putSensitivity("quiet");
+    expect(await summariesFor("normal")).toBe(0);
+    await putSensitivity("balanced");
+    expect(await summariesFor("normal")).toBe(1);
+    expect(await summariesFor("low")).toBe(0);
+    await putSensitivity("proactive");
+    expect(await summariesFor("low")).toBe(1);
   });
 });

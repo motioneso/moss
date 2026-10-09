@@ -369,12 +369,13 @@ export class NotificationsRepository {
     // acting actor (see CreateNotificationInput docblock), so it is never null here.
     // Enqueued through scopedDb: same transaction as the row above (finding 7).
     if (this.pushQueuePort && row.recipient_user_id) {
-      if (deferredUntil) {
-        await this.pushQueuePort.enqueueSummary(scopedDb, row.recipient_user_id, deferredUntil);
-      } else {
-        const sensitivity =
-          (await this.notificationPreferencePort?.getSensitivity?.(scopedDb)) ?? "balanced";
-        if (shouldPushImmediately(sensitivity, urgency)) {
+      // The sensitivity level gates both the immediate push and the end-of-quiet-hours summary.
+      const sensitivity =
+        (await this.notificationPreferencePort?.getSensitivity?.(scopedDb)) ?? "balanced";
+      if (shouldPushImmediately(sensitivity, urgency)) {
+        if (deferredUntil) {
+          await this.pushQueuePort.enqueueSummary(scopedDb, row.recipient_user_id, deferredUntil);
+        } else {
           await this.pushQueuePort.enqueueDeliver(scopedDb, row.id, row.recipient_user_id);
         }
       }
