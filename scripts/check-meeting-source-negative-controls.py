@@ -21,6 +21,7 @@ BINDING = "packages/meetings/src/capture-binding.ts"
 CHANGES = "tests/unit/meeting-capture-source-changes.test.ts"
 SECURITY = "tests/unit/meeting-capture-source-security.test.ts"
 ORDER = "tests/unit/meeting-capture-source-order.test.ts"
+RECOVERY_LIMITS = "tests/unit/meeting-capture-recovery-limits.test.ts"
 mutation, control = runner.mutation, runner.control
 CONTROLS = [
     control("S1-source-epoch", "rejects stale source intent", [mutation(
@@ -58,13 +59,26 @@ CONTROLS = [
     control("S9-stop-finalization", "lets Stop supersede stale source intent", [mutation(
         SERVICE,
         'if (grant.status !== "active" || !grant.credential_hash)\n          throw new MeetingCaptureError("meeting_capture_conflict", 409);',
-        'if (grant.status !== "active" || !grant.credential_hash) throw new MeetingCaptureError();')], CHANGES, "source-stop-finalization-conflict")
+        'if (grant.status !== "active" || !grant.credential_hash) throw new MeetingCaptureError();')], CHANGES, "source-stop-finalization-conflict"),
+    control("S10-automatic-recovery-budget", "caps repeated completed episodes", [mutation(
+        DOMAIN,
+        "recoveryCount >= MAX_AUTOMATIC_RECOVERIES ||",
+        "false ||")], RECOVERY_LIMITS),
+    control("S11-manual-epoch-reserve", "reserves the last eight epochs for manual controls", [mutation(
+        DOMAIN,
+        "state.epochs.length >= MAX_CAPTURE_EPOCHS - MANUAL_CAPTURE_EPOCH_RESERVE",
+        "false")], RECOVERY_LIMITS),
+    control("S12-recovery-count-shape", "rejects a malformed persisted recovery count.*-1", [mutation(
+        DOMAIN,
+        "    if (!Number.isSafeInteger(recoveryCount) || recoveryCount < 0) invalid();\n",
+        "")], RECOVERY_LIMITS)
 ]
 runner.FAILURE_PATTERNS.update({
     item["name"]: r"^Error: promise resolved .* instead of rejecting"
-    for item in CONTROLS if item["name"] not in {"S2-paused-intent", "S8-older-source-registration", "S9-stop-finalization"}
+    for item in CONTROLS if item["name"] not in {"S2-paused-intent", "S8-older-source-registration", "S9-stop-finalization", "S11-manual-epoch-reserve", "S12-recovery-count-shape"}
 })
 runner.FAILURE_PATTERNS.update({"S2-paused-intent": r"expected", "S8-older-source-registration": r"expected", "S9-stop-finalization": r"source-stop-finalization-conflict.*meeting_capture_unavailable.*meeting_capture_conflict"})
+runner.FAILURE_PATTERNS.update({"S11-manual-epoch-reserve": r"expected.*throw", "S12-recovery-count-shape": r"expected.*throw"})
 
 
 def main():
@@ -83,7 +97,7 @@ def main():
     print(f"Proof receipts: {directory}", flush=True)
     for item in CONTROLS:
         runner.run_control(item, directory)
-    print("Nine source-change named assertions RED under guard removal; restored GREEN.")
+    print("Twelve source-change named assertions RED under guard removal; restored GREEN.")
     print("Database-free behavioral proof only; hosted integration and installed Mac proof remain required.")
 
 

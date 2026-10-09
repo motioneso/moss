@@ -74,8 +74,25 @@ CONTROLS = [
     }),
     ("Meetings/MeetingRecordingPresentation.swift", "MeetingRecordingPresentationTests", {
         "name": "T12-terminal-surfaces", "test": "testEveryTerminalPhaseClearsBothSurfacesAndMeter",
-        "before": "        guard [.ready, .recording, .paused].contains(phase) else { stop(); return }",
+        "before": "        guard [.ready, .recording, .recovering, .paused].contains(phase) else { stop(); return }",
         "after": "        guard active else { return }", "assertion": "XCTAssertFalse failed",
+    }),
+    ("Meetings/MeetingRecordingPresentation.swift", "MeetingRecordingPresentationTests", {
+        "name": "T12-hidden-interruption-warning", "test": "testInterruptionWarningForcesHiddenPillVisibleUntilExplicitlyCleared",
+        "before": "var showsPill: Bool { showsAttention || (active && !hidden) }",
+        "after": "var showsPill: Bool { active && !hidden }", "assertion": "XCTAssertTrue failed",
+    }),
+    ("Meetings/MeetingRecordingPresentation.swift", "MeetingRecordingPresentationTests", {
+        "name": "T12-cleanup-warning-survives-stop", "test": "testCleanupErrorRemainsVisibleAfterRecordingSurfacesWereStopped",
+        "before": "var showsAttention: Bool { interruptionWarning != nil || (active && state == .recovering) }",
+        "after": "var showsAttention: Bool { active && (interruptionWarning != nil || state == .recovering) }",
+        "assertion": "A real cleanup error must survive terminal-phase presentation updates",
+    }),
+    ("Meetings/MeetingRecordingPresentation.swift", "MeetingRecordingPresentationTests", {
+        "name": "T12-recovery-keeps-pause", "test": "testRecoveringOverridesHideWithDistinctVisibleStatusAndPauseControl",
+        "before": "        canPause = phase == .recording || phase == .recovering",
+        "after": "        canPause = phase == .recording",
+        "assertion": "Pause remains usable while recovery is pending",
     }),
     ("Meetings/MeetingRecordingPill.swift", "MeetingRecordingPresentationTests", {
         "name": "T12-every-space", "test": "testPanelFloatsOnEverySpaceWithoutActivationOrHardware",

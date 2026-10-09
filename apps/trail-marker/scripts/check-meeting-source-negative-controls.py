@@ -49,15 +49,15 @@ CONTROLS = [
     ("MeetingCaptureHost.swift", {
         "name": "source-exact-control-acknowledgment",
         "test": "testMismatchedSourceControlAcknowledgmentNeverReopensHardware",
-        "before": "                guard intent.matches(reply.capture) else { throw MeetingHostError.rejected }",
-        "after": "                // Mutation: accept a control receipt for a different source choice.",
+        "before": "                guard intent.matches(reply.capture) else { throw MeetingHostError.rejected }\n                self.sourceChangeIntent?.acknowledged = true",
+        "after": "                // Mutation: accept a control receipt for a different source choice.\n                self.sourceChangeIntent?.acknowledged = true",
         "assertion": "Mismatched source control acknowledgment must reject the intent",
     }),
     ("MeetingCaptureHost.swift", {
         "name": "source-exact-status-acknowledgment",
         "test": "testMismatchedSourceStatusAcknowledgmentNeverReopensHardware",
-        "before": "        guard intent.acknowledged, intent.matches(capture) else {",
-        "after": "        guard intent.acknowledged else {",
+        "before": "        guard intent.acknowledged, intent.matches(capture) else {\n            failSourceChange(MeetingHostError.rejected)",
+        "after": "        guard intent.acknowledged else {\n            failSourceChange(MeetingHostError.rejected)",
         "assertion": "Mismatched source status acknowledgment must reject the intent",
     }),
     ("MeetingCaptureHost.swift", {
@@ -85,15 +85,17 @@ CONTROLS = [
     ("MeetingCaptureHost.swift", {
         "name": "source-queued-stop-dominance",
         "test": "testStopCancelsQueuedSourceChangeBeforeTransportAndCannotReopen",
-        "before": "                guard !Task.isCancelled, self.sourceChangeIntent?.body.requestKey == body.requestKey else { return }",
-        "after": "                // Mutation: send a source intent superseded by Stop.",
+        # Mutate Stop's cancellation itself: removing one preflight guard is masked by
+        # the transport's independent cooperative-cancellation check.
+        "before": "        cancelSourceChange()\n        if cleanupBlocked { _ = terminate(reason: \"Recording stopped.\"); return }\n        localControl(\"stop\")",
+        "after": "        // Mutation: Stop leaves its queued source task and intent live.\n        if cleanupBlocked { _ = terminate(reason: \"Recording stopped.\"); return }\n        localControl(\"stop\")",
         "assertion": "Stop must cancel queued source change before transport",
     }),
     ("MeetingCaptureHost.swift", {
         "name": "source-cleanup-failure-stop-recovery",
         "test": "testCleanupFailureKeepsStopRecoveryAndSendsNoSourceChange",
-        "before": "var canStop: Bool { [.recording, .paused, .stopping].contains(phase) || (phase == .ready && grantId != nil) || cleanupBlocked }",
-        "after": "var canStop: Bool { [.recording, .paused, .stopping].contains(phase) || (phase == .ready && grantId != nil) }",
+        "before": "var canStop: Bool { [.recording, .recovering, .paused, .stopping].contains(phase) || (phase == .ready && grantId != nil) || acquisitionPending || cleanupBlocked }",
+        "after": "var canStop: Bool { [.recording, .recovering, .paused, .stopping].contains(phase) || (phase == .ready && grantId != nil) || acquisitionPending }",
         "assertion": "Source cleanup failure must preserve Stop recovery",
     }),
     ("MeetingCaptureHost.swift", {
@@ -106,8 +108,8 @@ CONTROLS = [
     ("MeetingCaptureHost.swift", {
         "name": "source-teardown-cancels-intent",
         "test": "testUnlinkAndLeaseExpiryCancelPendingSourceIntent",
-        "before": "        recordingPresentation.stop()\n        cancelSourceChange()\n        sourceSelectionError = nil",
-        "after": "        recordingPresentation.stop()\n        sourceSelectionError = nil",
+        "before": "        cancelSourceChange()\n        sourceSelectionError = nil",
+        "after": "        sourceSelectionError = nil",
         "assertion": "Unlink and lease expiry must cancel the source intent",
     }),
     ("MeetingCaptureHost.swift", {

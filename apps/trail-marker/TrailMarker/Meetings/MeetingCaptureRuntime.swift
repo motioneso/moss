@@ -14,6 +14,8 @@ final class MeetingCaptureRuntime {
 
     private let queue = DispatchQueue(label: "com.moss.meeting.capture-control")
     private let factory: DeviceFactory
+    private let monotonicNow: () -> UInt64
+    private var acquisition: MeetingCaptureAcquisition?
     private let reportCaptureDiagnostic: (String) -> Void
     private let captureLease = MeetingAudioLease()
     private var machine = MeetingCaptureMachine()
@@ -27,14 +29,136 @@ final class MeetingCaptureRuntime {
     private var dispatchCursor = 0
     private var hadExpiredAudio = false
     private var pauseBoundary: (at: UInt64, epoch: UInt64, sources: [MeetingAudioSource])?
+    // Retain fault evidence through teardown: a late hard source fault cannot be hidden
+    // by pruning an empty ring or by a later clean inventory snapshot.
+    private var recoveryEvidence: [MeetingAudioBuffer] = []
+
+    var canRecoverSources: Bool {
+        queue.sync { canRecoverSourcesLocked }
+    }
+    var recoveryFaultSources: Set<MeetingAudioSource> {
+        queue.sync { Set(recoveryEvidence.filter { $0.failure == .sourceReconfigured }.map(\.source)) }
+    }
+    private var canRecoverSourcesLocked: Bool {
+        machine.state == .paused && devices.isEmpty && !recoveryEvidence.isEmpty &&
+            recoveryEvidence.contains { $0.failure == .sourceReconfigured } &&
+            recoveryEvidence.allSatisfy { $0.failure == nil || $0.failure == .sourceReconfigured }
+    }
 
     convenience init(factory: @escaping DeviceFactory) {
         self.init(factory: factory, reportCaptureDiagnostic: MeetingAudioFailureDiagnostic.log)
     }
 
-    init(factory: @escaping DeviceFactory, reportCaptureDiagnostic: @escaping (String) -> Void) {
+    convenience init(factory: @escaping DeviceFactory, monotonicNow: @escaping () -> UInt64) {
+        self.init(factory: factory, reportCaptureDiagnostic: MeetingAudioFailureDiagnostic.log, monotonicNow: monotonicNow)
+    }
+
+    init(factory: @escaping DeviceFactory, reportCaptureDiagnostic: @escaping (String) -> Void,
+         monotonicNow: @escaping () -> UInt64 = MeetingCaptureClock.now) {
         self.factory = factory
         self.reportCaptureDiagnostic = reportCaptureDiagnostic
+        self.monotonicNow = monotonicNow
+    }
+
+    var hasPendingAcquisition: Bool { queue.sync { acquisition != nil } }
+    var acquisitionCleanupFailed: Bool { queue.sync { acquisition?.cleanupFailed == true } }
+
+    /// Reserve identity under the control queue, then acquire on the device owner queue.
+    /// The paused machine and retained old tails stay serviceable while a driver blocks.
+    func beginRecoveryAcquisition(selection: MeetingNativeSelection, readiness: MeetingNativeReadiness,
+                                  permitRetainedAudio: Bool, deadline: UInt64, at: UInt64,
+                                  onEvent: @escaping (MeetingCaptureAcquisitionEvent) -> Void) throws -> MeetingCaptureAcquisitionTicket {
+        try queue.sync {
+            guard acquisition == nil else { throw MeetingAudioFailure.cleanupFailed }
+            guard canRecoverSourcesLocked, selection == machine.selection, machine.epoch < UInt64.max else {
+                throw MeetingAudioFailure.invalidSelection
+            }
+            try readiness.validate()
+            try selection.validate()
+            guard at < min(deadline, captureLease.deadline) else { throw MeetingAudioFailure.leaseExpired }
+            let expired = try serviceLocked(at: at)
+            retainedGaps.append(contentsOf: expired)
+            try checkSourceCapacity()
+            let ticket = MeetingCaptureAcquisitionTicket(id: UUID(), epoch: machine.epoch + 1)
+            let staged = MeetingCaptureAcquisition(ticket: ticket, selection: selection, previousEpoch: machine.epoch,
+                readiness: readiness, permitRetainedAudio: permitRetainedAudio, deadline: deadline, origin: at,
+                previousEvidence: recoveryEvidence, lease: captureLease, monotonicNow: monotonicNow, factory: factory,
+                reportDiagnostic: reportCaptureDiagnostic) { [weak self] event in
+                    self?.queue.async { [weak self] in
+                        guard let self, self.acquisition?.ticket == ticket else { return }
+                        if case .cleanupComplete = event { self.acquisition = nil }
+                        if case .failed = event {
+                            self.retainedGaps.append(contentsOf: self.discardUnsafeScope(self.recoveryEvidence))
+                        }
+                        DispatchQueue.main.async { onEvent(event) }
+                    }
+                }
+            acquisition = staged
+            staged.start()
+            return ticket
+        }
+    }
+
+    /// The host has revalidated the original sources and current grant/epoch before this call.
+    /// This only adopts already-open handles. No native factory/start/stop executes here.
+    func commitRecoveryAcquisition(_ ticket: MeetingCaptureAcquisitionTicket, at: UInt64) throws {
+        try queue.sync {
+            guard let staged = acquisition, staged.ticket == ticket else { throw MeetingAudioFailure.invalidTransition }
+            do {
+                guard canRecoverSourcesLocked, machine.epoch == staged.previousEpoch,
+                      machine.selection == staged.selection else { throw MeetingAudioFailure.invalidSelection }
+                guard at < min(staged.deadline, captureLease.deadline) else { throw MeetingAudioFailure.leaseExpired }
+                let expired = try serviceLocked(at: at)
+                retainedGaps.append(contentsOf: expired)
+                var candidate = machine
+                try candidate.resume(selection: staged.selection, readiness: staged.readiness,
+                    permitRetainedAudio: staged.permitRetainedAudio, at: at)
+                guard candidate.epoch == ticket.epoch, canRecoverSourcesLocked else {
+                    throw MeetingAudioFailure.invalidSelection
+                }
+                let adopted = try staged.adopt(at: at)
+                if !staged.permitRetainedAudio {
+                    for entry in pending {
+                        if let gap = entry.buffer.discard(reason: .retentionDeclined) { retainedGaps.append(gap) }
+                    }
+                    pending.removeAll()
+                }
+                devices = adopted.devices
+                pending.append(contentsOf: adopted.receivers.map {
+                    PendingSource(buffer: $0.buffer, cutoff: nil, inFlightSequence: nil, offeredChunk: nil)
+                })
+                machine = candidate
+                epochStart = at
+                startupSourceRecheckUsed = false
+                currentEpochEverOffered = false
+                recoveryEvidence.removeAll()
+                appendPauseGap(through: at)
+                acquisition = nil
+                adopted.receivers.forEach { $0.admit(at: at) }
+                if let line = adopted.startupDiagnostic { reportCaptureDiagnostic(line) }
+            } catch {
+                retainedGaps.append(contentsOf: discardUnsafeScope(recoveryEvidence))
+                staged.reject(error as? MeetingAudioFailure ?? .invalidTransition)
+                throw error
+            }
+        }
+    }
+
+    func cancelRecoveryAcquisition(_ ticket: MeetingCaptureAcquisitionTicket? = nil) {
+        queue.sync {
+            guard let staged = acquisition, ticket == nil || staged.ticket == ticket else { return }
+            staged.cancel()
+        }
+    }
+
+    private func appendPauseGap(through at: UInt64) {
+        if let pause = pauseBoundary, at > pause.at {
+            retainedGaps.append(contentsOf: pause.sources.map { source in
+                MeetingAudioGap(source: source, epoch: pause.epoch, startNanoseconds: pause.at,
+                                endNanoseconds: at, reason: .paused)
+            })
+        }
+        pauseBoundary = nil
     }
 
     func updateCaptureLease(until deadline: UInt64) { captureLease.update(deadline: deadline) }
@@ -67,11 +191,15 @@ final class MeetingCaptureRuntime {
     }
 
     func prepare(selection: MeetingNativeSelection, readiness: MeetingNativeReadiness, at: UInt64) throws {
-        try queue.sync { try machine.prepare(selection: selection, readiness: readiness, at: at) }
+        try queue.sync {
+            guard acquisition == nil else { throw MeetingAudioFailure.cleanupFailed }
+            try machine.prepare(selection: selection, readiness: readiness, at: at)
+        }
     }
 
     func start(readiness: MeetingNativeReadiness, at: UInt64) throws {
         try queue.sync {
+            guard acquisition == nil else { throw MeetingAudioFailure.cleanupFailed }
             var candidate = machine
             try candidate.start(readiness: readiness, at: at, initialEpoch: nextSessionEpoch)
             try startDevices(candidate: candidate, at: at)
@@ -79,9 +207,18 @@ final class MeetingCaptureRuntime {
     }
 
     func resume(selection: MeetingNativeSelection, readiness: MeetingNativeReadiness,
-                permitRetainedAudio: Bool, at: UInt64) throws {
+                permitRetainedAudio: Bool, at: UInt64, recoveringSameSources: Bool = false) throws {
         try queue.sync {
-            guard devices.isEmpty else { throw MeetingAudioFailure.cleanupFailed }
+            guard acquisition == nil, devices.isEmpty else { throw MeetingAudioFailure.cleanupFailed }
+            if recoveringSameSources {
+                guard canRecoverSourcesLocked, selection == machine.selection else {
+                    throw MeetingAudioFailure.invalidSelection
+                }
+            }
+            // Expiry belongs to its old stream. Reconcile it while still paused, before
+            // allocating a new ring or enabling a replacement device.
+            let expiredGaps = try serviceLocked(at: at)
+            retainedGaps.append(contentsOf: expiredGaps)
             var candidate = machine
             try candidate.resume(selection: selection, readiness: readiness, permitRetainedAudio: permitRetainedAudio, at: at)
             if !permitRetainedAudio {
@@ -91,22 +228,21 @@ final class MeetingCaptureRuntime {
                 pending.removeAll()
             }
             try startDevices(candidate: candidate, at: at)
-            if let pause = pauseBoundary, at > pause.at {
-                retainedGaps.append(contentsOf: pause.sources.map { source in
-                    MeetingAudioGap(source: source, epoch: pause.epoch, startNanoseconds: pause.at,
-                                    endNanoseconds: at, reason: .paused)
-                })
+            if recoveringSameSources,
+               recoveryEvidence.contains(where: { $0.failure != nil && $0.failure != .sourceReconfigured }) {
+                let discarded = discardUnsafeScope(recoveryEvidence)
+                retainedGaps.append(contentsOf: discarded)
+                try discardUnconfirmedEpochLocked(at: at)
+                throw MeetingAudioFailure.invalidSelection
             }
-            pauseBoundary = nil
+            recoveryEvidence.removeAll()
+            appendPauseGap(through: at)
         }
     }
 
     private func startDevices(candidate: MeetingCaptureMachine, at: UInt64) throws {
         guard devices.isEmpty, let selection = candidate.selection else { throw MeetingAudioFailure.invalidTransition }
-        // At most sixteen retained source rings: 128 MiB of preallocated Float32 sample storage.
-        // Empty acknowledged epochs are pruned before allocating another pair.
-        pruneClosedSources()
-        guard pending.count <= 14 else { throw MeetingAudioFailure.bufferFull }
+        try checkSourceCapacity()
         let created = try factory(selection)
         let expected = selection.sources
         guard Set(created.keys) == expected else { throw MeetingAudioFailure.invalidSelection }
@@ -143,6 +279,15 @@ final class MeetingCaptureRuntime {
         }
     }
 
+    private func checkSourceCapacity() throws {
+        // Sixteen rings maximum, including closed fault evidence and the staged pair.
+        pruneClosedSources()
+        let retainedEvidenceCount = recoveryEvidence.filter { buffer in
+            !pending.contains { $0.buffer === buffer }
+        }.count
+        guard pending.count + retainedEvidenceCount <= 14 else { throw MeetingAudioFailure.bufferFull }
+    }
+
     /// One missing-metadata retry is allowed only before this startup epoch ever offered PCM.
     /// Positive source changes are rejected by the host before reaching this quarantine.
     func beginStartupSourceRecheck(at: UInt64) -> Bool {
@@ -173,6 +318,13 @@ final class MeetingCaptureRuntime {
 
     func pause(at: UInt64, captureCutoffNanoseconds: UInt64? = nil) throws {
         try queue.sync {
+            if let staged = acquisition {
+                staged.cancel()
+                if machine.state == .paused {
+                    try machine.observeTime(at)
+                    return
+                }
+            }
             try machine.pause(at: at)
             let cutoff = min(at, captureCutoffNanoseconds ?? at)
             rememberPause(at: cutoff)
@@ -182,9 +334,28 @@ final class MeetingCaptureRuntime {
         }
     }
 
+    /// Acquisition is not published until the host's final source check succeeds.
+    /// Discard only this unconfirmed ring pair; older mapped/authorized tails retain
+    /// their immutable receipt identities and normal expiry/gap handling.
+    func discardUnconfirmedEpoch(at: UInt64) throws {
+        try queue.sync { try discardUnconfirmedEpochLocked(at: at) }
+    }
+
+    private func discardUnconfirmedEpochLocked(at: UInt64) throws {
+        acquisition?.cancel()
+        if machine.state == .recording { try machine.pause(at: at) }
+        closeCurrentEpoch(at: at)
+        for entry in pending where entry.buffer.epoch == machine.epoch { entry.buffer.discard() }
+        pending.removeAll { $0.buffer.epoch == machine.epoch }
+        recoveryEvidence.removeAll()
+        do { try stopDevices() } catch { machine.fail(); throw error }
+    }
+
     func stop(at: UInt64, finalizationNanoseconds: UInt64 = 60_000_000_000,
               captureCutoffNanoseconds: UInt64? = nil) throws {
         try queue.sync {
+            acquisition?.cancel()
+            retainedGaps.append(contentsOf: discardUnsafeScope(recoveryEvidence))
             let alreadyStopped = machine.stopCutoffNanoseconds != nil
             try machine.stop(at: at, finalizationNanoseconds: finalizationNanoseconds,
                              captureCutoffNanoseconds: captureCutoffNanoseconds)
@@ -268,37 +439,49 @@ final class MeetingCaptureRuntime {
     }
 
     /// Called on the host's bounded service tick and before every send. Returns events for UI/storage.
-    /// No reconnect or service tick can activate a source or resume recording.
+    /// This never activates hardware; the host must confirm a new server epoch first.
     func service(at: UInt64) throws -> [MeetingAudioGap] {
         try queue.sync { try serviceLocked(at: at) }
     }
 
     private func serviceLocked(at: UInt64) throws -> [MeetingAudioGap] {
         try machine.observeTime(at)
+        // A hard old scope notice may arrive after a failed acquisition has already cleaned
+        // up. It must still retire the whole uncertain pair before Stop/Resume can send it.
+        retainedGaps.append(contentsOf: discardUnsafeScope(recoveryEvidence))
+        if let staged = acquisition {
+            if at >= min(staged.deadline, captureLease.deadline) { staged.reject(.leaseExpired) }
+            else if !canRecoverSourcesLocked {
+                retainedGaps.append(contentsOf: discardUnsafeScope(recoveryEvidence))
+                staged.reject(.invalidSelection)
+            }
+            else if let failure = staged.failure { staged.reject(failure) }
+        }
         var gaps = retainedGaps
         retainedGaps.removeAll(keepingCapacity: true)
         if machine.state == .recording,
-           let failed = pending.first(where: { $0.cutoff == nil && $0.buffer.failure != nil }),
+           let failed = pending.first(where: { $0.cutoff == nil && $0.buffer.failure != nil && $0.buffer.failure != .sourceReconfigured })
+                ?? pending.first(where: { $0.cutoff == nil && $0.buffer.failure != nil }),
            let reason = failed.buffer.failure {
             reportCaptureDiagnostic(MeetingAudioFailureDiagnostic.message(source: failed.buffer.source, failure: reason,
                 diagnostic: failed.buffer.failureDiagnostic))
+            let current = pending.filter { $0.cutoff == nil }.map(\.buffer)
+            recoveryEvidence = current.allSatisfy { $0.failure == nil || $0.failure == .sourceReconfigured }
+                && reason == .sourceReconfigured ? current : []
             try machine.pause(at: at)
             rememberPause(at: at)
             closeCurrentEpoch(at: at)
-            gaps.append(MeetingAudioGap(source: failed.buffer.source, epoch: failed.buffer.epoch,
-                startNanoseconds: epochStart, endNanoseconds: at,
-                reason: reason == .bufferFull ? .bufferFull : .captureFailure(reason)))
-            if failed.buffer.source == .output, reason == .invalidSelection {
-                // The new process may have rendered before its list notification. Do not
-                // flush queued audio from an exclusion scope whose membership is uncertain.
-                for entry in pending where entry.buffer.epoch == machine.epoch { entry.buffer.discard() }
-                pending.removeAll { $0.buffer.epoch == machine.epoch }
-            }
+            let failureGap = MeetingAudioGap(source: failed.buffer.source, epoch: failed.buffer.epoch,
+                startNanoseconds: reason == .sourceReconfigured ? min(at, failed.buffer.recoveryBoundaryNanoseconds) : epochStart, endNanoseconds: at,
+                reason: reason == .bufferFull ? .bufferFull : .captureFailure(reason))
+            gaps.append(failureGap)
             do { try stopDevices() } catch {
+                gaps.append(contentsOf: discardUnsafeScope(current, alreadyReported: failureGap))
                 machine.fail()
                 retainedGaps = gaps
                 throw error
             }
+            gaps.append(contentsOf: discardUnsafeScope(current, alreadyReported: failureGap))
         }
         var lostUnknownReceipt = false
         for index in pending.indices {
@@ -311,7 +494,9 @@ final class MeetingCaptureRuntime {
                 // Receipt outcome is unknown after expiry. A later packet cannot reuse or
                 // guess the server's sequence cursor. Retire this source's remaining tail,
                 // visibly; explicit Resume creates a new source epoch with a fresh cursor.
-                lostUnknownReceipt = true
+                // A retired old epoch cannot pause a newer recording. Its sequence is
+                // never reused; server receipt expiry releases its bounded pending slot.
+                lostUnknownReceipt = lostUnknownReceipt || pending[index].buffer.epoch == machine.epoch
                 if let gap = pending[index].buffer.discard(reason: .retentionDeclined) { gaps.append(gap) }
                 pending[index].cutoff = min(pending[index].cutoff ?? at, at)
                 pending[index].inFlightSequence = nil
@@ -328,10 +513,45 @@ final class MeetingCaptureRuntime {
         if machine.state == .stopping, let deadline = machine.finalizationDeadlineNanoseconds, at >= deadline {
             let drained = pending.allSatisfy { $0.buffer.peek(cutoffNanoseconds: $0.cutoff) == nil }
             guard devices.isEmpty else { retainedGaps = gaps; throw MeetingAudioFailure.cleanupFailed }
+            // A blocked acquisition is still owned, not a failed disposal. Keep servicing
+            // retained tails; the cleanup event permits finalization after the driver returns.
+            guard acquisition == nil else { return gaps }
             try machine.finish(at: at, drained: drained, expiredAudio: hadExpiredAudio)
             pending.forEach { $0.buffer.discard() }
             pending.removeAll()
         }
+        return gaps
+    }
+
+    private func discardUnsafeScope(_ current: [MeetingAudioBuffer], alreadyReported: MeetingAudioGap? = nil) -> [MeetingAudioGap] {
+        let unsafeEpochs = Set(current.filter { $0.failure == .invalidSelection }.map(\.epoch))
+        guard !unsafeEpochs.isEmpty else { return [] }
+        // Recheck after teardown drains listeners: a hard scope notice arriving while a
+        // softer microphone fault closes the pair still invalidates every uncertain tail.
+        var gaps: [MeetingAudioGap] = []
+        for entry in pending where unsafeEpochs.contains(entry.buffer.epoch) {
+            guard let discarded = entry.buffer.discard(reason: .captureFailure(.invalidSelection)) else { continue }
+            let end = min(discarded.endNanoseconds, entry.cutoff ?? discarded.endNanoseconds)
+            guard end > discarded.startNanoseconds else { continue }
+            let gap = MeetingAudioGap(source: discarded.source, epoch: discarded.epoch,
+                startNanoseconds: discarded.startNanoseconds, endNanoseconds: end, reason: discarded.reason)
+            if let covered = alreadyReported, covered.source == gap.source, covered.epoch == gap.epoch,
+               covered.reason == gap.reason, gap.startNanoseconds < covered.endNanoseconds,
+               covered.startNanoseconds < gap.endNanoseconds {
+                // The failure event already covers this source's interval. Keep any
+                // uncovered prefix/suffix and every peer tail, without duplicate loss.
+                if gap.startNanoseconds < covered.startNanoseconds {
+                    gaps.append(.init(source: gap.source, epoch: gap.epoch, startNanoseconds: gap.startNanoseconds,
+                        endNanoseconds: covered.startNanoseconds, reason: gap.reason))
+                }
+                if gap.endNanoseconds > covered.endNanoseconds {
+                    gaps.append(.init(source: gap.source, epoch: gap.epoch, startNanoseconds: covered.endNanoseconds,
+                        endNanoseconds: gap.endNanoseconds, reason: gap.reason))
+                }
+            } else { gaps.append(gap) }
+        }
+        pending.removeAll { unsafeEpochs.contains($0.buffer.epoch) }
+        recoveryEvidence.removeAll()
         return gaps
     }
 
@@ -428,7 +648,7 @@ final class MeetingCaptureRuntime {
 
     func finish(at: UInt64) throws {
         try queue.sync {
-            guard devices.isEmpty else { throw MeetingAudioFailure.cleanupFailed }
+            guard acquisition == nil, devices.isEmpty else { throw MeetingAudioFailure.cleanupFailed }
             let drained = pending.allSatisfy { $0.buffer.peek(cutoffNanoseconds: $0.cutoff) == nil }
             try machine.finish(at: at, drained: drained, expiredAudio: hadExpiredAudio)
             pending.forEach { $0.buffer.discard() }
@@ -442,12 +662,14 @@ final class MeetingCaptureRuntime {
     }
 
     private func terminateLocked(at: UInt64) throws {
+        acquisition?.cancel()
         machine.terminate(at: at)
         pending.forEach { $0.buffer.close() }
         pending.forEach { $0.buffer.discard() }
         pending.removeAll()
         retainedGaps.removeAll()
         currentEpochEverOffered = false
+        recoveryEvidence.removeAll()
         pauseBoundary = nil
         try stopDevices()
     }
@@ -456,6 +678,7 @@ final class MeetingCaptureRuntime {
     /// This does not prepare or restart capture; the caller still needs a new explicit Start.
     func reset(at: UInt64) throws {
         try queue.sync {
+            guard acquisition == nil else { throw MeetingAudioFailure.cleanupFailed }
             guard machine.state == .failed || machine.state == .finished else {
                 throw MeetingAudioFailure.invalidTransition
             }
@@ -471,6 +694,7 @@ final class MeetingCaptureRuntime {
     }
 
     deinit {
+        acquisition?.cancel()
         // No callback owns the runtime. Close all receivers before best-effort resource release;
         // adapters retain callback storage themselves when the OS refuses cleanup.
         pending.forEach { $0.buffer.close() }

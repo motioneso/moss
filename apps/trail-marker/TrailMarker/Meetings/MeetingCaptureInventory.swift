@@ -51,6 +51,8 @@ struct MeetingInventorySnapshot {
     let audioObjects: [Int32: AudioObjectID]
     let excluded: [MeetingProcessIdentity]
     var audioRoutes: [Int32: [AudioObjectID]] = [:]
+    var defaultOutputDeviceID: AudioObjectID? = nil
+    var defaultSystemOutputDeviceID: AudioObjectID? = nil
 
     struct Resolved: Equatable {
         let selection: MeetingNativeSelection
@@ -63,6 +65,10 @@ struct MeetingInventorySnapshot {
     /// process or object is never retried, even if a later snapshot would hide it again.
     func onlyOmitsStartupSources(from original: Self, choice: MeetingCaptureChoice) -> Bool {
         guard choice.mode != "selected-app" else { return false }
+        if choice.outputSourceId != nil {
+            guard defaultOutputDeviceID == original.defaultOutputDeviceID,
+                  defaultSystemOutputDeviceID == original.defaultSystemOutputDeviceID else { return false }
+        }
         if let microphone = choice.microphone,
            let current = microphones[microphone.deviceId], current != original.microphones[microphone.deviceId] { return false }
         guard choice.mode == "computer-audio" else { return true }
@@ -90,7 +96,7 @@ struct MeetingInventorySnapshot {
             microphone = nil
         }
         if let output = choice.outputSourceId {
-            guard !output.isEmpty, !wire.microphones.contains(where: { $0.sourceId == output }) else {
+            guard wire.systemAudioPermission != .denied, !output.isEmpty, !wire.microphones.contains(where: { $0.sourceId == output }) else {
                 throw MeetingHostError.unavailable
             }
         }
@@ -107,7 +113,8 @@ struct MeetingInventorySnapshot {
             let members = MeetingProcessScope.members(of: root, processes: processes)
             let ids = members.compactMap { audioObjects[$0.pid] }.sorted()
             guard !ids.isEmpty, !members.contains(where: { excluded.contains($0) }) else { throw MeetingHostError.unavailable }
-            let selection = MeetingNativeSelection(microphoneDeviceID: microphone, output: .selectedProcesses(ids))
+            let selection = MeetingNativeSelection(microphoneDeviceID: microphone, output: .selectedProcesses(ids),
+                defaultOutputDeviceID: defaultOutputDeviceID, defaultSystemOutputDeviceID: defaultSystemOutputDeviceID)
             try selection.validate()
             return Resolved(selection: selection, members: members, exclusions: [],
                 outputRoutes: audioRoutes.filter { pair in members.contains { $0.pid == pair.key } })
@@ -119,7 +126,8 @@ struct MeetingInventorySnapshot {
                   choice.outputSourceId != nil, choice.appProcessTreeId == nil, choice.applicationId == nil else { throw MeetingHostError.unavailable }
             let ids = excluded.compactMap { audioObjects[$0.pid] }.sorted()
             guard !ids.isEmpty else { throw MeetingHostError.unavailable }
-            let selection = MeetingNativeSelection(microphoneDeviceID: microphone, output: .excludingProcesses(ids))
+            let selection = MeetingNativeSelection(microphoneDeviceID: microphone, output: .excludingProcesses(ids),
+                defaultOutputDeviceID: defaultOutputDeviceID, defaultSystemOutputDeviceID: defaultSystemOutputDeviceID)
             try selection.validate()
             // Computer capture deliberately includes unrelated apps. Their process/route
             // churn does not change the approved Moss exclusion or the tap's own route.
@@ -192,7 +200,17 @@ final class MeetingCaptureInventoryReader {
             defaultMicrophoneId: MeetingMicrophoneInventory.defaultMicrophoneId(device: defaultInput,
                 devices: microphones, microphones: wireMicrophones))
         return MeetingInventorySnapshot(wire: wire, microphones: microphones, applications: applications,
-            processes: processes, audioObjects: audioObjects, excluded: excluded, audioRoutes: audioRoutes)
+            processes: processes, audioObjects: audioObjects, excluded: excluded, audioRoutes: audioRoutes,
+            defaultOutputDeviceID: try? physicalOutput(kAudioHardwarePropertyDefaultOutputDevice),
+            defaultSystemOutputDeviceID: try? physicalOutput(kAudioHardwarePropertyDefaultSystemOutputDevice))
+    }
+
+    private func physicalOutput(_ selector: AudioObjectPropertySelector) throws -> AudioObjectID {
+        let device = try integer(AudioObjectID(kAudioObjectSystemObject), selector: selector)
+        guard device != kAudioObjectUnknown, try integer(device, selector: kAudioDevicePropertyDeviceIsAlive) == 1 else {
+            throw MeetingHostError.unavailable
+        }
+        return device
     }
 
     @available(macOS 14.2, *)
@@ -242,7 +260,8 @@ final class MeetingCaptureInventoryReader {
         var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         var value: UInt32 = 0
         var size = UInt32(MemoryLayout<UInt32>.size)
-        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr else { throw MeetingHostError.unavailable }
+        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr,
+              size == UInt32(MemoryLayout<UInt32>.size) else { throw MeetingHostError.unavailable }
         return value
     }
 

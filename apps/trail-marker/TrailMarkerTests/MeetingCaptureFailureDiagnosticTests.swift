@@ -11,13 +11,19 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
     private final class Device: MeetingAudioCapturing {
         var receiver: MeetingAudioReceiving?
         var onStart: ((MeetingAudioReceiving) throws -> Void)?
+        var onStop: (() -> Void)?
+        var failStop = false
         var stops = 0
 
         func start(into receiver: MeetingAudioReceiving) throws {
             self.receiver = receiver
             try onStart?(receiver)
         }
-        func stop() throws { stops += 1 }
+        func stop() throws {
+            stops += 1
+            onStop?()
+            if failStop { throw MeetingAudioFailure.cleanupFailed }
+        }
         func emit(at: UInt64 = 0) {
             receiver?.receive(hostTimeNanoseconds: at, sampleRate: 8000, frameCount: 8, sampleAt: { _ in 0.25 })
         }
@@ -232,6 +238,45 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         XCTAssertNil(MeetingAudioFailureDiagnostic.status(oversized))
     }
 
+    func testDiagnosticReadDoesNotWaitForAnInProgressSampleReader() throws {
+        let ring = try buffer()
+        let diagnostic = MeetingAudioFailureDiagnostic(.microphoneRender, status: -10863)
+        let completed = DispatchSemaphore(value: 0)
+        let joined = expectation(description: "Diagnostic reader returned after sample reader")
+        ring.receive(hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 1) { _ in
+            ring.fail(.sourceReconfigured, diagnostic: .init(.bufferFormat))
+            ring.fail(.deviceFailure(operation: "render", status: -10863), diagnostic: diagnostic)
+            DispatchQueue.global().async {
+                XCTAssertEqual(ring.failureDiagnostic, diagnostic)
+                completed.signal()
+                joined.fulfill()
+            }
+            XCTAssertEqual(completed.wait(timeout: .now() + 1), .success,
+                "Diagnostic reads must not wait for the held audio ring lock")
+            return 0.25
+        }
+        wait(for: [joined], timeout: 2)
+    }
+
+    func testHardAndScopeDiagnosticsOverrideRecoveryWithoutBorrowingItsTag() throws {
+        let ring = try buffer()
+        let soft = MeetingAudioFailureDiagnostic(.bufferFormat)
+        let hard = MeetingAudioFailureDiagnostic(.microphoneRender, status: -50)
+        let scope = MeetingAudioFailureDiagnostic(.outputProcessScope)
+        ring.fail(.sourceReconfigured, diagnostic: soft)
+        XCTAssertEqual(ring.failureDiagnostic, soft)
+        ring.fail(.deviceFailure(operation: "render", status: -50), diagnostic: hard)
+        XCTAssertEqual(ring.failureDiagnostic, hard)
+        ring.fail(.sourceReconfigured, diagnostic: soft)
+        XCTAssertEqual(ring.failureDiagnostic, hard)
+        ring.fail(.invalidSelection, diagnostic: scope)
+        XCTAssertEqual(ring.failureDiagnostic, scope)
+        let unspecified = try buffer()
+        unspecified.fail(.sourceReconfigured, diagnostic: soft)
+        unspecified.fail(.bufferFull)
+        XCTAssertNil(unspecified.failureDiagnostic)
+    }
+
     func testContendedBufferRetainsActualCallbackCodeAndStatusWithoutChangingSemanticFallback() throws {
         let ring = try buffer()
         let diagnostic = MeetingAudioFailureDiagnostic(.microphoneRender, status: -10863)
@@ -260,10 +305,18 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
                 ring.receive(sampleTime: .nan, hostTimeNanoseconds: 0, sampleRate: 8000,
                              frameCount: 1, sampleAt: { _ in 0 })
             }),
-            (.invalidTimestamp, .bufferSampleContinuity, { ring in
+            (.sourceReconfigured, .bufferSampleContinuity, { ring in
                 ring.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 8000,
                              frameCount: 1, sampleAt: { _ in 0 })
                 ring.receive(sampleTime: 2, hostTimeNanoseconds: 250_000, sampleRate: 8000,
+                             frameCount: 1, sampleAt: { _ in 0 })
+            }),
+            (.invalidTimestamp, .bufferSampleContinuity, { ring in
+                ring.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 8000,
+                             frameCount: 1, sampleAt: { _ in 0 })
+                // The same counter discontinuity with a reversed/overlapping host clock
+                // is malformed evidence, so it must remain a hard timing failure.
+                ring.receive(sampleTime: 2, hostTimeNanoseconds: 0, sampleRate: 8000,
                              frameCount: 1, sampleAt: { _ in 0 })
             }),
             (.invalidTimestamp, .bufferClockRange, { ring in
@@ -417,8 +470,12 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         let gaps = try runtime.service(at: 1_000_000)
         XCTAssertTrue(hadAudioWhenReported)
         XCTAssertEqual(reports, ["capture-failure source=output callback=outputProcessRoute reason=invalidSelection status=-50"])
-        XCTAssertEqual(gaps, [.init(source: .output, epoch: 1, startNanoseconds: 0,
-                                   endNanoseconds: 1_000_000, reason: .captureFailure(.invalidSelection))])
+        XCTAssertEqual(gaps, [
+            .init(source: .output, epoch: 1, startNanoseconds: 0,
+                endNanoseconds: 1_000_000, reason: .captureFailure(.invalidSelection)),
+            .init(source: .microphone, epoch: 1, startNanoseconds: 0,
+                endNanoseconds: 1_000_000, reason: .captureFailure(.invalidSelection))
+        ], "Scope failure must report each discarded track exactly once")
         XCTAssertEqual(runtime.snapshot.state, .paused)
         XCTAssertNil((output.receiver as? MeetingAudioBuffer)?.peek())
         XCTAssertNil((microphone.receiver as? MeetingAudioBuffer)?.peek())
@@ -429,19 +486,113 @@ final class MeetingCaptureFailureDiagnosticTests: XCTestCase {
         var timeline = MeetingCaptureTimeline()
         timeline.originNanoseconds = 0
         timeline.epochs[1] = .init(remoteEpoch: 9, generation: 2,
-            choice: .init(mode: "computer-audio", microphone: nil, outputSourceId: "output-source",
+            choice: .init(mode: "computer-audio", microphone: .init(deviceId: "mic-device", sourceId: "mic-source"), outputSourceId: "output-source",
                           appProcessTreeId: nil, scope: nil), startNanoseconds: 0)
-        let wireGap = try XCTUnwrap(timeline.map(try XCTUnwrap(gaps.first)))
-        XCTAssertEqual(wireGap.reason, "source-unavailable")
-        XCTAssertEqual(wireGap.sourceId, "output-source")
-        XCTAssertEqual(wireGap.epoch, 9)
-        XCTAssertEqual(wireGap.startMs, 0)
-        XCTAssertEqual(wireGap.endMs, 1)
+        let wireGaps = gaps.compactMap(timeline.map)
+        XCTAssertEqual(wireGaps.count, 2)
+        XCTAssertEqual(Set(wireGaps.map(\.sourceId)), ["mic-source", "output-source"])
+        for gap in wireGaps {
+            XCTAssertEqual(gap.reason, "source-unavailable")
+            XCTAssertEqual(gap.epoch, 9)
+            XCTAssertEqual(gap.startMs, 0)
+            XCTAssertEqual(gap.endMs, 1)
+        }
 
         XCTAssertTrue(try runtime.service(at: 2_000_000).isEmpty)
         try runtime.stop(at: 2_000_000)
         XCTAssertFalse(try runtime.dispatchNext(at: 2_000_000) { _ in XCTFail("Discarded scope must not flush") })
         XCTAssertEqual(reports.count, 1)
+    }
+
+    func testScopeDiscardClipsPartialCallbacksAtPauseWithoutDuplicateCoverage() throws {
+        let microphone = Device(), output = Device()
+        let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone, .output: output] },
+            reportCaptureDiagnostic: { _ in })
+        try start(runtime, selection: bothSources)
+        microphone.emit()
+        output.emit()
+        output.receiver?.fail(.invalidSelection)
+        let gaps = try runtime.service(at: 500_000)
+        XCTAssertEqual(gaps, [
+            .init(source: .output, epoch: 1, startNanoseconds: 0,
+                endNanoseconds: 500_000, reason: .captureFailure(.invalidSelection)),
+            .init(source: .microphone, epoch: 1, startNanoseconds: 0,
+                endNanoseconds: 500_000, reason: .captureFailure(.invalidSelection))
+        ], "Discarded scope coverage must be clipped at the pause cutoff on both tracks")
+        XCTAssertTrue(try runtime.service(at: 1_000_000).isEmpty)
+        try runtime.terminate(at: 1_000_000)
+    }
+
+    func testLateScopeDiscardRespectsStopCutoffAndOmitsEmptyTails() throws {
+        for start in [UInt64(0), 1_000_000] {
+            let microphone = Device(), output = Device()
+            let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone, .output: output] },
+                reportCaptureDiagnostic: { _ in })
+            try self.start(runtime, selection: bothSources)
+            microphone.emit(at: start)
+            output.emit(at: start)
+            microphone.receiver?.fail(.sourceReconfigured)
+            _ = try runtime.service(at: 2_000_000)
+            try runtime.stop(at: 3_000_000, captureCutoffNanoseconds: 1_000_000)
+            output.receiver?.fail(.invalidSelection)
+            let gaps = try runtime.service(at: 4_000_000)
+            if start == 0 {
+                XCTAssertEqual(gaps, MeetingAudioSource.allCases.map { source in
+                    .init(source: source, epoch: 1, startNanoseconds: 0,
+                        endNanoseconds: 1_000_000, reason: .captureFailure(.invalidSelection))
+                })
+            } else {
+                XCTAssertTrue(gaps.isEmpty, "A tail at or after Stop must not create a zero-length or post-Stop gap")
+            }
+            XCTAssertTrue(gaps.allSatisfy { $0.startNanoseconds < $0.endNanoseconds && $0.endNanoseconds <= 1_000_000 })
+            XCTAssertFalse(try runtime.dispatchNext(at: 4_000_000) { _ in XCTFail("Uncertain scope must never flush") })
+            try runtime.finish(at: 4_000_000)
+        }
+    }
+
+    func testScopeDiscardDoesNotDuplicateFailureCoverageWhenCleanupThrows() throws {
+        let microphone = Device(), output = Device()
+        let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone, .output: output] },
+            reportCaptureDiagnostic: { _ in })
+        try start(runtime, selection: bothSources)
+        microphone.emit()
+        output.emit()
+        output.receiver?.fail(.invalidSelection)
+        output.failStop = true
+        XCTAssertThrowsError(try runtime.service(at: 1_000_000))
+        let gaps = try runtime.service(at: 2_000_000)
+        XCTAssertEqual(gaps, [
+            .init(source: .output, epoch: 1, startNanoseconds: 0,
+                endNanoseconds: 1_000_000, reason: .captureFailure(.invalidSelection)),
+            .init(source: .microphone, epoch: 1, startNanoseconds: 0,
+                endNanoseconds: 1_000_000, reason: .captureFailure(.invalidSelection))
+        ], "Cleanup failure must retain each discarded track exactly once")
+        XCTAssertTrue(try runtime.service(at: 3_000_000).isEmpty)
+        output.failStop = false
+        try runtime.terminate(at: 3_000_000)
+    }
+
+    func testScopeDiscardPreservesOverlappingFailureWithADifferentReason() throws {
+        let microphone = Device(), output = Device()
+        let runtime = MeetingCaptureRuntime(factory: { _ in [.microphone: microphone, .output: output] },
+            reportCaptureDiagnostic: { _ in })
+        try start(runtime, selection: bothSources)
+        microphone.emit()
+        output.emit()
+        let failure = MeetingAudioFailure.deviceFailure(operation: "render", status: -50)
+        microphone.receiver?.fail(failure)
+        output.onStop = { output.receiver?.fail(.invalidSelection) }
+        let gaps = try runtime.service(at: 2_000_000)
+        XCTAssertEqual(gaps, [
+            .init(source: .microphone, epoch: 1, startNanoseconds: 0,
+                endNanoseconds: 2_000_000, reason: .captureFailure(failure)),
+            .init(source: .microphone, epoch: 1, startNanoseconds: 0,
+                endNanoseconds: 1_000_000, reason: .captureFailure(.invalidSelection)),
+            .init(source: .output, epoch: 1, startNanoseconds: 0,
+                endNanoseconds: 1_000_000, reason: .captureFailure(.invalidSelection))
+        ], "A later scope fault must not erase a differently reasoned failure interval")
+        output.onStop = nil
+        try runtime.terminate(at: 2_000_000)
     }
 
     func testStartupCallbackFailureReportsFreshRingBeforeRollback() throws {

@@ -29,9 +29,13 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
     private let callbackFailures = MeetingAudioAtomicState()
     private let callbackDiagnostic = MeetingAudioFailureDiagnosticSlot()
     private let scopeDiagnostic = MeetingAudioFailureDiagnosticSlot()
+    private let recoveryDiagnostic = MeetingAudioFailureDiagnosticSlot()
     var failureDiagnostic: MeetingAudioFailureDiagnostic? {
         if callbackFailures.value & 1 != 0 { return scopeDiagnostic.latest }
-        return callbackDiagnostic.latest
+        // Reading diagnostics is allowed from an in-progress sample reader. Never enter
+        // the ring lock here, and never label an undiagnosed hard failure with a soft tag.
+        if callbackFailures.value & 255 != 0 { return callbackDiagnostic.latest }
+        return callbackDiagnostic.latest ?? recoveryDiagnostic.latest
     }
     private let closed = MeetingAudioAtomicState()
     private let scopeVerification = MeetingAudioAtomicState()
@@ -261,8 +265,7 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
               frames > 0,
               maximumFrameCount.map({ $0 > 0 && $0 <= Self.maximumCallbackFrames && frames >= $0 && frames <= 11_520_000 })
                 ?? (frames <= Self.maximumCallbackFrames),
-              firstFrameCount.map({ $0 > 0 && $0 <= (maximumFrameCount ?? frames) }) ?? true,
-              rate.map({ $0 == sampleRate }) ?? true else { failLocked(.invalidFormat, diagnostic: .init(.bufferFormat)); return nil }
+              firstFrameCount.map({ $0 > 0 && $0 <= (maximumFrameCount ?? frames) }) ?? true else { failLocked(.invalidFormat, diagnostic: .init(.bufferFormat)); return nil }
         guard sampleTime.isFinite, sampleTime.rounded() == sampleTime,
               abs(sampleTime) <= 9_007_199_254_732_800, host >= origin,
               let duration = MeetingAudioSampleClock.nanoseconds(frames: UInt64(frames), sampleRate: sampleRate),
@@ -270,6 +273,32 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         let observedEnd = max(host + duration, measuredEnd ?? 0)
         let callbackDuration = MeetingAudioSampleClock.nanoseconds(
             frames: UInt64(firstFrameCount ?? frames), sampleRate: sampleRate)!
+        // All arithmetic, authorization and trusted-clock checks precede recoverable
+        // classification. A valid rate alone cannot turn malformed timing into a restart.
+        let now = monotonicNow()
+        guard now >= startupClockBeganAt else {
+            failLocked(.invalidTimestamp, diagnostic: .init(.bufferTimestamp)); return nil
+        }
+        let changesClock = (rate.map { $0 != sampleRate } ?? false) ||
+            (nextSampleTime.map { $0 != sampleTime } ?? false)
+        if changesClock, let lease, observedEnd > lease.deadline {
+            failLocked(.leaseExpired, diagnostic: .init(.bufferLease)); return nil
+        }
+        if let rate, rate != sampleRate {
+            guard host >= previousObservedEnd else {
+                failLocked(.invalidTimestamp, diagnostic: .init(.bufferTimestamp)); return nil
+            }
+            // The old counter cannot be mapped using the new rate. Only the valid
+            // observed interval is evidence here; fresh PCM needs a new epoch.
+            failLocked(.sourceReconfigured, diagnostic: .init(.bufferFormat)); return nil
+        }
+        if let first = sampleOrigin, sampleTime >= first {
+            let offset = UInt64(sampleTime - first)
+            guard let endOffset = MeetingAudioSampleClock.nanoseconds(frames: offset + UInt64(frames), sampleRate: sampleRate),
+                  clockOrigin <= UInt64.max - endOffset else {
+                failLocked(.invalidTimestamp, diagnostic: .init(.bufferClockRange)); return nil
+            }
+        }
         if sampleOrigin == nil {
             var segmentOrigin = host
             if let gapEnd = startupGapEnd {
@@ -295,7 +324,10 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
               let first = sampleOrigin, sampleTime >= first else {
             if sampleDiscontinuities < UInt32.max { sampleDiscontinuities += 1 }
             if allowStartupRecovery, recoverStartupClockLocked(host: host, observedEnd: observedEnd, callbackDuration: callbackDuration) { return nil }
-            failLocked(.invalidTimestamp, diagnostic: .init(.bufferSampleContinuity))
+            // A new epoch may anchor a valid reset; it must never reinterpret this
+            // epoch's audio or relax the startup-only in-place recovery window.
+            failLocked(host >= previousObservedEnd ? .sourceReconfigured : .invalidTimestamp,
+                diagnostic: .init(.bufferSampleContinuity))
             return nil
         }
         let offset = UInt64(sampleTime - first)
@@ -405,6 +437,7 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
 
     func fail(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic) {
         if failure == .invalidSelection { scopeDiagnostic.store(diagnostic) }
+        else if failure == .sourceReconfigured { recoveryDiagnostic.store(diagnostic) }
         else { callbackDiagnostic.store(diagnostic) }
         fail(failure)
     }
@@ -421,17 +454,22 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         case .invalidTransition: bit = 32
         case .cleanupFailed: bit = 64
         case .leaseExpired: bit = 128
+        case .sourceReconfigured: bit = 256
         }
         callbackFailures.insert(bit)
         guard lock.try() else { return }
         defer { lock.unlock() }
-        guard accepting else { return }
         failLocked(failure)
     }
 
     private func failLocked(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic? = nil) {
-        if let diagnostic { callbackDiagnostic.store(diagnostic) }
-        if storedFailure == nil { storedFailure = failure }
+        if let diagnostic {
+            if failure == .sourceReconfigured { recoveryDiagnostic.store(diagnostic) }
+            else { callbackDiagnostic.store(diagnostic) }
+        }
+        if storedFailure == nil || (storedFailure == .sourceReconfigured && failure != .sourceReconfigured) {
+            storedFailure = failure
+        }
         accepting = false
     }
 
@@ -446,7 +484,7 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         }
         let flags = callbackFailures.value
         if flags & 1 != 0 { return .invalidSelection }
-        if let storedFailure { return storedFailure }
+        if let storedFailure, storedFailure != .sourceReconfigured { return storedFailure }
         if flags & 2 != 0 { return .invalidFormat }
         if flags & 4 != 0 { return .invalidTimestamp }
         if flags & 8 != 0 { return .bufferFull }
@@ -454,7 +492,16 @@ final class MeetingAudioBuffer: MeetingAudioReceiving {
         if flags & 32 != 0 { return .invalidTransition }
         if flags & 64 != 0 { return .cleanupFailed }
         if flags & 128 != 0 { return .leaseExpired }
+        if flags & 256 != 0 || storedFailure == .sourceReconfigured { return .sourceReconfigured }
         return nil
+    }
+
+    /// Gaps use the same immutable mapped clock as accepted PCM. Observed host
+    /// timing separately constrains cutoff admission; jitter cannot overlap the tail.
+    var recoveryBoundaryNanoseconds: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return max(origin, previousMappedEnd)
     }
 
     struct Diagnostics: Equatable {

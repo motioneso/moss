@@ -110,6 +110,7 @@ struct MeetingAudioFailureDiagnostic: Equatable {
         case .invalidSelection: reason = "invalidSelection"
         case .invalidFormat: reason = "invalidFormat"
         case .invalidTimestamp: reason = "invalidTimestamp"
+        case .sourceReconfigured: reason = "sourceReconfigured"
         case .bufferFull: reason = "bufferFull"
         case .leaseExpired: reason = "leaseExpired"
         case .deviceFailure: reason = "deviceFailure"
