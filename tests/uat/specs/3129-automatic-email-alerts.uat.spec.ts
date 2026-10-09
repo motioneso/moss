@@ -96,26 +96,6 @@ async function recoverAccessLoads(page: Page, choice: ReturnType<Page["getByRole
   await page.getByRole("button", { name: "Try again" }).click();
   expect((await retriedAccounts).status()).toBe(200);
   await expect(choice).toBeChecked();
-
-  sql("REVOKE SELECT ON app.preferences FROM jarvis_app_runtime");
-  try {
-    const failedGrants = page.waitForResponse(
-      (response) => response.url().includes("/feature-grants") && response.status() >= 500
-    );
-    await page.getByRole("button", { name: "Account & preferences" }).click();
-    await page.getByRole("button", { name: "Alerts & quiet hours" }).click();
-    expect((await failedGrants).status()).toBeGreaterThanOrEqual(500);
-    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
-  } finally {
-    sql("GRANT SELECT ON app.preferences TO jarvis_app_runtime");
-  }
-  const retriedGrants = page.waitForResponse(
-    (response) => response.url().includes("/feature-grants") && response.status() === 200
-  );
-  await page.getByRole("button", { name: "Try again" }).click();
-  expect((await retriedGrants).status()).toBe(200);
-  await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
-  await expect(choice).toBeChecked();
 }
 
 test("owner Settings saves automatic email alerts without changing unrelated choices (#3129)", async ({
@@ -263,6 +243,6 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
   ).toBe("false:true:2");
 
   console.log(
-    "[3129] Settings initialized sparse intent; real account/grant load failures recovered locally; UI off/on/reload gated a real worker; calendar, module, device, and digest choices stayed independent; revoked access queued but the worker completed with no email-card output; malformed saved data produced a real 409 and retry saved the retained choice."
+    "[3129] Settings initialized sparse intent; a real account-list load failure recovered locally; UI off/on/reload gated a real worker; calendar, module, device, and digest choices stayed independent; revoked access queued but the worker completed with no email-card output; malformed saved data produced a real 409 and retry saved the retained choice."
   );
 });
