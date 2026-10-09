@@ -16,6 +16,7 @@ import {
 const VALID_SOURCES = new Set<ProactiveSource>(["tasks", "calendar", "email", "notes"]);
 const PREF_KEYS = new Set([
   "version",
+  "automaticEmailAlerts",
   "enabled",
   "sources",
   "dailyCardCap",
@@ -27,17 +28,23 @@ const SOURCE_PREF_KEYS = new Set(["enabled", "dailyCardCap"]);
 
 export class ProactiveMonitoringPreferencesRepository {
   async get(scopedDb: DataContextDb): Promise<ProactiveMonitoringPreferenceV1> {
+    return (await this.getSaved(scopedDb)) ?? defaultProactiveMonitoringPreference();
+  }
+
+  async getSaved(
+    scopedDb: DataContextDb
+  ): Promise<ProactiveMonitoringPreferenceV1 | null | undefined> {
     assertDataContextDb(scopedDb);
     const row = await scopedDb.db
       .selectFrom("app.preferences")
       .select("value_json")
       .where("key", "=", PROACTIVE_MONITORING_PREFERENCE_KEY)
       .executeTakeFirst();
-    if (!row) return defaultProactiveMonitoringPreference();
+    if (!row) return undefined;
     try {
       return parse(row.value_json);
     } catch {
-      return defaultProactiveMonitoringPreference();
+      return null;
     }
   }
 
@@ -74,6 +81,9 @@ export function validateProactiveMonitoringPreference(
   }
   if (p.version !== 1) {
     throw new HttpError(400, "Invalid preference: version must be 1");
+  }
+  if (p.automaticEmailAlerts !== undefined && typeof p.automaticEmailAlerts !== "boolean") {
+    throw new HttpError(400, "Invalid preference: automaticEmailAlerts must be boolean");
   }
   if (typeof p.enabled !== "boolean") {
     throw new HttpError(400, "Invalid preference: enabled must be boolean");
@@ -138,7 +148,8 @@ function parse(raw: unknown): ProactiveMonitoringPreferenceV1 {
   }
   const p = raw as Record<string, unknown>;
   if (p.version !== 1) throw new Error("malformed preference");
-  return p as unknown as ProactiveMonitoringPreferenceV1;
+  validateProactiveMonitoringPreference(p);
+  return p;
 }
 
 function isLocalTime(s: string): boolean {
@@ -150,4 +161,28 @@ export function resolveSourcePreference(
   source: ProactiveSource
 ): ProactiveSourcePreference {
   return pref.sources[source] ?? { enabled: false, dailyCardCap: 3 };
+}
+
+/**
+ * `undefined` means no stored record, while `null` is a malformed stored record.
+ * Legacy records preserve their master/source-off decisions until the user saves an
+ * explicit email choice.
+ */
+export function resolveAutomaticEmailAlertsEnabled(
+  saved: ProactiveMonitoringPreferenceV1 | null | undefined
+): boolean {
+  if (saved === undefined) return true;
+  if (saved === null) return false;
+  if (typeof saved.automaticEmailAlerts === "boolean") return saved.automaticEmailAlerts;
+  return saved.enabled && saved.sources.email.enabled;
+}
+
+export function isProactiveSourceEnabled(
+  preference: ProactiveMonitoringPreferenceV1,
+  source: ProactiveSource,
+  saved: ProactiveMonitoringPreferenceV1 | null | undefined = preference
+): boolean {
+  return source === "email"
+    ? resolveAutomaticEmailAlertsEnabled(saved)
+    : preference.enabled && Boolean(preference.sources[source]?.enabled);
 }

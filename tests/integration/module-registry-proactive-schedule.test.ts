@@ -67,6 +67,16 @@ describe("proactive-monitoring schedule key", () => {
     expect(taskRow?.key.includes(":")).toBe(false);
   });
 
+  it("schedules explicit automatic email alerts without enabling another legacy source", async () => {
+    const pref = { ...defaultProactiveMonitoringPreference(), automaticEmailAlerts: true };
+
+    await buildReconcileProactiveSchedule(boss)(ids.userA, pref);
+
+    const rows = await scheduleRows();
+    expect(rows.some((row) => row.key === `${ids.userA}/email`)).toBe(true);
+    expect(rows.some((row) => row.key === `${ids.userA}/calendar`)).toBe(false);
+  });
+
   it("unschedules with the same slash-separated key when a source is disabled", async () => {
     const enabledPref = {
       ...defaultProactiveMonitoringPreference(),
