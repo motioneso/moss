@@ -78,6 +78,53 @@ async function accountRow(page: Page) {
   return page.locator(".acct").nth(index);
 }
 
+async function recoverAccessLoads(page: Page, choice: ReturnType<Page["getByRole"]>) {
+  sql("REVOKE SELECT ON app.connector_accounts FROM jarvis_app_runtime");
+  try {
+    const failedAccounts = page.waitForResponse(
+      (response) => response.url().endsWith("/api/connectors/accounts") && response.status() >= 500
+    );
+    await page.reload();
+    expect((await failedAccounts).status()).toBeGreaterThanOrEqual(500);
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  } finally {
+    sql("GRANT SELECT ON app.connector_accounts TO jarvis_app_runtime");
+  }
+  const retriedAccounts = page.waitForResponse(
+    (response) => response.url().endsWith("/api/connectors/accounts") && response.status() === 200
+  );
+  await page.getByRole("button", { name: "Try again" }).click();
+  expect((await retriedAccounts).status()).toBe(200);
+  await expect(choice).toBeChecked();
+
+  sql("REVOKE SELECT ON app.preferences FROM jarvis_app_runtime");
+  try {
+    const failedGrants = page.waitForResponse(
+      (response) => response.url().includes("/feature-grants") && response.status() >= 500
+    );
+    await page.reload();
+    expect((await failedGrants).status()).toBeGreaterThanOrEqual(500);
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  } finally {
+    sql("GRANT SELECT ON app.preferences TO jarvis_app_runtime");
+  }
+  const retriedGrants = page.waitForResponse(
+    (response) => response.url().includes("/feature-grants") && response.status() === 200
+  );
+  await page.getByRole("button", { name: "Try again" }).click();
+  expect((await retriedGrants).status()).toBe(200);
+  const retriedSettings = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/me/proactive-monitoring-settings") &&
+      response.request().method() === "GET" &&
+      response.status() === 200
+  );
+  await page.getByRole("button", { name: "Try again" }).click();
+  expect((await retriedSettings).status()).toBe(200);
+  await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+  await expect(choice).toBeChecked();
+}
+
 test("owner Settings saves automatic email alerts without changing unrelated choices (#3129)", async ({
   page
 }) => {
@@ -98,6 +145,29 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
     )
   ).toBe("t");
 
+  const mutedModule = await page.request.put("/api/me/notification-preferences/briefings", {
+    data: { enabled: false }
+  });
+  expect(mutedModule.status()).toBe(200);
+  const registeredDevice = await page.request.post("/api/notifications/push/subscriptions", {
+    data: {
+      endpoint: "https://push.example.test/send/uat3129",
+      keys: {
+        p256dh:
+          "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
+        auth: "tBHItJI5svbpez7KI4CCXg"
+      }
+    }
+  });
+  expect(registeredDevice.status()).toBe(200);
+  const modulesBefore = await page.request.get("/api/me/notification-preferences");
+  expect(modulesBefore.status()).toBe(200);
+  const modulePreferences = await modulesBefore.json();
+  const devicesBefore = await page.request.get("/api/notifications/push/config");
+  expect(devicesBefore.status()).toBe(200);
+  const devicePreferences = await devicesBefore.json();
+  expect((devicePreferences as { enabledDevices: unknown[] }).enabledDevices).toHaveLength(1);
+
   const setCalendar = await page.request.patch("/api/me/proactive-monitoring-settings", {
     data: { sources: { calendar: { enabled: true, dailyCardCap: 2 } } }
   });
@@ -105,6 +175,8 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
   const digestBefore = await page.request.get("/api/me/notification-digest-preference");
   expect(digestBefore.status()).toBe(200);
   const digest = await digestBefore.json();
+
+  await recoverAccessLoads(page, choice);
 
   const savedOff = page.waitForResponse(
     (response) =>
@@ -118,9 +190,9 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
   await expect(choice).not.toBeChecked();
   expect(
     sql(
-      `SELECT (value_json ->> 'automaticEmailAlerts') || ':' || (value_json #>> '{sources,calendar,dailyCardCap}') FROM app.preferences WHERE owner_user_id = '${UAT_ADMIN_ID}' AND key = 'proactive.monitoring.v1'`
+      `SELECT (value_json ->> 'automaticEmailAlerts') || ':' || (value_json #>> '{sources,calendar,enabled}') || ':' || (value_json #>> '{sources,calendar,dailyCardCap}') FROM app.preferences WHERE owner_user_id = '${UAT_ADMIN_ID}' AND key = 'proactive.monitoring.v1'`
     )
-  ).toBe("false:2");
+  ).toBe("false:true:2");
   await refresh(page, 0);
 
   const savedOn = page.waitForResponse(
@@ -136,6 +208,12 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
   const digestAfter = await page.request.get("/api/me/notification-digest-preference");
   expect(digestAfter.status()).toBe(200);
   expect(await digestAfter.json()).toEqual(digest);
+  const modulesAfter = await page.request.get("/api/me/notification-preferences");
+  expect(modulesAfter.status()).toBe(200);
+  expect(await modulesAfter.json()).toEqual(modulePreferences);
+  const devicesAfter = await page.request.get("/api/notifications/push/config");
+  expect(devicesAfter.status()).toBe(200);
+  expect(await devicesAfter.json()).toEqual(devicePreferences);
 
   await page.goto(`${env("JARVIS_UAT_BASE_URL")}/settings?section=connections`);
   const account = await accountRow(page);
@@ -151,7 +229,17 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
   await expect(
     page.getByText("An email connection was revoked. Your alert choice is saved.")
   ).toBeVisible();
-  await refresh(page, 0);
+  await refresh(page, 1);
+  expect(
+    sql(
+      `SELECT cursor_json ? 'checkedAt' AND last_error_class IS NULL AND failure_count = 0 FROM app.proactive_monitor_state WHERE owner_user_id = '${UAT_ADMIN_ID}' AND source = 'email'`
+    )
+  ).toBe("t");
+  expect(
+    sql(
+      `SELECT count(*) FROM app.proactive_cards WHERE owner_user_id = '${UAT_ADMIN_ID}' AND source = 'email'`
+    )
+  ).toBe("0");
 
   sql(`UPDATE app.preferences SET value_json = '{"version":1,"broken":true}'::jsonb
     WHERE owner_user_id = '${UAT_ADMIN_ID}' AND key = 'proactive.monitoring.v1'`);
@@ -175,8 +263,13 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
   await page.getByRole("button", { name: "Try again" }).click();
   expect((await retriedSave).status()).toBe(200);
   await expect(choice).not.toBeChecked();
+  expect(
+    sql(
+      `SELECT (value_json ->> 'automaticEmailAlerts') || ':' || (value_json #>> '{sources,calendar,enabled}') || ':' || (value_json #>> '{sources,calendar,dailyCardCap}') FROM app.preferences WHERE owner_user_id = '${UAT_ADMIN_ID}' AND key = 'proactive.monitoring.v1'`
+    )
+  ).toBe("false:true:2");
 
   console.log(
-    "[3129] Settings initialized sparse intent; UI off/on/reload gated a real worker; calendar source and digest stayed independent; revoked access stayed local; malformed saved data produced a real 409 and retry saved the retained choice."
+    "[3129] Settings initialized sparse intent; real account/grant load failures recovered locally; UI off/on/reload gated a real worker; calendar, module, device, and digest choices stayed independent; revoked access queued but the worker completed with no email-card output; malformed saved data produced a real 409 and retry saved the retained choice."
   );
 });

@@ -131,30 +131,31 @@ beforeEach(async () => {
   });
 });
 
-it("records sparse email-alert intent without overwriting a concurrent saved-off choice", async () => {
+it("does not overwrite an already saved-off email choice with unrelated preferences", async () => {
   const preferencesRepository = new ProactiveMonitoringPreferencesRepository();
+  const savedOff = {
+    ...defaultProactiveMonitoringPreference(),
+    automaticEmailAlerts: false,
+    sources: {
+      ...defaultProactiveMonitoringPreference().sources,
+      calendar: { enabled: true, dailyCardCap: 2 }
+    },
+    quietHours: { enabled: false, startLocalTime: "09:00", endLocalTime: "17:00" },
+    updatedAt: "2026-10-08T00:00:00.000Z"
+  };
 
-  await Promise.all([
-    context.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
-      preferencesRepository.initializeAutomaticEmailAlerts(scopedDb)
-    ),
-    appContext.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
-      preferencesRepository.upsert(scopedDb, {
-        version: 1,
-        automaticEmailAlerts: false,
-        updatedAt: new Date().toISOString()
-      })
-    )
-  ]);
+  await appContext.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+    preferencesRepository.upsert(scopedDb, savedOff)
+  );
+  await context.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+    preferencesRepository.initializeAutomaticEmailAlerts(scopedDb)
+  );
 
   const saved = await context.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
     preferencesRepository.getSaved(scopedDb)
   );
 
-  expect(saved).not.toBeNull();
-  expect(saved?.raw).toMatchObject({ version: 1, automaticEmailAlerts: false });
-  expect(saved?.raw).not.toHaveProperty("quietHours");
-  expect(saved?.raw).not.toHaveProperty("sources");
+  expect(saved?.raw).toEqual(savedOff);
   expect(resolveAutomaticEmailAlertsEnabled(saved)).toBe(false);
 });
 
