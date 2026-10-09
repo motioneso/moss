@@ -61,7 +61,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Every bank transaction grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, and Confirm all.",
+        "description": "Every bank transaction grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, Confirm all, a category picker on every confirmed row to change its category, and a Show more button when a month has more than 200 rows.",
         "path": "/transactions"
       },
       {
@@ -73,7 +73,7 @@
       {
         "id": "finance.start",
         "label": "Getting started",
-        "description": "Connect a first bank and build a first budget from three months of history. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin.",
+        "description": "Connect a first bank, let Moss sort the spending, then build the budget together. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin.",
         "path": "/start"
       }
     ],
@@ -159,7 +159,7 @@
           "search": { "type": "string" },
           "pendingOnly": { "type": "boolean" },
           "needsLookOnly": { "type": "boolean" },
-          "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+          "limit": { "type": "integer", "minimum": 1, "maximum": 2000 }
         }
       },
       "handler": "transactions.query"
@@ -280,6 +280,7 @@
         },
         "required": ["accountId", "shared"]
       },
+      "actionFamilyId": "sharing",
       "handler": "account.set-shared"
     },
     {
@@ -332,6 +333,13 @@
       "description": "Start a bank connection.",
       "defaultTier": "always_confirm",
       "allowedTiers": ["always_confirm"]
+    },
+    {
+      "id": "sharing",
+      "label": "Share an account with the household",
+      "description": "Show or hide one of your bank accounts to the people you live with.",
+      "defaultTier": "always_confirm",
+      "allowedTiers": ["always_confirm"]
     }
   ],
   "worker": {
@@ -373,7 +381,13 @@
           "fields": {
             "month": { "type": "identifier" },
             "categoryId": { "type": "identifier" },
-            "amountCents": { "type": "integer", "min": -100000000, "max": 100000000 }
+            "amountCents": { "type": "integer", "min": -100000000, "max": 100000000 },
+            "categoryIds": { "type": "array", "maxItems": 20, "items": { "type": "identifier" } },
+            "amountsCents": {
+              "type": "array",
+              "maxItems": 20,
+              "items": { "type": "integer", "min": -100000000, "max": 100000000 }
+            }
           }
         }
       },

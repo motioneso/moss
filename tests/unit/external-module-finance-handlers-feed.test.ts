@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  contentHash,
   DEFAULT_CATEGORIES,
   itemKey,
   kvStore,
@@ -240,7 +241,7 @@ describe("finance feed handlers (#1147)", () => {
     );
   });
 
-  it("query defaults limit to 50, allows up to 200, rejects beyond", async () => {
+  it("query defaults limit to 50, allows up to 2000, rejects beyond, and reports the total", async () => {
     const kv = fakeKv();
     await seedAccount(kv, "acc-1");
     await kv.set(NS.transactions, "acc-1:2026-07", {
@@ -252,7 +253,9 @@ describe("finance feed handlers (#1147)", () => {
     const handler = (input: Record<string, unknown>) => query({ actorUserId: ACTOR, ...input });
     expect(ids(await handler({})).length).toBe(50);
     expect(ids(await handler({ limit: 200 })).length).toBe(60);
-    await expect(handler({ limit: 201 })).rejects.toThrow("at most 200");
+    await expect(handler({ limit: 2001 })).rejects.toThrow("at most 2000");
+    // The total lets the screen offer Show more (review A11).
+    expect((await handler({ limit: 10 })).totalCount).toBe(60);
     await expect(handler({ month: "July 2026" })).rejects.toThrow("month must be YYYY-MM");
   });
 
@@ -657,5 +660,99 @@ describe("finance review (#3176)", () => {
       )
     ).rejects.toThrow();
     expect(JSON.stringify(await rows(kv))).toBe(before);
+  });
+
+  it("logs a user activity row per changed row, a confirm row per unchanged row (review finding 4)", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const activity: ActivityInput[] = [];
+    await reviewApplyHandler(fakePorts(kv, undefined, activity))(
+      envelope({
+        transactionIds: ["r-1", "r-2"],
+        accountIds: ["acc-1", "acc-1"],
+        months: ["2026-07", "2026-07"],
+        categoryIds: ["groceries", "transport"]
+      })
+    );
+    expect(activity.map((entry) => [entry.actor, entry.kind])).toEqual([
+      ["user", "transaction.categorize"],
+      ["user", "transaction.confirm"]
+    ]);
+    expect(activity[0]!.params).toMatchObject({
+      transactionId: "r-1",
+      categoryId: "groceries",
+      previousCategoryId: "dining"
+    });
+    expect(activity[0]!.undo).toMatchObject({ transactionId: "r-1", categoryId: "dining" });
+  });
+
+  it("logs the merchant rule it makes (review finding 4)", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const activity: ActivityInput[] = [];
+    await reviewApplyHandler(fakePorts(kv, undefined, activity))(
+      envelope({
+        transactionIds: ["r-1"],
+        accountIds: ["acc-1"],
+        months: ["2026-07"],
+        categoryIds: ["groceries"],
+        createRule: true
+      })
+    );
+    expect(activity.map((entry) => entry.kind)).toEqual([
+      "transaction.categorize",
+      "merchant-rule.set"
+    ]);
+    expect(activity.every((entry) => entry.actor === "user")).toBe(true);
+    expect(activity[1]!.params).toMatchObject({ categoryId: "groceries" });
+  });
+
+  it("writes one rule per merchant and removes the old-format key (review finding 5)", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const legacyKey = contentHash("blue bottle");
+    await kv.set(NS.rules, legacyKey, {
+      payeeKey: "blue bottle",
+      categoryId: "dining",
+      createdAt: "2026-06-01T00:00:00Z"
+    });
+    await reviewApplyHandler(fakePorts(kv))(
+      envelope({
+        transactionIds: ["r-1"],
+        accountIds: ["acc-1"],
+        months: ["2026-07"],
+        categoryIds: ["groceries"],
+        createRule: true
+      })
+    );
+    expect(await kv.list(NS.rules)).toEqual([`rule:${legacyKey}`]);
+    expect(await kv.get(NS.rules, `rule:${legacyKey}`)).toMatchObject({ categoryId: "groceries" });
+  });
+
+  it("loads categories and each month chunk once for the whole batch (review finding 9)", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const ports = fakePorts(kv);
+    const inner = await ports.store();
+    let chunkReads = 0;
+    const counting: WorkerPorts = {
+      ...ports,
+      store: async () => ({
+        ...inner,
+        getTransactionChunk: async (accountId, month) => {
+          chunkReads += 1;
+          return inner.getTransactionChunk(accountId, month);
+        }
+      })
+    };
+    await reviewApplyHandler(counting)(
+      envelope({
+        transactionIds: ["r-1", "r-2", "r-3"],
+        accountIds: ["acc-1", "acc-1", "acc-1"],
+        months: ["2026-07", "2026-07", "2026-07"],
+        categoryIds: ["dining", "transport", "rent-mortgage"]
+      })
+    );
+    expect(chunkReads).toBe(1);
   });
 });

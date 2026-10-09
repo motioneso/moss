@@ -9,6 +9,26 @@
 import type { FinanceFetch, FinanceFetchRequest, PlaidEnv } from "./types.js";
 import { FinanceFetchError } from "./types.js";
 
+// Plaid's lookup only finds a bank in the countries named, so name every supported one.
+const INSTITUTION_COUNTRIES = [
+  "US",
+  "CA",
+  "GB",
+  "IE",
+  "FR",
+  "ES",
+  "NL",
+  "DE",
+  "IT",
+  "PL",
+  "DK",
+  "NO",
+  "SE",
+  "EE",
+  "LT",
+  "LV"
+];
+
 export type { PlaidEnv } from "./types.js";
 
 export type PlaidCreds = { clientId: string; secret: string };
@@ -240,7 +260,7 @@ export function createPlaid(
     async institutionGet(institutionId) {
       const json = await call("/institutions/get_by_id", {
         institution_id: institutionId,
-        country_codes: ["US"]
+        country_codes: INSTITUTION_COUNTRIES
       });
       const institution = (json.institution ?? {}) as Json;
       const name = typeof institution.name === "string" ? institution.name.trim() : "";

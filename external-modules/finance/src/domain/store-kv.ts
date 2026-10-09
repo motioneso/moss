@@ -172,6 +172,10 @@ export function kvStore(kv: FinanceKv): FinanceStore {
 
     // The activity trail lives in SQL only; the KV store (migration source
     // and unit-test fake) keeps no trail.
-    async appendActivity() {}
+    async appendActivity() {},
+
+    async lastLoggedAssignment() {
+      return null;
+    }
   };
 }

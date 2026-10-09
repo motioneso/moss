@@ -6,7 +6,7 @@
 // Fetch starts on first subscribe; snapshots are stable object identities so
 // getSnapshot is referentially safe.
 import { useCallback, useSyncExternalStore } from "@moss/module-web-sdk";
-import { invokeTool, type ToolOutcome } from "./api";
+import { invokeTool, resetWriteQueues, type ToolOutcome } from "./api";
 
 export type QuerySnapshot<T> =
   | { status: "loading" }
@@ -74,4 +74,5 @@ export function invalidateQueries(): void {
 
 export function __resetStoreForTests(): void {
   cache.clear();
+  resetWriteQueues();
 }

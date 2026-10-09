@@ -46,7 +46,7 @@ interface Call {
 }
 let calls: Call[] = [];
 
-function fakeFetch(result: Record<string, unknown>) {
+function fakeFetch(result: Record<string, unknown>, queueStatus = 202) {
   calls = [];
   vi.stubGlobal(
     "fetch",
@@ -54,7 +54,7 @@ function fakeFetch(result: Record<string, unknown>) {
       const body = init?.body ? JSON.parse(init.body) : {};
       calls.push({ url, body });
       if (url.includes("/queues/")) {
-        return { ok: true, status: 202, json: async () => ({ jobId: "j" }) };
+        return { ok: queueStatus === 202, status: queueStatus, json: async () => ({ jobId: "j" }) };
       }
       return {
         ok: true,
@@ -126,6 +126,54 @@ describe("Transactions screen (#3176)", () => {
     // Rows confirmed here leave the count and the button at once.
     expect(text(renderer)).not.toContain("Confirm all");
     expect(text(renderer)).toContain("Needs a look (0)");
+  });
+
+  it("puts the rows back when the confirm request fails (review finding 6)", async () => {
+    fakeFetch({ ...base, transactions: rows, needsLookCount: 2 }, 500);
+    const renderer = await render();
+    await act(async () => {
+      button(renderer, "Confirm all 2").props.onClick();
+    });
+    await act(async () => {});
+    expect(text(renderer)).toContain("Confirm all 2");
+    expect(text(renderer)).toContain("Needs a look (2)");
+  });
+
+  it("lets a confirmed row change category, sending the new one (review A7)", async () => {
+    fakeFetch({ ...base, transactions: rows, needsLookCount: 2 });
+    const renderer = await render();
+    const picker = renderer.root.findAll(
+      (node) => node.props["aria-label"] === "Category for Payee c" && typeof node.type !== "string"
+    )[0]!;
+    await act(async () => {
+      picker.props.onChange({ target: { value: "dining" } });
+    });
+    const [call] = queueCalls();
+    expect(call!.body.params).toMatchObject({
+      transactionIds: ["c"],
+      categoryIds: ["dining"]
+    });
+    expect(call!.body.params).not.toHaveProperty("createRule");
+  });
+
+  it("offers Show more when the month has more rows than loaded (review A11)", async () => {
+    fakeFetch({ ...base, transactions: rows, needsLookCount: 2, totalCount: 450 });
+    const renderer = await render();
+    const queryInputs = () =>
+      calls
+        .filter((call) => !call.url.includes("/queues/"))
+        .map((call) => (call.body.input as { limit?: number }).limit);
+    expect(queryInputs()).toEqual([200]);
+    await act(async () => {
+      button(renderer, "Show more").props.onClick();
+    });
+    await act(async () => {});
+    expect(queryInputs().at(-1)).toBe(400);
+  });
+
+  it("hides Show more when everything is loaded", async () => {
+    fakeFetch({ ...base, transactions: rows, needsLookCount: 2, totalCount: 3 });
+    expect(text(await render())).not.toContain("Show more");
   });
 
   it("hides Confirm all when nothing needs a look", async () => {

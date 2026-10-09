@@ -1,7 +1,14 @@
 // tests/unit/external-module-finance-web-format.test.ts
 import { describe, expect, it } from "vitest";
 
-import { applyPending, settlePending } from "../../external-modules/finance/src/web/assign.js";
+import {
+  applyPending,
+  checkDelayMs,
+  chunkReviewRows,
+  mergeBudgetParams,
+  settlePending,
+  trackChecks
+} from "../../external-modules/finance/src/web/assign.js";
 
 import {
   centsToAmountInput,
@@ -69,5 +76,62 @@ describe("typed budget amounts", () => {
     expect(
       settlePending({ groceries: 70_000, dining: 5_000, fun: 0 }, { groceries: 70_000, dining: 1 })
     ).toEqual({ confirmed: ["groceries", "fun"], mismatched: ["dining"] });
+  });
+
+  it("counts checks per category so a new edit starts fresh (review finding 7)", () => {
+    const first = trackChecks({}, { confirmed: [], mismatched: ["groceries"] }, 3);
+    const second = trackChecks(first.counts, { confirmed: [], mismatched: ["groceries"] }, 3);
+    expect(second.counts).toEqual({ groceries: 2 });
+    // A second category typed later does not inherit groceries' count.
+    const third = trackChecks(
+      second.counts,
+      { confirmed: [], mismatched: ["groceries", "dining"] },
+      3
+    );
+    expect(third.giveUp).toEqual(["groceries"]);
+    expect(third.counts).toEqual({ dining: 1 });
+    expect(third.retryAttempt).toBe(1);
+  });
+
+  it("waits longer between later checks, up to a ceiling", () => {
+    expect(checkDelayMs(1)).toBe(2000);
+    expect(checkDelayMs(3)).toBe(6000);
+    expect(checkDelayMs(50)).toBe(10_000);
+  });
+
+  it("merges waiting budget commands, newest amount wins, and refuses past the limit", () => {
+    const a = { month: "2026-07", categoryIds: ["groceries"], amountsCents: [100] };
+    const b = { month: "2026-07", categoryIds: ["dining", "groceries"], amountsCents: [5, 300] };
+    expect(mergeBudgetParams(a, b)).toEqual({
+      month: "2026-07",
+      categoryIds: ["groceries", "dining"],
+      amountsCents: [300, 5]
+    });
+    expect(mergeBudgetParams(a, { ...b, month: "2026-08" })).toBeNull();
+    const full = {
+      month: "2026-07",
+      categoryIds: Array.from({ length: 20 }, (_, n) => `c${n}`),
+      amountsCents: Array.from({ length: 20 }, () => 1)
+    };
+    expect(mergeBudgetParams(full, a)).toBeNull();
+  });
+
+  it("splits 200 confirm rows into commands that each fit 2048 bytes (review A5)", () => {
+    const rows = Array.from({ length: 200 }, (_, n) => ({
+      transactionId: `plaid-transaction-id-${String(n).padStart(20, "0")}`,
+      accountId: "plaid-account-id-000000000000000000000",
+      month: "2026-07",
+      categoryId: "rent-mortgage"
+    }));
+    const chunks = chunkReviewRows(rows, true);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(JSON.stringify(chunk).length).toBeLessThanOrEqual(2048);
+      expect(chunk.createRule).toBe(true);
+    }
+    expect(chunks.flatMap((chunk) => chunk.transactionIds)).toEqual(
+      rows.map((row) => row.transactionId)
+    );
+    expect(chunkReviewRows([], false)).toEqual([]);
   });
 });

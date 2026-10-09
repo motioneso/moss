@@ -118,6 +118,22 @@ describe("Budget screen (#3173)", () => {
     expect(window.location.pathname).toBe("/m/finance/start");
   });
 
+  it("stays on Budget with categories at zero when a bank is linked but no budget exists (review finding 1)", async () => {
+    window.history.pushState({}, "", "/m/finance");
+    fakeFetch(() => ({
+      status: 200,
+      body: {
+        invocation: {
+          status: "succeeded",
+          result: status({ hasBudget: false, state: { categories: {} } })
+        }
+      }
+    }));
+    const out = text(await render());
+    expect(window.location.pathname).toBe("/m/finance");
+    expect(out).toContain("Groceries");
+  });
+
   it("shows a broken state when the read fails", async () => {
     fakeFetch(() => ({ status: 500, body: {} }));
     expect(text(await render())).toContain("Something went wrong");
@@ -174,7 +190,11 @@ describe("Budget screen typing (#3174)", () => {
     const queued = calls.find((call) => call.url.includes("/queues/finance.budget-apply/run"));
     expect(queued?.body).toEqual({
       jobKind: "finance.budget-apply",
-      params: { month: expect.any(String), categoryId: "groceries", amountCents: 70_000 }
+      params: {
+        month: expect.any(String),
+        categoryIds: ["groceries"],
+        amountsCents: [70_000]
+      }
     });
     expect(groceriesBox(renderer).props.value).toBe("$700.00");
     // Available moves by the difference: 231.73 plus 50.00.

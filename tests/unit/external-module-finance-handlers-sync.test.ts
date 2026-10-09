@@ -475,7 +475,11 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     );
     expect(byId["t-rule"]).toMatchObject({ categoryId: "subscriptions", categorizedBy: "rule" });
     expect(byId["t-pfc"]).toMatchObject({ categoryId: "dining", categorizedBy: "plaid-map" });
-    expect(byId["t-none"]).toMatchObject({ categoryId: null, categorizedBy: null });
+    expect(byId["t-none"]).toMatchObject({
+      categoryId: null,
+      categorizedBy: null,
+      reviewState: "needs_look"
+    });
 
     // First read seeds the default taxonomy so the feed and rules always
     // have a category list to resolve against.
@@ -483,6 +487,31 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
       categories: { id: string }[];
     };
     expect(taxonomy.categories.map((category) => category.id)).toContain("dining");
+  });
+
+  it("lets the newest rule win when one merchant holds two (review finding 5)", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    await kv.set(NS.rules, "rule:newer", {
+      payeeKey: "coffee shop",
+      categoryId: "dining",
+      createdAt: "2026-08-01T00:00:00Z"
+    });
+    await kv.set(NS.rules, "aaa-older", {
+      payeeKey: "coffee shop",
+      categoryId: "subscriptions",
+      createdAt: "2026-07-01T00:00:00Z"
+    });
+    const plaid = fakePlaid({
+      transactionsSync: async () =>
+        syncPage({ added: [tx({ transaction_id: "t-rule", name: "COFFEE SHOP #42" })] })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)({ actorUserId: "00000000-0000-4000-8000-0000000000aa" });
+    const chunk = (await kv.get(NS.transactions, "acc-1:2026-07")) as {
+      transactions: Record<string, unknown>[];
+    };
+    expect(chunk.transactions[0]).toMatchObject({ categoryId: "dining" });
   });
 
   describe("review state (#3175)", () => {

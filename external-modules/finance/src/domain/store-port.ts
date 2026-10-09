@@ -65,4 +65,7 @@ export interface FinanceStore {
 
   /** Appends one activity row for the acting user, stamped with the current time. */
   appendActivity(entry: ActivityInput): Promise<void>;
+
+  /** Amount of the newest budget.assign row for one category and month; null when none. */
+  lastLoggedAssignment(month: string, categoryId: string): Promise<number | null>;
 }

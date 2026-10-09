@@ -70,7 +70,26 @@ export function decideReview(input: {
 /** Plaid batches at count:100; 40 keeps prompts small on economy-tier models. */
 const AI_BATCH_SIZE = 40;
 
+/**
+ * Rows still without a category after every step wait in Needs a look, so the
+ * user sees what Moss could not place. Placed rows keep their review state.
+ */
 export async function categorize(
+  records: TransactionRecord[],
+  rules: Rule[],
+  categories: Category[],
+  ai: CategorizeAi | null,
+  review: ReviewPolicy
+): Promise<TransactionRecord[]> {
+  const placed = await categorizeSteps(records, rules, categories, ai, review);
+  return placed.map((record) =>
+    record.categoryId === null && record.reviewState !== "needs_look"
+      ? { ...record, reviewState: "needs_look" }
+      : record
+  );
+}
+
+async function categorizeSteps(
   records: TransactionRecord[],
   rules: Rule[],
   categories: Category[],

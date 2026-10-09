@@ -91,4 +91,17 @@ describe("readyToAssignCents (#3173)", () => {
     // Paying the card from checking: checking drops 120.00, the card owes nothing.
     expect(readyToAssignCents([checking(88_000), card(0)], after)).toBe(readyBefore);
   });
+
+  it("counts cash accounts and credit cards only, not investments or loans (review finding 3)", () => {
+    const ready = readyToAssignCents(
+      [
+        checking(100_000),
+        card(20_000),
+        { type: "investment", balanceCents: 900_000 },
+        { type: "loan", balanceCents: 250_000 }
+      ],
+      {}
+    );
+    expect(ready).toBe(80_000);
+  });
 });

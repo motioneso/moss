@@ -49,6 +49,10 @@ describe("finance manifest app map (#3177)", () => {
     expect(countTopLevelKeys(readFileSync(manifestPath, "utf8"), "appMap")).toBe(1);
   });
 
+  it("promises no history-built first budget, which phase 1 does not do (review A4)", () => {
+    expect(readFileSync(manifestPath, "utf8")).not.toMatch(/three months|months of history/i);
+  });
+
   it("the duplicate-key check really counts a repeated block", () => {
     expect(countTopLevelKeys('{"appMap":{"a":1},"x":{"appMap":2},"appMap":{}}', "appMap")).toBe(2);
   });
@@ -129,8 +133,15 @@ describe("finance manifest contract (#1146)", () => {
     ).toEqual([
       ["sorting", "ask_each_time"],
       ["sorting_new", "ask_each_time"],
-      ["bank_connections", "always_confirm"]
+      ["bank_connections", "always_confirm"],
+      ["sharing", "always_confirm"]
     ]);
+    // Sharing balances with the household must always ask, even unattended (review A1).
+    expect(toolByName("finance.account.set-shared").actionFamilyId).toBe("sharing");
+    expect(
+      (result.manifest.assistantActionFamilies ?? []).find((family) => family.id === "sharing")
+        ?.allowedTiers
+    ).toEqual(["always_confirm"]);
     // FIN-03 (#1148): budget reads are free; assigning money is a mutation,
     // so the assistant path confirms (D4) while the web path enqueues
     // finance.budget-apply instead (D3).
@@ -230,7 +241,14 @@ describe("finance manifest contract (#1146)", () => {
             categoryId: { type: "identifier" },
             // The bounded-integer param type (module-params.ts) is what makes
             // an amount a legal queue param under D6's command-param carve-out.
-            amountCents: { type: "integer", min: -100000000, max: 100000000 }
+            amountCents: { type: "integer", min: -100000000, max: 100000000 },
+            // Batch shape: parallel arrays, at most twenty categories per job.
+            categoryIds: { type: "array", maxItems: 20, items: { type: "identifier" } },
+            amountsCents: {
+              type: "array",
+              maxItems: 20,
+              items: { type: "integer", min: -100000000, max: 100000000 }
+            }
           }
         }
       },

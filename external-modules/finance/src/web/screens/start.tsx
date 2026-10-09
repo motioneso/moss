@@ -55,7 +55,7 @@ export function StartView(props: StartViewProps): ReactNodeLike {
         tone="field"
         eyebrow="Finance"
         title="Run your money with Moss"
-        lede="Connect a bank and Moss builds your first budget from the last three months."
+        lede="Connect a bank and Moss sorts your spending. Then you build your budget together."
       />
       <section className="fnm-stack">
         <SectionHead title="Three steps" rule />

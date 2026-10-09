@@ -105,6 +105,13 @@ describe("sqlStore (FIN-06b #1166)", () => {
     expect(db.calls[0]!.params.slice(-2)).toEqual(["needs_look", 0.42]);
   });
 
+  it("putTransaction stores an uncategorized row with no review state as needs_look", async () => {
+    const db = fakeDb();
+    const { reviewState: _drop, ...bare } = tx({ id: "u", categoryId: null });
+    await sqlStore(db).putTransaction(bare);
+    expect(db.calls[0]!.params.slice(-2)).toEqual(["needs_look", null]);
+  });
+
   it("getTransactionChunk returns null on zero rows", async () => {
     const store = sqlStore(fakeDb([[]]));
     expect(await store.getTransactionChunk("acc1", "2026-07")).toBeNull();
@@ -309,6 +316,19 @@ describe("sqlStore (FIN-06b #1166)", () => {
       '{"amountCents":0}'
     ]);
     expect(db.calls[1]!.params).toEqual(["moss", "x", "{}", null]);
+  });
+
+  it("lastLoggedAssignment reads the newest budget.assign amount, null when none", async () => {
+    const db = fakeDb([[{ amount: "5000" }], []]);
+    const store = sqlStore(db);
+    expect(await store.lastLoggedAssignment("2026-07", "groceries")).toBe(5000);
+    expect(await store.lastLoggedAssignment("2026-07", "dining")).toBeNull();
+    expect(db.calls[0]!.text).toBe(
+      "SELECT params->>'amountCents' AS amount FROM app.finance_activity " +
+        "WHERE kind = 'budget.assign' AND params->>'month' = $1 AND params->>'categoryId' = $2 " +
+        "ORDER BY at DESC LIMIT 1"
+    );
+    expect(db.calls[0]!.params).toEqual(["2026-07", "groceries"]);
   });
 
   it("getLedger builds {assignments} with Number(assigned_cents), null when empty", async () => {
