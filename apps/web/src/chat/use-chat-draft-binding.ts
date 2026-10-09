@@ -76,19 +76,21 @@ export function useChatDraftBinding(input: {
         : surface === "drawer" && !mainThreadId && drafts[fallbackKey] !== undefined
           ? fallbackKey
           : (selectedThreadId ?? fallbackKey);
-  const changeDraft = (draft: string) => {
-    if (draftKey === fallbackKey) {
-      if (!draft) origin.current = null;
-      else if (draft !== drafts[fallbackKey]) {
-        origin.current = { surface, generation: generation.current };
-      }
-    }
+  const changeDraft = (action: SetStateAction<string>) => {
     setDrafts((current) => {
-      if (!draft && draftKey === activeBoundKey) {
+      const draft = current[draftKey] ?? "";
+      const nextDraft = typeof action === "function" ? action(draft) : action;
+      if (draftKey === fallbackKey) {
+        if (!nextDraft) origin.current = null;
+        else if (nextDraft !== current[fallbackKey]) {
+          origin.current = { surface, generation: generation.current };
+        }
+      }
+      if (!nextDraft && draftKey === activeBoundKey) {
         const { [draftKey]: _bound, ...rest } = current;
         return rest;
       }
-      return { ...current, [draftKey]: draft };
+      return { ...current, [draftKey]: nextDraft };
     });
   };
   return { changeDraft, draftKey };

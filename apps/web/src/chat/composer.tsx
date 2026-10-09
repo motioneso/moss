@@ -70,7 +70,7 @@ export function Composer(props: {
   readonly initialText?: string;
   /** The drawer keeps one unsent draft per selected conversation. */
   readonly draft?: string;
-  readonly onDraftChange?: (draft: string) => void;
+  readonly onDraftChange?: (action: SetStateAction<string>) => void;
   readonly isSending: boolean;
   readonly sendError: string | null;
   readonly needsProvider: boolean;
@@ -98,9 +98,8 @@ export function Composer(props: {
   const [localText, setLocalText] = useState(() => props.draft ?? props.initialText ?? "");
   const text = props.draft ?? localText;
   const setText = (next: SetStateAction<string>) => {
-    const value = typeof next === "function" ? next(text) : next;
-    if (props.draft === undefined) setLocalText(value);
-    props.onDraftChange?.(value);
+    if (props.draft === undefined) setLocalText(next);
+    props.onDraftChange?.(next);
   };
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   // #916 — when the composer opens seeded with a starter (module draft #916 or onboarding #368),

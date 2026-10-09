@@ -25,6 +25,7 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
   getChatPrivacyState: vi.fn(async () => ({ incognito: false })),
   listChatThreads: vi.fn(async () => ({ threads: [] })),
   listChatThreadMessages: vi.fn(async () => ({ messages: [] })),
+  transcribeAudio: vi.fn(),
   resumeChat: vi.fn(async () => ({})),
   listChatSkills: vi.fn(async () => ({ skills: [] })),
   listTasks: vi.fn(async () => ({ tasks: [] })),
@@ -54,7 +55,8 @@ import {
   listChatThreadMessages,
   listChatThreads,
   resumeChat,
-  sendChatTurn
+  sendChatTurn,
+  transcribeAudio
 } from "../../apps/web/src/api/client.js";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { boundDraftKey, unselectedDraftKey } from "../../apps/web/src/chat/chat-draft-storage.js";
@@ -105,6 +107,16 @@ function deferred<T>() {
     reject = fail;
   });
   return { promise, reject, resolve };
+}
+
+class FakeMediaRecorder {
+  ondataavailable: ((event: { data: { size: number } }) => void) | null = null;
+  onstop: (() => void) | null = null;
+  mimeType = "audio/webm";
+  constructor(_stream: unknown) {}
+  start() {
+    /* no-op */
+  }
 }
 
 it("reuses a cleared starter after the caller clears it", async () => {
@@ -246,6 +258,72 @@ it("does not reseed a no-ID starter while its first send is in flight", async ()
     });
     await Promise.resolve();
   });
+});
+
+it("keeps delayed speech with its edited A starter without disturbing B's untouched starter", async () => {
+  const transcript = deferred<{ text: string }>();
+  vi.mocked(transcribeAudio).mockReturnValueOnce(transcript.promise);
+  const recorders: FakeMediaRecorder[] = [];
+  class RecordingFakeMediaRecorder extends FakeMediaRecorder {
+    constructor(stream: unknown) {
+      super(stream);
+      recorders.push(this);
+    }
+  }
+  const track = { stop: vi.fn() };
+  vi.stubGlobal("navigator", {
+    mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [track] })) }
+  });
+  vi.stubGlobal("MediaRecorder", RecordingFakeMediaRecorder);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const moduleSurface = moduleChatSurface("job-search", "profile-voice") as ChatSurface;
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client, "A starter"));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  await act(async () => {
+    findByAriaLabel(renderer, "Record voice message")!.props.onClick();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(recorders).toHaveLength(1);
+    recorders[0]!.onstop?.();
+    await Promise.resolve();
+  });
+  await act(async () => {
+    renderer.root.findByType("textarea").props.onChange({ target: { value: "A starter second" } });
+  });
+  await act(async () => {
+    renderer.update(drawer(client, "B starter", undefined, moduleSurface));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("B starter");
+
+  await act(async () => {
+    transcript.resolve({ text: "voice" });
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("B starter");
+
+  await act(async () => {
+    renderer.update(drawer(client, "A starter"));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("A starter second voice");
+  await act(async () => {
+    renderer.root.findByType("textarea").props.onChange({ target: { value: "" } });
+    await Promise.resolve();
+  });
+  await act(async () => {
+    renderer.update(drawer(client, "A starter"));
+    await Promise.resolve();
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("");
 });
 
 it("retires a starter supplied during a failed B selection", async () => {

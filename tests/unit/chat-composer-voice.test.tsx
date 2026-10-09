@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { createElement, StrictMode, type ReactElement } from "react";
+import { createElement, StrictMode, useState, type ReactElement } from "react";
 import { renderToString } from "react-dom/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -324,7 +324,92 @@ describe("Composer mic lifecycle (#900 insecure origin, #1134 track cleanup)", (
       });
     }).not.toThrow();
   });
+
+  it("merges delayed speech into its original controlled draft without overwriting later edits", async () => {
+    const transcript = deferred<{ text: string }>();
+    vi.mocked(transcribeAudio).mockReturnValueOnce(transcript.promise);
+    const recorders: FakeMediaRecorder[] = [];
+    class RecordingFakeMediaRecorder extends FakeMediaRecorder {
+      constructor(stream: unknown) {
+        super(stream);
+        recorders.push(this);
+      }
+    }
+    const track = { stop: vi.fn() };
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [track] })) }
+    });
+    vi.stubGlobal("MediaRecorder", RecordingFakeMediaRecorder);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const tree = (selected: "a" | "b") =>
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(ControlledVoiceComposer, { selected })
+      );
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(tree("a"));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      findMicButton(renderer).props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(recorders).toHaveLength(1);
+      recorders[0]!.onstop?.();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      renderer.root.findByType("textarea").props.onChange({ target: { value: "First second" } });
+    });
+    await act(async () => {
+      renderer.update(tree("b"));
+    });
+    expect(renderer.root.findByType("textarea").props.value).toBe("B");
+
+    await act(async () => {
+      transcript.resolve({ text: "voice" });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(renderer.root.findByType("textarea").props.value).toBe("B");
+
+    await act(async () => {
+      renderer.update(tree("a"));
+    });
+    expect(renderer.root.findByType("textarea").props.value).toBe("First second voice");
+  });
 });
+
+function ControlledVoiceComposer(props: { readonly selected: "a" | "b" }) {
+  const [drafts, setDrafts] = useState({ a: "First", b: "B" });
+  return (
+    <Composer
+      draft={drafts[props.selected]}
+      isFounder={false}
+      isSending={false}
+      lockedModelUnavailable={false}
+      needsProvider={false}
+      onDiscardQueuedText={() => {}}
+      onDraftChange={(next) =>
+        setDrafts((current) => ({
+          ...current,
+          [props.selected]: typeof next === "function" ? next(current[props.selected]) : next
+        }))
+      }
+      onQueue={() => {}}
+      onSend={() => {}}
+      onStop={() => {}}
+      privateMode={false}
+      queuedText={null}
+      readOnly={false}
+      sendError={null}
+    />
+  );
+}
 
 class FakeMediaRecorder {
   ondataavailable: ((event: { data: { size: number } }) => void) | null = null;
@@ -334,6 +419,14 @@ class FakeMediaRecorder {
   start() {
     /* no-op */
   }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
 }
 
 function findMicButton(renderer: ReactTestRenderer) {
