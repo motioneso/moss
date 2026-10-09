@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Automatic day planning no longer books unapproved drafts.** When Moss plans your day automatically, it now adds only the time blocks it created itself. A draft you have not approved can no longer end up on your calendar. [PR #3205](https://github.com/motioneso/moss/pull/3205)
 - **Upgrades with saved News and Sports sources.** Updating Moss no longer fails to start when you already have custom News or Sports sources saved. [PR #3207](https://github.com/motioneso/moss/pull/3207)
 - **Creating goals works again.** Adding a new goal, or adding progress notes to a goal, no longer fails. [PR #3206](https://github.com/motioneso/moss/pull/3206)
 - **Finance screens refresh after actions.** Finance pages no longer get stuck on Loading after you sync, change a category, or set a budget. [PR #3203](https://github.com/motioneso/moss/pull/3203)
