@@ -194,7 +194,7 @@ describe("finance module surface (#1146)", () => {
     const response = await invokeTool("finance.accounts.list");
     expect(response.statusCode).toBe(200);
     const invocation = response.json<{
-      invocation: { status: string; result: { accounts: unknown[] } };
+      invocation: { status: string; result: { accounts: unknown[]; banks: unknown[] } };
     }>().invocation;
     expect(invocation.status).toBe("succeeded");
     // toEqual (not matchObject): a field silently dropped by any of the three
@@ -202,6 +202,7 @@ describe("finance module surface (#1146)", () => {
     expect(invocation.result.accounts).toEqual([
       {
         accountId: "acc-1",
+        itemId: "item-1",
         name: "Checking",
         mask: "0000",
         type: "depository",
@@ -214,6 +215,15 @@ describe("finance module surface (#1146)", () => {
         // FIN-04 (#1149): accounts.list now reports the household-share flag; an
         // unshared account defaults to false (flag key absent in KV).
         sharedToHousehold: false
+      }
+    ]);
+    expect(invocation.result.banks).toEqual([
+      {
+        itemId: "item-1",
+        institutionId: "ins_1",
+        status: "connected",
+        lastSyncAt: null,
+        message: null
       }
     ]);
   });
