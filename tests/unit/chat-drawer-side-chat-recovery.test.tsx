@@ -769,3 +769,41 @@ it("retains a cached transcript and restores the composer after a failed refetch
 
   expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
 });
+
+it("keeps delayed caller text and edits through unavailable-provider transitions", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const route = (available: boolean) => ({
+    route: {
+      capability: "chat" as const,
+      available,
+      reason: available ? "matched-active-model" : "no-active-model",
+      model: null
+    }
+  });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client));
+  });
+  await act(async () => {
+    client.setQueryData(queryKeys.ai.capability("chat"), route(false));
+    renderer.update(drawer(client, "Delayed caller"));
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("Delayed caller");
+  await act(async () => {
+    renderer.root.findByType("textarea").props.onChange({ target: { value: "My edited caller" } });
+    client.setQueryData(queryKeys.ai.capability("chat"), route(true));
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("My edited caller");
+  await act(async () => client.setQueryData(queryKeys.ai.capability("chat"), route(false)));
+  expect(renderer.root.findByType("textarea").props.value).toBe("My edited caller");
+  await act(async () => {
+    renderer.root.findByType("textarea").props.onChange({ target: { value: "" } });
+  });
+  expect(renderer.root.findAllByType("textarea")).toHaveLength(0);
+  await act(async () => {
+    client.setQueryData(queryKeys.ai.capability("chat"), route(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("");
+  act(() => renderer.unmount());
+});

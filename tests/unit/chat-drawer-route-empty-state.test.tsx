@@ -87,6 +87,7 @@ describe("ChatDrawer unavailable routes (rendered)", () => {
     );
 
     expect(html).toContain("<textarea");
+    expect(html).toContain("Say hello in three words.");
     expect(html).not.toContain("chatd-connect-cta");
   });
 });
