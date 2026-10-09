@@ -125,21 +125,18 @@ async function openConversations(renderer: ReactTestRenderer): Promise<void> {
     findByAriaLabel(renderer, "Open conversations")!.props.onClick();
   });
 }
-
 async function selectConversation(renderer: ReactTestRenderer, title: string): Promise<void> {
   await openConversations(renderer);
   await act(async () => {
     findByAriaLabel(renderer, title)!.props.onClick();
   });
 }
-
 async function startNewSideChat(renderer: ReactTestRenderer): Promise<void> {
   await openConversations(renderer);
   await act(async () => {
     findByAriaLabel(renderer, "New side chat")!.props.onClick();
   });
 }
-
 function buildElement(
   client: QueryClient,
   surface: ChatSurface,
@@ -166,7 +163,6 @@ function buildElement(
     )
   );
 }
-
 async function mountWithClient(
   client: QueryClient,
   surface: ChatSurface,
@@ -180,7 +176,6 @@ async function mountWithClient(
   });
   return renderer;
 }
-
 async function flipSurface(
   renderer: ReactTestRenderer,
   client: QueryClient,
@@ -193,7 +188,6 @@ async function flipSurface(
     await Promise.resolve();
   });
 }
-
 async function typeAndSend(renderer: ReactTestRenderer, text: string): Promise<void> {
   const textarea = renderer.root.findByType("textarea");
   await act(async () => {
@@ -205,7 +199,6 @@ async function typeAndSend(renderer: ReactTestRenderer, text: string): Promise<v
     await Promise.resolve();
   });
 }
-
 describe("ChatDrawer surface routing (#1533)", () => {
   afterEach(() => {
     vi.mocked(sendChatTurn).mockClear();
@@ -216,13 +209,11 @@ describe("ChatDrawer surface routing (#1533)", () => {
     vi.mocked(listChatThreads).mockClear();
     vi.mocked(resumeChat).mockClear();
   });
-
   it("reads privacy state and thread history for the module surface, not the drawer's", async () => {
     await renderDrawer(moduleSurface);
     expect(getChatPrivacyState).toHaveBeenCalledWith(moduleSurface);
     expect(listChatThreads).toHaveBeenCalledWith(moduleSurface);
   });
-
   it("hides the private-chat control on a module surface", async () => {
     const renderer = await renderDrawer(moduleSurface);
     expect(await menuItem(renderer, "Start private chat")).toBeNull();
@@ -458,6 +449,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
 
   it("does not clear a new surface when an earlier New side chat request finishes", async () => {
     let finish!: () => void;
+    let resolveIdentity!: (state: { incognito: boolean }) => void;
     vi.mocked(clearChat).mockImplementationOnce(
       () =>
         new Promise<void>((resolve) => {
@@ -468,7 +460,17 @@ describe("ChatDrawer surface routing (#1533)", () => {
     const clearRecords = vi.fn();
     const renderer = await mountWithClient(client, moduleSurface, clearRecords);
     await startNewSideChat(renderer);
+    vi.mocked(getChatPrivacyState).mockImplementationOnce(
+      () =>
+        new Promise<{ incognito: boolean }>((resolve) => {
+          resolveIdentity = resolve;
+        })
+    );
     await flipSurface(renderer, client, moduleSurfaceB, clearRecords);
+    await act(async () => {
+      resolveIdentity({ incognito: false });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     await act(async () => {
       finish();
     });

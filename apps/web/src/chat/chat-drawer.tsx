@@ -16,9 +16,7 @@ import {
   useRef,
   useState
 } from "react";
-
 import { BrandMark, Button, Chip, IconButton, Menu } from "@moss/ui";
-
 import {
   cancelChatTurn,
   beaconEndPrivateChat,
@@ -45,7 +43,6 @@ import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
 import { Thread } from "@moss/ui";
 import { trapFocus } from "../shell/command-palette";
-
 import { RecordRow } from "./message-row";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
 import {
@@ -58,10 +55,8 @@ export { recordsFromMessages } from "./use-chat-stream";
 import "../styles/kit-chat.css";
 import "../styles/kit-chat-attach.css";
 import "../styles/kit-chat-skills.css";
-
 const PHONE_QUERY = "(max-width: 720px)";
 const PRIVATE_DRAFT_KEY = "__private__";
-
 export function ChatDrawer(props: {
   readonly meetingContext?: MeetingChatSelection & { readonly title: string };
   readonly onMeetingUnavailable?: () => void;
@@ -230,6 +225,8 @@ export function ChatDrawer(props: {
     reviewThreadId !== null && (resumeMutation.isPending || !messagesQuery.isSuccess);
   const mainThreadId = threadsQuery.data?.threads.find((thread) => thread.isMain)?.id;
   const confirmedSelection = selection.current;
+  const moduleIdentityPending =
+    props.surface !== DEFAULT_CHAT_SURFACE && !confirmedSelection && !privacyStateQuery.isSuccess;
   const selectedThreadId =
     reviewThreadId ??
     (confirmedSelection
@@ -297,6 +294,7 @@ export function ChatDrawer(props: {
         sendPending ||
         privateEnded ||
         activatingPrivate ||
+        moduleIdentityPending ||
         historyActivationPending ||
         (Boolean(props.meetingContext) && reviewThreadId !== null)
       ) {
@@ -423,6 +421,7 @@ export function ChatDrawer(props: {
     [
       activatingPrivate,
       historyActivationPending,
+      moduleIdentityPending,
       sendPending,
       messagesQuery.data?.messages,
       confirmedSelection?.threadId,
@@ -435,12 +434,12 @@ export function ChatDrawer(props: {
     ]
   );
   useEffect(() => {
-    if (sendPending || queuedSendText === null) return;
+    if (sendPending || moduleIdentityPending || queuedSendText === null) return;
     const queued = queuedSendText;
     setQueuedSendText(null);
     if (queued.surface !== props.surface) return;
     sendMessage(queued.text);
-  }, [queuedSendText, sendPending, props.surface, sendMessage]);
+  }, [moduleIdentityPending, queuedSendText, sendPending, props.surface, sendMessage]);
   const reviewing = reviewThreadId !== null;
   const displayRecords = reviewing
     ? recordsFromMessages(messagesQuery.data?.messages ?? [])
@@ -667,7 +666,10 @@ export function ChatDrawer(props: {
     })();
   };
   const stopSending = (): void => void cancelChatTurn(props.surface).catch(() => {});
-  const queueSend = (text: string): void => setQueuedSendText({ text, surface: props.surface });
+  const queueSend = (text: string): void => {
+    if (moduleIdentityPending) return;
+    setQueuedSendText({ text, surface: props.surface });
+  };
 
   return (
     <aside
@@ -811,6 +813,20 @@ export function ChatDrawer(props: {
               </button>
             </div>
           ) : null}
+          {moduleIdentityPending && privacyStateQuery.isError ? (
+            <div className="chatd-empty" role="alert">
+              <div className="chatd-empty__title">Could not load module conversation.</div>
+              <Button
+                aria-label="Retry conversation identity"
+                size="sm"
+                type="button"
+                variant="quiet"
+                onClick={() => void privacyStateQuery.refetch()}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : null}
           {messagesQuery.isError ? (
             <div className="chatd-empty" role="alert">
               <div className="chatd-empty__title">Could not load conversation.</div>
@@ -948,6 +964,7 @@ export function ChatDrawer(props: {
           readOnly={
             privateEnded ||
             props.selectionPending ||
+            moduleIdentityPending ||
             historyActivationPending ||
             (transition.pending && !activatingPrivate) ||
             (Boolean(props.meetingContext) && reviewing)

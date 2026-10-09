@@ -494,6 +494,13 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     description: "The active provider changed before the chat message was sent."
   },
   {
+    code: "core.ai.module_chat_identity_unavailable",
+    class: "transient",
+    remediationRef: "core.ai.retry_module_chat_identity",
+    description:
+      "A module chat cannot accept a new draft or message until its current conversation identity loads."
+  },
+  {
     code: "core.today.day_plan_review_unavailable",
     class: "prerequisite",
     remediationRef: "core.today.review_when_plan_available",
@@ -576,6 +583,13 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     id: "core.ai.retry_chat_message",
     description: "Retry the message after the provider change.",
     path: "/chat",
+    scope: "user"
+  },
+  {
+    id: "core.ai.retry_module_chat_identity",
+    description:
+      "Press Retry in the module chat to load its current conversation identity; unsent drafts stay unchanged.",
+    path: "/",
     scope: "user"
   },
   {

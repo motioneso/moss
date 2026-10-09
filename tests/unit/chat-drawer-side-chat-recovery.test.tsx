@@ -400,6 +400,82 @@ it("binds an edited restored module fallback after remount without replacing can
   });
 });
 
+it("waits for module identity after reloading canonical and bound A drafts", async () => {
+  const moduleSurface = moduleChatSurface("job-search", "profile-1") as ChatSurface;
+  const drafts = new Map([
+    [
+      "moss.chatDrafts",
+      JSON.stringify({
+        ownerId: "owner",
+        drafts: {
+          a: "Canonical A",
+          [boundDraftKey(moduleSurface, "a")]: "Bound A"
+        }
+      })
+    ]
+  ]);
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => drafts.get(key) ?? null,
+    setItem: (key: string, value: string) => drafts.set(key, value),
+    removeItem: (key: string) => drafts.delete(key)
+  });
+  const privacy = deferred<{ incognito: boolean; threadId: string }>();
+  vi.mocked(getChatPrivacyState).mockImplementationOnce(() => privacy.promise);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client, undefined, "owner", moduleSurface));
+    await Promise.resolve();
+  });
+
+  expect(renderer.root.findByType("textarea").props.disabled).toBe(true);
+  expect(findByClassName(renderer, "chatd-send").props.disabled).toBe(true);
+  await act(async () => {
+    privacy.resolve({ incognito: false, threadId: "a" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
+  expect(renderer.root.findByType("textarea").props.value).toBe("Bound A");
+});
+
+it("retries a failed module identity load and allows a settled no-ID send", async () => {
+  const moduleSurface = moduleChatSurface("job-search", "profile-1") as ChatSurface;
+  const privacy = deferred<{ incognito: boolean; threadId?: string }>();
+  vi.mocked(getChatPrivacyState)
+    .mockImplementationOnce(() => privacy.promise)
+    .mockResolvedValueOnce({ incognito: false });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client, undefined, undefined, moduleSurface));
+    await Promise.resolve();
+  });
+
+  expect(renderer.root.findByType("textarea").props.disabled).toBe(true);
+  await act(async () => {
+    privacy.reject(new Error("offline"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(findByAriaLabel(renderer, "Retry conversation identity")).not.toBeNull();
+  await act(async () => {
+    findByAriaLabel(renderer, "Retry conversation identity")!.props.onClick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(findByAriaLabel(renderer, "Retry conversation identity")).toBeNull();
+  expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
+  await act(async () =>
+    renderer.root.findByType("textarea").props.onChange({ target: { value: "No-ID draft" } })
+  );
+  await act(async () => {
+    findByClassName(renderer, "chatd-send").props.onClick();
+    await Promise.resolve();
+  });
+
+  expect(sendChatTurn).toHaveBeenCalledWith("No-ID draft", undefined, undefined, moduleSurface);
+});
+
 it("retains a cached transcript and restores the composer after a failed refetch", async () => {
   vi.mocked(listChatThreads).mockResolvedValueOnce({
     threads: [
@@ -469,9 +545,10 @@ it("retains a cached transcript and restores the composer after a failed refetch
   });
   await act(async () => {
     resolveRetry({ messages });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => expect(findByAriaLabel(renderer, "Retry conversation")).toBeNull(), {
+      interval: 1
+    });
   });
 
-  expect(findByAriaLabel(renderer, "Retry conversation")).toBeNull();
   expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
 });
