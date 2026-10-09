@@ -266,8 +266,11 @@ beforeEach(() => {
         );
       if (path === `${base}/${project.id}`)
         return response(detailStatus === 200 ? { project } : { error: "Not found" }, detailStatus);
-      if (path.startsWith(`${base}/${project.id}/messages?`))
-        return response({ entries, nextCursor: entries.at(-1)?.sequence ?? "0" });
+      if (path.startsWith(`${base}/${project.id}/messages?`)) {
+        const after = Number(new URL(path, "http://x").searchParams.get("after") ?? "0");
+        const page = entries.filter((entry) => Number(entry.sequence) > after).slice(0, 50);
+        return response({ entries: page, nextCursor: page.at(-1)?.sequence ?? String(after) });
+      }
       if (path === `${base}/${createdId}` && createdBody)
         return response({
           project: {
@@ -373,6 +376,49 @@ describe("Workshop project browser interactions", () => {
     expect(field("project-message").value).toBe("");
     // Ben's ruling on 2404: no status line narrating that saving started no planning or build.
     expect(container.textContent).not.toContain("No planning or build has started");
+  });
+
+  it("shows replies that land past the first 50 feed entries", async () => {
+    const feed = (n: number, kind: WorkshopFeedEntry["kind"], text: string): WorkshopFeedEntry => ({
+      projectId: project.id,
+      messageId: `m${n}`,
+      text,
+      sequence: String(n),
+      kind,
+      delivery: "delivered",
+      createdAt: project.createdAt
+    });
+    entries = Array.from({ length: 52 }, (_, i) =>
+      i % 2 === 0
+        ? feed(i + 1, "user_message", `ask ${i + 1}`)
+        : feed(i + 1, "assistant_message", `answer ${i + 1}`)
+    );
+    await render(`/workshop/${project.id}`);
+    await eventually(() =>
+      expect(container.querySelector(".chatd-thread")?.textContent).toContain("answer 52")
+    );
+  });
+
+  it("stops thinking when a saved message never got a reply", async () => {
+    entries = [
+      {
+        projectId: project.id,
+        messageId: "m1",
+        text: "old question",
+        sequence: "1",
+        kind: "user_message",
+        delivery: "pending",
+        createdAt: "2026-09-05T12:00:00.000Z"
+      }
+    ];
+    await render(`/workshop/${project.id}`);
+    await eventually(() => expect(container.textContent).toContain("old question"));
+    expect(container.textContent).not.toContain("Thinking");
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("did not reply");
+    const polls = reads.length;
+    await flush();
+    await flush();
+    expect(reads.length).toBe(polls);
   });
 
   it("sends the project message on Enter, but not on Shift+Enter", async () => {
