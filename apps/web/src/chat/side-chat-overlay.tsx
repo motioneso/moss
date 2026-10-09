@@ -7,8 +7,20 @@ import type { ChatThreadDto } from "@moss/shared";
 import { useDismissableMenu } from "../shared/use-dismissable-menu.js";
 import { trapFocus } from "../shell/command-palette";
 
+/**
+ * Main is the signed-in owner's own designation. A shared thread can carry another owner's
+ * Main flag, so the flag alone never makes a thread this viewer's Main.
+ */
+export function findOwnerMainThread(
+  threads: readonly ChatThreadDto[],
+  ownerId: string | undefined
+): ChatThreadDto | undefined {
+  return threads.find((thread) => thread.isMain && thread.ownerUserId === ownerId);
+}
+
 export function SideChatOverlay(props: {
   readonly threads: readonly ChatThreadDto[];
+  readonly ownerId: string | undefined;
   readonly selectedThreadId: string | null;
   readonly onSelect: (threadId: string) => void;
   readonly onNewSideChat: () => void;
@@ -28,8 +40,8 @@ export function SideChatOverlay(props: {
     triggerRef.current?.focus();
   }, []);
   const { ref } = useDismissableMenu<HTMLDivElement>({ open: props.open, onClose: close });
-  const main = props.threads.find((thread) => thread.isMain);
-  const sideChats = props.threads.filter((thread) => !thread.isMain);
+  const main = findOwnerMainThread(props.threads, props.ownerId);
+  const sideChats = props.threads.filter((thread) => thread !== main);
 
   useEffect(() => {
     if (!props.open) return;

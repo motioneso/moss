@@ -1,6 +1,6 @@
 import { randomUuid, requestJson } from "@moss/module-web-sdk";
 import type { MeetingChatSelection, MeetingChatTurnResponse } from "@moss/shared";
-import { SideChatOverlay } from "./side-chat-overlay";
+import { findOwnerMainThread, SideChatOverlay } from "./side-chat-overlay";
 import { loadChatDrafts, saveChatDrafts } from "./chat-draft-storage";
 import { useChatTransition, type ChatTransition } from "./use-chat-transition";
 import { useInitialCallerDraft } from "./use-initial-caller-draft";
@@ -207,8 +207,7 @@ export function ChatDrawer(props: {
     retry: false
   });
   const lockedModelUnavailable = chatRouteQuery.data?.route?.reason === "admin-pin-unavailable";
-  const chatAvailable = chatAvailableFromRoute(chatRouteQuery.data);
-  const chatUnavailable = chatRouteQuery.isSuccess && !chatAvailable;
+  const chatUnavailable = chatRouteQuery.isSuccess && !chatAvailableFromRoute(chatRouteQuery.data);
   const noModelAvailable = chatUnavailable && !lockedModelUnavailable;
   const threadsQuery = useQuery({
     queryKey: queryKeys.chat.threads(props.surface),
@@ -223,7 +222,7 @@ export function ChatDrawer(props: {
   const sendPending = isSending || transition.pending || Boolean(props.selectionPending);
   const historyActivationPending =
     reviewThreadId !== null && (resumeMutation.isPending || !messagesQuery.isSuccess);
-  const mainThreadId = threadsQuery.data?.threads.find((thread) => thread.isMain)?.id;
+  const mainThreadId = findOwnerMainThread(threadsQuery.data?.threads ?? [], props.ownerId)?.id;
   const confirmedSelection = selection.current;
   const moduleIdentityPending =
     props.surface !== DEFAULT_CHAT_SURFACE && !confirmedSelection && !privacyStateQuery.isSuccess;
@@ -723,6 +722,7 @@ export function ChatDrawer(props: {
           key={props.surface}
           disabled={transition.pending}
           open={conversationOverlayOpen}
+          ownerId={props.ownerId}
           selectedThreadId={selectedThreadId}
           threads={threadsQuery.data?.threads ?? []}
           loading={threadsQuery.isPending}

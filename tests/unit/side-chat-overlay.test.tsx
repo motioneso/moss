@@ -50,13 +50,17 @@ function ControlledOverlay(
 
 async function renderOverlay(props?: {
   readonly onSelect?: (threadId: string) => void;
+  readonly threads?: readonly ChatThreadDto[];
+  readonly ownerId?: string;
+  readonly selectedThreadId?: string | null;
 }): Promise<ReactTestRenderer> {
   let renderer!: ReactTestRenderer;
   await act(async () => {
     renderer = create(
       createElement(ControlledOverlay, {
-        threads,
-        selectedThreadId: "main",
+        threads: props?.threads ?? threads,
+        ownerId: props && "ownerId" in props ? props.ownerId : "user-1",
+        selectedThreadId: props?.selectedThreadId === undefined ? "main" : props.selectedThreadId,
         onSelect: props?.onSelect ?? vi.fn(),
         onNewSideChat: vi.fn(),
         disabled: false
@@ -94,6 +98,55 @@ describe("SideChatOverlay (#3126)", () => {
     expect(renderer.root.findAllByProps({ "aria-label": "Conversations" })).toHaveLength(0);
   });
 
+  it("keeps the owner's Main as Main when a newer shared Main is listed first (#3192)", async () => {
+    const sharedMain: ChatThreadDto = {
+      ...threads[0]!,
+      id: "shared-main",
+      ownerUserId: "user-2",
+      title: "Shared planning",
+      lastActiveAt: "2026-10-09T12:00:00.000Z"
+    };
+    const onSelect = vi.fn();
+    const renderer = await renderOverlay({ onSelect, threads: [sharedMain, ...threads] });
+
+    await act(async () => openOverlay(renderer));
+
+    const mainRow = renderer.root.findByProps({ "aria-label": "Main chat" });
+    expect(mainRow.props["aria-pressed"]).toBe(true);
+    expect(renderer.root.findAllByProps({ "aria-label": "Shared planning" })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ "aria-label": "Kitchen plans" })).toHaveLength(1);
+
+    await act(async () => mainRow.props.onClick());
+    expect(onSelect).toHaveBeenCalledWith("main");
+  });
+
+  it("shows no Main row when only another person's Main is visible (#3192)", async () => {
+    const sharedMain: ChatThreadDto = {
+      ...threads[0]!,
+      id: "shared-main",
+      ownerUserId: "user-2",
+      title: "Shared planning"
+    };
+    const renderer = await renderOverlay({
+      threads: [sharedMain, threads[1]!],
+      selectedThreadId: null
+    });
+
+    await act(async () => openOverlay(renderer));
+
+    expect(renderer.root.findAllByProps({ "aria-label": "Main chat" })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ "aria-label": "Shared planning" })).toHaveLength(1);
+  });
+
+  it("never infers Main without a known owner (#3192)", async () => {
+    const renderer = await renderOverlay({ ownerId: undefined, selectedThreadId: null });
+
+    await act(async () => openOverlay(renderer));
+
+    expect(renderer.root.findAllByProps({ "aria-label": "Main chat" })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ "aria-label": "Main" })).toHaveLength(1);
+  });
+
   it("shows a retry action instead of an empty state when loading fails", async () => {
     const onRetry = vi.fn();
     let renderer!: ReactTestRenderer;
@@ -101,6 +154,7 @@ describe("SideChatOverlay (#3126)", () => {
       renderer = create(
         createElement(ControlledOverlay, {
           threads: [],
+          ownerId: "user-1",
           selectedThreadId: null,
           onSelect: vi.fn(),
           onNewSideChat: vi.fn(),

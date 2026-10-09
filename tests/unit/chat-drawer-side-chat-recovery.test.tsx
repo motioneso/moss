@@ -919,3 +919,36 @@ it("sends a recovered Main draft after startup history is ready", async () => {
     vi.stubGlobal("localStorage", previousStorage);
   }
 });
+
+it("keeps the owner's Main and its draft when a newer shared Main is listed first (#3192)", async () => {
+  const drafts = new Map([
+    ["moss.chatDrafts", JSON.stringify({ ownerId: "owner", drafts: { "own-main": "Unsent Main" } })]
+  ]);
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => drafts.get(key) ?? null,
+    setItem: (key: string, value: string) => drafts.set(key, value),
+    removeItem: (key: string) => drafts.delete(key)
+  });
+  vi.mocked(getChatPrivacyState).mockResolvedValueOnce({ incognito: false });
+  vi.mocked(listChatThreads).mockResolvedValueOnce({
+    threads: [
+      { ...chatThread("shared-main", "Shared planning", true), ownerUserId: "someone-else" },
+      chatThread("own-main", "My Main", true)
+    ]
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client, undefined, "owner"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(renderer.root.findByType("textarea").props.value).toBe("Unsent Main");
+  await act(async () => findByAriaLabel(renderer, "Open conversations")!.props.onClick());
+  expect(findByAriaLabel(renderer, "Main chat")!.props["aria-pressed"]).toBe(true);
+  expect(findByAriaLabel(renderer, "Shared planning")!.props["aria-pressed"]).toBe(false);
+  expect(JSON.parse(drafts.get("moss.chatDrafts")!).drafts["own-main"]).toBe("Unsent Main");
+});

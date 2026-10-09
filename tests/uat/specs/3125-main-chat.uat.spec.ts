@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { restartUatStack } from "../provisioner.js";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { signInUatAdmin } from "./real-chat-signin.js";
 
 export const uatLevel = {
   level: "solo-admin",
@@ -27,14 +27,6 @@ function requireProjectName(): string {
   return projectName;
 }
 
-async function signIn(page: Page): Promise<void> {
-  await page.goto(requireBaseURL());
-  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
-  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
-}
-
 async function openChat(page: Page): Promise<Locator> {
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
@@ -50,19 +42,21 @@ async function send(drawer: Locator, message: string): Promise<void> {
   await expect(drawer.getByText("UAT-3125 scripted reply.", { exact: true }).last()).toBeVisible();
 }
 
-async function openHistory(drawer: Locator): Promise<void> {
-  await drawer.getByRole("button", { name: "More chat options" }).click();
-  await drawer.getByRole("menuitemcheckbox", { name: "Show chat history" }).click();
-  await expect(drawer.getByText("History", { exact: true })).toBeVisible();
+async function openConversations(drawer: Locator): Promise<void> {
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  await expect(drawer.getByLabel("Conversations", { exact: true })).toBeVisible();
 }
 
-async function threadIdFor(page: Page, marker: string): Promise<{ id: string; isMain: boolean }> {
+async function threadIdFor(
+  page: Page,
+  marker: string
+): Promise<{ id: string; isMain: boolean; title: string }> {
   const threadsResponse = await page.request.get(
     `${requireBaseURL()}/api/chat/threads?surface=drawer`
   );
   expect(threadsResponse.ok()).toBeTruthy();
   const body = (await threadsResponse.json()) as {
-    threads: readonly { id: string; isMain: boolean }[];
+    threads: readonly { id: string; isMain: boolean; title: string }[];
   };
   for (const thread of body.threads) {
     const messagesResponse = await page.request.get(
@@ -72,7 +66,9 @@ async function threadIdFor(page: Page, marker: string): Promise<{ id: string; is
     const messages = (await messagesResponse.json()) as {
       messages: readonly { body: string }[];
     };
-    if (messages.messages.some((message) => message.body === marker)) return thread;
+    if (messages.messages.some((message) => message.body === marker)) {
+      return { id: thread.id, isMain: thread.isMain, title: thread.title };
+    }
   }
   throw new Error(`no stored drawer thread contains ${marker}`);
 }
@@ -81,7 +77,7 @@ test("cold drawer reconnect returns to Main while side history remains separate 
   page
 }) => {
   test.setTimeout(300_000);
-  await signIn(page);
+  await signInUatAdmin(page);
   let drawer = await openChat(page);
   let mainThreadId = "";
   let sideThreadId = "";
@@ -91,7 +87,9 @@ test("cold drawer reconnect returns to Main while side history remains separate 
     const main = await threadIdFor(page, MAIN_MESSAGE);
     expect(main.isMain).toBe(true);
     mainThreadId = main.id;
-    await drawer.getByRole("button", { name: "New chat" }).click();
+    await openConversations(drawer);
+    await drawer.getByRole("button", { name: "New side chat" }).click();
+    await expect(drawer.getByLabel("Message Moss")).toBeFocused();
     await expect(drawer.getByText(MAIN_MESSAGE, { exact: true })).toHaveCount(0);
     await send(drawer, SIDE_MESSAGE);
     const side = await threadIdFor(page, SIDE_MESSAGE);
@@ -105,23 +103,22 @@ test("cold drawer reconnect returns to Main while side history remains separate 
     drawer = await openChat(page);
     await expect(drawer.getByText(MAIN_MESSAGE, { exact: true })).toBeVisible();
     await expect(drawer.getByText(SIDE_MESSAGE, { exact: true })).toHaveCount(0);
-    await expect(threadIdFor(page, MAIN_MESSAGE)).resolves.toEqual({
+    await expect(threadIdFor(page, MAIN_MESSAGE)).resolves.toMatchObject({
       id: mainThreadId,
       isMain: true
     });
   });
 
-  await test.step("history selection still opens each preserved transcript", async () => {
-    await openHistory(drawer);
-    const mainHistoryRow = drawer.getByRole("button", { name: new RegExp(MAIN_MESSAGE) });
-    const sideHistoryRow = drawer.getByRole("button", { name: new RegExp(SIDE_MESSAGE) });
-    await expect(mainHistoryRow).toBeVisible();
-    await expect(sideHistoryRow).toBeVisible();
-    await mainHistoryRow.click();
+  await test.step("Conversations still opens each preserved transcript", async () => {
+    const side = await threadIdFor(page, SIDE_MESSAGE);
+    expect(side.id).toBe(sideThreadId);
+    await openConversations(drawer);
+    await expect(drawer.getByRole("button", { name: side.title, exact: true })).toBeVisible();
+    await drawer.getByRole("button", { name: "Main chat", exact: true }).click();
     await expect(drawer.getByText(MAIN_MESSAGE, { exact: true })).toBeVisible();
     await expect(drawer.getByText(SIDE_MESSAGE, { exact: true })).toHaveCount(0);
-    await openHistory(drawer);
-    await sideHistoryRow.click();
+    await openConversations(drawer);
+    await drawer.getByRole("button", { name: side.title, exact: true }).click();
     await expect(drawer.getByText(SIDE_MESSAGE, { exact: true })).toBeVisible();
     await expect(drawer.getByText(MAIN_MESSAGE, { exact: true })).toHaveCount(0);
   });
@@ -132,17 +129,17 @@ test("cold drawer reconnect returns to Main while side history remains separate 
     drawer = await openChat(page);
     await expect(drawer.getByText(MAIN_MESSAGE, { exact: true })).toBeVisible();
     await expect(drawer.getByText(SIDE_MESSAGE, { exact: true })).toHaveCount(0);
-    await expect(threadIdFor(page, MAIN_MESSAGE)).resolves.toEqual({
+    await expect(threadIdFor(page, MAIN_MESSAGE)).resolves.toMatchObject({
       id: mainThreadId,
       isMain: true
     });
   });
 
   await test.step("the later side transcript remains available after reconnect", async () => {
-    await openHistory(drawer);
-    const sideHistoryRow = drawer.getByRole("button", { name: new RegExp(SIDE_MESSAGE) });
-    await expect(sideHistoryRow).toBeVisible();
-    await sideHistoryRow.click();
+    const side = await threadIdFor(page, SIDE_MESSAGE);
+    expect(side.id).toBe(sideThreadId);
+    await openConversations(drawer);
+    await drawer.getByRole("button", { name: side.title, exact: true }).click();
     await expect(drawer.getByText(SIDE_MESSAGE, { exact: true })).toBeVisible();
     await expect(drawer.getByText(MAIN_MESSAGE, { exact: true })).toHaveCount(0);
   });

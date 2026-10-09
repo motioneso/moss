@@ -70,9 +70,9 @@ async function threadsWithHistory(page: Page): Promise<
   );
 }
 
-async function openHistory(drawer: Locator): Promise<void> {
-  await drawer.getByRole("button", { name: "More chat options" }).click();
-  await drawer.getByRole("menuitemcheckbox", { name: "Show chat history" }).click();
+async function openConversations(drawer: Locator): Promise<void> {
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  await expect(drawer.getByLabel("Conversations", { exact: true })).toBeVisible();
 }
 
 test("real model preserves Main across warm/cold reopen and explicit side/private first turns (#3125)", async ({
@@ -100,7 +100,9 @@ test("real model preserves Main across warm/cold reopen and explicit side/privat
     );
     expect(main?.isMain).toBe(true);
     mainId = main!.id;
-    await drawer.getByRole("button", { name: "New chat" }).click();
+    await openConversations(drawer);
+    await drawer.getByRole("button", { name: "New side chat" }).click();
+    await expect(drawer.getByLabel("Message Moss")).toBeFocused();
     await expect(drawer.getByText(MAIN, { exact: true })).toHaveCount(0);
     await sendReal(page, drawer, SIDE);
     const side = (await threadsWithHistory(page)).find((thread) =>
@@ -152,11 +154,8 @@ test("real model preserves Main across warm/cold reopen and explicit side/privat
   await test.step("preserved side resumes, then cold server reopen restores original Main", async () => {
     const side = (await threadsWithHistory(page)).find((thread) => thread.id === sideId);
     expect(side?.title).toBeTruthy();
-    await openHistory(drawer);
-    await drawer
-      .getByRole("button")
-      .filter({ has: page.getByText(side!.title, { exact: true }) })
-      .click();
+    await openConversations(drawer);
+    await drawer.getByRole("button", { name: side!.title, exact: true }).click();
     await expect(drawer.getByText(SIDE, { exact: true })).toBeVisible();
     await expect(drawer.getByText(MAIN, { exact: true })).toHaveCount(0);
     await restartUatStack(requireUatProjectName(), requireUatBaseURL());
