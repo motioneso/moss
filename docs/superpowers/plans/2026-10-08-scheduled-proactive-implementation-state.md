@@ -84,8 +84,15 @@ Runtime baseline and throwaway prototypes were not merged.
   failed the Tasks quick-add browser assertion (one request expected while saving, two observed);
   the other 230 browser tests passed and one was skipped. The integrated repair above
   reproduces the same-turn admission gap, without classifying the original CI failure as
-  preexisting/flaky or claiming current CI readiness. The separate module-registry immutable
-  version CI failure remains queued for a fresh repair; the complete task graph is unfinished.
+  preexisting/flaky or claiming current CI readiness. The module-registry immutable-version
+  repair is integrated from clean pushed
+  `b0ce8f859`: Finance `0.5.14→0.5.15` and Food `0.3.7→0.3.8`, with Job Search unchanged.
+  Both independent review axes cleared the metadata/evidence scope. See
+  [registry repair evidence](../handoffs/2026-10-08-registry-version-repair-evidence.md) for
+  the corrected mounted-index base-red/candidate-green production publisher checks; the earlier
+  unmounted-index probe is invalidated. Recorded Main/email-choice/quiet-boundary/quick-add
+  runtime and harness inputs are unchanged. Fresh assembled checks and their exact integration inputs require a separate merger
+  receipt; final candidate GitHub registry CI remains pending. The complete task graph is unfinished.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
