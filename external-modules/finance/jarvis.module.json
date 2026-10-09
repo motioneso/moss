@@ -49,6 +49,32 @@
       "app.finance_categories"
     ]
   },
+  "appMap": {
+    "screens": [
+      {
+        "id": "finance.budget",
+        "label": "Budget",
+        "description": "This month's budget: money ready to assign, and each category's assigned, spent and available amounts.",
+        "path": "/"
+      },
+      {
+        "id": "finance.start",
+        "label": "Getting started",
+        "description": "Connect a first bank and build a first budget from three months of history. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin.",
+        "path": "/start"
+      }
+    ],
+    "features": [
+      {
+        "id": "finance.getting-started",
+        "description": "Getting started shows three steps (connect a bank, Moss sorts spending, build a budget together) with each step's state. A bank cannot be connected until an admin sets the bank keys in Finance settings."
+      },
+      {
+        "id": "finance.needs-a-look",
+        "description": "Moss sorts each new transaction into a category and marks the ones it is unsure about as Needs a look. Whether Moss confirms its own guesses for merchants you have confirmed before, and for new merchants, follows the Sort purchases settings. A guessed category still counts toward the budget while it waits for review."
+      }
+    ]
+  },
   "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },
   "assistantTools": [
     {
@@ -368,25 +394,5 @@
   },
   "fetchHosts": ["production.plaid.com", "sandbox.plaid.com"],
   "web": { "entrypoint": "dist/web/index.js", "contractVersion": 2 },
-  "navigation": [{ "id": "finance", "label": "Finance", "path": "/", "icon": "landmark" }],
-  "appMap": {
-    "screens": [
-      {
-        "id": "finance.start",
-        "label": "Getting started",
-        "description": "Connect a first bank and build a first budget from three months of history. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin.",
-        "path": "/start"
-      }
-    ],
-    "features": [
-      {
-        "id": "finance.getting-started",
-        "description": "Getting started shows three steps (connect a bank, Moss sorts spending, build a budget together) with each step's state. A bank cannot be connected until an admin sets the bank keys in Finance settings."
-      },
-      {
-        "id": "finance.needs-a-look",
-        "description": "Moss sorts each new transaction into a category and marks the ones it is unsure about as Needs a look. Whether Moss confirms its own guesses for merchants you have confirmed before, and for new merchants, follows the Sort purchases settings. A guessed category still counts toward the budget while it waits for review."
-      }
-    ]
-  }
+  "navigation": [{ "id": "finance", "label": "Finance", "path": "/", "icon": "landmark" }]
 }
