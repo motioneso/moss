@@ -169,52 +169,7 @@ describe("Today morning briefing prose", () => {
   });
 
   it("enables Reply only when a provider is ready", () => {
-    const morning = briefingDefinition({
-      id: "morning-1",
-      title: "Morning briefing",
-      briefingType: "morning"
-    });
-    const replyRow: BriefingActionRowDto = {
-      taskId: "reply-task",
-      title: "Reply to Alex",
-      explanation: "Alex needs a response.",
-      category: "needs_reply",
-      status: "suggested",
-      primaryAction: { kind: "reply", cacheMessageId: "cache-1" },
-      source: "email",
-      sourceLabel: "Email",
-      sourceRef: "account:message",
-      sourceHref: null,
-      dueAt: null,
-      computedAt: "2026-06-30T01:00:00.000Z",
-      resurfaceReason: null
-    };
-    const replyTask: TaskDto = {
-      id: "reply-task",
-      ownerUserId: "user-1",
-      listId: "list-1",
-      parentTaskId: null,
-      title: "Reply to Alex",
-      description: "Alex needs a response.",
-      status: "suggested",
-      priority: 2,
-      position: 0,
-      dueAt: null,
-      doAt: null,
-      effort: null,
-      source: "email",
-      sourceRef: "account:message",
-      completedAt: null,
-      createdAt: "2026-06-30T01:00:00.000Z",
-      updatedAt: "2026-06-30T01:00:00.000Z",
-      tags: [],
-      suggestionMetadata: null
-    };
-    const runs = [
-      briefingRun({
-        structuredPayload: { version: 1, actionRows: [replyRow], catchUp: null }
-      })
-    ];
+    const { morning, replyTask, runs } = replyFixtures();
     let blockedOpenChatCalls = 0;
     const blocked = renderToday({
       now: new Date("2026-06-30T01:30:00.000Z"),
@@ -240,6 +195,21 @@ describe("Today morning briefing prose", () => {
 
     expect(ready).toMatch(/<button[^>]*>Reply<\/button>/);
     expect(ready).not.toMatch(/<button[^>]*disabled=""[^>]*>Reply<\/button>/);
+  });
+
+  it("enables Reply for a family member whenever chat is usable", () => {
+    const { morning, replyTask, runs } = replyFixtures();
+    const html = renderToday({
+      now: new Date("2026-06-30T01:30:00.000Z"),
+      definitions: [morning],
+      runs,
+      tasks: [replyTask],
+      chatAvailable: true,
+      member: true
+    });
+
+    expect(html).toContain(">Reply</button>");
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Reply<\/button>/);
   });
 
   it("lists saved plan blocks in the schedule section between Start here and Needs you", () => {
@@ -318,6 +288,56 @@ describe("Today morning briefing prose", () => {
   });
 });
 
+function replyFixtures() {
+  const morning = briefingDefinition({
+    id: "morning-1",
+    title: "Morning briefing",
+    briefingType: "morning"
+  });
+  const replyRow: BriefingActionRowDto = {
+    taskId: "reply-task",
+    title: "Reply to Alex",
+    explanation: "Alex needs a response.",
+    category: "needs_reply",
+    status: "suggested",
+    primaryAction: { kind: "reply", cacheMessageId: "cache-1" },
+    source: "email",
+    sourceLabel: "Email",
+    sourceRef: "account:message",
+    sourceHref: null,
+    dueAt: null,
+    computedAt: "2026-06-30T01:00:00.000Z",
+    resurfaceReason: null
+  };
+  const replyTask: TaskDto = {
+    id: "reply-task",
+    ownerUserId: "user-1",
+    listId: "list-1",
+    parentTaskId: null,
+    title: "Reply to Alex",
+    description: "Alex needs a response.",
+    status: "suggested",
+    priority: 2,
+    position: 0,
+    dueAt: null,
+    doAt: null,
+    effort: null,
+    source: "email",
+    sourceRef: "account:message",
+    completedAt: null,
+    createdAt: "2026-06-30T01:00:00.000Z",
+    updatedAt: "2026-06-30T01:00:00.000Z",
+    tags: [],
+    suggestionMetadata: null
+  };
+  const runs = [
+    briefingRun({
+      structuredPayload: { version: 1, actionRows: [replyRow], catchUp: null }
+    })
+  ];
+  return { morning, replyRow, replyTask, runs };
+}
+
 function renderToday(input: {
   readonly now: Date;
   readonly definitions: readonly BriefingDefinitionDto[] | undefined;
@@ -326,6 +346,7 @@ function renderToday(input: {
   readonly chatAvailable?: boolean;
   readonly openChatWith?: (prompt: string) => void;
   readonly dayPlan?: GetDayPlanResponse;
+  readonly member?: boolean;
 }): string {
   const previousDocument = globalThis.document;
   const previousDateNow = Date.now;
@@ -382,7 +403,15 @@ function renderToday(input: {
           createElement(
             MemoryRouter,
             null,
-            createElement(TodayPage, { me, wellnessEnabled: false })
+            createElement(TodayPage, {
+              me: input.member
+                ? {
+                    ...me,
+                    user: { ...me.user, isInstanceAdmin: false, isBootstrapOwner: false }
+                  }
+                : me,
+              wellnessEnabled: false
+            })
           )
         )
       )
