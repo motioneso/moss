@@ -3,6 +3,8 @@
 // database; run via the verify-gate skill.
 import { createAiSecretCipher } from "@moss/ai";
 import { createDatabase } from "@moss/db";
+import { createPushSigningCipher, createPushSubscriptionCipher } from "@moss/notifications";
+import { createMasterKeyStoreCipher, createWebSearchSecretCipher } from "@moss/settings";
 import { sql } from "kysely";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -19,6 +21,10 @@ const oldEnv: NodeJS.ProcessEnv = {
   JARVIS_AI_SECRET_KEY: OLD_SECRET,
   JARVIS_AI_SECRET_KEY_ID: "v1"
 };
+const currentOnlyEnv: NodeJS.ProcessEnv = {
+  JARVIS_AI_SECRET_KEY: NEW_SECRET,
+  JARVIS_AI_SECRET_KEY_ID: "v2"
+};
 const rotatedEnv: NodeJS.ProcessEnv = {
   JARVIS_AI_SECRET_KEY: NEW_SECRET,
   JARVIS_AI_SECRET_KEY_ID: "v2",
@@ -29,8 +35,15 @@ describe("AI key retirement covers every AI-keyring store", () => {
   beforeEach(resetEmptyFoundationDatabase);
 
   async function seedStoresSealedWithOldKey(db: ReturnType<typeof createDatabase>) {
-    const oldCipher = createAiSecretCipher(oldEnv);
-    const seal = (value: Record<string, unknown>) => JSON.stringify(oldCipher.encryptJson(value));
+    // Each record is sealed by the same cipher the owning feature uses at runtime.
+    const masterCipher = createMasterKeyStoreCipher(oldEnv);
+    const webSearchCipher = createWebSearchSecretCipher(oldEnv);
+    const pushSigningCipher = createPushSigningCipher(oldEnv);
+    const pushSubscriptionCipher = createPushSubscriptionCipher(oldEnv);
+    const seal = (
+      cipher: { encryptJson(value: Record<string, unknown>): unknown },
+      value: Record<string, unknown>
+    ) => JSON.stringify(cipher.encryptJson(value));
 
     await db
       .insertInto("app.users")
@@ -48,24 +61,24 @@ describe("AI key retirement covers every AI-keyring store", () => {
       })
       .execute();
 
-    for (const key of [
-      "keys.integrations",
-      "keys.module_credential",
-      "keys.news_credential",
-      "web.brave_search_api_key"
-    ]) {
+    for (const [key, cipher] of [
+      ["keys.integrations", masterCipher],
+      ["keys.module_credential", masterCipher],
+      ["keys.news_credential", masterCipher],
+      ["web.brave_search_api_key", webSearchCipher]
+    ] as const) {
       await sql`
         INSERT INTO app.instance_settings (key, value)
-        VALUES (${key}, ${JSON.stringify({ value: JSON.parse(seal({ secret: key })) })}::jsonb)
+        VALUES (${key}, ${JSON.stringify({ value: JSON.parse(seal(cipher, { secret: key })) })}::jsonb)
       `.execute(db);
     }
     await sql`
       INSERT INTO app.push_signing_key (id, public_key, private_key_ciphertext)
-      VALUES ('default', 'pub', ${seal({ privateKey: "priv" })}::jsonb)
+      VALUES ('default', 'pub', ${seal(pushSigningCipher, { privateKey: "priv" })}::jsonb)
     `.execute(db);
     await sql`
       INSERT INTO app.push_subscriptions (owner_user_id, endpoint_hash, credentials_ciphertext)
-      VALUES (${ids.userA}, 'hash-1', ${seal({ endpoint: "https://push.example/1" })}::jsonb)
+      VALUES (${ids.userA}, 'hash-1', ${seal(pushSubscriptionCipher, { endpoint: "https://push.example/1" })}::jsonb)
     `.execute(db);
   }
 
@@ -94,21 +107,47 @@ describe("AI key retirement covers every AI-keyring store", () => {
     }
   });
 
-  it("keeps the plaintext intact through the rewrap", async () => {
+  it("reads every record through its own feature cipher with the new key alone", async () => {
     const db = createDatabase({ connectionString: connectionStrings.bootstrap });
     try {
       await seedStoresSealedWithOldKey(db);
       await rewrapAiKeyringStores(db, createAiSecretCipher(rotatedEnv));
 
-      const row = await sql<{ credentials_ciphertext: unknown }>`
+      const masterCipher = createMasterKeyStoreCipher(currentOnlyEnv);
+      const webSearchCipher = createWebSearchSecretCipher(currentOnlyEnv);
+      const settings = await sql<{ key: string; value: { value?: unknown } }>`
+        SELECT key, value FROM app.instance_settings
+      `.execute(db);
+      const byKey = new Map(settings.rows.map((row) => [row.key, row.value.value]));
+
+      for (const key of ["keys.integrations", "keys.module_credential", "keys.news_credential"]) {
+        expect(masterCipher.decryptJson(masterCipher.parseEnvelope(byKey.get(key)))).toEqual({
+          secret: key
+        });
+      }
+      const braveKey = "web.brave_search_api_key";
+      expect(
+        webSearchCipher.decryptJson(webSearchCipher.parseEnvelope(byKey.get(braveKey)))
+      ).toEqual({ secret: braveKey });
+
+      const signing = await sql<{ private_key_ciphertext: unknown }>`
+        SELECT private_key_ciphertext FROM app.push_signing_key
+      `.execute(db);
+      const signingCipher = createPushSigningCipher(currentOnlyEnv);
+      expect(
+        signingCipher.decryptJson(
+          signingCipher.parseEnvelope(signing.rows[0]?.private_key_ciphertext)
+        )
+      ).toEqual({ privateKey: "priv" });
+
+      const subscription = await sql<{ credentials_ciphertext: unknown }>`
         SELECT credentials_ciphertext FROM app.push_subscriptions
       `.execute(db);
-      const newCipher = createAiSecretCipher({
-        JARVIS_AI_SECRET_KEY: NEW_SECRET,
-        JARVIS_AI_SECRET_KEY_ID: "v2"
-      });
+      const subscriptionCipher = createPushSubscriptionCipher(currentOnlyEnv);
       expect(
-        newCipher.decryptJson(newCipher.parseEnvelope(row.rows[0]?.credentials_ciphertext))
+        subscriptionCipher.decryptJson(
+          subscriptionCipher.parseEnvelope(subscription.rows[0]?.credentials_ciphertext)
+        )
       ).toEqual({ endpoint: "https://push.example/1" });
     } finally {
       await db.destroy();
