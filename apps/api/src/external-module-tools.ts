@@ -146,21 +146,31 @@ export function createExternalModuleTools(input: {
     // validateToolInput deliberately does not enforce additionalProperties
     // (#133), so a caller CAN smuggle an `actorUserId` key through schema
     // validation — spread order, not schema rejection, is the spoof defense.
-    // Active member ids let a module drop mirror residue left by deleted or
-    // deactivated members (finance household reads). Spread last for the same
-    // reason as actorUserId.
-    const activeUserIds = await input.appDataContext.withDataContext(
-      { actorUserId: context.actorUserId, requestId: context.requestId },
-      async (scopedDb) =>
-        (await input.settingsRepository.listUsers(scopedDb))
-          .filter((user) => user.status === "active")
-          .map((user) => user.id)
+    // A module that writes instance-scope storage itself (a shared household pool) must be able
+    // to drop entries left by deleted or deactivated members, so it alone receives the active
+    // member ids. Other modules reject unknown input keys and get nothing extra. Spread last for
+    // the same reason as actorUserId.
+    const sharesMemberState = (module.manifest.storage ?? []).some(
+      (entry) => entry.scopes.includes("instance") && entry.instanceWritePolicy === "module"
     );
+    const activeUserIds = sharesMemberState
+      ? await input.appDataContext.withDataContext(
+          { actorUserId: context.actorUserId, requestId: context.requestId },
+          async (scopedDb) =>
+            (await input.settingsRepository.listUsers(scopedDb))
+              .filter((user) => user.status === "active")
+              .map((user) => user.id)
+        )
+      : undefined;
     return externalToolResult(
       await runtime.invoke(
         module,
         tool.handler,
-        { ...toolInput, actorUserId: context.actorUserId, activeUserIds },
+        {
+          ...toolInput,
+          actorUserId: context.actorUserId,
+          ...(activeUserIds ? { activeUserIds } : {})
+        },
         rpc,
         // #1286 Task 2e: an assistant tool call gets its own child process,
         // separate from this module's queue jobs and briefing invocations.
