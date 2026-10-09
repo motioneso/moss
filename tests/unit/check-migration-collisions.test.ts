@@ -310,6 +310,45 @@ describe("check-migration-collisions (Issue #2371)", () => {
       expect(violations[0]?.message).toContain('PR #2510 ("In-flight migration")');
     });
 
+    it("treats a stacked branch and its parent PR carrying the same file as one claimant", () => {
+      const sharedFile = {
+        path: "packages/chat/sql/0299_main_chat.sql",
+        version: "0299",
+        filename: "0299_main_chat.sql"
+      };
+      const claims: ClaimSource[] = [
+        { label: "Current branch (local working copy)", file: sharedFile },
+        { label: 'PR #3154 ("Scheduled proactive integration")', file: { ...sharedFile } }
+      ];
+
+      expect(checkCrossPrCollisions(claims)).toEqual([]);
+    });
+
+    it("still flags a different file on the same number alongside a shared file", () => {
+      const sharedFile = {
+        path: "packages/chat/sql/0299_main_chat.sql",
+        version: "0299",
+        filename: "0299_main_chat.sql"
+      };
+      const claims: ClaimSource[] = [
+        { label: "Current branch (local working copy)", file: sharedFile },
+        { label: 'PR #3154 ("Scheduled proactive integration")', file: { ...sharedFile } },
+        {
+          label: 'PR #3300 ("Unrelated feature")',
+          file: {
+            path: "packages/news/sql/0299_news_feed.sql",
+            version: "0299",
+            filename: "0299_news_feed.sql"
+          }
+        }
+      ];
+
+      const violations = checkCrossPrCollisions(claims);
+      expect(violations).toHaveLength(1);
+      expect(violations[0]?.version).toBe("0299");
+      expect(violations[0]?.message).toContain("packages/news/sql/0299_news_feed.sql");
+    });
+
     it("flags when an open PR claims a version already on base branch", () => {
       const baseFiles: MigrationFile[] = [
         {
