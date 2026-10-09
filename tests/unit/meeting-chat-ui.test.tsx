@@ -97,7 +97,8 @@ afterEach(async () => {
 async function mount(
   gated = false,
   initialSelection = selection,
-  records: readonly TranscriptRecord[] = []
+  records: readonly TranscriptRecord[] = [],
+  expectedState: "ready" | "loading" | "failed" | "denied" = "ready"
 ) {
   vi.stubGlobal("fetch", fetchMock);
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -123,8 +124,18 @@ async function mount(
       </QueryClientProvider>
     );
   });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 10));
+  await vi.waitFor(() => {
+    if (expectedState === "ready") {
+      expect(renderer!.root.findByType(Composer).props.readOnly).toBeFalsy();
+    } else {
+      expect(JSON.stringify(renderer!.toJSON())).toContain(
+        expectedState === "loading"
+          ? "Loading meeting…"
+          : expectedState === "failed"
+            ? "Couldn’t load meeting chat"
+            : "Meeting unavailable"
+      );
+    }
   });
   return renderer!;
 }
@@ -210,9 +221,7 @@ it.each([401, 403, 404])(
     await act(async () => {
       await client.refetchQueries({ queryKey: ["meeting-chat-access", selection.selectionId] });
     });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    });
+    await vi.waitFor(() => expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable"));
     expect(JSON.stringify(view.toJSON())).not.toContain("Private review");
     expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable");
   }
@@ -356,7 +365,7 @@ it.each(["access", "title", "history"])(
     });
     if (source === "history")
       vi.mocked(listChatThreads).mockRejectedValueOnce(new ApiError(503, "Unavailable"));
-    const view = await mount(true);
+    const view = await mount(true, selection, [], "failed");
     await vi.waitFor(() =>
       expect(JSON.stringify(view.toJSON())).toContain("Couldn’t load meeting chat")
     );
@@ -510,7 +519,7 @@ it.each(["meeting", "account"])(
           })
         : json({ available: true })
     );
-    const view = await mount(true, { ...selection, title: "About this meeting" });
+    const view = await mount(true, { ...selection, title: "About this meeting" }, [], "loading");
     await vi.waitFor(() => expect(finish).toEqual(expect.any(Function)));
     const next = {
       meetingId: boundary === "account" ? meetingId : "22334455-2233-4233-8233-223344556677",
@@ -553,7 +562,7 @@ it.each([401, 403, 404])(
         ? json({ error: "Meeting unavailable" }, status)
         : json({ available: true })
     );
-    const view = await mount(true);
+    const view = await mount(true, selection, [], "denied");
     await vi.waitFor(() => expect(JSON.stringify(view.toJSON())).toContain("Meeting unavailable"));
     expect(view.root.findAllByType(Composer)).toHaveLength(0);
     expect(JSON.stringify(view.toJSON())).not.toContain(selection.title);

@@ -25,8 +25,10 @@ export function useInitialCallerDraft(
   surface: ChatSurface,
   generation: { current: number }
 ) {
-  const [draft, setDraft] = useState<CallerDraft | null>(null);
-  const draftRef = useRef<CallerDraft | null>(null);
+  const [draft, setDraft] = useState<CallerDraft | null>(() =>
+    initialText ? { text: initialText, surface, generation: generation.current } : null
+  );
+  const draftRef = useRef<CallerDraft | null>(draft);
   const initialTextRef = useRef<string | undefined>(undefined);
   const setCurrentDraft = useCallback((action: SetStateAction<CallerDraft | null>) => {
     setDraft((current) => {

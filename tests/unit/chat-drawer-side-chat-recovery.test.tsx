@@ -204,9 +204,10 @@ it("does not move an unresolved starter into a later untouched conversation", as
   await act(async () => {
     privacy.resolve({ incognito: false, threadId: "a" });
     threads.resolve({ threads: [thread("a", "Main chat", true), thread("b", "Side chat")] });
-    await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  expect(renderer.root.findByType("textarea").props.value).toBe("genuine unsent");
+  await vi.waitFor(() =>
+    expect(renderer.root.findByType("textarea").props.value).toBe("genuine unsent")
+  );
 
   await act(async () => {
     findByAriaLabel(renderer, "Open conversations")!.props.onClick();
@@ -672,16 +673,18 @@ it("retries a failed module identity load and allows a settled no-ID send", asyn
   expect(renderer.root.findByType("textarea").props.disabled).toBe(true);
   await act(async () => {
     privacy.reject(new Error("offline"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  expect(findByAriaLabel(renderer, "Retry conversation identity")).not.toBeNull();
+  await vi.waitFor(() =>
+    expect(findByAriaLabel(renderer, "Retry conversation identity")).not.toBeNull()
+  );
   await act(async () => {
     findByAriaLabel(renderer, "Retry conversation identity")!.props.onClick();
-    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-  expect(findByAriaLabel(renderer, "Retry conversation identity")).toBeNull();
-  expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
+  await vi.waitFor(() => {
+    expect(findByAriaLabel(renderer, "Retry conversation identity")).toBeNull();
+    expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
+  });
   await act(async () =>
     renderer.root.findByType("textarea").props.onChange({ target: { value: "No-ID draft" } })
   );
@@ -768,4 +771,54 @@ it("retains a cached transcript and restores the composer after a failed refetch
   });
 
   expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
+});
+
+it("keeps delayed caller text and edits through unavailable-provider transitions", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const route = (available: boolean) => ({
+    route: {
+      capability: "chat" as const,
+      available,
+      reason: available ? "matched-active-model" : "no-active-model",
+      model: null
+    }
+  });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client));
+  });
+  await act(async () => {
+    client.setQueryData(queryKeys.ai.capability("chat"), route(false));
+    renderer.update(drawer(client, "Delayed caller"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(findByClassName(renderer, "chatd__status chatd__status--offline").children).toEqual([
+    "Not connected"
+  ]);
+  expect(renderer.root.findByType("textarea").props.value).toBe("Delayed caller");
+  await act(async () => {
+    renderer.root.findByType("textarea").props.onChange({ target: { value: "My edited caller" } });
+    client.setQueryData(queryKeys.ai.capability("chat"), route(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(findByClassName(renderer, "chatd__status").children).toEqual(["Here when you need me"]);
+  expect(renderer.root.findByType("textarea").props.value).toBe("My edited caller");
+  await act(async () => {
+    client.setQueryData(queryKeys.ai.capability("chat"), route(false));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(findByClassName(renderer, "chatd__status chatd__status--offline").children).toEqual([
+    "Not connected"
+  ]);
+  expect(renderer.root.findByType("textarea").props.value).toBe("My edited caller");
+  await act(async () => {
+    renderer.root.findByType("textarea").props.onChange({ target: { value: "" } });
+  });
+  expect(renderer.root.findAllByType("textarea")).toHaveLength(0);
+  await act(async () => {
+    client.setQueryData(queryKeys.ai.capability("chat"), route(true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("");
+  act(() => renderer.unmount());
 });
