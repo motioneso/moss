@@ -36,23 +36,30 @@ Runtime baseline and throwaway prototypes were not merged.
   account-list recovery; grant-query Retry and useful selected delivery are not live-proven.
   Final assembled static, exact six-file units and four-file email-access DB checks are
   recorded at the merger's final commit/fingerprint; earlier receipts do not certify it.
-- Unblocked Settings frontier: #3130. #3126, #3156 and #3149 are eligible after the verified
-  repair; #3157 waits for #3156. #3127 is a scope container until both children pass its
+- The #3130 source-fit audit at `04bcabc42d` found the original full builder too large for one
+  complete session. Its native prerequisite #3158 is now the Settings frontier: existing Profile
+  local notification defer/release behavior, proactive parity, DST/UTC+14, and current UI/worker
+  proof. #3130 remains a full canonical migration/editor/writer/CAS/undo/conflict-preservation
+  builder and must be rechecked after #3158; #3131 still waits for #3130. The audit made no code,
+  test or live-proof claim. See [the prerequisite plan](2026-10-08-quiet-hours-delivery-prerequisite.md).
+- #3126, #3156 and #3149 are eligible after the verified repair; #3157 waits for #3156. #3127 is a scope container until both children pass its
   full acceptance; #3128 remains blocked by #3127. Use one builder
   and sequential independent reviews within available capacity; serialize heavy checks.
   All other work remains pending its verified blockers. The coordinator owns dispatch
   and tracker transitions. Draft integration PR [#3154](https://github.com/motioneso/moss/pull/3154)
   is open and remains draft during implementation. Current GitHub CI is not certified;
-  the previously observed assistant-name Meetings chat CI failure remains pending coordinator disposition.
-  Scoped repair verification does not establish branch-wide readiness.
+  the previously observed assistant-name Meetings chat CI failure was repaired in the two affected
+  fixtures, with source reviews and scoped local evidence recorded in
+  [the fixture repair evidence](../handoffs/2026-10-08-ci-fixture-repair-evidence.md). That evidence
+  does not establish branch-wide CI readiness.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
   records session sizing, explicit shared Settings shell/Alerts/client/query/app-map/manifest
   and personal-pane ownership transfer from #3129 to #3130, and native reslices #3149–#3152
-  under #3132/#3137 plus #3156→#3157 under #3127. #3155 and #3129 are integrated and verified
+  under #3132/#3137, #3156→#3157 under #3127, and #3158→#3130. #3155 and #3129 are integrated and verified
   within their recorded source/live/assembled limits. Original downstream blockers are retained;
-  no native Settings edge was added. The current 31-node/38-edge graph is acyclic.
+  #3130 is not a scope container. The current 32-node/39-edge graph is acyclic.
 - Each ticket uses a fresh TDD implementer, isolated worktree/branch from the integration
   tip, required checks and independent review, real UI/worker demonstration, evidence
   and truthful app-map updates. DB checks use `verify-gate`.

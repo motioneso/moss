@@ -6,25 +6,27 @@ The accepted product behavior, mockups and approved migration rulings remain unc
 
 ## Native reslices
 
-| Original | Dispatch slice | Blocked by | Complete user outcome                                                                                                                                  |
-| -------- | -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| #3132    | #3149          | #3125      | Request/cancel a relative fixed reminder in ordinary chat; receive one durable, replyable assistant message while away, safely alongside a live reply. |
-| #3132    | #3150          | #3149      | Extend the same reminder with local-clock/DST timing, explicit deadlines and late/expired recovery.                                                    |
-| #3137    | #3151          | #3133      | Schedule one exact authorized existing-source read through a real read-only gateway; receive a sourced status report while away.                       |
-| #3137    | #3152          | #3151      | Extend that path with configured-model source reporting and bounded quiet retries.                                                                     |
-| #3129    | #3155          | None       | Existing email refresh/monitoring respects current per-account access and module availability, with two-account revocation and real worker proof.      |
-| #3127    | #3156          | #3125      | Retain earlier decisions on return/restart through semantic summary coverage and safe bounded replay in the same conversation.                         |
-| #3127    | #3157          | #3156      | Continue typing through an automatic bounded provider-session rollover while preserving conversation and transcript identity.                          |
+| Original | Dispatch slice | Blocked by | Complete user outcome                                                                                                                                                                  |
+| -------- | -------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #3132    | #3149          | #3125      | Request/cancel a relative fixed reminder in ordinary chat; receive one durable, replyable assistant message while away, safely alongside a live reply.                                 |
+| #3132    | #3150          | #3149      | Extend the same reminder with local-clock/DST timing, explicit deadlines and late/expired recovery.                                                                                    |
+| #3137    | #3151          | #3133      | Schedule one exact authorized existing-source read through a real read-only gateway; receive a sourced status report while away.                                                       |
+| #3137    | #3152          | #3151      | Extend that path with configured-model source reporting and bounded quiet retries.                                                                                                     |
+| #3129    | #3155          | None       | Existing email refresh/monitoring respects current per-account access and module availability, with two-account revocation and real worker proof.                                      |
+| #3130    | #3158          | None       | Existing Profile saved quiet window correctly defers and releases normal outward notifications at its local boundary, with proactive parity, DST/UTC+14 and installed UI/worker proof. |
+| #3127    | #3156          | #3125      | Retain earlier decisions on return/restart through semantic summary coverage and safe bounded replay in the same conversation.                                                         |
+| #3127    | #3157          | #3156      | Continue typing through an automatic bounded provider-session rollover while preserving conversation and transcript identity.                                                          |
 
-These seven tasks are native children of their original tickets, tracked on project 2 with
+These eight tasks are native children of their original tickets, tracked on project 2 with
 native blocking edges. #3132 additionally waits for #3150; #3137 additionally waits for #3152;
 #3129 waits for #3155 before its saved-choice and accepted Settings implementation; #3127
-additionally waits for #3157. #3128 still waits for original #3127, including both children.
-Original downstream edges remain intact. #3127, #3132 and #3137 are scope containers, not extra builder
-dispatches; their full acceptance criteria must pass after both children integrate. #3129 still
-has its own saved-choice and Settings implementation session after its prerequisite.
-Verified graph now has 31 task nodes and 38 blocking edges and is acyclic. All tickets remain open until
-normal PR closure; integration/verification governs the working frontier.
+additionally waits for #3157. #3130 waits for #3158; #3131 still waits for original #3130.
+#3128 still waits for original #3127, including both children. Original downstream edges remain
+intact. #3127, #3132 and #3137 are scope containers, not extra builder dispatches; their full
+acceptance criteria must pass after both children integrate. #3129 and #3130 each retain a full
+builder session after their prerequisite. Verified graph now has 32 task nodes and 39 blocking
+edges and is acyclic. All tickets remain open until normal PR closure; integration/verification
+governs the working frontier.
 
 ## Session fit and shared conversation ownership
 
@@ -59,7 +61,7 @@ normal PR closure; integration/verification governs the working frontier.
   exist. Persist initiation before invocation and prohibit automatic replay after it begins.
   Reslice if the required seams did not actually land; do not add a general model tool loop.
 
-## Settings ownership — #3129 and #3130
+## Settings ownership — #3129, #3158 and #3130
 
 #3155 first hardens the existing cached email source through public grant/module services and
 per-account filtering. Its demonstration uses existing grant/module controls, authenticated
@@ -73,10 +75,20 @@ single verified session. #3129 retains all of its original acceptance criteria a
 entry, saved/effective email-choice mapping and relevant email source gates. It owns new surface
 navigation/app-map metadata and delivery-control reuse. It does not implement quiet-hours policy.
 
-#3130 owns the dedicated quiet-hours component, saved/draft/error/conflict detection, API
-validation/metadata, unambiguous canonical migration, Profile link/control behavior and real
-notification boundary proof. #3131 separately resolves conflicts. It uses existing quiet-hours
-client/query seams and owns changed Profile/quiet-hours map metadata.
+#3158 first repairs the existing Profile saved quiet window's normal outward notification
+defer/release boundary and compatible proactive quiet-end calculation. It owns existing local
+delivery consumers, the smallest compatible time helper and tests if needed, the local behavior's
+map metadata, and installed current-UI/worker proof. It preserves wall-time membership (including
+legacy equal-time handling), strict local-instant rejection, Profile owner-zone/UTC fallback and
+proactive's existing owner-zone fallback. A gap end uses the first valid instant; a fold end uses
+the later occurrence. It does not add a canonical resolver, writer, CAS, undo, editor, conflict
+choice, task allowance or cap-day change.
+
+#3130 remains a full builder after #3158: it owns the dedicated quiet-hours component,
+saved/draft/error/conflict detection, API validation/metadata, unambiguous canonical migration,
+all three writers with revision/CAS/undo safety, Profile link/control behavior and real notification
+boundary proof. #3131 separately resolves conflicts. Recheck #3130's fit after #3158; no assumption
+that the remaining scope fits is authorized.
 
 Shared Settings navigation, client/query files, app-map and manifest/composition hunks require
 explicit handoff. With #3129 integrated from `8dc523ece`, shared-hunk ownership now transfers
@@ -88,8 +100,9 @@ in that API directory, `packages/shared/src/app-map-core.ts`,
 `packages/module-registry/src/route-chat-rules.ts`. Preserve the integrated email choice,
 delivery controls and external-effect classification while wiring canonical quiet hours.
 #3130 starts from the latest verified integration tip and owns the shell/Alerts/Profile
-composition, query and app-map changes needed for its accepted UI and live proof. This
-coordination adds no native Settings dependency edge; #3131 remains the separate conflict slice.
+composition, query and app-map changes needed for its accepted UI and live proof. The Settings
+shell ownership transferred by #3129 remains #3130's; #3158 changes only local delivery
+consumer/time/map/UAT hunks and adds no shell or control. #3131 remains the separate conflict slice.
 
 ## Verification infrastructure
 
