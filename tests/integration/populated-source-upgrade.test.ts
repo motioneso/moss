@@ -76,6 +76,7 @@ describe("populated news and sports source upgrades", () => {
         DROP COLUMN health_state, DROP COLUMN health_reason_code, DROP COLUMN health_message,
         DROP COLUMN last_checked_at, DROP COLUMN last_success_at;
       ALTER TABLE app.sports_custom_sources
+        DROP CONSTRAINT sports_custom_sources_reason_check,
         DROP COLUMN recipe_json, DROP COLUMN recipe_schema_version, DROP COLUMN recipe_fingerprint,
         DROP COLUMN recipe_status, DROP COLUMN confirmed_fetch_hosts,
         DROP COLUMN authorization_confirmed_at;
@@ -241,18 +242,49 @@ describe("populated news and sports source upgrades", () => {
   });
 
   it("leaves an already upgraded install untouched", async () => {
-    const sources = await seedSportsSources();
-    await seedAssignments(sources);
+    // The foundation reset already applied every migration, so these rows use the current shape.
+    const feed = randomUUID();
+    const scrape = randomUUID();
+    await bootstrap.query(
+      `INSERT INTO app.sports_custom_sources
+         (id, owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
+          validation_fingerprint, validated_at, recipe_status, confirmed_fetch_hosts,
+          authorization_confirmed_at)
+       VALUES ($1, $3, 'Feed', 'feed.example', 'https://feed.example/', 'https://feed.example/rss',
+               'feed', 'fp', now(), 'feed', ARRAY['feed.example'], now()),
+              ($2, $3, 'Scrape', 'scrape.example', 'https://scrape.example/', NULL,
+               'scrape', 'fp', now(), 'missing', ARRAY['scrape.example'], now())`,
+      [feed, scrape, owner]
+    );
+    await seedAssignments({ feed, scrape });
+    const newsId = randomUUID();
+    await bootstrap.query(
+      `INSERT INTO app.news_custom_sources
+         (id, owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
+          validation_status, validation_fingerprint, validated_at, confirmed_fetch_hosts)
+       VALUES ($1, $2, 'Paper', 'news.example', 'https://news.example/home',
+               'https://news.example/rss', 'feed', 'approved', 'fp', now(),
+               ARRAY['news.example'])`,
+      [newsId, owner]
+    );
+    const before = await bootstrap.query(
+      `SELECT (SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM app.sports_custom_sources s) AS sports,
+              (SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM app.sports_source_assignments a) AS assignments,
+              (SELECT jsonb_agg(to_jsonb(n) ORDER BY id) FROM app.news_custom_sources n) AS news`
+    );
 
     await stage("sports", [sportsFile]);
     await stage("news", [healthFile, kindsFile]);
     await migrate();
     await migrate();
 
-    const sportsRows = await bootstrap.query(
-      "SELECT count(*)::int AS n FROM app.sports_custom_sources"
+    const after = await bootstrap.query(
+      `SELECT (SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM app.sports_custom_sources s) AS sports,
+              (SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM app.sports_source_assignments a) AS assignments,
+              (SELECT jsonb_agg(to_jsonb(n) ORDER BY id) FROM app.news_custom_sources n) AS news`
     );
-    expect(sportsRows.rows[0].n).toBe(2);
+    expect(after.rows[0]).toEqual(before.rows[0]);
+    expect(before.rows[0].sports).toHaveLength(2);
     await expectAllForced();
   });
 
