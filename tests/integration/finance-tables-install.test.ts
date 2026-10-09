@@ -24,7 +24,8 @@ const ownedTables = [
   "app.finance_accounts",
   "app.finance_transactions",
   "app.finance_balance_snapshots",
-  "app.finance_budget_assignments"
+  "app.finance_budget_assignments",
+  "app.finance_categories"
 ];
 
 beforeAll(async () => {
@@ -53,7 +54,7 @@ afterEach(async () => {
 });
 
 describe("finance module table install (FIN-06a #1166)", () => {
-  it("installs all nine migrations, FORCE RLS on every table, and re-runs idempotently", async () => {
+  it("installs all ten migrations, FORCE RLS on every table, and re-runs idempotently", async () => {
     const result = await installModule({
       moduleId,
       manifest: { database: { ownedTables } },
@@ -61,7 +62,7 @@ describe("finance module table install (FIN-06a #1166)", () => {
       migrationConnectionString: urls.migration,
       migrationsDirectory: "external-modules/finance/sql"
     });
-    expect(result.installed).toHaveLength(9);
+    expect(result.installed).toHaveLength(10);
 
     const client = new Client({ connectionString: urls.bootstrap });
     await client.connect();
@@ -86,7 +87,7 @@ describe("finance module table install (FIN-06a #1166)", () => {
       "SELECT version FROM app.module_schema_migrations WHERE module_id = $1",
       [moduleId]
     );
-    expect(ledger.rows).toHaveLength(9);
+    expect(ledger.rows).toHaveLength(10);
 
     await client.end();
 

@@ -62,3 +62,25 @@ export const PFC_MAP: Readonly<Record<string, string>> = {
   GOVERNMENT_AND_NON_PROFIT: "subscriptions",
   HOME_IMPROVEMENT: "shopping"
 };
+
+/** Budget groups shown on the Budget screen, in display order. */
+export const CATEGORY_GROUP_NAMES = ["Bills", "Everyday", "Fun", "Savings", "Income"] as const;
+export type CategoryGroupName = (typeof CATEGORY_GROUP_NAMES)[number];
+
+/**
+ * Legacy KV group id to table group. Transfers have no group of their own in
+ * R1, so they sit under Everyday. Unknown ids (user-added categories) fall
+ * back to Everyday.
+ */
+const LEGACY_GROUP_MAP: Readonly<Record<string, CategoryGroupName>> = {
+  fixed: "Bills",
+  everyday: "Everyday",
+  personal: "Fun",
+  "savings-goals": "Savings",
+  income: "Income",
+  transfers: "Everyday"
+};
+
+export function tableGroupFor(legacyGroup: string): CategoryGroupName {
+  return LEGACY_GROUP_MAP[legacyGroup] ?? "Everyday";
+}
