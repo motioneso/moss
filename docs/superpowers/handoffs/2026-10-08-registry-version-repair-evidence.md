@@ -44,19 +44,29 @@ The exact CI run for the verified base,
 [`37893433995`](https://github.com/motioneso/moss/actions/runs/37893433995),
 used Node `24.21.0` and pnpm `10.6.2`. Its real
 `publish-module-registry.ts --check` command exited 1 and rejected only Finance
-`0.5.14` and Food `0.3.7` for changed SHA-256 and size. An independent
-disposable archive of that same base reproduced the red result (terminal exit
-1) in the matching Node container after `corepack pnpm install
---frozen-lockfile`, using:
+`0.5.14` and Food `0.3.7` for changed SHA-256 and size.
+
+The authoritative local pair used fresh `git archive` sources, a read-only
+mounted index, and a frozen install inside the same disposable
+`node:24.21.0-bookworm` container. Before the CLI, each run asserted that the
+mounted file was nonempty, parsed as an index containing Finance and Food, and
+had SHA-256 `8b6cb44748c979c1e70618e3f0eb3eb9202c1006a2879dc43bc439c2a73ee3e5`.
+The base archive (`ab057308`, archive SHA-256
+`0775c332a32f0e7d1fd34fd43f6471d1aefa248b4f0c65e2da2b46e250a3893a`)
+exited 1 for only Finance and Food. The candidate archive (`44d381d`, archive
+SHA-256 `e6150090828056d24a72e6de2bf17220ffb49a71895a876bf7e13940432c7ca9`)
+exited 0 with `registry check: 3 module(s) publishable`. Both ran:
 
 ```sh
+corepack pnpm install --frozen-lockfile
 corepack pnpm tsx scripts/publish-module-registry.ts \
   --check --out /tmp/registry-check --previous-index /published-index/index.json
 ```
 
-Before editing, the same local CLI command with the released index also exited
-1 for those two artifacts. It additionally reported Job Search `0.2.15`.
-That local discrepancy was investigated instead of bumping a third module:
+An earlier host-mounted container probe did not mount the published index and
+is excluded from the result above. A separate host-local diagnostic with the
+released index reported Job Search `0.2.15`; it was investigated rather than
+used to bump a third module:
 
 - The published and local Job Search tarballs unpack to identical trust-set
   files (`jarvis.module.json`, `dist/**`, and `sql/**`), while their gzip
@@ -64,19 +74,17 @@ That local discrepancy was investigated instead of bumping a third module:
 - Their gzip headers are identical. The first compressed-payload difference is
   one-indexed byte 3,744 (`0o355` published, `0o343` local); the compressed
   streams have further differences but unpacked files compare equal.
-- The CI run at the same source SHA did not reject Job Search. The same
-  disposable `node:24.21.0-bookworm` input image, using Node `24.21.0`, zlib
-  `1.3.2.1-motley-8002e91`, pnpm `10.6.2`, the published-index digest above,
-  and the actual CLI command, exited 0 with `registry check: 3 module(s)
-  publishable` after the two version edits. That candidate had only the two
-  manifest version edits and no evidence-document delta. The image digest was
+- The CI run at the same source SHA did not reject Job Search, and the
+  authoritative candidate archive did not reject it. The container used Node
+  `24.21.0`, zlib `1.3.2.1-motley-8002e91`, and pnpm `10.6.2`. Its image digest was
   `sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0`;
   its Node binary SHA-256 was
   `7fde7b8afa198da66257f42ee2001d874c7355631e6d1579a5fb5ef1f246df4c`.
 
-The disposable container corroborates the CI result but does not replace the
+The archive pair corroborates the CI result but does not replace the
 pull-request workflow as final registry evidence. Job Search remains unchanged
-because no canonical CI rejection supports a new immutable release version.
+because no canonical CI rejection or matching-input check supports a new
+immutable release version.
 
 ## Checks
 
@@ -93,7 +101,7 @@ inputs, not a clean-commit certification.
 | `pnpm format:check` | passed |
 | `pnpm check:file-size` | passed; no checked file exceeds 1,000 lines |
 | `pnpm typecheck` | passed, including root, test, web, and external-module checks |
-| Publisher check in disposable matching Node container | passed: 3 modules publishable |
+| Publisher check in frozen disposable Node container with mounted index | passed: 3 modules publishable |
 
 The failed pre-edit publisher check is the meaningful red proof. No mirrored
 JSON-only test was added for the two one-line version changes; the publisher
