@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Recover meeting audio after call changes.** A meeting recording now keeps going when you join a browser call such as Teams or Google Meet. It reconnects the audio by itself, and a few seconds may be missed while it does. [PR #3153](https://github.com/motioneso/moss/pull/3153)
 - **Reduce speaker echo in meeting recordings.** Meeting recordings use the Mac’s voice processing to reduce speaker audio picked up by the microphone. [PR #3120](https://github.com/motioneso/moss/pull/3120)
 - **Starting meeting recordings.** Meeting recording on Mac can recover from brief microphone startup hiccups without needing Resume. [PR #3119](https://github.com/motioneso/moss/pull/3119)
 - **Cleaner meeting transcripts during silence.** Silent and near-silent recording chunks no longer create repeated transcript lines. [PR #3104](https://github.com/motioneso/moss/pull/3104)
