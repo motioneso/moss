@@ -291,6 +291,14 @@ function isExcludedElement(el: Element): boolean {
   return isSensitiveElementSignals(signals) || isHiddenElementSignals(signals);
 }
 
+/** True when the element or any ancestor is excluded; a hidden container hides its children. */
+function isExcludedInContext(el: Element): boolean {
+  for (let node: Element | null = el; node; node = node.parentElement) {
+    if (isExcludedElement(node)) return true;
+  }
+  return false;
+}
+
 function isFormValueElement(el: Element): boolean {
   if (FORM_CONTROL_TAGS.has(el.tagName.toLowerCase())) return true;
   const editable = el.getAttribute("contenteditable");
@@ -313,7 +321,7 @@ function capturableText(node: Node): string {
 
 function focusInfo(el: Element): PageContextFocusInfo | null {
   const signals = elementPrivacySignals(el);
-  if (isSensitiveElementSignals(signals) || isHiddenElementSignals(signals)) return null;
+  if (isExcludedInContext(el)) return null;
   const role = el.getAttribute("role");
   const ariaLabel = el.getAttribute("aria-label");
   // A form control's own text is a value, so only its aria-label can name it.
@@ -335,7 +343,7 @@ function collectPageContextCandidates(root: ParentNode): {
   const candidates: PageContextCandidate[] = [];
   const elements = root.querySelectorAll(CAPTURE_SELECTOR);
   for (const el of elements) {
-    if (isExcludedElement(el)) continue;
+    if (isExcludedInContext(el)) continue;
     const kind = candidateKindFor(el);
     if (!kind) continue;
     const declared = kind === "declared" ? el.getAttribute(DECLARED_TEXT_ATTRIBUTE)?.trim() : null;
@@ -370,6 +378,8 @@ function selectionTouchesExcluded(selection: Selection): boolean {
     if (!scope) continue;
     for (const el of scope.querySelectorAll("*")) {
       if (!range.intersectsNode(el)) continue;
+      // Textless decorations (icons, separators) carry nothing to leak.
+      if (!el.textContent?.trim()) continue;
       if (isExcludedElement(el) || isFormValueElement(el)) return true;
     }
   }

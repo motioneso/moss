@@ -60,4 +60,22 @@ describe("capturePageContextSnapshot DOM privacy (#3211)", () => {
     document.body.innerHTML = `<label>Notes <textarea>SECRET-G</textarea></label>`;
     expect(JSON.stringify(capturePageContextSnapshot())).not.toContain("SECRET-G");
   });
+
+  it("leaves out paragraphs inside a hidden container", () => {
+    document.body.innerHTML = `<div hidden><p>SECRET-H</p></div><div aria-hidden="true"><p>SECRET-I</p></div><ul style="display:none"><li>SECRET-J</li></ul>`;
+    const json = JSON.stringify(capturePageContextSnapshot());
+    for (const marker of ["SECRET-H", "SECRET-I", "SECRET-J"]) expect(json).not.toContain(marker);
+  });
+
+  it("does not label a focused button inside a hidden container", () => {
+    document.body.innerHTML = `<div aria-hidden="true"><button id="b">SECRET-K</button></div>`;
+    document.getElementById("b")!.focus();
+    expect(JSON.stringify(capturePageContextSnapshot())).not.toContain("SECRET-K");
+  });
+
+  it("keeps a selection that crosses a decorative icon", () => {
+    document.body.innerHTML = `<p id="p"><svg aria-hidden="true"></svg> Saved two minutes ago</p>`;
+    select(document.getElementById("p")!);
+    expect(capturePageContextSnapshot().selectedText).toBe("Saved two minutes ago");
+  });
 });
