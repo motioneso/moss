@@ -550,6 +550,8 @@ export * from "./external/validate.js";
 export * from "./external/types.js";
 export * from "./external/reconcile.js";
 export * from "./external/preferences.js";
+export * from "./external/app-map.js";
+import type { ExternalAppMapItems } from "./external/app-map.js";
 
 import { createActiveModulesResolver } from "./active-modules-resolver.js";
 
@@ -630,6 +632,8 @@ export interface BuiltInRouteDependencies {
    * listModuleManifests (the full registered set used by briefings + /api/modules).
    */
   readonly resolveActiveModules: ActiveModulesResolver;
+  /** #3168: installed modules' app-map entries for one actor; see createAppMapReadService. */
+  readonly resolveExternalAppMap?: (actorUserId: string) => Promise<ExternalAppMapItems>;
   readonly dataContext: DataContextRunner;
   readonly boss: PgBoss;
   /**
@@ -3708,6 +3712,8 @@ export function registerBuiltInApiRoutes(
   const appMapService = createAppMapReadService({
     artifact: loadAppMap(APP_MAP_ARTIFACT_PATH),
     resolveActiveModules: dependencies.resolveActiveModules,
+    // #3168: installed modules' app-map entries, only for modules active for this actor.
+    resolveExternalAppMap: dependencies.resolveExternalAppMap,
     resolveFeatureFlagState: (featureFlagId) =>
       dependencies
         .listModuleManifests()

@@ -53,6 +53,7 @@ import {
   getAllQueueDefinitions,
   getBuiltInModuleManifests,
   reconcileExternalModules,
+  externalAppMapItems,
   registerBuiltInApiRoutes,
   registerRouteEnablementGuard,
   assertRouteCoverage,
@@ -629,6 +630,13 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       routeCatalog,
       actAsGrants,
       resolveActiveModules: resolveActiveModulesWithIntegrations,
+      resolveExternalAppMap: async (actorUserId) =>
+        externalAppMapItems(
+          await getActiveExternalModules({
+            actorUserId,
+            requestId: `app-map:${randomUUID()}`
+          })
+        ),
       mcpServerUrl: apiServerConfig.mcpServerUrl,
       focusSignals: async (ctx) => {
         // 1) Resolve THIS actor's active manifests (honors per-user/instance disable) — its
