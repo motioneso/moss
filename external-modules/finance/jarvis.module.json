@@ -73,7 +73,7 @@
       {
         "id": "finance.start",
         "label": "Getting started",
-        "description": "Connect a first bank and build a first budget from three months of history. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin.",
+        "description": "Connect a first bank, let Moss sort the spending, then build the budget together. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin.",
         "path": "/start"
       }
     ],

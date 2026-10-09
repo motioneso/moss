@@ -49,6 +49,10 @@ describe("finance manifest app map (#3177)", () => {
     expect(countTopLevelKeys(readFileSync(manifestPath, "utf8"), "appMap")).toBe(1);
   });
 
+  it("promises no history-built first budget, which phase 1 does not do (review A4)", () => {
+    expect(readFileSync(manifestPath, "utf8")).not.toMatch(/three months|months of history/i);
+  });
+
   it("the duplicate-key check really counts a repeated block", () => {
     expect(countTopLevelKeys('{"appMap":{"a":1},"x":{"appMap":2},"appMap":{}}', "appMap")).toBe(2);
   });
