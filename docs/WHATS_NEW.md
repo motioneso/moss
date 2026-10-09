@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Task edits no longer lose data.** Editing a repeating task, moving a task with subtasks to another list, searching in plain words, and saving a task while it is still loading now all keep your changes instead of dropping or overwriting them. [PR #3272](https://github.com/motioneso/moss/pull/3272)
 - **Automatic day planning no longer books unapproved drafts.** When Moss plans your day automatically, it now adds only the time blocks it created itself. A draft you have not approved can no longer end up on your calendar. [PR #3205](https://github.com/motioneso/moss/pull/3205)
 - **Upgrades with saved News and Sports sources.** Updating Moss no longer fails to start when you already have custom News or Sports sources saved. [PR #3207](https://github.com/motioneso/moss/pull/3207)
 - **Creating goals works again.** Adding a new goal, or adding progress notes to a goal, no longer fails. [PR #3206](https://github.com/motioneso/moss/pull/3206)
