@@ -44,12 +44,19 @@ export function registerProactiveMonitoringSettingsRoutes(
   server.get("/api/me/proactive-monitoring-settings", async (request, reply) => {
     try {
       const ctx = await dependencies.resolveAccessContext(request);
-      const settings = await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
-        const saved = await repository.getSaved(scopedDb);
+      const saved = await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
+        const saved = await repository.initializeAutomaticEmailAlerts(scopedDb);
         if (saved === null) throw new HttpError(409, "Saved alert preference needs recovery");
-        return settingsResponse(saved);
+        if (!saved) throw new HttpError(409, "Saved alert preference needs recovery");
+        return saved;
       });
-      return reply.send({ settings });
+      await reconcileScheduleSafe(
+        dependencies.reconcileProactiveSchedule,
+        ctx.actorUserId,
+        saved.preference,
+        saved
+      );
+      return reply.send({ settings: settingsResponse(saved) });
     } catch (error) {
       return handleSettingsRouteError(error, reply);
     }
@@ -120,7 +127,7 @@ function mergePreference(
   return {
     ...(current ?? { version: 1 }),
     ...patch,
-    ...(patch.sources ? { sources: { ...currentSources, ...patch.sources } } : {}),
+    ...(patch.sources ? { sources: mergeSources(currentSources, patch.sources) } : {}),
     ...(patch.quietHours ? { quietHours: { ...currentQuietHours, ...patch.quietHours } } : {}),
     updatedAt: new Date().toISOString()
   };
@@ -137,6 +144,17 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function mergeSources(
+  current: Record<string, unknown>,
+  patch: Partial<ProactiveMonitoringPreferenceV1["sources"]>
+): Record<string, unknown> {
+  const merged = { ...current };
+  for (const [source, value] of Object.entries(patch)) {
+    merged[source] = { ...objectValue(current[source]), ...objectValue(value) };
+  }
+  return merged;
 }
 
 async function reconcileScheduleSafe(

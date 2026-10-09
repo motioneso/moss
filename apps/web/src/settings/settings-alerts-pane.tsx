@@ -31,7 +31,6 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
     onSuccess: (data) => queryClient.setQueryData(queryKeys.proactiveMonitoring.settings, data)
   });
   const enabled = settingsQuery.data?.settings.automaticEmailAlerts ?? false;
-  const error = settingsQuery.error ?? save.error;
   const emailAccounts =
     accountsQuery.data?.accounts.filter((account) =>
       account.scopes.some((scope) => scope.includes("gmail") || scope.includes("mail"))
@@ -45,6 +44,8 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
         retry: false
       }))
   });
+  const accessError = accountsQuery.error ?? grantQueries.find((query) => query.error)?.error;
+  const error = settingsQuery.error ?? save.error ?? accessError;
   const emailAvailable = grantQueries.some((query) => query.data?.email === true);
   const emailGrantDisabled = grantQueries.some(
     (query) => query.isSuccess && query.data?.email === false
@@ -52,6 +53,15 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
   const emailConnectionRevoked = emailAccounts.some((account) => account.status === "revoked");
   const emailAccessUnavailable =
     accountsQuery.isSuccess && !emailAvailable && !grantQueries.some((query) => query.isLoading);
+  const retryError = () => {
+    if (save.error && typeof save.variables === "boolean") return save.mutate(save.variables);
+    if (accessError) {
+      void accountsQuery.refetch();
+      grantQueries.forEach((query) => void query.refetch());
+      return;
+    }
+    void settingsQuery.refetch();
+  };
 
   return (
     <>
@@ -81,7 +91,7 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
             {error ? (
               <Note icon={<Mail size={13} aria-hidden="true" />}>
                 {readError(error)}{" "}
-                <Button variant="link" size="sm" onClick={() => void settingsQuery.refetch()}>
+                <Button variant="link" size="sm" onClick={retryError}>
                   Try again
                 </Button>
               </Note>

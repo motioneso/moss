@@ -77,6 +77,27 @@ export class ProactiveMonitoringPreferencesRepository {
       .execute();
     return saved;
   }
+
+  async initializeAutomaticEmailAlerts(
+    scopedDb: DataContextDb
+  ): Promise<SavedProactiveMonitoringPreference | null | undefined> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .insertInto("app.preferences")
+      .values({
+        owner_user_id: sql<string>`app.current_actor_user_id()`,
+        key: PROACTIVE_MONITORING_PREFERENCE_KEY,
+        value_json: jsonb({
+          version: 1,
+          automaticEmailAlerts: true,
+          updatedAt: new Date().toISOString()
+        }),
+        updated_at: new Date()
+      })
+      .onConflict((oc) => oc.columns(["owner_user_id", "key"]).doNothing())
+      .execute();
+    return this.getSaved(scopedDb);
+  }
 }
 
 export function validateProactiveMonitoringPreference(
@@ -175,10 +196,17 @@ function parse(raw: unknown): SavedProactiveMonitoringPreference {
   ) {
     throw new Error("malformed preference");
   }
+  const effectiveSources = { ...defaults.sources } as Record<string, unknown>;
+  for (const [source, value] of Object.entries(sources ?? {})) {
+    effectiveSources[source] =
+      value && typeof value === "object" && !Array.isArray(value) && source in effectiveSources
+        ? { ...(effectiveSources[source] as Record<string, unknown>), ...value }
+        : value;
+  }
   const preference = {
     ...defaults,
     ...p,
-    sources: { ...defaults.sources, ...(sources ?? {}) },
+    sources: effectiveSources,
     quietHours: { ...defaults.quietHours, ...(quietHours ?? {}) }
   };
   validateProactiveMonitoringPreference(preference);

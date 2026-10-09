@@ -5,9 +5,18 @@ import { defaultProactiveMonitoringPreference } from "@moss/shared";
 import { registerProactiveMonitoringSettingsRoutes } from "@moss/settings";
 
 function routeHarness(saved: unknown) {
+  const initialized =
+    saved === undefined
+      ? {
+          raw: { version: 1, automaticEmailAlerts: true },
+          preference: { ...defaultProactiveMonitoringPreference(), automaticEmailAlerts: true },
+          hasLegacyEmailChoice: false
+        }
+      : saved;
   const repository = {
     get: vi.fn().mockResolvedValue(defaultProactiveMonitoringPreference()),
     getSaved: vi.fn().mockResolvedValue(saved),
+    initializeAutomaticEmailAlerts: vi.fn().mockResolvedValue(initialized),
     upsert: vi.fn().mockImplementation(async (_db, raw: Record<string, unknown>) => ({
       raw,
       preference: {
@@ -98,6 +107,32 @@ describe("proactive monitoring settings persistence", () => {
     expect(vi.mocked(repository.upsert).mock.calls[0]?.[1]).toMatchObject({
       quietHours: { enabled: true, startLocalTime: "21:00", endLocalTime: "06:00" },
       automaticEmailAlerts: false
+    });
+    await app.close();
+  });
+
+  it("keeps a legacy source cap when the existing caller patches only enabled", async () => {
+    const pref = {
+      ...defaultProactiveMonitoringPreference(),
+      sources: {
+        ...defaultProactiveMonitoringPreference().sources,
+        email: { enabled: false, dailyCardCap: 2 }
+      }
+    };
+    const { app, repository } = routeHarness({
+      raw: { ...pref },
+      preference: pref,
+      hasLegacyEmailChoice: true
+    });
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/me/proactive-monitoring-settings",
+      payload: { sources: { email: { enabled: true } } }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(vi.mocked(repository.upsert).mock.calls[0]?.[1]).toMatchObject({
+      sources: { email: { enabled: true, dailyCardCap: 2 } }
     });
     await app.close();
   });
