@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import { buildUatComposeArgs } from "../provisioner.js";
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { signInUatAdmin } from "./real-chat-signin.js";
 
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
@@ -15,21 +15,6 @@ function pauseApp(paused: boolean): void {
   });
 }
 
-async function signIn(page: Page): Promise<void> {
-  await page.goto("/");
-  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
-  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  const skip = page.getByRole("button", { name: "Skip setup" });
-  const menu = page.locator(".jds-usermenu__trigger");
-  await expect(skip.or(menu).first()).toBeVisible({ timeout: 30_000 });
-  if (await skip.isVisible()) {
-    await skip.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
-  }
-  await expect(menu).toBeVisible();
-}
-
 function isTaskPost(request: { method(): string; url(): string }): boolean {
   return request.method() === "POST" && new URL(request.url()).pathname === "/api/tasks";
 }
@@ -38,7 +23,7 @@ test("installed quick add retains a genuine failed draft, admits once while busy
   page
 }) => {
   test.setTimeout(90_000);
-  await signIn(page);
+  await signInUatAdmin(page);
   const recoveryList = await page.request.post("/api/tasks/lists", {
     data: { name: "Quick-add recovery list" }
   });
