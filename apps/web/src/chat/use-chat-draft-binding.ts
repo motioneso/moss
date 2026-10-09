@@ -68,7 +68,7 @@ export function useChatDraftBinding(input: {
     surface
   ]);
   const activeBoundKey = selectedThreadId ? boundDraftKey(surface, selectedThreadId) : null;
-  const draftKey =
+  const activeDraftKey =
     privateMode || activatingPrivate
       ? "__private__"
       : activeBoundKey && drafts[activeBoundKey]
@@ -76,7 +76,11 @@ export function useChatDraftBinding(input: {
         : surface === "drawer" && !mainThreadId && drafts[fallbackKey] !== undefined
           ? fallbackKey
           : (selectedThreadId ?? fallbackKey);
-  const changeDraft = (action: SetStateAction<string>) => {
+  const changeDraft = (
+    action: SetStateAction<string>,
+    draftKey = activeDraftKey,
+    onChange?: () => void
+  ) => {
     setDrafts((current) => {
       const draft = current[draftKey] ?? "";
       const nextDraft = typeof action === "function" ? action(draft) : action;
@@ -86,6 +90,7 @@ export function useChatDraftBinding(input: {
           origin.current = { surface, generation: generation.current };
         }
       }
+      if (nextDraft !== draft) onChange?.();
       if (!nextDraft && draftKey === activeBoundKey) {
         const { [draftKey]: _bound, ...rest } = current;
         return rest;
@@ -93,5 +98,5 @@ export function useChatDraftBinding(input: {
       return { ...current, [draftKey]: nextDraft };
     });
   };
-  return { changeDraft, draftKey };
+  return { changeDraft, draftKey: activeDraftKey };
 }

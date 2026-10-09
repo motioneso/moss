@@ -119,6 +119,20 @@ class FakeMediaRecorder {
   }
 }
 
+function chatThread(id: string, title: string, isMain = false) {
+  return {
+    id,
+    ownerUserId: "owner",
+    title,
+    incognito: false,
+    isMain,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    lastActiveAt: "2026-01-01T00:00:00Z",
+    lastMessagePreview: null
+  };
+}
+
 it("reuses a cleared starter after the caller clears it", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let renderer!: ReactTestRenderer;
@@ -258,6 +272,131 @@ it("does not reseed a no-ID starter while its first send is in flight", async ()
     });
     await Promise.resolve();
   });
+});
+
+it("merges voice into an untouched settled caller starter only when transcription completes", async () => {
+  const drafts = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => drafts.get(key) ?? null,
+    setItem: (key: string, value: string) => drafts.set(key, value),
+    removeItem: (key: string) => drafts.delete(key)
+  });
+  const transcript = deferred<{ text: string }>();
+  vi.mocked(transcribeAudio).mockReturnValueOnce(transcript.promise);
+  vi.mocked(getChatPrivacyState).mockResolvedValueOnce({ incognito: false, threadId: "a" });
+  vi.mocked(listChatThreads).mockResolvedValueOnce({
+    threads: [chatThread("a", "Main chat", true)]
+  });
+  const recorders: FakeMediaRecorder[] = [];
+  class RecordingFakeMediaRecorder extends FakeMediaRecorder {
+    constructor(stream: unknown) {
+      super(stream);
+      recorders.push(this);
+    }
+  }
+  vi.stubGlobal("navigator", {
+    mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })) }
+  });
+  vi.stubGlobal("MediaRecorder", RecordingFakeMediaRecorder);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.chat.privacy(DEFAULT_CHAT_SURFACE), {
+    incognito: false,
+    threadId: "a"
+  });
+  client.setQueryData(queryKeys.chat.threads(DEFAULT_CHAT_SURFACE), {
+    threads: [chatThread("a", "Main chat", true)]
+  });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client, "A starter", "owner"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("A starter");
+
+  await act(async () => {
+    findByAriaLabel(renderer, "Record voice message")!.props.onClick();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(recorders).toHaveLength(1);
+    recorders[0]!.onstop?.();
+    await Promise.resolve();
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("A starter");
+  expect(drafts.get("moss.chatDrafts")).toBeUndefined();
+
+  await act(async () => {
+    transcript.resolve({ text: "voice" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("A starter voice");
+  expect(JSON.parse(drafts.get("moss.chatDrafts")!).drafts.a).toBe("A starter voice");
+});
+
+it("keeps a new B caller starter visible when delayed A speech completes on the same surface", async () => {
+  const drafts = new Map([
+    ["moss.chatDrafts", JSON.stringify({ ownerId: "owner", drafts: { b: "" } })]
+  ]);
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => drafts.get(key) ?? null,
+    setItem: (key: string, value: string) => drafts.set(key, value),
+    removeItem: (key: string) => drafts.delete(key)
+  });
+  const transcript = deferred<{ text: string }>();
+  vi.mocked(transcribeAudio).mockReturnValueOnce(transcript.promise);
+  vi.mocked(getChatPrivacyState).mockResolvedValueOnce({ incognito: false, threadId: "a" });
+  vi.mocked(listChatThreads).mockResolvedValueOnce({
+    threads: [chatThread("a", "Main chat", true), chatThread("b", "Side chat")]
+  });
+  const recorders: FakeMediaRecorder[] = [];
+  class RecordingFakeMediaRecorder extends FakeMediaRecorder {
+    constructor(stream: unknown) {
+      super(stream);
+      recorders.push(this);
+    }
+  }
+  vi.stubGlobal("navigator", {
+    mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })) }
+  });
+  vi.stubGlobal("MediaRecorder", RecordingFakeMediaRecorder);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.chat.privacy(DEFAULT_CHAT_SURFACE), {
+    incognito: false,
+    threadId: "a"
+  });
+  client.setQueryData(queryKeys.chat.threads(DEFAULT_CHAT_SURFACE), {
+    threads: [chatThread("a", "Main chat", true), chatThread("b", "Side chat")]
+  });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client, "A starter", "owner"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await act(async () => {
+    findByAriaLabel(renderer, "Record voice message")!.props.onClick();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(recorders).toHaveLength(1);
+    recorders[0]!.onstop?.();
+    await Promise.resolve();
+  });
+  await act(async () => {
+    findByAriaLabel(renderer, "Open conversations")!.props.onClick();
+  });
+  await act(async () => {
+    findByAriaLabel(renderer, "Side chat")!.props.onClick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    renderer.update(drawer(client, "B starter", "owner"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("B starter");
+
+  await act(async () => {
+    transcript.resolve({ text: "voice" });
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  expect(renderer.root.findByType("textarea").props.value).toBe("B starter");
+  expect(JSON.parse(drafts.get("moss.chatDrafts")!).drafts.a).toBe("voice");
 });
 
 it("keeps delayed speech with its edited A starter without disturbing B's untouched starter", async () => {

@@ -248,6 +248,14 @@ export function ChatDrawer(props: {
   const visibleCallerDraft = privateMode
     ? ""
     : callerDraft.textFor(selectedThreadId, drafts[draftBinding.draftKey]);
+  const composerTarget = {
+    destination: draftBinding.draftKey,
+    generation: generationRef.current,
+    surface: props.surface,
+    threadId: selectedThreadId
+  };
+  const changeComposerDraft = (action: Parameters<typeof draftBinding.changeDraft>[0]) =>
+    callerDraft.apply(action, composerTarget, draftBinding.changeDraft);
   useEffect(() => saveChatDrafts(props.ownerId, drafts), [drafts, props.ownerId]);
   useEffect(() => {
     const threadId = confirmedSelection
@@ -670,7 +678,6 @@ export function ChatDrawer(props: {
     if (moduleIdentityPending) return;
     setQueuedSendText({ text, surface: props.surface });
   };
-
   return (
     <aside
       ref={asideRef}
@@ -767,7 +774,6 @@ export function ChatDrawer(props: {
           </IconButton>
         </div>
       </div>
-
       {props.meetingContext ? (
         <div className="chatd__head" inert={conversationOverlayOpen ? true : undefined}>
           <Chip
@@ -939,7 +945,6 @@ export function ChatDrawer(props: {
           </button>
         ) : null}
       </div>
-
       {props.meetingContext ? (
         <p className="jds-hint">Uses the transcript so far and your saved notes.</p>
       ) : null}
@@ -972,10 +977,7 @@ export function ChatDrawer(props: {
           isFounder={props.isFounder}
           initialText={visibleCallerDraft || undefined}
           draft={visibleCallerDraft || drafts[draftBinding.draftKey] || ""}
-          onDraftChange={(draft) => {
-            callerDraft.edit(props.surface, generationRef.current);
-            draftBinding.changeDraft(draft);
-          }}
+          onDraftChange={changeComposerDraft}
           isSending={isSending}
           sendError={privateEnded ? "Private chat ended. Start a new chat to continue." : sendError}
           needsProvider={needsProvider}
@@ -992,7 +994,6 @@ export function ChatDrawer(props: {
     </aside>
   );
 }
-
 export function chatAvailableFromRoute(data: LookupAiCapabilityRouteResponse | undefined): boolean {
   return data?.route?.available === true;
 }
