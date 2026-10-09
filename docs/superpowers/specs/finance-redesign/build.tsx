@@ -957,7 +957,7 @@ const draft: { name: string; lines: DraftLine[] }[] = [
   {
     name: "Fun",
     lines: [
-      { name: "Streaming", avg: 3200, proposed: 3200 },
+      { name: "Streaming", avg: 3415, proposed: 3500 },
       { name: "Hobbies", avg: 7215, proposed: 7500 }
     ]
   },
@@ -965,9 +965,9 @@ const draft: { name: string; lines: DraftLine[] }[] = [
     name: "Savings",
     lines: [
       { name: "Emergency fund", avg: 120000, proposed: 120000 },
-      { name: "Travel", avg: 48000, proposed: 50000 },
-      { name: "Car repairs", avg: 25000, proposed: 30000 },
-      { name: "Gifts", avg: 26115, proposed: 28300 }
+      { name: "Travel", avg: 49620, proposed: 50000 },
+      { name: "Car repairs", avg: 29540, proposed: 30000 },
+      { name: "Gifts", avg: 27610, proposed: 28000 }
     ]
   }
 ];

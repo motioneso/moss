@@ -87,7 +87,7 @@ In:
   rename a category.
 - The freedom setting (three steps, dollar limit, custom switches) and the activity trail that
   step 3's weekly review reads, both on Settings.
-- Platform additions P1 to P6 (below).
+- Platform additions P1 to P7 (below).
 
 Out:
 
@@ -175,7 +175,23 @@ CREATE INDEX finance_transactions_needs_look
   ON app.finance_transactions (owner_user_id, date DESC)
   WHERE review_state = 'needs_look';
 
--- 0012_create_finance_budget_drafts.sql
+-- 0012_create_finance_activity.sql
+CREATE TABLE app.finance_activity (
+  owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
+  id uuid NOT NULL,
+  at timestamptz NOT NULL,
+  actor text NOT NULL CHECK (actor IN ('user', 'moss')),
+  kind text NOT NULL,
+  params jsonb NOT NULL,
+  undo jsonb,
+  undone_at timestamptz,
+  PRIMARY KEY (owner_user_id, id)
+);
+
+-- 0013_index_finance_activity_at.sql
+CREATE INDEX finance_activity_owner_at ON app.finance_activity (owner_user_id, at DESC);
+
+-- 0014_create_finance_budget_drafts.sql
 CREATE TABLE app.finance_budget_drafts (
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
   id uuid NOT NULL,
@@ -188,7 +204,7 @@ CREATE TABLE app.finance_budget_drafts (
   PRIMARY KEY (owner_user_id, id)
 );
 
--- 0013_create_finance_budget_draft_lines.sql
+-- 0015_create_finance_budget_draft_lines.sql
 CREATE TABLE app.finance_budget_draft_lines (
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
   draft_id uuid NOT NULL,
@@ -204,22 +220,6 @@ CREATE TABLE app.finance_budget_draft_lines (
   FOREIGN KEY (owner_user_id, draft_id)
     REFERENCES app.finance_budget_drafts (owner_user_id, id) ON DELETE CASCADE
 );
-
--- 0014_create_finance_activity.sql
-CREATE TABLE app.finance_activity (
-  owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
-  id uuid NOT NULL,
-  at timestamptz NOT NULL,
-  actor text NOT NULL CHECK (actor IN ('user', 'moss')),
-  kind text NOT NULL,
-  params jsonb NOT NULL,
-  undo jsonb,
-  undone_at timestamptz,
-  PRIMARY KEY (owner_user_id, id)
-);
-
--- 0015_index_finance_activity_at.sql
-CREATE INDEX finance_activity_owner_at ON app.finance_activity (owner_user_id, at DESC);
 ```
 
 Notes:
@@ -299,7 +299,10 @@ that moves money.
 
 New and changed entries only. `finance.transaction.categorize` loses `createRule` (rules become
 their own tool so they can have their own switch) and gains `amountCents`, which the handler
-checks against the stored transaction and rejects on mismatch.
+checks against the stored transaction and rejects on mismatch. It also refuses a transaction whose
+merchant has no confirmed history; that call goes through `finance.transaction.categorize-new`,
+the same input in the `sorting_new` family. The handler decides from stored history, so chat
+cannot sort a new merchant under the routine family.
 
 ```json
 {
@@ -376,20 +379,21 @@ checks against the stored transaction and rejects on mismatch.
 }
 ```
 
-| Tool                                            | Risk  | Family             | Policy | Notes                                                                                                                  |
-| ----------------------------------------------- | ----- | ------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `finance.transaction.categorize`                | write | `sorting`          | auto   | input gains `amountCents`; drops `createRule`                                                                          |
-| `finance.rule.set` (new)                        | write | `rules`            | auto   | `{ merchant, categoryId }`                                                                                             |
-| `finance.budget.assign`                         | write | `moving_money`     | auto   | `confirmAbove { inputKey: "amountCents", preferenceKey: "freedomLimitDollars", scale: 100 }`                           |
-| `finance.budget.move` (new)                     | write | `moving_money`     | auto   | `{ month, fromCategoryId, toCategoryId, amountCents }`; `fromCategoryId` may be `ready_to_assign`; same `confirmAbove` |
-| `finance.category.upsert` (new)                 | write | `categories`       | auto   | `{ id?, name, groupName }`                                                                                             |
-| `finance.category.archive` (new)                | write | `categories`       | auto   | `{ id }`; refuses when assignments exist this month                                                                    |
-| `finance.budget.draft.get` (new)                | read  | n/a                | n/a    |                                                                                                                        |
-| `finance.budget.draft.update` (new)             | write | `drafting`         | auto   | `{ draftId, categoryKey, amountCents?, categoryName?, groupName?, dropped? }`                                          |
-| `finance.activity.list` (new)                   | read  | n/a                | n/a    | `{ from, to }`                                                                                                         |
-| `finance.sync.run-now`                          | write | `upkeep`           | auto   |                                                                                                                        |
-| `finance.connect.start`, `finance.connect.poll` | write | `bank_connections` | ask    |                                                                                                                        |
-| `finance.account.set-shared`                    | write | `sharing`          | ask    | hidden in R1 screens                                                                                                   |
+| Tool                                            | Risk  | Family             | Policy | Notes                                                                                                                                         |
+| ----------------------------------------------- | ----- | ------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `finance.transaction.categorize`                | write | `sorting`          | auto   | input gains `amountCents`; drops `createRule`                                                                                                 |
+| `finance.transaction.categorize-new` (new)      | write | `sorting_new`      | auto   | same input; refuses a merchant with confirmed history                                                                                         |
+| `finance.rule.set` (new)                        | write | `rules`            | auto   | `{ merchant, categoryId }`                                                                                                                    |
+| `finance.budget.assign`                         | write | `moving_money`     | auto   | gains `previousCents`; `confirmAbove { inputKey: "amountCents", baseKey: "previousCents", preferenceKey: "freedomLimitDollars", scale: 100 }` |
+| `finance.budget.move` (new)                     | write | `moving_money`     | auto   | `{ month, fromCategoryId, toCategoryId, amountCents }`; `fromCategoryId` may be `ready_to_assign`; same `confirmAbove`                        |
+| `finance.category.upsert` (new)                 | write | `categories`       | auto   | `{ id?, name, groupName }`                                                                                                                    |
+| `finance.category.archive` (new)                | write | `categories`       | auto   | `{ id }`; refuses when assignments exist this month                                                                                           |
+| `finance.budget.draft.get` (new)                | read  | n/a                | n/a    |                                                                                                                                               |
+| `finance.budget.draft.update` (new)             | write | `drafting`         | auto   | `{ draftId, categoryKey, amountCents?, categoryName?, groupName?, dropped? }`                                                                 |
+| `finance.activity.list` (new)                   | read  | n/a                | n/a    | `{ from, to }`                                                                                                                                |
+| `finance.sync.run-now`                          | write | `upkeep`           | auto   |                                                                                                                                               |
+| `finance.connect.start`, `finance.connect.poll` | write | `bank_connections` | ask    |                                                                                                                                               |
+| `finance.account.set-shared`                    | write | `sharing`          | ask    | hidden in R1 screens                                                                                                                          |
 
 New queues: `finance.draft-build`, `finance.draft-start`, `finance.review-apply` (confirm or
 change `needs_look` rows from the screen, one or all), `finance.budget-assign` (an amount typed on
@@ -412,6 +416,10 @@ New preference (`external-module.ts:256-314`, integer, within the 8-entry cap):
   ]
 }
 ```
+
+`finance.budget.assign` sets a category's total (`handlers/budget.ts:108`), so its input carries
+`previousCents`, the total it replaces. The handler rejects the call when `previousCents` differs
+from the stored total, so a stale or invented base cannot slip a large change under the limit.
 
 Each write handler appends a `finance_activity` row with the actor (`moss` when the call came
 through the assistant gateway or a background job, `user` when it came from a screen queue) and
@@ -442,7 +450,7 @@ How each path honours the setting:
 | Chat tool call                 | `resolvePolicy` (`packages/ai/src/gateway/policy.ts:37-73`) reads the family tier               | Unchanged, plus `confirmAbove` (P3) feeds the existing `requiresConfirmation` step |
 | Classifier gate                | Routes through the same policy (`gateway.ts:307-345`)                                           | Unchanged; finance declares no classifier in R1                                    |
 | Background sorting during sync | Bypasses the gateway (`apps/worker/src/external-module-job-handler.ts:197-214`); always applies | Reads its own `sorting` and `sorting_new` tiers (P4) to set `review_state`         |
-| YOLO mode                      | Runs any non-destructive installed-module tool (`policy.ts:83-97`)                              | Unchanged. `always_confirm` families still ask; `confirmAbove` still asks          |
+| YOLO mode                      | Runs any non-destructive installed-module tool (`policy.ts:83-97`)                              | P7: a family that allows only `always_confirm` asks; `confirmAbove` still asks     |
 
 Step 3's "review weekly" is the activity list on Settings in R1. The weekly check-in chat that walks through
 it arrives in R2.
@@ -497,11 +505,13 @@ Each is a host change with its own tests, built before the finance work that use
 **P3. `confirmAbove`, a numeric confirmation rule.**
 
 - Today `confirmWhen` is equality only (`tool-manifests.ts:82-91,149-172`).
-- Change: tool field `confirmAbove: { inputKey, preferenceKey, scale }`. When
-  `abs(input[inputKey]) > preferences[preferenceKey] * scale`, `requiresConfirmation` is true, so
-  `resolvePolicy` asks at step 6 regardless of tier. A missing preference asks.
-- Test: limit 100, move of 10001 cents asks under `trusted_auto`; 10000 runs. Fails today because
-  nothing reads preferences in the gateway.
+- Change: tool field `confirmAbove: { inputKey, baseKey?, preferenceKey, scale }`. When
+  `abs(input[inputKey] - (input[baseKey] ?? 0)) > preferences[preferenceKey] * scale`,
+  `requiresConfirmation` is true, so `resolvePolicy` asks at step 6 regardless of tier. A missing
+  preference, or a declared `baseKey` absent from the input, asks.
+- Test: limit 100, move of 10001 cents asks under `trusted_auto`; 10000 runs; an assign from
+  50000 to 5000 asks; an assign from 50000 to 55000 runs. Fails today because nothing reads
+  preferences in the gateway.
 
 **P4. A worker can read its own family tiers.**
 
@@ -510,8 +520,6 @@ Each is a host change with its own tests, built before the finance work that use
   module declared. Implemented host-side over the existing repository
   (`packages/ai/src/repository.ts:2406-2455`), wired at the composition root like `ctx.notify`
   (`apps/api/src/external-module-tools.ts:91-108`).
-- Open: confirm the validator accepts a family that no tool references (`sorting_new`). If not,
-  P4 relaxes that check.
 - Test: a worker asking for another module's family gets an error, not a tier.
 
 **P5. A module declares its own settings page.**
@@ -538,6 +546,16 @@ Each is a host change with its own tests, built before the finance work that use
   `finance-redesign/p6.css` previews them on the mockups.
 - Test: the existing contrast and visual checks for `@moss/ui` pass with the new values; a phone
   viewport test measures a `Button` at 44px or more.
+
+**P7. Unattended mode keeps always-ask families asking.**
+
+- Today `familyAllowsAutoRun` returns true for every installed-module tool before it looks at the
+  family (`packages/ai/src/gateway/policy.ts:90`), so unattended mode would connect a bank or share
+  an account with no card.
+- Change: when the tool names a family whose `allowedTiers` lacks `trusted_auto`, the check returns
+  false before the installed-module shortcut.
+- Test: in unattended mode, `finance.connect.start` and `finance.account.set-shared` each get an
+  approval card; a `sorting` call still runs. Fails today because of the early return.
 
 ### App map entries
 
@@ -589,8 +607,9 @@ Features:
   2. the guidance below with a worked example;
   3. a boundary validator (category ids must exist; amounts within manifest bounds;
      `amountCents` must match the stored transaction);
-  4. a before-and-after diff in every write tool's result, shown in the approval card when it
-     asks.
+  4. a before-and-after diff in every write tool's result, which Moss reports after the call
+     runs. An approval card shows the requested change, rendered from the tool input; nothing
+     runs before approval.
 
 `assistantOnboarding.guidance` (under 150 words):
 
@@ -614,11 +633,11 @@ Features:
 
 ### Build phases and tests
 
-| Phase | Contents                                                                                                                              | E2E test (Playwright, real dev instance, Plaid sandbox)                                                                                                                                                                                          |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1     | P1, P6; migrations 0009-0011; categorization review; Budget (amounts typed in place), Transactions, Accounts screens; app-map entries | Connect a sandbox bank, see transactions grouped by day, open Needs a look, change one category with "Always for this merchant", see the Budget spent column move, type a new assigned amount and see Available change                           |
-| 2     | Migrations 0012-0013; draft build and start; Getting started screens; draft chat tools                                                | From a fresh account, connect, open Getting started, see a draft, ask Moss in chat to set Groceries to $600, see the line change on screen, type $350 for Car repairs and see the total move, press Start, land on Budget with those assignments |
-| 3     | P2, P3, P4; migrations 0014-0015; families; move and category tools; Settings screen                                                  | Pick step 2 with a $100 limit; ask Moss to move $50 (runs, appears in the Settings activity list, Undo works); ask to move $250 (approval card); switch to step 1 and sync (new rows land in Needs a look)                                       |
+| Phase | Contents                                                                                                                                                                                                               | E2E test (Playwright, real dev instance, Plaid sandbox)                                                                                                                                                                                          |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | P1, P4, P6, P7; migrations 0009-0013; `sorting`, `sorting_new` and connection families; categorization review; activity rows written; Budget (amounts typed in place), Transactions, Accounts screens; app-map entries | Connect a sandbox bank, see transactions grouped by day, open Needs a look, change one category with "Always for this merchant", see the Budget spent column move, type a new assigned amount and see Available change                           |
+| 2     | Migrations 0014-0015; draft build and start; Getting started screens; draft chat tools                                                                                                                                 | From a fresh account, connect, open Getting started, see a draft, ask Moss in chat to set Groceries to $600, see the line change on screen, type $350 for Car repairs and see the total move, press Start, land on Budget with those assignments |
+| 3     | P2, P3, P5; remaining families; move and category tools; Settings screen with the activity list and undo                                                                                                               | Pick step 2 with a $100 limit; ask Moss to move $50 (runs, appears in the Settings activity list, Undo works); ask to move $250 (approval card); switch to step 1 and sync (new rows land in Needs a look)                                       |
 
 Each phase ships with its e2e test run and observed to pass, and live proof on the PR.
 
@@ -710,6 +729,5 @@ Investment holdings and loan detail. Each bank needs one Plaid update-mode pass 
 | Chat actions in R1                                       | Ben, at mockup review |
 | Defaults: step 2, $100 limit                             | Ben, at mockup review |
 | Guesses count toward the budget before confirmation      | Ben, at mockup review |
-| Validator accepts a family that no tool references       | P4 implementer        |
 | Household RLS class versus extending the instance mirror | R2 spec, with Ben     |
 | Quiet hours for module notifications                     | R2 spec               |
