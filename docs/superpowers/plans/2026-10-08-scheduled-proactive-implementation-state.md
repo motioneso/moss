@@ -36,12 +36,25 @@ Runtime baseline and throwaway prototypes were not merged.
   account-list recovery; grant-query Retry and useful selected delivery are not live-proven.
   Final assembled static, exact six-file units and four-file email-access DB checks are
   recorded at the merger's final commit/fingerprint; earlier receipts do not certify it.
+- #3158 is integrated from clean pushed `1cad56d41`: existing Profile local notification
+  defer/release and proactive quiet-end parity share a local cutoff conversion, with DST and
+  UTC+14 coverage. Both independent source review axes cleared `184dfd458`. Installed
+  capture-off Profile/API/worker proof used that source and harness with rebuilt image
+  `sha256:a5c48383302192807318eed928c16e9dddc99ebb3f7317e7041c5133edf595e0`.
+  See [quiet-window evidence](../handoffs/2026-10-08-3158-evidence.md) for exact commands,
+  source pins, overnight save/reload, pre-cutoff absence, one released notification and the
+  summary job's no-device completion. The briefing writer was a scripted third-party fixture;
+  no real-model reply, physical device receipt or live DST transition is certified. Runtime and
+  harness bytes are unchanged through the evidence-only delta. Assembled full static, the exact
+  three-file 101-test unit bundle and both `test:notifications`/`test:proactive-email-access`
+  DB gates have separate merger receipts at their recorded integration pin/fingerprint;
+  builder receipts certify only their original inputs.
 - The #3130 source-fit audit at `04bcabc42d` found the original full builder too large for one
-  complete session. Its native prerequisite #3158 is now the Settings frontier: existing Profile
-  local notification defer/release behavior, proactive parity, DST/UTC+14, and current UI/worker
-  proof. #3130 remains a full canonical migration/editor/writer/CAS/undo/conflict-preservation
-  builder and must be rechecked after #3158; #3131 still waits for #3130. The audit made no code,
-  test or live-proof claim. See [the prerequisite plan](2026-10-08-quiet-hours-delivery-prerequisite.md).
+  complete session and introduced #3158. After that prerequisite's integration, #3130 remains a
+  full canonical migration/editor/writer/CAS/undo/conflict-preservation builder whose remaining
+  scope must be rechecked before dispatch; #3131 still waits for #3130. Settings shell and
+  email/delivery ownership transferred by #3129 remains reserved for #3130. See
+  [the prerequisite plan](2026-10-08-quiet-hours-delivery-prerequisite.md).
 - #3126, #3156 and #3149 are eligible after the verified repair; #3157 waits for #3156. #3127 is a scope container until both children pass its
   full acceptance; #3128 remains blocked by #3127. Use one builder
   and sequential independent reviews within available capacity; serialize heavy checks.
@@ -51,13 +64,17 @@ Runtime baseline and throwaway prototypes were not merged.
   the previously observed assistant-name Meetings chat CI failure was repaired in the two affected
   fixtures, with source reviews and scoped local evidence recorded in
   [the fixture repair evidence](../handoffs/2026-10-08-ci-fixture-repair-evidence.md). That evidence
-  does not establish branch-wide CI readiness.
+  does not establish branch-wide CI readiness. At integration `46b2bad82`, run `37883965859`
+  failed the Tasks quick-add browser assertion (one request expected while saving, two observed);
+  the other 230 browser tests passed and one was skipped. This failure has not been locally
+  reproduced or classified as preexisting/flaky. Its fresh regression-fix builder follows #3158
+  integration; current CI readiness remains uncertified.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
   records session sizing, explicit shared Settings shell/Alerts/client/query/app-map/manifest
   and personal-pane ownership transfer from #3129 to #3130, and native reslices #3149–#3152
-  under #3132/#3137, #3156→#3157 under #3127, and #3158→#3130. #3155 and #3129 are integrated and verified
+  under #3132/#3137, #3156→#3157 under #3127, and #3158→#3130. #3155, #3129 and #3158 are integrated and verified
   within their recorded source/live/assembled limits. Original downstream blockers are retained;
   #3130 is not a scope container. The current 32-node/39-edge graph is acyclic.
 - Each ticket uses a fresh TDD implementer, isolated worktree/branch from the integration
