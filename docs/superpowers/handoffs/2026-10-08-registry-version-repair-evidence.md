@@ -12,14 +12,12 @@ the registry's immutable-version guard rejected at the verified integration base
 | Food | `0.3.7` | `0.3.8` |
 
 No runtime, UI, worker, or app-map behavior changed. This repair claims no
-scheduled-task proof. It leaves the recorded Main-chat proof at source
-`50c8f807b718d4b251dc57a73fbc8bede8dc517a` with harness
-`7f0fa287754fa993977637a7faff656d11f48bce`, the email-choice proof at
-source/harness `cd264147988a3b4f1484855b23d7cc02e8fbd607`, and the
-quiet-boundary proof at source/harness
-`184dfd4588bcbce2c9abd2c2f97ed7c0c7e1bb0d` unchanged. Those receipts remain
-limited to their documented scenarios and do not establish that scheduled tasks
-exist or were exercised.
+scheduled-task proof. It leaves the recorded [Main repair](2026-10-08-3125-main-reopen-repair-evidence.md)
+at source/runtime/harness `01a014e1`, [email-choice](2026-10-08-3129-evidence.md)
+at source/harness `fa397bcb5`, and [quiet-boundary](2026-10-08-3158-evidence.md)
+at source/harness `184dfd458` unchanged. Those receipts remain limited to their
+documented scenarios and do not establish that scheduled tasks exist or were
+exercised.
 
 ## Published-index provenance
 
@@ -32,6 +30,13 @@ The index contains Finance `0.5.14` and Food `0.3.7`; neither proposed
 replacement version appears among current or retained versions. The release
 metadata and asset were read only. No registry publish, signing operation, or
 integrity-guard change was attempted.
+
+Against the verified base, the registry-input source diff contains only the two
+manifest files. Their replacement-input SHA-256 values are Finance
+`f3de66e0b0fb5c86002e74c36c88b8a9598d73dc6ffd761591e7cf0186a8a2a9` and
+Food `6ee12fb9ea86126f78d720d2dd97b9f0bae51cbd7310ea5629a5a024f31f1bb4`.
+The unchanged publisher script hash is
+`2481d023f5eeadbf6ed3aa68a120ce4941894c282abf6f98e9a12f0550897fab`.
 
 ## Red/green publisher evidence
 
@@ -63,7 +68,8 @@ That local discrepancy was investigated instead of bumping a third module:
   disposable `node:24.21.0-bookworm` input image, using Node `24.21.0`, zlib
   `1.3.2.1-motley-8002e91`, pnpm `10.6.2`, the published-index digest above,
   and the actual CLI command, exited 0 with `registry check: 3 module(s)
-  publishable` after the two version edits. The image digest was
+  publishable` after the two version edits. That candidate had only the two
+  manifest version edits and no evidence-document delta. The image digest was
   `sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0`;
   its Node binary SHA-256 was
   `7fde7b8afa198da66257f42ee2001d874c7355631e6d1579a5fb5ef1f246df4c`.
@@ -75,7 +81,10 @@ because no canonical CI rejection supports a new immutable release version.
 ## Checks
 
 All commands ran from `~/Jarv1s-scheduled-registry-fix` with Node `24.21.0`
-and pnpm `10.6.2`, except where noted above.
+and pnpm `10.6.2`, except where noted above. The source checks below ran before
+the first evidence document was added, with only the two uncommitted manifest
+version edits. They are meaningful publisher and static/type checks for those
+inputs, not a clean-commit certification.
 
 | Command | Result |
 | --- | --- |
@@ -94,10 +103,10 @@ seam.
 ## Review, cleanup, and remaining verification
 
 The freeze candidate changes only the two manifest version fields and this
-evidence file. Standards review was green at
-`48fbed288b0a0c1a1a1f0fac1faff7a3fb0bd25f`. The initial Spec review rejected
-only the former overbroad proof sentence; this documentation delta corrects it
-without changing publisher inputs. Its follow-up review remains required.
+evidence file. Standards review was green at `48fbed288`. The initial Spec
+review rejected only the former overbroad proof sentence; this documentation
+delta corrects it without changing publisher inputs. Its follow-up review
+remains required.
 
 The disposable Node containers exited and were removed. Private logs, the
 downloaded published index, and the archive used for the red proof remain in
