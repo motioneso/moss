@@ -10,13 +10,18 @@ no executed defect or green test result.
 #3158 repairs the existing saved Profile quiet window's local notification defer/release behavior
 and compatible proactive quiet-end calculation. It includes the existing Profile UI, real
 notification-producing worker, relevant checks, independent reviews, app-map metadata and recorded
-evidence in one fresh session. It blocks original #3130; #3131 still waits for #3130. The verified
-graph has 32 nodes and 39 blocking edges and is acyclic.
+evidence in one fresh session. It blocks original #3130; #3131 still waits for #3130. The initial verified
+graph had 32 nodes and 39 blocking edges and was acyclic.
 
-Original #3130 remains a complete builder for canonical raw saved-record carry-forward, all three
-writers and revision/CAS/undo safety, the accepted editor, saved/draft/retry feedback,
-unresolved-conflict preservation and its own installed proof. Revalidate that ticket's fit after
-#3158 integrates; the prerequisite does not certify the remaining scope fits.
+#3158 is integrated with its historical [quiet-window evidence](../handoffs/2026-10-08-3158-evidence.md)
+preserved. A fresh source-fit audit at `7a2efc3f3b` published #3164 for safe existing
+edits/undo, then #3165 for canonical raw carry-forward and real consumer authority. The
+[current canonical prerequisite plan](2026-10-08-canonical-quiet-hours-prerequisites.md)
+records those complete outcomes. The live-verified graph now has 34 nodes and 42 edges and is
+acyclic: #3158→#3164→#3165→#3130→#3131, retaining #3158→#3130.
+Original #3130 remains the complete accepted editor/Profile-links builder with saved/draft/retry,
+unresolved-conflict fallback and its own installed proof. Revalidate its actual fit after #3165;
+#3158's arithmetic and historical proof do not certify migration, writer safety or editor behavior.
 
 ## Ownership and boundary policy
 

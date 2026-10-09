@@ -14,17 +14,19 @@ The accepted product behavior, mockups and approved migration rulings remain unc
 | #3137    | #3152          | #3151      | Extend that path with configured-model source reporting and bounded quiet retries.                                                                                                     |
 | #3129    | #3155          | None       | Existing email refresh/monitoring respects current per-account access and module availability, with two-account revocation and real worker proof.                                      |
 | #3130    | #3158          | None       | Existing Profile saved quiet window correctly defers and releases normal outward notifications at its local boundary, with proactive parity, DST/UTC+14 and installed UI/worker proof. |
+| #3130    | #3164          | #3158      | Existing Profile/chat/legacy quiet-hours edits and undo preserve the latest validated saved schedule, with real controls and worker proof.                                             |
+| #3130    | #3165          | #3164      | Raw unambiguous saved schedules carry into Profile and govern real notification/focus/proactive consumers, preserving conflicting policies and migration-aware write/undo safety.      |
 | #3127    | #3156          | #3125      | Retain earlier decisions on return/restart through semantic summary coverage and safe bounded replay in the same conversation.                                                         |
 | #3127    | #3157          | #3156      | Continue typing through an automatic bounded provider-session rollover while preserving conversation and transcript identity.                                                          |
 
-These eight tasks are native children of their original tickets, tracked on project 2 with
+These ten tasks are native children of their original tickets, tracked on project 2 with
 native blocking edges. #3132 additionally waits for #3150; #3137 additionally waits for #3152;
 #3129 waits for #3155 before its saved-choice and accepted Settings implementation; #3127
-additionally waits for #3157. #3130 waits for #3158; #3131 still waits for original #3130.
+additionally waits for #3157. #3130 waits for #3165 and retains its #3158 edge; #3131 still waits for original #3130.
 #3128 still waits for original #3127, including both children. Original downstream edges remain
 intact. #3127, #3132 and #3137 are scope containers, not extra builder dispatches; their full
 acceptance criteria must pass after both children integrate. #3129 and #3130 each retain a full
-builder session after their prerequisite. Verified graph now has 32 task nodes and 39 blocking
+builder session after their prerequisites. Verified graph now has 34 task nodes and 42 blocking
 edges and is acyclic. All tickets remain open until normal PR closure; integration/verification
 governs the working frontier.
 
@@ -84,24 +86,33 @@ proactive's existing owner-zone fallback. A gap end uses the first valid instant
 the later occurrence. It does not add a canonical resolver, writer, CAS, undo, editor, conflict
 choice, task allowance or cap-day change.
 
-#3130 remains a full builder after #3158: it owns the dedicated quiet-hours component,
-saved/draft/error/conflict detection, API validation/metadata, unambiguous canonical migration,
-all three writers with revision/CAS/undo safety, Profile link/control behavior and real notification
-boundary proof. #3131 separately resolves conflicts. Recheck #3130's fit after #3158; no assumption
-that the remaining scope fits is authorized.
+The [post-#3158 canonical prerequisite plan](2026-10-08-canonical-quiet-hours-prerequisites.md)
+records the source-fit audit at `7a2efc3f3b` and published #3164→#3165→#3130 sequence.
+#3164 first owns validation and safe existing Profile/chat/legacy writes, caller expectations,
+revision/CAS/undo and recoverable feedback with real UI/chat/worker proof. #3165 then owns raw
+presence/canonical carry-forward, durable provenance, all-writer/undo migration safety and real
+notification/focus/proactive consumer authority. Conflicts preserve raw values and separate
+policies until #3131. Quiet GET stays observational under settings.view; owner timezone still
+controls scanner provider/ranking/cap days separately from explicit canonical quiet deferral.
+
+Original #3130 remains a full builder for the accepted Alerts editor and Profile links,
+saved/draft/load/error/retry/conflict fallback, query and map wiring, and its own real UI/worker
+proof. Revalidate its complete fit after both prerequisites; no new approval or proof is implied.
+#3131 separately resolves conflicts and remains blocked by #3130.
 
 Shared Settings navigation, client/query files, app-map and manifest/composition hunks require
 explicit handoff. With #3129 integrated from `8dc523ece`, shared-hunk ownership now transfers
-to #3130: `apps/web/src/settings/settings-page.tsx`, `settings-alerts-pane.tsx` and
+serially through #3164 and #3165 to #3130: `apps/web/src/settings/settings-page.tsx`, `settings-alerts-pane.tsx` and
 `settings-personal-panes.tsx` in that Settings directory, `apps/web/src/api/client-proactive.ts`
 plus quiet-hours client/query hunks in `apps/web/src/api/client.ts` and `query-keys.ts`
 in that API directory, `packages/shared/src/app-map-core.ts`,
 `packages/settings/src/manifest.ts`, and relevant route-dispatch composition in
 `packages/module-registry/src/route-chat-rules.ts`. Preserve the integrated email choice,
 delivery controls and external-effect classification while wiring canonical quiet hours.
+#3164 and #3165 receive only their required contract/Profile/client/query/map hunks;
 #3130 starts from the latest verified integration tip and owns the shell/Alerts/Profile
 composition, query and app-map changes needed for its accepted UI and live proof. The Settings
-shell ownership transferred by #3129 remains #3130's; #3158 changes only local delivery
+shell/accepted-editor ownership transferred by #3129 remains #3130's; #3158 changes only local delivery
 consumer/time/map/UAT hunks and adds no shell or control. #3131 remains the separate conflict slice.
 
 ## Verification infrastructure

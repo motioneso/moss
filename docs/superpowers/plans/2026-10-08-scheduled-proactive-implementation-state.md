@@ -49,12 +49,28 @@ Runtime baseline and throwaway prototypes were not merged.
   three-file 101-test unit bundle and both `test:notifications`/`test:proactive-email-access`
   DB gates have separate merger receipts at their recorded integration pin/fingerprint;
   builder receipts certify only their original inputs.
-- The #3130 source-fit audit at `04bcabc42d` found the original full builder too large for one
-  complete session and introduced #3158. After that prerequisite's integration, #3130 remains a
-  full canonical migration/editor/writer/CAS/undo/conflict-preservation builder whose remaining
-  scope must be rechecked before dispatch; #3131 still waits for #3130. Settings shell and
-  email/delivery ownership transferred by #3129 remains reserved for #3130. See
-  [the prerequisite plan](2026-10-08-quiet-hours-delivery-prerequisite.md).
+- The fresh #3130 source-fit audit at `7a2efc3f3b` found that #3158 leaves three
+  complete outcomes. Published prerequisites #3164 (safe existing edits/undo, blocked by
+  #3158) and #3165 (canonical raw carry-forward and real consumer authority, blocked by
+  #3164) now precede original #3130. #3130 retains its #3158 blocker and remains the complete
+  accepted Alerts editor/Profile-links builder; revalidate its actual fit after #3165.
+  #3131 still waits for #3130. See the
+  [canonical prerequisite plan](2026-10-08-canonical-quiet-hours-prerequisites.md).
+  Shared Settings ownership transfers serially from #3129 through #3164 and #3165 to #3130.
+  Publication records scope and blockers, not new implementation or executed proof.
+- The Tasks quick-add repair is integrated from clean pushed `42fedd992`. Both independent
+  source reviews cleared `a9d9bff7b`; the final delta adds public evidence only. A new native
+  same-turn submission check reproduced two admissions before the synchronous reservation
+  guard and passed afterward. The original CI test remains unchanged; its historical timing
+  was not reproduced locally. See [quick-add evidence](../handoffs/2026-10-08-quick-add-repair-evidence.md)
+  for the actual clean source gate (full static, 62 unit/harness, 72 Tasks API and all 30 Tasks
+  browser cases, terminal exit 0), retained initial startup failure, and installed real UI/API
+  proof. Installed runtime `416bfdada` and final harness `a9d9bff7b` used rebuilt standard
+  Dockerfile image `sha256:88a4168ca87acb6ea2031d45f879494bef054f26254ca82f8012d3bd1b4b4e12`;
+  the assembled runtime/harness bytes are unchanged. Proof covers one mounted capture form,
+  genuine stale-list failure, pending admission, recovery and draft persistence; it establishes
+  no server-wide idempotency, worker/model/physical-delivery behavior or branch readiness.
+  Fresh assembled checks have their own merger receipt and certify only its recorded inputs.
 - #3126, #3156 and #3149 are eligible after the verified repair; #3157 waits for #3156. #3127 is a scope container until both children pass its
   full acceptance; #3128 remains blocked by #3127. Use one builder
   and sequential independent reviews within available capacity; serialize heavy checks.
@@ -66,17 +82,18 @@ Runtime baseline and throwaway prototypes were not merged.
   [the fixture repair evidence](../handoffs/2026-10-08-ci-fixture-repair-evidence.md). That evidence
   does not establish branch-wide CI readiness. At integration `46b2bad82`, run `37883965859`
   failed the Tasks quick-add browser assertion (one request expected while saving, two observed);
-  the other 230 browser tests passed and one was skipped. This failure has not been locally
-  reproduced or classified as preexisting/flaky. Its fresh regression-fix builder follows #3158
-  integration; current CI readiness remains uncertified.
+  the other 230 browser tests passed and one was skipped. The integrated repair above
+  reproduces the same-turn admission gap, without classifying the original CI failure as
+  preexisting/flaky or claiming current CI readiness. The separate module-registry immutable
+  version CI failure remains queued for a fresh repair; the complete task graph is unfinished.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
   records session sizing, explicit shared Settings shell/Alerts/client/query/app-map/manifest
   and personal-pane ownership transfer from #3129 to #3130, and native reslices #3149–#3152
-  under #3132/#3137, #3156→#3157 under #3127, and #3158→#3130. #3155, #3129 and #3158 are integrated and verified
+  under #3132/#3137, #3156→#3157 under #3127, and #3158→#3164→#3165→#3130 (retaining #3158→#3130). #3155, #3129 and #3158 are integrated and verified
   within their recorded source/live/assembled limits. Original downstream blockers are retained;
-  #3130 is not a scope container. The current 32-node/39-edge graph is acyclic.
+  #3130 is not a scope container. The live-verified current graph has 34 nodes and 42 edges and is acyclic.
 - Each ticket uses a fresh TDD implementer, isolated worktree/branch from the integration
   tip, required checks and independent review, real UI/worker demonstration, evidence
   and truthful app-map updates. DB checks use `verify-gate`.
