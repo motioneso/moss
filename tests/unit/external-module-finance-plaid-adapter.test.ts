@@ -236,6 +236,24 @@ describe("plaid adapter request/response mapping (#1146)", () => {
     });
   });
 
+  it("institutionGet asks the institutions endpoint by id and maps the name", async () => {
+    const { requests, fetch } = fakeFetch([
+      {
+        status: 200,
+        body: { institution: { institution_id: "ins_1", name: " Sandbox First Bank " } }
+      },
+      { status: 200, body: { institution: { institution_id: "ins_2", name: "" } } }
+    ]);
+    const plaid = createPlaid(fetch, "sandbox", CREDS);
+    expect(await plaid.institutionGet("ins_1")).toEqual({ name: "Sandbox First Bank" });
+    expect(requests[0]!.url).toBe("https://sandbox.plaid.com/institutions/get_by_id");
+    expect(decodedBody(requests[0]!)).toMatchObject({
+      institution_id: "ins_1",
+      country_codes: expect.arrayContaining(["US", "CA", "GB"])
+    });
+    expect(await plaid.institutionGet("ins_2")).toEqual({ name: null });
+  });
+
   it("transactionsSync passes cursor + fixed count and maps pages", async () => {
     const tx = {
       transaction_id: "tx-1",

@@ -8,6 +8,7 @@ export * from "./errors.js";
 export * from "./keys.js";
 export * from "./kv-port.js";
 export * from "./net-worth.js";
+export * from "./ready-to-assign.js";
 export * from "./records.js";
 export * from "./reduce.js";
 export * from "./reports.js";

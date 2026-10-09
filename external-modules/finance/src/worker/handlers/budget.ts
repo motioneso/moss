@@ -24,6 +24,9 @@ import {
   type BudgetLedger,
   type BudgetMonthState,
   type FinanceStore,
+  readyToAssignCents,
+  signedBalanceCents,
+  tableGroupFor,
   type TransactionRecord
 } from "../../domain/index.js";
 import type { ToolFactory } from "../registry.js";
@@ -36,6 +39,9 @@ const MONTH = /^[0-9]{4}-[0-9]{2}$/;
 // ±$1M in cents. The manifest gate runs host-side; this re-check covers the
 // tool path, which never crosses the queue params schema.
 const AMOUNT_BOUND = 100_000_000;
+
+/** Most categories one budget-apply job may carry (keeps params under the host size cap). */
+export const MAX_BATCH = 20;
 
 function readMonth(input: Record<string, unknown>): string {
   const month = readString(input, "month", { required: true });
@@ -54,9 +60,13 @@ function readMonth(input: Record<string, unknown>): string {
 async function loadDerivationInput(store: FinanceStore): Promise<{
   ledgers: Record<string, BudgetLedger>;
   transactionsByMonth: Record<string, TransactionRecord[]>;
+  /** Rows by month, before transfer rows are dropped. */
+  allRowsByMonth: Record<string, TransactionRecord[]>;
+  assignmentMonthCount: number;
 }> {
   const ledgers: Record<string, BudgetLedger> = {};
-  for (const month of await store.listAssignmentMonths()) {
+  const assignmentMonths = await store.listAssignmentMonths();
+  for (const month of assignmentMonths) {
     const ledger = await store.getLedger(month);
     if (ledger) ledgers[month] = ledger;
   }
@@ -73,19 +83,29 @@ async function loadDerivationInput(store: FinanceStore): Promise<{
   // in depth — this filter only ever removes MORE rows (paired legs whose
   // category is not "transfers", e.g. a transfer-in miscategorized as
   // income inflating TBB).
+  const allRowsByMonth = { ...transactionsByMonth };
   const excluded = effectiveTransferIds(Object.values(transactionsByMonth).flat());
   for (const month of Object.keys(transactionsByMonth)) {
     transactionsByMonth[month] = transactionsByMonth[month]!.filter((txn) => !excluded.has(txn.id));
   }
-  return { ledgers, transactionsByMonth };
+  return {
+    ledgers,
+    transactionsByMonth,
+    allRowsByMonth,
+    assignmentMonthCount: assignmentMonths.length
+  };
 }
 
 async function computeMonthState(
   ports: WorkerPorts,
   store: FinanceStore,
   month: string
-): Promise<BudgetMonthState> {
-  const input = await loadDerivationInput(store);
+): Promise<{
+  state: BudgetMonthState;
+  monthRows: TransactionRecord[];
+  assignmentMonthCount: number;
+}> {
+  const { allRowsByMonth, assignmentMonthCount, ...input } = await loadDerivationInput(store);
   // Inject the requested month into the derivation union when it has no data
   // of its own: the derivation then rolls carry/TBB forward into it (or
   // yields the all-zero state when there is no data at all).
@@ -93,30 +113,88 @@ async function computeMonthState(
     input.ledgers[month] = { assignments: {} };
   }
   const core = deriveBudgetMonths(input)[month]!;
-  return { computedAt: ports.now().toISOString(), ...core };
+  return {
+    state: { computedAt: ports.now().toISOString(), ...core },
+    monthRows: allRowsByMonth[month] ?? [],
+    assignmentMonthCount
+  };
 }
 
 export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
   const month = readMonth(input);
   const store = await ports.store();
-  const state = await computeMonthState(ports, store, month);
+  const { state, monthRows, assignmentMonthCount } = await computeMonthState(ports, store, month);
+  const accounts = await store.listAccounts();
+  const itemStatus = new Map<string, string>();
+  for (const account of accounts) {
+    if (!itemStatus.has(account.itemId)) {
+      itemStatus.set(account.itemId, (await store.getItem(account.itemId))?.status ?? "error");
+    }
+  }
+  // The same rows the Transactions screen counts under Needs a look.
+  const needsLookCount = monthRows.filter((txn) => txn.reviewState === "needs_look").length;
   // Taxonomy rides along so the web budget screen renders names and group
   // order from a single call (same shape transactions.query ships).
-  return { month, state, categories: await loadCategories(ports) };
+  const categories = (await loadCategories(ports)).map((category) => ({
+    ...category,
+    tableGroup: tableGroupFor(category.group)
+  }));
+  return {
+    month,
+    state,
+    categories,
+    hasBank: accounts.length > 0,
+    hasBudget: assignmentMonthCount > 0,
+    readyToAssignCents: readyToAssignCents(accounts, state.categories),
+    needsLookCount,
+    accounts: accounts.map((account) => ({
+      accountId: account.accountId,
+      name: account.name,
+      balanceCents: signedBalanceCents(account),
+      asOf: account.updatedAt,
+      stale: itemStatus.get(account.itemId) !== "connected"
+    }))
+  };
 };
 
-/** Shared write path: validate, then SET the assigned category's total. */
+/**
+ * Shared write path: validate, SET the assigned category's total, and log it.
+ * The activity row carries ids and cents only; undo restores the old total.
+ */
 async function applyAssignment(
   ports: WorkerPorts,
-  args: { month: string; categoryId: string; amountCents: number }
+  args: { month: string; categoryId: string; amountCents: number },
+  actor: "user" | "moss",
+  liveIds?: ReadonlySet<string>
 ): Promise<Record<string, unknown>> {
-  const live = await loadCategories(ports);
-  if (!live.some((category) => category.id === args.categoryId)) {
+  const live = liveIds ?? new Set((await loadCategories(ports)).map((category) => category.id));
+  if (!live.has(args.categoryId)) {
     throw new InputError("invalid_category", "categoryId is not a live category");
   }
 
   const store = await ports.store();
+  const previousCents = (await store.getLedger(args.month))?.assignments[args.categoryId] ?? 0;
   await store.setAssignment(args.month, args.categoryId, args.amountCents);
+
+  // The total and its activity row are two writes. When a run dies between them, the retry
+  // finds the total already set, so it also checks the newest row logged for this category.
+  const logged = await store.lastLoggedAssignment(args.month, args.categoryId);
+  const changed = previousCents !== args.amountCents;
+  const missingRow = !changed && logged !== null && logged !== args.amountCents;
+  if (changed || missingRow) {
+    const baseline = changed ? previousCents : (logged as number);
+    await store.appendActivity({
+      actor,
+      kind: "budget.assign",
+      params: {
+        month: args.month,
+        categoryId: args.categoryId,
+        amountCents: args.amountCents,
+        previousCents: baseline
+      },
+      undo: { month: args.month, categoryId: args.categoryId, amountCents: baseline }
+    });
+  }
 
   return { status: "ok", ...args };
 }
@@ -129,7 +207,7 @@ export const budgetAssignHandler: ToolFactory = (ports) => async (input) => {
     min: -AMOUNT_BOUND,
     max: AMOUNT_BOUND
   });
-  return applyAssignment(ports, { month, categoryId, amountCents });
+  return applyAssignment(ports, { month, categoryId, amountCents }, "moss");
 };
 
 /** Queue twin of budget.assign — consumes the host job envelope. */
@@ -144,11 +222,44 @@ export const budgetApplyHandler: ToolFactory = (ports) => async (input) => {
   }
   const command = params as Record<string, unknown>;
   const month = readMonth(command);
+  const liveIds = new Set((await loadCategories(ports)).map((category) => category.id));
+
+  // Batch shape: parallel arrays. The single-category shape stays readable for jobs
+  // queued before the batch shape existed.
+  if (Array.isArray(command.categoryIds)) {
+    const ids = command.categoryIds as unknown[];
+    const amounts = Array.isArray(command.amountsCents) ? (command.amountsCents as unknown[]) : [];
+    if (ids.length === 0 || ids.length !== amounts.length || ids.length > MAX_BATCH) {
+      throw new InputError("categoryIds and amountsCents must be equal-length, 1 to 20 items");
+    }
+    const results: Record<string, unknown>[] = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      const amountCents = amounts[i];
+      if (
+        typeof ids[i] !== "string" ||
+        typeof amountCents !== "number" ||
+        !Number.isInteger(amountCents) ||
+        Math.abs(amountCents) > AMOUNT_BOUND
+      ) {
+        throw new InputError("each batch item needs a category id and an integer amount");
+      }
+      results.push(
+        await applyAssignment(
+          ports,
+          { month, categoryId: ids[i] as string, amountCents },
+          "user",
+          liveIds
+        )
+      );
+    }
+    return { status: "ok", applied: results.length };
+  }
+
   const categoryId = readString(command, "categoryId", { required: true });
   const amountCents = readInt(command, "amountCents", {
     required: true,
     min: -AMOUNT_BOUND,
     max: AMOUNT_BOUND
   });
-  return applyAssignment(ports, { month, categoryId, amountCents });
+  return applyAssignment(ports, { month, categoryId, amountCents }, "user", liveIds);
 };
