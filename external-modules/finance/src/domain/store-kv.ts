@@ -168,6 +168,10 @@ export function kvStore(kv: FinanceKv): FinanceStore {
       };
       ledger.assignments[categoryId] = amountCents;
       await kv.set(NS.budgets, key, ledger as unknown as Record<string, unknown>);
-    }
+    },
+
+    // The activity trail lives in SQL only; the KV store (migration source
+    // and unit-test fake) keeps no trail.
+    async appendActivity() {}
   };
 }

@@ -358,6 +358,19 @@ export function sqlStore(db: FinanceDb): FinanceStore {
           "ON CONFLICT (owner_user_id, month, category_id) DO UPDATE SET assigned_cents = EXCLUDED.assigned_cents",
         [month, categoryId, amountCents]
       );
+    },
+
+    async appendActivity(entry) {
+      await db.query(
+        "INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params, undo) " +
+          "VALUES (app.current_actor_user_id(), gen_random_uuid(), now(), $1, $2, $3::jsonb, $4::jsonb)",
+        [
+          entry.actor,
+          entry.kind,
+          JSON.stringify(entry.params),
+          entry.undo ? JSON.stringify(entry.undo) : null
+        ]
+      );
     }
   } satisfies FinanceStore;
 }

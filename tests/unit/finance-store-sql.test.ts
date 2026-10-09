@@ -287,6 +287,30 @@ describe("sqlStore (FIN-06b #1166)", () => {
     expect(db.calls[0]!.params).toEqual(["2026-07", "groceries", 15000]);
   });
 
+  it("appendActivity inserts an owner-scoped row with json params and undo", async () => {
+    const db = fakeDb();
+    const store = sqlStore(db);
+    await store.appendActivity({
+      actor: "user",
+      kind: "budget.assign",
+      params: { month: "2026-07", amountCents: 100 },
+      undo: { amountCents: 0 }
+    });
+    await store.appendActivity({ actor: "moss", kind: "x", params: {} });
+
+    expect(db.calls[0]!.text).toBe(
+      "INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params, undo) " +
+        "VALUES (app.current_actor_user_id(), gen_random_uuid(), now(), $1, $2, $3::jsonb, $4::jsonb)"
+    );
+    expect(db.calls[0]!.params).toEqual([
+      "user",
+      "budget.assign",
+      '{"month":"2026-07","amountCents":100}',
+      '{"amountCents":0}'
+    ]);
+    expect(db.calls[1]!.params).toEqual(["moss", "x", "{}", null]);
+  });
+
   it("getLedger builds {assignments} with Number(assigned_cents), null when empty", async () => {
     const db = fakeDb([
       [
