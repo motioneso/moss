@@ -4,9 +4,27 @@ import { CommitmentsRepository } from "./repository.js";
 
 const repo = new CommitmentsRepository();
 
+const LIST_STATUSES = [
+  "pending_review",
+  "accepted",
+  "rejected",
+  "snoozed",
+  "expired",
+  "explicit_non_action"
+] as const;
+
+function parseStatus(value: unknown): (typeof LIST_STATUSES)[number] {
+  if (value === undefined || value === null) return "pending_review";
+  if ((LIST_STATUSES as readonly unknown[]).includes(value)) {
+    return value as (typeof LIST_STATUSES)[number];
+  }
+  throw new Error(`Invalid status: ${String(value)}`);
+}
+
 export const commitmentListExecute: ToolExecute = async (scopedDb, input, ctx) => {
   assertDataContextDb(scopedDb);
-  const candidates = await repo.listCandidates(scopedDb, ctx.actorUserId, "pending_review");
+  const status = parseStatus((input as { status?: unknown } | null)?.status);
+  const candidates = await repo.listCandidates(scopedDb, ctx.actorUserId, status);
   const items = candidates.map((c) => ({
     id: c.id,
     kind: c.kind,

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
-import { CommitmentsRepository } from "@moss/commitments";
+import { CommitmentsRepository, commitmentsModuleManifest } from "@moss/commitments";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -294,6 +294,67 @@ describe("CommitmentsRepository", () => {
 
       expect(pendingIds).not.toContain(pending.id);
       expect(acceptedIds).toContain(pending.id);
+    });
+  });
+
+  describe("snooze and tool status", () => {
+    async function seed(title: string) {
+      return dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.upsertCandidate(scopedDb, {
+          ownerUserId: userA,
+          candidateSignature: `test-sig-snooze-${randomUUID()}`,
+          kind: "promise",
+          title,
+          dueLocalDate: null,
+          counterpartyLabel: null,
+          confidence: "high",
+          suggestedHandling: null,
+          occurredAt: null
+        } as never)
+      );
+    }
+
+    function snooze(id: string, until: Date) {
+      return dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.updateStatus(scopedDb, userA, id, "snoozed", until)
+      );
+    }
+
+    it("returns an elapsed snooze to pending_review and hides a future one", async () => {
+      const elapsed = await seed("elapsed snooze");
+      const future = await seed("future snooze");
+      await snooze(elapsed.id, new Date(Date.now() - 60_000));
+      await snooze(future.id, new Date(Date.now() + 3_600_000));
+
+      const pending = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.listCandidates(scopedDb, userA, "pending_review")
+      );
+      const snoozed = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.listCandidates(scopedDb, userA, "snoozed")
+      );
+
+      expect(pending.map((c) => c.id)).toContain(elapsed.id);
+      expect(pending.map((c) => c.id)).not.toContain(future.id);
+      expect(snoozed.map((c) => c.id)).toContain(future.id);
+      expect(snoozed.map((c) => c.id)).not.toContain(elapsed.id);
+    });
+
+    it("commitments.list honours the status argument", async () => {
+      const tool = commitmentsModuleManifest.assistantTools!.find(
+        (t) => t.name === "commitments.list"
+      )!;
+      const accepted = await seed("tool accepted");
+      await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.updateStatus(scopedDb, userA, accepted.id, "accepted")
+      );
+      const run = (input: Record<string, unknown>) =>
+        dataContext.withDataContext(userAContext(), async (scopedDb) => {
+          const r = await tool.execute!(scopedDb, input as never, userAContext() as never);
+          return (r.data as { items: { id: string }[] }).items.map((i) => i.id);
+        });
+
+      expect(await run({ status: "accepted" })).toContain(accepted.id);
+      expect(await run({})).not.toContain(accepted.id);
     });
   });
 
