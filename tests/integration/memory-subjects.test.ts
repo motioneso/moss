@@ -147,7 +147,7 @@ describe("entity suggestions from chat", () => {
     );
   }
 
-  it("reuses an existing entity when a person is suggested again, so later facts about them save", async () => {
+  it("reuses a person who already exists when chat suggests them, so later facts about them save under that person", async () => {
     await seedEconomyModel();
     await dataContext.withDataContext(userA("request:subjects-chat"), async (scopedDb) => {
       const name = `Morgan ${randomUUID()}`;
@@ -162,24 +162,28 @@ describe("entity suggestions from chat", () => {
         rationale: "Explicit memory request",
         isSensitive: false
       };
-      for (const label of ["first", "second"]) {
-        const turn = await createTurn(
-          scopedDb,
-          `Distill-entity-${label}`,
-          `Remember my colleague ${name}.`
-        );
-        await handleExtractFactsJob(
-          scopedDb,
-          ids.userA,
-          {
-            actorUserId: ids.userA,
-            threadId: turn.threadId,
-            userMessageId: turn.userMessage.id,
-            assistantMessageId: turn.assistantMessage.id
-          },
-          makeDeps(async () => ({ text: JSON.stringify([entityCandidate]) }))
-        );
-      }
+      const seeded = await repo.createEntity(scopedDb, ids.userA, {
+        kind: "person",
+        name,
+        summary: "added earlier",
+        importance: 0.5
+      });
+      const suggestion = await createTurn(
+        scopedDb,
+        "Distill-entity-suggest",
+        `Remember my colleague ${name}.`
+      );
+      await handleExtractFactsJob(
+        scopedDb,
+        ids.userA,
+        {
+          actorUserId: ids.userA,
+          threadId: suggestion.threadId,
+          userMessageId: suggestion.userMessage.id,
+          assistantMessageId: suggestion.assistantMessage.id
+        },
+        makeDeps(async () => ({ text: JSON.stringify([entityCandidate]) }))
+      );
 
       expect(await repo.findEntitiesByName(scopedDb, ids.userA, name)).toHaveLength(1);
 
@@ -215,7 +219,11 @@ describe("entity suggestions from chat", () => {
       );
       const core = await repo.listCoreFacts(scopedDb, ids.userA, 100);
       expect(core).toContainEqual(
-        expect.objectContaining({ predicate: "prefers", objectText: "email" })
+        expect.objectContaining({
+          predicate: "prefers",
+          objectText: "email",
+          subjectEntityId: seeded.id
+        })
       );
     });
   });
