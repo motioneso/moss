@@ -18,8 +18,7 @@ import { bringUpRealChatModel } from "./real-chat-signin.js";
 // the test skips; it never runs against production keys.
 //
 // Starting the bank link goes through Moss's chat with a real model (the host's Codex login, copied
-// in by the harness), as a user would. Setting a first budget goes through the same queue run the
-// Budget screen uses, because the conversation that normally proposes it is not part of this ticket.
+// in by the harness), as a user would. The first budget amount is typed on the Budget screen.
 export const uatLevel = { level: "admin+data", without: ["finance"] } as const;
 
 const PROOF_DIR = process.env.FIN_3179_PROOF_DIR ?? "/tmp/fin-3179-proof";
@@ -327,22 +326,6 @@ test("Finance phase 1 works end to end against the Plaid sandbox", async ({ page
   const targetName = targetCategory;
 
   // --- Budget before: set a first budget for the month, note Spent ---------------------------
-  const monthLabel = (
-    await transactions
-      .locator("span", { hasText: /^[A-Z][a-z]+ \d{4}$/ })
-      .first()
-      .innerText()
-  ).trim();
-  const monthIso = new Date(`${monthLabel} 1 UTC`).toISOString().slice(0, 7);
-  const categoryIds: Record<string, string> = { Groceries: "groceries", Fuel: "fuel" };
-  const seeded = await page.request.post("/api/modules/finance/queues/finance.budget-apply/run", {
-    data: {
-      jobKind: "finance.budget-apply",
-      params: { month: monthIso, categoryId: categoryIds[targetName], amountCents: 50_000 }
-    }
-  });
-  expect(seeded.status(), "first budget amount queued").toBe(202);
-
   const openBudget = async () => {
     await tabs.getByText("Budget", { exact: true }).click();
     const budget = page.locator('section[aria-label="Budget"]');
@@ -360,6 +343,11 @@ test("Finance phase 1 works end to end against the Plaid sandbox", async ({ page
   };
 
   let budget = await openBudget();
+  const firstBox = budget.getByLabel(`Assigned to ${targetName}`).locator("visible=true").first();
+  await firstBox.click();
+  await firstBox.press("Control+a");
+  await firstBox.pressSequentially("500");
+  await firstBox.press("Enter");
   await expect(async () => {
     await page.reload();
     await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Finance" }).click();
