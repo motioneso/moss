@@ -119,3 +119,107 @@ export async function runQueue(
   if (response.status === 404) return { kind: "disabled" };
   return { kind: "error", message: `Request failed (${response.status})` };
 }
+
+/**
+ * True when the signed-in user is an admin. The admin-only credential list
+ * answers 200 for admins and 403 for everyone else, so the host's own
+ * authorization decides; any failure reads as "not an admin" (fail closed).
+ */
+export async function fetchIsAdmin(): Promise<boolean> {
+  try {
+    const response = await fetch("/api/admin/modules/finance/credentials", {
+      credentials: "include"
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The host drops a manual run that starts within five seconds of the last one on the
+ * same queue, whatever its parameters, and still answers 202. Writes therefore go
+ * through one sender per queue that spaces runs apart, merges waiting commands when the
+ * caller allows it, and treats a dropped run as a failure rather than a success.
+ */
+export const WRITE_SPACING_MS = 5200;
+const DROPPED_RETRIES = 2;
+
+interface WriteEntry {
+  jobKind: string;
+  params: Record<string, unknown> | undefined;
+  waiting: Array<(outcome: RunOutcome) => void>;
+}
+
+interface WriteQueue {
+  entries: WriteEntry[];
+  lastSentAt: number;
+  running: boolean;
+}
+
+const writeQueues = new Map<string, WriteQueue>();
+
+export type MergeParams = (
+  waiting: Record<string, unknown>,
+  incoming: Record<string, unknown>
+) => Record<string, unknown> | null;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function drainWrites(queueName: string, queue: WriteQueue): Promise<void> {
+  queue.running = true;
+  while (queue.entries.length > 0) {
+    const wait = queue.lastSentAt + WRITE_SPACING_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    const entry = queue.entries.shift() as WriteEntry;
+    let outcome: RunOutcome = { kind: "already-queued" };
+    for (let attempt = 0; attempt <= DROPPED_RETRIES; attempt += 1) {
+      queue.lastSentAt = Date.now();
+      outcome = await runQueue(queueName, entry.jobKind, entry.params);
+      if (outcome.kind !== "already-queued") break;
+      await sleep(WRITE_SPACING_MS);
+    }
+    if (outcome.kind === "already-queued") {
+      outcome = { kind: "error", message: "The request was dropped" };
+    }
+    for (const done of entry.waiting) done(outcome);
+  }
+  queue.running = false;
+}
+
+/**
+ * Sends a write command. Resolves "queued" only when the host really started a run.
+ * `merge` lets a command join one that is still waiting its turn; return null to keep
+ * them separate.
+ */
+export function runWrite(
+  queueName: string,
+  jobKind: string,
+  params?: Record<string, unknown>,
+  merge?: MergeParams
+): Promise<RunOutcome> {
+  let queue = writeQueues.get(queueName);
+  if (!queue) {
+    queue = { entries: [], lastSentAt: 0, running: false };
+    writeQueues.set(queueName, queue);
+  }
+  const target = queue;
+  return new Promise((resolve) => {
+    const last = target.entries[target.entries.length - 1];
+    if (merge && last && last.jobKind === jobKind && last.params && params) {
+      const merged = merge(last.params, params);
+      if (merged) {
+        last.params = merged;
+        last.waiting.push(resolve);
+        return;
+      }
+    }
+    target.entries.push({ jobKind, params, waiting: [resolve] });
+    if (!target.running) void drainWrites(queueName, target);
+  });
+}
+
+/** Test hook: forget spacing and waiting commands. */
+export function resetWriteQueues(): void {
+  writeQueues.clear();
+}

@@ -253,6 +253,36 @@ export interface ExternalModuleNavigationEntry {
   };
 }
 
+/** A screen an installed module adds to Moss's app map. `path` is module-relative. */
+export interface ExternalModuleAppMapScreen {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly path: string;
+}
+
+/** A setting an installed module adds to Moss's app map. `path` is module-relative. */
+export interface ExternalModuleAppMapSetting extends ExternalModuleAppMapScreen {
+  readonly scope: "user" | "admin";
+}
+
+/** A feature an installed module adds to Moss's app map. */
+export interface ExternalModuleAppMapFeature {
+  readonly id: string;
+  readonly description: string;
+}
+
+/**
+ * What an installed module tells Moss about its own screens, settings and features (#3168).
+ * The host validates it at install, prefixes paths with `/m/<moduleId>`, and serves it from the
+ * app-map query only to users who have the module active.
+ */
+export interface ExternalModuleAppMapDeclaration {
+  readonly screens?: readonly ExternalModuleAppMapScreen[];
+  readonly settings?: readonly ExternalModuleAppMapSetting[];
+  readonly features?: readonly ExternalModuleAppMapFeature[];
+}
+
 /**
  * A resolved preference value as the host hands it to a module (#1757).
  *
@@ -392,6 +422,8 @@ export interface JsonMossModuleManifest {
    * instead. Optional: a module that declares none contributes no briefing section.
    */
   readonly briefing?: ExternalModuleBriefingDeclaration;
+  /** Entries for Moss's app map (#3168). Optional; validated in validate-declarations.ts. */
+  readonly appMap?: ExternalModuleAppMapDeclaration;
   readonly assistantOnboarding?: ModuleAssistantOnboardingManifest;
 }
 

@@ -20,6 +20,7 @@ import type {
 } from "@moss/module-sdk";
 import { validateClassifierDeclaration } from "./validate-classifier.js";
 import { validateModuleNavigation, validateModulePreferences } from "./validate-declarations.js";
+import { validateModuleAppMap } from "./app-map.js";
 import { assertValidFetchHosts } from "@moss/host-fetch/policy";
 import {
   isValidModuleParamsSchema,
@@ -790,6 +791,9 @@ export function validateExternalModuleManifest(
   // file only to keep this one under the 1000-line check; see that file for the design.
   const preferences = validateModulePreferences(obj, errors);
 
+  // #3168: screens, settings and features the module adds to Moss's app map.
+  const appMap = validateModuleAppMap(obj, expectedId, errors);
+
   // #1282: positive validation of the briefing contribution declaration. Same shape as
   // every other allow-listed surface above: unknown keys rejected outright rather than
   // ignored, bounded strings, and a cross-check that the handler has a worker to run in.
@@ -880,6 +884,7 @@ export function validateExternalModuleManifest(
     ...(database !== undefined ? { database } : {}),
     ...(navigation !== undefined ? { navigation } : {}),
     ...(preferences !== undefined ? { preferences } : {}),
+    ...(appMap !== undefined ? { appMap } : {}),
     // #1282: this literal is an allow-list — a validated field that is not re-emitted
     // here vanishes from the manifest with validation still returning ok. Omitting this
     // line is silent, and only tests/unit/external-module-briefing-manifest.test.ts

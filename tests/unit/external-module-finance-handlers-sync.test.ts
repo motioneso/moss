@@ -9,7 +9,7 @@ import type {
 } from "../../external-modules/finance/src/adapters/plaid.js";
 import { PlaidError } from "../../external-modules/finance/src/adapters/plaid.js";
 import { kvStore, NS } from "../../external-modules/finance/src/domain/index.js";
-import type { FinanceKv } from "../../external-modules/finance/src/domain/index.js";
+import type { ActivityInput, FinanceKv } from "../../external-modules/finance/src/domain/index.js";
 import { syncRunHandler } from "../../external-modules/finance/src/worker/handlers/sync.js";
 import type { TokenMap, WorkerPorts } from "../../external-modules/finance/src/worker/ports.js";
 import { InputError } from "../../external-modules/finance/src/worker/validate.js";
@@ -112,6 +112,10 @@ function fakePlaid(overrides: PlaidOverrides = {}) {
       "accountsGet",
       overrides.accountsGet ?? (async () => ({ institutionId: null, accounts: [] }))
     ) as PlaidClient["accountsGet"],
+    institutionGet: record(
+      "institutionGet",
+      overrides.institutionGet ?? (async () => ({ name: "Sandbox First Bank" }))
+    ) as PlaidClient["institutionGet"],
     accountsBalanceGet: record(
       "accountsBalanceGet",
       overrides.accountsBalanceGet ?? (async () => ({ accounts: [balanceAccount()] }))
@@ -377,6 +381,41 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     });
   });
 
+  it("saves the bank name on the next sync and does not look it up again once known", async () => {
+    const actor = { actorUserId: "00000000-0000-4000-8000-0000000000aa" };
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid();
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(actor);
+    expect(await kv.get(NS.connections, "item:item-1")).toMatchObject({
+      institutionName: "Sandbox First Bank"
+    });
+    expect(plaid.callsTo("institutionGet")).toHaveLength(1);
+    await syncRunHandler(ports)(actor);
+    expect(plaid.callsTo("institutionGet")).toHaveLength(1);
+  });
+
+  it("still finishes the sync when the bank name lookup fails", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      institutionGet: async () => {
+        throw new PlaidError("INTERNAL_SERVER_ERROR", 500, {
+          type: null,
+          message: null,
+          requestId: null
+        });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = (await syncRunHandler(ports)({
+      actorUserId: "00000000-0000-4000-8000-0000000000aa"
+    })) as { items: Record<string, unknown>[] };
+    expect(result.items[0]).toMatchObject({ itemId: "item-1", status: "connected" });
+    expect(await kv.get(NS.connections, "item:item-1")).not.toHaveProperty("institutionName");
+  });
+
   it("recovers a reauth-required item to connected after a successful sync", async () => {
     const kv = fakeKv();
     await kv.set(NS.connections, "item:item-1", {
@@ -436,7 +475,11 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     );
     expect(byId["t-rule"]).toMatchObject({ categoryId: "subscriptions", categorizedBy: "rule" });
     expect(byId["t-pfc"]).toMatchObject({ categoryId: "dining", categorizedBy: "plaid-map" });
-    expect(byId["t-none"]).toMatchObject({ categoryId: null, categorizedBy: null });
+    expect(byId["t-none"]).toMatchObject({
+      categoryId: null,
+      categorizedBy: null,
+      reviewState: "needs_look"
+    });
 
     // First read seeds the default taxonomy so the feed and rules always
     // have a category list to resolve against.
@@ -444,6 +487,142 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
       categories: { id: string }[];
     };
     expect(taxonomy.categories.map((category) => category.id)).toContain("dining");
+  });
+
+  it("lets the newest rule win when one merchant holds two (review finding 5)", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    await kv.set(NS.rules, "rule:newer", {
+      payeeKey: "coffee shop",
+      categoryId: "dining",
+      createdAt: "2026-08-01T00:00:00Z"
+    });
+    await kv.set(NS.rules, "aaa-older", {
+      payeeKey: "coffee shop",
+      categoryId: "subscriptions",
+      createdAt: "2026-07-01T00:00:00Z"
+    });
+    const plaid = fakePlaid({
+      transactionsSync: async () =>
+        syncPage({ added: [tx({ transaction_id: "t-rule", name: "COFFEE SHOP #42" })] })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)({ actorUserId: "00000000-0000-4000-8000-0000000000aa" });
+    const chunk = (await kv.get(NS.transactions, "acc-1:2026-07")) as {
+      transactions: Record<string, unknown>[];
+    };
+    expect(chunk.transactions[0]).toMatchObject({ categoryId: "dining" });
+  });
+
+  describe("review state (#3175)", () => {
+    type Tier = "ask_each_time" | "trusted_auto" | "always_confirm";
+    const ACTOR = "00000000-0000-4000-8000-0000000000aa";
+
+    async function runWithTiers(
+      tiers: Partial<Record<string, Tier | "throw">>,
+      activity: ActivityInput[] = []
+    ) {
+      const kv = fakeKv();
+      await seedItem(kv, "item-1");
+      // A confirmed, categorized earlier row makes "Known Diner" a seen merchant.
+      await kv.set(NS.transactions, "acc-1:2026-06", {
+        transactions: [
+          {
+            id: "t-old",
+            accountId: "acc-1",
+            date: "2026-06-10",
+            amountCents: 900,
+            isoCurrency: "USD",
+            name: "Known Diner 7",
+            merchant: null,
+            plaidCategory: null,
+            categoryId: "dining",
+            pending: false,
+            pendingTransactionId: null,
+            categorizedBy: "user"
+          }
+        ]
+      });
+      const plaid = fakePlaid({
+        transactionsSync: async () =>
+          syncPage({
+            added: [
+              tx({ transaction_id: "t-seen", name: "Known Diner 8" }),
+              tx({ transaction_id: "t-new", name: "Some Diner" })
+            ]
+          })
+      });
+      const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+      const withPolicy: WorkerPorts = {
+        ...ports,
+        store: async () => ({
+          ...kvStore(kv),
+          appendActivity: async (entry) => {
+            activity.push(entry);
+          }
+        }),
+        actionPolicy: {
+          get: async (familyId) => {
+            const tier = tiers[familyId];
+            if (tier === "throw") throw new Error("rpc_failed");
+            return tier ?? "ask_each_time";
+          }
+        }
+      };
+      await syncRunHandler(withPolicy)({ actorUserId: ACTOR });
+      const chunk = (await kv.get(NS.transactions, "acc-1:2026-07")) as {
+        transactions: Record<string, unknown>[];
+      };
+      return Object.fromEntries(chunk.transactions.map((record) => [record.id as string, record]));
+    }
+
+    it("sorting trusted and sorting_new asking: seen merchant confirmed, new one needs a look", async () => {
+      const byId = await runWithTiers({ sorting: "trusted_auto", sorting_new: "ask_each_time" });
+      expect(byId["t-seen"]).toMatchObject({ categoryId: "dining", reviewState: "confirmed" });
+      expect(byId["t-new"]).toMatchObject({ categoryId: "dining", reviewState: "needs_look" });
+    });
+
+    it("sorting asking and sorting_new trusted: the reverse", async () => {
+      const byId = await runWithTiers({ sorting: "ask_each_time", sorting_new: "trusted_auto" });
+      expect(byId["t-seen"]).toMatchObject({ reviewState: "needs_look" });
+      expect(byId["t-new"]).toMatchObject({ reviewState: "confirmed" });
+    });
+
+    it("logs an activity row (actor moss, ids only) for each guess Moss confirms itself", async () => {
+      const activity: ActivityInput[] = [];
+      await runWithTiers({ sorting: "trusted_auto", sorting_new: "ask_each_time" }, activity);
+      expect(activity).toEqual([
+        {
+          actor: "moss",
+          kind: "transaction.categorize",
+          params: {
+            transactionId: "t-seen",
+            accountId: "acc-1",
+            month: "2026-07",
+            categoryId: "dining",
+            previousCategoryId: null
+          },
+          undo: {
+            transactionId: "t-seen",
+            accountId: "acc-1",
+            month: "2026-07",
+            categoryId: null
+          }
+        }
+      ]);
+    });
+
+    it("logs nothing when Moss only suggests and leaves the row for review", async () => {
+      const activity: ActivityInput[] = [];
+      await runWithTiers({}, activity);
+      expect(activity).toEqual([]);
+    });
+
+    it("an unreadable tier fails closed to needs_look", async () => {
+      const byId = await runWithTiers({ sorting: "throw", sorting_new: "throw" });
+      expect(byId["t-seen"]).toMatchObject({ reviewState: "needs_look" });
+      expect(byId["t-new"]).toMatchObject({ reviewState: "needs_look" });
+    });
   });
 
   it("bounds a runaway sync at 100 pages per item per run", async () => {

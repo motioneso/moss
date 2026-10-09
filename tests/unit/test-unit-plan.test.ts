@@ -16,6 +16,7 @@ describe("resolveVitestArgs", () => {
       "packages/acp/src",
       "packages/settings/src/app-action-tools.test.ts",
       "packages/ai/src/gateway/per-call-resolver.test.ts",
+      "packages/ai/src/gateway/policy.test.ts",
       "tests/uat/fixtures/meeting-chat-fixture-server.test.ts",
       "tests/uat/provisioner.test.ts"
     ]);

@@ -22,13 +22,17 @@ import type {
   FinanceKv,
   FinanceStore,
   ItemRecord,
-  Rule
+  ReviewPolicy,
+  TransactionRecord,
+  Rule,
+  SortingTier
 } from "../../domain/index.js";
 import {
   categorize,
   cursorKey,
   DEFAULT_CATEGORIES,
   monthKey,
+  normalizePayee,
   NS,
   parseSharedKey,
   prevMonthKey,
@@ -80,7 +84,26 @@ type BalanceFailure = {
 type ItemSyncOutcome = Omit<ItemResult, "itemId" | "status"> & { balanceFailure?: BalanceFailure };
 
 /** Loaded once per run and shared across items/pages. */
-type CategorizeCtx = { rules: Rule[]; categories: Category[]; ai: CategorizeAi | null };
+type CategorizeCtx = {
+  rules: Rule[];
+  categories: Category[];
+  ai: CategorizeAi | null;
+  review: ReviewPolicy;
+};
+
+/** Fail closed: an unreadable tier means Moss asks instead of confirming. */
+async function readTier(ports: WorkerPorts, familyId: string): Promise<SortingTier> {
+  try {
+    return (await ports.actionPolicy?.get(familyId)) ?? "ask_each_time";
+  } catch {
+    return "ask_each_time";
+  }
+}
+
+/** Merchants with confirmed, categorized history, keyed like payee rules. */
+async function loadSeenPayeeKeys(store: FinanceStore): Promise<Set<string>> {
+  return new Set((await store.listConfirmedPayeeNames()).map(normalizePayee));
+}
 
 /**
  * FIN-02 (#1147) Task 9: load the categorization inputs, seeding the default
@@ -88,7 +111,7 @@ type CategorizeCtx = { rules: Rule[]; categories: Category[]; ai: CategorizeAi |
  * resolve against, and seeding here (the only writer besides the user's own
  * edits) keeps the read path elsewhere side-effect free.
  */
-async function loadCategorizeCtx(ports: WorkerPorts): Promise<CategorizeCtx> {
+async function loadCategorizeCtx(ports: WorkerPorts, store: FinanceStore): Promise<CategorizeCtx> {
   let stored = (await ports.kv.get(NS.categories, "taxonomy")) as {
     categories: Category[];
   } | null;
@@ -96,12 +119,26 @@ async function loadCategorizeCtx(ports: WorkerPorts): Promise<CategorizeCtx> {
     stored = { categories: [...DEFAULT_CATEGORIES] };
     await ports.kv.set(NS.categories, "taxonomy", stored);
   }
-  const rules: Rule[] = [];
+  // Old-format and new-format keys both load. If one merchant ever holds two
+  // rules, the newest wins so load order cannot pick the loser.
+  const newest = new Map<string, Rule>();
   for (const key of await ports.kv.list(NS.rules)) {
-    const rule = await ports.kv.get(NS.rules, key);
-    if (rule) rules.push(rule as Rule);
+    const rule = (await ports.kv.get(NS.rules, key)) as Rule | null;
+    if (!rule) continue;
+    const held = newest.get(rule.payeeKey);
+    if (!held || rule.createdAt >= held.createdAt) newest.set(rule.payeeKey, rule);
   }
-  return { rules, categories: stored.categories, ai: buildCategorizeAi(ports.ai) };
+  const rules = [...newest.values()];
+  return {
+    rules,
+    categories: stored.categories,
+    ai: buildCategorizeAi(ports.ai),
+    review: {
+      sortingTier: await readTier(ports, "sorting"),
+      sortingNewTier: await readTier(ports, "sorting_new"),
+      seenPayeeKeys: await loadSeenPayeeKeys(store)
+    }
+  };
 }
 
 /**
@@ -113,17 +150,26 @@ async function categorizeChunks(
   chunks: ChunkMap,
   touched: readonly string[],
   ctx: CategorizeCtx
-): Promise<ChunkMap> {
+): Promise<{ chunks: ChunkMap; autoConfirmed: TransactionRecord[] }> {
   const records = touched.flatMap((key) => chunks[key]?.transactions ?? []);
-  const updated = await categorize(records, ctx.rules, ctx.categories, ctx.ai);
+  const before = new Map(records.map((record) => [record.id, record]));
+  const updated = await categorize(records, ctx.rules, ctx.categories, ctx.ai, ctx.review);
   const byId = new Map(updated.map((record) => [record.id, record]));
+  // Moss's own confirmations: a Plaid-map or AI guess it settled without asking.
+  const autoConfirmed = updated.filter(
+    (record) =>
+      before.get(record.id)?.categoryId === null &&
+      record.categoryId !== null &&
+      record.reviewState === "confirmed" &&
+      (record.categorizedBy === "ai" || record.categorizedBy === "plaid-map")
+  );
   const next: ChunkMap = { ...chunks };
   for (const key of touched) {
     next[key] = {
       transactions: (chunks[key]?.transactions ?? []).map((record) => byId.get(record.id) ?? record)
     };
   }
-  return next;
+  return { chunks: next, autoConfirmed };
 }
 
 async function readCursorRecord(
@@ -155,6 +201,24 @@ async function appendSnapshots(
       ...days,
       [today]: account.balanceCents
     });
+  }
+}
+
+/**
+ * Looks up the bank's display name once (#3177). A failed or empty lookup never
+ * fails the sync; the name is simply retried on the next run.
+ */
+async function resolveInstitutionName(
+  plaid: Awaited<ReturnType<typeof buildPlaid>>,
+  item: ItemRecord
+): Promise<string | undefined> {
+  if (item.institutionName || !item.institutionId) return item.institutionName;
+  try {
+    return (await plaid.institutionGet(item.institutionId)).name ?? undefined;
+  } catch (error) {
+    const code = error instanceof PlaidError ? error.code : "lookup_failed";
+    console.warn(`finance.sync institution_name_skipped item=${item.itemId} code=${code}`);
+    return undefined;
   }
 }
 
@@ -294,7 +358,8 @@ async function syncItem(
     }
 
     const reduced = reduceSyncPage(chunks, page);
-    const next = await categorizeChunks(reduced.chunks, reduced.touched, categorizeCtx);
+    const categorized = await categorizeChunks(reduced.chunks, reduced.touched, categorizeCtx);
+    const next = categorized.chunks;
     for (const key of reduced.touched) {
       const pair = pairs.get(key)!;
       await store.putTransactionChunk(pair.accountId, pair.month, next[key]!.transactions);
@@ -306,6 +371,25 @@ async function syncItem(
           toSharedChunk(next[key]!)
         );
       }
+    }
+    for (const record of categorized.autoConfirmed) {
+      await store.appendActivity({
+        actor: "moss",
+        kind: "transaction.categorize",
+        params: {
+          transactionId: record.id,
+          accountId: record.accountId,
+          month: record.date.slice(0, 7),
+          categoryId: record.categoryId,
+          previousCategoryId: null
+        },
+        undo: {
+          transactionId: record.id,
+          accountId: record.accountId,
+          month: record.date.slice(0, 7),
+          categoryId: null
+        }
+      });
     }
     // Cursor LAST (see header): only after this page's chunks are durable.
     // The pagination start is kept while more pages remain so a later run can
@@ -401,7 +485,7 @@ const runSync: (
   }
 
   const plaid = await buildPlaid(ports);
-  const categorizeCtx = await loadCategorizeCtx(ports);
+  const categorizeCtx = await loadCategorizeCtx(ports, store);
   const results: ItemResult[] = [];
   for (const item of items) {
     const entry = tokens[item.itemId];
@@ -438,8 +522,10 @@ const runSync: (
       // A balance-check failure that fell back is still worth reading back, so
       // its detail is kept while the item itself reports connected.
       const { lastError: _cleared, lastErrorDetail: _clearedDetail, ...rest } = item;
+      const institutionName = await resolveInstitutionName(plaid, item);
       await store.putItem({
         ...rest,
+        ...(institutionName ? { institutionName } : {}),
         status: "connected",
         lastSyncAt: ports.now().toISOString(),
         ...(balanceFailure ? { lastErrorDetail: balanceFailure } : {})

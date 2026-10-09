@@ -145,13 +145,15 @@ worth heads Accounts. The two report tools stay for chat.
 
 ### Data model
 
-New module migrations under `external-modules/finance/sql/`. Every table keeps
+New module migrations under `external-modules/finance/sql/`. Main already holds `0009` (#3161), so phase 1 is `0010`-`0014` below plus `0015`
+(stored bank name on the connection) and `0016` (flags rows saved as confirmed with no category
+so they wait in Needs a look); phase 2 drafts are `0017`-`0018`. Every table keeps
 `owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE` and gets the
 platform-generated owner-only FORCE RLS (fin-06 delta:61, :107). All are added to
 `database.ownedTables`.
 
 ```sql
--- 0009_create_finance_categories.sql
+-- 0010_create_finance_categories.sql
 CREATE TABLE app.finance_categories (
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
   id text NOT NULL,
@@ -163,19 +165,19 @@ CREATE TABLE app.finance_categories (
   PRIMARY KEY (owner_user_id, id)
 );
 
--- 0010_add_finance_transactions_review.sql
+-- 0011_add_finance_transactions_review.sql
 ALTER TABLE app.finance_transactions
   ADD COLUMN review_state text NOT NULL DEFAULT 'confirmed'
     CHECK (review_state IN ('confirmed', 'needs_look')),
   ADD COLUMN ai_confidence real
     CHECK (ai_confidence IS NULL OR (ai_confidence >= 0 AND ai_confidence <= 1));
 
--- 0011_index_finance_transactions_review.sql
+-- 0012_index_finance_transactions_review.sql
 CREATE INDEX finance_transactions_needs_look
   ON app.finance_transactions (owner_user_id, date DESC)
   WHERE review_state = 'needs_look';
 
--- 0012_create_finance_activity.sql
+-- 0013_create_finance_activity.sql
 CREATE TABLE app.finance_activity (
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
   id uuid NOT NULL,
@@ -188,10 +190,10 @@ CREATE TABLE app.finance_activity (
   PRIMARY KEY (owner_user_id, id)
 );
 
--- 0013_index_finance_activity_at.sql
+-- 0014_index_finance_activity_at.sql
 CREATE INDEX finance_activity_owner_at ON app.finance_activity (owner_user_id, at DESC);
 
--- 0014_create_finance_budget_drafts.sql
+-- 0017_create_finance_budget_drafts.sql
 CREATE TABLE app.finance_budget_drafts (
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
   id uuid NOT NULL,
@@ -204,7 +206,7 @@ CREATE TABLE app.finance_budget_drafts (
   PRIMARY KEY (owner_user_id, id)
 );
 
--- 0015_create_finance_budget_draft_lines.sql
+-- 0018_create_finance_budget_draft_lines.sql
 CREATE TABLE app.finance_budget_draft_lines (
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
   draft_id uuid NOT NULL,
@@ -635,8 +637,8 @@ Features:
 
 | Phase | Contents                                                                                                                                                                                                               | E2E test (Playwright, real dev instance, Plaid sandbox)                                                                                                                                                                                          |
 | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1     | P1, P4, P6, P7; migrations 0009-0013; `sorting`, `sorting_new` and connection families; categorization review; activity rows written; Budget (amounts typed in place), Transactions, Accounts screens; app-map entries | Connect a sandbox bank, see transactions grouped by day, open Needs a look, change one category with "Always for this merchant", see the Budget spent column move, type a new assigned amount and see Available change                           |
-| 2     | Migrations 0014-0015; draft build and start; Getting started screens; draft chat tools                                                                                                                                 | From a fresh account, connect, open Getting started, see a draft, ask Moss in chat to set Groceries to $600, see the line change on screen, type $350 for Car repairs and see the total move, press Start, land on Budget with those assignments |
+| 1     | P1, P4, P6, P7; migrations 0010-0016; `sorting`, `sorting_new` and connection families; categorization review; activity rows written; Budget (amounts typed in place), Transactions, Accounts screens; app-map entries | Connect a sandbox bank, see transactions grouped by day, open Needs a look, change one category with "Always for this merchant", see the Budget spent column move, type a new assigned amount and see Available change                           |
+| 2     | Migrations 0017-0018; draft build and start; Getting started screens; draft chat tools                                                                                                                                 | From a fresh account, connect, open Getting started, see a draft, ask Moss in chat to set Groceries to $600, see the line change on screen, type $350 for Car repairs and see the total move, press Start, land on Budget with those assignments |
 | 3     | P2, P3, P5; remaining families; move and category tools; Settings screen with the activity list and undo                                                                                                               | Pick step 2 with a $100 limit; ask Moss to move $50 (runs, appears in the Settings activity list, Undo works); ask to move $250 (approval card); switch to step 1 and sync (new rows land in Needs a look)                                       |
 
 Each phase ships with its e2e test run and observed to pass, and live proof on the PR.

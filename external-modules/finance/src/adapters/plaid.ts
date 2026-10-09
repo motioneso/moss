@@ -9,6 +9,26 @@
 import type { FinanceFetch, FinanceFetchRequest, PlaidEnv } from "./types.js";
 import { FinanceFetchError } from "./types.js";
 
+// Plaid's lookup only finds a bank in the countries named, so name every supported one.
+const INSTITUTION_COUNTRIES = [
+  "US",
+  "CA",
+  "GB",
+  "IE",
+  "FR",
+  "ES",
+  "NL",
+  "DE",
+  "IT",
+  "PL",
+  "DK",
+  "NO",
+  "SE",
+  "EE",
+  "LT",
+  "LV"
+];
+
 export type { PlaidEnv } from "./types.js";
 
 export type PlaidCreds = { clientId: string; secret: string };
@@ -81,6 +101,8 @@ export interface PlaidClient {
   accountsGet(
     accessToken: string
   ): Promise<{ institutionId: string | null; accounts: PlaidAccount[] }>;
+  /** Public institution lookup: the bank's display name, or null when Plaid has none. */
+  institutionGet(institutionId: string): Promise<{ name: string | null }>;
   accountsBalanceGet(accessToken: string): Promise<{ accounts: PlaidAccount[] }>;
   transactionsSync(
     accessToken: string,
@@ -233,6 +255,16 @@ export function createPlaid(
         institutionId: (item.institution_id as string | null) ?? null,
         accounts: (Array.isArray(json.accounts) ? (json.accounts as Json[]) : []).map(mapAccount)
       };
+    },
+
+    async institutionGet(institutionId) {
+      const json = await call("/institutions/get_by_id", {
+        institution_id: institutionId,
+        country_codes: INSTITUTION_COUNTRIES
+      });
+      const institution = (json.institution ?? {}) as Json;
+      const name = typeof institution.name === "string" ? institution.name.trim() : "";
+      return { name: name === "" ? null : name };
     },
 
     async accountsBalanceGet(accessToken) {

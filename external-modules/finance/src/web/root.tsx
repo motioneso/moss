@@ -1,13 +1,18 @@
 // external-modules/finance/src/web/root.tsx
-// FIN-02 (#1147) Task 11: module Root — chrome (eyebrow + heading), one polite
-// live region for the whole surface. FIN-03 (#1148) Task 4 adds the in-module
-// router (job-search idiom): Feed at "/", Budget at "/budget"; jds-*
-// primitives + layout-only fnm-* styles.
-import { useSyncExternalStore, type ReactNodeLike } from "@moss/module-web-sdk";
-import { ModuleLink, useModulePath } from "./router";
+// Module Root: chrome (eyebrow + heading), one polite live region for the whole
+// surface, and the in-module router; jds-* primitives + layout-only fnm-* styles.
+import {
+  Segmented,
+  useEffect,
+  useSyncExternalStore,
+  type ReactNodeLike
+} from "@moss/module-web-sdk";
+import { navigate, useModulePath } from "./router";
+import { AccountsScreen } from "./screens/accounts";
 import { BudgetScreen } from "./screens/budget";
-import { FeedScreen } from "./screens/feed";
 import { ReportsScreen } from "./screens/reports";
+import { StartScreen } from "./screens/start";
+import { TransactionsScreen } from "./screens/transactions";
 import { currentLiveMessage, subscribeLive } from "./states";
 
 export type HostActions = { openAssistant: (input: { starterPrompt: string }) => void };
@@ -24,14 +29,28 @@ function LiveRegion(): ReactNodeLike {
   );
 }
 
-const TABS: ReadonlyArray<{ to: string; label: string }> = [
-  { to: "/", label: "Feed" },
-  { to: "/budget", label: "Budget" },
-  { to: "/reports", label: "Reports" }
-];
+// The tab bar names Budget, Transactions and Accounts. Other pages (Getting started,
+// Settings, Reports) show it with nothing selected so there is always a way back.
+type Tab = "budget" | "transactions" | "accounts";
+const TAB_PATHS: Record<Tab, string> = {
+  budget: "/",
+  transactions: "/transactions",
+  accounts: "/accounts"
+};
+
+function tabFor(path: string): Tab | "none" {
+  if (path === "/") return "budget";
+  if (path === "/transactions") return "transactions";
+  if (path === "/accounts") return "accounts";
+  return "none";
+}
 
 export function Root(props: { hostActions: HostActions }): ReactNodeLike {
   const path = useModulePath();
+  // The old Feed and Budget paths now live at Transactions and the Budget home.
+  useEffect(() => {
+    if (path === "/budget") navigate("/");
+  }, [path]);
   return (
     <div className="fnm-root">
       <LiveRegion />
@@ -48,26 +67,29 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
           Settings
         </a>
       </header>
-      <nav className="fnm-chips" aria-label="Finance sections">
-        {TABS.map((tab) => (
-          <ModuleLink
-            key={tab.to}
-            to={tab.to}
-            variant={path === tab.to ? "secondary" : "quiet"}
-            size="sm"
-            aria-current={path === tab.to ? "page" : undefined}
-          >
-            {tab.label}
-          </ModuleLink>
-        ))}
-      </nav>
-      {path === "/budget" ? (
+      <div className="fnm-tabs">
+        <Segmented
+          ariaLabel="Finance views"
+          value={tabFor(path) as Tab}
+          onChange={(tab: Tab) => navigate(TAB_PATHS[tab])}
+          options={[
+            { value: "budget", label: "Budget" },
+            { value: "transactions", label: "Transactions" },
+            { value: "accounts", label: "Accounts" }
+          ]}
+        />
+      </div>
+      {path === "/start" ? (
+        <StartScreen hostActions={props.hostActions} />
+      ) : path === "/" ? (
         <BudgetScreen />
+      ) : path === "/transactions" ? (
+        <TransactionsScreen />
+      ) : path === "/accounts" ? (
+        <AccountsScreen hostActions={props.hostActions} />
       ) : path === "/reports" ? (
         <ReportsScreen />
-      ) : (
-        <FeedScreen hostActions={props.hostActions} />
-      )}
+      ) : null}
     </div>
   );
 }
