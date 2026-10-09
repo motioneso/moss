@@ -71,7 +71,7 @@ async function sendAndAwaitReply(page: Page, drawer: Locator, message: string): 
 
 test.describe.configure({ mode: "serial" });
 
-test("resuming a History thread while private clears the stale privateMode flag (#1090)", async ({
+test("resuming Main from Conversations while private clears the stale privateMode flag (#1090)", async ({
   page
 }) => {
   await signIn(page);
@@ -81,10 +81,12 @@ test("resuming a History thread while private clears the stale privateMode flag 
   await pickChatMenuItem(drawer, "Start private chat");
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toBeVisible();
   await expectPrivateChecked(drawer, true);
-  await pickChatMenuItem(drawer, "Show chat history");
-  const threadRow = drawer.getByRole("button", { name: new RegExp(FIRST_MESSAGE) });
-  await expect(threadRow).toBeVisible();
-  await threadRow.click();
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  const conversations = drawer.getByLabel("Conversations", { exact: true });
+  await expect(conversations).toBeVisible();
+  const mainRow = conversations.getByRole("button", { name: "Main chat", exact: true });
+  await expect(mainRow).toBeVisible();
+  await mainRow.click();
 
   await expect(drawer.getByText(FIRST_MESSAGE)).toBeVisible();
   await expectPrivateChecked(drawer, false);

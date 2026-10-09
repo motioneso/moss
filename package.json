@@ -132,7 +132,8 @@
     "test:uat:2981-real-providers": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 1909-sports-public-source-completion.uat.spec.ts notes-default-retrieval.uat.spec.ts notes-path-recheck.uat.spec.ts workshop-chat-handover.uat.spec.ts",
     "test:uat:3125-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3125-main-chat-real.uat.spec.ts",
     "test:uat:3191-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3191-caller-provider-real.uat.spec.ts",
-    "test:uat:3126-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3126-side-chat-overlay-real.uat.spec.ts"
+    "test:uat:3126-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3126-side-chat-overlay-real.uat.spec.ts",
+    "test:uat:3192": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3192-owner-main.uat.spec.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",

@@ -4,7 +4,7 @@ import { createMockChatMessage, createMockChatThread } from "./mock-chat-api.js"
 import { createMockConnectorProviders } from "./mock-api.js";
 import { mockApi } from "./mock-chat-model.js";
 
-test("drawer hydrates the owner's Main before a newer shared foreign Main (#3125)", async ({
+test("drawer hydrates the owner's Main before a newer shared foreign Main (#3125, #3192)", async ({
   page
 }) => {
   const ownMain = createMockChatThread("own-main", "My Main", { isMain: true });
@@ -56,7 +56,12 @@ test("drawer hydrates the owner's Main before a newer shared foreign Main (#3125
   await drawer.getByLabel("Message Moss").fill("Continue my Main");
   await drawer.getByLabel("Message Moss").press("Enter");
   expect((await turn).ok()).toBe(true);
-  await drawer.getByRole("button", { name: "More chat options" }).click();
-  await drawer.getByRole("menuitemcheckbox", { name: "Show chat history" }).click();
-  await expect(drawer.getByText("Shared Main", { exact: true })).toBeVisible();
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  const conversations = drawer.getByLabel("Conversations", { exact: true });
+  await expect(
+    conversations.getByRole("button", { name: "Main chat", exact: true })
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    conversations.getByRole("button", { name: "Shared Main", exact: true })
+  ).toHaveAttribute("aria-pressed", "false");
 });

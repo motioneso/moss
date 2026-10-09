@@ -360,8 +360,8 @@ export const chatModuleManifest = {
     {
       id: "chat.thread_history",
       description:
-        "Reopen your own Main chat, keep older side chats, pick history or start a new chat, " +
-        "and see conversations ordered by recent activity. Shared histories never replace your Main."
+        "Reopen your own Main chat and older side chats, or start a side chat, from Conversations, ordered by recent activity. " +
+        "A chat another person shared with you is listed as a side chat but does not open, and it never replaces your Main."
     }
   ],
   routes: [

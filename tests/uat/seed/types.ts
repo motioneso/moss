@@ -55,7 +55,8 @@ export type UatChatScript =
   | "2911-shadow-delete"
   | "3065-app-actions"
   | "classifier-shadow"
-  | "3125-main-chat";
+  | "3125-main-chat"
+  | "3192-shared-main";
 
 export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "phase1-smoke",
@@ -68,7 +69,8 @@ export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "2911-shadow-delete",
   "3065-app-actions",
   "classifier-shadow",
-  "3125-main-chat"
+  "3125-main-chat",
+  "3192-shared-main"
 ];
 
 export interface SeedOptions {
