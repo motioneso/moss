@@ -32,6 +32,8 @@ import {
 export type { EntityRow, FactRow, SourceRow };
 export { confidenceTier, mapEntity, mapFact, mapSource };
 
+const SELF_SUBJECTS = new Set(["self", "user", "me", "myself", "i", "the user"]);
+
 // All multi-write methods (confirmFact, correctFact, patchFactStatus) assume the caller
 // provides a DataContextDb whose .db is already a Kysely Transaction — guaranteed by
 // withDataContext (packages/db/src/data-context.ts). If any write in the method throws,
@@ -215,7 +217,7 @@ export class MemoryGraphRepository {
       ownerUserId,
       "fact",
       factRow.id,
-      [factRow.predicate, factRow.object_text].filter(Boolean).join(" ")
+      await this.factSearchText(scopedDb, ownerUserId, factRow)
     );
     await this.upsertSearchDocument(scopedDb, ownerUserId, "episode", source.id, source.excerpt);
 
@@ -304,7 +306,7 @@ export class MemoryGraphRepository {
       ownerUserId,
       "fact",
       factRow.id,
-      [factRow.predicate, factRow.object_text].filter(Boolean).join(" ")
+      await this.factSearchText(scopedDb, ownerUserId, factRow)
     );
     return mapFact(factRow, sources);
   }
@@ -855,6 +857,60 @@ export class MemoryGraphRepository {
       ORDER BY e.created_at, e.id
     `.execute(scopedDb.db);
     return result.rows.map(mapEntity);
+  }
+
+  /**
+   * Names of the non-self entities among `entityIds`, keyed by id. Facts about the user have no
+   * entry, so callers treat a missing key as "about the owner".
+   */
+  async getOtherSubjectNames(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    entityIds: readonly string[]
+  ): Promise<Map<string, string>> {
+    assertDataContextDb(scopedDb);
+    const ids = [...new Set(entityIds)];
+    if (ids.length === 0) return new Map();
+    const result = await sql<{ id: string; name: string }>`
+      SELECT id, name FROM app.memory_entities
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND kind <> 'self'
+        AND id = ANY(${ids}::uuid[])
+    `.execute(scopedDb.db);
+    return new Map(result.rows.map((row) => [row.id, row.name]));
+  }
+
+  private async factSearchText(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    fact: { subject_entity_id: string; predicate: string; object_text: string | null }
+  ): Promise<string> {
+    const names = await this.getOtherSubjectNames(scopedDb, ownerUserId, [fact.subject_entity_id]);
+    return [names.get(fact.subject_entity_id), fact.predicate, fact.object_text]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  /**
+   * Maps a fact subject to the entity it describes: the owner's Self entity for the user, the
+   * single existing entity of that name, or a new entity of `newKind`. Returns null when several
+   * entities share the name, so the caller can leave the fact staged.
+   */
+  async resolveSubjectEntityId(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    subject: string,
+    newKind: NewMemoryEntity["kind"] = "topic"
+  ): Promise<string | null> {
+    assertDataContextDb(scopedDb);
+    const name = subject.trim();
+    if (SELF_SUBJECTS.has(name.toLocaleLowerCase())) {
+      return (await this.ensureSelfEntity(scopedDb, ownerUserId)).id;
+    }
+    const matches = await this.findEntitiesByName(scopedDb, ownerUserId, name);
+    if (matches.length > 1) return null;
+    if (matches[0]) return matches[0].id;
+    return (await this.createEntity(scopedDb, ownerUserId, { kind: newKind, name })).id;
   }
 
   async updateEntity(

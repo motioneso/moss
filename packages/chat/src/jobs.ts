@@ -612,21 +612,28 @@ async function maybePromoteCandidate(
   }
 
   if (candidate.kind === "entity" && candidate.entity) {
-    await graphRepository.createEntity(scopedDb, ownerUserId, {
-      kind: candidate.entity.kind,
-      name: candidate.entity.name,
-      summary: candidate.entity.summary,
-      importance: candidate.importance
-    });
+    // Reuses an entity of the same name so repeated suggestions do not create duplicates.
+    const existing = await graphRepository.findEntitiesByName(
+      scopedDb,
+      ownerUserId,
+      candidate.entity.name
+    );
+    if (existing.length === 0) {
+      await graphRepository.createEntity(scopedDb, ownerUserId, {
+        kind: candidate.entity.kind,
+        name: candidate.entity.name,
+        summary: candidate.entity.summary,
+        importance: candidate.importance
+      });
+    }
     await candidatesRepository.markPromoted(scopedDb, ownerUserId, record.id, decision.reason);
     return;
   }
 
   if (candidate.fact) {
-    const subjectEntityId = await resolveFactSubjectEntityId(
+    const subjectEntityId = await graphRepository.resolveSubjectEntityId(
       scopedDb,
       ownerUserId,
-      graphRepository,
       candidate.fact.subject
     );
     // Several entities share the name, so the fact stays staged for review.
@@ -643,33 +650,6 @@ async function maybePromoteCandidate(
     });
     await candidatesRepository.markPromoted(scopedDb, ownerUserId, record.id, decision.reason);
   }
-}
-
-const SELF_SUBJECTS = new Set(["self", "user", "me", "myself", "i", "the user"]);
-
-/**
- * Maps a distilled fact's subject to the entity it describes: the owner's Self entity for the
- * user, an existing entity of that name, or a new person entity. Returns null when the name
- * is ambiguous.
- */
-export async function resolveFactSubjectEntityId(
-  scopedDb: DataContextDb,
-  ownerUserId: string,
-  graphRepository: MemoryGraphRepository,
-  subject: string
-): Promise<string | null> {
-  const name = subject.trim();
-  if (SELF_SUBJECTS.has(name.toLocaleLowerCase())) {
-    return (await graphRepository.ensureSelfEntity(scopedDb, ownerUserId)).id;
-  }
-  const matches = await graphRepository.findEntitiesByName(scopedDb, ownerUserId, name);
-  if (matches.length > 1) return null;
-  if (matches[0]) return matches[0].id;
-  const created = await graphRepository.createEntity(scopedDb, ownerUserId, {
-    kind: "person",
-    name
-  });
-  return created.id;
 }
 
 function recordKindForCandidate(candidate: MemoryCandidate): MemoryRecordKind {

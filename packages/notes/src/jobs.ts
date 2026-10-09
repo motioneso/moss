@@ -248,6 +248,9 @@ async function purgeDeletedNotes(
   mdFiles: readonly string[],
   repository: MemoryRepository
 ): Promise<void> {
+  // An empty walk over a previously indexed folder usually means an unmounted or unreadable
+  // folder, so the index is left alone rather than wiped.
+  if (mdFiles.length === 0) return;
   const present = new Set<string>(mdFiles);
   for (const file of mdFiles) {
     try {
