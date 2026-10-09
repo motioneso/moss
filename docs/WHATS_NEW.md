@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-09
+
+#### Fixed
+
+- **Bank transactions now sync.** Transactions from your connected banks now arrive even when the bank's live balance check fails, and a first sync runs as soon as you connect. [PR #3166](https://github.com/motioneso/moss/pull/3166)
+
 ### 2026-10-08
 
 #### Fixed
