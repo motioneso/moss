@@ -15,6 +15,7 @@ export const MEETING_UAT_GROUPS = {
   ],
   chat: [
     "1089-1090-chat-drawer-private.uat.spec.ts",
+    "3274-meeting-new-side-chat.uat.spec.ts",
     "1133-chat-attachments.uat.spec.ts",
     "runtime-context.uat.spec.ts",
     "moss-assistant-name.uat.spec.ts"
