@@ -3,6 +3,8 @@
 // finance.accounts.list and returns banks with a status line, a stale-bank
 // as-of date and the net worth total. No React, no I/O.
 
+import { signedBalanceCents } from "../domain/account-sign.js";
+
 export interface AccountsRow {
   accountId: string;
   itemId: string;
@@ -75,10 +77,6 @@ function asOfDate(lastSyncAt: string | null): string | null {
   return parsed.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
-function isDebt(type: string): boolean {
-  return type === "credit" || type === "loan";
-}
-
 export function buildAccountsView(
   accounts: readonly AccountsRow[],
   banks: readonly AccountsBank[],
@@ -101,7 +99,7 @@ export function buildAccountsView(
   const sections: BankSection[] = itemIds.map((itemId, index) => {
     const bank = bankFor.get(itemId);
     const lines = (byItem.get(itemId) ?? []).map((account) => {
-      const balanceCents = isDebt(account.type) ? -account.balanceCents : account.balanceCents;
+      const balanceCents = signedBalanceCents(account);
       netWorthCents += balanceCents;
       return {
         accountId: account.accountId,
