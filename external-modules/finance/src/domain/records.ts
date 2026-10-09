@@ -57,6 +57,15 @@ export type ItemRecord = {
   lastSyncAt?: string;
   /** Plaid error CODE only — never response bodies (secret hygiene). */
   lastError?: string;
+  /** Plaid's type/code/message/request id for the last failure (#3161). */
+  lastErrorDetail?: ItemErrorDetail;
+};
+
+export type ItemErrorDetail = {
+  type: string | null;
+  code: string;
+  message: string | null;
+  requestId: string | null;
 };
 
 /**

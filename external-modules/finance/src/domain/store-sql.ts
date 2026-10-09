@@ -4,7 +4,7 @@
 // silently changes what RLS sees. Owner is always written in the SQL text
 // via app.current_actor_user_id(), never a param, and no statement filters
 // by owner (RLS + that GUC own that, per the #1167 classifier's read).
-import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
+import type { AccountRecord, ItemErrorDetail, ItemRecord, TransactionRecord } from "./records.js";
 import type { FinanceStore } from "./store-port.js";
 
 // Structural twin of #1167 ctx.db — domain files never import @moss/*, so
@@ -92,7 +92,8 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
   );
 }
 
-const ITEM_COLUMNS = "item_id, institution_id, connected_at, status, last_sync_at, last_error";
+const ITEM_COLUMNS =
+  "item_id, institution_id, connected_at, status, last_sync_at, last_error, last_error_detail";
 
 type ItemRow = {
   item_id: string;
@@ -101,7 +102,17 @@ type ItemRow = {
   status: ItemRecord["status"];
   last_sync_at: string | null;
   last_error: string | null;
+  last_error_detail?: string | null;
 };
+
+function parseErrorDetail(raw: string | null | undefined): ItemErrorDetail | undefined {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw) as ItemErrorDetail;
+  } catch {
+    return undefined;
+  }
+}
 
 function rowToItem(row: ItemRow): ItemRecord {
   return {
@@ -110,7 +121,8 @@ function rowToItem(row: ItemRow): ItemRecord {
     connectedAt: row.connected_at,
     status: row.status,
     lastSyncAt: row.last_sync_at ?? undefined,
-    lastError: row.last_error ?? undefined
+    lastError: row.last_error ?? undefined,
+    lastErrorDetail: parseErrorDetail(row.last_error_detail)
   };
 }
 
@@ -166,18 +178,20 @@ export function sqlStore(db: FinanceDb): FinanceStore {
     async putItem(record) {
       await db.query(
         "INSERT INTO app.finance_items (owner_user_id, item_id, institution_id, connected_at, status, " +
-          "last_sync_at, last_error) " +
-          "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6) " +
+          "last_sync_at, last_error, last_error_detail) " +
+          "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7) " +
           "ON CONFLICT (owner_user_id, item_id) DO UPDATE SET institution_id = EXCLUDED.institution_id, " +
           "connected_at = EXCLUDED.connected_at, status = EXCLUDED.status, " +
-          "last_sync_at = EXCLUDED.last_sync_at, last_error = EXCLUDED.last_error",
+          "last_sync_at = EXCLUDED.last_sync_at, last_error = EXCLUDED.last_error, " +
+          "last_error_detail = EXCLUDED.last_error_detail",
         [
           record.itemId,
           record.institutionId ?? null,
           record.connectedAt,
           record.status,
           record.lastSyncAt ?? null,
-          record.lastError ?? null
+          record.lastError ?? null,
+          record.lastErrorDetail ? JSON.stringify(record.lastErrorDetail) : null
         ]
       );
     },
