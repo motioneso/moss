@@ -13,28 +13,43 @@ The accepted product behavior, mockups and approved migration rulings remain unc
 | #3137    | #3151          | #3133      | Schedule one exact authorized existing-source read through a real read-only gateway; receive a sourced status report while away.                       |
 | #3137    | #3152          | #3151      | Extend that path with configured-model source reporting and bounded quiet retries.                                                                     |
 | #3129    | #3155          | None       | Existing email refresh/monitoring respects current per-account access and module availability, with two-account revocation and real worker proof.      |
+| #3127    | #3156          | #3125      | Retain earlier decisions on return/restart through semantic summary coverage and safe bounded replay in the same conversation.                         |
+| #3127    | #3157          | #3156      | Continue typing through an automatic bounded provider-session rollover while preserving conversation and transcript identity.                          |
 
-These five tasks are native children of their original tickets, tracked on project 2 with
+These seven tasks are native children of their original tickets, tracked on project 2 with
 native blocking edges. #3132 additionally waits for #3150; #3137 additionally waits for #3152;
-#3129 waits for #3155 before its saved-choice and accepted Settings implementation.
-Original downstream edges remain intact. #3132 and #3137 are scope containers, not extra builder
+#3129 waits for #3155 before its saved-choice and accepted Settings implementation; #3127
+additionally waits for #3157. #3128 still waits for original #3127, including both children.
+Original downstream edges remain intact. #3127, #3132 and #3137 are scope containers, not extra builder
 dispatches; their full acceptance criteria must pass after both children integrate. #3129 still
 has its own saved-choice and Settings implementation session after its prerequisite.
-Verified graph now has 29 task nodes and 35 blocking edges. All tickets remain open until
+Verified graph now has 31 task nodes and 38 blocking edges and is acyclic. All tickets remain open until
 normal PR closure; integration/verification governs the working frontier.
 
 ## Session fit and shared conversation ownership
 
-- #3127 can use the existing clean launch/replay boundary. Add capability-routed semantic
-  summarization and success-only persistence; no provider runtime replacement. Existing
-  concatenation/truncation is not semantic compaction.
+- The #3127 fit audit at `8fecaacae` requires two complete vertical children. #3156 owns
+  capability-routed semantic summarization, detached AI preparation/composition, durable
+  revision/coverage checkpoints, compare-and-swap publication and coverage-aligned replay.
+  `prepareTextGeneration` is private; its generalized detached public contract does not
+  exist yet. Current summary writes are unconditional and truncated; checkpoint/CAS and
+  coverage-safe failure replay are pending work, not existing guarantees. Keep model work
+  outside the publish transaction. Failed, empty or stale summaries never advance coverage;
+  refuse an incomplete bounded launch when the unsummarized suffix cannot safely fit.
+- #3156 proves retention through return/restart with a disclosed small replay budget in the
+  isolated container and a real configured-model answer for a decision absent from raw replay.
+  #3157 then owns conservative context accounting, the admitted-turn rollover, exact owned
+  session disposal/relaunch and Stop/selection/provider/shared-warmup/seed races. It proves
+  automatic rollover through ordinary real chat with unchanged IDs and no duplicate turns.
+  Existing clean launch/replay seams are reusable; neither native context exhaustion nor
+  automatic rollover is shipped. Serialize both children across their shared chat/runtime files.
 - #3128 can add durable pending/completed identity at that boundary and conservatively explain
   unfinished work. Keep existing safe pre-acceptance retry versus uncertain-outcome handling;
   never blindly replay a possible action.
 - #3149 owns assistant-only message persistence and exact streaming correlation. Current
   injection does not persist; current UI replaces the last unsaved reply, which is unsafe
   beside a background result. These changes ship with the complete reminder path.
-- Serialize #3126/#3127/#3149 when their actual conversation/UI ownership overlaps. Settings
+- Serialize #3126/#3156/#3157/#3149 when their actual conversation/UI ownership overlaps. Settings
   lanes provide independent concurrency; do not merge conflicting runtime assumptions.
 - #3151 must enforce read-only policy at actual dispatch. Existing approval-free gateway calls
   can still perform permitted writes and are not a substitute. Keep background run provenance
@@ -64,9 +79,17 @@ notification boundary proof. #3131 separately resolves conflicts. It uses existi
 client/query seams and owns changed Profile/quiet-hours map metadata.
 
 Shared Settings navigation, client/query files, app-map and manifest/composition hunks require
-explicit handoff. #3129 integrates the shell first. #3130 may work on backend and a standalone
-component concurrently, then merges the integration tip and receives shell wiring ownership
-to finish accepted UI and live proof. This coordination does not add an artificial native edge.
+explicit handoff. With #3129 integrated from `8dc523ece`, shared-hunk ownership now transfers
+to #3130: `apps/web/src/settings/settings-page.tsx`, `settings-alerts-pane.tsx` and
+`settings-personal-panes.tsx` in that Settings directory, `apps/web/src/api/client-proactive.ts`
+plus quiet-hours client/query hunks in `apps/web/src/api/client.ts` and `query-keys.ts`
+in that API directory, `packages/shared/src/app-map-core.ts`,
+`packages/settings/src/manifest.ts`, and relevant route-dispatch composition in
+`packages/module-registry/src/route-chat-rules.ts`. Preserve the integrated email choice,
+delivery controls and external-effect classification while wiring canonical quiet hours.
+#3130 starts from the latest verified integration tip and owns the shell/Alerts/Profile
+composition, query and app-map changes needed for its accepted UI and live proof. This
+coordination adds no native Settings dependency edge; #3131 remains the separate conflict slice.
 
 ## Verification infrastructure
 
@@ -74,8 +97,8 @@ The existing isolated UAT provisioner is the reuse path for actual UI/API/worker
 the tested checkout, use unique Compose project/network/volumes, bootstrap a disposable owner,
 exercise real Settings/chat and tear down. No rewritten Moss responses or screenshots.
 
-Its historical hardcoded 20000–20099 host ports conflict with mandatory shared development
-ports. The first implementation may add the smallest claimed-port override in the harness;
-claim with `devports` in 5180–5299 and retain disposable-environment safeguards. Never use
+The claimed-port override already exists in the provisioner and runner through
+`JARVIS_UAT_CLAIMED_WEB_PORT`; reuse it rather than adding another override. Claim with
+`devports` in 5180–5299 and retain disposable-environment safeguards. Never use
 production or the shared development instance for this proof. DB-touching checks still use
 `verify-gate`; receipt reuse never replaces required review/live proof.

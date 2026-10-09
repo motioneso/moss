@@ -18,29 +18,41 @@ Runtime baseline and throwaway prototypes were not merged.
   source reviews and fresh scripted plus configured-model installed proof cleared runtime
   and harness `01a014e1c3`, including immediate warm reopen, resume-before-turn ordering,
   Main continuation and caller cancellation. See the [repair supplement](../handoffs/2026-10-08-3125-main-reopen-repair-evidence.md)
-  for exact pins, checks, runtime provenance and limits. Chat descendants (#3126, #3127 and
-  #3149) are released from this repair hold only after final assembled static, focused
-  units and Main-chat DB regressions pass; the coordinator records that verified frontier.
+  for exact pins, checks, runtime provenance and limits. The repair's final clean assembled
+  tip `8fecaacae` passed full static, 258 focused units and 184 Main/chat DB regressions,
+  all exit 0. #3126, #3156 and #3149 are released from that repair hold; the coordinator
+  owns dispatch and records the verified frontier.
 - #3155 is integrated from `8ef212857`; independent source review and scoped installed
   UI/API/worker proof cleared `cd2641479`, using unchanged image runtime `28c43f5ac`.
   See [email-access evidence](../handoffs/2026-10-08-3155-evidence.md) for current account
   filtering, public app-map recovery, negative controls, exact inputs and proof limits.
-  The merger returns a verified integration receipt only after assembled static, focused
-  unit and email-access DB checks pass; builder receipts do not certify a different tip.
-- Unblocked Settings frontier: #3129 and #3130. After the repair's assembled checks pass,
-  #3126, #3127 and #3149 rejoin the eligible frontier. Use one builder
+  Its final clean assembled verification passed full static, focused units and scoped
+  email-access DB checks, all exit 0; builder receipts were not reused for another tip.
+- #3129 is integrated from clean pushed `8dc523ece`: saved automatic-email choice,
+  Alerts shell/delivery controls and source gates. Both source review axes cleared
+  `bf2ad6f72`. Installed capture-off UI/API/worker proof used `fa397bcb5`; production
+  runtime and UAT harness bytes remain identical through the fixture/evidence-only delta.
+  See [email-choice evidence](../handoffs/2026-10-08-3129-evidence.md). Live Retry proves
+  account-list recovery; grant-query Retry and useful selected delivery are not live-proven.
+  Final assembled static, exact six-file units and four-file email-access DB checks are
+  recorded at the merger's final commit/fingerprint; earlier receipts do not certify it.
+- Unblocked Settings frontier: #3130. #3126, #3156 and #3149 are eligible after the verified
+  repair; #3157 waits for #3156. #3127 is a scope container until both children pass its
+  full acceptance; #3128 remains blocked by #3127. Use one builder
   and sequential independent reviews within available capacity; serialize heavy checks.
   All other work remains pending its verified blockers. The coordinator owns dispatch
   and tracker transitions. Draft integration PR [#3154](https://github.com/motioneso/moss/pull/3154)
   is open and remains draft during implementation. Current GitHub CI is not certified;
-  the previously observed Meetings CI failure remains pending coordinator disposition.
+  the previously observed assistant-name Meetings chat CI failure remains pending coordinator disposition.
   Scoped repair verification does not establish branch-wide readiness.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
-  records session sizing, Settings coordination and native reslices #3149–#3152 under
-  #3132/#3137, plus integrated prerequisite #3155 under #3129. #3129 is now unblocked for
-  its full saved-choice/Settings outcome. Original downstream blockers are retained.
+  records session sizing, explicit shared Settings shell/Alerts/client/query/app-map/manifest
+  and personal-pane ownership transfer from #3129 to #3130, and native reslices #3149–#3152
+  under #3132/#3137 plus #3156→#3157 under #3127. #3155 and #3129 are integrated and verified
+  within their recorded source/live/assembled limits. Original downstream blockers are retained;
+  no native Settings edge was added. The current 31-node/38-edge graph is acyclic.
 - Each ticket uses a fresh TDD implementer, isolated worktree/branch from the integration
   tip, required checks and independent review, real UI/worker demonstration, evidence
   and truthful app-map updates. DB checks use `verify-gate`.
