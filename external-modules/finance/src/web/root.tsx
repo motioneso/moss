@@ -11,9 +11,9 @@ import {
 } from "@moss/module-web-sdk";
 import { navigate, useModulePath } from "./router";
 import { BudgetScreen } from "./screens/budget";
-import { FeedScreen } from "./screens/feed";
 import { ReportsScreen } from "./screens/reports";
 import { StartScreen } from "./screens/start";
+import { TransactionsScreen } from "./screens/transactions";
 import { currentLiveMessage, EmptyState, subscribeLive } from "./states";
 
 export type HostActions = { openAssistant: (input: { starterPrompt: string }) => void };
@@ -90,7 +90,7 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
       ) : path === "/" ? (
         <BudgetScreen />
       ) : path === "/transactions" ? (
-        <FeedScreen hostActions={props.hostActions} />
+        <TransactionsScreen />
       ) : path === "/accounts" ? (
         <PendingScreen title="Accounts" />
       ) : path === "/reports" ? (

@@ -11,6 +11,7 @@ import { budgetApplyHandler, budgetAssignHandler, budgetStatusHandler } from "./
 import { connectPollHandler, connectStartHandler } from "./handlers/connect.js";
 import {
   categorizeApplyHandler,
+  reviewApplyHandler,
   transactionCategorizeNewHandler,
   transactionCategorizeHandler,
   transactionsQueryHandler
@@ -39,6 +40,8 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "transaction.categorize": transactionCategorizeHandler,
   "transaction.categorize-new": transactionCategorizeNewHandler,
   "categorize.apply": categorizeApplyHandler,
+  // #3176: confirm or change rows from the Transactions screen.
+  "review.apply": reviewApplyHandler,
   // FIN-03 (#1148) Task 3: the envelope-budget surface of manifest v0.2.0.
   "budget.status": budgetStatusHandler,
   "budget.assign": budgetAssignHandler,

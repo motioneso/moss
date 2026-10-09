@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -58,6 +58,12 @@
         "path": "/"
       },
       {
+        "id": "finance.transactions",
+        "label": "Transactions",
+        "description": "Every bank transaction grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, and Confirm all.",
+        "path": "/transactions"
+      },
+      {
         "id": "finance.start",
         "label": "Getting started",
         "description": "Connect a first bank and build a first budget from three months of history. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin.",
@@ -65,6 +71,10 @@
       }
     ],
     "features": [
+      {
+        "id": "finance.confirm-guesses",
+        "description": "On Transactions, a Needs a look row has a category picker, a Confirm button and an Always for this merchant switch (off by default; on, the new category becomes a rule for that merchant). Confirm all N confirms every Needs a look row the filter and search show, keeps Moss's guessed categories, makes no rules, and disappears when none are left."
+      },
       {
         "id": "finance.getting-started",
         "description": "Getting started shows three steps (connect a bank, Moss sorts spending, build a budget together) with each step's state. A bank cannot be connected until an admin sets the bank keys in Finance settings."
@@ -137,6 +147,7 @@
           "categoryId": { "type": "string" },
           "search": { "type": "string" },
           "pendingOnly": { "type": "boolean" },
+          "needsLookOnly": { "type": "boolean" },
           "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
         }
       },
@@ -373,6 +384,26 @@
         "handler": "storage.migrate",
         "retryLimit": 1,
         "allowManualRun": true
+      },
+      {
+        "name": "finance.review-apply",
+        "handler": "review.apply",
+        "retryLimit": 1,
+        "allowManualRun": true,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "transactionIds": {
+              "type": "array",
+              "maxItems": 200,
+              "items": { "type": "identifier" }
+            },
+            "accountIds": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
+            "months": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
+            "categoryIds": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
+            "createRule": { "type": "boolean" }
+          }
+        }
       }
     ],
     "schedules": [

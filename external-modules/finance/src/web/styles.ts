@@ -51,6 +51,12 @@ export const MODULE_STYLES = `
 .fnm-cell-stack { display: flex; flex-direction: column; gap: var(--space-2); min-width: 9rem; }
 .fnm-cell-meter { width: 7rem; margin-left: auto; }
 .fnm-phone-only { display: none; }
+/* #3176 Transactions: layout only. */
+.fnm-spread { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.fnm-col-payee { width: 30%; }
+.fnm-col-category { width: 34%; }
+.fnm-col-amount { width: 14%; }
+.fnm-search { width: 14rem; max-width: 100%; }
 @media (max-width: 720px) {
   .fnm-root { padding: 1rem 0.75rem 2rem; }
   .fnm-page { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }

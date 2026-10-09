@@ -12,8 +12,8 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../../external-modules/finance/src/web/screens/feed", () => ({
-  FeedScreen: () => createElement("div", { "data-screen": "feed" })
+vi.mock("../../external-modules/finance/src/web/screens/transactions", () => ({
+  TransactionsScreen: () => createElement("div", { "data-screen": "transactions" })
 }));
 vi.mock("../../external-modules/finance/src/web/screens/budget", () => ({
   BudgetScreen: () => createElement("div", { "data-screen": "budget" })

@@ -145,6 +145,22 @@ describe("finance budget.status (#1148)", () => {
     );
   });
 
+  it("counts the month's transactions whose review state needs a look (#3176)", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [
+        // Uncategorized but confirmed: not a review item any more.
+        txRecord({ categoryId: null, amountCents: 100, reviewState: "confirmed" }),
+        txRecord({ categoryId: "groceries", amountCents: 200, reviewState: "needs_look" }),
+        txRecord({ categoryId: "dining", amountCents: 300, reviewState: "needs_look" }),
+        // Rows written before review state existed read as confirmed.
+        txRecord({ categoryId: "dining", amountCents: 400 })
+      ]
+    });
+    const result = await budgetStatusHandler(fakePorts(kv))({ month: "2026-07" });
+    expect(result.needsLookCount).toBe(2);
+  });
+
   it("reports ready to assign from account balances, card debt and each envelope (#3173)", async () => {
     const kv = fakeKv();
     await seedJuly(kv);
