@@ -139,6 +139,43 @@ describe("Transactions screen (#3176)", () => {
     expect(text(renderer)).toContain("Needs a look (2)");
   });
 
+  it("lets a confirmed row change category, sending the new one (review A7)", async () => {
+    fakeFetch({ ...base, transactions: rows, needsLookCount: 2 });
+    const renderer = await render();
+    const picker = renderer.root.findAll(
+      (node) => node.props["aria-label"] === "Category for Payee c" && typeof node.type !== "string"
+    )[0]!;
+    await act(async () => {
+      picker.props.onChange({ target: { value: "dining" } });
+    });
+    const [call] = queueCalls();
+    expect(call!.body.params).toMatchObject({
+      transactionIds: ["c"],
+      categoryIds: ["dining"]
+    });
+    expect(call!.body.params).not.toHaveProperty("createRule");
+  });
+
+  it("offers Show more when the month has more rows than loaded (review A11)", async () => {
+    fakeFetch({ ...base, transactions: rows, needsLookCount: 2, totalCount: 450 });
+    const renderer = await render();
+    const queryInputs = () =>
+      calls
+        .filter((call) => !call.url.includes("/queues/"))
+        .map((call) => (call.body.input as { limit?: number }).limit);
+    expect(queryInputs()).toEqual([200]);
+    await act(async () => {
+      button(renderer, "Show more").props.onClick();
+    });
+    await act(async () => {});
+    expect(queryInputs().at(-1)).toBe(400);
+  });
+
+  it("hides Show more when everything is loaded", async () => {
+    fakeFetch({ ...base, transactions: rows, needsLookCount: 2, totalCount: 3 });
+    expect(text(await render())).not.toContain("Show more");
+  });
+
   it("hides Confirm all when nothing needs a look", async () => {
     fakeFetch({ ...base, transactions: [rows[2]], needsLookCount: 0 });
     const out = text(await render());

@@ -241,7 +241,7 @@ describe("finance feed handlers (#1147)", () => {
     );
   });
 
-  it("query defaults limit to 50, allows up to 200, rejects beyond", async () => {
+  it("query defaults limit to 50, allows up to 2000, rejects beyond, and reports the total", async () => {
     const kv = fakeKv();
     await seedAccount(kv, "acc-1");
     await kv.set(NS.transactions, "acc-1:2026-07", {
@@ -253,7 +253,9 @@ describe("finance feed handlers (#1147)", () => {
     const handler = (input: Record<string, unknown>) => query({ actorUserId: ACTOR, ...input });
     expect(ids(await handler({})).length).toBe(50);
     expect(ids(await handler({ limit: 200 })).length).toBe(60);
-    await expect(handler({ limit: 201 })).rejects.toThrow("at most 200");
+    await expect(handler({ limit: 2001 })).rejects.toThrow("at most 2000");
+    // The total lets the screen offer Show more (review A11).
+    expect((await handler({ limit: 10 })).totalCount).toBe(60);
     await expect(handler({ month: "July 2026" })).rejects.toThrow("month must be YYYY-MM");
   });
 

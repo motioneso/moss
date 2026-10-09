@@ -61,7 +61,7 @@
       {
         "id": "finance.transactions",
         "label": "Transactions",
-        "description": "Every bank transaction grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, and Confirm all.",
+        "description": "Every bank transaction grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, Confirm all, a category picker on every confirmed row to change its category, and a Show more button when a month has more than 200 rows.",
         "path": "/transactions"
       },
       {
@@ -159,7 +159,7 @@
           "search": { "type": "string" },
           "pendingOnly": { "type": "boolean" },
           "needsLookOnly": { "type": "boolean" },
-          "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+          "limit": { "type": "integer", "minimum": 1, "maximum": 2000 }
         }
       },
       "handler": "transactions.query"

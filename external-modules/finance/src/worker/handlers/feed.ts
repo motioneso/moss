@@ -55,6 +55,9 @@ export async function loadCategories(ports: WorkerPorts): Promise<Category[]> {
 // mirror carry their owner's id and a shared marker for the web layer.
 type FeedRow = TransactionRecord & { ownerUserId?: string; shared?: true };
 
+/** Most rows one transactions.query call returns; the screen asks for more in steps of 200. */
+const MAX_QUERY_LIMIT = 2000;
+
 export const transactionsQueryHandler: ToolFactory = (ports) => async (input) => {
   // Host-injected at the dispatch chokepoint (spread LAST over tool input)
   // and host-bound on queue envelopes — never caller-controlled (#1149).
@@ -65,7 +68,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   const search = readString(input, "search")?.toLowerCase();
   const pendingOnly = readBool(input, "pendingOnly") ?? false;
   const needsLookOnly = readBool(input, "needsLookOnly") ?? false;
-  const limit = readInt(input, "limit", { min: 1, max: 200 }) ?? 50;
+  const limit = readInt(input, "limit", { min: 1, max: MAX_QUERY_LIMIT }) ?? 50;
 
   // FIN-06c (#1166) Task 9: one store call for the requested month, across
   // every account — store.listMonthTransactions already returns the pinned
@@ -117,12 +120,14 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   transactions.sort((a, b) =>
     a.date !== b.date ? (a.date > b.date ? -1 : 1) : a.id < b.id ? -1 : a.id > b.id ? 1 : 0
   );
+  const totalCount = transactions.length;
   transactions = transactions.slice(0, limit);
 
   const accounts = await accountsListHandler(ports)({ actorUserId });
   return {
     month,
     transactions,
+    totalCount,
     needsLookCount,
     categories: await loadCategories(ports),
     accounts: (accounts.accounts as unknown[] | undefined) ?? []

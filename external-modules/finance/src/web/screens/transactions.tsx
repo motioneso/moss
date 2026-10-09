@@ -56,12 +56,15 @@ interface TxResult extends Record<string, unknown> {
   categories?: TxCategory[];
   accounts?: TxAccount[];
   needsLookCount?: number;
+  totalCount?: number;
 }
 
 type Filter = "all" | "look";
 
 const REFETCH_DELAY_MS = 2000;
 const SEARCH_DELAY_MS = 300;
+const PAGE_SIZE = 200;
+const MAX_PAGES = 10;
 
 const isLook = (tx: Tx): boolean => tx.shared !== true && tx.reviewState === "needs_look";
 
@@ -134,6 +137,40 @@ function LookControls(props: {
   );
 }
 
+// The category picker for a row that is already confirmed. Picking another category saves it.
+function ChangeCategory(props: {
+  tx: Tx;
+  categories: TxCategory[];
+  onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
+}): ReactNodeLike {
+  const { tx } = props;
+  const [categoryId, setCategoryId] = useState(tx.categoryId ?? "");
+  return (
+    <Select
+      aria-label={`Category for ${tx.name}`}
+      value={categoryId}
+      onChange={(event: { target: { value: string } }) => {
+        const next = event.target.value;
+        const before = categoryId;
+        setCategoryId(next);
+        // A save that never ran puts the old category back on screen.
+        void props.onChange(tx, next).then((saved) => {
+          if (!saved) setCategoryId(before);
+        });
+      }}
+    >
+      <option value="" disabled>
+        Uncategorized
+      </option>
+      {props.categories.map((category) => (
+        <option key={category.id} value={category.id}>
+          {category.name}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
 interface DayGroup {
   date: string;
   rows: Tx[];
@@ -155,6 +192,7 @@ interface RowContext {
   accountName: (tx: Tx) => string;
   confirmed: ReadonlySet<string>;
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
+  onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
 }
 
 function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): ReactNodeLike {
@@ -197,8 +235,15 @@ function DayTable(props: { day: DayGroup; head: boolean; ctx: RowContext }): Rea
                 <td>
                   {look ? (
                     <LookControls tx={tx} categories={ctx.categories} onConfirm={ctx.onConfirm} />
-                  ) : (
+                  ) : tx.shared === true ? (
                     ctx.categoryName(tx)
+                  ) : (
+                    <ChangeCategory
+                      key={`${tx.id}:${tx.categoryId}`}
+                      tx={tx}
+                      categories={ctx.categories}
+                      onChange={ctx.onChange}
+                    />
                   )}
                 </td>
                 <td>{ctx.accountName(tx)}</td>
@@ -235,8 +280,18 @@ function DayRows(props: { day: DayGroup; ctx: RowContext }): ReactNodeLike {
                     </div>
                     <LookControls tx={tx} categories={ctx.categories} onConfirm={ctx.onConfirm} />
                   </div>
-                ) : (
+                ) : tx.shared === true ? (
                   `${ctx.categoryName(tx)} · ${ctx.accountName(tx)}`
+                ) : (
+                  <div className="fnm-block fnm-block--tight">
+                    <ChangeCategory
+                      key={`${tx.id}:${tx.categoryId}`}
+                      tx={tx}
+                      categories={ctx.categories}
+                      onChange={ctx.onChange}
+                    />
+                    <span>{ctx.accountName(tx)}</span>
+                  </div>
                 )
               }
               meta={look ? null : <Amount tx={tx} />}
@@ -254,6 +309,7 @@ function TransactionsBody(props: {
   searching: boolean;
   confirmed: ReadonlySet<string>;
   onConfirm: (tx: Tx, categoryId: string, makeRule: boolean) => void;
+  onChange: (tx: Tx, categoryId: string) => Promise<boolean>;
 }): ReactNodeLike {
   const { result, filter, confirmed } = props;
   const accounts = result.accounts ?? [];
@@ -268,7 +324,8 @@ function TransactionsBody(props: {
       categories.find((category) => category.id === tx.categoryId)?.name ?? "Uncategorized",
     accountName: (tx) => accounts.find((account) => account.accountId === tx.accountId)?.name ?? "",
     confirmed,
-    onConfirm: props.onConfirm
+    onConfirm: props.onConfirm,
+    onChange: props.onChange
   };
   if (rows.length === 0) {
     if (filter === "look") {
@@ -303,6 +360,10 @@ export function TransactionsScreen(): ReactNodeLike {
   const [search, setSearch] = useState("");
   // Rows confirmed here, hidden from Needs a look until the refetch catches up.
   const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(new Set());
+  // How many pages of PAGE_SIZE rows to load; Show more adds one.
+  const [pages, setPages] = useState(1);
+
+  useEffect(() => setPages(1), [month, filter, search]);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(draft.trim()), SEARCH_DELAY_MS);
@@ -311,7 +372,7 @@ export function TransactionsScreen(): ReactNodeLike {
 
   const query = useToolQuery<TxResult>("finance.transactions.query", {
     month,
-    limit: 200,
+    limit: PAGE_SIZE * pages,
     ...(search ? { search } : {}),
     ...(filter === "look" ? { needsLookOnly: true } : {})
   });
@@ -333,7 +394,12 @@ export function TransactionsScreen(): ReactNodeLike {
     release(ids);
   }, [query]);
 
-  const send = (rows: Tx[], categoryIds: string[], createRule: boolean, message: string): void => {
+  const send = (
+    rows: Tx[],
+    categoryIds: string[],
+    createRule: boolean,
+    message: string
+  ): Promise<boolean> => {
     const ids = rows.map((row) => row.id);
     setConfirmed((previous) => new Set([...previous, ...ids]));
     // One command per batch that fits the host's size limit; the sender spaces them apart.
@@ -346,35 +412,46 @@ export function TransactionsScreen(): ReactNodeLike {
       })),
       createRule
     );
-    for (const chunk of chunks) {
-      const chunkIds = chunk.transactionIds;
-      void runWrite("finance.review-apply", "finance.review-apply", { ...chunk }).then(
-        (outcome) => {
+    return Promise.all(
+      chunks.map((chunk) =>
+        runWrite("finance.review-apply", "finance.review-apply", { ...chunk }).then((outcome) => {
+          const chunkIds = chunk.transactionIds;
           const queued = afterRun(outcome, message, () => {
             releaseOnRead.current = [...releaseOnRead.current, ...chunkIds];
             readArmed.current = true;
           });
           // A command that never ran will not change anything, so show its rows again.
           if (!queued) release(chunkIds);
-        }
-      );
-    }
+          return queued;
+        })
+      )
+    ).then((all) => all.every(Boolean));
   };
 
-  const confirmOne = (tx: Tx, categoryId: string, makeRule: boolean): void =>
-    send([tx], [categoryId], makeRule, "Confirmed.");
+  const confirmOne = (tx: Tx, categoryId: string, makeRule: boolean): void => {
+    void send([tx], [categoryId], makeRule, "Confirmed.");
+  };
+
+  // Changing an already-confirmed row only rewrites its category; it is never hidden.
+  const changeOne = (tx: Tx, categoryId: string): Promise<boolean> =>
+    send([tx], [categoryId], false, "Category changed.").then((saved) => {
+      // The row was never in Needs a look here, so take off the optimistic mark right away.
+      release([tx.id]);
+      return saved;
+    });
 
   // Exactly the Needs a look rows on screen: the filter, the search and the month decide them.
   const visibleLook = (result?.transactions ?? []).filter(
     (tx) => isLook(tx) && tx.categoryId !== null && !confirmed.has(tx.id)
   );
-  const confirmAll = (): void =>
-    send(
+  const confirmAll = (): void => {
+    void send(
       visibleLook,
       visibleLook.map((tx) => tx.categoryId as string),
       false,
       `Confirmed ${visibleLook.length}.`
     );
+  };
 
   // The server counts rows the viewer still sees as Needs a look; take off those confirmed here.
   const stillCounted = (result?.transactions ?? []).filter(
@@ -437,10 +514,20 @@ export function TransactionsScreen(): ReactNodeLike {
             searching={search !== ""}
             confirmed={confirmed}
             onConfirm={confirmOne}
+            onChange={changeOne}
           />
         ),
         { loadingLabel: "Loading transactions" }
       )}
+      {result !== null &&
+      (result.totalCount ?? 0) > (result.transactions ?? []).length &&
+      pages < MAX_PAGES ? (
+        <div>
+          <Button variant="secondary" onClick={() => setPages(pages + 1)}>
+            Show more
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }
