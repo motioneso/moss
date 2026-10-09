@@ -16,6 +16,10 @@ type Entry = {
   snapshot: QuerySnapshot<Record<string, unknown>>;
   listeners: Set<() => void>;
   started: boolean;
+  // Remembered so invalidateQueries can restart the fetch for mounted screens.
+  generation: number;
+  name?: string;
+  input?: Record<string, unknown>;
 };
 
 const LOADING: QuerySnapshot<never> = { status: "loading" };
@@ -24,7 +28,7 @@ const cache = new Map<string, Entry>();
 function entryFor(key: string): Entry {
   let entry = cache.get(key);
   if (!entry) {
-    entry = { snapshot: LOADING, listeners: new Set(), started: false };
+    entry = { snapshot: LOADING, listeners: new Set(), started: false, generation: 0 };
     cache.set(key, entry);
   }
   return entry;
@@ -34,7 +38,11 @@ function start(key: string, name: string, input?: Record<string, unknown>): void
   const entry = entryFor(key);
   if (entry.started) return;
   entry.started = true;
+  const generation = ++entry.generation;
+  entry.name = name;
+  entry.input = input;
   void invokeTool(name, input).then((outcome) => {
+    if (generation !== entry.generation) return;
     entry.snapshot = { status: "settled", outcome };
     for (const listener of entry.listeners) listener();
   });
@@ -64,12 +72,17 @@ export function useToolQuery<T extends Record<string, unknown>>(
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot) as QuerySnapshot<T>;
 }
 
-// After a queue run (or on demand) drop everything so the next mount refetches.
+// After a queue run (or on demand) drop unmounted entries so the next mount refetches, and
+// restart mounted ones in place. Mounted screens keep their current data until the refetch lands.
 export function invalidateQueries(): void {
-  const listeners: Array<() => void> = [];
-  for (const entry of cache.values()) listeners.push(...entry.listeners);
-  cache.clear();
-  for (const listener of listeners) listener();
+  for (const [key, entry] of [...cache]) {
+    if (entry.listeners.size === 0 || entry.name === undefined) {
+      cache.delete(key);
+      continue;
+    }
+    entry.started = false;
+    start(key, entry.name, entry.input);
+  }
 }
 
 export function __resetStoreForTests(): void {

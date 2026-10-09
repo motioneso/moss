@@ -103,18 +103,22 @@ tar -xzf backups/jarv1s-<timestamp>.tar.gz --strip-components=1 \
 docker exec jarv1s-postgres \
   bash -c 'PGPASSWORD="$POSTGRES_PASSWORD" createdb -U postgres jarv1s_restoretest'
 
-# 4. Copy the dump into the container and restore
+# 4. Copy the dump (backups keep owners and grants, so no --no-owner or --no-privileges) into the container and restore
 docker cp /tmp/jarv1s-restore-test/db.dump jarv1s-postgres:/tmp/restore-test.dump
 docker exec jarv1s-postgres \
   bash -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore \
     --username=postgres --dbname=jarv1s_restoretest \
-    --clean --if-exists --no-owner --no-privileges \
+    --clean --if-exists --single-transaction --exit-on-error \
     /tmp/restore-test.dump'
 
-# 5. Spot-check
+# 5. Prove the app role can read data under row-level security.
+#    The dump keeps owners and grants, so the app, auth and worker roles must already exist in
+#    this cluster (they do on the instance that took the backup). Use the app role's password.
 docker exec jarv1s-postgres \
-  bash -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U postgres -d jarv1s_restoretest \
-    -c "SELECT count(*) FROM app.users;"'
+  bash -c 'PGPASSWORD="<app role password>" psql -U jarvis_app_runtime -d jarv1s_restoretest \
+    -c "BEGIN; SELECT set_config('"'"'app.actor_user_id'"'"', '"'"'<a real user id>'"'"', true); \
+        SELECT count(*) FROM app.users; ROLLBACK;"'
+# Then point a throwaway API at the restored database and check /health/ready returns 200.
 
 # 6. Drop the test database and clean up
 docker exec jarv1s-postgres \

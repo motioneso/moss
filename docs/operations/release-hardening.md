@@ -100,8 +100,20 @@ pnpm restore:db -- --input backups/jarv1s-alpha.dump --execute --confirm-restore
 ```
 
 The restore path uses the bootstrap/operator database URL and `pg_restore --clean --if-exists
---no-owner --no-privileges`. Like backups, the script passes the database password through
-`PGPASSWORD` instead of command arguments.
+--single-transaction --exit-on-error`. Backups keep owners and grants, so the restore recreates
+the role-scoped definer functions and runtime privileges exactly as migrations made them. The
+runtime roles must already exist in the target cluster. Like backups, the script passes the
+database password through `PGPASSWORD` instead of command arguments.
+
+#3199: pg_dump and pg_restore run inside a Postgres container (`JARVIS_BACKUP_PG_CONTAINER`, or
+`--container`; default `jarv1s-postgres`, production is `moss-postgres`). Before any destructive
+step the script takes a random advisory lock on the configured URL's connection and requires the
+container to find that lock held, which proves both reach the same running server and database
+(copies of a cluster share a system identifier, so identity alone cannot tell them apart). It
+refuses otherwise. Backups apply the same check to their source.
+
+After a restore, prove the app can run on it: connect as the app runtime role, read a row under
+row-level security, and check the API's ready endpoint returns 200. Counting rows is not enough.
 
 #1468: the restore path confirms the target's identity before restoring — pass
 `--confirm-owner-email <email>` matching the target's current bootstrap owner, or
