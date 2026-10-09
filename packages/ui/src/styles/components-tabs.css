@@ -51,8 +51,10 @@
 .jds-radio-card {
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-content: start;
   gap: var(--space-3);
+  column-gap: var(--space-3);
   padding: var(--space-4);
   border: var(--border-w) solid var(--border-strong);
   border-radius: var(--radius-md);
@@ -68,12 +70,21 @@
   outline: var(--border-w-strong) solid var(--focus-ring);
   outline-offset: var(--space-1);
 }
+.jds-radio-card:has(input:checked) .jds-radio-card__description {
+  grid-column: 1 / -1;
+  color: var(--text);
+}
 .jds-radio-card input {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
   justify-self: end;
   margin: 0;
   accent-color: var(--accent);
 }
 .jds-radio-card__label {
+  grid-column: 1;
+  grid-row: 1;
   color: var(--text);
   font-size: var(--text-md);
   font-weight: var(--weight-bold);
@@ -105,4 +116,21 @@
 
 .jds-tabs__list[hidden] ~ .jds-tabs__panel {
   padding-block: 0;
+}
+
+/* ---------------------------------------------------------------
+   PHONE CONTROL HEIGHT
+   Thumb-sized controls below 720px wide.
+   --------------------------------------------------------------- */
+@media (max-width: 720px) {
+  .jds-btn,
+  .jds-segmented__opt,
+  .jds-input,
+  .jds-select,
+  .jds-iconbtn {
+    min-height: 44px;
+  }
+  .jds-iconbtn {
+    min-width: 44px;
+  }
 }
