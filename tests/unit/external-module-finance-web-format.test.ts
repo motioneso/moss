@@ -1,7 +1,12 @@
 // tests/unit/external-module-finance-web-format.test.ts
 import { describe, expect, it } from "vitest";
 
-import { applyPending, settlePending } from "../../external-modules/finance/src/web/assign.js";
+import {
+  applyPending,
+  checkDelayMs,
+  settlePending,
+  trackChecks
+} from "../../external-modules/finance/src/web/assign.js";
 
 import {
   centsToAmountInput,
@@ -69,5 +74,26 @@ describe("typed budget amounts", () => {
     expect(
       settlePending({ groceries: 70_000, dining: 5_000, fun: 0 }, { groceries: 70_000, dining: 1 })
     ).toEqual({ confirmed: ["groceries", "fun"], mismatched: ["dining"] });
+  });
+
+  it("counts checks per category so a new edit starts fresh (review finding 7)", () => {
+    const first = trackChecks({}, { confirmed: [], mismatched: ["groceries"] }, 3);
+    const second = trackChecks(first.counts, { confirmed: [], mismatched: ["groceries"] }, 3);
+    expect(second.counts).toEqual({ groceries: 2 });
+    // A second category typed later does not inherit groceries' count.
+    const third = trackChecks(
+      second.counts,
+      { confirmed: [], mismatched: ["groceries", "dining"] },
+      3
+    );
+    expect(third.giveUp).toEqual(["groceries"]);
+    expect(third.counts).toEqual({ dining: 1 });
+    expect(third.retryAttempt).toBe(1);
+  });
+
+  it("waits longer between later checks, up to a ceiling", () => {
+    expect(checkDelayMs(1)).toBe(2000);
+    expect(checkDelayMs(3)).toBe(6000);
+    expect(checkDelayMs(50)).toBe(10_000);
   });
 });

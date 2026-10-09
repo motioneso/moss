@@ -27,7 +27,13 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { runQueue } from "../api";
-import { applyPending, settlePending, type PendingAssignments } from "../assign";
+import {
+  applyPending,
+  checkDelayMs,
+  settlePending,
+  trackChecks,
+  type PendingAssignments
+} from "../assign";
 import {
   centsToAmountInput,
   currentMonth,
@@ -478,17 +484,13 @@ function BudgetBody(
   );
 }
 
-// Wait between checks that a queued save landed, and how many checks before giving up.
-const CHECK_DELAY_MS = 2000;
-const MAX_CHECKS = 3;
-
 export function BudgetScreen(): ReactNodeLike {
   const [month, setMonth] = useState(currentMonth);
   const [pending, setPending] = useState<PendingAssignments>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const status = useToolQuery<BudgetStatusResult>("finance.budget.status", { month });
   const armed = useRef(false);
-  const checks = useRef(0);
+  const checks = useRef<Record<string, number>>({});
   const result =
     status.status === "settled" && status.outcome.kind === "ok" ? status.outcome.result : null;
 
@@ -497,14 +499,14 @@ export function BudgetScreen(): ReactNodeLike {
     setPending({});
     setErrors({});
     armed.current = false;
-    checks.current = 0;
+    checks.current = {};
   }, [month]);
 
-  const scheduleCheck = (): void => {
+  const scheduleCheck = (attempt = 1): void => {
     setTimeout(() => {
       armed.current = true;
       invalidateQueries();
-    }, CHECK_DELAY_MS);
+    }, checkDelayMs(attempt));
   };
 
   const fail = (line: Line, message: string): void => {
@@ -524,6 +526,7 @@ export function BudgetScreen(): ReactNodeLike {
       return next;
     });
     setPending((previous) => ({ ...previous, [line.id]: cents }));
+    checks.current = { ...checks.current, [line.id]: 0 };
     // Metadata-only params: ids and cents, nothing else.
     void runQueue("finance.budget-apply", "finance.budget-apply", {
       month,
@@ -555,18 +558,15 @@ export function BudgetScreen(): ReactNodeLike {
         return next;
       });
     }
-    if (mismatched.length === 0) {
-      checks.current = 0;
-    } else if (checks.current + 1 < MAX_CHECKS) {
-      checks.current += 1;
-      scheduleCheck();
-    } else {
-      checks.current = 0;
+    const step = trackChecks(checks.current, { confirmed, mismatched });
+    checks.current = step.counts;
+    if (step.retryAttempt > 0) scheduleCheck(step.retryAttempt);
+    if (step.giveUp.length > 0) {
       const names = new Map((result.categories ?? []).map((c) => [c.id, c.name]));
-      for (const id of mismatched) {
+      for (const id of step.giveUp) {
         fail(
           { id, name: names.get(id) ?? id, assigned: 0, spent: 0, available: 0, carried: 0 },
-          "Couldn't save. Put back to the old amount."
+          "Couldn't confirm the save. Put back to the old amount."
         );
       }
     }

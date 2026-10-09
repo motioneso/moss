@@ -36,3 +36,44 @@ export function settlePending(
   }
   return { confirmed, mismatched };
 }
+
+/** Checks a typed amount gets before the screen gives up on it (about a minute in all). */
+export const MAX_CHECKS = 8;
+
+/** Wait before check number `attempt` (1-based): starts at 2 seconds, then slows down. */
+export function checkDelayMs(attempt: number): number {
+  return Math.min(2000 * attempt, 10_000);
+}
+
+export interface CheckStep {
+  /** Per-category count of checks that found a mismatch. */
+  counts: Record<string, number>;
+  /** Categories that used all their checks. */
+  giveUp: string[];
+  /** Largest count among categories still waiting; 0 when none wait. */
+  retryAttempt: number;
+}
+
+/**
+ * Advances each category's own check count. Confirmed categories drop out, so one
+ * slow save never uses up another category's checks.
+ */
+export function trackChecks(
+  counts: Record<string, number>,
+  settled: SettleResult,
+  max: number = MAX_CHECKS
+): CheckStep {
+  const next: Record<string, number> = {};
+  const giveUp: string[] = [];
+  let retryAttempt = 0;
+  for (const id of settled.mismatched) {
+    const used = (counts[id] ?? 0) + 1;
+    if (used >= max) {
+      giveUp.push(id);
+    } else {
+      next[id] = used;
+      retryAttempt = Math.max(retryAttempt, used);
+    }
+  }
+  return { counts: next, giveUp, retryAttempt };
+}
