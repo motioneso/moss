@@ -10,11 +10,12 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { navigate, useModulePath } from "./router";
+import { AccountsScreen } from "./screens/accounts";
 import { BudgetScreen } from "./screens/budget";
 import { FeedScreen } from "./screens/feed";
 import { ReportsScreen } from "./screens/reports";
 import { StartScreen } from "./screens/start";
-import { currentLiveMessage, EmptyState, subscribeLive } from "./states";
+import { currentLiveMessage, subscribeLive } from "./states";
 
 export type HostActions = { openAssistant: (input: { starterPrompt: string }) => void };
 
@@ -44,11 +45,6 @@ function tabFor(path: string): Tab | "none" {
   if (path === "/transactions") return "transactions";
   if (path === "/accounts") return "accounts";
   return "none";
-}
-
-// Stand-in until the Accounts screen lands.
-function PendingScreen(props: { title: string }): ReactNodeLike {
-  return <EmptyState title={props.title} body="This screen is not available yet." />;
 }
 
 export function Root(props: { hostActions: HostActions }): ReactNodeLike {
@@ -92,7 +88,7 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
       ) : path === "/transactions" ? (
         <FeedScreen hostActions={props.hostActions} />
       ) : path === "/accounts" ? (
-        <PendingScreen title="Accounts" />
+        <AccountsScreen hostActions={props.hostActions} />
       ) : path === "/reports" ? (
         <ReportsScreen />
       ) : null}
