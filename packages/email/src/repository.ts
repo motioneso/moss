@@ -71,7 +71,7 @@ export interface CreateCachedEmailMessageInput {
 
 /**
  * The owner's addresses from per-address recipient counts. An address qualifies at a fifth of
- * the sampled messages and at half the count of the most frequent address, so a regular
+ * the sampled messages and at four fifths of the count of the most frequent address, so a regular
  * co-recipient is not mistaken for the owner while a busy alias still is.
  */
 export function selectOwnAddresses(
@@ -434,7 +434,7 @@ export class EmailRepository {
    *  at least this share of the owner's newest messages are treated as the owner's own addresses. */
   static readonly OWN_ADDRESS_SAMPLE = 500;
   static readonly OWN_ADDRESS_MIN_SHARE = 0.2;
-  static readonly OWN_ADDRESS_MIN_SHARE_OF_TOP = 0.5;
+  static readonly OWN_ADDRESS_MIN_SHARE_OF_TOP = 0.8;
 
   /**
    * Recipient addresses that appear on at least a fifth of the owner's newest cached messages

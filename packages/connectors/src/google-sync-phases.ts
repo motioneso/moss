@@ -15,6 +15,7 @@ import {
   extractEmailSignalsBatch,
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
+  replyThreadingMetadata,
   senderAddress,
   type EmailExtractOptions,
   type EmailExtractResult,
@@ -139,7 +140,8 @@ export function cachedEmailInput(
     externalMetadata: {
       labelIds: parsed.labelIds,
       historyId: parsed.historyId ?? null,
-      threadId: parsed.threadId ?? null
+      threadId: parsed.threadId ?? null,
+      ...replyThreadingMetadata(parsed)
     },
     summary: extracted.summary,
     signals: extracted.signals as Record<string, unknown>

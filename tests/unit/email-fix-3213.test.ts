@@ -4,6 +4,8 @@ import type { DataContextDb, EmailMessage } from "@moss/db";
 import { buildReplyMime, replyThreadHeaders, selectOwnAddresses } from "@moss/email";
 import { ImapEmailWriteProvider } from "@moss/connectors";
 import type { ConnectorSecretCipher, ConnectorsRepository } from "@moss/connectors";
+import { cachedEmailInput } from "../../packages/connectors/src/google-sync-phases.js";
+import { parseEmail, replyThreadingMetadata } from "../../packages/connectors/src/email-extract.js";
 import { buildChatToolServices } from "../../packages/chat/src/gateway-services.js";
 
 type Internals = {
@@ -147,10 +149,18 @@ describe("DOM-040: a frequent co-recipient is not the owner", () => {
     expect(selectOwnAddresses(counts, 500)).toEqual(["me@example.com"]);
   });
 
+  it("drops a colleague on well over half as many messages as the owner", () => {
+    const counts = new Map([
+      ["me@example.com", 400],
+      ["colleague@example.com", 260]
+    ]);
+    expect(selectOwnAddresses(counts, 500)).toEqual(["me@example.com"]);
+  });
+
   it("keeps an alias nearly as busy as the main address", () => {
     const counts = new Map([
       ["me@example.com", 300],
-      ["alias@example.com", 220],
+      ["alias@example.com", 260],
       ["colleague@example.com", 100]
     ]);
     expect(selectOwnAddresses(counts, 500).sort()).toEqual(["alias@example.com", "me@example.com"]);
@@ -158,5 +168,41 @@ describe("DOM-040: a frequent co-recipient is not the owner", () => {
 
   it("returns nothing for an empty cache", () => {
     expect(selectOwnAddresses(new Map(), 0)).toEqual([]);
+  });
+});
+
+describe("DOM-038: threading ids survive sync", () => {
+  const header = (name: string, value: string) => ({ name, value });
+  const gmailMessage = {
+    id: "g1",
+    threadId: "t1",
+    internalDate: "1700000000000",
+    payload: {
+      headers: [
+        header("From", "alice@example.com"),
+        header("To", "me@example.com"),
+        header("Subject", "Lunch"),
+        header("Message-ID", "<b@x>"),
+        header("References", "<a@x>\r\n <root@x>")
+      ]
+    }
+  };
+
+  it("a fetched Gmail message is saved with its ids and replies thread from the saved row", () => {
+    const parsed = parseEmail(gmailMessage as never);
+    const row = cachedEmailInput("acct", parsed, { summary: null, signals: {} });
+    const cached = { ...message, external_metadata: row.externalMetadata } as EmailMessage;
+    const { inReplyTo, references } = replyThreadHeaders(cached);
+    expect(inReplyTo).toBe("<b@x>");
+    expect(references).toEqual(["<a@x>", "<root@x>", "<b@x>"]);
+  });
+
+  it("an IMAP message's saved metadata carries its ids", () => {
+    const meta = replyThreadingMetadata({
+      messageId: "<b@x>",
+      references: ["<a@x>"]
+    } as never);
+    expect(meta).toEqual({ messageId: "<b@x>", references: ["<a@x>"] });
+    expect(replyThreadingMetadata({} as never)).toEqual({});
   });
 });
