@@ -174,8 +174,9 @@ export function TaskDetailsDialog(props: {
     const key = isNew ? "new" : `${props.taskId}:${task ? "loaded" : "pending"}`;
     const seeded = seededRef.current;
     if (seeded?.key === key) {
-      // Only the persisted locale changed: re-seed the date inputs if nothing was edited.
-      if (!isNew && task && seeded.timeZone !== locale.timezone) {
+      // Newer server data or a changed locale arrived: re-seed if nothing was edited, so a
+      // cached copy shown first cannot be saved back over fresher values.
+      if (!isNew && task && (seeded.task !== task || seeded.timeZone !== locale.timezone)) {
         const before = seeded.task ? formFromTask(seeded.task, seeded.timeZone) : null;
         setForm((f) =>
           before && JSON.stringify(f) === JSON.stringify(before)

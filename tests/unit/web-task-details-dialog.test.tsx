@@ -134,6 +134,20 @@ describe("task details dialog", () => {
     expect(titleInput().props.value).toBe("Renew passport today");
   });
 
+  it("replaces a cached copy with newer server data while the form is untouched", async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(queryKeys.tasks.detail("task-1"), {
+      task: storedTask({ title: "Cached title" })
+    });
+    api.getTask.mockResolvedValue({ task: storedTask({ title: "Fresh title" }) });
+    const act = await mount("task-1", queryClient);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(titleInput().props.value).toBe("Fresh title");
+  });
+
   it("resumes a partly failed new-task save without creating the parent twice", async () => {
     api.createTask.mockResolvedValue({ task: storedTask({ id: "created-1" }) });
     api.breakdownTask.mockRejectedValueOnce(new Error("network")).mockResolvedValue({});

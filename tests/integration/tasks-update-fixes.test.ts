@@ -58,6 +58,42 @@ describe("Tasks update: recurrence edits and parent list moves", () => {
     expect(childTags).toHaveLength(0);
   });
 
+  it("saving a parent with its list unchanged leaves subtasks and their tags alone", async () => {
+    const listsRepo = new TaskListsRepository();
+    const listA = await dataContext.withDataContext(userAContext(), (db) =>
+      listsRepo.getOrCreate(db, "A3")
+    );
+    const listB = await dataContext.withDataContext(userAContext(), (db) =>
+      listsRepo.getOrCreate(db, "B3")
+    );
+    const tagB = await dataContext.withDataContext(userAContext(), (db) =>
+      listsRepo.createTag(db, listB.id, "child-only-B")
+    );
+    const parent = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.create(db, { title: "parent", listId: listA.id })
+    );
+    const child = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.create(db, { title: "child", listId: listB.id, parentTaskId: parent.id })
+    );
+    await dataContext.withDataContext(userAContext(), (db) =>
+      listsRepo.assignTag(db, child.id, tagB.id)
+    );
+
+    await dataContext.withDataContext(userAContext(), (db) =>
+      repository.update(db, parent.id, { title: "parent renamed", listId: listA.id })
+    );
+
+    const keptChild = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.getById(db, child.id)
+    );
+    expect(keptChild?.list_id).toBe(listB.id);
+    expect(keptChild?.updated_at).toEqual(child.updated_at);
+    const childTags = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.getTagsForTask(db, child.id)
+    );
+    expect(childTags).toHaveLength(1);
+  });
+
   it("update persists a changed recurrence, keeps the series, and clears it with null", async () => {
     const task = await dataContext.withDataContext(userAContext(), (db) =>
       repository.create(db, {

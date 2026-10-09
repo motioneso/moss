@@ -409,12 +409,21 @@ export class TasksRepository {
         )
         .execute();
 
-      // Subtasks follow their parent: same list, and tags foreign to the destination are dropped.
-      const children = await scopedDb.db
+      // Subtasks follow their parent only when the list actually changes: same list, and tags
+      // foreign to the destination are dropped.
+      const stored = await scopedDb.db
         .selectFrom("app.tasks")
-        .select("id")
-        .where("parent_task_id", "=", taskId)
-        .execute();
+        .select("list_id")
+        .where("id", "=", taskId)
+        .executeTakeFirst();
+      const children =
+        stored && stored.list_id !== input.listId
+          ? await scopedDb.db
+              .selectFrom("app.tasks")
+              .select("id")
+              .where("parent_task_id", "=", taskId)
+              .execute()
+          : [];
       if (children.length > 0) {
         const childIds = children.map((child) => child.id);
         await scopedDb.db
