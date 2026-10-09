@@ -22,13 +22,16 @@ import type {
   FinanceKv,
   FinanceStore,
   ItemRecord,
-  Rule
+  ReviewPolicy,
+  Rule,
+  SortingTier
 } from "../../domain/index.js";
 import {
   categorize,
   cursorKey,
   DEFAULT_CATEGORIES,
   monthKey,
+  normalizePayee,
   NS,
   parseSharedKey,
   prevMonthKey,
@@ -80,7 +83,26 @@ type BalanceFailure = {
 type ItemSyncOutcome = Omit<ItemResult, "itemId" | "status"> & { balanceFailure?: BalanceFailure };
 
 /** Loaded once per run and shared across items/pages. */
-type CategorizeCtx = { rules: Rule[]; categories: Category[]; ai: CategorizeAi | null };
+type CategorizeCtx = {
+  rules: Rule[];
+  categories: Category[];
+  ai: CategorizeAi | null;
+  review: ReviewPolicy;
+};
+
+/** Fail closed: an unreadable tier means Moss asks instead of confirming. */
+async function readTier(ports: WorkerPorts, familyId: string): Promise<SortingTier> {
+  try {
+    return (await ports.actionPolicy?.get(familyId)) ?? "ask_each_time";
+  } catch {
+    return "ask_each_time";
+  }
+}
+
+/** Merchants with confirmed, categorized history, keyed like payee rules. */
+async function loadSeenPayeeKeys(store: FinanceStore): Promise<Set<string>> {
+  return new Set((await store.listConfirmedPayeeNames()).map(normalizePayee));
+}
 
 /**
  * FIN-02 (#1147) Task 9: load the categorization inputs, seeding the default
@@ -88,7 +110,7 @@ type CategorizeCtx = { rules: Rule[]; categories: Category[]; ai: CategorizeAi |
  * resolve against, and seeding here (the only writer besides the user's own
  * edits) keeps the read path elsewhere side-effect free.
  */
-async function loadCategorizeCtx(ports: WorkerPorts): Promise<CategorizeCtx> {
+async function loadCategorizeCtx(ports: WorkerPorts, store: FinanceStore): Promise<CategorizeCtx> {
   let stored = (await ports.kv.get(NS.categories, "taxonomy")) as {
     categories: Category[];
   } | null;
@@ -101,7 +123,16 @@ async function loadCategorizeCtx(ports: WorkerPorts): Promise<CategorizeCtx> {
     const rule = await ports.kv.get(NS.rules, key);
     if (rule) rules.push(rule as Rule);
   }
-  return { rules, categories: stored.categories, ai: buildCategorizeAi(ports.ai) };
+  return {
+    rules,
+    categories: stored.categories,
+    ai: buildCategorizeAi(ports.ai),
+    review: {
+      sortingTier: await readTier(ports, "sorting"),
+      sortingNewTier: await readTier(ports, "sorting_new"),
+      seenPayeeKeys: await loadSeenPayeeKeys(store)
+    }
+  };
 }
 
 /**
@@ -115,7 +146,7 @@ async function categorizeChunks(
   ctx: CategorizeCtx
 ): Promise<ChunkMap> {
   const records = touched.flatMap((key) => chunks[key]?.transactions ?? []);
-  const updated = await categorize(records, ctx.rules, ctx.categories, ctx.ai);
+  const updated = await categorize(records, ctx.rules, ctx.categories, ctx.ai, ctx.review);
   const byId = new Map(updated.map((record) => [record.id, record]));
   const next: ChunkMap = { ...chunks };
   for (const key of touched) {
@@ -401,7 +432,7 @@ const runSync: (
   }
 
   const plaid = await buildPlaid(ports);
-  const categorizeCtx = await loadCategorizeCtx(ports);
+  const categorizeCtx = await loadCategorizeCtx(ports, store);
   const results: ItemResult[] = [];
   for (const item of items) {
     const entry = tokens[item.itemId];

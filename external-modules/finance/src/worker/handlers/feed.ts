@@ -2,20 +2,20 @@
 //
 // FIN-02 (#1147) Task 10: the feed surface. transactions.query is the web
 // page's single read (transactions + categories + accounts in one call, so
-// the feed renders off one round-trip); transaction.categorize is the
-// assistant write path (provenance "user", optional notes/createRule); and
+// the feed renders off one round-trip); transaction.categorize and
+// transaction.categorize-new are the assistant write paths (provenance
+// "user", optional notes; the merchant's confirmed history picks which one
+// may run, so chat cannot sort a new merchant under the routine family); and
 // categorize.apply is the SAME category-set logic behind the
 // finance.categorize-apply queue — the web path, which per D4/D6 carries the
 // four identifier ids only. Notes never ride a job payload.
 import type {
   Category,
   FinanceStore,
-  Rule,
   TransactionChunk,
   TransactionRecord
 } from "../../domain/index.js";
 import {
-  contentHash,
   DEFAULT_CATEGORIES,
   normalizePayee,
   NS,
@@ -159,33 +159,53 @@ async function applyCategory(
   }
   record.categoryId = ids.categoryId;
   record.categorizedBy = "user";
+  // Choosing a category is the user's confirmation, whatever Moss guessed.
+  record.reviewState = "confirmed";
   return { record };
 }
 
-export const transactionCategorizeHandler: ToolFactory = (ports) => async (input) => {
-  const ids = readApplyIds(input);
-  // Manifest caps notes at 500 chars; 2000 bytes covers 4-byte UTF-8 worst case.
-  const notes = readString(input, "notes", { maxBytes: 2000 });
-  const createRule = readBool(input, "createRule") ?? false;
+/**
+ * Chat write path. `mode` is the family the tool is declared under: "seen"
+ * (sorting) refuses a merchant with no confirmed history, "new" (sorting_new)
+ * refuses one that has it. The decision reads stored history, never the
+ * model's say-so. amountCents must match the stored row, so a stale or
+ * invented reference cannot re-sort a different purchase.
+ */
+function categorizeTool(mode: "seen" | "new"): ToolFactory {
+  return (ports) => async (input) => {
+    const ids = readApplyIds(input);
+    const amountCents = readInt(input, "amountCents", { required: true });
+    // Manifest caps notes at 500 chars; 2000 bytes covers 4-byte UTF-8 worst case.
+    const notes = readString(input, "notes", { maxBytes: 2000 });
 
-  const store = await ports.store();
-  const { record } = await applyCategory(ports, store, ids);
-  if (notes !== undefined) record.notes = notes;
-  await store.putTransaction(record);
+    const store = await ports.store();
+    const { record } = await applyCategory(ports, store, ids);
+    if (record.amountCents !== amountCents) {
+      throw new InputError("amount_mismatch", "amountCents does not match the stored transaction");
+    }
+    const seen = (await store.listConfirmedPayeeNames()).some(
+      (name) => normalizePayee(name) === normalizePayee(record.name)
+    );
+    if (mode === "seen" && !seen) {
+      throw new InputError(
+        "new_merchant",
+        "this merchant has no confirmed history; use finance.transaction.categorize-new"
+      );
+    }
+    if (mode === "new" && seen) {
+      throw new InputError(
+        "merchant_seen",
+        "this merchant already has confirmed history; use finance.transaction.categorize"
+      );
+    }
+    if (notes !== undefined) record.notes = notes;
+    await store.putTransaction(record);
+    return { status: "ok", transaction: record };
+  };
+}
 
-  let rule: Rule | undefined;
-  if (createRule) {
-    // Rule key = hash of the normalized payee (never payee prose as key
-    // material); upsert so re-ruling the same payee replaces the category.
-    rule = {
-      payeeKey: normalizePayee(record.name),
-      categoryId: ids.categoryId,
-      createdAt: ports.now().toISOString()
-    };
-    await ports.kv.set(NS.rules, contentHash(rule.payeeKey), rule);
-  }
-  return { status: "ok", transaction: record, ...(rule ? { rule } : {}) };
-};
+export const transactionCategorizeHandler: ToolFactory = categorizeTool("seen");
+export const transactionCategorizeNewHandler: ToolFactory = categorizeTool("new");
 
 export const categorizeApplyHandler: ToolFactory = (ports) => async (input) => {
   // Queue path (D6): unlike the tool handlers above, this one is invoked with

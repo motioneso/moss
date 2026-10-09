@@ -90,6 +90,21 @@ export function kvStore(kv: FinanceKv): FinanceStore {
       return sortTransactions(records);
     },
 
+    async listConfirmedPayeeNames() {
+      const names = new Set<string>();
+      for (const key of await kv.list(NS.transactions)) {
+        const chunk = await kv.get(NS.transactions, key);
+        if (!chunk) continue;
+        for (const record of (chunk as unknown as { transactions: TransactionRecord[] })
+          .transactions) {
+          if (record.categoryId !== null && (record.reviewState ?? "confirmed") === "confirmed") {
+            names.add(record.name);
+          }
+        }
+      }
+      return [...names];
+    },
+
     async getTransactionChunk(accountId, month) {
       const chunk = await kv.get(NS.transactions, transactionChunkKey(accountId, month));
       if (!chunk) return null;

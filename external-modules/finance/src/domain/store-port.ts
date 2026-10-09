@@ -31,6 +31,11 @@ export interface FinanceStore {
     month: string,
     records: TransactionRecord[]
   ): Promise<void>;
+  /**
+   * Payee names (transaction `name`) of categorized rows whose review state is
+   * confirmed. A merchant counts as "seen" when its normalized name is here.
+   */
+  listConfirmedPayeeNames(): Promise<string[]>;
   /** Rewrite a single transaction in place (feed categorize/note paths). */
   putTransaction(record: TransactionRecord): Promise<void>;
 

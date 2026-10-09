@@ -90,6 +90,14 @@ export interface WorkerPorts {
   readonly settings: InstanceSettingsPort;
   /** Admin-gated inputs (connect.start environment override) are dropped when false. */
   readonly isAdmin: boolean;
+  /**
+   * The actor's tier for one of this module's action families (#3171).
+   * Absent on a host without the read; callers then treat every family as
+   * "ask_each_time", so Moss never confirms on its own.
+   */
+  readonly actionPolicy?: {
+    get(familyId: string): Promise<"ask_each_time" | "trusted_auto" | "always_confirm">;
+  };
   now(): Date;
   /**
    * FIN-06b (#1166 F6-D4): the per-owner storage selector — async, memoized
