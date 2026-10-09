@@ -52,4 +52,25 @@ describe("finance tool query store (#3197)", () => {
     expect(invokeTool).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(renderer.toJSON())).toContain("n=2");
   });
+
+  it("ignores an older answer that arrives after a newer one", async () => {
+    let resolveFirst!: (value: unknown) => void;
+    invokeTool
+      .mockReturnValueOnce(new Promise((resolve) => (resolveFirst = resolve)))
+      .mockResolvedValueOnce({ kind: "ok", result: { n: 2 } });
+
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(Probe));
+    });
+    await act(async () => {
+      invalidateQueries();
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain("n=2");
+
+    await act(async () => {
+      resolveFirst({ kind: "ok", result: { n: 1 } });
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain("n=2");
+  });
 });
