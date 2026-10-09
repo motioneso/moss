@@ -12,6 +12,9 @@ import type * as ApiClientModule from "../../apps/web/src/api/client.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
   ApiError: (await importOriginal<typeof ApiClientModule>()).ApiError,
+  chatStreamUrl: () => "/api/chat/stream",
+  getMe: vi.fn(async () => ({ user: { id: "owner" } })),
+  listPendingActionRequests: vi.fn(async () => ({ actions: [] })),
   sendChatTurn: vi.fn(async () => ({
     userMessageId: "user-1",
     assistantMessageId: "assistant-1",
@@ -58,6 +61,11 @@ import {
   sendChatTurn,
   transcribeAudio
 } from "../../apps/web/src/api/client.js";
+vi.mock("../../apps/web/src/api/workflows-client.js", () => ({
+  listWorkflowApprovals: vi.fn(async () => [])
+}));
+
+import { useChatStream } from "../../apps/web/src/chat/use-chat-stream.js";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { boundDraftKey, unselectedDraftKey } from "../../apps/web/src/chat/chat-draft-storage.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
@@ -821,4 +829,89 @@ it("keeps delayed caller text and edits through unavailable-provider transitions
   });
   expect(renderer.root.findByType("textarea").props.value).toBe("");
   act(() => renderer.unmount());
+});
+
+it("sends a recovered Main draft after startup history is ready", async () => {
+  vi.stubGlobal(
+    "EventSource",
+    class {
+      close() {}
+    }
+  );
+  const saved = new Map([
+    [
+      "moss.chatDrafts",
+      JSON.stringify({
+        ownerId: "owner",
+        drafts: { a: "Recovered Main draft" }
+      })
+    ]
+  ]);
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => saved.get(key) ?? null,
+    setItem: (key: string, value: string) => saved.set(key, value),
+    removeItem: (key: string) => saved.delete(key)
+  });
+  const history = deferred<Awaited<ReturnType<typeof listChatThreadMessages>>>();
+  vi.mocked(listChatThreadMessages).mockImplementationOnce(() => history.promise);
+  vi.mocked(listChatThreads).mockResolvedValue({ threads: [chatThread("a", "Main", true)] });
+  vi.mocked(sendChatTurn).mockClear();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  function MainDrawer() {
+    const stream = useChatStream(DEFAULT_CHAT_SURFACE);
+    return createElement(ChatDrawer, {
+      ...stream,
+      open: true,
+      onClose: () => undefined,
+      isFounder: false,
+      ownerId: "owner",
+      surface: DEFAULT_CHAT_SURFACE
+    });
+  }
+  let renderer!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      renderer = create(createElement(QueryClientProvider, { client }, createElement(MainDrawer)));
+    });
+    await vi.waitFor(async () => {
+      await act(async () => {
+        expect(renderer.root.findByType("textarea").props.value).toBe("Recovered Main draft");
+      });
+    });
+    expect(findByClassName(renderer, "chatd-send").props.disabled).toBe(true);
+    await act(async () => {
+      renderer.root.findByType("textarea").props.onKeyDown({
+        key: "Enter",
+        shiftKey: false,
+        preventDefault: () => undefined
+      });
+    });
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    expect(renderer.root.findByType("textarea").props.value).toBe("Recovered Main draft");
+    await act(async () => history.resolve({ messages: [] }));
+    await vi.waitFor(async () => {
+      await act(async () => {
+        expect(findByClassName(renderer, "chatd-send").props.disabled).toBe(false);
+      });
+    });
+    await act(async () => {
+      renderer.root.findByType("textarea").props.onKeyDown({
+        key: "Enter",
+        shiftKey: false,
+        preventDefault: () => undefined
+      });
+    });
+    expect(sendChatTurn).toHaveBeenCalledTimes(1);
+    expect(sendChatTurn).toHaveBeenCalledWith(
+      "Recovered Main draft",
+      undefined,
+      undefined,
+      DEFAULT_CHAT_SURFACE
+    );
+  } finally {
+    await act(async () => renderer?.unmount());
+    client.clear();
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [] });
+    vi.unstubAllGlobals();
+  }
 });

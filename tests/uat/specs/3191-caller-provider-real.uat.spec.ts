@@ -69,6 +69,7 @@ test("real caller remains editable and recoverable through provider disable and 
   await drawer
     .getByLabel("Message Moss")
     .fill("UAT 3191. Reply briefly: ready for draft recovery.");
+  await expect(drawer.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
   await drawer.getByLabel("Message Moss").press("Enter");
   const seedResponse = await seedCompleted;
   expect(seedResponse.ok(), `real UI turn returned ${seedResponse.status()}`).toBe(true);
@@ -143,14 +144,22 @@ test("real caller remains editable and recoverable through provider disable and 
   await page.reload();
   drawer = await openChat(page);
   await expect(drawer.getByLabel("Message Moss")).toHaveValue(edited);
-  const completed = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/chat/turn",
-    { timeout: 120_000 }
-  );
-  await drawer.getByLabel("Message Moss").press("Enter");
-  const response = await completed;
+  // A recovered draft can appear before Main history hydration admits a send.
+  await expect(drawer.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/chat/turn",
+      { timeout: 120_000 }
+    ),
+    page.waitForRequest(
+      (request) =>
+        request.method() === "POST" && new URL(request.url()).pathname === "/api/chat/turn",
+      { timeout: 10_000 }
+    ),
+    drawer.getByLabel("Message Moss").press("Enter")
+  ]);
   expect(response.ok(), `real UI turn returned ${response.status()}`).toBe(true);
   const result = (await response.json()) as { reply: string };
   expect(result.reply.trim().length).toBeGreaterThan(0);
