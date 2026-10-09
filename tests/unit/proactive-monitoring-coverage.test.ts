@@ -6,7 +6,9 @@ import {
   isAllowedSignalType,
   makeProactiveCardVerifier,
   mapSignalType,
+  isProactiveSourceEnabled,
   resolveSourcePreference,
+  resolveAutomaticEmailAlertsEnabled,
   serializeCard,
   validateProactiveMonitoringPreference,
   type CardRepository
@@ -216,6 +218,23 @@ describe("per-source preference lookup", () => {
       enabled: false,
       dailyCardCap: 3
     });
+  });
+});
+
+describe("automatic email alert choice", () => {
+  it("defaults an absent choice on, preserves legacy off decisions, and lets explicit email-on stand alone", () => {
+    const legacyOff = enabledPref("email");
+    const explicitEmailOn = {
+      ...defaultProactiveMonitoringPreference(),
+      automaticEmailAlerts: true
+    };
+
+    expect(resolveAutomaticEmailAlertsEnabled(undefined)).toBe(true);
+    expect(resolveAutomaticEmailAlertsEnabled(null)).toBe(false);
+    expect(resolveAutomaticEmailAlertsEnabled({ ...legacyOff, enabled: false })).toBe(false);
+    expect(resolveAutomaticEmailAlertsEnabled(explicitEmailOn)).toBe(true);
+    expect(isProactiveSourceEnabled(explicitEmailOn, "email", explicitEmailOn)).toBe(true);
+    expect(isProactiveSourceEnabled(explicitEmailOn, "calendar", explicitEmailOn)).toBe(false);
   });
 });
 

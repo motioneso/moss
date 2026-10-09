@@ -5,6 +5,7 @@ import { HttpError } from "@moss/module-sdk";
 import { sessionRateLimitKey } from "@moss/module-sdk/server";
 import {
   ProactiveMonitoringPreferencesRepository,
+  resolveAutomaticEmailAlertsEnabled,
   validateProactiveMonitoringPreference
 } from "@moss/proactive-monitoring";
 import type { ProactiveMonitoringPreferenceV1, ProactiveSource } from "@moss/shared";
@@ -42,10 +43,11 @@ export function registerProactiveMonitoringSettingsRoutes(
   server.get("/api/me/proactive-monitoring-settings", async (request, reply) => {
     try {
       const ctx = await dependencies.resolveAccessContext(request);
-      const pref = await dependencies.dataContext.withDataContext(ctx, (scopedDb) =>
-        repository.get(scopedDb)
-      );
-      return reply.send({ settings: pref });
+      const settings = await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
+        const saved = await repository.getSaved(scopedDb);
+        return settingsResponse(saved ?? defaultProactiveMonitoringPreference(), saved);
+      });
+      return reply.send({ settings });
     } catch (error) {
       return handleSettingsRouteError(error, reply);
     }
@@ -81,7 +83,7 @@ export function registerProactiveMonitoringSettingsRoutes(
           updated
         );
 
-        return reply.send({ settings: updated });
+        return reply.send({ settings: settingsResponse(updated, updated) });
       } catch (error) {
         return handleSettingsRouteError(error, reply);
       }
@@ -94,7 +96,13 @@ function parseSettingsPatch(body: unknown): Partial<ProactiveMonitoringPreferenc
     throw new HttpError(400, "Proactive monitoring settings request is invalid");
   }
   const value = body as Record<string, unknown>;
-  const allowed = new Set(["enabled", "sources", "dailyCardCap", "quietHours"]);
+  const allowed = new Set([
+    "automaticEmailAlerts",
+    "enabled",
+    "sources",
+    "dailyCardCap",
+    "quietHours"
+  ]);
   const unknown = Object.keys(value).filter((k) => !allowed.has(k));
   if (unknown.length > 0) {
     throw new HttpError(400, `Unknown fields: ${unknown.join(", ")}`);
@@ -112,6 +120,11 @@ function mergePreference(
     : current.sources;
   return {
     version: 1,
+    ...(typeof patch.automaticEmailAlerts === "boolean"
+      ? { automaticEmailAlerts: patch.automaticEmailAlerts }
+      : typeof current.automaticEmailAlerts === "boolean"
+        ? { automaticEmailAlerts: current.automaticEmailAlerts }
+        : {}),
     enabled: typeof patch.enabled === "boolean" ? patch.enabled : current.enabled,
     sources,
     dailyCardCap:
@@ -121,6 +134,13 @@ function mergePreference(
       : current.quietHours,
     updatedAt: new Date().toISOString()
   };
+}
+
+function settingsResponse(
+  preference: ProactiveMonitoringPreferenceV1,
+  saved: ProactiveMonitoringPreferenceV1 | null | undefined
+): ProactiveMonitoringPreferenceV1 {
+  return { ...preference, automaticEmailAlerts: resolveAutomaticEmailAlertsEnabled(saved) };
 }
 
 function mergeSources(

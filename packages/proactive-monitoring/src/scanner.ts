@@ -12,6 +12,7 @@ import type { AntiSpamPolicy } from "./anti-spam.js";
 import type { CardRepository } from "./card-repository.js";
 import type { MonitorStateRepository } from "./monitor-state-repository.js";
 import type { ProactiveMonitoringPreferencesRepository } from "./preferences-repository.js";
+import { isProactiveSourceEnabled } from "./preferences-repository.js";
 import { isAllowedSignalType, mapSignalType } from "./signal-mapper.js";
 import type { ResolvedMonitoringConfig } from "./types.js";
 
@@ -55,11 +56,12 @@ export class ProactiveScanner {
 
     // Load monitoring preference.
     const pref = await this.deps.preferencesRepository.get(scopedDb);
-    if (!pref.enabled) {
+    if (source !== "email" && !pref.enabled) {
       return skip(source, "monitoring_disabled");
     }
-    const sourcePref = pref.sources[source];
-    if (!sourcePref?.enabled) {
+    const saved =
+      source === "email" ? await this.deps.preferencesRepository.getSaved(scopedDb) : pref;
+    if (!isProactiveSourceEnabled(pref, source, saved)) {
       return skip(source, "source_disabled");
     }
 

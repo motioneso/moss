@@ -473,6 +473,7 @@ import {
 } from "@moss/usefulness-feedback";
 import {
   CardRepository,
+  isProactiveSourceEnabled,
   makeProactiveCardVerifier,
   proactiveMonitoringModuleManifest,
   proactiveMonitoringSqlMigrationDirectory,
@@ -1615,7 +1616,7 @@ export function buildReconcileProactiveSchedule(boss: PgBoss): ReconcileProactiv
       // "/" separator, NOT ":" — pg-boss v12's assertKey restricts schedule keys to
       // [\w.\-/] (see job-reconciler.ts's identical fix, #1147). One row per user+source.
       const scheduleKey = `${actorUserId}/${source}`;
-      if (pref.enabled && pref.sources[source]?.enabled) {
+      if (isProactiveSourceEnabled(pref, source)) {
         const data: ProactiveScanSourceJobPayload = {
           actorUserId,
           source,

@@ -8,7 +8,10 @@ import type { ProactiveSource } from "@moss/shared";
 import { CardRepository, serializeCard } from "./card-repository.js";
 import { enqueueProactiveScan } from "./jobs.js";
 import { MonitorStateRepository } from "./monitor-state-repository.js";
-import { ProactiveMonitoringPreferencesRepository } from "./preferences-repository.js";
+import {
+  isProactiveSourceEnabled,
+  ProactiveMonitoringPreferencesRepository
+} from "./preferences-repository.js";
 
 export interface ProactiveMonitoringRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -55,22 +58,17 @@ export function registerProactiveMonitoringRoutes(
       const ctx = await dependencies.resolveAccessContext(request);
       const sources: ProactiveSource[] = ["tasks", "calendar", "email", "notes"];
 
-      const { pref, monitorStates } = await dependencies.dataContext.withDataContext(
-        ctx,
-        async (scopedDb) => {
+      const { pref, savedPreference, monitorStates } =
+        await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
           const pref = await prefsRepo.get(scopedDb);
+          const savedPreference = await prefsRepo.getSaved(scopedDb);
           const stateEntries = await Promise.all(
             sources.map(
               async (s) => [s, await monitorStateRepo.get(scopedDb, ctx.actorUserId, s)] as const
             )
           );
-          return { pref, monitorStates: new Map(stateEntries) };
-        }
-      );
-
-      if (!pref.enabled) {
-        return reply.status(202).send({ enqueued: 0 });
-      }
+          return { pref, savedPreference, monitorStates: new Map(stateEntries) };
+        });
 
       // Time-window slot: stable for the duration of the cooldown window, so the idempotency
       // key does not rotate on each HTTP request (which would let rapid clicks flood the queue).
@@ -78,7 +76,9 @@ export function registerProactiveMonitoringRoutes(
       const registeredSources = await dependencies.resolveRegisteredSources(ctx.actorUserId);
       let enqueued = 0;
       for (const source of sources) {
-        if (!pref.sources[source]?.enabled) continue;
+        if (!isProactiveSourceEnabled(pref, source, source === "email" ? savedPreference : pref)) {
+          continue;
+        }
         if (!registeredSources.has(source)) continue;
 
         const state = monitorStates.get(source);

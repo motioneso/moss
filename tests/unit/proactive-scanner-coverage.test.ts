@@ -95,7 +95,8 @@ interface ScannerHarness {
 
 function harness(pref: ProactiveMonitoringPreferenceV1): ScannerHarness {
   const prefsRepo = {
-    get: vi.fn().mockResolvedValue(pref)
+    get: vi.fn().mockResolvedValue(pref),
+    getSaved: vi.fn().mockResolvedValue(pref)
   } as unknown as ProactiveMonitoringPreferencesRepository;
   const priorityPrefsRepo = {
     get: vi.fn().mockReturnValue({ anchors: [] })
@@ -159,6 +160,24 @@ describe("scanner skip paths", () => {
     );
     expect(result).toMatchObject({ skipped: true, skipReason: "source_disabled" });
     expect(provider.collectSignals).not.toHaveBeenCalled();
+  });
+
+  it("scans email when its explicit alert choice is on even if legacy monitoring is off", async () => {
+    const pref = { ...defaultProactiveMonitoringPreference(), automaticEmailAlerts: true };
+    const { scanner } = harness(pref);
+    const provider = providerReturning([]);
+
+    const result = await scanner.scan(
+      fakeScopedDb(),
+      OWNER_A,
+      "email",
+      provider,
+      "source-sync",
+      NOW
+    );
+
+    expect(result.skipped).toBe(false);
+    expect(provider.collectSignals).toHaveBeenCalled();
   });
 
   it("skips a manual refresh inside the 15-minute cooldown", async () => {
@@ -708,7 +727,8 @@ describe("monitoring routes", () => {
       listActive: vi.fn().mockResolvedValue([])
     };
     const preferencesRepository = {
-      get: vi.fn().mockResolvedValue(enabledPref("calendar"))
+      get: vi.fn().mockResolvedValue(enabledPref("calendar")),
+      getSaved: vi.fn().mockResolvedValue(enabledPref("calendar"))
     };
     const monitorStateRepository = {
       get: vi.fn().mockResolvedValue(null)
@@ -778,6 +798,29 @@ describe("monitoring routes", () => {
     const req = {} as unknown as FastifyRequest;
     await (handlers.get("POST /api/me/proactive-cards/refresh") as AnyFn)(req, res);
     expect(send).toHaveBeenCalledWith({ enqueued: 1 });
+  });
+
+  it("enqueues only email when its explicit alert choice is on", async () => {
+    const pref = { ...defaultProactiveMonitoringPreference(), automaticEmailAlerts: true };
+    const { base, preferencesRepository } = depsWith({
+      resolveRegisteredSources: async () => new Set(["calendar", "email"])
+    });
+    vi.mocked(preferencesRepository.get).mockResolvedValue(pref);
+    vi.mocked(preferencesRepository.getSaved).mockResolvedValue(pref);
+    const handlers = captureHandlers(base);
+    const { reply: res, send } = reply();
+
+    await (handlers.get("POST /api/me/proactive-cards/refresh") as AnyFn)(
+      {} as FastifyRequest,
+      res
+    );
+
+    expect(send).toHaveBeenCalledWith({ enqueued: 1 });
+    expect((base as { boss: { send: ReturnType<typeof vi.fn> } }).boss.send).toHaveBeenCalledWith(
+      PROACTIVE_SCAN_SOURCE_QUEUE.name,
+      expect.objectContaining({ source: "email" }),
+      expect.anything()
+    );
   });
 
   it("skips a source refreshed inside the cooldown", async () => {
