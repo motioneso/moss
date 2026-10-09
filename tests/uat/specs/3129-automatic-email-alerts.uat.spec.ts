@@ -90,6 +90,7 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
   await signIn(page);
   await page.goto(`${env("JARVIS_UAT_BASE_URL")}/settings?section=alerts`);
   const choice = page.getByRole("checkbox", { name: "Automatic email alerts" });
+  const choiceSwitch = page.locator("label.jds-switch").filter({ has: choice });
   await expect(choice).toBeChecked();
   expect(
     sql(
@@ -110,7 +111,7 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
       response.url().endsWith("/api/me/proactive-monitoring-settings") &&
       response.request().method() === "PATCH"
   );
-  await choice.click();
+  await choiceSwitch.click();
   expect((await savedOff).status()).toBe(200);
   await expect(choice).not.toBeChecked();
   await page.reload();
@@ -127,7 +128,7 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
       response.url().endsWith("/api/me/proactive-monitoring-settings") &&
       response.request().method() === "PATCH"
   );
-  await choice.click();
+  await choiceSwitch.click();
   expect((await savedOn).status()).toBe(200);
   await page.reload();
   await expect(choice).toBeChecked();
@@ -159,7 +160,7 @@ test("owner Settings saves automatic email alerts without changing unrelated cho
       response.url().endsWith("/api/me/proactive-monitoring-settings") &&
       response.request().method() === "PATCH"
   );
-  await choice.click();
+  await choiceSwitch.click();
   expect((await failedSave).status()).toBe(409);
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
   await expect(choice).toBeChecked();
