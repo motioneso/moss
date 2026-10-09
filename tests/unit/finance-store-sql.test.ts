@@ -321,6 +321,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
     const item: ItemRecord = {
       itemId: "i1",
       institutionId: "ins_1",
+      institutionName: "Sandbox First Bank",
       connectedAt: "2026-07-01T00:00:00Z",
       status: "connected",
       lastSyncAt: "2026-07-18T00:00:00Z",
@@ -328,10 +329,11 @@ describe("sqlStore (FIN-06b #1166)", () => {
     };
     await store.putItem(item);
     expect(db.calls[0]!.text).toBe(
-      "INSERT INTO app.finance_items (owner_user_id, item_id, institution_id, connected_at, status, " +
-        "last_sync_at, last_error, last_error_detail) " +
-        "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7) " +
+      "INSERT INTO app.finance_items (owner_user_id, item_id, institution_id, institution_name, " +
+        "connected_at, status, last_sync_at, last_error, last_error_detail) " +
+        "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8) " +
         "ON CONFLICT (owner_user_id, item_id) DO UPDATE SET institution_id = EXCLUDED.institution_id, " +
+        "institution_name = EXCLUDED.institution_name, " +
         "connected_at = EXCLUDED.connected_at, status = EXCLUDED.status, " +
         "last_sync_at = EXCLUDED.last_sync_at, last_error = EXCLUDED.last_error, " +
         "last_error_detail = EXCLUDED.last_error_detail"
@@ -339,6 +341,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
     expect(db.calls[0]!.params).toEqual([
       "i1",
       "ins_1",
+      "Sandbox First Bank",
       "2026-07-01T00:00:00Z",
       "connected",
       "2026-07-18T00:00:00Z",
@@ -363,7 +366,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
       lastError: "INVALID_PRODUCT",
       lastErrorDetail: detail
     });
-    expect(db.calls[0]!.params![6]).toBe(JSON.stringify(detail));
+    expect(db.calls[0]!.params![7]).toBe(JSON.stringify(detail));
     const read = sqlStore(
       fakeDb([
         [
@@ -400,6 +403,7 @@ describe("sqlStore (FIN-06b #1166)", () => {
     expect(await store.getItem("i1")).toEqual({
       itemId: "i1",
       institutionId: null,
+      institutionName: undefined,
       connectedAt: "2026-07-01T00:00:00Z",
       status: "connected",
       lastSyncAt: undefined,
@@ -407,7 +411,8 @@ describe("sqlStore (FIN-06b #1166)", () => {
       lastErrorDetail: undefined
     });
     expect(db.calls[0]!.text).toBe(
-      "SELECT item_id, institution_id, connected_at, status, last_sync_at, last_error, last_error_detail " +
+      "SELECT item_id, institution_id, institution_name, connected_at, status, last_sync_at, last_error, " +
+        "last_error_detail " +
         "FROM app.finance_items WHERE item_id = $1"
     );
     expect(await sqlStore(fakeDb([[]])).getItem("missing")).toBeNull();
@@ -418,7 +423,8 @@ describe("sqlStore (FIN-06b #1166)", () => {
     const store = sqlStore(db);
     await store.listItems();
     expect(db.calls[0]!.text).toBe(
-      "SELECT item_id, institution_id, connected_at, status, last_sync_at, last_error, last_error_detail " +
+      "SELECT item_id, institution_id, institution_name, connected_at, status, last_sync_at, last_error, " +
+        "last_error_detail " +
         "FROM app.finance_items"
     );
   });

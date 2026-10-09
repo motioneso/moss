@@ -60,7 +60,7 @@
       {
         "id": "finance.accounts",
         "label": "Accounts",
-        "description": "Connected banks, balances, sync status, reconnect, and net worth.",
+        "description": "Connected banks listed by their real names (filled in on the next sync), balances, sync status, reconnect, and net worth.",
         "path": "/accounts"
       },
       {

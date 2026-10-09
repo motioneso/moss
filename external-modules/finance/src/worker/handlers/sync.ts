@@ -189,6 +189,24 @@ async function appendSnapshots(
   }
 }
 
+/**
+ * Looks up the bank's display name once (#3177). A failed or empty lookup never
+ * fails the sync; the name is simply retried on the next run.
+ */
+async function resolveInstitutionName(
+  plaid: Awaited<ReturnType<typeof buildPlaid>>,
+  item: ItemRecord
+): Promise<string | undefined> {
+  if (item.institutionName || !item.institutionId) return item.institutionName;
+  try {
+    return (await plaid.institutionGet(item.institutionId)).name ?? undefined;
+  } catch (error) {
+    const code = error instanceof PlaidError ? error.code : "lookup_failed";
+    console.warn(`finance.sync institution_name_skipped item=${item.itemId} code=${code}`);
+    return undefined;
+  }
+}
+
 async function syncItem(
   ports: WorkerPorts,
   store: FinanceStore,
@@ -469,8 +487,10 @@ const runSync: (
       // A balance-check failure that fell back is still worth reading back, so
       // its detail is kept while the item itself reports connected.
       const { lastError: _cleared, lastErrorDetail: _clearedDetail, ...rest } = item;
+      const institutionName = await resolveInstitutionName(plaid, item);
       await store.putItem({
         ...rest,
+        ...(institutionName ? { institutionName } : {}),
         status: "connected",
         lastSyncAt: ports.now().toISOString(),
         ...(balanceFailure ? { lastErrorDetail: balanceFailure } : {})

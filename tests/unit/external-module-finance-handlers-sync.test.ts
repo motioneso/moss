@@ -112,6 +112,10 @@ function fakePlaid(overrides: PlaidOverrides = {}) {
       "accountsGet",
       overrides.accountsGet ?? (async () => ({ institutionId: null, accounts: [] }))
     ) as PlaidClient["accountsGet"],
+    institutionGet: record(
+      "institutionGet",
+      overrides.institutionGet ?? (async () => ({ name: "Sandbox First Bank" }))
+    ) as PlaidClient["institutionGet"],
     accountsBalanceGet: record(
       "accountsBalanceGet",
       overrides.accountsBalanceGet ?? (async () => ({ accounts: [balanceAccount()] }))
@@ -375,6 +379,41 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
       status: "error",
       lastError: "TOKEN_MISSING"
     });
+  });
+
+  it("saves the bank name on the next sync and does not look it up again once known", async () => {
+    const actor = { actorUserId: "00000000-0000-4000-8000-0000000000aa" };
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid();
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(actor);
+    expect(await kv.get(NS.connections, "item:item-1")).toMatchObject({
+      institutionName: "Sandbox First Bank"
+    });
+    expect(plaid.callsTo("institutionGet")).toHaveLength(1);
+    await syncRunHandler(ports)(actor);
+    expect(plaid.callsTo("institutionGet")).toHaveLength(1);
+  });
+
+  it("still finishes the sync when the bank name lookup fails", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      institutionGet: async () => {
+        throw new PlaidError("INTERNAL_SERVER_ERROR", 500, {
+          type: null,
+          message: null,
+          requestId: null
+        });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = (await syncRunHandler(ports)({
+      actorUserId: "00000000-0000-4000-8000-0000000000aa"
+    })) as { items: Record<string, unknown>[] };
+    expect(result.items[0]).toMatchObject({ itemId: "item-1", status: "connected" });
+    expect(await kv.get(NS.connections, "item:item-1")).not.toHaveProperty("institutionName");
   });
 
   it("recovers a reauth-required item to connected after a successful sync", async () => {

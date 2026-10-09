@@ -18,6 +18,42 @@ const manifestPath = fileURLToPath(
 const loadManifest = (): Record<string, unknown> =>
   JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
 
+/** Counts keys named `key` at the top level of a JSON object, which JSON.parse hides. */
+function countTopLevelKeys(text: string, key: string): number {
+  let depth = 0;
+  let count = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (inString) {
+      if (ch === "\\") i++;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      const end = text.indexOf('"', i + 1);
+      let close = end;
+      while (close > 0 && text[close - 1] === "\\") close = text.indexOf('"', close + 1);
+      const name = text.slice(i + 1, close);
+      const after = text.slice(close + 1).match(/^\s*:/);
+      if (depth === 1 && after && name === key) count++;
+      i = close;
+    } else if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") depth--;
+  }
+  return count;
+}
+
+describe("finance manifest app map (#3177)", () => {
+  it("holds exactly one top-level appMap block", () => {
+    expect(countTopLevelKeys(readFileSync(manifestPath, "utf8"), "appMap")).toBe(1);
+  });
+
+  it("the duplicate-key check really counts a repeated block", () => {
+    expect(countTopLevelKeys('{"appMap":{"a":1},"x":{"appMap":2},"appMap":{}}', "appMap")).toBe(2);
+  });
+});
+
 describe("finance manifest contract (#1146)", () => {
   it("accepts the shipped manifest against the merged ABI", () => {
     const result = validateExternalModuleManifest(loadManifest(), "finance", "0.1.0");
