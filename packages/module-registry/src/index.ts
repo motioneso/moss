@@ -287,6 +287,8 @@ import {
   type PushSummaryJobPayload,
   type NotificationPreferencePort,
   runNotificationDigestCompose,
+  NOTIFICATION_SENSITIVITY_PREFERENCE_KEY,
+  sensitivityFromRaw,
   notificationsModuleManifest,
   notificationsModuleSqlMigrationDirectory,
   registerNotificationsRoutes,
@@ -1602,6 +1604,11 @@ export function createNotificationPreferencePort(
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) return true;
       const enabled = (raw as { enabled?: unknown }).enabled;
       return typeof enabled === "boolean" ? enabled : true;
+    },
+    async getSensitivity(scopedDb) {
+      return sensitivityFromRaw(
+        await preferencesRepository.get(scopedDb, NOTIFICATION_SENSITIVITY_PREFERENCE_KEY)
+      );
     }
   };
 }

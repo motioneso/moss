@@ -6,6 +6,7 @@ import { assertDataContextDb, type DataContextDb, type Notification } from "@mos
 
 import { isSameOriginAppPath } from "./app-path.js";
 import { projectNotificationMetadata } from "./metadata.js";
+import { shouldPushImmediately, type NotificationSensitivity } from "./sensitivity.js";
 
 export interface NotificationWithReadState extends Notification {
   readonly read_at: Date | null;
@@ -68,6 +69,7 @@ export interface QuietHoursPort {
 
 export interface NotificationPreferencePort {
   isModuleEnabled(scopedDb: DataContextDb, moduleId: string): Promise<boolean>;
+  getSensitivity?(scopedDb: DataContextDb): Promise<NotificationSensitivity>;
 }
 
 /**
@@ -370,7 +372,11 @@ export class NotificationsRepository {
       if (deferredUntil) {
         await this.pushQueuePort.enqueueSummary(scopedDb, row.recipient_user_id, deferredUntil);
       } else {
-        await this.pushQueuePort.enqueueDeliver(scopedDb, row.id, row.recipient_user_id);
+        const sensitivity =
+          (await this.notificationPreferencePort?.getSensitivity?.(scopedDb)) ?? "balanced";
+        if (shouldPushImmediately(sensitivity, urgency)) {
+          await this.pushQueuePort.enqueueDeliver(scopedDb, row.id, row.recipient_user_id);
+        }
       }
     }
 
