@@ -53,7 +53,7 @@ test("installed quick add retains a genuine failed draft, admits once while busy
   await lists.getByRole("button", { name: /^Temporary quick-add list/ }).click();
 
   // A list removed by another client genuinely fails the stale focused-list submission.
-  const deleted = await page.request.delete(`/api/tasks/lists/${list.id}`);
+  const deleted = await page.request.delete(`/api/tasks/lists/${list.id}`, { data: {} });
   expect(deleted.ok()).toBeTruthy();
   let posts = 0;
   page.on("request", (request) => {
