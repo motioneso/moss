@@ -425,8 +425,9 @@ function BudgetBody(
   props: { result: BudgetStatusResult; pending: PendingAssignments } & AssignProps
 ): ReactNodeLike {
   const { result } = props;
-  // No bank, or a bank with no budget yet: Getting started owns both.
-  const sendToStart = result.hasBank === false || result.hasBudget === false;
+  // No bank: Getting started. A bank with no budget rows shows the categories at
+  // zero, so the first amounts can be typed here.
+  const sendToStart = result.hasBank === false;
   useEffect(() => {
     if (sendToStart) navigate("/start");
   }, [sendToStart]);
