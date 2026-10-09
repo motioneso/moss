@@ -173,7 +173,8 @@ export function groupEventsByDay(
         ? new Date(lastMidnight.getFullYear(), lastMidnight.getMonth(), lastMidnight.getDate() - 1)
         : lastMidnight;
     if (last <= first) {
-      addToBucket(map, first, e);
+      // A timed event ending exactly at local midnight runs to the end of its day.
+      addToBucket(map, first, e.endMin === 0 ? { ...e, endMin: 1440 } : e);
       continue;
     }
     for (

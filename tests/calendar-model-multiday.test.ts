@@ -84,5 +84,6 @@ describe("groupEventsByDay multi-day events", () => {
       })
     ]);
     expect([...map.keys()]).toEqual([key(2026, 10, 5)]);
+    expect(map.get(key(2026, 10, 5))?.[0]).toMatchObject({ startMin: 20 * 60, endMin: 1440 });
   });
 });
