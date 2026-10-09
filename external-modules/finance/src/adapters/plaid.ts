@@ -17,10 +17,21 @@ export type PlaidCreds = { clientId: string; secret: string };
  * message = Plaid error CODE only, NEVER the response body — error_message
  * is provider prose that could echo institution details into logs/results.
  */
+/**
+ * Plaid's own diagnostic fields for a failed call. Plaid error bodies carry
+ * no credentials; only these three fields are ever kept, length-capped.
+ */
+export type PlaidErrorDetail = {
+  type: string | null;
+  message: string | null;
+  requestId: string | null;
+};
+
 export class PlaidError extends Error {
   constructor(
     readonly code: string,
-    readonly httpStatus: number
+    readonly httpStatus: number,
+    readonly detail: PlaidErrorDetail = { type: null, message: null, requestId: null }
   ) {
     super(code);
     this.name = "PlaidError";
@@ -100,6 +111,10 @@ function mapAccount(raw: Json): PlaidAccount {
   };
 }
 
+function capped(value: unknown): string | null {
+  return typeof value === "string" ? value.slice(0, 500) : null;
+}
+
 export function createPlaid(
   fetchPort: FinanceFetch,
   env: PlaidEnv,
@@ -127,7 +142,12 @@ export function createPlaid(
     if (response.status < 200 || response.status >= 300) {
       throw new PlaidError(
         typeof json.error_code === "string" ? json.error_code : `http_${response.status}`,
-        response.status
+        response.status,
+        {
+          type: capped(json.error_type),
+          message: capped(json.error_message),
+          requestId: capped(json.request_id)
+        }
       );
     }
     return json;

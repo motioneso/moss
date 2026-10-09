@@ -1,5 +1,5 @@
 // tests/unit/external-module-finance-handlers-sync.test.ts
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type {
   PlaidAccount,
@@ -467,5 +467,198 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     expect(result.items[0]).toMatchObject({ status: "connected", pages: 20, added: 20 });
     // Progress is durable: the 20th cursor is persisted, the next run resumes.
     expect(await kv.get(NS.connections, "cursor:item-1")).toEqual({ cursor: "c-19" });
+  });
+});
+
+// #3161: a failed live balance check must not block transactions, Plaid's full
+// error is kept for diagnosis, removal-only batches delete, mutation-during-
+// pagination restarts, and connect triggers a first sync.
+describe("finance.sync.run (#3161 sync resilience)", () => {
+  const ACTOR = { actorUserId: "00000000-0000-4000-8000-0000000000aa" };
+  const invalidProduct = () =>
+    new PlaidError("INVALID_PRODUCT", 400, {
+      type: "INVALID_REQUEST",
+      message: "client is not authorized to access the following products: balance",
+      requestId: "req-abc123"
+    });
+
+  it("falls back to the accounts lookup balances and still pulls transactions", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      accountsBalanceGet: async () => {
+        throw invalidProduct();
+      },
+      accountsGet: async () => ({
+        institutionId: "ins_1",
+        accounts: [balanceAccount({ balanceCents: 4200 })]
+      }),
+      transactionsSync: async () =>
+        syncPage({ added: [tx({ transaction_id: "t1" })], nextCursor: "c1" })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.items).toEqual([
+      { itemId: "item-1", status: "connected", added: 1, modified: 0, removed: 0, pages: 1 }
+    ]);
+    expect(await kv.get(NS.accounts, "acc-1")).toMatchObject({ balanceCents: 4200 });
+    const chunk = await kv.get(NS.transactions, "acc-1:2026-07");
+    expect((chunk as { transactions: { id: string }[] }).transactions.map((r) => r.id)).toEqual([
+      "t1"
+    ]);
+  });
+
+  it("still marks reauth when the balance check says login is required", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      accountsBalanceGet: async () => {
+        throw new PlaidError("ITEM_LOGIN_REQUIRED", 400);
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.items).toMatchObject([{ status: "reauth-required" }]);
+  });
+
+  it("persists Plaid's full error detail on a failed item, never the token", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        throw invalidProduct();
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    const stored = await kv.get(NS.connections, "item:item-1");
+    expect(stored).toMatchObject({
+      status: "error",
+      lastError: "INVALID_PRODUCT",
+      lastErrorDetail: {
+        type: "INVALID_REQUEST",
+        code: "INVALID_PRODUCT",
+        message: "client is not authorized to access the following products: balance",
+        requestId: "req-abc123"
+      }
+    });
+    expect(JSON.stringify(stored)).not.toContain("access-1");
+  });
+
+  it("clears the stored error detail after a good sync", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.connections, "item:item-1", {
+      itemId: "item-1",
+      institutionId: "ins_1",
+      connectedAt: "2026-07-01T00:00:00Z",
+      status: "error",
+      lastError: "X",
+      lastErrorDetail: { type: "T", code: "X", message: "m", requestId: "r" }
+    });
+    const { ports } = fakePorts({ kv, plaid: fakePlaid().client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    const stored = (await kv.get(NS.connections, "item:item-1")) as Record<string, unknown>;
+    expect(stored.lastError).toBeUndefined();
+    expect(stored.lastErrorDetail).toBeUndefined();
+  });
+
+  it("logs a metadata-only line on failure", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        throw invalidProduct();
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "warn").mockImplementation((...a) => {
+      lines.push(a.join(" "));
+    });
+    try {
+      await syncRunHandler(ports)(ACTOR);
+    } finally {
+      spy.mockRestore();
+    }
+    const line = lines.find((l) => l.includes("INVALID_PRODUCT"));
+    expect(line).toBeDefined();
+    expect(line).toContain("item-1");
+    expect(line).not.toContain("access-1");
+  });
+
+  it("deletes removed transactions when the batch carries only removals", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    await kv.set(NS.accounts, "acc-1", { ...balanceAccount(), itemId: "item-1", updatedAt: "x" });
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [
+        {
+          id: "pend-1",
+          accountId: "acc-1",
+          date: "2026-07-10",
+          amountCents: 1234,
+          isoCurrency: "USD",
+          name: "X",
+          merchant: null,
+          plaidCategory: null,
+          categoryId: null,
+          pending: true,
+          pendingTransactionId: null,
+          categorizedBy: null
+        }
+      ]
+    });
+    const plaid = fakePlaid({
+      transactionsSync: async () => syncPage({ removed: [{ transaction_id: "pend-1" }] })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    const chunk = (await kv.get(NS.transactions, "acc-1:2026-07")) as {
+      transactions: unknown[];
+    } | null;
+    expect(chunk?.transactions ?? []).toEqual([]);
+  });
+
+  it("restarts from the starting cursor on mutation-during-pagination", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    await kv.set(NS.connections, "cursor:item-1", { cursor: "c-start" });
+    const cursorsSeen: (string | null)[] = [];
+    let n = 0;
+    const plaid = fakePlaid({
+      transactionsSync: async (_token: string, cursor: string | null) => {
+        cursorsSeen.push(cursor);
+        n += 1;
+        if (n === 1) {
+          return syncPage({
+            added: [tx({ transaction_id: "t1" })],
+            nextCursor: "c-mid",
+            hasMore: true
+          });
+        }
+        if (n === 2) {
+          throw new PlaidError("TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION", 400);
+        }
+        return syncPage({ added: [tx({ transaction_id: "t1" })], nextCursor: "c-end" });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(cursorsSeen).toEqual(["c-start", "c-mid", "c-start"]);
+    expect(result.items).toMatchObject([{ status: "connected", added: 1, pages: 1 }]);
+  });
+
+  it("gives up after repeated mutation errors and records the item error", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        throw new PlaidError("TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION", 400);
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.items).toMatchObject([{ status: "error" }]);
+    expect(plaid.callsTo("transactionsSync").length).toBeLessThanOrEqual(4);
   });
 });

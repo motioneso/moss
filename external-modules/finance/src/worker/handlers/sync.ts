@@ -11,6 +11,7 @@
 // only AFTER that page's chunks are written. A crash between the two writes
 // replays the page on the next run; the reducer makes the replay a no-op.
 import { PlaidError } from "../../adapters/plaid.js";
+import type { PlaidAccount } from "../../adapters/plaid.js";
 import type {
   AccountRecord,
   Category,
@@ -47,6 +48,11 @@ import { buildPlaid, loadItems } from "./connect.js";
 // enough to bound a runaway loop. Progress is durable (cursor per page), so
 // a truncated run simply resumes at the next sweep.
 const MAX_PAGES_PER_RUN = 20;
+
+// Plaid invalidates a pagination run when the data changes under it; the
+// documented recovery is to restart from the cursor the run began with.
+const MUTATION_DURING_PAGINATION = "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION";
+const MAX_PAGINATION_RESTARTS = 3;
 
 type ItemResult = {
   itemId: string;
@@ -141,8 +147,20 @@ async function syncItem(
   const today = nowIso.slice(0, 10);
 
   // Balances first: cheap, and the feed's account cards should be fresh
-  // even when the transaction loop later truncates at the page bound.
-  const { accounts } = await plaid.accountsBalanceGet(accessToken);
+  // even when the transaction loop later truncates at the page bound. The
+  // live balance product is not enabled for every Plaid client (it fails with
+  // INVALID_PRODUCT), so any failure except a real login problem falls back
+  // to the balances the plain accounts lookup already returns.
+  let accounts: PlaidAccount[];
+  try {
+    accounts = (await plaid.accountsBalanceGet(accessToken)).accounts;
+  } catch (error) {
+    if (!(error instanceof PlaidError) || error.code === "ITEM_LOGIN_REQUIRED") throw error;
+    console.warn(
+      `finance.sync balance_fallback item=${item.itemId} code=${error.code} http=${error.httpStatus}`
+    );
+    accounts = (await plaid.accountsGet(accessToken)).accounts;
+  }
   // Accounts this item shares to the household — drives the mirror writes
   // below (FIN-04 #1149).
   const sharedIds = new Set<string>();
@@ -170,11 +188,31 @@ async function syncItem(
   }
   await appendSnapshots(store, accounts, today);
 
-  let cursor = await readCursor(ports.kv, item.itemId);
-  const counts = { added: 0, modified: 0, removed: 0, pages: 0 };
+  const startCursor = await readCursor(ports.kv, item.itemId);
+  let cursor = startCursor;
+  let counts = { added: 0, modified: 0, removed: 0, pages: 0 };
+  let restarts = 0;
   let hasMore = true;
   while (hasMore && counts.pages < MAX_PAGES_PER_RUN) {
-    const page = await plaid.transactionsSync(accessToken, cursor);
+    let page: Awaited<ReturnType<typeof plaid.transactionsSync>>;
+    try {
+      page = await plaid.transactionsSync(accessToken, cursor);
+    } catch (error) {
+      if (
+        !(error instanceof PlaidError) ||
+        error.code !== MUTATION_DURING_PAGINATION ||
+        restarts >= MAX_PAGINATION_RESTARTS
+      ) {
+        throw error;
+      }
+      restarts += 1;
+      console.warn(`finance.sync pagination_restart item=${item.itemId} attempt=${restarts}`);
+      await ports.kv.set(NS.connections, cursorKey(item.itemId), { cursor: startCursor });
+      cursor = startCursor;
+      counts = { added: 0, modified: 0, removed: 0, pages: 0 };
+      hasMore = true;
+      continue;
+    }
     counts.pages += 1;
 
     // Load exactly the months this page touches, plus each month's
@@ -192,6 +230,19 @@ async function syncItem(
       keys.add(prevKey);
       pairs.set(targetKey, { accountId: tx.account_id, month: targetKey.slice(-7) });
       pairs.set(prevKey, { accountId: tx.account_id, month: prevKey.slice(-7) });
+    }
+    // A removal names only a transaction id, so its month is unknown. Load
+    // every month of this item's accounts (no stored index exists) — without
+    // this, a batch of only removals would find nothing to delete.
+    if (page.removed.length > 0) {
+      const months = await store.listTransactionMonths();
+      for (const account of accounts) {
+        for (const month of months) {
+          const key = `${account.accountId}:${month}`;
+          keys.add(key);
+          pairs.set(key, { accountId: account.accountId, month });
+        }
+      }
     }
     const chunks: ChunkMap = {};
     for (const key of keys) {
@@ -310,7 +361,7 @@ export const syncRunHandler: ToolFactory = (ports) => async (input) => {
       );
       // Success clears any prior failure state — this is also how a
       // reauth-required item returns to connected after Hosted Link update.
-      const { lastError: _cleared, ...rest } = item;
+      const { lastError: _cleared, lastErrorDetail: _clearedDetail, ...rest } = item;
       await store.putItem({
         ...rest,
         status: "connected",
@@ -319,15 +370,22 @@ export const syncRunHandler: ToolFactory = (ports) => async (input) => {
       results.push({ itemId: item.itemId, status: "connected", ...counts });
     } catch (error) {
       // Item-level isolation: one bank's outage or expired login never
-      // blocks the others. Only the Plaid error CODE is recorded (secret
-      // hygiene); everything non-Plaid still aborts the run via wrap.
+      // blocks the others. Only Plaid's own diagnostic fields are recorded
+      // (type, code, message, request id; never tokens or request bodies);
+      // everything non-Plaid still aborts the run via wrap.
       if (!(error instanceof PlaidError)) throw error;
       const status: ItemRecord["status"] =
         error.code === "ITEM_LOGIN_REQUIRED" ? "reauth-required" : "error";
+      console.warn(
+        `finance.sync item_failed item=${item.itemId} status=${status} code=${error.code} ` +
+          `http=${error.httpStatus} type=${error.detail.type ?? "-"} ` +
+          `request_id=${error.detail.requestId ?? "-"}`
+      );
       await store.putItem({
         ...item,
         status,
-        lastError: error.code
+        lastError: error.code,
+        lastErrorDetail: { code: error.code, ...error.detail }
       });
       results.push({ itemId: item.itemId, status, added: 0, modified: 0, removed: 0, pages: 0 });
     }

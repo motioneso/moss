@@ -324,6 +324,32 @@ describe("plaid adapter error mapping (#1146)", () => {
     expect(plaidError.message).not.toContain("SECRET-DETAIL");
   });
 
+  it("keeps Plaid's type, message and request id as detail for diagnosis (#3161)", async () => {
+    const { fetch } = fakeFetch([
+      {
+        status: 400,
+        body: {
+          error_type: "INVALID_REQUEST",
+          error_code: "INVALID_PRODUCT",
+          error_message: "client is not authorized to access: balance",
+          request_id: "req9",
+          access_token: "must-not-be-kept"
+        }
+      }
+    ]);
+    const plaid = createPlaid(fetch, "sandbox", CREDS);
+    const error = (await plaid.accountsBalanceGet("access-sandbox-2").then(
+      () => null,
+      (e: unknown) => e
+    )) as PlaidError;
+    expect(error.detail).toEqual({
+      type: "INVALID_REQUEST",
+      message: "client is not authorized to access: balance",
+      requestId: "req9"
+    });
+    expect(error.message).toBe("INVALID_PRODUCT");
+  });
+
   it("falls back to http_<status> when the error body carries no code", async () => {
     const { fetch } = fakeFetch([{ status: 502, body: { oops: true } }]);
     const plaid = createPlaid(fetch, "sandbox", CREDS);
