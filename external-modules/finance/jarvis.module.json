@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.5.15",
+  "version": "0.5.16",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -45,7 +45,8 @@
       "app.finance_accounts",
       "app.finance_transactions",
       "app.finance_balance_snapshots",
-      "app.finance_budget_assignments"
+      "app.finance_budget_assignments",
+      "app.finance_categories"
     ]
   },
   "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },

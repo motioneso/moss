@@ -24,7 +24,8 @@ const ownedTables = [
   "app.finance_accounts",
   "app.finance_transactions",
   "app.finance_balance_snapshots",
-  "app.finance_budget_assignments"
+  "app.finance_budget_assignments",
+  "app.finance_categories"
 ];
 
 beforeAll(async () => {
