@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { kvStore, NS } from "../../external-modules/finance/src/domain/index.js";
 import type {
+  ActivityInput,
   FinanceKv,
   TransactionRecord
 } from "../../external-modules/finance/src/domain/index.js";
@@ -47,7 +48,7 @@ function fakeKv(): FinanceKv {
 
 // Budget handlers are pure KV reads/writes — same isolation contract as the
 // feed handlers: touching Plaid creds, tokens, or instance settings throws.
-function fakePorts(kv: FinanceKv): WorkerPorts {
+function fakePorts(kv: FinanceKv, activity: ActivityInput[] = []): WorkerPorts {
   return {
     kv,
     // FIN-04 (#1149): mirror writes are share/sync-handler territory only.
@@ -90,7 +91,12 @@ function fakePorts(kv: FinanceKv): WorkerPorts {
     now: () => NOW,
     // FIN-06b (#1166): pre-cutover handler tests stay on kvStore — the
     // FIN-06c cutover (Tasks 8-10) is what makes handlers actually call this.
-    store: async () => kvStore(kv)
+    store: async () => ({
+      ...kvStore(kv),
+      appendActivity: async (entry) => {
+        activity.push(entry);
+      }
+    })
   };
 }
 
@@ -329,5 +335,72 @@ describe("finance budget-apply — queue path (#1148)", () => {
         params: { month: "2026-07", categoryId: "groceries", amountCents: 1 }
       })
     ).rejects.toThrow("jobKind is not supported");
+  });
+});
+
+describe("finance budget activity rows (#3174)", () => {
+  it("queue path logs a user row holding ids and cents only, with undo to the old total", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.budgets, "ledger:2026-07", { assignments: { groceries: 20_000 } });
+    const activity: ActivityInput[] = [];
+
+    await budgetApplyHandler(fakePorts(kv, activity))({
+      jobKind: "finance.budget-apply",
+      params: { month: "2026-07", categoryId: "groceries", amountCents: 50_000 }
+    });
+
+    expect(activity).toEqual([
+      {
+        actor: "user",
+        kind: "budget.assign",
+        params: {
+          month: "2026-07",
+          categoryId: "groceries",
+          amountCents: 50_000,
+          previousCents: 20_000
+        },
+        undo: { month: "2026-07", categoryId: "groceries", amountCents: 20_000 }
+      }
+    ]);
+  });
+
+  it("tool path logs the row as moss", async () => {
+    const kv = fakeKv();
+    const activity: ActivityInput[] = [];
+    await budgetAssignHandler(fakePorts(kv, activity))({
+      month: "2026-07",
+      categoryId: "groceries",
+      amountCents: 7_500
+    });
+    expect(activity).toHaveLength(1);
+    expect(activity[0]).toMatchObject({
+      actor: "moss",
+      params: { amountCents: 7_500, previousCents: 0 }
+    });
+  });
+
+  it("logs nothing when the amount did not change", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.budgets, "ledger:2026-07", { assignments: { groceries: 20_000 } });
+    const activity: ActivityInput[] = [];
+    await budgetAssignHandler(fakePorts(kv, activity))({
+      month: "2026-07",
+      categoryId: "groceries",
+      amountCents: 20_000
+    });
+    expect(activity).toEqual([]);
+  });
+
+  it("logs nothing when the category is rejected", async () => {
+    const kv = fakeKv();
+    const activity: ActivityInput[] = [];
+    await expect(
+      budgetAssignHandler(fakePorts(kv, activity))({
+        month: "2026-07",
+        categoryId: "no-such-category",
+        amountCents: 100
+      })
+    ).rejects.toThrow();
+    expect(activity).toEqual([]);
   });
 });

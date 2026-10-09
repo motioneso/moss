@@ -123,3 +123,79 @@ describe("Budget screen (#3173)", () => {
     expect(text(await render())).toContain("Something went wrong");
   });
 });
+
+describe("Budget screen typing (#3174)", () => {
+  function routedFetch(queueStatus: number) {
+    const calls: { url: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: { body?: string }) => {
+        calls.push({ url, body: init?.body ? JSON.parse(init.body) : null });
+        if (url.includes("/queues/")) {
+          return {
+            ok: queueStatus < 300,
+            status: queueStatus,
+            json: async () => ({ jobId: "job-1" })
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ invocation: { status: "succeeded", result: status() } })
+        };
+      })
+    );
+    return calls;
+  }
+
+  const groceriesBox = (renderer: ReactTestRenderer) =>
+    renderer.root.findAll(
+      (node) => node.type === "input" && node.props["aria-label"] === "Assigned to Groceries"
+    )[0]!;
+
+  async function type(renderer: ReactTestRenderer, value: string) {
+    await act(async () => {
+      groceriesBox(renderer).props.onFocus({ currentTarget: { select: () => {} } });
+    });
+    await act(async () => {
+      groceriesBox(renderer).props.onChange({ currentTarget: { value } });
+    });
+    await act(async () => {
+      groceriesBox(renderer).props.onBlur();
+    });
+    await act(async () => {});
+  }
+
+  it("saves a typed amount through the queue and shows it at once", async () => {
+    const calls = routedFetch(202);
+    const renderer = await render();
+    await type(renderer, "700");
+
+    const queued = calls.find((call) => call.url.includes("/queues/finance.budget-apply/run"));
+    expect(queued?.body).toEqual({
+      jobKind: "finance.budget-apply",
+      params: { month: expect.any(String), categoryId: "groceries", amountCents: 70_000 }
+    });
+    expect(groceriesBox(renderer).props.value).toBe("$700.00");
+    // Available moves by the difference: 231.73 plus 50.00.
+    expect(text(renderer)).toContain("$281.73");
+  });
+
+  it("puts the old amount back and shows an error when the save is refused", async () => {
+    routedFetch(500);
+    const renderer = await render();
+    await type(renderer, "700");
+
+    expect(groceriesBox(renderer).props.value).toBe("$650.00");
+    expect(text(renderer)).toContain("Couldn't save");
+  });
+
+  it("rejects text that is not an amount without calling the queue", async () => {
+    const calls = routedFetch(202);
+    const renderer = await render();
+    await type(renderer, "lots");
+
+    expect(calls.some((call) => call.url.includes("/queues/"))).toBe(false);
+    expect(text(renderer)).toContain("Enter an amount");
+  });
+});

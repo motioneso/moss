@@ -8,6 +8,7 @@ import {
   NS
 } from "../../external-modules/finance/src/domain/index.js";
 import type {
+  ActivityInput,
   FinanceKv,
   SharedMirrorKv,
   TransactionRecord
@@ -79,7 +80,11 @@ function readOnlyMirror(seed?: Record<string, Record<string, unknown>>): SharedM
 // Feed handlers are pure KV reads/writes: any touch of Plaid credentials,
 // the token map, or instance settings is a contract violation, so every
 // non-kv port throws on use.
-function fakePorts(kv: FinanceKv, mirror?: SharedMirrorKv): WorkerPorts {
+function fakePorts(
+  kv: FinanceKv,
+  mirror?: SharedMirrorKv,
+  activity: ActivityInput[] = []
+): WorkerPorts {
   return {
     kv,
     // Default: categorize handlers are mirror-blind (share/sync territory).
@@ -122,7 +127,12 @@ function fakePorts(kv: FinanceKv, mirror?: SharedMirrorKv): WorkerPorts {
     now: () => NOW,
     // FIN-06b (#1166): pre-cutover handler tests stay on kvStore — the
     // FIN-06c cutover (Tasks 8-10) is what makes handlers actually call this.
-    store: async () => kvStore(kv)
+    store: async () => ({
+      ...kvStore(kv),
+      appendActivity: async (entry) => {
+        activity.push(entry);
+      }
+    })
   };
 }
 
@@ -415,6 +425,30 @@ describe("finance feed handlers (#1147)", () => {
     expect(updated).toMatchObject({ categoryId: "transport", categorizedBy: "user" });
     expect(updated.notes).toBeUndefined();
     expect(await kv.list(NS.rules)).toEqual([]);
+  });
+
+  it("queue path logs a user activity row with ids only and undo to the old category (#3174)", async () => {
+    const kv = fakeKv();
+    await seedFeed(kv);
+    const activity: ActivityInput[] = [];
+    await categorizeApplyHandler(fakePorts(kv, undefined, activity))({
+      actorUserId: "00000000-0000-4000-8000-000000000001",
+      jobKind: "finance.categorize-apply",
+      idempotencyKey: "finance:finance.categorize-apply:job-2",
+      params: {
+        transactionId: "t-a",
+        accountId: "acc-1",
+        month: "2026-07",
+        categoryId: "transport"
+      }
+    });
+    expect(activity).toHaveLength(1);
+    expect(activity[0]).toMatchObject({
+      actor: "user",
+      kind: "transaction.categorize",
+      params: { transactionId: "t-a", categoryId: "transport" }
+    });
+    expect(activity[0]!.undo).toMatchObject({ transactionId: "t-a" });
   });
 });
 

@@ -70,7 +70,8 @@ const ownedTables = [
   "app.finance_transactions",
   "app.finance_balance_snapshots",
   "app.finance_budget_assignments",
-  "app.finance_categories"
+  "app.finance_categories",
+  "app.finance_activity"
 ];
 
 const NOW_1 = "2026-07-18T12:00:00.000Z";

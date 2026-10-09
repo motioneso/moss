@@ -58,6 +58,8 @@ export const MODULE_STYLES = `
 .fnm-col-name { width: 34%; }
 .fnm-cell-stack { display: flex; flex-direction: column; gap: var(--space-2); min-width: 9rem; }
 .fnm-cell-meter { width: 7rem; margin-left: auto; }
+.fnm-assign { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); }
+.fnm-assign__input { width: 100%; max-width: 9rem; text-align: right; }
 .fnm-phone-only { display: none; }
 /* #3176 Transactions: layout only. */
 .fnm-spread { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }

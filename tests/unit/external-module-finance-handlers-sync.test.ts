@@ -9,7 +9,7 @@ import type {
 } from "../../external-modules/finance/src/adapters/plaid.js";
 import { PlaidError } from "../../external-modules/finance/src/adapters/plaid.js";
 import { kvStore, NS } from "../../external-modules/finance/src/domain/index.js";
-import type { FinanceKv } from "../../external-modules/finance/src/domain/index.js";
+import type { ActivityInput, FinanceKv } from "../../external-modules/finance/src/domain/index.js";
 import { syncRunHandler } from "../../external-modules/finance/src/worker/handlers/sync.js";
 import type { TokenMap, WorkerPorts } from "../../external-modules/finance/src/worker/ports.js";
 import { InputError } from "../../external-modules/finance/src/worker/validate.js";
@@ -450,7 +450,10 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     type Tier = "ask_each_time" | "trusted_auto" | "always_confirm";
     const ACTOR = "00000000-0000-4000-8000-0000000000aa";
 
-    async function runWithTiers(tiers: Partial<Record<string, Tier | "throw">>) {
+    async function runWithTiers(
+      tiers: Partial<Record<string, Tier | "throw">>,
+      activity: ActivityInput[] = []
+    ) {
       const kv = fakeKv();
       await seedItem(kv, "item-1");
       // A confirmed, categorized earlier row makes "Known Diner" a seen merchant.
@@ -484,6 +487,12 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
       const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
       const withPolicy: WorkerPorts = {
         ...ports,
+        store: async () => ({
+          ...kvStore(kv),
+          appendActivity: async (entry) => {
+            activity.push(entry);
+          }
+        }),
         actionPolicy: {
           get: async (familyId) => {
             const tier = tiers[familyId];
@@ -509,6 +518,36 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
       const byId = await runWithTiers({ sorting: "ask_each_time", sorting_new: "trusted_auto" });
       expect(byId["t-seen"]).toMatchObject({ reviewState: "needs_look" });
       expect(byId["t-new"]).toMatchObject({ reviewState: "confirmed" });
+    });
+
+    it("logs an activity row (actor moss, ids only) for each guess Moss confirms itself", async () => {
+      const activity: ActivityInput[] = [];
+      await runWithTiers({ sorting: "trusted_auto", sorting_new: "ask_each_time" }, activity);
+      expect(activity).toEqual([
+        {
+          actor: "moss",
+          kind: "transaction.categorize",
+          params: {
+            transactionId: "t-seen",
+            accountId: "acc-1",
+            month: "2026-07",
+            categoryId: "dining",
+            previousCategoryId: null
+          },
+          undo: {
+            transactionId: "t-seen",
+            accountId: "acc-1",
+            month: "2026-07",
+            categoryId: null
+          }
+        }
+      ]);
+    });
+
+    it("logs nothing when Moss only suggests and leaves the row for review", async () => {
+      const activity: ActivityInput[] = [];
+      await runWithTiers({}, activity);
+      expect(activity).toEqual([]);
     });
 
     it("an unreadable tier fails closed to needs_look", async () => {

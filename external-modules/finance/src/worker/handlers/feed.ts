@@ -150,7 +150,7 @@ async function applyCategory(
   ports: WorkerPorts,
   store: FinanceStore,
   ids: ApplyIds
-): Promise<{ record: TransactionRecord }> {
+): Promise<{ record: TransactionRecord; previousCategoryId: string | null }> {
   const live = (await loadCategories(ports)).filter((category) => !category.archived);
   if (!live.some((category) => category.id === ids.categoryId)) {
     throw new InputError("invalid_category", "categoryId is not a live category");
@@ -165,11 +165,39 @@ async function applyCategory(
     // Names the condition only — ids from a queue payload are still inputs.
     throw new InputError("not_found", "no transaction matches the given ids");
   }
+  const previousCategoryId = record.categoryId;
   record.categoryId = ids.categoryId;
   record.categorizedBy = "user";
   // Choosing a category is the user's confirmation, whatever Moss guessed.
   record.reviewState = "confirmed";
-  return { record };
+  return { record, previousCategoryId };
+}
+
+/** Logs a category change; ids only, and undo restores the earlier category. */
+async function logCategorize(
+  store: FinanceStore,
+  actor: "user" | "moss",
+  ids: ApplyIds,
+  previousCategoryId: string | null
+): Promise<void> {
+  if (previousCategoryId === ids.categoryId) return;
+  await store.appendActivity({
+    actor,
+    kind: "transaction.categorize",
+    params: {
+      transactionId: ids.transactionId,
+      accountId: ids.accountId,
+      month: ids.month,
+      categoryId: ids.categoryId,
+      previousCategoryId
+    },
+    undo: {
+      transactionId: ids.transactionId,
+      accountId: ids.accountId,
+      month: ids.month,
+      categoryId: previousCategoryId
+    }
+  });
 }
 
 /**
@@ -187,7 +215,7 @@ function categorizeTool(mode: "seen" | "new"): ToolFactory {
     const notes = readString(input, "notes", { maxBytes: 2000 });
 
     const store = await ports.store();
-    const { record } = await applyCategory(ports, store, ids);
+    const { record, previousCategoryId } = await applyCategory(ports, store, ids);
     if (record.amountCents !== amountCents) {
       throw new InputError("amount_mismatch", "amountCents does not match the stored transaction");
     }
@@ -208,6 +236,7 @@ function categorizeTool(mode: "seen" | "new"): ToolFactory {
     }
     if (notes !== undefined) record.notes = notes;
     await store.putTransaction(record);
+    await logCategorize(store, "moss", ids, previousCategoryId);
     return { status: "ok", transaction: record };
   };
 }
@@ -234,8 +263,9 @@ export const categorizeApplyHandler: ToolFactory = (ports) => async (input) => {
   // here is defense in depth.
   const ids = readApplyIds(params as Record<string, unknown>);
   const store = await ports.store();
-  const { record } = await applyCategory(ports, store, ids);
+  const { record, previousCategoryId } = await applyCategory(ports, store, ids);
   await store.putTransaction(record);
+  await logCategorize(store, "user", ids, previousCategoryId);
   return { status: "ok", transaction: record };
 };
 
