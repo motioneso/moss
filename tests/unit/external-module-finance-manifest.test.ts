@@ -42,6 +42,7 @@ describe("finance manifest contract (#1146)", () => {
     expect((result.manifest.assistantTools ?? []).map((tool) => [tool.name, tool.handler])).toEqual(
       [
         ["finance.accounts.list", "accounts.list"],
+        ["finance.setup.status", "setup.status"],
         ["finance.connect.start", "connect.start"],
         ["finance.connect.poll", "connect.poll"],
         ["finance.sync.run-now", "sync.run"],

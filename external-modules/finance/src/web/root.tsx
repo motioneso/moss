@@ -8,6 +8,7 @@ import { ModuleLink, useModulePath } from "./router";
 import { BudgetScreen } from "./screens/budget";
 import { FeedScreen } from "./screens/feed";
 import { ReportsScreen } from "./screens/reports";
+import { StartScreen } from "./screens/start";
 import { currentLiveMessage, subscribeLive } from "./states";
 
 export type HostActions = { openAssistant: (input: { starterPrompt: string }) => void };
@@ -61,7 +62,9 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
           </ModuleLink>
         ))}
       </nav>
-      {path === "/budget" ? (
+      {path === "/start" ? (
+        <StartScreen hostActions={props.hostActions} />
+      ) : path === "/budget" ? (
         <BudgetScreen />
       ) : path === "/reports" ? (
         <ReportsScreen />
