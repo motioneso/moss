@@ -11,6 +11,7 @@ import { budgetApplyHandler, budgetAssignHandler, budgetStatusHandler } from "./
 import { connectPollHandler, connectStartHandler } from "./handlers/connect.js";
 import {
   categorizeApplyHandler,
+  transactionCategorizeNewHandler,
   transactionCategorizeHandler,
   transactionsQueryHandler
 } from "./handlers/feed.js";
@@ -36,6 +37,7 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   // FIN-02 (#1147) Task 10: the feed surface declared by manifest v2.
   "transactions.query": transactionsQueryHandler,
   "transaction.categorize": transactionCategorizeHandler,
+  "transaction.categorize-new": transactionCategorizeNewHandler,
   "categorize.apply": categorizeApplyHandler,
   // FIN-03 (#1148) Task 3: the envelope-budget surface of manifest v0.2.0.
   "budget.status": budgetStatusHandler,

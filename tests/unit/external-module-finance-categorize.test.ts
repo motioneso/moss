@@ -1,8 +1,12 @@
 // tests/unit/external-module-finance-categorize.test.ts
 import { describe, expect, it } from "vitest";
 
-import { categorize } from "../../external-modules/finance/src/domain/categorize.js";
-import type { AiTxInput, Rule } from "../../external-modules/finance/src/domain/categorize.js";
+import { categorize, decideReview } from "../../external-modules/finance/src/domain/categorize.js";
+import type {
+  AiTxInput,
+  ReviewPolicy,
+  Rule
+} from "../../external-modules/finance/src/domain/categorize.js";
 import type { TransactionRecord } from "../../external-modules/finance/src/domain/index.js";
 import { DEFAULT_CATEGORIES, PFC_MAP } from "../../external-modules/finance/src/domain/taxonomy.js";
 import { buildCategorizeAi } from "../../external-modules/finance/src/worker/ai-port.js";
@@ -31,6 +35,12 @@ function tx(over: Partial<TransactionRecord> & { id: string }): TransactionRecor
   };
 }
 
+const ASK: ReviewPolicy = {
+  sortingTier: "ask_each_time",
+  sortingNewTier: "ask_each_time",
+  seenPayeeKeys: new Set()
+};
+
 const RULES: Rule[] = [
   { payeeKey: "trader joes", categoryId: "groceries", createdAt: "2026-07-01T00:00:00Z" }
 ];
@@ -40,7 +50,7 @@ describe("finance categorization pipeline (#1147)", () => {
     const calls: AiTxInput[][] = [];
     const ai = async (batch: AiTxInput[]) => {
       calls.push(batch);
-      return { "t-ai": "entertainment" };
+      return { "t-ai": { categoryId: "entertainment", confidence: 0.9 } };
     };
     const result = await categorize(
       [
@@ -51,7 +61,8 @@ describe("finance categorization pipeline (#1147)", () => {
       ],
       RULES,
       [...DEFAULT_CATEGORIES],
-      ai
+      ai,
+      ASK
     );
     const byId = Object.fromEntries(result.map((record) => [record.id, record]));
     expect(byId["t-rule"]).toMatchObject({ categoryId: "groceries", categorizedBy: "rule" });
@@ -75,7 +86,7 @@ describe("finance categorization pipeline (#1147)", () => {
       categorizedBy: "user"
     });
     const prior = tx({ id: "t-prior", categoryId: "transport", categorizedBy: "ai" });
-    const result = await categorize([user, prior], RULES, [...DEFAULT_CATEGORIES], ai);
+    const result = await categorize([user, prior], RULES, [...DEFAULT_CATEGORIES], ai, ASK);
     expect(result.find((record) => record.id === "t-user")).toEqual(user);
     expect(result.find((record) => record.id === "t-prior")).toEqual(prior);
     expect(calls).toHaveLength(0);
@@ -90,7 +101,7 @@ describe("finance categorization pipeline (#1147)", () => {
     const records = Array.from({ length: 85 }, (_, index) =>
       tx({ id: `t-${index}`, name: `Vendor ${index}`, notes: "PRIVATE NOTE" })
     );
-    await categorize(records, [], [...DEFAULT_CATEGORIES], ai);
+    await categorize(records, [], [...DEFAULT_CATEGORIES], ai, ASK);
     expect(calls.map((call) => call.batch.length)).toEqual([40, 40, 5]);
     // The AI input surface is a hard privacy boundary: id for correlation,
     // then payee/amount/date — never notes, merchant, or account ids.
@@ -109,7 +120,8 @@ describe("finance categorization pipeline (#1147)", () => {
       [...DEFAULT_CATEGORIES],
       async () => {
         throw new Error("provider_error");
-      }
+      },
+      ASK
     );
     const byId = Object.fromEntries(result.map((record) => [record.id, record]));
     // The mapped record is still applied — AI failure only affects its batch.
@@ -118,7 +130,7 @@ describe("finance categorization pipeline (#1147)", () => {
   });
 
   it("leaves records uncategorized when no AI port exists", async () => {
-    const result = await categorize([tx({ id: "t-1" })], [], [...DEFAULT_CATEGORIES], null);
+    const result = await categorize([tx({ id: "t-1" })], [], [...DEFAULT_CATEGORIES], null, ASK);
     expect(result[0]).toMatchObject({ categoryId: null, categorizedBy: null });
   });
 
@@ -127,7 +139,11 @@ describe("finance categorization pipeline (#1147)", () => {
       [tx({ id: "t-1" }), tx({ id: "t-2" })],
       [],
       [...DEFAULT_CATEGORIES],
-      async () => ({ "t-1": "not-a-category", "t-2": "dining" })
+      async () => ({
+        "t-1": { categoryId: "not-a-category", confidence: 0.9 },
+        "t-2": { categoryId: "dining", confidence: 0.9 }
+      }),
+      ASK
     );
     const byId = Object.fromEntries(result.map((record) => [record.id, record]));
     expect(byId["t-1"]).toMatchObject({ categoryId: null, categorizedBy: null });
@@ -139,16 +155,27 @@ describe("finance categorization pipeline (#1147)", () => {
     const call = buildCategorizeAi({
       generateStructured: async (input) => {
         inputs.push(input);
-        return { ok: true, object: { "t-1": "dining", "t-2": 42 } };
+        return {
+          ok: true,
+          object: {
+            "t-1": { categoryId: "dining", confidence: 0.8 },
+            "t-2": 42,
+            "t-3": { categoryId: "travel", confidence: 7 }
+          }
+        };
       }
     })!;
     const result = await call(
       [{ id: "t-1", payee: "Corner Bakery", amountCents: 850, date: "2026-07-02" }],
       ["dining", "travel"]
     );
-    // Non-string values are dropped at the bridge; id validation happens in
-    // the pipeline (single place for the unknown-id rule).
-    expect(result).toEqual({ "t-1": "dining" });
+    // Malformed guesses are dropped at the bridge and an out-of-range
+    // confidence reads as 0; id validation happens in the pipeline (single
+    // place for the unknown-id rule).
+    expect(result).toEqual({
+      "t-1": { categoryId: "dining", confidence: 0.8 },
+      "t-3": { categoryId: "travel", confidence: 0 }
+    });
     expect(inputs).toHaveLength(1);
     expect(inputs[0]!.tierHint).toBe("economy");
     expect(inputs[0]!.prompt).toContain("Corner Bakery");
@@ -175,5 +202,113 @@ describe("finance categorization pipeline (#1147)", () => {
     for (const [pfc, categoryId] of Object.entries(PFC_MAP)) {
       expect(ids, `PFC_MAP[${pfc}]`).toContain(categoryId);
     }
+  });
+
+  it("decideReview covers every row of the spec table", () => {
+    const tiers = ["ask_each_time", "trusted_auto"] as const;
+    for (const sortingTier of tiers) {
+      for (const sortingNewTier of tiers) {
+        const policy = { sortingTier, sortingNewTier };
+        // Payee rule: always confirmed.
+        for (const seen of [true, false]) {
+          expect(decideReview({ source: "rule", seen, confidence: null, policy })).toBe(
+            "confirmed"
+          );
+        }
+        // Seen merchant follows the sorting tier; new merchant follows sorting_new.
+        for (const source of ["plaid-map", "ai"] as const) {
+          const confidence = source === "ai" ? 0.9 : null;
+          expect(decideReview({ source, seen: true, confidence, policy })).toBe(
+            sortingTier === "trusted_auto" ? "confirmed" : "needs_look"
+          );
+          expect(decideReview({ source, seen: false, confidence, policy })).toBe(
+            sortingNewTier === "trusted_auto" ? "confirmed" : "needs_look"
+          );
+        }
+        // AI under 0.6 needs a look whatever the tiers say.
+        for (const seen of [true, false]) {
+          expect(decideReview({ source: "ai", seen, confidence: 0.59, policy })).toBe("needs_look");
+          expect(decideReview({ source: "ai", seen, confidence: 0.6, policy })).toBe(
+            (seen ? sortingTier : sortingNewTier) === "trusted_auto" ? "confirmed" : "needs_look"
+          );
+        }
+      }
+    }
+    // A tier that is not trusted_auto never lets Moss confirm.
+    expect(
+      decideReview({
+        source: "plaid-map",
+        seen: true,
+        confidence: null,
+        policy: { sortingTier: "always_confirm", sortingNewTier: "always_confirm" }
+      })
+    ).toBe("needs_look");
+  });
+
+  it("applies the table end to end and stores the AI confidence", async () => {
+    const policy: ReviewPolicy = {
+      sortingTier: "trusted_auto",
+      sortingNewTier: "ask_each_time",
+      seenPayeeKeys: new Set(["known cafe"])
+    };
+    const result = await categorize(
+      [
+        tx({ id: "t-rule", name: "TRADER JOE'S #1" }),
+        tx({ id: "t-seen", name: "Known Cafe 22" }),
+        tx({ id: "t-new", name: "Brand New Place" }),
+        tx({ id: "t-low", name: "Known Cafe 23" })
+      ],
+      RULES,
+      [...DEFAULT_CATEGORIES],
+      async (batch) =>
+        Object.fromEntries(
+          batch.map((item) => [
+            item.id,
+            { categoryId: "dining", confidence: item.id === "t-low" ? 0.3 : 0.95 }
+          ])
+        ),
+      policy
+    );
+    const byId = Object.fromEntries(result.map((record) => [record.id, record]));
+    expect(byId["t-rule"]).toMatchObject({ reviewState: "confirmed", aiConfidence: null });
+    expect(byId["t-seen"]).toMatchObject({ reviewState: "confirmed", aiConfidence: 0.95 });
+    expect(byId["t-new"]).toMatchObject({ reviewState: "needs_look", aiConfidence: 0.95 });
+    expect(byId["t-low"]).toMatchObject({ reviewState: "needs_look", aiConfidence: 0.3 });
+  });
+
+  it("a Plaid-map result for a new merchant needs a look when sorting_new asks", async () => {
+    const result = await categorize(
+      [tx({ id: "t-1", name: "Some Diner", plaidCategory: "FOOD_AND_DRINK" })],
+      [],
+      [...DEFAULT_CATEGORIES],
+      null,
+      ASK
+    );
+    expect(result[0]).toMatchObject({
+      categoryId: "dining",
+      reviewState: "needs_look",
+      aiConfidence: null
+    });
+  });
+
+  it("a merchant Moss just confirmed counts as seen later in the same run", async () => {
+    const policy: ReviewPolicy = {
+      sortingTier: "ask_each_time",
+      sortingNewTier: "trusted_auto",
+      seenPayeeKeys: new Set()
+    };
+    const result = await categorize(
+      [
+        tx({ id: "t-1", name: "Fresh Bakery", plaidCategory: "FOOD_AND_DRINK" }),
+        tx({ id: "t-2", name: "Fresh Bakery", plaidCategory: "FOOD_AND_DRINK" })
+      ],
+      [],
+      [...DEFAULT_CATEGORIES],
+      null,
+      policy
+    );
+    // First is new (sorting_new trusted -> confirmed); second is now seen and
+    // the sorting tier asks.
+    expect(result.map((record) => record.reviewState)).toEqual(["confirmed", "needs_look"]);
   });
 });

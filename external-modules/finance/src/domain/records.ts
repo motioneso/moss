@@ -7,6 +7,8 @@
 // Plaid's float dollars are converted exactly once, at the reducer edge
 // (Task 6 toRecord), never here.
 
+export type ReviewState = "confirmed" | "needs_look";
+
 export type TransactionRecord = {
   id: string;
   accountId: string;
@@ -24,6 +26,13 @@ export type TransactionRecord = {
   /** Posted transactions carry their pending twin's id for de-duplication. */
   pendingTransactionId: string | null;
   categorizedBy: "rule" | "plaid-map" | "ai" | "user" | null;
+  /**
+   * #3175: "needs_look" rows still count toward their guessed category. Absent
+   * reads as "confirmed" (rows written before review state existed).
+   */
+  reviewState?: ReviewState;
+  /** 0 to 1; set only when the AI step chose the category. */
+  aiConfidence?: number | null;
   /** Assistant-only free text — never in job payloads (metadata-only rule). */
   notes?: string;
 };

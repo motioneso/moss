@@ -48,6 +48,7 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.sync.run-now", "sync.run"],
         ["finance.transactions.query", "transactions.query"],
         ["finance.transaction.categorize", "transaction.categorize"],
+        ["finance.transaction.categorize-new", "transaction.categorize-new"],
         ["finance.budget.status", "budget.status"],
         ["finance.budget.assign", "budget.assign"],
         ["finance.account.set-shared", "account.set-shared"],
@@ -70,6 +71,30 @@ describe("finance manifest contract (#1146)", () => {
     // Categorizing rewrites a stored record → write risk, so the assistant
     // path goes through confirmation (D4) like every other mutation.
     expect(riskOf["finance.transaction.categorize"]).toBe("write");
+    // #3175: chat sorts a merchant under the family matching its history.
+    const tools = result.manifest.assistantTools ?? [];
+    const toolByName = (name: string) => tools.find((tool) => tool.name === name)!;
+    expect(toolByName("finance.transaction.categorize")).toMatchObject({
+      actionFamilyId: "sorting",
+      executionPolicy: "auto"
+    });
+    expect(toolByName("finance.transaction.categorize-new")).toMatchObject({
+      actionFamilyId: "sorting_new",
+      executionPolicy: "auto",
+      risk: "write"
+    });
+    expect(toolByName("finance.connect.start").actionFamilyId).toBe("bank_connections");
+    expect(toolByName("finance.connect.poll").actionFamilyId).toBe("bank_connections");
+    expect(
+      (result.manifest.assistantActionFamilies ?? []).map((family) => [
+        family.id,
+        family.defaultTier
+      ])
+    ).toEqual([
+      ["sorting", "ask_each_time"],
+      ["sorting_new", "ask_each_time"],
+      ["bank_connections", "always_confirm"]
+    ]);
     // FIN-03 (#1148): budget reads are free; assigning money is a mutation,
     // so the assistant path confirms (D4) while the web path enqueues
     // finance.budget-apply instead (D3).
@@ -263,14 +288,15 @@ describe("finance manifest contract (#1146)", () => {
       "accountId",
       "month",
       "categoryId",
-      "createRule",
+      "amountCents",
       "notes"
     ]);
     expect(categorizeSchema.required).toEqual([
       "transactionId",
       "accountId",
       "month",
-      "categoryId"
+      "categoryId",
+      "amountCents"
     ]);
 
     // FIN-05 (#1150): both report tools take ONLY an optional bounded months

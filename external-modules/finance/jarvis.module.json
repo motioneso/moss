@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.5.16",
+  "version": "0.6.0",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -72,6 +72,7 @@
       "permissionId": "finance.connect.start",
       "description": "Start connecting a bank via Plaid Hosted Link; returns a link URL to open.",
       "risk": "write",
+      "actionFamilyId": "bank_connections",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -84,6 +85,7 @@
       "permissionId": "finance.connect.poll",
       "description": "Check pending bank connections and finish token exchange.",
       "risk": "write",
+      "actionFamilyId": "bank_connections",
       "inputSchema": { "type": "object", "additionalProperties": false },
       "handler": "connect.poll"
     },
@@ -117,22 +119,74 @@
     {
       "name": "finance.transaction.categorize",
       "permissionId": "finance.transaction.categorize",
-      "description": "Set a transaction's category, optionally creating a payee rule.",
+      "description": "Set the category of a transaction from a merchant that already has confirmed history. Refuses a new merchant; use finance.transaction.categorize-new for that.",
       "risk": "write",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "transactionId": { "type": "string" },
-          "accountId": { "type": "string" },
-          "month": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$" },
-          "categoryId": { "type": "string" },
-          "createRule": { "type": "boolean" },
-          "notes": { "type": "string", "maxLength": 500 }
+          "transactionId": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
+          "categoryId": {
+            "type": "string"
+          },
+          "amountCents": {
+            "type": "integer"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500
+          }
         },
-        "required": ["transactionId", "accountId", "month", "categoryId"]
+        "required": ["transactionId", "accountId", "month", "categoryId", "amountCents"]
       },
-      "handler": "transaction.categorize"
+      "handler": "transaction.categorize",
+      "actionFamilyId": "sorting",
+      "executionPolicy": "auto"
+    },
+    {
+      "name": "finance.transaction.categorize-new",
+      "permissionId": "finance.transaction.categorize-new",
+      "description": "Set the category of a transaction from a merchant with no confirmed history yet. Refuses a merchant that has it; use finance.transaction.categorize for that.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "transactionId": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$"
+          },
+          "categoryId": {
+            "type": "string"
+          },
+          "amountCents": {
+            "type": "integer"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": ["transactionId", "accountId", "month", "categoryId", "amountCents"]
+      },
+      "handler": "transaction.categorize-new",
+      "actionFamilyId": "sorting_new",
+      "executionPolicy": "auto"
     },
     {
       "name": "finance.budget.status",
@@ -207,6 +261,29 @@
         }
       },
       "handler": "reports.net-worth"
+    }
+  ],
+  "assistantActionFamilies": [
+    {
+      "id": "sorting",
+      "label": "Sort purchases from merchants you've seen",
+      "description": "Put transactions into categories.",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto"]
+    },
+    {
+      "id": "sorting_new",
+      "label": "Sort purchases from new merchants",
+      "description": "Decide the category the first time a merchant appears.",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto"]
+    },
+    {
+      "id": "bank_connections",
+      "label": "Connect a bank",
+      "description": "Start a bank connection.",
+      "defaultTier": "always_confirm",
+      "allowedTiers": ["always_confirm"]
     }
   ],
   "worker": {
@@ -305,6 +382,10 @@
       {
         "id": "finance.getting-started",
         "description": "Getting started shows three steps (connect a bank, Moss sorts spending, build a budget together) with each step's state. A bank cannot be connected until an admin sets the bank keys in Finance settings."
+      },
+      {
+        "id": "finance.needs-a-look",
+        "description": "Moss sorts each new transaction into a category and marks the ones it is unsure about as Needs a look. Whether Moss confirms its own guesses for merchants you have confirmed before, and for new merchants, follows the Sort purchases settings. A guessed category still counts toward the budget while it waits for review."
       }
     ]
   }
