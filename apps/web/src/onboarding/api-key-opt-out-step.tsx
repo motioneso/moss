@@ -1,11 +1,18 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Lock } from "lucide-react";
 
-import { getAiSummary } from "../api/client";
+import { createAiProvider, getAiSummary } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { FootNote, OptionCard, StepHeader } from "./onboarding-ui";
 import { personalize } from "../api/use-assistant-name.js";
+import { PROVIDER_CATALOG } from "../settings/settings-ai-provider-catalog";
+import { readError } from "../settings/settings-types";
+
+// Key-based providers that need no preset form; the member picks which service the key is for.
+const KEY_PROVIDERS = PROVIDER_CATALOG.filter(
+  (option) => option.authMethod === "api_key" && option.preset === undefined
+);
 
 export function ApiKeyOptOutStep(props: { readonly onSkipStep: () => void }) {
   const [assistant, setAssistant] = useState<"shared" | "personal">("shared");
@@ -19,6 +26,28 @@ export function ApiKeyOptOutStep(props: { readonly onSkipStep: () => void }) {
     retry: false
   });
   const done = summaryQuery.data?.summary.hasPersonalAiProvider ?? false;
+  const queryClient = useQueryClient();
+  const [providerLabel, setProviderLabel] = useState(KEY_PROVIDERS[0]?.label ?? "");
+  const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const saveKey = useMutation({
+    mutationFn: () => {
+      const option = KEY_PROVIDERS.find((entry) => entry.label === providerLabel);
+      if (!option) throw new Error("Choose a provider for this key.");
+      return createAiProvider({
+        providerKind: option.kind,
+        displayName: option.label,
+        authMethod: option.authMethod,
+        ...(baseUrl.trim() ? { baseUrl: baseUrl.trim() } : {}),
+        credentialPayload: { apiKey: apiKey.trim() }
+      });
+    },
+    onSuccess: async () => {
+      setApiKey("");
+      setBaseUrl("");
+      await queryClient.invalidateQueries({ queryKey: queryKeys.ai.summary });
+    }
+  });
 
   return (
     <section className="onb-step" aria-labelledby="member-apikey-title">
@@ -59,14 +88,45 @@ export function ApiKeyOptOutStep(props: { readonly onSkipStep: () => void }) {
             </span>
             Personal AI key
           </label>
+          <select
+            aria-label="Provider for this key"
+            value={providerLabel}
+            onChange={(event) => setProviderLabel(event.target.value)}
+          >
+            {KEY_PROVIDERS.map((option) => (
+              <option key={option.label} value={option.label}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <input
-            id="member-personal-ai-key"
             type="text"
-            placeholder="sk-…  (kept private to you)"
+            aria-label="Service address (optional)"
+            placeholder="Service address (optional)"
+            value={baseUrl}
+            onChange={(event) => setBaseUrl(event.target.value)}
             spellCheck={false}
           />
+          <input
+            id="member-personal-ai-key"
+            type="password"
+            autoComplete="off"
+            placeholder="Paste your key (kept private to you)"
+            value={apiKey}
+            onChange={(event) => setApiKey(event.target.value)}
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            data-testid="member-personal-ai-key-save"
+            disabled={apiKey.trim() === "" || saveKey.isPending}
+            onClick={() => saveKey.mutate()}
+          >
+            Save key
+          </button>
+          {saveKey.isError ? <div role="alert">{readError(saveKey.error)}</div> : null}
           <div className="onb-keyfield__hint">
-            You can paste your key now or add it later under {"Settings > Assistant"}. This key is
+            You can save your key now or add it later under {"Settings > Assistant"}. This key is
             private.
           </div>
         </div>

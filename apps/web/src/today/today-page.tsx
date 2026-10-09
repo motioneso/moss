@@ -18,7 +18,6 @@ import {
 import {
   getBriefingRun,
   getDayPlan,
-  getOnboardingStatus,
   listCalendarEvents,
   listBriefingDefinitions,
   listBriefingRuns,
@@ -30,7 +29,7 @@ import {
 import { findDefinition, targetTimeFor } from "../briefings/briefing-settings-model";
 import { formatDate, useUserLocale, zonedClockMinutes } from "../locale/locale-format";
 import { localTimeToIso } from "./day-plan-review-model.js";
-import { hasConnectedProvider } from "../onboarding/chat-availability";
+import { useChatAvailable } from "../onboarding/chat-availability";
 import { useChatControls } from "../shell/chat-controls-context";
 import { readColorMode } from "../theme/color-mode";
 import { getWeatherToday } from "../api/weather-client";
@@ -112,11 +111,7 @@ export function TodayPage(props: {
   const navigate = useNavigate();
   const chatControls = useChatControls();
   const locale = useUserLocale();
-  const onboardingStatusQuery = useQuery({
-    queryKey: queryKeys.onboarding.status,
-    queryFn: getOnboardingStatus,
-    retry: false
-  });
+  const chatAvailable = useChatAvailable();
   const feed = props.feed ?? createEmptyTodayFeed();
   const disabledModuleIds = props.disabledModuleIds ?? [];
   const wellnessEnabled = props.wellnessEnabled ?? false;
@@ -695,7 +690,7 @@ export function TodayPage(props: {
                 tasks={tasks}
                 looseEnds={looseEnds}
                 locale={locale}
-                chatAvailable={hasConnectedProvider(onboardingStatusQuery.data)}
+                chatAvailable={chatAvailable}
                 onOpenTask={(id) => setDialog({ id })}
               />
             </div>

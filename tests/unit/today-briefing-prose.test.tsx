@@ -11,7 +11,6 @@ import type {
   GetDayPlanResponse,
   LocaleSettingsDto,
   MeResponse,
-  OnboardingStatusResponse,
   TaskDto
 } from "@moss/shared";
 import { localDay } from "@moss/shared";
@@ -222,7 +221,7 @@ describe("Today morning briefing prose", () => {
       definitions: [morning],
       runs,
       tasks: [replyTask],
-      onboardingStatus: onboardingStatus("needs_login"),
+      chatAvailable: false,
       openChatWith: () => {
         blockedOpenChatCalls += 1;
       }
@@ -236,7 +235,7 @@ describe("Today morning briefing prose", () => {
       definitions: [morning],
       runs,
       tasks: [replyTask],
-      onboardingStatus: onboardingStatus("ready")
+      chatAvailable: true
     });
 
     expect(ready).toMatch(/<button[^>]*>Reply<\/button>/);
@@ -324,7 +323,7 @@ function renderToday(input: {
   readonly definitions: readonly BriefingDefinitionDto[] | undefined;
   readonly runs: readonly BriefingRunDto[];
   readonly tasks?: readonly TaskDto[];
-  readonly onboardingStatus?: OnboardingStatusResponse;
+  readonly chatAvailable?: boolean;
   readonly openChatWith?: (prompt: string) => void;
   readonly dayPlan?: GetDayPlanResponse;
 }): string {
@@ -353,8 +352,10 @@ function renderToday(input: {
       }
     );
     client.setQueryData(queryKeys.goals.list, { items: [] });
-    if (input.onboardingStatus) {
-      client.setQueryData(queryKeys.onboarding.status, input.onboardingStatus);
+    if (input.chatAvailable !== undefined) {
+      client.setQueryData(queryKeys.ai.capability("chat"), {
+        route: { available: input.chatAvailable }
+      });
     }
     if (input.definitions) {
       client.setQueryData(queryKeys.briefings.definitions, { definitions: input.definitions });
@@ -393,20 +394,6 @@ function renderToday(input: {
       value: previousDocument
     });
   }
-}
-
-function onboardingStatus(installState: "needs_login" | "ready"): OnboardingStatusResponse {
-  return {
-    role: "founder",
-    state: "completed",
-    steps: {
-      cliAuth: {
-        done: installState === "ready",
-        providers: [{ kind: "anthropic", cliPresent: true, installState }]
-      },
-      connectors: { done: false }
-    }
-  };
 }
 
 function briefingDefinition(
