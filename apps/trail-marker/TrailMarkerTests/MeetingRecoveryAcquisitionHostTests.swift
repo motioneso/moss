@@ -11,6 +11,8 @@ private final class BlockingRecoveryDevice: MeetingAudioCapturing {
     private var didReturn = false
     private var stops = 0
     private var refusesCleanup = false
+    private var heldStop: XCTestExpectation?
+    private let releaseStop = DispatchSemaphore(value: 0)
     init(entered: XCTestExpectation) { self.entered = entered }
     var returned: Bool { lock.lock(); defer { lock.unlock() }; return didReturn }
     var stopCount: Int { lock.lock(); defer { lock.unlock() }; return stops }
@@ -30,9 +32,22 @@ private final class BlockingRecoveryDevice: MeetingAudioCapturing {
         lock.lock(); didReturn = true; lock.unlock()
     }
     func stop() throws {
-        lock.lock(); stops += 1; let fail = refusesCleanup; lock.unlock()
+        lock.lock()
+        stops += 1
+        let fail = refusesCleanup
+        let held = heldStop
+        heldStop = nil
+        lock.unlock()
+        if let held {
+            held.fulfill()
+            _ = releaseStop.wait(timeout: .now() + 8)
+        }
         if fail { throw MeetingAudioFailure.cleanupFailed }
     }
+    func holdNextStop(_ expectation: XCTestExpectation) {
+        lock.lock(); heldStop = expectation; lock.unlock()
+    }
+    func unblockStop() { releaseStop.signal() }
     func unblock() { release.signal() }
 }
 
@@ -267,13 +282,68 @@ final class MeetingRecoveryAcquisitionHostTests: XCTestCase {
         XCTAssertTrue(host.acquisitionPending)
         XCTAssertTrue(host.canStop)
         XCTAssertFalse(host.canResumeFromUserClick)
+        let retryEntered = expectation(description: "Shutdown retry sampled its failing stop result")
+        blocked.holdNextStop(retryEntered)
+        defer { blocked.unblockStop() }
         XCTAssertFalse(host.shutdown(reason: "Must retain the unfinished cleanup barrier"))
+        await fulfillment(of: [retryEntered], timeout: 2)
+        let failedAttemptCount = blocked.stopCount
+        blocked.failCleanup = false
+        // Every click happens while the shutdown retry still owns the device and will fail.
+        // They must coalesce into one newer retry, not disappear behind cleanupScheduled.
+        host.stopFromUserClick()
+        host.stopFromUserClick()
+        host.stopFromUserClick()
+        blocked.unblockStop()
+        try await waitUntil { !host.acquisitionPending && !host.cleanupBlocked }
+        XCTAssertEqual(host.phase, .stopped, "Stop retry must survive an overlapping failed disposal")
+        XCTAssertEqual(blocked.stopCount, failedAttemptCount + 1,
+            "Overlapping Stop requests must coalesce into one retained-handle retry")
+    }
+    func testOverlappingFailedCleanupRetryDoesNotSpinWithoutAnotherStop() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let blocked = BlockingRecoveryDevice(entered: expectation(description: "Start entered before retry failure"))
+        defer { blocked.unblock(); blocked.unblockStop() }
+        blocked.failCleanup = true
+        let factory = RecoveryDeviceFactory(initial: fixture.device, replacement: blocked)
+        let host = fixture.host(factory: factory.make) { false }
+        defer { host.shutdown(reason: "No automatic cleanup retry test") }
+        try host.acceptStart(fixture.server.command, claim: await fixture.claim(),
+            credential: fixture.pending.credential, origin: 9_000_000_000)
+        try await waitUntil { host.phase == .recording }
+        fixture.device.receiver?.fail(.sourceReconfigured)
+        host.service()
+        await fulfillment(of: [blocked.entered], timeout: 5)
+        host.pauseFromUserClick()
+        blocked.unblock()
+        try await waitUntil { host.cleanupBlocked }
+        let retryEntered = expectation(description: "Shutdown cleanup retry held with a failing result")
+        blocked.holdNextStop(retryEntered)
+        XCTAssertFalse(host.shutdown(reason: "No timer or polling may retry disposal"))
+        await fulfillment(of: [retryEntered], timeout: 2)
+        let failedAttemptCount = blocked.stopCount
+        host.stopFromUserClick()
+        host.stopFromUserClick()
+        blocked.unblockStop()
+        try await waitUntil { host.cleanupBlocked && blocked.stopCount >= failedAttemptCount + 1 }
+        // Shutdown removed the service timer. A failed coalesced retry must remain owned
+        // and visibly blocked until another explicit request; it cannot schedule itself.
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(blocked.stopCount, failedAttemptCount + 1,
+            "A failed coalesced cleanup retry must not retry itself without another Stop")
+        XCTAssertEqual(host.phase, .error)
+        XCTAssertTrue(host.acquisitionPending)
+        XCTAssertTrue(host.canStop)
+        XCTAssertFalse(host.canResumeFromUserClick)
         blocked.failCleanup = false
         host.stopFromUserClick()
         try await waitUntil { !host.acquisitionPending && !host.cleanupBlocked }
+        XCTAssertEqual(blocked.stopCount, failedAttemptCount + 2)
         XCTAssertEqual(host.phase, .stopped)
-        XCTAssertGreaterThan(blocked.stopCount, 1)
     }
+
     func testStagedPermissionLossKeepsGapEpochThroughExplicitResume() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }

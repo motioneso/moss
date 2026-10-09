@@ -360,8 +360,10 @@ final class MeetingCaptureAcquisitionTests: XCTestCase {
         clock.advance(to: origin + 12_000_000_000)
         XCTAssertThrowsError(try runtime.commitRecoveryAcquisition(ticket, at: origin + 2),
             "Trusted deadline must reject admission even when the caller supplies an earlier clock")
-        if runtime.hasPendingAcquisition { wait(for: [cleaned], timeout: 2) }
-        else { cleaned.fulfill() } // Let a surviving mutation fail assertions, never an expectation timeout.
+        // A surviving admission mutation has no staged cleanup event. Satisfy its
+        // bookkeeping, but still wait so XCTest records only the semantic failures.
+        if runtime.snapshot.state == .recording { cleaned.fulfill() }
+        wait(for: [cleaned], timeout: 2)
         XCTAssertEqual(runtime.snapshot.state, .paused)
         XCTAssertEqual(runtime.snapshot.epoch, 1)
         XCTAssertNoThrow(try runtime.terminate(at: clock.now))

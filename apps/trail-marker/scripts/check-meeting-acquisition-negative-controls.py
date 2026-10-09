@@ -20,6 +20,22 @@ SPEC.loader.exec_module(SHARED)
 RUNNER = SHARED.RUNNER
 MEETINGS = RUNNER.APP / "TrailMarker/Meetings"
 CONTROLS = [
+    ("MeetingRecoveryAcquisitionHostTests", {
+        "name": "acquisition-overlapping-stop-keeps-retry",
+        "source": MEETINGS / "MeetingCaptureAcquisition.swift",
+        "test": "testCancelledAcquisitionRetainsFailedCleanupUntilStopRetriesIt",
+        "before": "        if cleanupInProgress { cleanupRetryRequested = true }",
+        "after": "        // Mutation: lose a newer Stop behind the executing disposal.",
+        "assertion": "Stop retry must survive an overlapping failed disposal",
+    }),
+    ("MeetingRecoveryAcquisitionHostTests", {
+        "name": "acquisition-failed-retry-does-not-spin",
+        "source": MEETINGS / "MeetingCaptureAcquisition.swift",
+        "test": "testOverlappingFailedCleanupRetryDoesNotSpinWithoutAnotherStop",
+        "before": "let retry = failed && cleanupRetryRequested",
+        "after": "let retry = failed",
+        "assertion": "A failed coalesced cleanup retry must not retry itself without another Stop",
+    }),
     ("MeetingCaptureAcquisitionTests", {
         "name": "acquisition-quarantine-ignores-clock",
         "source": MEETINGS / "MeetingCaptureAcquisition.swift",

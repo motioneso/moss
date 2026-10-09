@@ -85,8 +85,10 @@ CONTROLS = [
     ("MeetingCaptureHost.swift", {
         "name": "source-queued-stop-dominance",
         "test": "testStopCancelsQueuedSourceChangeBeforeTransportAndCannotReopen",
-        "before": "                guard !Task.isCancelled, self.sourceChangeIntent?.body.requestKey == body.requestKey else { return }",
-        "after": "                // Mutation: send a source intent superseded by Stop.",
+        # Mutate Stop's cancellation itself: removing one preflight guard is masked by
+        # the transport's independent cooperative-cancellation check.
+        "before": "        cancelSourceChange()\n        if cleanupBlocked { _ = terminate(reason: \"Recording stopped.\"); return }\n        localControl(\"stop\")",
+        "after": "        // Mutation: Stop leaves its queued source task and intent live.\n        if cleanupBlocked { _ = terminate(reason: \"Recording stopped.\"); return }\n        localControl(\"stop\")",
         "assertion": "Stop must cancel queued source change before transport",
     }),
     ("MeetingCaptureHost.swift", {

@@ -106,6 +106,8 @@ final class MeetingCaptureAcquisition {
     private let lock = NSLock()
     private var phase: Phase = .starting
     private var cleanupScheduled = false
+    private var cleanupInProgress = false
+    private var cleanupRetryRequested = false
     private var failureReported = false
     private var receivers: [MeetingCaptureAcquisitionReceiver] = []
     // Only the owner queue touches devices until adopt transfers them under lock.
@@ -223,6 +225,9 @@ final class MeetingCaptureAcquisition {
         if shouldReport { failureReported = true }
         phase = .cancelled
         receivers.forEach { $0.close() }
+        // A newer Stop may arrive after the current native stop has already sampled a
+        // failure. Keep one retry intent; queued-but-not-started disposal already covers it.
+        if cleanupInProgress { cleanupRetryRequested = true }
         let schedule = !cleanupScheduled
         cleanupScheduled = true
         lock.unlock()
@@ -232,6 +237,9 @@ final class MeetingCaptureAcquisition {
 
     private func dispose() {
         // Serialized after factory/start returns. Never stop concurrently with start.
+        lock.lock()
+        cleanupInProgress = true
+        lock.unlock()
         var failed = false
         for source in MeetingAudioSource.allCases.reversed() {
             if let device = devices[source] {
@@ -241,10 +249,17 @@ final class MeetingCaptureAcquisition {
         lock.lock()
         receivers.forEach { $0.close() }
         let retired = receivers
-        phase = failed ? .cleanupFailed : .cleaned
-        cleanupScheduled = false
+        let retry = failed && cleanupRetryRequested
+        phase = retry ? .cancelled : (failed ? .cleanupFailed : .cleaned)
+        cleanupInProgress = false
+        cleanupRetryRequested = false
+        cleanupScheduled = retry
         lock.unlock()
         retired.forEach { $0.buffer.discard() }
-        emit(failed ? .cleanupFailed(ticket) : .cleanupComplete(ticket))
+        if retry {
+            // Coalesce overlapping requests into one follow-up for retained failed handles.
+            // Failure alone never retries: another pass needs a newer explicit request.
+            ownerQueue.async { self.dispose() }
+        } else { emit(failed ? .cleanupFailed(ticket) : .cleanupComplete(ticket)) }
     }
 }

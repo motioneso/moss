@@ -429,6 +429,9 @@ final class MeetingHostLifecycleTests: XCTestCase {
             let deviceStops = fixture.device.stops
             close()
             XCTAssertEqual(host.phase, .recording, "Close must not Pause or Stop")
+            // A broken visibility action already failed above. Do not turn that semantic
+            // failure into a throwing menu lookup for a state the mutation destroyed.
+            guard host.phase == .recording else { return }
             XCTAssertFalse(pill.panel.isVisible)
             XCTAssertTrue(host.recordingPresentation.showsRedDot)
             XCTAssertFalse(poll.isCancelled, "Hiding must not cancel the host loop")
