@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -59,6 +59,12 @@
         "path": "/"
       },
       {
+        "id": "finance.transactions",
+        "label": "Transactions",
+        "description": "Every bank transaction grouped by day, with a search box, an All and Needs a look filter with a count, a Predicted badge on Moss's guesses, a category picker, an Always for this merchant switch that starts off, and Confirm all.",
+        "path": "/transactions"
+      },
+      {
         "id": "finance.accounts",
         "label": "Accounts",
         "description": "Connected banks, balances, sync status, reconnect, and net worth.",
@@ -72,6 +78,10 @@
       }
     ],
     "features": [
+      {
+        "id": "finance.confirm-guesses",
+        "description": "On Transactions, a Needs a look row has a category picker, a Confirm button and an Always for this merchant switch (off by default; on, the new category becomes a rule for that merchant). Confirm all N confirms every Needs a look row the filter and search show, keeps Moss's guessed categories, makes no rules, and disappears when none are left."
+      },
       {
         "id": "finance.budget-typing",
         "description": "On Budget, type a dollar amount into a category's Assigned box and press Enter or click away to save it. Saving never asks for approval, and Available updates. If the save fails the box goes back to its old amount with an error. Every change is logged with who made it, and the log keeps only ids and amounts."
@@ -148,6 +158,7 @@
           "categoryId": { "type": "string" },
           "search": { "type": "string" },
           "pendingOnly": { "type": "boolean" },
+          "needsLookOnly": { "type": "boolean" },
           "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
         }
       },
@@ -384,6 +395,26 @@
         "handler": "storage.migrate",
         "retryLimit": 1,
         "allowManualRun": true
+      },
+      {
+        "name": "finance.review-apply",
+        "handler": "review.apply",
+        "retryLimit": 1,
+        "allowManualRun": true,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "transactionIds": {
+              "type": "array",
+              "maxItems": 200,
+              "items": { "type": "identifier" }
+            },
+            "accountIds": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
+            "months": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
+            "categoryIds": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
+            "createRule": { "type": "boolean" }
+          }
+        }
       }
     ],
     "schedules": [

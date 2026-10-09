@@ -110,9 +110,9 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
       itemStatus.set(account.itemId, (await store.getItem(account.itemId))?.status ?? "error");
     }
   }
-  // Rows still waiting for a category; the review-state column replaces this count (#3175).
+  // The same rows the Transactions screen counts under Needs a look.
   const monthTransactions = await store.listMonthTransactions(month);
-  const needsLookCount = monthTransactions.filter((txn) => txn.categoryId === null).length;
+  const needsLookCount = monthTransactions.filter((txn) => txn.reviewState === "needs_look").length;
   // Taxonomy rides along so the web budget screen renders names and group
   // order from a single call (same shape transactions.query ships).
   const categories = (await loadCategories(ports)).map((category) => ({

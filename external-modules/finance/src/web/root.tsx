@@ -12,9 +12,9 @@ import {
 import { navigate, useModulePath } from "./router";
 import { AccountsScreen } from "./screens/accounts";
 import { BudgetScreen } from "./screens/budget";
-import { FeedScreen } from "./screens/feed";
 import { ReportsScreen } from "./screens/reports";
 import { StartScreen } from "./screens/start";
+import { TransactionsScreen } from "./screens/transactions";
 import { currentLiveMessage, subscribeLive } from "./states";
 
 export type HostActions = { openAssistant: (input: { starterPrompt: string }) => void };
@@ -86,7 +86,7 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
       ) : path === "/" ? (
         <BudgetScreen />
       ) : path === "/transactions" ? (
-        <FeedScreen hostActions={props.hostActions} />
+        <TransactionsScreen />
       ) : path === "/accounts" ? (
         <AccountsScreen hostActions={props.hostActions} />
       ) : path === "/reports" ? (

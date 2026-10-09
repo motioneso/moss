@@ -222,6 +222,25 @@ describe("finance manifest contract (#1146)", () => {
         handler: "storage.migrate",
         retryLimit: 1,
         allowManualRun: true
+      },
+      {
+        // #3176: confirm or change Needs a look rows. Parallel id lists (queue params
+        // allow arrays of scalars only); one job so the per-user manual singleton
+        // never drops part of a Confirm all.
+        name: "finance.review-apply",
+        handler: "review.apply",
+        retryLimit: 1,
+        allowManualRun: true,
+        paramsSchema: {
+          type: "object",
+          fields: {
+            transactionIds: { type: "array", maxItems: 200, items: { type: "identifier" } },
+            accountIds: { type: "array", maxItems: 200, items: { type: "identifier" } },
+            months: { type: "array", maxItems: 200, items: { type: "identifier" } },
+            categoryIds: { type: "array", maxItems: 200, items: { type: "identifier" } },
+            createRule: { type: "boolean" }
+          }
+        }
       }
     ]);
     expect(result.manifest.worker?.schedules).toEqual([
@@ -275,6 +294,7 @@ describe("finance manifest contract (#1146)", () => {
       "categoryId",
       "search",
       "pendingOnly",
+      "needsLookOnly",
       "limit"
     ]);
     expect(querySchema.required).toBeUndefined();

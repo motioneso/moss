@@ -16,6 +16,7 @@ import type {
   TransactionRecord
 } from "../../domain/index.js";
 import {
+  contentHash,
   DEFAULT_CATEGORIES,
   normalizePayee,
   NS,
@@ -61,6 +62,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   const categoryId = readString(input, "categoryId");
   const search = readString(input, "search")?.toLowerCase();
   const pendingOnly = readBool(input, "pendingOnly") ?? false;
+  const needsLookOnly = readBool(input, "needsLookOnly") ?? false;
   const limit = readInt(input, "limit", { min: 1, max: 200 }) ?? 50;
 
   // FIN-06c (#1166) Task 9: one store call for the requested month, across
@@ -103,6 +105,11 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     );
   }
   if (pendingOnly) transactions = transactions.filter((record) => record.pending);
+  // Household rows are read-only here, so only the viewer's own rows can need a look.
+  const needsLook = (record: FeedRow): boolean =>
+    record.shared !== true && record.reviewState === "needs_look";
+  const needsLookCount = transactions.filter(needsLook).length;
+  if (needsLookOnly) transactions = transactions.filter(needsLook);
   // Chunks are date-desc/id-asc internally; re-sort after the cross-account
   // merge so the feed order is stable regardless of kv.list order.
   transactions.sort((a, b) =>
@@ -114,6 +121,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
   return {
     month,
     transactions,
+    needsLookCount,
     categories: await loadCategories(ports),
     accounts: (accounts.accounts as unknown[] | undefined) ?? []
   };
@@ -259,4 +267,76 @@ export const categorizeApplyHandler: ToolFactory = (ports) => async (input) => {
   await store.putTransaction(record);
   await logCategorize(store, "user", ids, previousCategoryId);
   return { status: "ok", transaction: record };
+};
+
+const REVIEW_BATCH_MAX = 200;
+
+function readIdList(params: Record<string, unknown>, key: string): string[] {
+  const value = params[key];
+  if (!Array.isArray(value) || value.length < 1 || value.length > REVIEW_BATCH_MAX) {
+    throw new InputError(`${key} must list 1 to ${REVIEW_BATCH_MAX} ids`);
+  }
+  if (!value.every((item) => typeof item === "string" && item.length > 0)) {
+    throw new InputError(`${key} must hold strings`);
+  }
+  return value as string[];
+}
+
+/**
+ * Queue path for the Transactions screen: confirm or change the category of one
+ * or many rows. The lists line up by position. Every row is checked before any
+ * is written, so a bad id leaves the whole batch untouched. A merchant rule is
+ * made only for a single row and only when asked.
+ */
+export const reviewApplyHandler: ToolFactory = (ports) => async (input) => {
+  const jobKind = readString(input, "jobKind", { required: true });
+  if (jobKind !== "finance.review-apply") {
+    throw new InputError("jobKind is not supported");
+  }
+  const params = input.params;
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    throw new InputError("params must be an object");
+  }
+  const command = params as Record<string, unknown>;
+  const transactionIds = readIdList(command, "transactionIds");
+  const accountIds = readIdList(command, "accountIds");
+  const months = readIdList(command, "months");
+  const categoryIds = readIdList(command, "categoryIds");
+  const createRule = readBool(command, "createRule") ?? false;
+  if (
+    accountIds.length !== transactionIds.length ||
+    months.length !== transactionIds.length ||
+    categoryIds.length !== transactionIds.length
+  ) {
+    throw new InputError("id lists must be the same length");
+  }
+  if (createRule && transactionIds.length !== 1) {
+    throw new InputError("a merchant rule can only be made for one transaction");
+  }
+
+  const store = await ports.store();
+  const records: TransactionRecord[] = [];
+  for (let index = 0; index < transactionIds.length; index += 1) {
+    const month = months[index]!;
+    if (!MONTH.test(month)) throw new InputError("month must be YYYY-MM");
+    const { record } = await applyCategory(ports, store, {
+      transactionId: transactionIds[index]!,
+      accountId: accountIds[index]!,
+      month,
+      categoryId: categoryIds[index]!
+    });
+    records.push(record);
+  }
+  for (const record of records) await store.putTransaction(record);
+  if (createRule) {
+    const payeeKey = normalizePayee(records[0]!.name);
+    if (payeeKey !== "") {
+      await ports.kv.set(NS.rules, `rule:${contentHash(payeeKey)}`, {
+        payeeKey,
+        categoryId: categoryIds[0]!,
+        createdAt: ports.now().toISOString()
+      });
+    }
+  }
+  return { status: "ok", confirmed: records.length };
 };
