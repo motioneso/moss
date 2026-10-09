@@ -145,6 +145,41 @@ describe("finance budget.status (#1148)", () => {
     );
   });
 
+  it("reports ready to assign from account balances, card debt and each envelope (#3173)", async () => {
+    const kv = fakeKv();
+    await seedJuly(kv);
+    await kv.set(NS.connections, "item:i1", {
+      itemId: "i1",
+      institutionId: "ins_1",
+      connectedAt: NOW.toISOString(),
+      status: "reauth-required"
+    });
+    const account = (accountId: string, type: string, balanceCents: number) => ({
+      accountId,
+      itemId: "i1",
+      name: accountId,
+      officialName: null,
+      type,
+      subtype: null,
+      mask: null,
+      balanceCents,
+      isoCurrency: "USD",
+      updatedAt: "2026-07-17T00:00:00Z"
+    });
+    await kv.set(NS.accounts, "acc-1", account("acc-1", "depository", 187_655));
+    await kv.set(NS.accounts, "acc-2", account("acc-2", "credit", 10_000));
+
+    const result = await budgetStatusHandler(fakePorts(kv))({ month: "2026-07" });
+
+    // 1876.55 in checking - 100.00 owed on the card - 376.55 left in groceries.
+    expect(result.readyToAssignCents).toBe(140_000);
+    expect(result.hasBank).toBe(true);
+    expect(result.accounts).toEqual([
+      expect.objectContaining({ accountId: "acc-1", balanceCents: 187_655, stale: true }),
+      expect.objectContaining({ accountId: "acc-2", balanceCents: -10_000, stale: true })
+    ]);
+  });
+
   it("rolls carry and TBB into a later month with no data of its own", async () => {
     const kv = fakeKv();
     await seedJuly(kv);

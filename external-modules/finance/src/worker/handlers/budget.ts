@@ -24,6 +24,9 @@ import {
   type BudgetLedger,
   type BudgetMonthState,
   type FinanceStore,
+  readyToAssignCents,
+  signedBalanceCents,
+  tableGroupFor,
   type TransactionRecord
 } from "../../domain/index.js";
 import type { ToolFactory } from "../registry.js";
@@ -100,9 +103,38 @@ export const budgetStatusHandler: ToolFactory = (ports) => async (input) => {
   const month = readMonth(input);
   const store = await ports.store();
   const state = await computeMonthState(ports, store, month);
+  const accounts = await store.listAccounts();
+  const itemStatus = new Map<string, string>();
+  for (const account of accounts) {
+    if (!itemStatus.has(account.itemId)) {
+      itemStatus.set(account.itemId, (await store.getItem(account.itemId))?.status ?? "error");
+    }
+  }
+  // Rows still waiting for a category; the review-state column replaces this count (#3175).
+  const monthTransactions = await store.listMonthTransactions(month);
+  const needsLookCount = monthTransactions.filter((txn) => txn.categoryId === null).length;
   // Taxonomy rides along so the web budget screen renders names and group
   // order from a single call (same shape transactions.query ships).
-  return { month, state, categories: await loadCategories(ports) };
+  const categories = (await loadCategories(ports)).map((category) => ({
+    ...category,
+    tableGroup: tableGroupFor(category.group)
+  }));
+  return {
+    month,
+    state,
+    categories,
+    hasBank: accounts.length > 0,
+    hasBudget: (await store.listAssignmentMonths()).length > 0,
+    readyToAssignCents: readyToAssignCents(accounts, state.categories),
+    needsLookCount,
+    accounts: accounts.map((account) => ({
+      accountId: account.accountId,
+      name: account.name,
+      balanceCents: signedBalanceCents(account),
+      asOf: account.updatedAt,
+      stale: itemStatus.get(account.itemId) !== "connected"
+    }))
+  };
 };
 
 /** Shared write path: validate, then SET the assigned category's total. */

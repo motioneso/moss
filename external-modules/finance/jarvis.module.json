@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.5.16",
+  "version": "0.5.17",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -47,6 +47,16 @@
       "app.finance_balance_snapshots",
       "app.finance_budget_assignments",
       "app.finance_categories"
+    ]
+  },
+  "appMap": {
+    "screens": [
+      {
+        "id": "finance.budget",
+        "label": "Budget",
+        "description": "This month's budget: money ready to assign, and each category's assigned, spent and available amounts.",
+        "path": "/"
+      }
     ]
   },
   "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },

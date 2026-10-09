@@ -33,4 +33,28 @@ export const MODULE_STYLES = `
 .fnm-report-bar-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.25rem 0; }
 .fnm-report-bar-row > span:first-child { flex: 0 0 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fnm-report-trend { width: 100%; height: 8rem; display: block; }
+/* #3173 Budget: layout only. Desktop shows the table and rail, phone the row list. */
+.fnm-tabs { margin-bottom: var(--space-5); overflow-x: auto; }
+.fnm-hero { margin-bottom: var(--space-6); }
+.fnm-pad { padding: 0; }
+.fnm-page { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: var(--space-8); }
+.fnm-block { display: flex; flex-direction: column; gap: var(--space-7); }
+.fnm-block--tight { gap: var(--space-3); }
+.fnm-block--tiny { gap: var(--space-1); }
+.fnm-end { align-items: flex-end; }
+.fnm-inline { display: inline-flex; align-items: center; gap: var(--space-2); }
+.fnm-rail { display: flex; flex-direction: column; gap: var(--space-6); }
+.fnm-stat-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.fnm-month-step { display: flex; align-items: center; gap: var(--space-3); }
+.fnm-fixed { table-layout: fixed; width: 100%; }
+.fnm-col-name { width: 34%; }
+.fnm-cell-stack { display: flex; flex-direction: column; gap: var(--space-2); min-width: 9rem; }
+.fnm-cell-meter { width: 7rem; margin-left: auto; }
+.fnm-phone-only { display: none; }
+@media (max-width: 720px) {
+  .fnm-root { padding: 1rem 0.75rem 2rem; }
+  .fnm-page { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
+  .fnm-desktop-only { display: none; }
+  .fnm-phone-only { display: block; }
+}
 `;

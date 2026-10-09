@@ -36,4 +36,19 @@ describe("Finance module root (#1759)", () => {
       .map((node) => node.props.href as string | undefined);
     expect(hrefs).toContain("/settings?section=modules&module=finance");
   });
+
+  it("shows Budget, Transactions and Accounts tabs, with Budget at the module home (#3173)", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(Root, { hostActions: { openAssistant: vi.fn() } }));
+    });
+
+    const labels = renderer.root
+      .findAll((node) => node.props.className === "jds-segmented__opt")
+      .map((node) => node.props.children as string);
+    expect(labels).toEqual(["Budget", "Transactions", "Accounts"]);
+    expect(
+      renderer.root.findAll((node) => node.props["data-screen"] === "budget")
+    ).not.toHaveLength(0);
+  });
 });
