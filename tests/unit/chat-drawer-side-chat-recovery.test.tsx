@@ -57,6 +57,7 @@ import {
   sendChatTurn
 } from "../../apps/web/src/api/client.js";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
+import { boundDraftKey, unselectedDraftKey } from "../../apps/web/src/chat/chat-draft-storage.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
 import { moduleChatSurface } from "../../apps/web/src/shell/chat-surface-key.js";
 
@@ -353,6 +354,50 @@ it("keeps a collided module fallback active without replacing canonical A", asyn
 
   expect(renderer.root.findByType("textarea").props.value).toBe("Fallback A");
   expect(JSON.parse(drafts.get("moss.chatDrafts")!).drafts.a).toBe("Canonical A");
+});
+
+it("binds an edited restored module fallback after remount without replacing canonical A", async () => {
+  const moduleSurface = moduleChatSurface("job-search", "profile-1") as ChatSurface;
+  const fallbackKey = unselectedDraftKey(moduleSurface);
+  const drafts = new Map([
+    [
+      "moss.chatDrafts",
+      JSON.stringify({
+        ownerId: "owner",
+        drafts: { [fallbackKey]: "Restored fallback", a: "Canonical A" }
+      })
+    ]
+  ]);
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => drafts.get(key) ?? null,
+    setItem: (key: string, value: string) => drafts.set(key, value),
+    removeItem: (key: string) => drafts.delete(key)
+  });
+  const privacy = deferred<{ incognito: boolean; threadId: string }>();
+  vi.mocked(getChatPrivacyState).mockImplementationOnce(() => privacy.promise);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(drawer(client, undefined, "owner", moduleSurface));
+    await Promise.resolve();
+  });
+
+  expect(renderer.root.findByType("textarea").props.value).toBe("Restored fallback");
+  await act(async () =>
+    renderer.root
+      .findByType("textarea")
+      .props.onChange({ target: { value: "Restored fallback, edited" } })
+  );
+  await act(async () => {
+    privacy.resolve({ incognito: false, threadId: "a" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(renderer.root.findByType("textarea").props.value).toBe("Restored fallback, edited");
+  expect(JSON.parse(drafts.get("moss.chatDrafts")!).drafts).toMatchObject({
+    a: "Canonical A",
+    [boundDraftKey(moduleSurface, "a")]: "Restored fallback, edited"
+  });
 });
 
 it("retains a cached transcript and restores the composer after a failed refetch", async () => {

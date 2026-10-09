@@ -79,7 +79,7 @@ export function useChatDraftBinding(input: {
   const changeDraft = (draft: string) => {
     if (draftKey === fallbackKey) {
       if (!draft) origin.current = null;
-      else if (drafts[fallbackKey] === undefined || drafts[fallbackKey] === "") {
+      else if (draft !== drafts[fallbackKey]) {
         origin.current = { surface, generation: generation.current };
       }
     }
