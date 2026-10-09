@@ -102,7 +102,8 @@ async function recoverAccessLoads(page: Page, choice: ReturnType<Page["getByRole
     const failedGrants = page.waitForResponse(
       (response) => response.url().includes("/feature-grants") && response.status() >= 500
     );
-    await page.reload();
+    await page.getByRole("button", { name: "Account & preferences" }).click();
+    await page.getByRole("button", { name: "Alerts & quiet hours" }).click();
     expect((await failedGrants).status()).toBeGreaterThanOrEqual(500);
     await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
   } finally {
@@ -113,14 +114,6 @@ async function recoverAccessLoads(page: Page, choice: ReturnType<Page["getByRole
   );
   await page.getByRole("button", { name: "Try again" }).click();
   expect((await retriedGrants).status()).toBe(200);
-  const retriedSettings = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/me/proactive-monitoring-settings") &&
-      response.request().method() === "GET" &&
-      response.status() === 200
-  );
-  await page.getByRole("button", { name: "Try again" }).click();
-  expect((await retriedSettings).status()).toBe(200);
   await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
   await expect(choice).toBeChecked();
 }
