@@ -312,3 +312,24 @@ describe("finance categorization pipeline (#1147)", () => {
     expect(result.map((record) => record.reviewState)).toEqual(["confirmed", "needs_look"]);
   });
 });
+
+describe("rows nothing could place (review finding 2)", () => {
+  it("marks an unplaced row as needing a look, with and without an AI port", async () => {
+    const records = [tx({ id: "t-x", name: "Mystery Vendor" })];
+    const noAi = await categorize(records, [], [...DEFAULT_CATEGORIES], null, ASK);
+    expect(noAi[0]).toMatchObject({ categoryId: null, reviewState: "needs_look" });
+    const emptyAi = await categorize(records, [], [...DEFAULT_CATEGORIES], async () => ({}), ASK);
+    expect(emptyAi[0]).toMatchObject({ categoryId: null, reviewState: "needs_look" });
+  });
+
+  it("marks a row whose AI guess names an unknown category as needing a look", async () => {
+    const result = await categorize(
+      [tx({ id: "t-y", name: "Mystery Vendor" })],
+      [],
+      [...DEFAULT_CATEGORIES],
+      async () => ({ "t-y": { categoryId: "nope", confidence: 0.99 } }),
+      ASK
+    );
+    expect(result[0]).toMatchObject({ categoryId: null, reviewState: "needs_look" });
+  });
+});

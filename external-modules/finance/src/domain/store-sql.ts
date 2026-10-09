@@ -99,7 +99,7 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
       record.pendingTransactionId ?? null,
       record.categorizedBy ?? null,
       record.notes ?? null,
-      record.reviewState ?? "confirmed",
+      record.reviewState ?? (record.categoryId == null ? "needs_look" : "confirmed"),
       record.aiConfidence ?? null
     ]
   );

@@ -105,6 +105,13 @@ describe("sqlStore (FIN-06b #1166)", () => {
     expect(db.calls[0]!.params.slice(-2)).toEqual(["needs_look", 0.42]);
   });
 
+  it("putTransaction stores an uncategorized row with no review state as needs_look", async () => {
+    const db = fakeDb();
+    const { reviewState: _drop, ...bare } = tx({ id: "u", categoryId: null });
+    await sqlStore(db).putTransaction(bare);
+    expect(db.calls[0]!.params.slice(-2)).toEqual(["needs_look", null]);
+  });
+
   it("getTransactionChunk returns null on zero rows", async () => {
     const store = sqlStore(fakeDb([[]]));
     expect(await store.getTransactionChunk("acc1", "2026-07")).toBeNull();
