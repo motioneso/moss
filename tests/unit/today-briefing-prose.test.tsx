@@ -373,6 +373,14 @@ function renderToday(input: {
       }
     );
     client.setQueryData(queryKeys.goals.list, { items: [] });
+    if (input.member) {
+      // Member-shaped onboarding status: no connected provider on this role.
+      client.setQueryData(queryKeys.onboarding.status, {
+        role: "member",
+        completed: true,
+        steps: { apiKeyOptOut: { done: false }, connectors: { done: false } }
+      });
+    }
     if (input.chatAvailable !== undefined) {
       client.setQueryData(queryKeys.ai.capability("chat"), {
         route: { available: input.chatAvailable }
