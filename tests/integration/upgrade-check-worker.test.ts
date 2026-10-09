@@ -2,13 +2,15 @@ import { Client } from "pg";
 import { sql, type Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { createDatabase, type MossDatabase } from "@moss/db";
-import { handleUpgradeCheckJob, UPGRADE_NOTIFY_QUEUE } from "@moss/jobs";
+import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
+import { NotificationsRepository } from "@moss/notifications";
+import { handleUpgradeCheckJob, handleUpgradeNotifyJob, UPGRADE_NOTIFY_QUEUE } from "@moss/jobs";
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
 
 const ownerId = "00000000-0000-4000-8000-0000000000a1";
 
 let worker: Kysely<MossDatabase>;
+let appDb: Kysely<MossDatabase>;
 let bootstrap: Client;
 
 beforeAll(async () => {
@@ -21,12 +23,14 @@ beforeAll(async () => {
     [ownerId]
   );
   worker = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 1 });
+  appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
 });
 
 afterAll(async () => {
   vi.unstubAllGlobals();
   delete process.env.JARVIS_APP_VERSION;
   await worker?.destroy();
+  await appDb?.destroy();
   await bootstrap?.end();
 });
 
@@ -52,6 +56,18 @@ describe("upgrade check as the worker role", () => {
       UPGRADE_NOTIFY_QUEUE,
       expect.objectContaining({ actorUserId: ownerId, version: "v1.1.0" }),
       expect.anything()
+    );
+
+    const payload = boss.send.mock.calls[0]?.[1] as { actorUserId: string; version: string };
+    await new DataContextRunner(appDb).withDataContext(
+      { actorUserId: payload.actorUserId, requestId: "req-upgrade-notify" },
+      async (scopedDb) => {
+        await handleUpgradeNotifyJob({ data: payload } as never, scopedDb, {} as never);
+        const notices = await new NotificationsRepository().listVisible(scopedDb);
+        expect(notices.notifications.map((n) => n.metadata)).toContainEqual(
+          expect.objectContaining({ kind: "upgrade_available", version: "v1.1.0" })
+        );
+      }
     );
   });
 });

@@ -23,6 +23,8 @@ CREATE POLICY instance_settings_latest_release_update ON app.instance_settings
   USING (key = 'latest_release')
   WITH CHECK (key = 'latest_release');
 
+-- Applies to the whole migration-owner role, so it is deliberately broad: it
+-- exposes only the bootstrap owner row to the definer functions in this file.
 CREATE POLICY users_bootstrap_owner_select ON app.users
   FOR SELECT
   TO jarvis_migration_owner
