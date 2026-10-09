@@ -101,12 +101,16 @@ export const newsModuleManifest = {
       "sql/0200_news_source_credentials.sql",
       // #2030 (part of #1586) — refresh attempt/success/failure history columns.
       "sql/0203_news_refresh_history.sql",
+      // #3201 — lift FORCE row security so 0204 and 0218 can rewrite existing sources.
+      "sql/0203a_news_sources_open_for_upgrade.sql",
       // #2006 — health states distinguish rejected credentials from temporary outages.
       "sql/0204_news_source_health_states.sql",
       // #2006 QA fix — complete the worker's narrow credential-status read grant.
       "sql/0205_news_credential_status_worker_grant.sql",
       // #2282 — subreddit sources, per-source fetch-host allowlist, workaround failure count.
-      "sql/0218_news_source_kinds.sql"
+      "sql/0218_news_source_kinds.sql",
+      // #3201 — restore FORCE row security.
+      "sql/0218a_news_sources_force_rls.sql"
     ],
     migrationDirectories: ["packages/news/sql"],
     ownedTables: [
