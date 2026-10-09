@@ -1,9 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { execUatSql } from "./job-search-board-sql.js";
 
-// Uses the actual Settings controls, the installed scheduling worker, and the configured
-// briefing writer provider. The UAT stack is disposable and has no registered push device.
+// Uses the actual Settings controls and installed scheduling worker. Its disposable third-party
+// briefing writer fixture is scripted, so this does not prove a real model reply or push device.
 export const uatLevel = {
   level: "admin+data",
   without: [],
@@ -59,7 +60,37 @@ async function quietHours(page: Page) {
 async function notifications(page: Page) {
   const response = await page.request.get("/api/notifications");
   expect(response.ok(), `notifications -> ${response.status()}`).toBeTruthy();
-  return (await response.json()) as { notifications: readonly { title: string }[] };
+  return (await response.json()) as { notifications: readonly { id: string; title: string }[] };
+}
+
+async function briefingNotifications(page: Page) {
+  return (await notifications(page)).notifications.filter(
+    (item) => item.title === NOTIFICATION_TITLE
+  );
+}
+
+function projectName(): string {
+  const value = process.env.JARVIS_UAT_PROJECT_NAME;
+  if (!value?.startsWith("uat-"))
+    throw new Error("JARVIS_UAT_PROJECT_NAME must name an isolated UAT stack");
+  return value;
+}
+
+function summaryJob(releaseAt: Date): { readonly state: string; readonly output: unknown } | null {
+  const row = execUatSql(
+    projectName(),
+    `SELECT state || '|' || COALESCE(output::text, 'null')
+     FROM pgboss.job
+     WHERE name = 'notifications.push.summary'
+       AND data->>'recipientUserId' = '${UAT_ADMIN_ID}'
+       AND data->>'releaseAt' = '${releaseAt.toISOString()}'
+     ORDER BY created_on DESC
+     LIMIT 1`
+  ).trim();
+  if (!row) return null;
+  const [state, output] = row.split("|", 2);
+  if (!state || output === undefined) throw new Error(`Malformed summary-job row: ${row}`);
+  return { state, output: JSON.parse(output) };
 }
 
 test("Profile quiet hours defer a scheduled briefing notification until the saved local end (#3158)", async ({
@@ -78,20 +109,12 @@ test("Profile quiet hours defer a scheduled briefing notification until the save
       locale: { timezone: TIME_ZONE }
     });
 
-  const now = new Date();
-  const scheduledAt = new Date(now.getTime());
-  scheduledAt.setUTCSeconds(0, 0);
-  scheduledAt.setUTCMinutes(scheduledAt.getUTCMinutes() + 2);
-  const releaseAt = new Date(scheduledAt.getTime() + 3 * 60_000);
-  const start = hhmm(now);
-  const end = hhmm(releaseAt);
-
   const from = page.getByLabel("Quiet hours from");
   const to = page.getByLabel("Quiet hours to");
-  await from.fill(start);
-  await expect.poll(async () => (await quietHours(page)).quietHours.start).toBe(start);
-  await to.fill(end);
-  await expect.poll(async () => (await quietHours(page)).quietHours.end).toBe(end);
+  await from.fill("22:00");
+  await expect.poll(async () => (await quietHours(page)).quietHours.start).toBe("22:00");
+  await to.fill("07:00");
+  await expect.poll(async () => (await quietHours(page)).quietHours.end).toBe("07:00");
   await page
     .locator("label.jds-switch")
     .filter({ has: page.locator('input[aria-label="Enable quiet hours"]') })
@@ -100,14 +123,37 @@ test("Profile quiet hours defer a scheduled briefing notification until the save
     .poll(async () => (await quietHours(page)).quietHours)
     .toMatchObject({
       enabled: true,
+      start: "22:00",
+      end: "07:00",
+      timezone: null
+    });
+  await page.reload();
+  await expect(page.getByLabel("Quiet hours from")).toHaveValue("22:00");
+  await expect(page.getByLabel("Quiet hours to")).toHaveValue("07:00");
+  await expect
+    .poll(async () => (await page.request.get("/api/me/locale")).json())
+    .toMatchObject({ locale: { timezone: TIME_ZONE } });
+
+  const now = new Date();
+  const scheduledAt = new Date(now.getTime());
+  scheduledAt.setUTCSeconds(0, 0);
+  scheduledAt.setUTCMinutes(scheduledAt.getUTCMinutes() + 2);
+  const releaseAt = new Date(scheduledAt.getTime() + 3 * 60_000);
+  const start = hhmm(now);
+  const end = hhmm(releaseAt);
+
+  await from.fill(start);
+  await expect.poll(async () => (await quietHours(page)).quietHours.start).toBe(start);
+  await to.fill(end);
+  await expect.poll(async () => (await quietHours(page)).quietHours.end).toBe(end);
+  await expect
+    .poll(async () => (await quietHours(page)).quietHours)
+    .toMatchObject({
+      enabled: true,
       start,
       end,
       timezone: null
     });
-  await page.reload();
-  await expect(page.getByLabel("Quiet hours from")).toHaveValue(start);
-  await expect(page.getByLabel("Quiet hours to")).toHaveValue(end);
-
   const definition = await page.request.post("/api/briefings/definitions", {
     data: {
       title: "3158 scheduled quiet-hours proof",
@@ -139,23 +185,30 @@ test("Profile quiet hours defer a scheduled briefing notification until the save
     )
     .toBe("succeeded");
 
-  expect(
-    (await notifications(page)).notifications.some((item) => item.title === NOTIFICATION_TITLE)
-  ).toBe(false);
+  expect(Date.now()).toBeLessThan(releaseAt.getTime());
+  expect(await briefingNotifications(page)).toHaveLength(0);
+  await expect.poll(() => summaryJob(releaseAt)).toEqual({ state: "created", output: null });
 
   const waitMs = Math.max(0, releaseAt.getTime() - Date.now() + 2_000);
   if (waitMs > 0) await page.waitForTimeout(waitMs);
   await expect
-    .poll(
-      async () =>
-        (await notifications(page)).notifications.some((item) => item.title === NOTIFICATION_TITLE),
-      {
-        timeout: 30_000
-      }
-    )
-    .toBe(true);
+    .poll(async () => briefingNotifications(page).then((items) => items.map((item) => item.id)), {
+      timeout: 30_000
+    })
+    .toHaveLength(1);
+  const [released] = await briefingNotifications(page);
+  expect(released?.id).toEqual(expect.any(String));
+  await page.waitForTimeout(1_000);
+  expect((await briefingNotifications(page)).map((item) => item.id)).toEqual([released!.id]);
+  await expect
+    .poll(() => summaryJob(releaseAt), { timeout: 30_000 })
+    .toEqual({
+      state: "completed",
+      output: { delivered: 0, alreadyDelivered: 0, temporaryFailures: 0, reasons: [] }
+    });
   console.log(
-    `[3158 live proof] Profile saved ${TIME_ZONE} ${start}-${end}; scheduled configured-provider briefing ` +
-      `completed while its normal notification stayed absent until ${releaseAt.toISOString()}`
+    `[3158 live proof] Profile saved and reloaded overnight ${TIME_ZONE} 22:00-07:00, then saved ` +
+      `${start}-${end}; scheduled fixture briefing completed before its notification released once at ` +
+      `${releaseAt.toISOString()}`
   );
 });

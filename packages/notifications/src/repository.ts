@@ -146,6 +146,7 @@ export function computeDeferredUntil(
   settings: QuietHoursSettings,
   tz: string
 ): Date | null {
+  if (!settings.enabled) return null;
   return deferUntilQuietHoursEnd(now, settings.start, settings.end, tz);
 }
 

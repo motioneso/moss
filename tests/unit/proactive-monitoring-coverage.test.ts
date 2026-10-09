@@ -523,9 +523,11 @@ describe("spam filter", () => {
     ["Pacific/Kiritimati", "2026-10-08T09:30:00Z", "22:00", "07:00", "2026-10-08T17:00:00.000Z"],
     ["America/Los_Angeles", "2026-03-08T09:45:00Z", "22:00", "02:30", "2026-03-08T10:00:00.000Z"],
     ["America/Los_Angeles", "2026-11-01T08:10:00Z", "22:00", "01:30", "2026-11-01T09:30:00.000Z"],
-    ["America/Los_Angeles", "2026-11-01T09:10:00Z", "22:00", "01:30", "2026-11-01T09:30:00.000Z"]
+    ["America/Los_Angeles", "2026-11-01T09:10:00Z", "22:00", "01:30", "2026-11-01T09:30:00.000Z"],
+    ["America/Los_Angeles", "2026-11-01T08:45:00Z", "22:00", "01:30", null],
+    ["America/Los_Angeles", "2026-11-01T09:30:00Z", "22:00", "01:30", null]
   ])(
-    "defers to the same local end in %s",
+    "applies quiet-hours membership and release in %s",
     async (timeZone, nowIso, startLocalTime, endLocalTime, expected) => {
       const { policy } = spamHarness();
       const verdict = await policy.check(

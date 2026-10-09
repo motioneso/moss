@@ -132,4 +132,17 @@ describe("computeDeferredUntil", () => {
       computeDeferredUntil(new Date("2026-03-08T09:45:00Z"), settings, "America/Los_Angeles")
     ).toEqual(new Date("2026-03-08T10:00:00Z"));
   });
+
+  it("does not defer when quiet hours are disabled", () => {
+    const settings: QuietHoursSettings = {
+      enabled: false,
+      start: "22:00",
+      end: "07:00",
+      timezone: "America/Chicago"
+    };
+
+    expect(
+      computeDeferredUntil(new Date("2026-10-09T03:30:00Z"), settings, "America/Chicago")
+    ).toBe(null);
+  });
 });
