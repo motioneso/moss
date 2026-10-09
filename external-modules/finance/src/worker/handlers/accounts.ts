@@ -44,6 +44,7 @@ type AccountView = {
 export type BankView = {
   itemId: string;
   institutionId: string | null;
+  institutionName: string | null;
   status: ItemRecord["status"];
   lastSyncAt: string | null;
   message: string | null;
@@ -164,6 +165,7 @@ export const accountsListHandler: ToolFactory = (ports) => async (input) => {
       return {
         itemId,
         institutionId: item?.institutionId ?? null,
+        institutionName: item?.institutionName ?? null,
         status: item?.status ?? "error",
         lastSyncAt: item?.lastSyncAt ?? null,
         message: item?.lastErrorDetail?.message ?? null

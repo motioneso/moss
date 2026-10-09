@@ -81,6 +81,8 @@ export interface PlaidClient {
   accountsGet(
     accessToken: string
   ): Promise<{ institutionId: string | null; accounts: PlaidAccount[] }>;
+  /** Public institution lookup: the bank's display name, or null when Plaid has none. */
+  institutionGet(institutionId: string): Promise<{ name: string | null }>;
   accountsBalanceGet(accessToken: string): Promise<{ accounts: PlaidAccount[] }>;
   transactionsSync(
     accessToken: string,
@@ -233,6 +235,16 @@ export function createPlaid(
         institutionId: (item.institution_id as string | null) ?? null,
         accounts: (Array.isArray(json.accounts) ? (json.accounts as Json[]) : []).map(mapAccount)
       };
+    },
+
+    async institutionGet(institutionId) {
+      const json = await call("/institutions/get_by_id", {
+        institution_id: institutionId,
+        country_codes: ["US"]
+      });
+      const institution = (json.institution ?? {}) as Json;
+      const name = typeof institution.name === "string" ? institution.name.trim() : "";
+      return { name: name === "" ? null : name };
     },
 
     async accountsBalanceGet(accessToken) {

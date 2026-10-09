@@ -106,11 +106,13 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
 }
 
 const ITEM_COLUMNS =
-  "item_id, institution_id, connected_at, status, last_sync_at, last_error, last_error_detail";
+  "item_id, institution_id, institution_name, connected_at, status, last_sync_at, last_error, " +
+  "last_error_detail";
 
 type ItemRow = {
   item_id: string;
   institution_id: string | null;
+  institution_name?: string | null;
   connected_at: string;
   status: ItemRecord["status"];
   last_sync_at: string | null;
@@ -131,6 +133,7 @@ function rowToItem(row: ItemRow): ItemRecord {
   return {
     itemId: row.item_id,
     institutionId: row.institution_id,
+    institutionName: row.institution_name ?? undefined,
     connectedAt: row.connected_at,
     status: row.status,
     lastSyncAt: row.last_sync_at ?? undefined,
@@ -190,16 +193,18 @@ export function sqlStore(db: FinanceDb): FinanceStore {
 
     async putItem(record) {
       await db.query(
-        "INSERT INTO app.finance_items (owner_user_id, item_id, institution_id, connected_at, status, " +
-          "last_sync_at, last_error, last_error_detail) " +
-          "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7) " +
+        "INSERT INTO app.finance_items (owner_user_id, item_id, institution_id, institution_name, " +
+          "connected_at, status, last_sync_at, last_error, last_error_detail) " +
+          "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8) " +
           "ON CONFLICT (owner_user_id, item_id) DO UPDATE SET institution_id = EXCLUDED.institution_id, " +
+          "institution_name = EXCLUDED.institution_name, " +
           "connected_at = EXCLUDED.connected_at, status = EXCLUDED.status, " +
           "last_sync_at = EXCLUDED.last_sync_at, last_error = EXCLUDED.last_error, " +
           "last_error_detail = EXCLUDED.last_error_detail",
         [
           record.itemId,
           record.institutionId ?? null,
+          record.institutionName ?? null,
           record.connectedAt,
           record.status,
           record.lastSyncAt ?? null,

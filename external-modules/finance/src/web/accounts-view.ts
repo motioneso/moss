@@ -16,6 +16,7 @@ export interface AccountsRow {
 export interface AccountsBank {
   itemId: string;
   institutionId: string | null;
+  institutionName?: string | null;
   status: "connected" | "reauth-required" | "error";
   lastSyncAt: string | null;
   message: string | null;
@@ -110,7 +111,8 @@ export function buildAccountsView(
       };
     });
     const status = bank?.status ?? "error";
-    const name = itemIds.length === 1 ? "Connected bank" : `Bank ${index + 1}`;
+    const known = bank?.institutionName?.trim();
+    const name = known ? known : itemIds.length === 1 ? "Connected bank" : `Bank ${index + 1}`;
     if (status === "connected") {
       return {
         itemId,
