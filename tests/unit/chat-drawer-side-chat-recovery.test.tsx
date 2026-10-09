@@ -204,9 +204,10 @@ it("does not move an unresolved starter into a later untouched conversation", as
   await act(async () => {
     privacy.resolve({ incognito: false, threadId: "a" });
     threads.resolve({ threads: [thread("a", "Main chat", true), thread("b", "Side chat")] });
-    await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  expect(renderer.root.findByType("textarea").props.value).toBe("genuine unsent");
+  await vi.waitFor(() =>
+    expect(renderer.root.findByType("textarea").props.value).toBe("genuine unsent")
+  );
 
   await act(async () => {
     findByAriaLabel(renderer, "Open conversations")!.props.onClick();
@@ -672,16 +673,18 @@ it("retries a failed module identity load and allows a settled no-ID send", asyn
   expect(renderer.root.findByType("textarea").props.disabled).toBe(true);
   await act(async () => {
     privacy.reject(new Error("offline"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  expect(findByAriaLabel(renderer, "Retry conversation identity")).not.toBeNull();
+  await vi.waitFor(() =>
+    expect(findByAriaLabel(renderer, "Retry conversation identity")).not.toBeNull()
+  );
   await act(async () => {
     findByAriaLabel(renderer, "Retry conversation identity")!.props.onClick();
-    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-  expect(findByAriaLabel(renderer, "Retry conversation identity")).toBeNull();
-  expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
+  await vi.waitFor(() => {
+    expect(findByAriaLabel(renderer, "Retry conversation identity")).toBeNull();
+    expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
+  });
   await act(async () =>
     renderer.root.findByType("textarea").props.onChange({ target: { value: "No-ID draft" } })
   );

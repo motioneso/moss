@@ -70,7 +70,9 @@ test("real caller remains editable and recoverable through provider disable and 
     .getByLabel("Message Moss")
     .fill("UAT 3191. Reply briefly: ready for draft recovery.");
   await drawer.getByLabel("Message Moss").press("Enter");
-  const seed = (await readUatJson(await seedCompleted)) as { reply: string };
+  const seedResponse = await seedCompleted;
+  expect(seedResponse.ok(), `real UI turn returned ${seedResponse.status()}`).toBe(true);
+  const seed = (await seedResponse.json()) as { reply: string };
   expect(seed.reply.trim().length).toBeGreaterThan(0);
   await expect(drawer.getByText(seed.reply, { exact: true }).last()).toBeVisible();
   await drawer.getByRole("button", { name: "Close chat" }).click();
@@ -149,7 +151,8 @@ test("real caller remains editable and recoverable through provider disable and 
   );
   await drawer.getByLabel("Message Moss").press("Enter");
   const response = await completed;
-  const result = (await readUatJson(response)) as { reply: string };
+  expect(response.ok(), `real UI turn returned ${response.status()}`).toBe(true);
+  const result = (await response.json()) as { reply: string };
   expect(result.reply.trim().length).toBeGreaterThan(0);
   await expect(drawer.getByText(result.reply, { exact: true }).last()).toBeVisible();
   const history = (await readUatJson(
