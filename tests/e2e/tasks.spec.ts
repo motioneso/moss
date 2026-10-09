@@ -414,6 +414,78 @@ test("quick add sends one request while saving and keeps the draft when it fails
   expect(posts).toBe(1);
 });
 
+test("quick add admits one same-turn submission and allows a deliberate retry after failure", async ({
+  page
+}) => {
+  let posts = 0;
+  let failing = true;
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/tasks") {
+      posts += 1;
+    }
+  });
+  await page.route("**/api/tasks", async (route) => {
+    if (route.request().method() !== "POST" || !failing) return route.fallback();
+    await held;
+    return route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Server unavailable" })
+    });
+  });
+  await page.goto("/tasks");
+  const field = page.getByRole("textbox", { name: "Task title" });
+  await field.fill("Call the plumber");
+  // Native form submissions in one turn expose admission before the pending render.
+  await page.getByRole("form", { name: "Capture a task" }).evaluate((form: HTMLFormElement) => {
+    form.requestSubmit();
+    form.requestSubmit();
+  });
+  await expect(page.getByRole("button", { name: "Add task" })).toBeDisabled();
+  release();
+  await expect(page.getByRole("alert")).toContainText("Could not add the task.");
+  await expect(field).toHaveValue("Call the plumber");
+  expect(posts).toBe(1);
+
+  failing = false;
+  await field.press("Enter");
+  await expect(page.getByText("Call the plumber")).toBeVisible();
+  await expect(field).toHaveValue("");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(posts).toBe(2);
+});
+
+test("quick add keeps text typed during a successful save", async ({ page }) => {
+  let posts = 0;
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/tasks", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    posts += 1;
+    await held;
+    return route.fallback();
+  });
+  await page.goto("/tasks");
+  const field = page.getByRole("textbox", { name: "Task title" });
+  await field.fill("Call the plumber");
+  await field.press("Enter");
+  await expect(page.getByRole("button", { name: "Add task" })).toBeDisabled();
+  await field.fill("Book the electrician");
+  await field.press("Enter");
+  release();
+
+  await expect(page.getByText("Call the plumber")).toBeVisible();
+  await expect(field).toHaveValue("Book the electrician");
+  await expect(page.getByRole("button", { name: "Add task" })).toBeEnabled();
+  expect(posts).toBe(1);
+});
+
 const serverError = { status: 500, contentType: "application/json", body: '{"error":"down"}' };
 
 test("a failed task load says so and Retry recovers", async ({ page }) => {

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@moss/ui";
 import { LoaderCircle, Plus, SlidersHorizontal } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 
 import { createTask } from "../api/client";
 import { queryKeys } from "../api/query-keys";
@@ -13,6 +13,7 @@ export function TaskCapture(props: {
   readonly onDetails: (name: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const submitting = useRef(false);
   const [title, setTitle] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -25,13 +26,18 @@ export function TaskCapture(props: {
       setFormError(null);
       await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list });
     },
-    onError: (error) => setFormError(error.message)
+    onError: (error) => setFormError(error.message),
+    onSettled: () => {
+      submitting.current = false;
+    }
   });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const submitted = title.trim();
-    if (!submitted || createMutation.isPending) return;
+    if (!submitted || submitting.current) return;
+    // Admit once before the mutation's pending state reaches the next render.
+    submitting.current = true;
     setFormError(null);
     createMutation.mutate(submitted);
   };
