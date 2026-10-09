@@ -131,6 +131,12 @@ describe("briefing source startup wiring (#2313)", () => {
     await news.registerWorkers!(fakeBoss(), workerDeps as never);
     expect(seams.configureSportsBriefingService).toHaveBeenCalledTimes(1);
     expect(seams.configureNewsBriefingService).toHaveBeenCalledTimes(1);
+    // The briefing honours dismissed stories, so it needs the story feedback port (#3227).
+    const feedbackPort = seams.configureNewsBriefingService.mock.calls[0]?.[1] as
+      | { listDismissedRefs?: unknown; storyRef?: unknown }
+      | undefined;
+    expect(typeof feedbackPort?.listDismissedRefs).toBe("function");
+    expect(typeof feedbackPort?.storyRef).toBe("function");
     // The worker fetch seam reaches both dataset clients.
     for (const sourceId of ["espn", "newsfeeds"]) {
       const calls = seams.datasetClients.filter((call) => call.sourceId === sourceId);

@@ -20,13 +20,13 @@ const SETTINGS_HREF = "/settings?section=modules&module=news";
 
 type TopicFilter = string | null;
 
+// Chips carry a topic key ("us") while headlines carry display labels ("U.S."), so a
+// filter matches the raw value or its display label, ignoring case.
 export function matchesTopic(headline: NewsHeadline, filter: TopicFilter): boolean {
-  return (
-    filter === null ||
-    headline.topicLabels?.includes(filter) === true ||
-    headline.topicKey === filter ||
-    headline.topicLabel === filter
-  );
+  if (filter === null) return true;
+  const wanted = new Set([filter, TOPIC_LABELS[filter] ?? filter].map((v) => v.toLowerCase()));
+  const candidates = [...(headline.topicLabels ?? []), headline.topicKey, headline.topicLabel];
+  return candidates.some((value) => value != null && wanted.has(value.toLowerCase()));
 }
 
 const TOPIC_LABELS: Readonly<Record<string, string>> = {

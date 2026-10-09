@@ -135,7 +135,51 @@ describe("collectCandidates", () => {
     expect(credentialedCalls).toEqual(["s-control"]);
     expect(feedFetches).toBe(1);
     expect(result.sourceFailures).toEqual([]);
-    expect(result.credentialedRecovered).toEqual(["s-control"]);
+    expect(result.recovered).toEqual(["s-control"]);
+  });
+
+  it("retries a plain feed source stuck on temporarily_unavailable and reports it recovered (#3227)", async () => {
+    const stuck = {
+      id: "s-stuck",
+      label: "Stuck",
+      canonicalDomain: "stuck.example.com",
+      homepageUrl: "https://stuck.example.com",
+      feedUrl: "https://stuck.example.com/feed.xml",
+      retrievalMethod: "feed",
+      validationStatus: "approved",
+      healthStatus: "temporarily_unavailable",
+      createdAt: now.toISOString()
+    };
+    const authFailed = { ...stuck, id: "s-auth", healthStatus: "authentication_failed" };
+    let fetches = 0;
+    const result = await collectCandidates(
+      db,
+      {
+        fetch: async (url: string) => {
+          fetches += 1;
+          return {
+            ok: true,
+            status: 200,
+            finalUrl: url,
+            contentType: "application/rss+xml",
+            body: feed([]),
+            truncated: false
+          };
+        },
+        search: { search: async () => ({ results: [] }) },
+        ai: {
+          fingerprint: async () => "fp",
+          generateJson: async () => ({ ok: false, error: "provider_error" })
+        },
+        repo: repo({ listCustomSources: async () => [stuck, authFailed] }),
+        prefs: { list: async () => [] },
+        catalog: emptyCatalog
+      },
+      { now, actorUserId: "owner-1" }
+    );
+    // Only the temporarily unavailable source is retried; auth failures need a new key.
+    expect(fetches).toBe(1);
+    expect(result.recovered).toEqual(["s-stuck"]);
   });
 
   it("never fetches an excluded source", async () => {
