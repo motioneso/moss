@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CalendarEventDto } from "@moss/shared";
 
 import {
+  dateRangeLabel,
   dayKey,
   dtoToViewEvent,
   groupEventsByDay,
@@ -85,5 +86,27 @@ describe("groupEventsByDay multi-day events", () => {
     ]);
     expect([...map.keys()]).toEqual([key(2026, 10, 5)]);
     expect(map.get(key(2026, 10, 5))?.[0]).toMatchObject({ startMin: 20 * 60, endMin: 1440 });
+  });
+});
+
+describe("dateRangeLabel for multi-day all-day events", () => {
+  it("starts from the real start date, not the clicked day", () => {
+    const map = groupEventsByDay([
+      view({
+        allDay: true,
+        startsAt: "2026-10-05T00:00:00.000Z",
+        endsAt: "2026-10-08T00:00:00.000Z"
+      })
+    ]);
+    const clicked = map.get(key(2026, 10, 7))?.[0];
+    if (!clicked) throw new Error("missing segment");
+    const expected = dateRangeLabel(
+      view({
+        allDay: true,
+        startsAt: "2026-10-05T00:00:00.000Z",
+        endsAt: "2026-10-08T00:00:00.000Z"
+      })
+    );
+    expect(dateRangeLabel(clicked)).toBe(expected);
   });
 });

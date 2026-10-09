@@ -333,3 +333,31 @@ export function loadPersistedCursor(): Date {
 export function loadPersistedWorkWeek(): boolean {
   return migrateLegacyKey("jarvis.cal.workweek", "moss.cal.workweek") === "1";
 }
+
+const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
+
+// Real first date, plus the real last date when the event spans several days.
+export function dateRangeLabel(event: CalendarViewEvent): string {
+  if (event.allDay) {
+    const first = new Date(
+      event.startsAt.getUTCFullYear(),
+      event.startsAt.getUTCMonth(),
+      event.startsAt.getUTCDate()
+    );
+    // All-day end is exclusive and UTC-midnight anchored.
+    const last = new Date(
+      event.endsAt.getUTCFullYear(),
+      event.endsAt.getUTCMonth(),
+      event.endsAt.getUTCDate() - 1
+    );
+    return last > first ? fmtDateLabel(first) + " – " + fmtDateLabel(last) : fmtDateLabel(first);
+  }
+  const first = event.startsAt;
+  const endsAtMidnight = minutesOfDay(event.endsAt) === 0 && event.endsAt > first;
+  const last = endsAtMidnight
+    ? new Date(event.endsAt.getFullYear(), event.endsAt.getMonth(), event.endsAt.getDate() - 1)
+    : event.endsAt;
+  return dayKey(last) === dayKey(first) || last < first
+    ? fmtDateLabel(first)
+    : fmtDateLabel(first) + " – " + fmtDateLabel(last);
+}

@@ -1,31 +1,9 @@
 import { CalendarCheck, Clock, GitCommitHorizontal, MapPin, Users, X } from "lucide-react";
 import { CategoryDot, HeldBanner, PeekCloseButton, PeekPanel } from "@moss/ui";
 import { useAssistantName } from "../api/use-assistant-name.js";
-import { dayKey, fmtDateLabel, fmtDur, fmtTime, type CalendarViewEvent } from "./calendar-model.js";
+import { dateRangeLabel, fmtDur, fmtTime, type CalendarViewEvent } from "./calendar-model.js";
 
 const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
-
-// Real first date, plus the real last date when the event spans several days.
-function dateRangeLabel(event: CalendarViewEvent): string {
-  if (event.allDay) {
-    const first = event.date;
-    // All-day end is exclusive and UTC-midnight anchored.
-    const last = new Date(
-      event.endsAt.getUTCFullYear(),
-      event.endsAt.getUTCMonth(),
-      event.endsAt.getUTCDate() - 1
-    );
-    return last > first ? fmtDateLabel(first) + " – " + fmtDateLabel(last) : fmtDateLabel(first);
-  }
-  const first = event.startsAt;
-  const endsAtMidnight = minutesOfDay(event.endsAt) === 0 && event.endsAt > first;
-  const last = endsAtMidnight
-    ? new Date(event.endsAt.getFullYear(), event.endsAt.getMonth(), event.endsAt.getDate() - 1)
-    : event.endsAt;
-  return dayKey(last) === dayKey(first) || last < first
-    ? fmtDateLabel(first)
-    : fmtDateLabel(first) + " – " + fmtDateLabel(last);
-}
 
 interface CalendarPeekProps {
   readonly event: CalendarViewEvent | null;
