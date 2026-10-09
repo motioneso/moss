@@ -128,7 +128,7 @@ export function createExternalModuleTools(input: {
       }
     );
 
-  const invoke: ExternalToolInvoker = async (module, tool, toolInput, context) => {
+  const invoke: ExternalToolInvoker = async (module, tool, toolInput, context, scopedDb) => {
     const rpc = buildRpc(module, tool.risk, context);
     // #1768: resolved per invocation inside the ACTOR's data context, exactly as the
     // queued path does in apps/worker/src/external-module-invoke.ts. Without this the
@@ -153,14 +153,19 @@ export function createExternalModuleTools(input: {
     const sharesMemberState = (module.manifest.storage ?? []).some(
       (entry) => entry.scopes.includes("instance") && entry.instanceWritePolicy === "module"
     );
+    // Reuse the caller's open database handle when there is one. The invoke route holds the
+    // request's connection, so opening a second context here would wait on a pool of one.
+    const listActiveUserIds = async (db: DataContextDb) =>
+      (await input.settingsRepository.listUsers(db))
+        .filter((user) => user.status === "active")
+        .map((user) => user.id);
     const activeUserIds = sharesMemberState
-      ? await input.appDataContext.withDataContext(
-          { actorUserId: context.actorUserId, requestId: context.requestId },
-          async (scopedDb) =>
-            (await input.settingsRepository.listUsers(scopedDb))
-              .filter((user) => user.status === "active")
-              .map((user) => user.id)
-        )
+      ? scopedDb
+        ? await listActiveUserIds(scopedDb)
+        : await input.appDataContext.withDataContext(
+            { actorUserId: context.actorUserId, requestId: context.requestId },
+            listActiveUserIds
+          )
       : undefined;
     return externalToolResult(
       await runtime.invoke(
