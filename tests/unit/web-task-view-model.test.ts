@@ -77,6 +77,21 @@ describe("task view model", () => {
     expect(derived.visibleTasks.map((item) => item.id)).toEqual(["medium"]);
   });
 
+  it("does not apply the typed sentence as a title filter when the intent has no residual text", () => {
+    const derived = deriveTaskFilters({
+      tasks: [task("quick", { effort: "quick" }), task("medium", { effort: "medium" })],
+      lists: [list("work", "Work")],
+      statusFilter: "todo",
+      focus: null,
+      listStates: {},
+      tagFilter: [],
+      search: "medium effort tasks",
+      searchIntent: baseIntent({ effort: "medium", text: null })
+    });
+
+    expect(derived.visibleTasks.map((item) => item.id)).toEqual(["medium"]);
+  });
+
   it("combines natural-language tag intent with literal text", () => {
     const derived = deriveTaskFilters({
       tasks: [
@@ -90,7 +105,7 @@ describe("task view model", () => {
       listStates: {},
       tagFilter: [],
       search: "invoice",
-      searchIntent: baseIntent({ tagNames: ["invoices"] })
+      searchIntent: baseIntent({ tagNames: ["invoices"], text: "invoice" })
     });
 
     expect(derived.visibleTasks.map((item) => item.id)).toEqual(["a"]);
