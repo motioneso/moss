@@ -26,9 +26,11 @@ All names, banks, merchants and amounts are made up.
   rendering as designed when the live CSS moves on.
 - `moss-ui.phone.css` is generated from it by the build. It turns the narrow-screen rules on
   unconditionally, so phone pages render as a phone even in a wide browser window.
+- `p6.css` previews the shared `@moss/ui` fixes of platform addition P6 (contrast, radio card
+  layout, 44px phone targets). The build makes `p6.phone.css` from it the same way.
 - `fonts/` holds the Archivo files the tokens point at.
 
-The generated HTML and both `moss-ui` stylesheets are excluded from Prettier.
+The generated HTML, both `moss-ui` stylesheets and `p6.phone.css` are excluded from Prettier.
 
 ## Rebuild
 

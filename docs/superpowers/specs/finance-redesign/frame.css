@@ -287,3 +287,32 @@ h3 {
 .frame--phone .search {
   width: 100%;
 }
+
+/* ---- Fixes from the design critique ---- */
+.rail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.assign {
+  width: 8rem;
+  max-width: 100%;
+  text-align: right;
+}
+.frame--phone .assign {
+  width: 9rem;
+  text-align: left;
+}
+.month-step {
+  gap: var(--space-3);
+  font-weight: var(--weight-medium);
+}
+.bal-meta {
+  align-items: flex-end;
+}
+.frame--desktop .jds-radio-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.frame--desktop .steps .jds-index {
+  grid-template-columns: 16rem minmax(0, 1fr) auto;
+}

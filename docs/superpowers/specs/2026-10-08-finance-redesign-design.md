@@ -87,7 +87,7 @@ In:
   rename a category.
 - The freedom setting (three steps, dollar limit, custom switches) and the activity trail that
   step 3's weekly review reads, both on Settings.
-- Platform additions P1 to P5 (below).
+- Platform additions P1 to P6 (below).
 
 Out:
 
@@ -101,27 +101,33 @@ Out:
 
 All screens are Park Press and use `@moss/ui` only. Module CSS is layout only. The module keeps a
 single host navigation entry, "Finance". Inside it, a `Segmented` control switches between Budget,
-Transactions and Accounts. Settings opens from the gear next to the Finance title in the
-top bar (P5). Chat docks on the right, as in every app.
+Transactions and Accounts. The control sits above the masthead on every Finance page, Settings
+included, where no option is selected. Settings opens from the gear next to the Finance title in
+the top bar (P5). Chat docks on the right, as in every app.
 
 Screens carry no explanatory, tutorial or reassurance copy ("what Moss can see", "nothing changes
 until you press") because it reads as marketing. How things work belongs in Moss's answers. Section
 heads carry no numbers anywhere in Finance.
 
-| Screen                   | Path                      | Built from                                                                                                                                                                                                                                                                                                                                                                                                         | Empty                                                                           | Loading                               | Broken                                                                                 |
-| ------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
-| Budget                   | `/m/finance`              | `Masthead tone="field"` (ready to assign, month switcher), `SectionHead` per group with a drag handle marker (dragging reorders groups; no section numbers), a `jds-table` per group on desktop (assigned, spent with `jds-progress` meter, available) and `RowIndex` rows on phone, `Badge` for overspent, rail blocks (`Eyebrow` plus `SectionHead`) for Needs you (`StatTile`s) and Balances (facts `RowIndex`) | No bank: redirect to Getting started. Bank but no budget: Getting started draft | Masthead skeleton, three ghost groups | Sync error `Note variant="plan"` with Reconnect; budget still renders from stored data |
-| Transactions             | `/m/finance/transactions` | Single column, no rail. `Segmented` filter (All, Needs a look), day `SectionHead`s, `RowIndex` rows, `Badge` "Predicted", `Select` for category, `Switch` "Always for this merchant"                                                                                                                                                                                                                               | "Nothing yet. Transactions appear after the first sync."                        | Ghost rows                            | Same banner as Budget                                                                  |
-| Accounts                 | `/m/finance/accounts`     | Single column. `Masthead` net worth, `RowIndex` per bank with `Indicator` sync status, `Button` Reconnect / Add a bank, sync-error `Note` giving the date balances are current to                                                                                                                                                                                                                                  | Getting started                                                                 | Ghost rows                            | Per-bank `Indicator status="error"` with the stored display message and Reconnect      |
-| Getting started: no bank | `/m/finance/start`        | `Masthead`, numbered `RowIndex` steps (connect, sort, build budget), primary `Button` "Connect a bank"                                                                                                                                                                                                                                                                                                             | n/a                                                                             | n/a                                   | Plaid credentials missing: admin `Note` linking to Finance Settings                    |
-| Getting started: draft   | `/m/finance/start`        | `Masthead` ("Your first budget"), draft group rows with history average and proposed amount, `Button` "Build my budget with Moss" (opens chat), `Button` "Start this budget"                                                                                                                                                                                                                                       | Under 30 days of history: draft from what exists, with a `Note` saying so       | Draft computing: progress row         | Draft failed: retry `Button`                                                           |
-| Settings                 | `/m/finance/settings`     | `RadioCardGroup` "How much Moss does alone" (three steps), `Field` dollar limit, `SectionHead` "Customize" with a `Switch` per action family, fixed "Always asks" rows, admin-only "Bank connection" with the Plaid client ID and secret, rail listing this week's activity (who, what, when) with Undo per row and "Earlier weeks"                                                                                | n/a                                                                             | Ghost cards                           | Save failed: inline error, switches revert                                             |
+| Screen                   | Path                      | Built from                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Empty                                                                           | Loading                               | Broken                                                                                                                              |
+| ------------------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Budget                   | `/m/finance`              | `Masthead tone="field"` (ready to assign; month stepped with icon-only previous and next buttons), `SectionHead` per group with a drag handle marker (dragging reorders groups; no section numbers), a `jds-table` per group on desktop (assigned, spent with `jds-progress` meter, available; column heads on the first group only) and `RowIndex` rows on phone. Assigned amounts are typed in place: a `jds-input jds-input--sm` per row on desktop; on phone, tapping a row opens an amount field with Save. `Badge` "$X over" for overspent at every width; forest `Badge` on a row Moss changed this month ("Moss added $40.00"). Rail blocks (`Eyebrow` plus `SectionHead`) for Needs you (`StatTile`s) and Balances (facts `RowIndex`, a stale account carrying `Indicator status="error"` with its as-of date) | No bank: redirect to Getting started. Bank but no budget: Getting started draft | Masthead skeleton, three ghost groups | Stale account marked in Balances; budget still renders from stored data. Assign save failed: the field reverts with an inline error |
+| Transactions             | `/m/finance/transactions` | Single column, no rail, no masthead (the selected tab names the page). `Segmented` filter (All, Needs a look), `Button` "Confirm all N" (confirms every Needs a look row with its guessed category), day `SectionHead`s, column heads on the first day only, `RowIndex` rows on phone, `Badge` "Predicted", `Select` for category, `Switch` "Always for this merchant" (starts off)                                                                                                                                                                                                                                                                                                                                                                                                                                     | "Nothing yet. Transactions appear after the first sync."                        | Ghost rows                            | Rows render from stored data; Reconnect lives on Accounts                                                                           |
+| Accounts                 | `/m/finance/accounts`     | Single column. `Masthead` net worth, `RowIndex` per bank with one line per account and `Indicator` sync status, `Button` Reconnect / Add a bank. A bank whose sign-in expired shows the date its balances are current to on its own row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Getting started                                                                 | Ghost rows                            | Per-bank `Indicator status="error"` with the stored display message and Reconnect                                                   |
+| Getting started: no bank | `/m/finance/start`        | `Masthead`, `RowIndex` steps (connect, sort, build budget), each with its state (the current step's `Button` "Connect a bank", later steps an `Indicator status="idle"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | n/a                                                                             | n/a                                   | Plaid credentials missing: admin `Note` linking to Finance Settings                                                                 |
+| Getting started: draft   | `/m/finance/start`        | `Masthead` ("Your first budget": the plan total and what is left unplanned), draft group rows with history average and proposed amount (column heads on the first group only), forest `Badge` on a line changed in chat at every width, `Button` "Build my budget with Moss" (opens chat), `Button` "Start this budget"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Under 30 days of history: draft from what exists, with a `Note` saying so       | Draft computing: progress row         | Draft failed: retry `Button`                                                                                                        |
+| Settings                 | `/m/finance/settings`     | Compact `Masthead` "Settings". `RadioCardGroup` "How much Moss does alone" (three presets and Custom), `Field` dollar limit (hidden on Ask about everything, where Moss moves nothing alone), "Customize" behind a `DisclosureToggle` (closed on a preset, open on Custom) with a `Switch` per action family and fixed "Always asks" rows, admin-only "Bank connection" with the Plaid client ID and secret, rail listing this week's activity (who, what, when) with Undo per row and a `Button` "Earlier weeks"                                                                                                                                                                                                                                                                                                       | n/a                                                                             | Ghost cards                           | Save failed: inline error, switches revert                                                                                          |
 
 Phone: every screen is single column. The rail moves below the main column, except on Budget, where
-Needs you and Balances come first and Balances starts collapsed to its total behind a
-`DisclosureToggle`. Chat stays a drawer
+Needs you and Balances come first and Balances starts collapsed to its net worth total behind a
+`DisclosureToggle`, and on Settings, where the activity list follows "How much Moss does alone".
+Chat stays a drawer
 that slides over the page, including on the draft screen. Rows wrap amounts below the title rather
 than shrinking text.
+
+Typing an amount on Budget saves on Enter or when the field loses focus, through the
+`finance.budget-assign` queue. It runs the same handler as `finance.budget.assign` and writes an
+activity row with actor `user`. The dollar limit governs Moss, so a typed amount never asks.
 
 Reports folds in. Spending by category is the Budget "spent" column plus each row's trend. Net
 worth heads Accounts. The two report tools stay for chat.
@@ -237,7 +243,9 @@ map, then AI. Two things change.
 
 A `needs_look` transaction still counts toward its guessed category, so the budget is never empty
 while you review. Transactions shows a "Needs a look" count and filter. Confirming or changing a
-category writes `confirmed` and, when "Always for this merchant" is on, a payee rule.
+category writes `confirmed` and, when "Always for this merchant" is on, a payee rule. The switch
+starts off on every row. "Confirm all N" confirms every `needs_look` row with its guessed category
+through `finance.review-apply` and makes no rules.
 
 ### First budget
 
@@ -255,7 +263,12 @@ The draft is deterministic. Moss never invents the numbers on the screen.
    The prompt is an editable draft; the user sends it. On phone the chat opens as the drawer.
 4. In chat, Moss calls `finance.budget.draft.get` and `finance.budget.draft.update`. Every update
    returns the line's before and after, and the screen re-reads the record.
-5. "Start this budget" is a button on the screen only, through the `finance.draft-start` queue. It
+5. The header total is the sum of `proposed_cents` over lines not dropped. Unplanned is
+   `monthly_income_cents` minus that total, shown as "over by" when negative. Every
+   `finance.budget.draft.update` result carries the draft total before and after, and Moss quotes
+   those numbers rather than adding them up. Test: after any sequence of updates, the rendered total
+   equals the sum of the rendered lines, and the update result's after-total equals it too.
+6. "Start this budget" is a button on the screen only, through the `finance.draft-start` queue. It
    creates categories, writes this month's assignments and marks the draft `started`. No chat
    tool can start a budget.
 
@@ -362,7 +375,8 @@ checks against the stored transaction and rejects on mismatch.
 | `finance.account.set-shared`                    | write | `sharing`          | ask    | hidden in R1 screens                                                                                                   |
 
 New queues: `finance.draft-build`, `finance.draft-start`, `finance.review-apply` (confirm or
-change a `needs_look` row from the screen), `finance.activity-undo`.
+change `needs_look` rows from the screen, one or all), `finance.budget-assign` (an amount typed on
+Budget), `finance.activity-undo`.
 
 New preference (`external-module.ts:256-314`, integer, within the 8-entry cap):
 
@@ -496,6 +510,18 @@ Each is a host change with its own tests, built before the finance work that use
 - Test: with `settingsPath` set, the gear's link is the module page and the host page renders no
   credential slot for that module. Fails today because the gear link is fixed.
 
+**P6. Shared design-system fixes the Finance screens need.**
+
+- Contrast: `StatTile` labels move to `--text-muted`, the selected radio card's description to
+  `--text`, and the gold `Eyebrow` to `--gold-ink`, so each clears 4.5:1 on paper.
+- `RadioCardGroup`: the radio sits on the title's line instead of a line of its own.
+- Phone: buttons, segmented options, inputs, selects and icon buttons are at least 44px tall below
+  720px wide.
+- These go in `packages/ui/src/styles`, not module CSS, so every screen gets them.
+  `finance-redesign/p6.css` previews them on the mockups.
+- Test: the existing contrast and visual checks for `@moss/ui` pass with the new values; a phone
+  viewport test measures a `Button` at 44px or more.
+
 ### App map entries
 
 Declared in the finance manifest `appMap` block (P1). Paths are module-relative.
@@ -571,11 +597,11 @@ Features:
 
 ### Build phases and tests
 
-| Phase | Contents                                                                                                 | E2E test (Playwright, real dev instance, Plaid sandbox)                                                                                                                                                    |
-| ----- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | P1; migrations 0009-0011; categorization review; Budget, Transactions, Accounts screens; app-map entries | Connect a sandbox bank, see transactions grouped by day, open Needs a look, change one category with "Always for this merchant", see the Budget spent column move                                          |
-| 2     | Migrations 0012-0013; draft build and start; Getting started screens; draft chat tools                   | From a fresh account, connect, open Getting started, see a draft, ask Moss in chat to set Groceries to $600, see the line change on screen, press Start, land on Budget with those assignments             |
-| 3     | P2, P3, P4; migrations 0014-0015; families; move and category tools; Settings screen                     | Pick step 2 with a $100 limit; ask Moss to move $50 (runs, appears in the Settings activity list, Undo works); ask to move $250 (approval card); switch to step 1 and sync (new rows land in Needs a look) |
+| Phase | Contents                                                                                                                              | E2E test (Playwright, real dev instance, Plaid sandbox)                                                                                                                                                                |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | P1, P6; migrations 0009-0011; categorization review; Budget (amounts typed in place), Transactions, Accounts screens; app-map entries | Connect a sandbox bank, see transactions grouped by day, open Needs a look, change one category with "Always for this merchant", see the Budget spent column move, type a new assigned amount and see Available change |
+| 2     | Migrations 0012-0013; draft build and start; Getting started screens; draft chat tools                                                | From a fresh account, connect, open Getting started, see a draft, ask Moss in chat to set Groceries to $600, see the line change on screen, press Start, land on Budget with those assignments                         |
+| 3     | P2, P3, P4; migrations 0014-0015; families; move and category tools; Settings screen                                                  | Pick step 2 with a $100 limit; ask Moss to move $50 (runs, appears in the Settings activity list, Undo works); ask to move $250 (approval card); switch to step 1 and sync (new rows land in Needs a look)             |
 
 Each phase ships with its e2e test run and observed to pass, and live proof on the PR.
 

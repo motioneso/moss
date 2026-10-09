@@ -38,6 +38,7 @@ docs/superpowers/specs/job-search-mockup/
 docs/superpowers/specs/finance-redesign/*.html
 docs/superpowers/specs/finance-redesign/moss-ui.css
 docs/superpowers/specs/finance-redesign/moss-ui.phone.css
+docs/superpowers/specs/finance-redesign/p6.phone.css
 
 # #1326: unit-test fixtures mkdtemp() a ".tmp-*" directory directly in the repo root
 # (external-worker-runtime, external-module-invocation-budget, module-sdk-worker); a
