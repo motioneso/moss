@@ -71,12 +71,24 @@ Runtime baseline and throwaway prototypes were not merged.
   genuine stale-list failure, pending admission, recovery and draft persistence; it establishes
   no server-wide idempotency, worker/model/physical-delivery behavior or branch readiness.
   Fresh assembled checks have their own merger receipt and certify only its recorded inputs.
-- #3126, #3156 and #3149 are eligible after the verified repair; #3157 waits for #3156. #3127 is a scope container until both children pass its
+- #3126 is integrated from clean pushed `2785c0f15`: persisted side-chat selection through
+  the accepted overlay, automatic titles, owner-bound separate drafts, and connected caller
+  recovery. Both independent source review axes cleared runtime/harness `761f0f376`.
+  See [side-chat evidence](../handoffs/2026-10-09-3126-evidence.md) for exact source/check
+  hashes, byte-compared storage negative controls and installed configured-model proof.
+  The fresh capture-off real-model UAT created, typed, switched and reloaded distinct Main
+  and side conversations at desktop and phone widths, preserving Main designation and
+  drafts. The final builder delta adds public evidence only. Mocked browser checks supplement
+  that installed proof; asynchronous selection and voice races have focused automated
+  coverage rather than exhaustive live proof. The recovered unknown-fingerprint recovery
+  failure remains an unresolved observation. Fresh assembled checks require their own
+  integration commit/fingerprint receipt; builder receipts certify only their original inputs.
+- #3156 and #3149 remain eligible after the verified repair; #3157 waits for #3156. #3127 is a scope container until both children pass its
   full acceptance; #3128 remains blocked by #3127. Use one builder
   and sequential independent reviews within available capacity; serialize heavy checks.
   All other work remains pending its verified blockers. The coordinator owns dispatch
   and tracker transitions. Draft integration PR [#3154](https://github.com/motioneso/moss/pull/3154)
-  is open and remains draft during implementation. Current GitHub CI is not certified;
+  is open and remains draft during implementation. New-tip GitHub CI is not certified;
   the previously observed assistant-name Meetings chat CI failure was repaired in the two affected
   fixtures, with source reviews and scoped local evidence recorded in
   [the fixture repair evidence](../handoffs/2026-10-08-ci-fixture-repair-evidence.md). That evidence
@@ -91,8 +103,11 @@ Runtime baseline and throwaway prototypes were not merged.
   [registry repair evidence](../handoffs/2026-10-08-registry-version-repair-evidence.md) for
   the corrected mounted-index base-red/candidate-green production publisher checks; the earlier
   unmounted-index probe is invalidated. Recorded Main/email-choice/quiet-boundary/quick-add
-  runtime and harness inputs are unchanged. Fresh assembled checks and their exact integration inputs require a separate merger
-  receipt; final candidate GitHub registry CI remains pending. The complete task graph is unfinished.
+  runtime and harness inputs are unchanged. Clean assembled integration `6c667b00e`
+  passed its separately recorded checks. GitHub run `37899457207` at that exact historical
+  tip completed with 19 successful and 3 skipped checks, including registry job `113718341464`
+  succeeding. This result does not certify a later integration tip. The complete task graph
+  is unfinished.
 - All four migration decisions approved explicitly in this session. See
   [migration decisions](2026-10-08-scheduled-proactive-migration-decisions.md).
 - Read-only exploration completed. [Dispatch seams and ownership](2026-10-08-scheduled-proactive-dispatch-seams.md)
