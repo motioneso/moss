@@ -28,6 +28,7 @@ type ExportedSections = {
     source_exclusions: unknown[];
   };
   sportsSources: {
+    follows: unknown[];
     assignments: unknown[];
     espnAssignments: unknown[];
     headlinePreferences: unknown[];
@@ -674,6 +675,38 @@ describe("Data export", () => {
             (row) => (row as { id: string }).id === sportsAssignmentId
           )
         ).toEqual(expectedSportsAssignment);
+        expect(archive.sections.sportsSources.follows).toEqual([
+          {
+            id: sportsFollowId,
+            ownerUserId: ids.userA,
+            competitionKey: "nfl",
+            teamKey: "7",
+            createdAt: "2026-02-04T07:57:00.000Z"
+          }
+        ]);
+        const sectionRecord = archive.sections as unknown as Record<string, unknown>;
+        const memorySection = sectionRecord.memory as Record<string, unknown>;
+        for (const key of [
+          "entities",
+          "graphFacts",
+          "episodes",
+          "factSources",
+          "aliases",
+          "candidates",
+          "conflictGroups"
+        ]) {
+          expect(Array.isArray(memorySection[key]), `memory.${key}`).toBe(true);
+        }
+        for (const key of [
+          "goals",
+          "task_activity",
+          "notifications",
+          "module_kv",
+          "usefulness_feedback",
+          "action_audit_log"
+        ]) {
+          expect(sectionRecord[key], key).toBeDefined();
+        }
         expect(archiveJson).not.toContain(sourceFingerprint);
         expect(archiveJson).not.toContain(topicFingerprint);
         expect(archiveJson).not.toContain(snapshotMarker);

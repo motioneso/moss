@@ -65,6 +65,7 @@ export interface NewsPersonalizationExportSection {
 
 export interface SportsSourcesExportSection {
   readonly assignments: readonly ExportRow[];
+  readonly follows: readonly ExportRow[];
   readonly sources: readonly ExportRow[];
 }
 
