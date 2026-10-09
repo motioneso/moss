@@ -123,6 +123,8 @@ export interface ListChatThreadsResponse {
 
 export interface GetChatPrivacyStateResponse {
   readonly incognito: boolean;
+  /** The owner-scoped conversation currently selected for this chat surface. */
+  readonly threadId?: string;
 }
 
 export interface ListChatThreadMessagesResponse {
@@ -680,7 +682,8 @@ export const getChatPrivacyStateResponseSchema = {
   additionalProperties: false,
   required: ["incognito"],
   properties: {
-    incognito: { type: "boolean" }
+    incognito: { type: "boolean" },
+    threadId: { type: "string" }
   }
 } as const;
 

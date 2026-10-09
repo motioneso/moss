@@ -456,6 +456,7 @@ export function AppShell(props: AppShellProps) {
       />
     ) : (
       <ChatDrawer
+        key={props.me.user.id}
         open={chatOpen}
         docked={dockChat}
         expanded={expanded}
@@ -477,6 +478,7 @@ export function AppShell(props: AppShellProps) {
         streamErrorCount={streamErrorCount}
         selectionPending={selectionPending}
         isFounder={props.me.user.isBootstrapOwner}
+        ownerId={props.me.user.id}
         initialText={moduleDraft}
         focusActionRequestId={focusActionRequestId}
         onActionRequestFocused={() => setFocusActionRequestId(null)}

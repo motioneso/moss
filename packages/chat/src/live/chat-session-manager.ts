@@ -210,9 +210,7 @@ export class ChatSessionManager {
   }> {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    // Turn-at-a-time (spec §6.5): reject a concurrent turn for the same surface.
-    // The flag is set synchronously (before any await) so two turns started in
-    // the same tick can't both pass the check, and cleared in finally below.
+    // Turn-at-a-time (spec §6.5): set synchronously before await, then clear in finally.
     if (this.turnsInFlight.has(sessionKey)) {
       throw new ChatTurnInFlightError();
     }
@@ -766,7 +764,7 @@ export class ChatSessionManager {
   async getPrivacyState(
     actorUserId: string,
     surface?: string
-  ): Promise<{ readonly incognito: boolean }> {
+  ): Promise<{ readonly incognito: boolean; readonly threadId?: string }> {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
     const session = this.sessions.get(sessionKey);
@@ -781,9 +779,11 @@ export class ChatSessionManager {
           }),
           persistence: this.deps.persistence
         });
-    return { incognito: currentThread?.incognito ?? false };
+    return {
+      incognito: currentThread?.incognito ?? false,
+      ...(currentThread?.id ? { threadId: currentThread.id } : {})
+    };
   }
-
   /** Resume an owned thread for this actor + surface. */
   async resumeThread(actorUserId: string, threadId: string, surface?: string): Promise<void> {
     await withOriginThreadTransition(
@@ -802,7 +802,6 @@ export class ChatSessionManager {
         })
     );
   }
-
   /** Switch provider without resetting the surface's conversation. */
   async switchProvider(actorUserId: string, userName: string, surface?: string): Promise<void> {
     await switchChatProviderSession({

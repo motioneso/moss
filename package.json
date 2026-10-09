@@ -130,7 +130,8 @@
     "prepare": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "test:uat:2981-meetings": "tsx tests/uat/run-meetings-uat.ts",
     "test:uat:2981-real-providers": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 1909-sports-public-source-completion.uat.spec.ts notes-default-retrieval.uat.spec.ts notes-path-recheck.uat.spec.ts workshop-chat-handover.uat.spec.ts",
-    "test:uat:3125-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3125-main-chat-real.uat.spec.ts"
+    "test:uat:3125-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3125-main-chat-real.uat.spec.ts",
+    "test:uat:3126-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3126-side-chat-overlay-real.uat.spec.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",
