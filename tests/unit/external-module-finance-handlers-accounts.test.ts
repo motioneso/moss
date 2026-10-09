@@ -186,6 +186,7 @@ describe("finance.accounts.list (#1146)", () => {
     await kv.set(NS.connections, "item:item-1", {
       itemId: "item-1",
       institutionId: "ins_1",
+      institutionName: "Sandbox First Bank",
       connectedAt: "2026-07-01T00:00:00Z",
       status: "connected",
       lastSyncAt: "2026-07-18T10:00:00Z"
@@ -211,6 +212,7 @@ describe("finance.accounts.list (#1146)", () => {
       {
         itemId: "item-1",
         institutionId: "ins_1",
+        institutionName: "Sandbox First Bank",
         status: "connected",
         lastSyncAt: "2026-07-18T10:00:00Z",
         message: null
@@ -218,6 +220,7 @@ describe("finance.accounts.list (#1146)", () => {
       {
         itemId: "item-2",
         institutionId: "ins_2",
+        institutionName: null,
         status: "reauth-required",
         lastSyncAt: "2026-07-05T10:00:00Z",
         message: "The login details of this item have changed."

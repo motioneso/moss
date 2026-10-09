@@ -88,6 +88,10 @@ function fakePlaid(overrides: PlaidOverrides = {}) {
       overrides.accountsGet ??
         (async () => ({ institutionId: "ins_9", accounts: [ACCOUNT_FIXTURE] }))
     ) as PlaidClient["accountsGet"],
+    institutionGet: record(
+      "institutionGet",
+      overrides.institutionGet ?? (async () => ({ name: null }))
+    ) as PlaidClient["institutionGet"],
     accountsBalanceGet: record(
       "accountsBalanceGet",
       overrides.accountsBalanceGet ?? (async () => ({ accounts: [] }))

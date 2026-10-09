@@ -127,6 +127,19 @@ describe("buildAccountsView", () => {
     ]);
   });
 
+  it("uses the stored bank name and falls back to the plain label when none is known", () => {
+    const named = { ...healthy, institutionName: "Sandbox First Bank" };
+    expect(buildAccountsView(accounts.slice(0, 1), [named], NOW).banks[0]!.name).toBe(
+      "Sandbox First Bank"
+    );
+    const view = buildAccountsView(accounts, [named, expired], NOW);
+    expect(view.banks.map((b) => b.name)).toEqual(["Sandbox First Bank", "Bank 2"]);
+    const blank = { ...healthy, institutionName: "  " };
+    expect(buildAccountsView(accounts.slice(0, 1), [blank], NOW).banks[0]!.name).toBe(
+      "Connected bank"
+    );
+  });
+
   it("is empty with no accounts", () => {
     const view = buildAccountsView([], [], NOW);
     expect(view.banks).toEqual([]);

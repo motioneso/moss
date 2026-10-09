@@ -61,6 +61,8 @@ export type AccountRecord = {
 export type ItemRecord = {
   itemId: string;
   institutionId: string | null;
+  /** Bank display name from Plaid (#3177); absent until a sync looks it up. */
+  institutionName?: string;
   connectedAt: string;
   status: "connected" | "reauth-required" | "error";
   lastSyncAt?: string;
