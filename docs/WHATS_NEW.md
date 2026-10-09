@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Creating goals works again.** Adding a new goal, or adding progress notes to a goal, no longer fails. [PR #3206](https://github.com/motioneso/moss/pull/3206)
 - **Finance screens refresh after actions.** Finance pages no longer get stuck on Loading after you sync, change a category, or set a budget. [PR #3203](https://github.com/motioneso/moss/pull/3203)
 - **Bank transactions now sync.** Transactions from your connected banks now arrive even when the bank's live balance check fails, and a first sync runs as soon as you connect. [PR #3166](https://github.com/motioneso/moss/pull/3166)
 
