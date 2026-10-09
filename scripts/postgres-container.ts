@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomInt } from "node:crypto";
 import { promisify } from "node:util";
 
 import { sql, type Kysely } from "kysely";
@@ -8,38 +9,17 @@ const execFileAsync = promisify(execFile);
 
 export const DEFAULT_POSTGRES_CONTAINER = "jarv1s-postgres";
 
-export interface DatabaseIdentity {
-  readonly database: string;
-  readonly systemIdentifier: string;
-}
-
 /** Resolves the container that runs pg_dump/pg_restore: flag, then env, then the dev default. */
 export function resolvePostgresContainer(flagValue?: string): string {
   return flagValue ?? process.env.JARVIS_BACKUP_PG_CONTAINER ?? DEFAULT_POSTGRES_CONTAINER;
 }
 
-/** Identity of the database behind a Kysely connection (the URL the operator confirmed). */
-export async function readConnectionIdentity(db: Kysely<MossDatabase>): Promise<DatabaseIdentity> {
-  const result = await sql<{ database: string; system_identifier: string }>`
-    SELECT current_database() AS database, system_identifier::text AS system_identifier
-    FROM pg_control_system()
-  `.execute(db);
-  const row = result.rows[0];
-
-  if (!row) {
-    throw new Error("Could not read the identity of the configured database");
-  }
-
-  return { database: row.database, systemIdentifier: row.system_identifier };
-}
-
-/** Identity of the database the container's own client tools reach for the same credentials. */
-export async function readContainerIdentity(input: {
-  readonly container: string;
-  readonly database: string;
-  readonly username: string;
-  readonly password: string;
-}): Promise<DatabaseIdentity> {
+/**
+ * Runs `SELECT pg_try_advisory_lock(key)` inside the container. Advisory locks live in one
+ * running server and one database, so a "false" answer means the lock is held by the session
+ * on the configured URL and both reach the same instance.
+ */
+async function tryLockInContainer(input: ContainerTarget, key: number): Promise<boolean> {
   const { stdout } = await execFileAsync(
     "docker",
     [
@@ -54,57 +34,46 @@ export async function readContainerIdentity(input: {
       input.database,
       "--tuples-only",
       "--no-align",
-      "--field-separator",
-      "|",
       "--command",
-      "SELECT current_database(), system_identifier::text FROM pg_control_system()"
+      `SELECT pg_try_advisory_lock(${key})`
     ],
     { env: { ...process.env, PGPASSWORD: input.password } }
   );
-  const [database, systemIdentifier] = stdout.trim().split("|");
 
-  if (!database || !systemIdentifier) {
-    throw new Error(`Could not read the database identity inside container "${input.container}"`);
-  }
+  return stdout.trim() === "t";
+}
 
-  return { database, systemIdentifier };
+export interface ContainerTarget {
+  readonly container: string;
+  readonly database: string;
+  readonly username: string;
+  readonly password: string;
 }
 
 /**
- * pg_dump and pg_restore run inside a container and ignore the URL's host and port. This proves
- * the container reaches the same Postgres server and database the operator confirmed.
+ * pg_dump and pg_restore run inside a container and ignore the URL's host and port. Copies of a
+ * cluster share a system identifier and database name, so identity cannot tell them apart.
+ * Instead the URL connection takes a random advisory lock and the container must find it held.
  */
-export function assertSameDatabase(
-  confirmed: DatabaseIdentity,
-  actual: DatabaseIdentity,
-  container: string
-): void {
-  if (
-    confirmed.systemIdentifier !== actual.systemIdentifier ||
-    confirmed.database !== actual.database
-  ) {
-    throw new Error(
-      `Container "${container}" reaches database "${actual.database}" on a different Postgres ` +
-        `server than the configured URL ("${confirmed.database}"). Refusing to continue. ` +
-        "Set JARVIS_BACKUP_PG_CONTAINER (or pass --container) to the container that runs " +
-        "the configured database."
-    );
-  }
-}
-
 export async function assertContainerMatchesConnection(
   db: Kysely<MossDatabase>,
-  input: {
-    readonly container: string;
-    readonly database: string;
-    readonly username: string;
-    readonly password: string;
-  }
+  input: ContainerTarget
 ): Promise<void> {
-  const [confirmed, actual] = await Promise.all([
-    readConnectionIdentity(db),
-    readContainerIdentity(input)
-  ]);
+  const key = randomInt(1, 2 ** 31);
 
-  assertSameDatabase(confirmed, actual, input.container);
+  await db.connection().execute(async (connection) => {
+    await sql`SELECT pg_advisory_lock(${key})`.execute(connection);
+
+    try {
+      if (await tryLockInContainer(input, key)) {
+        throw new Error(
+          `Container "${input.container}" does not reach the Postgres server behind the ` +
+            "configured URL. Refusing to continue. Set JARVIS_BACKUP_PG_CONTAINER (or pass " +
+            "--container) to the container that runs the configured database."
+        );
+      }
+    } finally {
+      await sql`SELECT pg_advisory_unlock(${key})`.execute(connection);
+    }
+  });
 }

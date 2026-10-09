@@ -9,8 +9,10 @@ import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
 
+import { assertContainerMatchesConnection } from "../../scripts/postgres-container.js";
 import { createBackupPlan } from "../../scripts/backup-database.js";
 import { createRestorePlan } from "../../scripts/restore-database.js";
+import { createDatabase } from "@moss/db";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -125,6 +127,106 @@ describe("backup and restore round trip", () => {
       expect(new Set(rows.rows.map((r) => r.owner_user_id))).toEqual(new Set([ids.userA]));
     } finally {
       await client.end();
+    }
+  }, 180_000);
+
+  it("refuses a container that runs a separate copy of the cluster", async () => {
+    // A base backup copied into a second server keeps the system identifier and database names.
+    const copy = `moss-3199-copy-${process.pid}`;
+    const sh = (args: string[]) => execFileAsync("docker", args, { maxBuffer: 256 * 1024 * 1024 });
+    const bootstrap = new URL(bootstrapUrl);
+    const user = decodeURIComponent(bootstrap.username);
+    const password = decodeURIComponent(bootstrap.password);
+    const database = bootstrap.pathname.slice(1);
+    const psql = async (c: string, command: string) =>
+      (
+        await sh([
+          "exec",
+          "--env",
+          `PGPASSWORD=${password}`,
+          c,
+          "psql",
+          "-U",
+          user,
+          "-d",
+          database,
+          "-At",
+          "-c",
+          command
+        ])
+      ).stdout.trim();
+    const db = createDatabase({ connectionString: bootstrapUrl });
+
+    try {
+      const image = (
+        await sh(["inspect", "--format", "{{.Config.Image}}", container])
+      ).stdout.trim();
+      await sh(["exec", "-u", "postgres", container, "rm", "-rf", "/tmp/copy3199"]);
+      await sh([
+        "exec",
+        "-u",
+        "postgres",
+        container,
+        "pg_basebackup",
+        "-D",
+        "/tmp/copy3199",
+        "-X",
+        "fetch",
+        "--checkpoint=fast",
+        "-U",
+        user
+      ]);
+      await sh([
+        "create",
+        "--name",
+        copy,
+        "-e",
+        "PGDATA=/var/lib/postgresql/copy3199",
+        "-e",
+        `POSTGRES_PASSWORD=${password}`,
+        image
+      ]);
+      await new Promise<void>((resolve, reject) => {
+        const packer = execFile(
+          "docker",
+          ["exec", container, "tar", "-C", "/tmp", "-cf", "-", "copy3199"],
+          { encoding: "buffer", maxBuffer: 512 * 1024 * 1024 },
+          (error, tar) => {
+            if (error) return reject(error);
+            const unpacker = execFile("docker", ["cp", "-", `${copy}:/var/lib/postgresql/`], (e) =>
+              e ? reject(e) : resolve()
+            );
+            unpacker.stdin?.end(tar);
+          }
+        );
+        void packer;
+      });
+      await sh(["start", copy]);
+      for (let i = 0; i < 60; i += 1) {
+        const ready = await sh(["exec", copy, "pg_isready", "-U", user]).then(
+          () => true,
+          () => false
+        );
+        if (ready) break;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+
+      // Same system identifier and database name: the old identity comparison could not tell them apart.
+      const control = "SELECT system_identifier FROM pg_control_system()";
+      expect(await psql(copy, control)).toBe(await psql(container, control));
+
+      const target = (name: string) => ({ container: name, database, username: user, password });
+
+      await expect(
+        assertContainerMatchesConnection(db, target(container))
+      ).resolves.toBeUndefined();
+      await expect(assertContainerMatchesConnection(db, target(copy))).rejects.toThrow(
+        /does not reach the Postgres server/
+      );
+    } finally {
+      await db.destroy();
+      await sh(["rm", "-f", copy]).catch(() => undefined);
+      await sh(["exec", container, "rm", "-rf", "/tmp/copy3199"]).catch(() => undefined);
     }
   }, 180_000);
 });
