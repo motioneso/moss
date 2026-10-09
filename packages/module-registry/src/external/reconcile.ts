@@ -36,7 +36,9 @@ export function reconcileExternalModules(
       // #1725: same default-to-[] reasoning as navigation above — the preferences route
       // and the settings pane can then treat "declares none" and "declares an empty list"
       // identically without an undefined check.
-      preferences: manifest.preferences ?? []
+      preferences: manifest.preferences ?? [],
+      // #3168: absent means the module adds nothing to the app map.
+      ...(manifest.appMap ? { appMap: manifest.appMap } : {})
     };
     const row = rowsById.get(id);
 
