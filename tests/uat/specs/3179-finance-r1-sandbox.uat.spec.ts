@@ -427,5 +427,6 @@ test("Finance phase 1 works end to end against the Plaid sandbox", async ({ page
   await tabs.getByText("Accounts", { exact: true }).click();
   const accounts = page.locator('section[aria-label="Accounts"]');
   await expect(accounts.getByText("Plaid Checking").first()).toBeVisible({ timeout: 30_000 });
+  await expect(accounts.getByRole("region", { name: /First Platypus/ })).toBeVisible();
   await crop(accounts, "accounts");
 });
