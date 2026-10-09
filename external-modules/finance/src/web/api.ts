@@ -119,3 +119,19 @@ export async function runQueue(
   if (response.status === 404) return { kind: "disabled" };
   return { kind: "error", message: `Request failed (${response.status})` };
 }
+
+/**
+ * True when the signed-in user is an admin. The admin-only credential list
+ * answers 200 for admins and 403 for everyone else, so the host's own
+ * authorization decides; any failure reads as "not an admin" (fail closed).
+ */
+export async function fetchIsAdmin(): Promise<boolean> {
+  try {
+    const response = await fetch("/api/admin/modules/finance/credentials", {
+      credentials: "include"
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}

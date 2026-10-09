@@ -11,12 +11,14 @@ import { budgetApplyHandler, budgetAssignHandler, budgetStatusHandler } from "./
 import { connectPollHandler, connectStartHandler } from "./handlers/connect.js";
 import {
   categorizeApplyHandler,
+  transactionCategorizeNewHandler,
   transactionCategorizeHandler,
   transactionsQueryHandler
 } from "./handlers/feed.js";
 import { storageMigrateHandler } from "./handlers/migrate.js";
 import { reportsNetWorthHandler, reportsSpendingHandler } from "./handlers/reports.js";
 import { accountSetSharedHandler, shareApplyHandler } from "./handlers/shared.js";
+import { setupStatusHandler } from "./handlers/setup.js";
 import { syncRunHandler } from "./handlers/sync.js";
 import type { WorkerPorts } from "./ports.js";
 import type { ToolHandler } from "./wrap.js";
@@ -27,12 +29,15 @@ export const notImplemented: ToolFactory = () => async () => ({ status: "not-imp
 
 export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "accounts.list": accountsListHandler,
+  // Getting started (#3178): bank keys present, bank linked.
+  "setup.status": setupStatusHandler,
   "connect.start": connectStartHandler,
   "connect.poll": connectPollHandler,
   "sync.run": syncRunHandler,
   // FIN-02 (#1147) Task 10: the feed surface declared by manifest v2.
   "transactions.query": transactionsQueryHandler,
   "transaction.categorize": transactionCategorizeHandler,
+  "transaction.categorize-new": transactionCategorizeNewHandler,
   "categorize.apply": categorizeApplyHandler,
   // FIN-03 (#1148) Task 3: the envelope-budget surface of manifest v0.2.0.
   "budget.status": budgetStatusHandler,

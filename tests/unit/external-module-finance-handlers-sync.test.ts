@@ -446,6 +446,78 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     expect(taxonomy.categories.map((category) => category.id)).toContain("dining");
   });
 
+  describe("review state (#3175)", () => {
+    type Tier = "ask_each_time" | "trusted_auto" | "always_confirm";
+    const ACTOR = "00000000-0000-4000-8000-0000000000aa";
+
+    async function runWithTiers(tiers: Partial<Record<string, Tier | "throw">>) {
+      const kv = fakeKv();
+      await seedItem(kv, "item-1");
+      // A confirmed, categorized earlier row makes "Known Diner" a seen merchant.
+      await kv.set(NS.transactions, "acc-1:2026-06", {
+        transactions: [
+          {
+            id: "t-old",
+            accountId: "acc-1",
+            date: "2026-06-10",
+            amountCents: 900,
+            isoCurrency: "USD",
+            name: "Known Diner 7",
+            merchant: null,
+            plaidCategory: null,
+            categoryId: "dining",
+            pending: false,
+            pendingTransactionId: null,
+            categorizedBy: "user"
+          }
+        ]
+      });
+      const plaid = fakePlaid({
+        transactionsSync: async () =>
+          syncPage({
+            added: [
+              tx({ transaction_id: "t-seen", name: "Known Diner 8" }),
+              tx({ transaction_id: "t-new", name: "Some Diner" })
+            ]
+          })
+      });
+      const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+      const withPolicy: WorkerPorts = {
+        ...ports,
+        actionPolicy: {
+          get: async (familyId) => {
+            const tier = tiers[familyId];
+            if (tier === "throw") throw new Error("rpc_failed");
+            return tier ?? "ask_each_time";
+          }
+        }
+      };
+      await syncRunHandler(withPolicy)({ actorUserId: ACTOR });
+      const chunk = (await kv.get(NS.transactions, "acc-1:2026-07")) as {
+        transactions: Record<string, unknown>[];
+      };
+      return Object.fromEntries(chunk.transactions.map((record) => [record.id as string, record]));
+    }
+
+    it("sorting trusted and sorting_new asking: seen merchant confirmed, new one needs a look", async () => {
+      const byId = await runWithTiers({ sorting: "trusted_auto", sorting_new: "ask_each_time" });
+      expect(byId["t-seen"]).toMatchObject({ categoryId: "dining", reviewState: "confirmed" });
+      expect(byId["t-new"]).toMatchObject({ categoryId: "dining", reviewState: "needs_look" });
+    });
+
+    it("sorting asking and sorting_new trusted: the reverse", async () => {
+      const byId = await runWithTiers({ sorting: "ask_each_time", sorting_new: "trusted_auto" });
+      expect(byId["t-seen"]).toMatchObject({ reviewState: "needs_look" });
+      expect(byId["t-new"]).toMatchObject({ reviewState: "confirmed" });
+    });
+
+    it("an unreadable tier fails closed to needs_look", async () => {
+      const byId = await runWithTiers({ sorting: "throw", sorting_new: "throw" });
+      expect(byId["t-seen"]).toMatchObject({ reviewState: "needs_look" });
+      expect(byId["t-new"]).toMatchObject({ reviewState: "needs_look" });
+    });
+  });
+
   it("bounds a runaway sync at 100 pages per item per run", async () => {
     const kv = fakeKv();
     await seedItem(kv, "item-1");

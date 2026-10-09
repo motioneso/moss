@@ -4,7 +4,13 @@
 // silently changes what RLS sees. Owner is always written in the SQL text
 // via app.current_actor_user_id(), never a param, and no statement filters
 // by owner (RLS + that GUC own that, per the #1167 classifier's read).
-import type { AccountRecord, ItemErrorDetail, ItemRecord, TransactionRecord } from "./records.js";
+import type {
+  AccountRecord,
+  ItemErrorDetail,
+  ItemRecord,
+  ReviewState,
+  TransactionRecord
+} from "./records.js";
 import type { FinanceStore } from "./store-port.js";
 
 // Structural twin of #1167 ctx.db — domain files never import @moss/*, so
@@ -26,7 +32,7 @@ function monthWindow(month: string): { from: string; to: string } {
 
 const TXN_COLUMNS =
   "id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes";
+  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence";
 
 type TransactionRow = {
   id: string;
@@ -42,6 +48,8 @@ type TransactionRow = {
   pending_transaction_id: string | null;
   categorized_by: TransactionRecord["categorizedBy"];
   notes: string | null;
+  review_state: ReviewState;
+  ai_confidence: number | null;
 };
 
 function rowToTransaction(row: TransactionRow): TransactionRecord {
@@ -58,7 +66,9 @@ function rowToTransaction(row: TransactionRow): TransactionRecord {
     pending: row.pending,
     pendingTransactionId: row.pending_transaction_id,
     categorizedBy: row.categorized_by,
-    notes: row.notes ?? undefined
+    notes: row.notes ?? undefined,
+    reviewState: row.review_state,
+    aiConfidence: row.ai_confidence
   };
 }
 
@@ -66,14 +76,15 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
   await db.query(
     "INSERT INTO app.finance_transactions (owner_user_id, id, account_id, date, amount_cents, " +
       "iso_currency, name, merchant, plaid_category, category_id, pending, " +
-      "pending_transaction_id, categorized_by, notes) " +
-      "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) " +
+      "pending_transaction_id, categorized_by, notes, review_state, ai_confidence) " +
+      "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) " +
       "ON CONFLICT (owner_user_id, id) DO UPDATE SET account_id = EXCLUDED.account_id, " +
       "date = EXCLUDED.date, amount_cents = EXCLUDED.amount_cents, iso_currency = EXCLUDED.iso_currency, " +
       "name = EXCLUDED.name, merchant = EXCLUDED.merchant, plaid_category = EXCLUDED.plaid_category, " +
       "category_id = EXCLUDED.category_id, pending = EXCLUDED.pending, " +
       "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
-      "categorized_by = EXCLUDED.categorized_by, notes = EXCLUDED.notes",
+      "categorized_by = EXCLUDED.categorized_by, notes = EXCLUDED.notes, " +
+      "review_state = EXCLUDED.review_state, ai_confidence = EXCLUDED.ai_confidence",
     [
       record.id,
       record.accountId,
@@ -87,7 +98,9 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
       record.pending,
       record.pendingTransactionId ?? null,
       record.categorizedBy ?? null,
-      record.notes ?? null
+      record.notes ?? null,
+      record.reviewState ?? "confirmed",
+      record.aiConfidence ?? null
     ]
   );
 }
@@ -252,6 +265,14 @@ export function sqlStore(db: FinanceDb): FinanceStore {
         [from, to]
       );
       return result.rows.map(rowToTransaction);
+    },
+
+    async listConfirmedPayeeNames() {
+      const result = await db.query<{ name: string }>(
+        "SELECT DISTINCT name FROM app.finance_transactions " +
+          "WHERE review_state = 'confirmed' AND category_id IS NOT NULL"
+      );
+      return result.rows.map((row) => row.name);
     },
 
     async getTransactionChunk(accountId, month) {
