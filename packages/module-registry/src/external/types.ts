@@ -1,6 +1,7 @@
 // Node-free shared types for external module discovery (#917). Kept out of node.ts so
 // the browser entry (index.ts) and the pure reconcile step can import them too.
 import type {
+  ExternalModuleAppMapDeclaration,
   ExternalModuleNavigationEntry,
   ExternalModulePreferenceDeclaration,
   JsonMossModuleManifest
@@ -65,6 +66,8 @@ export interface ReconciledExternalModule {
   // The host owns both the rendering and the storage — see the preferences routes in
   // apps/api/src/routes/module-preferences.ts.
   readonly preferences: readonly ExternalModulePreferenceDeclaration[];
+  /** #3168: entries for Moss's app map, module-relative; absent when the module declares none. */
+  readonly appMap?: ExternalModuleAppMapDeclaration;
 }
 
 export interface ExternalReconcileResult {
