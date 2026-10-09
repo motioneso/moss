@@ -60,17 +60,21 @@ export function check(condition: boolean, message: string): void {
   if (!condition) throw new Error(`parity-shell: ${message}`);
 }
 
+/**
+ * Opens the drawer and waits for a fresh nonempty reply. A drawer that already shows a
+ * reply starts a new side chat through Conversations first, and sends only after the
+ * clear is acknowledged and the old replies have left the DOM.
+ */
 export async function openChatDrawer(page: Page): Promise<void> {
   await page
     .locator("header.topbar")
     .getByRole("button", { name: /open chat|chat with/i })
     .click();
   await page.getByRole("button", { name: "Close chat" }).waitFor({ timeout: 10000 });
-  const newChat = page.getByRole("button", { name: "New chat" });
   const replies = page
     .locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")
     .filter({ hasText: /\S/ });
-  if (await newChat.count()) {
+  if ((await replies.count()) > 0) {
     const clearResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return (
@@ -79,7 +83,8 @@ export async function openChatDrawer(page: Page): Promise<void> {
         url.searchParams.get("surface") === "drawer"
       );
     });
-    await newChat.click();
+    await page.getByRole("button", { name: "Open conversations" }).click();
+    await page.getByRole("button", { name: "New side chat", exact: true }).click();
     const response = await clearResponse;
     if (response.status() !== 204) throw new Error("parity-shell: chat clear failed");
     await page.waitForFunction(
@@ -87,23 +92,13 @@ export async function openChatDrawer(page: Page): Promise<void> {
       undefined,
       { timeout: 10000 }
     );
-    const previousReplyCount = await replies.count();
-    const composer = page.getByRole("textbox", { name: /^Message/ }).first();
-    await composer.waitFor({ timeout: 10000 });
-    await composer.fill("What are my goals?");
-    await page.getByRole("button", { name: "Send", exact: true }).click();
-    await replies.nth(previousReplyCount).waitFor({ state: "visible", timeout: 120000 });
-    return;
   }
-  if ((await replies.count()) > 0) {
-    await replies.last().waitFor({ state: "visible", timeout: 10000 });
-    return;
-  }
+  const previousReplyCount = await replies.count();
   const composer = page.getByRole("textbox", { name: /^Message/ }).first();
   await composer.waitFor({ timeout: 10000 });
   await composer.fill("What are my goals?");
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await replies.last().waitFor({ state: "visible", timeout: 120000 });
+  await replies.nth(previousReplyCount).waitFor({ state: "visible", timeout: 120000 });
 }
 
 export async function blurComposer(page: Page): Promise<void> {

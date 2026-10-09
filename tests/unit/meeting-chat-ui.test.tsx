@@ -6,7 +6,9 @@ import { afterEach, expect, it, vi } from "vitest";
 
 // No jsdom in this environment; ChatDrawer's private-mode effect registers a real
 // `beforeunload` listener once privateMode goes true, which only this file's tests drive.
+// The open Conversations overlay registers document dismiss listeners.
 vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 
 import { DEFAULT_CHAT_SURFACE, meetingChatSurface, type TranscriptRecord } from "@moss/shared";
 import { Thread } from "@moss/ui";
@@ -139,6 +141,18 @@ async function mount(
   });
   return renderer!;
 }
+function hostButton(view: ReactTestRenderer, label: string) {
+  const [button] = view.root.findAll(
+    (node) => node.type === "button" && node.props["aria-label"] === label
+  );
+  if (!button) throw new Error(`No "${label}" button is rendered`);
+  return button;
+}
+/** Starts a fresh context through the mounted Conversations control, as a user does. */
+async function startNewSideChat(view: ReactTestRenderer) {
+  await act(async () => hostButton(view, "Open conversations").props.onClick());
+  await act(async () => hostButton(view, "New side chat").props.onClick());
+}
 function availableMeeting(url: string, title = selection.title, id = meetingId) {
   return url.startsWith("/api/meetings/records/")
     ? { meeting: { id, title, personalNotes: "", notesRevision: 0 } }
@@ -193,7 +207,7 @@ it("uses the shared composer and sends only the bound meeting selection", async 
   expect(JSON.stringify(view.toJSON())).toContain("Includes provisional text");
   expect(JSON.stringify(view.toJSON())).toContain("Partial context");
 });
-it("does not restore a late answer after New chat clears the meeting turn", async () => {
+it("does not restore a late answer after New side chat clears the meeting turn", async () => {
   let finish!: (value: Response) => void;
   fetchMock.mockImplementation(
     () =>
@@ -203,11 +217,7 @@ it("does not restore a late answer after New chat clears the meeting turn", asyn
   );
   const view = await mount();
   await act(async () => view.root.findByType(Composer).props.onSend("What was decided?"));
-  await act(async () =>
-    view.root
-      .findAll((node) => node.type === "button" && node.props["aria-label"] === "New chat")[0]!
-      .props.onClick()
-  );
+  await startNewSideChat(view);
   await act(async () => finish(json(response)));
   expect(JSON.stringify(view.toJSON())).not.toContain("A selected meeting answer");
 });
@@ -624,7 +634,7 @@ it("keeps repeated failed questions distinct from matching history and a success
   expect(view.root.findByType(Thread).props.working).toBe(false);
 });
 
-it("clears failed meeting questions on New chat and ignores a late failure from the old turn", async () => {
+it("clears failed meeting questions on New side chat and ignores a late failure from the old turn", async () => {
   fetchMock.mockImplementation(async () => json({ error: "First send failed" }, 503));
   const view = await mount();
   await act(async () => view.root.findByType(Composer).props.onSend("First private question"));
@@ -636,11 +646,7 @@ it("clears failed meeting questions on New chat and ignores a late failure from 
       })
   );
   await act(async () => view.root.findByType(Composer).props.onSend("Second private question"));
-  await act(async () =>
-    view.root
-      .findAll((node) => node.type === "button" && node.props["aria-label"] === "New chat")[0]!
-      .props.onClick()
-  );
+  await startNewSideChat(view);
   await act(async () => finish(json({ error: "Late failure" }, 503)));
   expect(view.root.findAllByType(Thread)).toHaveLength(0);
   expect(view.root.findByType(Composer).props.sendError).toBeNull();
