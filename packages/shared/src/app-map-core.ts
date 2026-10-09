@@ -465,7 +465,7 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     class: "prerequisite",
     remediationRef: "core.ai.connect_chat_provider",
     description:
-      "No chat model is available. The chat panel header reads Not connected, an empty message box is replaced by a Connect a provider link to Settings > Your assistant, and nothing can be sent. Caller starters are visible from the first render, and unsent drafts remain editable; user edits and explicit clears take precedence."
+      "No chat model is available. The chat panel header reads Not connected, an empty message box is replaced by a Connect a provider link to Settings > Your assistant, and nothing can be sent. Caller starters are visible from the first render, and unsent drafts remain editable; user edits and explicit clears take precedence. An ordinary caller starter stays hidden when a private chat is already known."
   },
   {
     code: "core.ai.chat_locked_model_unavailable",

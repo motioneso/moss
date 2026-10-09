@@ -245,9 +245,10 @@ export function ChatDrawer(props: {
     privacyThreadId: privacyStateQuery.isSuccess ? privacyStateQuery.data.threadId : undefined,
     generation: generationRef
   });
-  const visibleCallerDraft = privateMode
-    ? ""
-    : callerDraft.textFor(selectedThreadId, drafts[draftBinding.draftKey]);
+  const visibleCallerDraft =
+    privateMode || (privacyStateQuery.data?.incognito && !privateModeDecidedLocally.current)
+      ? ""
+      : callerDraft.textFor(selectedThreadId, drafts[draftBinding.draftKey]);
   const composerTarget = {
     destination: draftBinding.draftKey,
     generation: generationRef.current,
