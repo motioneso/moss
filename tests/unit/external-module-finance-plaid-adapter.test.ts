@@ -249,7 +249,7 @@ describe("plaid adapter request/response mapping (#1146)", () => {
     expect(requests[0]!.url).toBe("https://sandbox.plaid.com/institutions/get_by_id");
     expect(decodedBody(requests[0]!)).toMatchObject({
       institution_id: "ins_1",
-      country_codes: ["US"]
+      country_codes: expect.arrayContaining(["US", "CA", "GB"])
     });
     expect(await plaid.institutionGet("ins_2")).toEqual({ name: null });
   });
