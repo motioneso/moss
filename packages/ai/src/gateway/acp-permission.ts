@@ -42,7 +42,7 @@ import { actionResultRecord } from "./action-result-record.js";
 import { awaitActionResolution, emitPendingActionRequest } from "./action-request-lifecycle.js";
 import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
 import { APPROVAL_REFUSED_REASON, approvalRefusalReason } from "./native-tool-guard.js";
-import type { SessionTokenRegistry } from "./session-tokens.js";
+import { LAUNCH_REPLAY_REFUSAL, type SessionTokenRegistry } from "./session-tokens.js";
 import type { AdmissionPath, ConversationProvenancePort, SessionNotifier } from "./types.js";
 
 /**
@@ -241,6 +241,8 @@ export async function requestAcpBuiltInPermission(
   request: AcpBuiltInPermissionRequest
 ): Promise<AcpBuiltInPermissionResponse> {
   const { actorUserId, chatSessionId, threadId } = deps.tokens.verify(token);
+  if (deps.tokens.isInLaunchReplay(token))
+    return { decision: "deny", reason: LAUNCH_REPLAY_REFUSAL };
   const input = freezeSnapshot(request.toolInput);
   if (exactArgumentText(input) === null)
     return { decision: "deny", reason: "Complete native tool details are unavailable." };

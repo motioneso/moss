@@ -31,7 +31,8 @@ import {
   loadChatScriptFixture,
   resolveCaptures,
   extractCapture,
-  type ChatScriptCall
+  type ChatScriptCall,
+  type ChatScriptTurn
 } from "./script-schema.js";
 import { UAT_CHAT_SCRIPTS, type UatChatScript } from "../../seed/types.js";
 
@@ -39,6 +40,9 @@ const TOOLS_CALL_TIMEOUT_MS = 170_000; // 20s margin over NATIVE_CONFIRM_TIMEOUT
 // (packages/chat/src/live/persistent-claude-permission-hook.ts:17, wired at gateway-services.ts:152) —
 // tools/call blocks server-side until ConfirmationRegistry.awaitResolution() settles.
 const TOOLS_LIST_TIMEOUT_MS = 15_000;
+// Mirrors renderReplayBlock (packages/chat/src/live/chat-context-blocks.ts).
+export const REPLAY_BLOCK_HEADER = "The following is the prior conversation so far.";
+const REPLAY_TURN: ChatScriptTurn = { expectIncludes: [], calls: [], reply: "Noted." };
 export const FAILURE_LOG_PATH = "/data/cli-auth/uat-scripted-provider-failures.log";
 export const SUCCESS_LOG_PATH = "/data/cli-auth/uat-scripted-provider-success.log";
 
@@ -430,9 +434,15 @@ export async function runScriptedClaudeAcp(): Promise<void> {
           .map((part) => part.text)
           .join(" ")
       : "";
-    const turn = fixture.turns.find((candidate) =>
-      candidate.expectIncludes.every((expected) => promptText.includes(expected))
-    );
+
+    // #3335: an ACP launch prompts the history replay on its own (renderReplayBlock in
+    // packages/chat/src/live/chat-context-blocks.ts). The gateway refuses every tool call it
+    // provokes, so the stand-in treats it as history: no scripted calls, a short text reply.
+    const turn = promptText.includes(REPLAY_BLOCK_HEADER)
+      ? REPLAY_TURN
+      : fixture.turns.find((candidate) =>
+          candidate.expectIncludes.every((expected) => promptText.includes(expected))
+        );
     if (!turn) fail(scriptId, undefined, "ambiguous-or-zero-eligible-turns");
 
     // #2907: a scripted turn's tool calls ride the CLI's stream-json so the ACP adapter reports a

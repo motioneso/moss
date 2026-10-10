@@ -70,7 +70,8 @@ describe("gateway tool progress", () => {
           chatSessionId: "s1",
           allowedToolNames: null
         }),
-        mint: vi.fn()
+        mint: vi.fn(),
+        isInLaunchReplay: () => false
       } as never
     });
     const gw = new AssistantToolGateway(deps);
@@ -100,7 +101,8 @@ describe("gateway tool progress", () => {
           chatSessionId: "s1",
           allowedToolNames: null
         }),
-        mint: vi.fn()
+        mint: vi.fn(),
+        isInLaunchReplay: () => false
       } as never
     });
     const gw = new AssistantToolGateway(deps);
