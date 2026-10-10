@@ -22,7 +22,10 @@ export const quietHoursSetInputSchema = {
     enabled: { type: "boolean" },
     start: { type: "string" },
     end: { type: "string" },
-    timezone: { type: ["string", "null"] }
+    timezone: {
+      type: ["string", "null"],
+      description: "Leave out to keep the saved time zone. Send null to clear it."
+    }
   },
   required: ["enabled", "start", "end"],
   additionalProperties: false

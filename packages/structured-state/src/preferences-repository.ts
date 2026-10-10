@@ -76,6 +76,7 @@ export class PreferencesRepository {
     await scopedDb.db.deleteFrom("app.preferences").where("key", "=", key).execute();
   }
 
+  // Keep in step with the proactive-monitoring preferences repository's upsertWithRevision.
   async upsertWithRevision(
     scopedDb: DataContextDb,
     key: string,

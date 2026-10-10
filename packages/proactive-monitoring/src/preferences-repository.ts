@@ -62,7 +62,10 @@ export class ProactiveMonitoringPreferencesRepository {
     }
   }
 
-  /** Locked read for a compare-and-set writer. `saved` is null when the stored record is malformed. */
+  /**
+   * Read for a compare-and-set writer. forUpdate locks the row. `saved` is null when the stored
+   * record is malformed.
+   */
   async getSavedWithRevision(
     scopedDb: DataContextDb,
     options: { readonly forUpdate?: boolean } = {}
@@ -90,6 +93,7 @@ export class ProactiveMonitoringPreferencesRepository {
   /**
    * Compare-and-set write. A null expectation inserts only when no row exists; otherwise the row
    * must still be at `expectedRevision`. Either miss throws ProactivePreferenceRevisionConflictError.
+   * Keep in step with PreferencesRepository.upsertWithRevision in @moss/structured-state.
    */
   async upsertWithRevision(
     scopedDb: DataContextDb,
