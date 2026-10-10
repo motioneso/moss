@@ -831,7 +831,7 @@ export const tasksModuleManifest = {
     {
       id: "tasks.approval_effects",
       description:
-        "Deleting a list keeps reassigned tasks but deletes its tags and assignments. Moving a task removes tags from other lists. Deleting a tag removes it from all tasks without deleting the tasks."
+        "Deleting a list keeps reassigned tasks but deletes its tags and assignments. Moving a task removes tags from other lists; a parent's subtasks follow it. Deleting a tag removes it from all tasks without deleting the tasks."
     },
     {
       id: "tasks.chat_app_actions",
@@ -886,6 +886,11 @@ export const tasksModuleManifest = {
       id: "tasks.details_window",
       description:
         "Open a task from List or Grid to edit it in the Task details window. The close button (X) is in the top right corner. Closing it, or Cancel or Escape, discards unsaved edits to the task's fields; subtasks, tags and comments save as you go."
+    },
+    {
+      id: "tasks.details_save",
+      description:
+        "In the Task details window, Save changes waits until the task has loaded. A failed save says Could not save, try again, and keeps your edits. Adding again resumes, not duplicates. Repeats shows the stored repeat."
     },
     {
       id: "tasks.breakdown",

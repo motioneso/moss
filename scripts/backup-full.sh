@@ -88,7 +88,7 @@ main() {
     bash -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump \
       --username=postgres \
       --dbname="$BACKUP_DBNAME" \
-      -Fc --no-owner --no-privileges' \
+      -Fc' \
     > "$BUNDLE_DIR/db.dump"
 
   # 2. Vault snapshot

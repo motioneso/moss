@@ -21,6 +21,17 @@ final class MeetingOutputCaptureTests: XCTestCase {
         var events: [String] = []
         var failure: String?
         var scope: MeetingOutputScope?
+        var defaultOutput: AudioObjectID = 11
+        var systemOutput: AudioObjectID = 12
+        var routeChecks = 0
+        var onStart: (() -> Void)?
+        func verifyOutputRoutes(defaultOutput: AudioObjectID?, systemOutput: AudioObjectID?) throws {
+            guard defaultOutput != nil || systemOutput != nil else { return }
+            routeChecks += 1
+            guard defaultOutput == self.defaultOutput, systemOutput == self.systemOutput else {
+                throw MeetingAudioFailure.invalidSelection
+            }
+        }
         var format = AudioStreamBasicDescription(mSampleRate: 48000, mFormatID: kAudioFormatLinearPCM,
             mFormatFlags: kAudioFormatFlagsNativeFloatPacked, mBytesPerPacket: 4, mFramesPerPacket: 1,
             mBytesPerFrame: 4, mChannelsPerFrame: 1, mBitsPerChannel: 32, mReserved: 0)
@@ -41,7 +52,7 @@ final class MeetingOutputCaptureTests: XCTestCase {
     private final class IO: MeetingOutputIO {
         let hardware: Hardware
         init(_ hardware: Hardware) { self.hardware = hardware }
-        func start() throws { try hardware.step("start") }
+        func start() throws { try hardware.step("start"); hardware.onStart?() }
         func stop() throws { try hardware.step("stop") }
         func destroy() throws { try hardware.step("destroyIO") }
     }
@@ -311,7 +322,7 @@ final class MeetingOutputCaptureTests: XCTestCase {
             }
             gate.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 48000, frameCount: 1, sampleAt: { _ in 0 })
             XCTAssertEqual(receiver.received, 0)
-            XCTAssertEqual(receiver.failures, [.invalidFormat])
+            XCTAssertEqual(receiver.failures, [unreadable ? .invalidFormat : .sourceReconfigured])
         }
     }
 
@@ -437,4 +448,47 @@ final class MeetingOutputCaptureTests: XCTestCase {
             readPath: { _ in throw MeetingAudioFailure.invalidSelection }))
     }
 
+
+    func testPinnedOutputRoutesRejectChangesBeforeAndDuringAcquisition() throws {
+        for stage in ["before", "start", "unchanged"] {
+            let hardware = Hardware(), receiver = Receiver()
+            if stage == "before" { hardware.defaultOutput = 99 }
+            if stage == "start" { hardware.onStart = { hardware.systemOutput = 99 } }
+            let capture = CoreAudioMeetingOutput(scope: .excludingProcesses([7]),
+                expectedDefaultOutputDeviceID: 11, expectedSystemOutputDeviceID: 12, hardware: hardware)
+            if stage == "unchanged" { try capture.start(into: receiver) }
+            else {
+                XCTAssertThrowsError(try capture.start(into: receiver)) {
+                    XCTAssertEqual($0 as? MeetingAudioFailure, .invalidSelection)
+                }
+            }
+            XCTAssertEqual(hardware.routeChecks, stage == "before" ? 1 : 2,
+                "Both physical output routes must be verified after acquisition")
+            if stage == "before" { XCTAssertTrue(hardware.events.isEmpty) }
+            if stage == "start" {
+                XCTAssertEqual(Array(hardware.events.suffix(4)), ["stop", "destroyIO", "destroyAggregate", "destroyTap"])
+            }
+            try capture.stop()
+        }
+    }
+
+    func testUnsupportedTapFormatRemainsHardEvenAfterRecoverableNotice() throws {
+        let ring = try MeetingAudioBuffer(source: .output, epoch: 1, originNanoseconds: 0)
+        let gate = MeetingOutputReceiverGate(ring), hardware = Hardware()
+        try gate.open()
+        gate.verifyFormat(expected: hardware.format) {
+            var changed = hardware.format
+            changed.mSampleRate = 44_100
+            return changed
+        }
+        XCTAssertEqual(ring.failure, .sourceReconfigured)
+        gate.close(preservingFailures: true)
+        gate.verifyFormat(expected: hardware.format) {
+            var malformed = hardware.format
+            malformed.mSampleRate = .nan
+            return malformed
+        }
+        XCTAssertEqual(ring.failure, .invalidFormat)
+        gate.finishFaultMonitoring()
+    }
 }

@@ -83,17 +83,51 @@ function stripHeaderValue(value: string): string {
 }
 
 /**
- * Build a base64url-encoded RFC822 plain-text message for the Gmail draft/send APIs.
- * The body is emitted verbatim; headers are minimal (To/Subject/MIME-Version/Content-Type).
+ * The RFC822 threading headers for a reply to `message`: In-Reply-To is the original's
+ * Message-ID and References is its chain plus that id. Both are null when the cached
+ * message carries no Message-ID.
  */
-export function buildReplyMime(input: { to: string; subject: string; body: string }): string {
-  return buildNewMessageMime(input);
+export function replyThreadHeaders(message: EmailMessage): {
+  readonly inReplyTo: string | null;
+  readonly references: string[] | null;
+} {
+  const metadata =
+    message.external_metadata != null && typeof message.external_metadata === "object"
+      ? (message.external_metadata as Record<string, unknown>)
+      : {};
+  const { references } = deriveImapThreadId(metadata);
+  const inReplyTo =
+    typeof metadata.messageId === "string" && metadata.messageId ? metadata.messageId : null;
+  return { inReplyTo, references };
 }
 
-export function buildNewMessageMime(input: { to: string; subject: string; body: string }): string {
+/**
+ * Build a base64url-encoded RFC822 plain-text reply. Adds In-Reply-To and References when
+ * supplied so the message joins the original conversation.
+ */
+export function buildReplyMime(input: {
+  to: string;
+  subject: string;
+  body: string;
+  inReplyTo?: string | null;
+  references?: readonly string[] | null;
+}): string {
+  const extra: string[] = [];
+  if (input.inReplyTo) extra.push(`In-Reply-To: ${stripHeaderValue(input.inReplyTo)}`);
+  if (input.references && input.references.length > 0) {
+    extra.push(`References: ${input.references.map(stripHeaderValue).join(" ")}`);
+  }
+  return buildNewMessageMime(input, extra);
+}
+
+export function buildNewMessageMime(
+  input: { to: string; subject: string; body: string },
+  extraHeaders: readonly string[] = []
+): string {
   const headers = [
     `To: ${stripHeaderValue(input.to)}`,
     `Subject: ${stripHeaderValue(input.subject)}`,
+    ...extraHeaders,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=UTF-8"
   ];

@@ -77,6 +77,12 @@ export interface ModuleDto {
    * still-being-built module" — never someone else's. Absent once the module has shipped.
    */
   readonly draft?: boolean;
+  /**
+   * #3184: absolute app route of the module's own settings page (`/m/<id>/...`). When present,
+   * the top-bar gear opens it and the host Settings page links to it instead of rendering the
+   * module's switches and credential slots. Absent for modules using the host-rendered page.
+   */
+  readonly settingsPath?: string;
 }
 
 export interface InstanceSettingDto {
@@ -244,7 +250,9 @@ const moduleSchema = {
     // #918: web contribution declaration. NOT in `required` — absent for built-ins.
     web: moduleWebSchema,
     // #1756: present-and-true only for the caller's own still-running draft; absent otherwise.
-    draft: { type: "boolean" }
+    draft: { type: "boolean" },
+    // #3184: declared so fast-json-stringify keeps it.
+    settingsPath: { type: "string" }
   }
 } as const;
 

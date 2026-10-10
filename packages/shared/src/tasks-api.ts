@@ -48,6 +48,7 @@ export interface TaskDto {
   readonly updatedAt: string | null;
   readonly tags: readonly TaskTagDto[];
   readonly suggestionMetadata: TaskSuggestionMetadataV1 | null;
+  readonly recurrence?: RecurrenceSpecDto | null;
 }
 
 export interface TaskActivityDto {
@@ -314,7 +315,8 @@ export const taskDtoSchema = {
     createdAt: nullableStringSchema,
     updatedAt: nullableStringSchema,
     tags: { type: "array", items: taskTagDtoSchema },
-    suggestionMetadata: { anyOf: [taskSuggestionMetadataV1Schema, { type: "null" }] }
+    suggestionMetadata: { anyOf: [taskSuggestionMetadataV1Schema, { type: "null" }] },
+    recurrence: { anyOf: [recurrenceSpecDtoSchema, { type: "null" }] }
   },
   additionalProperties: false
 } as const;

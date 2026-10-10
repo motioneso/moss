@@ -1,0 +1,321 @@
+/* Finance mockups: app frame and page layout only. Colours, type and components come from
+   moss-ui.css, a frozen copy of the shipped tokens and @moss/ui styles. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+}
+p,
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+/* ---- Frames ---- */
+.frame {
+  position: relative;
+  margin: 0 auto;
+  background: var(--bg);
+  overflow: hidden;
+}
+.frame--desktop {
+  width: 1440px;
+  min-height: 1000px;
+}
+.frame--phone {
+  width: 390px;
+  min-height: 844px;
+}
+
+/* ---- Desktop shell ---- */
+.app {
+  display: grid;
+  grid-template-columns: 194px minmax(0, 1fr);
+  min-height: 1000px;
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  padding: 31px 17px;
+  background: var(--sage-light);
+  color: var(--ink);
+  border-right: 1px solid var(--line);
+}
+.nav__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 13px;
+  color: var(--accent-fg);
+  font-family: var(--font-display);
+  font-size: 1.8125rem;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+}
+.nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 42px;
+}
+.nav__label {
+  padding: 20px 14px 4px;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.nav__link {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-height: 2.75rem;
+  padding: 0 14px;
+  border-radius: 3px;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+.nav__link.is-active {
+  background: var(--forest);
+  color: var(--accent-label);
+  font-weight: 600;
+}
+.nav__link svg {
+  width: 19px;
+  height: 19px;
+  flex: none;
+}
+.nav__foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 13px 0;
+  border-top: 1px solid var(--line);
+  font-weight: 600;
+}
+.work {
+  min-width: 0;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg);
+}
+.topbar__title {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 800;
+}
+.topbar--phone {
+  background: var(--sage-light);
+  border-bottom-color: var(--line);
+  padding: 0 var(--space-3);
+}
+
+/* ---- Page layout ---- */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-7) var(--space-8);
+}
+.page--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.page--drawer {
+  grid-template-columns: minmax(0, 1fr);
+}
+.work--drawer .hero,
+.work--drawer .page {
+  padding-right: 440px;
+}
+.page--phone {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-7);
+  padding: var(--space-5) var(--space-4) var(--space-8);
+}
+.hero {
+  padding: var(--space-6) var(--space-7) 0;
+}
+.hero--phone {
+  padding: var(--space-4) var(--space-4) 0;
+}
+.tabs {
+  padding: var(--space-5) var(--space-7) 0;
+}
+.hero .jds-masthead--field {
+  margin-bottom: 0;
+}
+.tabs--phone {
+  padding: var(--space-4) var(--space-4) 0;
+  overflow-x: auto;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+.stack--tight {
+  gap: var(--space-3);
+}
+.stack--rail {
+  gap: var(--space-6);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.row--spread {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.stat-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 9rem;
+}
+.cell-meter {
+  width: 7rem;
+  margin-left: auto;
+}
+.switch-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: var(--border-w) solid var(--border-subtle);
+}
+.switch-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.limit {
+  max-width: 14rem;
+}
+
+/* ---- Chat drawer placement inside a static frame ---- */
+.frame .chatd {
+  position: absolute;
+}
+.frame--phone .chatd {
+  top: 64px;
+  right: 8px;
+  left: 8px;
+  width: auto;
+  height: 772px;
+}
+.scrim {
+  position: absolute;
+  inset: 56px 0 0;
+  background: var(--ink);
+  opacity: 0.32;
+}
+
+/* ---- Index page ---- */
+.index {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+/* ---- Tables that share column positions across groups ---- */
+.table--fixed {
+  table-layout: fixed;
+}
+.table--fixed .col--name {
+  width: 34%;
+}
+.table--fixed .col--payee {
+  width: 28%;
+}
+.table--fixed .col--category {
+  width: 38%;
+}
+.table--fixed .col--amount {
+  width: 8rem;
+}
+
+/* A phone with the chat open shows one screen, not the page behind it. */
+.frame--phone:has(.chatd) {
+  height: 844px;
+}
+
+/* ---- Budget group heads and the collapsed balances ---- */
+.drag-handle {
+  color: var(--muted);
+  cursor: grab;
+}
+.disclosure-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.search {
+  width: 20rem;
+  max-width: 100%;
+}
+.frame--phone .search {
+  width: 100%;
+}
+
+/* ---- Fixes from the design critique ---- */
+.rail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.assign {
+  width: 8rem;
+  max-width: 100%;
+  text-align: right;
+}
+.frame--phone .assign {
+  width: 9rem;
+  text-align: left;
+}
+.month-step {
+  gap: var(--space-3);
+  font-weight: var(--weight-medium);
+}
+.bal-meta {
+  align-items: flex-end;
+}
+.frame--desktop .jds-radio-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.frame--desktop .steps .jds-index {
+  grid-template-columns: 16rem minmax(0, 1fr) auto;
+}
+.bank-status {
+  padding-block-start: var(--space-2);
+}

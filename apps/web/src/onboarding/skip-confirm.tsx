@@ -8,11 +8,15 @@ import { hasConnectedProvider } from "./chat-availability.js";
  * #369 — "Skip setup" must not silently dead-end into a chat that can't answer. When no provider
  * is connected, skipping is still allowed but it must be HONEST: confirm the consequence first.
  *
- * `needsSkipConfirm` is true ⇔ chat would NOT work after the skip (no provider has reached the
- * `ready` install state). Once a provider is connected, skipping is harmless — confirm nothing.
+ * `needsSkipConfirm` is true ⇔ chat would NOT work after the skip: no provider has reached the
+ * `ready` install state and the chat route is not usable (members inherit the shared setup).
+ * Once chat is usable, skipping is harmless — confirm nothing.
  */
-export function needsSkipConfirm(status: OnboardingStatusResponse | undefined): boolean {
-  return !hasConnectedProvider(status);
+export function needsSkipConfirm(
+  status: OnboardingStatusResponse | undefined,
+  chatAvailable = false
+): boolean {
+  return !chatAvailable && !hasConnectedProvider(status);
 }
 
 /** Verbatim consequence copy (spec-locked). Exported so tests/callers share one source. */

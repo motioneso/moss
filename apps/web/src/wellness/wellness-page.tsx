@@ -178,13 +178,8 @@ export function WellnessPage() {
   };
 
   // IMPORTANT: never call mutation inside a setState updater — StrictMode double-fires → double mutation.
-  const handleSave = (val: CheckinFormValue) => {
-    if (editCheckin) {
-      updateCheckinMutation.mutate(val);
-    } else {
-      createCheckinMutation.mutate(val);
-    }
-  };
+  const handleSave = (val: CheckinFormValue) =>
+    editCheckin ? updateCheckinMutation.mutateAsync(val) : createCheckinMutation.mutateAsync(val);
 
   const initialCheckinValue: CheckinFormValue | null = editCheckin
     ? {

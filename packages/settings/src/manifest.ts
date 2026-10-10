@@ -204,6 +204,18 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       method: "GET",
+      path: "/api/me/notification-sensitivity",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "settings.view"
+    },
+    {
+      method: "PUT",
+      path: "/api/me/notification-sensitivity",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "settings.write"
+    },
+    {
+      method: "GET",
       path: "/api/me/notification-digest-preference",
       chat: { access: "read", content: "user_authored" },
       permissionId: "settings.view"

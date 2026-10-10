@@ -42,6 +42,9 @@ final class FixtureServer {
     private var nextStatusDelay: TimeInterval = 0
     private var heldRecordingGeneration: Int?
     private var heldRecordingReplies: [() -> Void] = []
+    private var holdRecoveryControl = false
+    private var heldRecoveryReplies: [() -> Void] = []
+    private var audioRequestBodies: [[String: Any]] = []
     private var strictGapBounds = false
     private var epochStarts: [Int: UInt64] = [1: 0]
     private var epochEnds: [Int: UInt64] = [:]
@@ -61,6 +64,23 @@ final class FixtureServer {
         mismatchSourceControl = control; mismatchSourceStatus = status
     }
     var sourceBodies: [Data] { lock.lock(); defer { lock.unlock() }; return sourceRequests }
+    var audioBodies: [[String: Any]] { lock.lock(); defer { lock.unlock() }; return audioRequestBodies }
+    func holdRecoveryReplies() { lock.lock(); holdRecoveryControl = true; lock.unlock() }
+    var heldRecoveryReplyCount: Int { lock.lock(); defer { lock.unlock() }; return heldRecoveryReplies.count }
+    func holdRecoveryReply(path: String, body: [String: Any], deliver: @escaping () -> Void) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard holdRecoveryControl, path.hasSuffix("/control"), body["command"] as? String == "recover-sources" else { return false }
+        heldRecoveryReplies.append(deliver)
+        return true
+    }
+    func releaseRecoveryReplies() {
+        lock.lock()
+        holdRecoveryControl = false
+        let replies = heldRecoveryReplies
+        heldRecoveryReplies.removeAll()
+        lock.unlock()
+        replies.forEach { $0() }
+    }
     var statusCount: Int { lock.lock(); defer { lock.unlock() }; return statusRequests }
     var captureEpoch: Int { lock.lock(); defer { lock.unlock() }; return epoch }
     func setSelection(_ selection: MeetingCaptureChoice) { lock.lock(); selectionOverride = selection; lock.unlock() }
@@ -170,7 +190,7 @@ final class FixtureServer {
             if loseFirstClaim, hashes.count == 1 { throw URLError(.timedOut) }
         }
         if path.hasSuffix("/control"), let command = body["command"] as? String {
-            if command == "change-sources", let key = body["requestKey"] as? String {
+            if ["change-sources", "recover-sources"].contains(command), let key = body["requestKey"] as? String {
                 sourceRequests.append(try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys]))
                 if sourceRequestUnavailable { throw URLError(.timedOut) }
                 if denySourceRequest { throw ResumeFixtureRejection() }
@@ -178,6 +198,13 @@ final class FixtureServer {
                     guard body["expectedGeneration"] as? Int == generation,
                           body["expectedEpoch"] as? Int == epoch, let selected = body["selection"] else {
                         throw ResumeFixtureRejection()
+                    }
+                    if command == "recover-sources" {
+                        let requested = try JSONDecoder().decode(MeetingCaptureChoice.self,
+                            from: JSONSerialization.data(withJSONObject: selected))
+                        guard desired == "recording", requested == (selectionOverride ?? self.command.selection) else {
+                            throw ResumeFixtureRejection()
+                        }
                     }
                     epochSelections[epoch] = selectionOverride ?? self.command.selection
                     epochEnds[epoch] = epochEnds[epoch] ?? elapsedMs
@@ -221,6 +248,7 @@ final class FixtureServer {
         }
         if path.hasSuffix("/audio"), let key = body["requestKey"] as? String {
             audioRequests += 1
+            audioRequestBodies.append(body)
             return try JSONSerialization.data(withJSONObject: ["requestKey": key, "status": "saved", "replayed": false,
                 "receipt": ["version": 1, "cursor": 1, "transcriptRevision": 1, "stopCutoffMs": NSNull()]])
         }
@@ -280,6 +308,7 @@ final class HostLifecycleProtocol: URLProtocol {
                 self.client?.urlProtocolDidFinishLoading(self)
             }
             if server.holdRecordingStatusReply(path: request.url!.path, body: body, deliver: deliver) { return }
+            if server.holdRecoveryReply(path: request.url!.path, body: body, deliver: deliver) { return }
             let delay = server.takeStatusDelay(path: request.url!.path)
             if delay > 0 { DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: deliver) }
             else { deliver() }

@@ -1,6 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import type { OnboardingStatusResponse } from "@moss/shared";
 
-import { ApiError } from "../api/client.js";
+import { ApiError, lookupAiCapabilityRoute } from "../api/client.js";
+import { queryKeys } from "../api/query-keys.js";
 
 /**
  * #369 — chat-availability signal, derived from the SAME onboarding status #365 added.
@@ -17,6 +19,19 @@ import { ApiError } from "../api/client.js";
 export function hasConnectedProvider(status: OnboardingStatusResponse | undefined): boolean {
   if (status === undefined || status.role !== "founder") return false;
   return status.steps.cliAuth.providers.some((provider) => provider.installState === "ready");
+}
+
+/**
+ * True when the signed-in user has a usable chat route (own provider or the shared setup), for
+ * every role. Same source the chat drawer uses.
+ */
+export function useChatAvailable(): boolean {
+  const route = useQuery({
+    queryKey: queryKeys.ai.capability("chat"),
+    queryFn: () => lookupAiCapabilityRoute("chat"),
+    retry: false
+  });
+  return route.data?.route?.available === true;
 }
 
 /**

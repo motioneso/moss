@@ -182,7 +182,7 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
         <CheckinModal
           open={checkinModalOpen}
           onClose={() => setCheckinModalOpen(false)}
-          onSave={(val) => createCheckinMutation.mutate(val)}
+          onSave={(val) => createCheckinMutation.mutateAsync(val)}
           initial={null}
           seedEmotion={null}
           theme={props.theme}
