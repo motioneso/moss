@@ -11,6 +11,8 @@
   flex-direction: column;
   min-height: 0;
   --cal-gutter: 60px;
+  min-width: 0;
+  container-type: inline-size;
 }
 
 /* ---- toolbar ---- */
@@ -41,7 +43,7 @@
 .cal-nav {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2);
 }
 
 .cal-range {
@@ -91,7 +93,7 @@
 .cal-legend__item {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   white-space: nowrap;
   flex: none;
 }
@@ -106,7 +108,7 @@
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -117,6 +119,9 @@
 .cal-body {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   display: flex;
   padding: 0 32px 24px;
 }
@@ -124,7 +129,7 @@
 /* ===== time grid (day & week) ===== */
 
 .cal-tg {
-  flex: 1;
+  flex: 1 0 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -189,7 +194,7 @@
 .cal-allchip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   width: 100%;
   text-align: left;
   padding: 4px 9px;
@@ -265,7 +270,7 @@
   line-height: 1.22;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
 }
 
 .cal-ev__hold {
@@ -303,11 +308,11 @@
 /* Jarvis-held block — governor treatment */
 
 .cal-ev--ghost {
-  padding-left: 9px;
+  padding-left: 11px;
 }
 
 .cal-ev--ghost .cal-ev__bar {
-  display: none;
+  display: block;
 }
 
 /* now line */
@@ -340,7 +345,7 @@
 /* ===== month ===== */
 
 .cal-month {
-  flex: 1;
+  flex: 1 0 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -383,7 +388,7 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   cursor: pointer;
   padding: 2px;
   font: inherit;
@@ -415,7 +420,7 @@
 .cal-mchip {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   width: 100%;
   text-align: left;
   cursor: pointer;
@@ -478,7 +483,7 @@
 .cal-peek__kind {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -566,4 +571,49 @@
   .cal-peek {
     animation: none;
   }
+}
+
+.cal-notice {
+  padding-inline: var(--space-7);
+}
+.cal-notice > [role="alert"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+.cal-notice p {
+  margin: 0;
+}
+.cal-scroll-hint {
+  display: none;
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+}
+@container (max-width: 800px) {
+  .cal-scroll-hint {
+    display: block;
+  }
+  .cal-body {
+    padding: 0 var(--space-3) var(--space-4);
+  }
+  .cal-legend {
+    padding-inline: var(--space-4);
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .cal-notice {
+    padding-inline: var(--space-4);
+  }
+  .cal-legend__note {
+    white-space: normal;
+  }
+}
+
+.cal-ev__titletext {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

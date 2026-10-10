@@ -18,90 +18,85 @@ export function CalendarPeek({ event, onClose }: CalendarPeekProps) {
   const evColor = isBlock ? "var(--accent-fg)" : "var(--steel)";
 
   return (
-    <>
-      <div className="cal-peek-scrim" onClick={onClose} />
-      <PeekPanel aria-label="Event details">
-        <div className="cal-peek__head">
-          {isBlock ? (
-            <span className="cal-peek__kind cal-peek__kind--block">
-              <GitCommitHorizontal size={13} />
-              {assistantName} is holding this
-            </span>
-          ) : (
-            <span className="cal-peek__kind">
-              <CalendarCheck size={13} />
-              {isTentative ? "Awaiting RSVP" : "On your calendar"}
-            </span>
-          )}
-          <PeekCloseButton aria-label="Close" onClick={onClose}>
-            <X size={17} />
-          </PeekCloseButton>
-        </div>
-        <div className="cal-peek__titlewrap">
-          <span className="cal-peek__mark" style={{ "--ev": evColor } as React.CSSProperties}>
-            {isBlock ? <GitCommitHorizontal size={18} /> : <CalendarCheck size={18} />}
+    <PeekPanel modal onClose={onClose} aria-label="Event details">
+      <div className="cal-peek__head">
+        {isBlock ? (
+          <span className="cal-peek__kind cal-peek__kind--block">
+            <GitCommitHorizontal size={13} />
+            {assistantName} is holding this
           </span>
-          <h3 className="cal-peek__title">{event.title}</h3>
+        ) : (
+          <span className="cal-peek__kind">
+            <CalendarCheck size={13} />
+            {isTentative ? "Awaiting RSVP" : "On your calendar"}
+          </span>
+        )}
+        <PeekCloseButton aria-label="Close" onClick={onClose}>
+          <X size={17} />
+        </PeekCloseButton>
+      </div>
+      <div className="cal-peek__titlewrap">
+        <span className="cal-peek__mark" style={{ "--ev": evColor } as React.CSSProperties}>
+          {isBlock ? <GitCommitHorizontal size={18} /> : <CalendarCheck size={18} />}
+        </span>
+        <h3 className="cal-peek__title">{event.title}</h3>
+      </div>
+      <div className="cal-peek__rows">
+        <div className="cal-peek__row">
+          <span className="ic">
+            <Clock size={15} />
+          </span>
+          <div>
+            <div className="cal-peek__rowmain">
+              {event.allDay
+                ? "All day"
+                : fmtTime(minutesOfDay(event.startsAt)) +
+                  " – " +
+                  fmtTime(minutesOfDay(event.endsAt))}
+              {!event.allDay ? (
+                <span className="cal-peek__dur">
+                  {" "}
+                  ·{" "}
+                  {fmtDur(Math.round((event.endsAt.getTime() - event.startsAt.getTime()) / 60000))}
+                </span>
+              ) : null}
+            </div>
+            <div className="cal-peek__rowsub">{dateRangeLabel(event)}</div>
+          </div>
         </div>
-        <div className="cal-peek__rows">
+        {event.where ? (
           <div className="cal-peek__row">
             <span className="ic">
-              <Clock size={15} />
+              <MapPin size={15} />
             </span>
-            <div>
-              <div className="cal-peek__rowmain">
-                {event.allDay
-                  ? "All day"
-                  : fmtTime(minutesOfDay(event.startsAt)) +
-                    " – " +
-                    fmtTime(minutesOfDay(event.endsAt))}
-                {!event.allDay ? (
-                  <span className="cal-peek__dur">
-                    {" "}
-                    ·{" "}
-                    {fmtDur(
-                      Math.round((event.endsAt.getTime() - event.startsAt.getTime()) / 60000)
-                    )}
-                  </span>
-                ) : null}
-              </div>
-              <div className="cal-peek__rowsub">{dateRangeLabel(event)}</div>
-            </div>
+            <div className="cal-peek__rowmain">{event.where}</div>
           </div>
-          {event.where ? (
-            <div className="cal-peek__row">
-              <span className="ic">
-                <MapPin size={15} />
-              </span>
-              <div className="cal-peek__rowmain">{event.where}</div>
-            </div>
-          ) : null}
-          {event.attendeeCount > 0 ? (
-            <div className="cal-peek__row">
-              <span className="ic">
-                <Users size={15} />
-              </span>
-              <div className="cal-peek__rowmain">
-                {event.attendeeCount} {event.attendeeCount === 1 ? "person" : "people"}
-              </div>
-            </div>
-          ) : null}
+        ) : null}
+        {event.attendeeCount > 0 ? (
           <div className="cal-peek__row">
-            <span className="ic" style={{ paddingTop: 2 }}>
-              <CategoryDot color={evColor} />
+            <span className="ic">
+              <Users size={15} />
             </span>
             <div className="cal-peek__rowmain">
-              {isBlock ? `${assistantName} focus block` : isTentative ? "Pending RSVP" : "Accepted"}
+              {event.attendeeCount} {event.attendeeCount === 1 ? "person" : "people"}
             </div>
           </div>
-        </div>
-        {isBlock ? (
-          <HeldBanner icon={<GitCommitHorizontal size={14} />}>
-            {assistantName} can move or shorten this block when your day changes. Hard events always
-            come first.
-          </HeldBanner>
         ) : null}
-      </PeekPanel>
-    </>
+        <div className="cal-peek__row">
+          <span className="ic" style={{ paddingTop: 2 }}>
+            <CategoryDot color={evColor} />
+          </span>
+          <div className="cal-peek__rowmain">
+            {isBlock ? `${assistantName} focus block` : isTentative ? "Pending RSVP" : "Accepted"}
+          </div>
+        </div>
+      </div>
+      {isBlock ? (
+        <HeldBanner icon={<GitCommitHorizontal size={14} />}>
+          {assistantName} can move or shorten this block when your day changes. Hard events always
+          come first.
+        </HeldBanner>
+      ) : null}
+    </PeekPanel>
   );
 }

@@ -1,8 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Inbox, LoaderCircle } from "lucide-react";
-import { Button, IconButton, LegendSwatch, Segmented } from "@moss/ui";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button, EmptyState, IconButton, LegendSwatch, Segmented } from "@moss/ui";
 import { listCalendarEvents } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useAssistantName } from "../api/use-assistant-name.js";
@@ -96,21 +96,6 @@ export function CalendarPage() {
     setView("day");
   }
 
-  if (calendarQuery.isLoading)
-    return (
-      <div className="empty-state">
-        <LoaderCircle className="spin" size={22} aria-hidden="true" />
-        <p>Loading calendar</p>
-      </div>
-    );
-  if (calendarQuery.error)
-    return (
-      <div className="empty-state">
-        <Inbox size={22} aria-hidden="true" />
-        <p>{calendarQuery.error.message}</p>
-      </div>
-    );
-
   return (
     <div className="cal-wrap" style={{ "--cal-h": HOUR_H + "px" } as React.CSSProperties}>
       <div className="cal-toolbar">
@@ -178,18 +163,56 @@ export function CalendarPage() {
           ) : null}
         </div>
       ) : null}
-      <div className="cal-body">
-        {view === "month" ? (
-          <CalendarMonth
-            cursor={cursor}
-            eventsByDay={eventsByDay}
-            onPickDay={pickDay}
-            onPick={setPeek}
-          />
-        ) : (
-          <CalendarTimeGrid days={dayObjs} hourH={HOUR_H} onPick={setPeek} />
-        )}
+      {view !== "day" ? (
+        <p className="cal-scroll-hint jds-caption" id="calendar-scroll-hint">
+          Scroll sideways to see more days, or choose Day for a closer look.
+        </p>
+      ) : null}
+      <div className="cal-notice">
+        {calendarQuery.isPending ? <p role="status">Loading calendar…</p> : null}
+        {calendarQuery.isError ? (
+          <div role="alert">
+            {calendarQuery.data ? (
+              <p className="jds-hint jds-hint--error">
+                Could not refresh your calendar. Previously loaded events are still shown.
+              </p>
+            ) : (
+              <EmptyState
+                title="Could not load your calendar"
+                description="Try again to load your events."
+              />
+            )}
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={calendarQuery.isFetching}
+              onClick={() => void calendarQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : null}
       </div>
+      {calendarQuery.data ? (
+        <div
+          className="cal-body"
+          role="region"
+          aria-label={`Calendar ${view}`}
+          tabIndex={view === "day" ? undefined : 0}
+          aria-describedby={view === "day" ? undefined : "calendar-scroll-hint"}
+        >
+          {view === "month" ? (
+            <CalendarMonth
+              cursor={cursor}
+              eventsByDay={eventsByDay}
+              onPickDay={pickDay}
+              onPick={setPeek}
+            />
+          ) : (
+            <CalendarTimeGrid days={dayObjs} hourH={HOUR_H} onPick={setPeek} />
+          )}
+        </div>
+      ) : null}
       <CalendarPeek event={peek} onClose={() => setPeek(null)} />
     </div>
   );
