@@ -105,7 +105,7 @@ test("Finance Settings saves the step and limit, lists activity, and undoes it",
   await crop(settings, "settings-fresh");
   await settings
     .getByRole("radio", { name: /Handle routine, ask about new/ })
-    .check({ force: true });
+    .click({ force: true });
   const limitBox = settings.getByLabel("Moss can move up to, per move");
   await limitBox.fill("100");
   await limitBox.press("Enter");

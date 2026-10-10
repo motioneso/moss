@@ -284,7 +284,7 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   await openSettings();
   await settings
     .getByRole("radio", { name: /Handle routine, ask about new/ })
-    .check({ force: true });
+    .click({ force: true });
   const limitBox = settings.getByLabel("Moss can move up to, per move");
   await limitBox.fill("100");
   await limitBox.press("Enter");
@@ -327,8 +327,19 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   // --- Chat: a $50 move is under the limit, so it runs on its own ---------------------------
   const card = page.locator('[role="region"][aria-label="Action request"]');
   const ask = async (text: string) => {
+    if (!(await composer.isVisible())) {
+      await page.getByRole("button", { name: "Chat with Moss" }).click();
+    }
     await composer.fill(text);
     await composer.press("Enter");
+    // Reloading the page mid-turn drops the turn, so stay put until Moss stops thinking or asks.
+    const thinking = page.getByText("Thinking", { exact: true }).last();
+    await thinking.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
+    await expect(async () => {
+      const busy = await thinking.isVisible();
+      const asking = await card.getByRole("button", { name: "Approve" }).last().isVisible();
+      expect(busy && !asking, "Moss is still working").toBe(false);
+    }).toPass({ timeout: 240_000, intervals: [2_000] });
   };
   await ask(
     "Move $50 from Groceries to Fuel for this month's budget. Use the budget move tool and tell me the result."
@@ -370,7 +381,7 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
 
   // --- Step 1, then a sync: new rows land in Needs a look -----------------------------------
   await openSettings();
-  await settings.getByRole("radio", { name: /Ask about everything/ }).check({ force: true });
+  await settings.getByRole("radio", { name: /Ask about everything/ }).click({ force: true });
   await expect(async () => {
     await openSettings();
     await expect(settings.getByRole("radio", { name: /Ask about everything/ })).toBeChecked({
