@@ -218,6 +218,23 @@ function validateAssistantToolPolicy(
   ) {
     errors.push("assistant tool confirmWhenKeys must be an array of non-empty strings");
   }
+  if (tool.confirmAbove !== undefined) {
+    const rule = tool.confirmAbove as Record<string, unknown> | null;
+    if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+      errors.push("assistant tool confirmAbove must be an object");
+    } else if (
+      !isNonEmptyString(rule.inputKey) ||
+      !isNonEmptyString(rule.preferenceKey) ||
+      (rule.baseKey !== undefined && !isNonEmptyString(rule.baseKey)) ||
+      typeof rule.scale !== "number" ||
+      !Number.isFinite(rule.scale) ||
+      rule.scale <= 0
+    ) {
+      errors.push(
+        "assistant tool confirmAbove needs inputKey:string, preferenceKey:string, scale:number>0 and optional baseKey:string"
+      );
+    }
+  }
   if (tool.confirmWhen !== undefined) {
     if (!Array.isArray(tool.confirmWhen)) {
       errors.push("assistant tool confirmWhen must be an array");
