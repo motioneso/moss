@@ -612,7 +612,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0297", name: "0297_chat_action_history_permissions.sql" },
         { version: "0298", name: "0298_ai_action_outcome_delivery.sql" },
         { version: "0300", name: "0300_goals_id_defaults.sql" },
-        { version: "0301", name: "0301_superseded_by_set_null_on_delete.sql" }
+        { version: "0301", name: "0301_superseded_by_set_null_on_delete.sql" },
+        { version: "0303", name: "0303_upgrade_check_worker_functions.sql" }
       ]);
     } finally {
       await client.end();
