@@ -556,11 +556,10 @@
   text-transform: uppercase;
   color: var(--text-subtle);
 }
-/* Tone modifiers (Job Search mockup's Eyebrow: gold for a hero's date/status line, muted for a
-   quieter aside). Gold maps the mockup's `--gold-hover` to this system's `--gold-strong` — same
-   "emphasized gold" role, this codebase's name for it. */
+/* Tone modifiers: gold-ink for a hero's date/status line (clears 4.5:1 on paper), muted for a
+   quieter aside. */
 .jds-eyebrow--gold {
-  color: var(--gold-strong);
+  color: var(--gold-ink);
 }
 .jds-eyebrow--muted {
   color: var(--ink-3);

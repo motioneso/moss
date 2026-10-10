@@ -15,7 +15,8 @@ export interface CheckinFormValue {
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSave: (value: CheckinFormValue) => void;
+  /** Resolves once the save is stored; a rejection keeps the modal open with the draft. */
+  onSave: (value: CheckinFormValue) => Promise<unknown>;
   initial?: CheckinFormValue | null;
   seedEmotion?: WellnessEmotionCore | null;
   theme?: Theme;
@@ -52,6 +53,8 @@ export function CheckinModal({
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -75,6 +78,7 @@ export function CheckinModal({
       setNote("");
     }
     setSearch("");
+    setSaveFailed(false);
   }, [open, initial, seedEmotion]);
 
   const searchResults = useMemo(() => {
@@ -116,10 +120,18 @@ export function CheckinModal({
     setSensations((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   };
 
-  const save = () => {
-    if (!emotion || !feeling) return;
-    onSave({ emotion, feeling, sensations, intensity, note: note.trim() });
-    onClose();
+  const save = async () => {
+    if (!emotion || !feeling || saving) return;
+    setSaving(true);
+    setSaveFailed(false);
+    try {
+      await onSave({ emotion, feeling, sensations, intensity, note: note.trim() });
+      onClose();
+    } catch {
+      setSaveFailed(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const FeelingChips = () => {
@@ -228,11 +240,21 @@ export function CheckinModal({
           </div>
         </div>
         <div className="wl-modal__foot">
+          {saveFailed ? (
+            <span className="wl-modal__note wl-modal__note--error" role="alert">
+              Couldn&apos;t save your check-in. Your note is still here, so try again.
+            </span>
+          ) : null}
           <span className="spacer" />
           <button type="button" className="ghost-button" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="primary-button" disabled={!canSave} onClick={save}>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={!canSave || saving}
+            onClick={() => void save()}
+          >
             {initial ? "Update check-in" : "Save check-in"}
           </button>
         </div>

@@ -15,7 +15,7 @@ import {
 } from "../../domain/index.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
-import { readInt, readString } from "../validate.js";
+import { readActiveUserIds, readInt, readString } from "../validate.js";
 import { loadCategories } from "./feed.js";
 
 function readWindow(input: Record<string, unknown>, ports: WorkerPorts): string[] {
@@ -37,6 +37,7 @@ export const reportsSpendingHandler: ToolFactory = (ports) => async (input) => {
   // Host-injected at the dispatch chokepoint (spread LAST) — never
   // caller-controlled (#1149).
   const actorUserId = readString(input, "actorUserId", { required: true });
+  const activeUserIds = readActiveUserIds(input);
   const window = readWindow(input, ports);
   const months = loadMonths(window);
 
@@ -55,6 +56,8 @@ export const reportsSpendingHandler: ToolFactory = (ports) => async (input) => {
     const parsed = parseSharedKey(key);
     if (!parsed || !months.has(parsed.suffix)) continue;
     if (parsed.ownerUserId === actorUserId) continue;
+    // Deleted/deactivated owners leave mirror residue; never surface it.
+    if (!activeUserIds.has(parsed.ownerUserId)) continue;
     const chunk = (await ports.mirror.get(key)) as TransactionChunk | null;
     if (!chunk || !Array.isArray(chunk.transactions)) continue;
     let rows = sharedByOwner.get(parsed.ownerUserId);

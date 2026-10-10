@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   filterEveningCalendar,
   localDayKey,
+  localDayStartIso,
   partitionEveningTasks
 } from "../../packages/briefings/src/evening-lenses.js";
 
@@ -23,6 +24,22 @@ describe("localDayKey", () => {
     expect(localDayKey("not-a-date", TZ)).toBeNull();
     expect(localDayKey(42, TZ)).toBeNull();
     expect(localDayKey("2026-07-02T12:00:00Z", "Not/AZone")).toBeNull();
+  });
+});
+
+describe("localDayStartIso", () => {
+  it("returns local midnight as a UTC instant", () => {
+    expect(localDayStartIso(NOW, TZ)).toBe("2026-07-02T07:00:00.000Z");
+    expect(localDayStartIso(NOW, "UTC")).toBe("2026-07-03T00:00:00.000Z");
+  });
+  it("uses the day's own offset on the fall-back DST day", () => {
+    // Nov 1 2026 in LA starts at 00:00 PDT (07:00Z) and ends in PST.
+    expect(localDayStartIso(new Date("2026-11-01T20:00:00.000Z"), TZ)).toBe(
+      "2026-11-01T07:00:00.000Z"
+    );
+  });
+  it("returns null for an unknown zone", () => {
+    expect(localDayStartIso(NOW, "Not/AZone")).toBeNull();
   });
 });
 
@@ -65,6 +82,40 @@ describe("filterEveningCalendar", () => {
       TZ
     );
     expect(kept.map((e) => e.title)).toEqual(["tonight", "tomorrow-mtg"]);
+  });
+  it("compares all-day events by calendar date, not by local instant", () => {
+    // Evening of 2026-07-02 in LA. All-day rows are UTC midnights with an exclusive end date.
+    const kept = filterEveningCalendar(
+      [
+        {
+          allDay: true,
+          startsAt: "2026-07-03T00:00:00.000Z",
+          endsAt: "2026-07-04T00:00:00.000Z",
+          title: "tomorrow-all-day"
+        },
+        {
+          allDay: true,
+          startsAt: "2026-07-04T00:00:00.000Z",
+          endsAt: "2026-07-05T00:00:00.000Z",
+          title: "day-after-all-day"
+        },
+        {
+          allDay: true,
+          startsAt: "2026-07-02T00:00:00.000Z",
+          endsAt: "2026-07-03T00:00:00.000Z",
+          title: "today-all-day"
+        },
+        {
+          allDay: true,
+          startsAt: "2026-07-01T00:00:00.000Z",
+          endsAt: "2026-07-04T00:00:00.000Z",
+          title: "multi-day-spanning-tomorrow"
+        }
+      ],
+      NOW,
+      TZ
+    );
+    expect(kept.map((e) => e.title)).toEqual(["tomorrow-all-day", "multi-day-spanning-tomorrow"]);
   });
   it("resolves 'tomorrow' correctly across the fall-back DST boundary", () => {
     // 2026-11-01 in LA is 25h long. Evening of Oct 31, 21:00 PDT = Nov 1 04:00Z.

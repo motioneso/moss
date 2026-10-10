@@ -53,6 +53,7 @@ import {
   getAllQueueDefinitions,
   getBuiltInModuleManifests,
   reconcileExternalModules,
+  externalAppMapItems,
   registerBuiltInApiRoutes,
   registerRouteEnablementGuard,
   assertRouteCoverage,
@@ -626,9 +627,28 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       resolveAccessContext: authRuntime.resolveAccessContext,
       listConfiguredAuthProviders: authRuntime.listConfiguredProviders,
       listModuleManifests: getBuiltInModuleManifests,
+      listExternalBriefingToolNames: () =>
+        externalModuleHolder
+          .getDiscoveries()
+          .flatMap((d) => (d.manifest.briefing ? [d.manifest.briefing.toolName] : [])),
+      listExternalBriefingSources: async (access) => {
+        const on = new Set((await getActiveExternalModules(access)).map((m) => m.id));
+        return externalModuleHolder
+          .getDiscoveries()
+          .flatMap(({ manifest: m }) =>
+            m.briefing && on.has(m.id) ? [{ toolName: m.briefing.toolName, label: m.name }] : []
+          );
+      },
       routeCatalog,
       actAsGrants,
       resolveActiveModules: resolveActiveModulesWithIntegrations,
+      resolveExternalAppMap: async (actorUserId) =>
+        externalAppMapItems(
+          await getActiveExternalModules({
+            actorUserId,
+            requestId: `app-map:${randomUUID()}`
+          })
+        ),
       mcpServerUrl: apiServerConfig.mcpServerUrl,
       focusSignals: async (ctx) => {
         // 1) Resolve THIS actor's active manifests (honors per-user/instance disable) — its

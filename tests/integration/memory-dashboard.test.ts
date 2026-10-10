@@ -387,6 +387,59 @@ async function candidateDecisionState(candidateId: string, excerpt: string) {
   );
 }
 
+describe("approving a suggestion about someone else", () => {
+  it("saves the fact under that person, not under the owner", async () => {
+    const name = `Riley ${randomUUID()}`;
+    const objectText = `likes oat milk ${randomUUID()}`;
+    const candidate = await insertPendingCandidate(ids.userA, {
+      fact: { subject: name, predicate: "prefers", objectText }
+    });
+    const accepted = await server.inject({
+      method: "POST",
+      url: `/api/memory/candidates/${candidate.id}/accept`,
+      headers: authHeaders(ids.userA)
+    });
+    expect(accepted.statusCode).toBe(200);
+
+    const rows = await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "test-read" },
+      (db) =>
+        sql<{ kind: string; name: string }>`
+          SELECT e.kind, e.name FROM app.memory_facts f
+          JOIN app.memory_entities e ON e.id = f.subject_entity_id
+          WHERE f.owner_user_id = ${ids.userA}::uuid AND f.object_text = ${objectText}
+        `.execute(db.db)
+    );
+    expect(rows.rows).toEqual([expect.objectContaining({ name })]);
+    expect(rows.rows[0]?.kind).not.toBe("self");
+  });
+
+  it("refuses when two entities share the name instead of picking one", async () => {
+    const name = `Dana ${randomUUID()}`;
+    await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "test-seed" },
+      async (db) => {
+        await graphRepo.createEntity(db, ids.userA, { kind: "person", name });
+        await graphRepo.createEntity(db, ids.userA, { kind: "person", name });
+      }
+    );
+    const candidate = await insertPendingCandidate(ids.userA, {
+      fact: { subject: name, predicate: "prefers", objectText: "tea" }
+    });
+    const res = await server.inject({
+      method: "POST",
+      url: `/api/memory/candidates/${candidate.id}/accept`,
+      headers: authHeaders(ids.userA)
+    });
+    expect(res.statusCode).toBe(409);
+    const still = await appDataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "test-read" },
+      (db) => candidatesRepo.getById(db, ids.userA, candidate.id)
+    );
+    expect(still?.status).toBe("pending");
+  });
+});
+
 describe("pending-only memory candidate decisions", () => {
   it.each(["reject", "suppress"] as const)(
     "preserves the full accepted candidate and its single memory after a late %s",

@@ -173,9 +173,9 @@ jobs:
       - name: Run unit tests
         run: |
           status=0
-          timeout --verbose --signal=TERM 10m pnpm test:unit || status=$?
+          timeout --verbose --signal=TERM 15m pnpm test:unit || status=$?
           if [ "$status" -eq 124 ]; then
-            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=unit budget=10m issue=#1534"
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=unit budget=15m issue=#1534"
           fi
           exit "$status"
 

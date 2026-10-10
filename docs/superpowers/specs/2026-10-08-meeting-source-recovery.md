@@ -1,0 +1,45 @@
+# Meeting source-format recovery (#3123)
+
+## Scope and decision
+
+A format or sample-clock change on the same authorized audio sources should restart capture automatically. Quiesce the selected microphone/output pair, obtain a new immutable server epoch, reopen the identical selection, and mark honest gaps on both interrupted tracks. Keep the meeting's monotonic origin and existing echo-cancellation/fallback behavior. Separate per-source lifecycle machines are out of scope.
+
+This is a bug fix against current main, after #3120. The implementation plan was supplied to the owner before code changes. This document records that plan; it does not claim live proof or permission to merge.
+
+## Invariants
+
+- Only positive, typed format-change or valid sample-discontinuity evidence qualifies. Malformed timestamps, NaN, overflow, monotonic reversal, capacity, permission, listener, missing device, route, application membership and exclusion changes remain hard failures.
+- Close capture and send admission before teardown or network work. Hard scope faults win over concurrent recoverable faults, including changes that disappear before the next inventory read.
+- Pin original physical microphone, speaker/reference route, selected application membership and Moss exclusions. Recheck before and after acquisition. Never switch devices or silently widen scope. Recovery does not call application permission-request APIs or accept consent automatically; known permission denial is a hard stop. Core Audio offers no documented system-audio preflight here: permission remains unknown until acquisition, and macOS may itself show consent if access was reset. No audio is admitted before successful acquisition and status acknowledgment.
+- Fully dispose failed units before attempting replacement. New eligible VPIO setup incompatibility may use the existing same-microphone HAL fallback. Running failures do not directly fall back. A speaker/reference-route change during echo-cancellation startup fails the pinned selection, including an ordinary combined-audio Start; it does not fall back to a different route or plain microphone.
+- The explicit native recovery command requires a live recording grant/lease, expected generation and epoch, and the identical selection. Paused, stopped, revoked and idle captures cannot recover automatically. Stable request keys make retries idempotent.
+- A confirmed control response is insufficient to upload: ordinary status must confirm the new epoch and then acknowledge its recording observation. Old replies and callbacks cannot admit fresh audio or mutate a newer operation.
+- One bounded episode owns attempts and a monotonic deadline, capped by authorization lease. Every RPC/backoff consumes that budget; recurring faults and immediate restart failures do not reset it. The recovery deadline is separate from the true recording authorization lease. Staged gates remain closed until adoption; an unconfirmed recovery deadline pauses the session rather than manufacturing an expired recording grant. Pause, Stop, permission/scope loss and revocation cancel async recovery immediately. Replacement acquisition runs on a separate serial owner queue while the paused runtime and host polling stay available. Pause/Stop close staged receiver gates and issue server control immediately; a late native return is disposed instead of adopted. Individual native calls cannot be physically preempted, so owned cleanup may remain pending beyond the budget. Initial quiescence uses the existing synchronous stop path; do not claim universal preemption of all native teardown calls.
+- After ordinary status acknowledges a recovered recording epoch, two seconds of continuously advancing callbacks from every faulted source can finish the local episode. If a faulted source stays quiet, service retires the completed episode once 30 seconds have elapsed since recording acknowledgment with no intervening recovery attempt. This is evaluated when serviced, before processing a newly observed fault; it does not establish the hardware fault's exact arrival time. Active control, acquisition and pending recording acknowledgment never start or inherit this cooldown; immediate recurring faults retain the original attempts and deadline. Source validation and the recording-wide recovery cap still apply to every later episode.
+- Retire expired old offers as gaps without assuming receipt success, changing offered bytes/keys, resetting old sequence numbers, or allowing old expiry to pause the fresh epoch. Server pending receipt accounting remains bounded across epochs.
+
+## Presentation
+
+Show "Recovering audio…" while capture is interrupted. A hard pause must surface a persistent visible warning, including if the recording pill was hidden. Keep explicit Pause and Stop usable during recovery. Do not claim audio is recording during the gap. Local recovery exhaustion, including a slow OS permission answer, says "Audio recovery could not finish. Capture is paused. Press Resume in Moss to try again." It does not assert that the server is unreachable or require a fresh grant when recording authorization remains live.
+
+## Verification and release gate
+
+Cover microphone/output/VPIO format changes, valid clock reset, unchanged reference notifications, unchanged authorized sources, route/scope/permission loss, cleanup failures, cancellation and late-response races, duplicate controls, limits, delayed Resume and unknown expired receipts. Observe regression tests failing without their protection. Run the actual app-map build and complete meeting manifest test, lint, formatting, root/test TypeScript checks, applicable portable checks and hosted native tests. Database tests use only the repository verify-gate procedure.
+
+Installed Mac proof remains mandatory: browser call and native Teams before and during recording, delayed Resume after retention expiry, and real device/permission loss. Keep the PR draft and describe it as unverified until this proof exists. Linux checks cannot substitute for native or live proof.
+
+## macOS permission boundary
+
+Apple documents that starting a tap-containing aggregate can trigger system-audio consent: https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps . The owner approved automatic same-source recovery that may cause macOS to show its own consent dialog. This is a narrow exception to the prior explicit-Start-only reopening rule: the person answers the OS dialog; the application never answers it automatically. A surfaced permission-denied error is a hard pause; whether refusal instead yields silent tap callbacks remains unverified until installed-Mac proof. The implementation never interprets an unknown permission as a grant. Live verification must include permission reset/revocation during recovery, no audio while acquisition is blocked, and Pause/Stop while any OS dialog is displayed.
+
+## Staged acquisition ownership
+
+Replacement acquisition has three distinct stages. A short control transaction reserves a ticket and next local epoch while the active runtime stays paused. A dedicated serial owner queue creates/starts the pair; its receiver gates ignore PCM and clock/drop observations before admission, while retaining hard faults. The host continues ordinary status polling. A ready event is only a proposal: the main actor rechecks ticket/session/revision, current remote generation/epoch/selection/desired state, sources, permissions, lease and deadline before a short ownership-transfer transaction opens the gates. Recording observation acknowledgment still precedes upload.
+
+Cancellation closes staged gates without waiting for a driver. Only the owner queue may dispose its partially opened pair after the in-progress call returns. No second acquisition, Resume or Start may overtake that ownership. Failed disposal retains the same handles for Stop retry; account/quit barriers preserve pending ownership. Transition chronology is computed at adoption because service ticks continue while acquisition is pending. A cancelled ticket never advances the native timeline or edits a newer session.
+
+## Recording-wide limits and deployment
+
+Each recording grant permits at most eight accepted automatic recovery controls. Each accepted control counts even if native acquisition later fails. Idempotent retries do not consume another recovery. Healthy audio or the completed 30-second cooldown may replenish a local episode budget, but neither can reset this recording-wide count. Automatic recovery does not consume the last eight of the 64 available segments; manual Pause/Resume and source selection retain their existing authority and limits. Limit exhaustion produces a visible pause requiring a deliberate user action.
+
+Deploy the matching Moss server first, then update Trail Marker. An older server rejects the new `recover-sources` command and `recovering` status value; the new client must not be represented as backward-compatible with that server.

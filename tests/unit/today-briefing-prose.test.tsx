@@ -11,7 +11,6 @@ import type {
   GetDayPlanResponse,
   LocaleSettingsDto,
   MeResponse,
-  OnboardingStatusResponse,
   TaskDto
 } from "@moss/shared";
 import { localDay } from "@moss/shared";
@@ -170,59 +169,14 @@ describe("Today morning briefing prose", () => {
   });
 
   it("enables Reply only when a provider is ready", () => {
-    const morning = briefingDefinition({
-      id: "morning-1",
-      title: "Morning briefing",
-      briefingType: "morning"
-    });
-    const replyRow: BriefingActionRowDto = {
-      taskId: "reply-task",
-      title: "Reply to Alex",
-      explanation: "Alex needs a response.",
-      category: "needs_reply",
-      status: "suggested",
-      primaryAction: { kind: "reply", cacheMessageId: "cache-1" },
-      source: "email",
-      sourceLabel: "Email",
-      sourceRef: "account:message",
-      sourceHref: null,
-      dueAt: null,
-      computedAt: "2026-06-30T01:00:00.000Z",
-      resurfaceReason: null
-    };
-    const replyTask: TaskDto = {
-      id: "reply-task",
-      ownerUserId: "user-1",
-      listId: "list-1",
-      parentTaskId: null,
-      title: "Reply to Alex",
-      description: "Alex needs a response.",
-      status: "suggested",
-      priority: 2,
-      position: 0,
-      dueAt: null,
-      doAt: null,
-      effort: null,
-      source: "email",
-      sourceRef: "account:message",
-      completedAt: null,
-      createdAt: "2026-06-30T01:00:00.000Z",
-      updatedAt: "2026-06-30T01:00:00.000Z",
-      tags: [],
-      suggestionMetadata: null
-    };
-    const runs = [
-      briefingRun({
-        structuredPayload: { version: 1, actionRows: [replyRow], catchUp: null }
-      })
-    ];
+    const { morning, replyTask, runs } = replyFixtures();
     let blockedOpenChatCalls = 0;
     const blocked = renderToday({
       now: new Date("2026-06-30T01:30:00.000Z"),
       definitions: [morning],
       runs,
       tasks: [replyTask],
-      onboardingStatus: onboardingStatus("needs_login"),
+      chatAvailable: false,
       openChatWith: () => {
         blockedOpenChatCalls += 1;
       }
@@ -236,11 +190,26 @@ describe("Today morning briefing prose", () => {
       definitions: [morning],
       runs,
       tasks: [replyTask],
-      onboardingStatus: onboardingStatus("ready")
+      chatAvailable: true
     });
 
     expect(ready).toMatch(/<button[^>]*>Reply<\/button>/);
     expect(ready).not.toMatch(/<button[^>]*disabled=""[^>]*>Reply<\/button>/);
+  });
+
+  it("enables Reply for a family member whenever chat is usable", () => {
+    const { morning, replyTask, runs } = replyFixtures();
+    const html = renderToday({
+      now: new Date("2026-06-30T01:30:00.000Z"),
+      definitions: [morning],
+      runs,
+      tasks: [replyTask],
+      chatAvailable: true,
+      member: true
+    });
+
+    expect(html).toContain(">Reply</button>");
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Reply<\/button>/);
   });
 
   it("lists saved plan blocks in the schedule section between Start here and Needs you", () => {
@@ -319,14 +288,65 @@ describe("Today morning briefing prose", () => {
   });
 });
 
+function replyFixtures() {
+  const morning = briefingDefinition({
+    id: "morning-1",
+    title: "Morning briefing",
+    briefingType: "morning"
+  });
+  const replyRow: BriefingActionRowDto = {
+    taskId: "reply-task",
+    title: "Reply to Alex",
+    explanation: "Alex needs a response.",
+    category: "needs_reply",
+    status: "suggested",
+    primaryAction: { kind: "reply", cacheMessageId: "cache-1" },
+    source: "email",
+    sourceLabel: "Email",
+    sourceRef: "account:message",
+    sourceHref: null,
+    dueAt: null,
+    computedAt: "2026-06-30T01:00:00.000Z",
+    resurfaceReason: null
+  };
+  const replyTask: TaskDto = {
+    id: "reply-task",
+    ownerUserId: "user-1",
+    listId: "list-1",
+    parentTaskId: null,
+    title: "Reply to Alex",
+    description: "Alex needs a response.",
+    status: "suggested",
+    priority: 2,
+    position: 0,
+    dueAt: null,
+    doAt: null,
+    effort: null,
+    source: "email",
+    sourceRef: "account:message",
+    completedAt: null,
+    createdAt: "2026-06-30T01:00:00.000Z",
+    updatedAt: "2026-06-30T01:00:00.000Z",
+    tags: [],
+    suggestionMetadata: null
+  };
+  const runs = [
+    briefingRun({
+      structuredPayload: { version: 1, actionRows: [replyRow], catchUp: null }
+    })
+  ];
+  return { morning, replyRow, replyTask, runs };
+}
+
 function renderToday(input: {
   readonly now: Date;
   readonly definitions: readonly BriefingDefinitionDto[] | undefined;
   readonly runs: readonly BriefingRunDto[];
   readonly tasks?: readonly TaskDto[];
-  readonly onboardingStatus?: OnboardingStatusResponse;
+  readonly chatAvailable?: boolean;
   readonly openChatWith?: (prompt: string) => void;
   readonly dayPlan?: GetDayPlanResponse;
+  readonly member?: boolean;
 }): string {
   const previousDocument = globalThis.document;
   const previousDateNow = Date.now;
@@ -353,8 +373,18 @@ function renderToday(input: {
       }
     );
     client.setQueryData(queryKeys.goals.list, { items: [] });
-    if (input.onboardingStatus) {
-      client.setQueryData(queryKeys.onboarding.status, input.onboardingStatus);
+    if (input.member) {
+      // Member-shaped onboarding status: no connected provider on this role.
+      client.setQueryData(queryKeys.onboarding.status, {
+        role: "member",
+        completed: true,
+        steps: { apiKeyOptOut: { done: false }, connectors: { done: false } }
+      });
+    }
+    if (input.chatAvailable !== undefined) {
+      client.setQueryData(queryKeys.ai.capability("chat"), {
+        route: { available: input.chatAvailable }
+      });
     }
     if (input.definitions) {
       client.setQueryData(queryKeys.briefings.definitions, { definitions: input.definitions });
@@ -381,7 +411,15 @@ function renderToday(input: {
           createElement(
             MemoryRouter,
             null,
-            createElement(TodayPage, { me, wellnessEnabled: false })
+            createElement(TodayPage, {
+              me: input.member
+                ? {
+                    ...me,
+                    user: { ...me.user, isInstanceAdmin: false, isBootstrapOwner: false }
+                  }
+                : me,
+              wellnessEnabled: false
+            })
           )
         )
       )
@@ -393,20 +431,6 @@ function renderToday(input: {
       value: previousDocument
     });
   }
-}
-
-function onboardingStatus(installState: "needs_login" | "ready"): OnboardingStatusResponse {
-  return {
-    role: "founder",
-    state: "completed",
-    steps: {
-      cliAuth: {
-        done: installState === "ready",
-        providers: [{ kind: "anthropic", cliPresent: true, installState }]
-      },
-      connectors: { done: false }
-    }
-  };
 }
 
 function briefingDefinition(

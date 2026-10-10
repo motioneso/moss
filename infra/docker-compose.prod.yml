@@ -213,6 +213,8 @@ services:
       - jarv1s-cli-socket:/run/jarv1s
       - jarv1s-sports-browser-socket:/run/moss-sports-browser
       - jarv1s-modules:/data/modules
+      # Control directory shared with the host restart watcher (JARVIS_HOST_CONTROL_DIR).
+      - ./control:/data/control
     # #2427 (task 5b): the launcher hands each conversation's process to its
     # own account and folders. That takes chown, setuid and setgid. FOWNER is
     # also required: scripts/start-jarv1s.ts chowns /run/jarv1s away from root

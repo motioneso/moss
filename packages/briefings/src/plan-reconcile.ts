@@ -84,8 +84,10 @@ export function planOvernightChanges(
   taskItems: readonly Item[] | undefined
 ): string[] {
   const lines: string[] = [];
-  const events = [...(calendarItems ?? [])];
+  // An unfetched calendar (undefined) says nothing about events; [] means none exist.
+  const events = calendarItems === undefined ? null : [...calendarItems];
   for (const block of plan.blocks) {
+    if (events === null) break;
     const name = nameOf(taskItems, block.taskId, block.title ?? block.id);
     const ref = eventRef(block);
     if (ref) {

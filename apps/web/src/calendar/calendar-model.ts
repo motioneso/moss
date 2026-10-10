@@ -124,17 +124,72 @@ export function dtoToViewEvent(dto: CalendarEventDto): CalendarViewEvent | null 
   };
 }
 
+function addToBucket(
+  map: Map<string, CalendarViewEvent[]>,
+  day: Date,
+  event: CalendarViewEvent
+): void {
+  const key = dayKey(day);
+  const bucket = map.get(key);
+  if (bucket) {
+    bucket.push(event);
+  } else {
+    map.set(key, [event]);
+  }
+}
+
+// Buckets each event on every local day it covers. All-day ends are exclusive.
+// Timed events crossing midnight get one clipped segment per day; segments keep
+// the event id and true start/end instants.
 export function groupEventsByDay(
   events: readonly CalendarViewEvent[]
 ): Map<string, CalendarViewEvent[]> {
   const map = new Map<string, CalendarViewEvent[]>();
   for (const e of events) {
-    const key = dayKey(e.date);
-    const bucket = map.get(key);
-    if (bucket) {
-      bucket.push(e);
-    } else {
-      map.set(key, [e]);
+    const first = new Date(e.date.getFullYear(), e.date.getMonth(), e.date.getDate());
+    const endMs = e.endsAt.getTime();
+    if (Number.isNaN(endMs) || endMs <= e.startsAt.getTime()) {
+      addToBucket(map, first, e);
+      continue;
+    }
+
+    if (e.allDay) {
+      const end = new Date(
+        e.endsAt.getUTCFullYear(),
+        e.endsAt.getUTCMonth(),
+        e.endsAt.getUTCDate()
+      );
+      let day = first;
+      do {
+        addToBucket(map, day, day === first ? e : { ...e, date: day });
+        day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+      } while (day < end);
+      continue;
+    }
+
+    const lastMidnight = new Date(e.endsAt.getFullYear(), e.endsAt.getMonth(), e.endsAt.getDate());
+    const last =
+      e.endMin === 0 && lastMidnight > first
+        ? new Date(lastMidnight.getFullYear(), lastMidnight.getMonth(), lastMidnight.getDate() - 1)
+        : lastMidnight;
+    if (last <= first) {
+      // A timed event ending exactly at local midnight runs to the end of its day.
+      addToBucket(map, first, e.endMin === 0 ? { ...e, endMin: 1440 } : e);
+      continue;
+    }
+    for (
+      let day = first;
+      day <= last;
+      day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)
+    ) {
+      const isFirst = day.getTime() === first.getTime();
+      const isLast = day.getTime() === last.getTime();
+      addToBucket(map, day, {
+        ...e,
+        date: isFirst ? e.date : day,
+        startMin: isFirst ? e.startMin : 0,
+        endMin: isLast ? (e.endMin === 0 ? 1440 : e.endMin) : 1440
+      });
     }
   }
   return map;
@@ -277,4 +332,32 @@ export function loadPersistedCursor(): Date {
 
 export function loadPersistedWorkWeek(): boolean {
   return migrateLegacyKey("jarvis.cal.workweek", "moss.cal.workweek") === "1";
+}
+
+const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
+
+// Real first date, plus the real last date when the event spans several days.
+export function dateRangeLabel(event: CalendarViewEvent): string {
+  if (event.allDay) {
+    const first = new Date(
+      event.startsAt.getUTCFullYear(),
+      event.startsAt.getUTCMonth(),
+      event.startsAt.getUTCDate()
+    );
+    // All-day end is exclusive and UTC-midnight anchored.
+    const last = new Date(
+      event.endsAt.getUTCFullYear(),
+      event.endsAt.getUTCMonth(),
+      event.endsAt.getUTCDate() - 1
+    );
+    return last > first ? fmtDateLabel(first) + " – " + fmtDateLabel(last) : fmtDateLabel(first);
+  }
+  const first = event.startsAt;
+  const endsAtMidnight = minutesOfDay(event.endsAt) === 0 && event.endsAt > first;
+  const last = endsAtMidnight
+    ? new Date(event.endsAt.getFullYear(), event.endsAt.getMonth(), event.endsAt.getDate() - 1)
+    : event.endsAt;
+  return dayKey(last) === dayKey(first) || last < first
+    ? fmtDateLabel(first)
+    : fmtDateLabel(first) + " – " + fmtDateLabel(last);
 }

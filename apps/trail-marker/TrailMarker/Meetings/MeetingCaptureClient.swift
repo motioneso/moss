@@ -75,14 +75,16 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
         }
     }
 
-    func status(_ body: MeetingCaptureStatusBody, credential: String) async throws -> MeetingCaptureReply {
+    func status(_ body: MeetingCaptureStatusBody, credential: String,
+                timeout: TimeInterval = MeetingCaptureClient.requestDeadline) async throws -> MeetingCaptureReply {
         try checkMeetingCredential(credential)
-        return try await post("status", body: body, credential: credential)
+        return try await post("status", body: body, credential: credential, timeout: timeout)
     }
 
-    func control(_ body: MeetingCaptureControlBody, credential: String) async throws -> MeetingCaptureReply {
+    func control(_ body: MeetingCaptureControlBody, credential: String,
+                 timeout: TimeInterval = MeetingCaptureClient.requestDeadline) async throws -> MeetingCaptureReply {
         try checkMeetingCredential(credential)
-        return try await post("control", body: body, credential: credential)
+        return try await post("control", body: body, credential: credential, timeout: timeout)
     }
 
     /// Initiates the HTTP request before returning. The runtime's serial admission boundary
@@ -101,17 +103,24 @@ final class MeetingCaptureClient: NSObject, URLSessionDataDelegate {
     }
 
     private func post<Body: Encodable, Reply: Decodable>(_ path: String, body: Body, credential: String,
-                                                       proof: String? = nil) async throws -> Reply {
-        let request = try makeRequest(path, body: body, credential: credential, proof: proof)
+                                                       proof: String? = nil,
+                                                       timeout: TimeInterval = MeetingCaptureClient.requestDeadline) async throws -> Reply {
+        guard timeout.isFinite, timeout > 0, !Task.isCancelled else { throw MeetingHostError.network }
+        let request = try makeRequest(path, body: body, credential: credential,
+            timeout: min(timeout, Self.requestDeadline), proof: proof)
+        let cancellation = MeetingCaptureRequestCancellation()
         do {
-            return try await withCheckedThrowingContinuation { continuation in
-                do {
-                    _ = try begin(request) { data, response, error in
-                        let result: Result<Reply, Error> = Self.decode(data: data, response: response, error: error)
-                        continuation.resume(with: result)
-                    }
-                } catch { continuation.resume(throwing: error) }
-            }
+            return try await withTaskCancellationHandler(operation: {
+                try await withCheckedThrowingContinuation { continuation in
+                    do {
+                        let task = try begin(request) { data, response, error in
+                            let result: Result<Reply, Error> = Self.decode(data: data, response: response, error: error)
+                            continuation.resume(with: result)
+                        }
+                        cancellation.register(task)
+                    } catch { continuation.resume(throwing: error) }
+                }
+            }, onCancel: { cancellation.cancel() })
         } catch let error as MeetingHostError { throw error }
         catch { throw MeetingHostError.network }
     }
@@ -231,5 +240,27 @@ enum MeetingPCMEncoder {
             bytes.append(UInt8(truncatingIfNeeded: bits >> 8))
         }
         return bytes.base64EncodedString()
+    }
+}
+
+/// Cancellation can arrive before URLSession creates the task. Register and cancel share
+/// one lock, so neither a late registration nor a trickling response outlives the operation.
+private final class MeetingCaptureRequestCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: URLSessionDataTask?
+    private var cancelled = false
+    func register(_ task: URLSessionDataTask) {
+        lock.lock()
+        self.task = task
+        let cancel = cancelled
+        lock.unlock()
+        if cancel { task.cancel() }
+    }
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let task = self.task
+        lock.unlock()
+        task?.cancel()
     }
 }

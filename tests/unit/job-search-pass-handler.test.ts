@@ -238,6 +238,7 @@ function createFakeCtx(input: {
         dimensions: vi.fn(async () => 3)
       } satisfies EmbedPort),
     attachments: { readText: notUsed("attachments.readText") },
+    actionPolicy: { get: notUsed("actionPolicy.get") },
     notify: input.notify ?? { post: vi.fn(async () => undefined) }
   } as ModuleWorkerContext;
 }

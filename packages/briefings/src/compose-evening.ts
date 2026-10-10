@@ -29,7 +29,11 @@ import {
   withinLocalDay
 } from "./compose-shared.js";
 import { collectExternalBriefingContributions } from "./external-contributions.js";
-import { filterEveningCalendar, partitionEveningTasks } from "./evening-lenses.js";
+import {
+  filterEveningCalendar,
+  localDayStartIso,
+  partitionEveningTasks
+} from "./evening-lenses.js";
 import { resolveBriefingFreshness } from "./freshness.js";
 import { resolvePlanContext } from "./plan-context.js";
 import { planSection } from "./plan-prose.js";
@@ -221,7 +225,8 @@ export async function composeEveningBriefing(
     key: "tasks_reconciliation",
     label: TASKS_RECONCILIATION_LABEL,
     lines: recon.lines,
-    count: lenses.completedToday.length + lenses.slipped.length + lenses.carryingForward.length
+    count: lenses.completedToday.length + lenses.slipped.length + lenses.carryingForward.length,
+    rawItems: [...(doneGather.rawItems ?? []), ...(openGather.rawItems ?? [])]
   };
 
   // ── commitments: identical to the morning gather ──────────────────────────────
@@ -254,6 +259,7 @@ export async function composeEveningBriefing(
   // ── calendar_tomorrow: raw events → tomorrow + rest-of-this-evening ──────────
   const includeCalendar = await sourceIncludedInBriefings(scopedDb, deps, "calendar.briefings");
   const calScratch: BriefingGap[] = [];
+  const calendarStart = localDayStartIso(now, timeZone);
   const rawCalendar = includeCalendar
     ? await gatherToolSection(
         scopedDb,
@@ -266,6 +272,8 @@ export async function composeEveningBriefing(
           toolName: "calendar.listVisibleEvents",
           arrayKey: "events",
           metaKeys: ["accounts", "gaps"],
+          // Start at local midnight so blocks earlier today still find their events.
+          toolInput: calendarStart === null ? {} : { startsAfter: calendarStart },
           format: (e) =>
             [sanitizeExternal(e.startsAt), sanitizeExternal(e.title)].filter(Boolean).join(" · ")
         },
@@ -493,7 +501,23 @@ export async function composeEveningBriefing(
   if (morningPlan) {
     sections.push(morningPlan);
   }
-  sections.push(planSection(plan.planContext, tasksReconciliation.rawItems));
+  // Calendar items go to the plan check only when the read succeeded. A switched-off,
+  // unselected, failed, disconnected or unknown-timezone read stays undefined so it never
+  // reads as "event gone".
+  const calendarLoaded =
+    includeCalendar &&
+    definition.selected_tool_names.includes("calendar.listVisibleEvents") &&
+    calendarStart !== null &&
+    calendarSourceContext.accounts.length > 0 &&
+    calendarSourceContext.gaps.length === 0 &&
+    !calScratch.some((g) => g.reason === "tool_failed" || g.reason === "module_disabled");
+  sections.push(
+    planSection(
+      plan.planContext,
+      tasksReconciliation.rawItems,
+      calendarLoaded ? rawCalendar.rawItems : undefined
+    )
+  );
 
   const hasFreshnessDeps = !!(deps.connectorSyncAt ?? deps.vaultLastWriteAt);
   const sourceTimestamps = hasFreshnessDeps

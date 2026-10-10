@@ -212,7 +212,11 @@ describe("finance.reports.spending", () => {
       ]
     });
     const ports = fakePorts(kv, mirror);
-    const result = (await reportsSpendingHandler(ports)({ actorUserId: "u", months: 1 })) as {
+    const result = (await reportsSpendingHandler(ports)({
+      actorUserId: "u",
+      activeUserIds: ["u", "other"],
+      months: 1
+    })) as {
       own: Array<{ byCategory: Record<string, number> }>;
       shared: Array<{
         ownerUserId: string;
@@ -224,6 +228,16 @@ describe("finance.reports.spending", () => {
     expect(result.shared).toHaveLength(1);
     expect(result.shared[0]!.ownerUserId).toBe("other");
     expect(result.shared[0]!.months[0]!.byCategory).toEqual({ groceries: 2_000 });
+
+    // Owner missing from the active list (deleted/deactivated), or no list at all: dropped.
+    for (const extra of [{ activeUserIds: ["u"] }, {}]) {
+      const dropped = (await reportsSpendingHandler(ports)({
+        actorUserId: "u",
+        months: 1,
+        ...extra
+      })) as { shared: unknown[] };
+      expect(dropped.shared).toEqual([]);
+    }
   });
 });
 

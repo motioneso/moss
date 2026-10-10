@@ -103,6 +103,8 @@ export interface CreateTherapyNoteInput {
   readonly linkedEmotion?: WellnessFeelingCore | null;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
  * The full set of schedule columns for one medication, from an already-validated schedule input.
  * Create and update both go through this so they cannot drift apart: EVERY column is listed, and
@@ -363,9 +365,11 @@ export class WellnessRepository {
       .selectAll()
       .where((eb) =>
         eb.or([
+          // One day of slack each side: a zoned medication's slot instant can fall outside the
+          // UTC day of its local date, and slot matching is by exact instant anyway.
           eb.and([
-            eb("scheduled_for", ">=", scheduledStart),
-            eb("scheduled_for", "<", scheduledEnd)
+            eb("scheduled_for", ">=", new Date(scheduledStart.getTime() - DAY_MS)),
+            eb("scheduled_for", "<", new Date(scheduledEnd.getTime() + DAY_MS))
           ]),
           eb.and([
             eb("scheduled_for", "is", null),
@@ -587,7 +591,12 @@ export function medicationLogBelongsToDate(
   if (log.scheduled_for) {
     const scheduledFor =
       log.scheduled_for instanceof Date ? log.scheduled_for : new Date(log.scheduled_for);
-    return scheduledFor >= scheduledStart && scheduledFor < scheduledEnd;
+    // One day of slack each side: a zoned slot instant can fall outside the UTC day of its
+    // local date, and slot matching is by exact instant anyway.
+    return (
+      scheduledFor.getTime() >= scheduledStart.getTime() - DAY_MS &&
+      scheduledFor.getTime() < scheduledEnd.getTime() + DAY_MS
+    );
   }
   const loggedAt = log.logged_at instanceof Date ? log.logged_at : new Date(log.logged_at);
   return loggedAt >= localStart && loggedAt < localEnd;

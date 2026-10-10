@@ -94,7 +94,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
       discoveries: () => [discovery],
       workerDataContext: noopRunner,
       appDataContext: noopRunner,
-      settingsRepository: { getUserById: async () => null } as never,
+      settingsRepository: { getUserById: async () => null, listUsers: async () => [] } as never,
       logger: { warn: () => undefined }
     });
 
@@ -120,7 +120,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
       discoveries: () => [discovery],
       workerDataContext: noopRunner,
       appDataContext: noopRunner,
-      settingsRepository: { getUserById: async () => null } as never,
+      settingsRepository: { getUserById: async () => null, listUsers: async () => [] } as never,
       logger: { warn: () => undefined }
     });
 
@@ -139,7 +139,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
       discoveries: () => [discovery],
       workerDataContext: noopRunner,
       appDataContext: noopRunner,
-      settingsRepository: { getUserById: async () => null } as never,
+      settingsRepository: { getUserById: async () => null, listUsers: async () => [] } as never,
       logger: { warn: () => undefined }
     });
 
@@ -156,6 +156,68 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
   });
 });
 
+describe("assistant-tool invocations carry the active member ids only for shared-state modules", () => {
+  const sharedStateDiscovery = {
+    ...(discovery as unknown as Record<string, unknown>),
+    manifest: {
+      ...(discovery as unknown as { manifest: Record<string, unknown> }).manifest,
+      storage: [{ namespace: "demo.shared", scopes: ["instance"], instanceWritePolicy: "module" }]
+    }
+  } as never;
+  const access = { actorUserId: "user-1", requestId: "req-1" } as never;
+
+  it("passes active members only, after any caller-supplied value", async () => {
+    invoke.mockClear();
+    const { getManifests } = createExternalModuleTools({
+      discoveries: () => [sharedStateDiscovery],
+      workerDataContext: noopRunner,
+      appDataContext: noopRunner,
+      settingsRepository: {
+        getUserById: async () => null,
+        listUsers: async () => [
+          { id: "user-1", status: "active" },
+          { id: "user-gone", status: "deactivated" },
+          { id: "user-2", status: "active" }
+        ]
+      } as never,
+      logger: { warn: () => undefined }
+    });
+
+    await getManifests()[0]!.assistantTools![0]!.execute!(
+      {} as never,
+      { activeUserIds: ["user-gone"] },
+      access
+    );
+
+    const toolInput = invoke.mock.calls[0]?.[2] as { activeUserIds?: unknown } | undefined;
+    expect(toolInput?.activeUserIds).toEqual(["user-1", "user-2"]);
+  });
+
+  it("sends a module without shared state no extra key and never reads the member list", async () => {
+    invoke.mockClear();
+    const listUsers = vi.fn(async () => []);
+    const { getManifests } = createExternalModuleTools({
+      discoveries: () => [discovery],
+      workerDataContext: noopRunner,
+      appDataContext: noopRunner,
+      settingsRepository: { getUserById: async () => null, listUsers } as never,
+      logger: { warn: () => undefined }
+    });
+
+    await getManifests()[0]!.assistantTools![0]!.execute!(
+      {} as never,
+      { localDate: "2026-08-20" },
+      access
+    );
+
+    expect(invoke.mock.calls[0]?.[2]).toEqual({
+      localDate: "2026-08-20",
+      actorUserId: "user-1"
+    });
+    expect(listUsers).not.toHaveBeenCalled();
+  });
+});
+
 describe("getManifests re-reads discoveries on every call (#1902)", () => {
   it("reflects a module discovered after construction, with no rebuild step", async () => {
     const mutableDiscoveries: (typeof discovery)[] = [];
@@ -163,7 +225,7 @@ describe("getManifests re-reads discoveries on every call (#1902)", () => {
       discoveries: () => mutableDiscoveries,
       workerDataContext: noopRunner,
       appDataContext: noopRunner,
-      settingsRepository: { getUserById: async () => null } as never,
+      settingsRepository: { getUserById: async () => null, listUsers: async () => [] } as never,
       logger: { warn: () => undefined }
     });
 
