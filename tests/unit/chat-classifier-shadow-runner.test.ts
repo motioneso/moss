@@ -4,7 +4,8 @@ import type { ClassifierChoiceResult, ClassifierHandle, GatewayGateOutcome } fro
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 
 import type { ClassifierShadowRepository } from "../../packages/chat/src/classifier-shadow-repository.js";
-import { GATE_LIMITS } from "../../packages/chat/src/live/classifier-gate.js";
+import { GATE_LIMITS, type GateSpeed } from "../../packages/chat/src/live/classifier-gate.js";
+import { GateSpeedRecord } from "../../packages/chat/src/live/classifier-gate-speed.js";
 import {
   createClassifierGateShadowRunner,
   type ClassifierGateShadowRunnerDeps
@@ -106,6 +107,7 @@ function harness(
     gateway?: GatewayGateOutcome;
     listTools?: ClassifierGateAttemptPorts["listTools"];
     listToolNames?: readonly string[];
+    speed?: GateSpeed;
   } = {}
 ): Harness {
   const choose = overrides.chooseImpl ?? vi.fn();
@@ -139,6 +141,7 @@ function harness(
 
   const deps: ClassifierGateShadowRunnerDeps = {
     readMode: vi.fn(async () => (overrides.mode ?? "shadow") as never),
+    ...(overrides.speed ? { speed: overrides.speed } : {}),
     createPorts,
     repository,
     dataContext,
@@ -458,6 +461,28 @@ describe("failure and cooldown", () => {
       fakeDb,
       expect.objectContaining({ decision: "failed", reason: "timeout" })
     );
+  });
+
+  it("waits out a five-second answer when the speed record allows it, and measures it (#3365)", async () => {
+    vi.useFakeTimers();
+    const choose = vi.fn();
+    calendarAnswers(choose);
+    const answer = choose.getMockImplementation()!;
+    choose.mockImplementationOnce(
+      (...args: unknown[]) =>
+        new Promise((resolve) => setTimeout(() => resolve(answer(...args)), 5_000))
+    );
+    const speed = new GateSpeedRecord();
+    const record = vi.spyOn(speed, "record");
+    const h = harness({ chooseImpl: choose, speed, now: () => Date.now() });
+    h.runner.start(input());
+    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.runAllTimersAsync();
+    expect(h.complete).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({ decision: "would_handle" })
+    );
+    expect(record).toHaveBeenCalledWith(handle().model.id, 5_000);
   });
 
   it("never throws when the repository write fails", async () => {

@@ -5,7 +5,8 @@ import {
   type ClassifierGatePorts,
   type GateMode,
   type GateOutcome,
-  type GateRequest
+  type GateRequest,
+  type GateSpeed
 } from "./classifier-gate.js";
 
 /**
@@ -59,6 +60,8 @@ export class GatePasses {
 export interface ClassifierGateWiringDeps {
   /** Reads the admin `chat.classifier_gate_mode` setting through the caller's data access. */
   readonly readMode: (actorUserId: string) => Promise<GateMode>;
+  /** #3365: the process-wide routing-model speed record. */
+  readonly speed?: GateSpeed;
   /** The same `SessionTokenRegistry` every model session uses. */
   readonly tokens: {
     mint(
@@ -124,6 +127,7 @@ export function buildClassifierGateRunner(deps: ClassifierGateWiringDeps): Class
   const passes = new GatePasses();
   return createClassifierGateRunner({
     readMode: deps.readMode,
+    ...(deps.speed ? { speed: deps.speed } : {}),
     ...(deps.createPorts ? { createPorts: deps.createPorts } : {}),
     tokens: {
       mint: (actorUserId, correlationId, threadId, options) => {
@@ -207,6 +211,8 @@ export interface ClassifierGateAttemptPorts {
 
 export interface ClassifierGateRunnerDeps {
   readMode(actorUserId: string): Promise<GateMode>;
+  /** #3365: measures each routing model and sets its time limit. Absent, the fixed limit applies. */
+  readonly speed?: GateSpeed;
   /**
    * Builds the attempt ports. The gateway must already be bound to `token`; the runner never exposes
    * the token anywhere else. ABSENT until the later live-wiring step assembles the tool list and
@@ -257,6 +263,7 @@ export function createClassifierGateRunner(deps: ClassifierGateRunnerDeps): Clas
                     : Promise.resolve({ kind: "declined" as const, reason: "not_in_allowlist" })
               }
             : attempt.gateway,
+          ...(deps.speed ? { speed: deps.speed } : {}),
           now: deps.now
         });
         return await gate.evaluate(request);
