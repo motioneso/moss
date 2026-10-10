@@ -321,7 +321,7 @@ function bindingContains(name: ts.BindingName, text: string): boolean {
       );
 }
 function findLocalBinding(node: ts.Identifier): ts.VariableDeclaration | undefined {
-  let scope: ts.Node | undefined = nearestScope(node);
+  let scope: ts.Node | undefined = node.parent;
   while (scope) {
     if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
       for (const statement of scope.statements) {

@@ -256,6 +256,7 @@ describe("bounded module-local class guard", () => {
   });
   it.each([
     'const names = "nw-card"; function Example({ names }) { return <div className={names} />; }',
+    'const names = "nw-card"; const Example = ({ names }) => <div className={names} />;',
     'function Example() { const names = ["nw-card"]; function alter() { names.push("nw-missing"); } alter(); return <div className={names.join(" ")} />; }',
     'function Example() { const names = ["nw-card"]; const alias = names; alias.push("nw-missing"); return <div className={names.join(" ")} />; }',
     'function Example({on}) { return <div className={`nw-card${on && " "}`} />; }',
