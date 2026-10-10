@@ -320,7 +320,7 @@ function bindingContains(name: ts.BindingName, text: string): boolean {
         (element) => ts.isBindingElement(element) && bindingContains(element.name, text)
       );
 }
-function findLocalBinding(node: ts.Identifier): ts.VariableDeclaration | undefined {
+function findLocalBinding(node: ts.Identifier): ts.VariableDeclaration | null | undefined {
   let scope: ts.Node | undefined = node.parent;
   while (scope) {
     if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
@@ -329,12 +329,24 @@ function findLocalBinding(node: ts.Identifier): ts.VariableDeclaration | undefin
           (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
           statement.name?.text === node.text
         ) {
-          return undefined;
+          return null;
+        }
+        if (ts.isImportDeclaration(statement)) {
+          const clause = statement.importClause;
+          const bindings = clause?.namedBindings;
+          if (
+            clause?.name?.text === node.text ||
+            (bindings && ts.isNamespaceImport(bindings) && bindings.name.text === node.text) ||
+            (bindings &&
+              ts.isNamedImports(bindings) &&
+              bindings.elements.some((entry) => entry.name.text === node.text))
+          )
+            return null;
         }
         if (!ts.isVariableStatement(statement)) continue;
         for (const declaration of statement.declarationList.declarations) {
           if (bindingContains(declaration.name, node.text)) {
-            return ts.isIdentifier(declaration.name) ? declaration : undefined;
+            return ts.isIdentifier(declaration.name) ? declaration : null;
           }
         }
       }
@@ -343,14 +355,14 @@ function findLocalBinding(node: ts.Identifier): ts.VariableDeclaration | undefin
       ts.isFunctionLike(scope) &&
       scope.parameters.some((parameter) => bindingContains(parameter.name, node.text))
     ) {
-      return undefined; // A parameter shadows outer constants, including destructured props.
+      return null; // A parameter shadows outer constants, including destructured props.
     }
     if (
       ts.isCatchClause(scope) &&
       scope.variableDeclaration &&
       bindingContains(scope.variableDeclaration.name, node.text)
     ) {
-      return undefined;
+      return null;
     }
     if (
       (ts.isForOfStatement(scope) || ts.isForInStatement(scope) || ts.isForStatement(scope)) &&
@@ -360,11 +372,31 @@ function findLocalBinding(node: ts.Identifier): ts.VariableDeclaration | undefin
         bindingContains(declaration.name, node.text)
       )
     ) {
-      return undefined;
+      return null;
     }
     scope = scope.parent;
   }
   return undefined;
+}
+
+function isBooleanFilter(call: ts.CallExpression): boolean {
+  const callback = call.arguments[0];
+  return (
+    call.arguments.length === 1 &&
+    callback !== undefined &&
+    ts.isIdentifier(callback) &&
+    callback.text === "Boolean" &&
+    findLocalBinding(callback) === undefined
+  );
+}
+function isSpaceJoin(call: ts.CallExpression): boolean {
+  const separator = call.arguments[0];
+  return (
+    call.arguments.length === 1 &&
+    separator !== undefined &&
+    ts.isStringLiteral(separator) &&
+    separator.text === " "
+  );
 }
 
 type ClassValueContext = "jsx" | "string" | "array" | "filtered-array";
@@ -504,7 +536,9 @@ function moduleClassValues(
             parent.expression === node &&
             ts.isCallExpression(parent.parent) &&
             parent.parent.expression === parent &&
-            ["push", "filter", "join"].includes(parent.name.text);
+            (parent.name.text === "push" ||
+              (parent.name.text === "filter" && isBooleanFilter(parent.parent)) ||
+              (parent.name.text === "join" && isSpaceJoin(parent.parent)));
           if (!knownMethod) unknown.add(node); // Any alias/escape can mutate outside supported pushes.
         }
         if (
@@ -526,7 +560,12 @@ function moduleClassValues(
             for (const argument of node.arguments) {
               result = product(result, ["", ...values(argument)], " ");
             }
-          } else if (method !== "filter" && method !== "join") {
+          } else if (
+            !(
+              (method === "filter" && isBooleanFilter(node)) ||
+              (method === "join" && isSpaceJoin(node))
+            )
+          ) {
             unknown.add(node);
           }
         }
@@ -539,23 +578,14 @@ function moduleClassValues(
   }
   if (ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression)) {
     const method = expression.expression.name.text;
-    if (
-      method === "filter" &&
-      expression.arguments.length === 1 &&
-      expression.arguments[0]!.getText(source) === "Boolean"
-    ) {
+    if (method === "filter" && isBooleanFilter(expression)) {
       if (context === "array" || context === "filtered-array") {
         return values(expression.expression.expression, "filtered-array");
       }
       unknown.add(expression);
       return [];
     }
-    if (
-      method === "join" &&
-      expression.arguments.length === 1 &&
-      ts.isStringLiteral(expression.arguments[0]!) &&
-      expression.arguments[0]!.text === " "
-    ) {
+    if (method === "join" && isSpaceJoin(expression)) {
       return values(expression.expression.expression, "array");
     }
   }

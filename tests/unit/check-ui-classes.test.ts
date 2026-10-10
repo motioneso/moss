@@ -265,7 +265,9 @@ describe("bounded module-local class guard", () => {
     '<div className={["nw-card", "nw-second"]} />',
     'const names = "nw-card"; try {} catch (names) { const element = <div className={names} />; }',
     'function Example() { const names = ["nw-card"]; mutate({names}); return <div className={names.join(" ")} />; }',
-    'function Example({count}) { return <div className={count && "nw-card"} />; }'
+    'function Example({count}) { return <div className={count && "nw-card"} />; }',
+    'function Example() { const names = ["nw-card"]; names.filter((value,index,array) => { array.push("nw-missing"); return false; }); return <div className={names.join(" ")} />; }',
+    'function Example({Boolean}) { const names = ["nw-card"]; names.filter(Boolean); return <div className={names.join(" ")} />; }'
   ])("fails closed for unsupported binding, mutation or string coercion: %s", async (source) => {
     const root = await localFixture(source, ".nw-card {} .nw-second {}");
     expect(
