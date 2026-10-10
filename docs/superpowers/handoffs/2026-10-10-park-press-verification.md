@@ -131,7 +131,13 @@ release and separate nonmodal source trays. Independent review includes stale
 closure/measurement and multiple-message source-tray probes. Source-faithful
 browser measurements verified all nine readability results against rendered
 colors and independently recalculated contrast, including a failing dark-palette
-pair and a changed custom light palette. No theme Save was issued in browser proof.
+pair and a changed custom light palette. No theme Save was issued in browser proof. SourceTray was
+rechecked under the real app StrictMode after the shared replay fix: Enter focuses
+Close source, Tab remains free, Escape and Close restore the opener without closing
+parent Chat, and a visible outside pointer click preserves the chosen textarea focus.
+Location and Skills explicitly name genuine mixed control groups; OpenCode directly
+associates its model label and hint with its select. The active Location branch patch
+remains apply-compatible.
 
 This batch adds no routes or authority. Core declarations describe the repaired
 recovery controls in the same batch. The active Memory and host chat patches were
@@ -140,8 +146,9 @@ Final command counts and remaining browser cases are recorded in its draft body.
 
 ## Explicit outstanding gates
 
-- Consumer batches, including the actual custom-theme readout and remaining Sports
-  controls, must receive their own source/test/browser review and same-PR metadata.
+- Later planning, lifestyle and Meetings/Finance batches must receive their own
+  source/test/browser review and same-PR metadata. The final bounded module-local
+  class guard remains a separate dependent followup.
 - Active PR-owned Conversations/Alerts changes are not imported or rewritten by
   this foundation batch. Relevant disjoint patch compatibility is recorded in the
   freshness handoff; overlapping future changes still need reconciliation.
