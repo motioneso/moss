@@ -3,10 +3,10 @@
 // engine and a real AI provider. Nothing is mocked. See docs/DEVELOPMENT_STANDARDS.md.
 //
 // Run with:
-//   LIVE_BASE_URL=http://127.0.0.1:5184 LIVE_API_URL=http://127.0.0.1:3033 \
-//   LIVE_OWNER_PASSWORD=... \
+//   LIVE_BASE_URL=http://127.0.0.1:<web-port> LIVE_API_URL=http://127.0.0.1:<api-port> \
+//   LIVE_OWNER_EMAIL=... LIVE_OWNER_PASSWORD=... \
 //     npx playwright test --config playwright.live.config.ts workshop-1888
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
 if (!OWNER_PASSWORD) {
@@ -16,7 +16,8 @@ if (!OWNER_PASSWORD) {
       "named dev-instance-lan-spinup-trusted-origins."
   );
 }
-const OWNER = { email: "ben@ben.com", password: OWNER_PASSWORD };
+const OWNER = { email: process.env.LIVE_OWNER_EMAIL ?? "ben@ben.com", password: OWNER_PASSWORD };
+const REPLIES = ".chatd-msg:not(.chatd-msg--me) .chatd-bubble";
 
 // One message that supplies everything workshop.buildModule's description tells the model to
 // gather first (what it does, what it reaches, when it runs), so the turn reaches the tool
@@ -32,6 +33,23 @@ async function signInThroughUi(page: Page) {
     .getByRole("button", { name: /sign in/i })
     .click();
   await expect(page.getByRole("navigation").first()).toBeVisible();
+}
+
+// The drawer reopens its last conversation, so a fresh chat comes from Conversations.
+// Asking waits for the drawer clear and for the old replies to leave.
+async function startSideChat(page: Page, drawer: Locator): Promise<void> {
+  const cleared = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname === "/api/chat/clear" &&
+      url.searchParams.get("surface") === "drawer"
+    );
+  });
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  await drawer.getByRole("button", { name: "New side chat", exact: true }).click();
+  expect((await cleared).status()).toBe(204);
+  await expect(drawer.locator(REPLIES)).toHaveCount(0);
 }
 
 test("Moss builds and installs a working Word of the Day module through the UI", async ({
@@ -52,7 +70,8 @@ test("Moss builds and installs a working Word of the Day module through the UI",
   await signInThroughUi(page);
 
   await page.getByRole("button", { name: /^(Chat with .+|Open chat)$/ }).click();
-  const composer = page.getByRole("textbox", { name: /^Message/ });
+  const drawer = page.getByRole("dialog", { name: /^Chat with .+|^Chat$/ });
+  const composer = drawer.getByRole("textbox", { name: /^Message/ });
   await expect(composer).toBeVisible();
 
   // #1943: start a fresh conversation before asking. The drawer reopens the previous one, and
@@ -61,7 +80,9 @@ test("Moss builds and installs a working Word of the Day module through the UI",
   // again; and the words "Build it" are already on the page, in the old card and in Moss's own
   // prose, so waiting for them to appear passed in under two seconds against a branch where
   // nothing had happened - no new build record, no new entry in the tool audit log.
-  await page.getByRole("button", { name: /^New chat$/ }).click();
+  const staleCards = await page.getByRole("button", { name: /^Build it$/ }).count();
+  await startSideChat(page, drawer);
+  console.log(`[1888] new side chat cleared ${staleCards} earlier plan cards before asking`);
 
   // Exactly one card, and only after the ask, so neither a leftover card nor a polite refusal
   // nor a follow-up question can pass this.
