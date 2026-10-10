@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router";
@@ -37,6 +38,24 @@ describe("shell nav storage", () => {
 });
 
 describe("shell nav rail rendering", () => {
+  it("hides only the closed mobile sheet without overriding motion behavior", () => {
+    const css = readFileSync(
+      new URL("../../apps/web/src/styles/kit-shell-nav.css", import.meta.url),
+      "utf8"
+    );
+    const rules = css.slice(css.indexOf("/* Translation alone"));
+    const narrowStart = css.lastIndexOf(
+      "@media (max-width: 920px)",
+      css.indexOf("/* Translation alone")
+    );
+    expect(narrowStart).toBeGreaterThan(-1);
+    expect(rules).toMatch(/\.sidebar:not\(\.open\)\s*\{\s*visibility: hidden;\s*\}/);
+    expect(rules).toMatch(/\.sidebar\.open\s*\{\s*visibility: visible;\s*\}/);
+    expect(rules.slice(0, rules.indexOf("@media (min-width: 921px)"))).not.toMatch(
+      /(?:transition|animation):/
+    );
+  });
+
   it("keeps every destination named and marks the toggle in rail mode", () => {
     const html = renderShellNav("rail");
     expect(html).toContain('aria-label="Expand navigation"');

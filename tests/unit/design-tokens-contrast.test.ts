@@ -10,8 +10,9 @@ const cssPath = new URL("../../apps/web/src/styles/tokens.css", import.meta.url)
 const css = readFileSync(cssPath, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 function blockFor(selector: string): Map<string, string> {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const body = css.match(new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1];
+  const body = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((block) =>
+    block[1]?.split(",").some((part) => part.trim() === selector)
+  )?.[2];
   if (body === undefined) throw new Error(`selector not found in tokens.css: ${selector}`);
   const decls = new Map<string, string>();
   for (const line of body.split(";")) {

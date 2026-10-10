@@ -17,7 +17,7 @@ async function signIn(page: Page) {
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
 
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible();
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
@@ -28,8 +28,8 @@ async function signIn(page: Page) {
 
 test("a non-admin can navigate to the bundled release history", async ({ page }) => {
   await signIn(page);
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
 
   const settingsNav = page.getByRole("navigation", { name: "Settings categories" });
   await expect(settingsNav.getByText("Moss", { exact: true })).toBeVisible();

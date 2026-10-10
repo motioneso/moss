@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 // #3184: what the host Settings page shows for a module that declares its own settings page.
 // It renders a link to that page and nothing else, so the module's switches and credential
 // slots appear in exactly one place.
@@ -23,14 +24,14 @@ export function ModuleOwnPageLink(props: {
         <Row
           name={`${props.moduleName} settings`}
           control={
-            <button
+            <Button
               type="button"
-              className="modrow__link"
+              variant="link"
               aria-label={`Open ${props.moduleName} settings`}
               onClick={() => props.onNavigate(props.settingsPath)}
             >
               Open <ArrowUpRight size={14} aria-hidden="true" />
-            </button>
+            </Button>
           }
         />
       </Group>

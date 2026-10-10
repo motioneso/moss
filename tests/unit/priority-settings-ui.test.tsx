@@ -1,4 +1,4 @@
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { act, create, type ReactTestRenderer, type ReactTestInstance } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -44,12 +44,11 @@ describe("PrioritySettings", () => {
   }
 
   function button(renderer: ReactTestRenderer, name: string) {
-    return renderer.root.findAllByType("button").find((item) => {
-      const children = Array.isArray(item.props.children)
-        ? item.props.children
-        : [item.props.children];
-      return children.some((child) => typeof child === "string" && child.includes(name));
-    });
+    const textContent = (item: ReactTestInstance): string =>
+      item.children
+        .map((child) => (typeof child === "string" ? child : textContent(child)))
+        .join("");
+    return renderer.root.findAllByType("button").find((item) => textContent(item).includes(name));
   }
 
   function input(renderer: ReactTestRenderer, label: string) {
@@ -90,6 +89,35 @@ describe("PrioritySettings", () => {
         ]
       })
     ).toContain("label");
+  });
+
+  it("associates each visible priority label with its own input", () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(["priority-model"], {
+      ...savedModel,
+      anchors: [
+        {
+          id: "anchor-label-test",
+          kind: "project",
+          label: "Launch",
+          aliases: ["release"],
+          weight: 1,
+          enabled: true,
+          createdAt: "now",
+          updatedAt: "now"
+        }
+      ]
+    });
+    const html = renderToString(
+      <QueryClientProvider client={queryClient}>
+        <PrioritySettings />
+      </QueryClientProvider>
+    );
+    const labels = [...html.matchAll(/<label[^>]*for="([^"]+)"[^>]*>([^<]+)<\/label>/g)];
+    expect(labels.map((label) => label[2])).toEqual(
+      expect.arrayContaining(["Mode", "What matters right now", "Also match"])
+    );
+    for (const label of labels) expect(html).toContain(`id="${label[1]}"`);
   });
 
   it("renders its loading state inside a query client", () => {

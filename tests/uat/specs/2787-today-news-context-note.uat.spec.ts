@@ -23,7 +23,7 @@ test("Today's news side stories show the context note and no invented topic labe
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
 
   for (const viewport of [
     { width: 1440, height: 900 },

@@ -15,7 +15,7 @@ import {
   Upload
 } from "lucide-react";
 import type { ChangeEvent } from "react";
-import { Button, ButtonLink } from "@moss/ui";
+import { Button, ButtonLink, RowButton } from "@moss/ui";
 
 import {
   connectImapConnection,
@@ -190,7 +190,12 @@ export function GoogleConnectorStep(props: {
   if (mode === "connecting") {
     return (
       <section className="onb-step" aria-labelledby="google-connector-title">
-        <StepHeader eyebrow={props.eyebrow} title={props.title} lede={props.lede} />
+        <StepHeader
+          titleId="google-connector-title"
+          eyebrow={props.eyebrow}
+          title={props.title}
+          lede={props.lede}
+        />
         <div className="onb-connector">
           <div className="onb-connector__head">
             <span className="onb-connector__g">G</span>
@@ -385,6 +390,7 @@ export function GoogleConnectorStep(props: {
     return (
       <section className="onb-step" aria-labelledby="imap-connector-title">
         <StepHeader
+          titleId="imap-connector-title"
           eyebrow={props.eyebrow}
           title={`Connect ${imapProvider.name}`}
           lede={props.lede}
@@ -546,14 +552,15 @@ export function GoogleConnectorStep(props: {
                     </span>
                   </div>
                 </div>
-                <button
-                  className="onb-acct__x"
+                <Button
+                  variant="quiet"
+                  size="sm"
                   type="button"
                   disabled={revoke.isPending}
                   onClick={() => revoke.mutate(account.id)}
                 >
                   Disconnect
-                </button>
+                </Button>
               </div>
             ))
           ) : (
@@ -571,7 +578,7 @@ export function GoogleConnectorStep(props: {
               </div>
             </div>
           )}
-          <button className="onb-addmore" type="button" onClick={() => setMode("adding")}>
+          <RowButton className="onb-addmore" type="button" onClick={() => setMode("adding")}>
             <span className="onb-addmore__ic">
               <Plus size={16} aria-hidden="true" />
             </span>
@@ -579,7 +586,7 @@ export function GoogleConnectorStep(props: {
               <span className="onb-addmore__t">Connect another account</span>
               <span className="onb-addmore__s">Connect another account.</span>
             </span>
-          </button>
+          </RowButton>
         </div>
         <FootNote icon={<ShieldCheck size={15} aria-hidden="true" />}>{props.privacy}</FootNote>
       </section>
@@ -588,7 +595,12 @@ export function GoogleConnectorStep(props: {
 
   return (
     <section className="onb-step" aria-labelledby="google-picker-title">
-      <StepHeader eyebrow={props.eyebrow} title={props.title} lede={props.lede} />
+      <StepHeader
+        titleId="google-picker-title"
+        eyebrow={props.eyebrow}
+        title={props.title}
+        lede={props.lede}
+      />
       <div className="onb-uses">
         <div className="onb-use">
           <span className="onb-use__ic">
@@ -626,7 +638,7 @@ export function GoogleConnectorStep(props: {
           </Button>
         ) : null}
       </div>
-      <button className="onb-prov" type="button" onClick={() => setMode("connecting")}>
+      <RowButton className="onb-prov" type="button" onClick={() => setMode("connecting")}>
         <span className="onb-prov__tile">G</span>
         <span className="onb-prov__main">
           <span className="onb-prov__name">Google</span>
@@ -635,9 +647,9 @@ export function GoogleConnectorStep(props: {
         <span className="onb-prov__cta">
           Connect Google <ArrowRight size={15} aria-hidden="true" />
         </span>
-      </button>
+      </RowButton>
       {IMAP_PROVIDERS.map((provider) => (
-        <button
+        <RowButton
           className="onb-prov"
           key={provider.id}
           type="button"
@@ -655,7 +667,7 @@ export function GoogleConnectorStep(props: {
           <span className="onb-prov__cta">
             Connect {provider.name} <ArrowRight size={15} aria-hidden="true" />
           </span>
-        </button>
+        </RowButton>
       ))}
     </section>
   );

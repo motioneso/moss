@@ -39,7 +39,7 @@ async function signIn(page: Page) {
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
   const skipAnyway = page.getByRole("button", { name: "Skip anyway" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible();
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
@@ -131,14 +131,14 @@ test.describe
     // preserving the browser's saved name. No localStorage writes or response interception.
     await drawer.getByRole("button", { name: "Close chat", exact: true }).click();
     await page.getByRole("button", { name: /^Account menu/ }).click();
-    await page.getByRole("button", { name: "Log out", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Log out", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
-    await expect(page.locator(".eyebrow")).toHaveText(ASSISTANT_NAME);
+    await expect(page.locator(".auth-panel .jds-eyebrow")).toHaveText(ASSISTANT_NAME);
     await expect(page).toHaveTitle(ASSISTANT_NAME);
 
     await page.reload();
     await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
-    await expect(page.locator(".eyebrow")).toHaveText(ASSISTANT_NAME);
+    await expect(page.locator(".auth-panel .jds-eyebrow")).toHaveText(ASSISTANT_NAME);
     await expect(page).toHaveTitle(ASSISTANT_NAME);
     await expectNoJarvis(page);
   });
@@ -175,7 +175,7 @@ test.describe
 
     await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
     await expect(page).toHaveTitle("Moss");
-    await expect(page.locator(".eyebrow")).toHaveText("Moss");
+    await expect(page.locator(".auth-panel .jds-eyebrow")).toHaveText("Moss");
 
     await expectNoJarvis(page);
   });

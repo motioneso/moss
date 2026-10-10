@@ -1,5 +1,6 @@
 import { MeetingSourceLink } from "./meeting-source-link";
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import { useDialogLifecycle } from "@moss/ui";
 import type { AnswerSourceSupportCard } from "@moss/shared";
 import { formatDate, useUserLocale } from "../locale/locale-format";
 
@@ -36,16 +37,55 @@ const SOURCE_ICONS: Record<string, string> = {
 interface SourceTrayProps {
   card: AnswerSourceSupportCard;
   onClose: () => void;
+  id?: string;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
 }
 
-export function SourceTray({ card, onClose }: SourceTrayProps) {
+export function SourceTray({ card, onClose, id, returnFocusRef }: SourceTrayProps) {
+  const trayRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const onKeyDown = useDialogLifecycle({
+    ref: trayRef,
+    modal: false,
+    onClose,
+    initialFocusRef: closeRef,
+    returnFocusRef
+  });
+  useEffect(() => {
+    // Click runs after pointer focus has moved, so closing must not pull focus
+    // away from the outside control the user chose. The opener owns its toggle.
+    const closeOutside = (event: MouseEvent) => {
+      if (
+        event.target instanceof Node &&
+        !trayRef.current?.contains(event.target) &&
+        !returnFocusRef?.current?.contains(event.target)
+      )
+        onClose();
+    };
+    document.addEventListener("click", closeOutside);
+    return () => document.removeEventListener("click", closeOutside);
+  }, [onClose, returnFocusRef]);
   const locale = useUserLocale();
   const stateLabel = STATE_LABELS[card.state] ?? card.state;
   const icon = SOURCE_ICONS[card.sourceKind] ?? "◎";
 
   return (
-    <div className="source-tray" role="dialog" aria-label={`Source: ${card.title}`}>
-      <button className="source-tray__close" onClick={onClose} aria-label="Close source">
+    <div
+      id={id}
+      ref={trayRef}
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="source-tray"
+      role="dialog"
+      aria-label={`Source: ${card.title}`}
+    >
+      <button
+        ref={closeRef}
+        type="button"
+        className="source-tray__close"
+        onClick={onClose}
+        aria-label="Close source"
+      >
         ×
       </button>
       <div className="source-tray__kind">
@@ -73,6 +113,8 @@ interface SourceChipsProps {
 
 export function SourceChips({ cards, citedIds, messageId }: SourceChipsProps) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const trayId = useId();
+  const openerRef = useRef<HTMLButtonElement>(null);
 
   const citedSet = new Set(citedIds ?? []);
   const visibleCards = citedIds != null ? cards.filter((c) => citedSet.has(c.supportId)) : cards;
@@ -89,21 +131,35 @@ export function SourceChips({ cards, citedIds, messageId }: SourceChipsProps) {
           card.sourceKind === "meeting" ? (
             <MeetingSourceLink key={card.supportId} card={card} messageId={messageId} />
           ) : (
-            <button
-              key={card.supportId}
-              role="listitem"
-              className={`source-chip source-chip--${card.sourceKind}`}
-              onClick={() => setOpenId(openId === card.supportId ? null : card.supportId)}
-              aria-expanded={openId === card.supportId}
-              aria-label={`${STATE_LABELS[card.state] ?? card.state}: ${card.title}`}
-            >
-              <span aria-hidden="true">{icon(card.sourceKind)}</span>
-              <span className="source-chip__label">{card.sourceLabel}</span>
-            </button>
+            <span key={card.supportId} role="listitem" style={{ minWidth: 0, maxWidth: "100%" }}>
+              <button
+                type="button"
+                className={`source-chip source-chip--${card.sourceKind}`}
+                onClick={(event) => {
+                  openerRef.current = event.currentTarget;
+                  setOpenId(openId === card.supportId ? null : card.supportId);
+                }}
+                aria-haspopup="dialog"
+                aria-controls={openId === card.supportId ? trayId : undefined}
+                aria-expanded={openId === card.supportId}
+                aria-label={`${STATE_LABELS[card.state] ?? card.state}: ${card.title}`}
+              >
+                <span aria-hidden="true">{icon(card.sourceKind)}</span>
+                <span className="source-chip__label">{card.sourceLabel}</span>
+              </button>
+            </span>
           )
         )}
       </div>
-      {openCard && <SourceTray card={openCard} onClose={() => setOpenId(null)} />}
+      {openCard && (
+        <SourceTray
+          key={openCard.supportId}
+          id={trayId}
+          card={openCard}
+          returnFocusRef={openerRef}
+          onClose={() => setOpenId(null)}
+        />
+      )}
     </div>
   );
 }

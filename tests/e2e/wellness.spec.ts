@@ -394,7 +394,7 @@ test("Meds dialog opens from the rail, closes on Escape, and returns focus", asy
   await opener.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+  await expect(dialog.getByRole("button", { name: "Done", exact: true })).toBeFocused();
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
@@ -410,7 +410,10 @@ test("Meds dialog opens from the rail, closes on Escape, and returns focus", asy
   await opener.focus();
   await page.keyboard.press("Enter");
   await expect(dialog).toBeVisible();
-  await page.locator(".wl-modal-scrim").click({ position: { x: 10, y: 10 } });
+  await page
+    .locator(".jds-dialog-scrim")
+    .filter({ has: dialog })
+    .click({ position: { x: 10, y: 10 } });
   await expect(dialog).toBeHidden();
   await expect(opener).toBeFocused();
 });

@@ -75,6 +75,14 @@ describe("WorkflowApprovalCard", () => {
 
   it("shows only the safe summary and both decisions", () => {
     const renderer = renderCard();
+    expect(renderer.root.findAllByProps({ className: "jds-card jds-card--pad-sm" })).toHaveLength(
+      1
+    );
+    expect(
+      renderer.root
+        .findAllByType("button")
+        .every((button) => String(button.props.className).includes("jds-btn"))
+    ).toBe(true);
     expect(renderedText(renderer.toJSON())).toContain("Approve the expense");
     expect(
       renderer.root
@@ -97,6 +105,8 @@ describe("WorkflowApprovalCard", () => {
     act(() => rejectClick());
     expect(resolveWorkflowApproval).toHaveBeenCalledOnce();
     expect(renderedText(renderer.toJSON())).toContain("Resolving");
+    expect(renderer.root.findByProps({ role: "region" }).props["aria-busy"]).toBe(true);
+    expect(renderer.root.findByProps({ role: "status" })).toBeDefined();
 
     await act(async () => {
       resolve(approval);

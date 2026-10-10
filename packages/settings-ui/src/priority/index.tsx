@@ -2,8 +2,9 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { PriorityModelPreferenceV1, PriorityAnchor, PrioritySource } from "@moss/priority";
+import { Button, IconButton } from "@moss/ui";
 import { Badge, Field, Group, Note, PaneHead, Row, Select, Switch } from "../index.js";
 
 const VISIBLE_SOURCES = ["tasks", "calendar", "email", "notes"] as const;
@@ -46,7 +47,13 @@ interface PrioritySettingsProps {
 
 export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) {
   const queryClient = useQueryClient();
-  const { data: model, isLoading } = useQuery<PriorityModelPreferenceV1>({
+  const fieldId = useId();
+  const {
+    data: model,
+    isLoading,
+    isError,
+    refetch
+  } = useQuery<PriorityModelPreferenceV1>({
     queryKey: ["priority-model"],
     queryFn: async () => {
       const res = await fetch("/api/me/priority-model");
@@ -93,7 +100,9 @@ export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) 
       <>
         <PaneHead title="Priorities" desc="Teach your assistant what deserves attention first." />
         <Group title="Priority model">
-          <Row name="Loading priority settings" desc="Fetching your current priority model." />
+          <div role="status">
+            <Row name="Loading priority settings" desc="Fetching your current priority model." />
+          </div>
         </Group>
       </>
     );
@@ -103,7 +112,17 @@ export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) 
       <>
         <PaneHead title="Priorities" desc="Teach your assistant what deserves attention first." />
         <Group title="Priority model">
-          <Row name="Unavailable" desc="Failed to load priority settings." />
+          <div role="status">
+            <Row
+              name="Unavailable"
+              desc="Failed to load priority settings."
+              control={
+                <Button variant="quiet" size="sm" onClick={() => void refetch()}>
+                  Try again
+                </Button>
+              }
+            />
+          </div>
         </Group>
       </>
     );
@@ -159,12 +178,21 @@ export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) 
         title="Priorities"
         desc="Tell your assistant what matters right now so it can rank work and signals usefully."
       />
+      {isError ? (
+        <div className="set2-read-state" role="status">
+          <span>Could not refresh priority settings. Your current draft is still shown.</span>
+          <Button variant="quiet" size="sm" onClick={() => void refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
       <Group
         title="Priority mode"
         desc="Choose the general way your assistant weighs deadlines and energy."
       >
-        <Field label="Mode">
+        <Field label="Mode" controlId={`${fieldId}-mode`}>
           <Select
+            id={`${fieldId}-mode`}
             value={draft.mode}
             aria-label="Priority mode"
             disabled={mutation.isPending}
@@ -182,14 +210,15 @@ export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) 
         title="What matters right now"
         desc="Priorities your assistant should consistently move up or down."
         action={
-          <button
+          <Button
             type="button"
             onClick={addAnchor}
-            className="jds-btn jds-btn--secondary jds-btn--sm"
+            variant="secondary"
+            size="sm"
             disabled={mutation.isPending}
           >
             <Plus size={16} aria-hidden="true" /> Add priority
-          </button>
+          </Button>
         }
       >
         {draft.anchors.length === 0 ? (
@@ -233,8 +262,9 @@ export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) 
                     </Select>
                   </div>
                 </div>
-                <Field label="What matters right now">
+                <Field label="What matters right now" controlId={`${fieldId}-${anchor.id}-label`}>
                   <input
+                    id={`${fieldId}-${anchor.id}-label`}
                     autoFocus={anchor.label === ""}
                     className="jds-input"
                     type="text"
@@ -245,10 +275,11 @@ export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) 
                     maxLength={120}
                   />
                 </Field>
-                <Field label="Also match">
+                <Field label="Also match" controlId={`${fieldId}-${anchor.id}-aliases`}>
                   <input
                     className="jds-input"
                     type="text"
+                    id={`${fieldId}-${anchor.id}-aliases`}
                     placeholder="Comma-separated aliases"
                     value={anchor.aliases.join(", ")}
                     disabled={mutation.isPending}
@@ -264,7 +295,7 @@ export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) 
                 </Field>
               </div>
               <div className="set-row__control">
-                <button
+                <IconButton
                   type="button"
                   onClick={() =>
                     setDraft((current) =>
@@ -273,12 +304,12 @@ export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) 
                         : current
                     )
                   }
-                  className="jds-iconbtn jds-iconbtn--sm"
+                  size="sm"
                   aria-label="Remove priority"
                   disabled={mutation.isPending}
                 >
                   <Trash2 size={16} aria-hidden="true" />
-                </button>
+                </IconButton>
               </div>
             </div>
           ))
@@ -314,22 +345,30 @@ export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) 
           />
         ))}
       </Group>
-      {validation ? <Note>{validation}</Note> : null}
-      {mutation.isPending ? <Note>Saving priority settings...</Note> : null}
-      {mutation.error ? <Note>{mutation.error.message}</Note> : null}
+      {validation ? (
+        <div role="alert">
+          <Note>{validation}</Note>
+        </div>
+      ) : null}
+      {mutation.isPending ? (
+        <div role="status">
+          <Note>Saving priority settings...</Note>
+        </div>
+      ) : null}
+      {mutation.error ? (
+        <div role="alert">
+          <Note>{mutation.error.message}</Note>
+        </div>
+      ) : null}
       {dirty ? (
         <div className="psona-save__acts">
-          <button
-            type="button"
-            className="jds-btn jds-btn--primary jds-btn--sm"
-            onClick={save}
-            disabled={mutation.isPending}
-          >
+          <Button type="button" size="sm" onClick={save} disabled={mutation.isPending}>
             Save priorities
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="jds-btn jds-btn--quiet jds-btn--sm"
+            variant="quiet"
+            size="sm"
             onClick={() => {
               setDraft(saved);
               setValidation(null);
@@ -337,7 +376,7 @@ export function PrioritySettings({ onError, onSuccess }: PrioritySettingsProps) 
             disabled={mutation.isPending}
           >
             Discard
-          </button>
+          </Button>
         </div>
       ) : null}
     </>

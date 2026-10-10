@@ -7,7 +7,9 @@ const tokens = readFileSync("apps/web/src/styles/tokens.css", "utf8").replace(
   ""
 );
 function declarations(selector: string): Record<string, string> {
-  const block = tokens.split(`${selector} {`)[1]?.split("\n}")[0];
+  const block = [...tokens.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find((rule) =>
+    rule[1]?.split(",").some((part) => part.trim() === selector)
+  )?.[2];
   if (block === undefined) throw new Error(`Missing token selector ${selector}`);
   return Object.fromEntries(
     [...block.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((match) => [match[1]!, match[2]!.trim()])

@@ -514,6 +514,8 @@ export function AppShell(props: AppShellProps) {
           <header className="topbar" hidden={expanded}>
             <button
               aria-label="Open navigation"
+              aria-controls="moss-main-navigation"
+              aria-expanded={mobileNavOpen}
               className="icon-button mobile-only"
               ref={openNavButtonRef}
               title="Open navigation"

@@ -39,7 +39,7 @@ async function signIn(page: Page) {
   // with the same accessible name as the submit button (apps/web/src/auth/auth-screen.tsx).
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible();
   if (await skipSetup.isVisible()) {
     await skipSetup.click();

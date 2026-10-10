@@ -154,6 +154,22 @@ describe("shared selector and ground contracts", () => {
     );
     expect(css).not.toMatch(/--shadow-(?:xs|sm):[^;]*(?:rgba|rgb)\(/);
   });
+  it("reuses every root token block inside an opt-in isolated theme scope", () => {
+    const rootBlocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((block) =>
+      block[1]?.split(",").some((selector) => selector.trim() === ":root")
+    );
+    expect(rootBlocks).toHaveLength(3);
+    for (const block of rootBlocks) {
+      expect(block[1]?.split(",").map((selector) => selector.trim())).toContain(".jds-theme-scope");
+    }
+    // Re-declaring aliases locally makes the browser resolve draft inputs on that node,
+    // rather than inheriting a previously resolved alias from an outer dark theme.
+    expect(rootBlocks[0]?.[2]).toContain("--text: var(--ink)");
+    expect(rootBlocks[0]?.[2]).toContain("--text-faint: #6a6350");
+    expect(rootBlocks[0]?.[2]).toContain("--text-on-accent: #ffffff");
+    expect(rootBlocks[0]?.[2]).toContain("--accent-fg: var(--forest)");
+    expect(rootBlocks[2]?.[2]).toContain("--dur-fast: 0ms");
+  });
   it("retains selected-chip emphasis after the chip base rule", () => {
     const rules = read("packages/ui/src/styles/components-sections.css");
     const active = rules.match(/\.jds-btn--chip\.jds-btn--active\s*\{([^}]*)\}/)?.[1];

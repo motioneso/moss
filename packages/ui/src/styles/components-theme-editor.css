@@ -233,8 +233,8 @@
   font-weight: var(--weight-bold);
 }
 .theme-pv__band {
-  background: var(--forest);
-  color: var(--accent-label);
+  background: var(--hero-bg);
+  color: var(--hero-fg);
 }
 .theme-pv__eyebrow {
   font-size: var(--text-2xs);
@@ -272,11 +272,11 @@
   border-top: var(--border-w) solid var(--line);
 }
 .theme-pv__time {
-  color: var(--forest);
+  color: var(--accent-fg);
   font-weight: var(--weight-bold);
 }
 .theme-pv__meta {
-  color: var(--ink-2);
+  color: var(--text-muted);
   font-size: var(--text-2xs);
 }
 .theme-pv__card {
@@ -286,8 +286,8 @@
 }
 .theme-pv__button {
   border-radius: var(--radius-sm);
-  background: var(--forest);
-  color: var(--accent-label);
+  background: var(--btn-primary-bg);
+  color: var(--text-on-accent);
   font-weight: var(--weight-bold);
 }
 
@@ -314,4 +314,14 @@
 }
 .theme-editor__foot {
   border-top: var(--border-w) solid var(--border-subtle);
+}
+
+/* Semantic draft samples are measured by the browser but have no visual/AT role. */
+.theme-readability-samples {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  pointer-events: none;
 }

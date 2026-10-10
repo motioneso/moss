@@ -145,7 +145,9 @@ export async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(R26.ownerEmail);
   await page.getByLabel("Password").fill(R26.ownerPassword);
   await page.locator("form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible({
+    timeout: 30_000
+  });
 }
 
 export async function openConnection(page: Page, name: string): Promise<void> {

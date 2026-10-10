@@ -1,3 +1,4 @@
+import { Button, Card, Eyebrow } from "@moss/ui";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle, LoaderCircle, XCircle } from "lucide-react";
 import { useEffect, useRef } from "react";
@@ -59,46 +60,56 @@ export function WorkflowApprovalCard(props: WorkflowApprovalCardProps) {
       className="action-request-card"
       role="region"
       aria-label="Workflow approval"
+      aria-busy={mutation.isPending}
       data-workflow-approval-id={props.approvalId}
       ref={rootRef}
       tabIndex={-1}
     >
-      <div className="action-request-preview__label" data-state={resolvedStatus}>
-        {stateLabel}
-      </div>
-      <p className="action-request-summary">{props.summary}</p>
+      <Card padding="sm">
+        <div className="action-request-stack">
+          <div data-state={resolvedStatus}>
+            <Eyebrow>{stateLabel}</Eyebrow>
+          </div>
+          <p className="action-request-summary">{props.summary}</p>
 
-      {mutation.isPending ? (
-        <p className="muted-text">
-          <LoaderCircle className="spin" size={14} aria-hidden="true" /> Resolving…
-        </p>
-      ) : resolvedStatus !== "pending" ? null : alreadyAnswered ? (
-        <p className="form-error" role="alert">
-          {errorMessage}
-        </p>
-      ) : (
-        <div className="action-request-actions">
-          <button
-            className="primary-button"
-            type="button"
-            disabled={mutation.isPending}
-            onClick={() => resolve("approve")}
-          >
-            <CheckCircle size={16} aria-hidden="true" />
-            Approve
-          </button>
-          <button
-            className="ghost-button"
-            type="button"
-            disabled={mutation.isPending}
-            onClick={() => resolve("deny")}
-          >
-            <XCircle size={16} aria-hidden="true" />
-            Reject
-          </button>
-          {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
+          {mutation.isPending ? (
+            <p className="muted-text" role="status">
+              <LoaderCircle className="spin" size={14} aria-hidden="true" /> Resolving…
+            </p>
+          ) : resolvedStatus !== "pending" ? null : alreadyAnswered ? (
+            <p className="form-error" role="alert">
+              {errorMessage}
+            </p>
+          ) : (
+            <div className="action-request-actions">
+              <Button
+                size="sm"
+                type="button"
+                disabled={mutation.isPending}
+                onClick={() => resolve("approve")}
+              >
+                <CheckCircle size={16} aria-hidden="true" />
+                Approve
+              </Button>
+              <Button
+                variant="quiet"
+                size="sm"
+                type="button"
+                disabled={mutation.isPending}
+                onClick={() => resolve("deny")}
+              >
+                <XCircle size={16} aria-hidden="true" />
+                Reject
+              </Button>
+              {errorMessage ? (
+                <p className="form-error" role="alert">
+                  {errorMessage}
+                </p>
+              ) : null}
+            </div>
+          )}
         </div>
-      )}
+      </Card>
     </div>
   );
 }

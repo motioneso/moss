@@ -509,6 +509,14 @@ export function PeoplePane({ me }: PaneProps) {
       ) : null}
       <Group title="Members" desc="New people create an account, then wait for approval here.">
         <div className="ppl">
+          {usersQuery.isError ? (
+            <div className="set2-read-state" role="status">
+              <span>Could not load members.</span>
+              <Button variant="quiet" size="sm" onClick={() => void usersQuery.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : null}
           {members.length ? (
             members.map((user) => (
               <PersonRow
@@ -519,8 +527,10 @@ export function PeoplePane({ me }: PaneProps) {
                 onAction={onAction}
               />
             ))
-          ) : (
-            <Row name={usersQuery.isLoading ? "Loading people…" : "No members"} />
+          ) : usersQuery.isError ? null : (
+            <div role="status">
+              <Row name={usersQuery.isLoading ? "Loading people…" : "No members"} />
+            </div>
           )}
         </div>
       </Group>
@@ -559,6 +569,14 @@ export function OversightPane() {
       />
       <Group title="Connectors">
         <div className="cono">
+          {accountsQuery.isError ? (
+            <div className="set2-read-state" role="status">
+              <span>Could not load connectors.</span>
+              <Button variant="quiet" size="sm" onClick={() => void accountsQuery.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : null}
           {accounts.length ? (
             accounts.map((account) => {
               // Health now derives from durable sync outcome, not just `status`. Revoked wins;
@@ -591,11 +609,17 @@ export function OversightPane() {
                 </div>
               );
             })
-          ) : (
-            <Row
-              name={accountsQuery.isLoading ? "Loading connectors…" : "No connectors"}
-              desc="Connection health appears here once accounts are connected."
-            />
+          ) : accountsQuery.isError ? null : (
+            <div role="status">
+              <Row
+                name={accountsQuery.isLoading ? "Loading connectors…" : "No connectors"}
+                desc={
+                  accountsQuery.isLoading
+                    ? undefined
+                    : "Connection health appears here once accounts are connected."
+                }
+              />
+            </div>
           )}
         </div>
       </Group>

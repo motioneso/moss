@@ -16,7 +16,9 @@ test("Workshop creates a private project, retries saved requests and retains mes
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skip = page.getByRole("button", { name: "Skip setup" });
-  await expect(skip.or(page.locator(".jds-usermenu__trigger")).first()).toBeVisible({
+  await expect(
+    skip.or(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).first()
+  ).toBeVisible({
     timeout: 30_000
   });
   if (await skip.isVisible()) {

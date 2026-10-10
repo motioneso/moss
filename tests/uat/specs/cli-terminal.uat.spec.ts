@@ -39,15 +39,15 @@ test("owner opens the CLI terminal, runs a command, sees output, closes clean", 
   await page.getByRole("button", { name: "Skip anyway" }).click();
 
   // Proves login landed on the authenticated shell — RailUserMenu only renders once logged in.
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
 
   // Nav path mirrors job-search-install.uat.spec.ts: usermenu -> Settings ->
   // Admin / Setup (segmented control) -> the "AI providers" admin section. Personal mode has
   // a different section ("Your assistant"), but settings-page.tsx only
   // ever mounts one mode's nav group at a time, so this button reference is unambiguous once
   // Admin / Setup has been selected.
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "AI providers" }).click();
   await expect(page.getByText("No providers yet")).toBeVisible();

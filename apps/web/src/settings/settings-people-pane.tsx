@@ -190,14 +190,29 @@ export function SettingsPeoplePane() {
   return (
     <>
       <Group title="People notes">
+        {notesSettingsQuery.isError ? (
+          <div className="set2-read-state" role="status">
+            <span>Could not load the People folder.</span>
+            <Button variant="quiet" size="sm" onClick={() => void notesSettingsQuery.refetch()}>
+              Try again
+            </Button>
+          </div>
+        ) : null}
         <Row
           name="Folder"
+          className="set-row--stack-narrow"
           desc={
-            configuredFolder ? `Notes folder: ${configuredFolder}` : "No People folder configured."
+            notesSettingsQuery.isPending
+              ? "Loading your People folder…"
+              : notesSettingsQuery.isError && !notesSettingsQuery.data
+                ? "People folder unavailable."
+                : configuredFolder
+                  ? `Notes folder: ${configuredFolder}`
+                  : "No People folder configured."
           }
           control={
             <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span>{folderValue || "No folder selected"}</span>
+              <span>{notesSettingsQuery.data ? folderValue || "No folder selected" : ""}</span>
               <Button variant="quiet" size="sm" onClick={() => setChoosingFolder(true)}>
                 Choose folder
               </Button>
@@ -286,7 +301,16 @@ export function SettingsPeoplePane() {
 
       <div ref={reviewRef} tabIndex={-1}>
         <Group title={`Review matches${pending.length > 0 ? ` (${pending.length})` : ""}`}>
-          {pending.length === 0 ? (
+          {candidatesQuery.isPending ? <p role="status">Loading match candidates…</p> : null}
+          {candidatesQuery.isError ? (
+            <div className="set2-read-state" role="status">
+              <span>Could not load match candidates.</span>
+              <Button variant="quiet" size="sm" onClick={() => void candidatesQuery.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : null}
+          {pending.length === 0 && candidatesQuery.isSuccess ? (
             <Row name="Nothing to review" desc="All match candidates are up to date." />
           ) : (
             pending.map((candidate) => (
@@ -330,7 +354,16 @@ export function SettingsPeoplePane() {
       </div>
 
       <Group title={`People${people.length > 0 ? ` (${people.length})` : ""}`}>
-        {people.length === 0 ? (
+        {peopleQuery.isPending ? <p role="status">Loading people…</p> : null}
+        {peopleQuery.isError ? (
+          <div className="set2-read-state" role="status">
+            <span>Could not load people.</span>
+            <Button variant="quiet" size="sm" onClick={() => void peopleQuery.refetch()}>
+              Try again
+            </Button>
+          </div>
+        ) : null}
+        {people.length === 0 && peopleQuery.isSuccess ? (
           <Row
             name="No people yet"
             desc={`${assistantName} builds this list from your connected data sources.`}

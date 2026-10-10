@@ -79,7 +79,7 @@ async function signIn(page: Page, email: string, password: string): Promise<void
   await page.getByLabel("Password").fill(password);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skip = page.getByRole("button", { name: "Skip setup" });
-  const menu = page.locator(".jds-usermenu__trigger");
+  const menu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skip.or(menu).first()).toBeVisible();
   if (await skip.isVisible()) {
     await skip.click();
