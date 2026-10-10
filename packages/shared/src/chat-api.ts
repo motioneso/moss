@@ -562,6 +562,44 @@ const chatModelRouteSchema = {
   }
 } as const;
 
+/**
+ * Why a stored message exists (a reminder event or a classifier gate outcome). Must stay
+ * declared in chatMessageSchema or fast-json-stringify silently strips it from responses,
+ * and the browser's reconnect catch-up never sees a delivered reminder.
+ */
+const chatTurnOriginSchema = {
+  anyOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["version", "kind", "decisionId", "moduleId", "toolName", "outcome"],
+      properties: {
+        version: { type: "number", enum: [1] },
+        kind: { type: "string", enum: ["classifier_gate"] },
+        decisionId: { type: "string" },
+        moduleId: { anyOf: [{ type: "string" }, { type: "null" }] },
+        toolName: { anyOf: [{ type: "string" }, { type: "null" }] },
+        outcome: { type: "string", enum: ["executed-success", "executed-failure-or-unknown"] }
+      }
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["version", "kind", "event", "reminderId"],
+      properties: {
+        version: { type: "number", enum: [1] },
+        kind: { type: "string", enum: ["reminder"] },
+        event: {
+          type: "string",
+          enum: ["saved", "refused", "delivered", "listed", "cancelled", "cancel_refused"]
+        },
+        reminderId: { anyOf: [{ type: "string" }, { type: "null" }] },
+        late: { type: "boolean" }
+      }
+    }
+  ]
+} as const;
+
 const chatMessageSchema = {
   type: "object",
   additionalProperties: false,
@@ -643,6 +681,7 @@ const chatMessageSchema = {
       }
     },
     answerProvenanceCitedIds: { type: "array", items: { type: "string" } },
+    origin: chatTurnOriginSchema,
     meetingContext: {
       type: "object",
       additionalProperties: false,
