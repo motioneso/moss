@@ -9,7 +9,7 @@ import "@xterm/xterm/css/xterm.css";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 
-import { Button, Dialog } from "@moss/ui";
+import { Button, Dialog, Field, FormLabel } from "@moss/ui";
 import type { AiProviderConfigDto } from "@moss/shared";
 
 import {
@@ -261,9 +261,10 @@ export function TerminalModal(props: {
     ) : phase.kind === "set-password" ? (
       <>
         <div className="term-modal__prompt">Set a terminal password</div>
-        <label className="deldlg__field">
-          <span className="deldlg__label">New terminal password</span>
+        <Field>
+          <FormLabel htmlFor={`${titleId}-new-password`}>New terminal password</FormLabel>
           <input
+            id={`${titleId}-new-password`}
             className="jds-input"
             type="password"
             value={password}
@@ -272,10 +273,11 @@ export function TerminalModal(props: {
             disabled={setPasswordMutation.isPending}
             aria-label="New terminal password"
           />
-        </label>
-        <label className="deldlg__field">
-          <span className="deldlg__label">Confirm password</span>
+        </Field>
+        <Field>
+          <FormLabel htmlFor={`${titleId}-confirm-password`}>Confirm password</FormLabel>
           <input
+            id={`${titleId}-confirm-password`}
             className="jds-input"
             type="password"
             value={confirmPassword}
@@ -284,14 +286,15 @@ export function TerminalModal(props: {
             disabled={setPasswordMutation.isPending}
             aria-label="Confirm terminal password"
           />
-        </label>
+        </Field>
       </>
     ) : phase.kind === "locked" ? (
       <>
         <div className="term-modal__prompt">Enter your terminal password</div>
-        <label className="deldlg__field">
-          <span className="deldlg__label">Terminal password</span>
+        <Field>
+          <FormLabel htmlFor={`${titleId}-password`}>Terminal password</FormLabel>
           <input
+            id={`${titleId}-password`}
             className="jds-input"
             type="password"
             value={password}
@@ -300,7 +303,7 @@ export function TerminalModal(props: {
             disabled={ticketMutation.isPending}
             aria-label="Terminal password"
           />
-        </label>
+        </Field>
       </>
     ) : (
       <div className="term-modal__host" ref={termHostRef} />

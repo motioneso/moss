@@ -1,3 +1,4 @@
+import { Button, RowButton } from "@moss/ui";
 import { type ReactNode, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check, Flag, LogIn, Minus, Play } from "lucide-react";
@@ -208,7 +209,7 @@ export function OnboardingWizard(props: {
             const state = railState(index, step);
             return (
               <li key={step.key}>
-                <button
+                <RowButton
                   className={`onb__step is-${state}`}
                   disabled={state === "locked" || step.key === "finish"}
                   type="button"
@@ -227,7 +228,7 @@ export function OnboardingWizard(props: {
                   {step.optional && state !== "skipped" ? (
                     <span className="onb__step__opt">Optional</span>
                   ) : null}
-                </button>
+                </RowButton>
               </li>
             );
           })}
@@ -235,27 +236,27 @@ export function OnboardingWizard(props: {
         <div className="onb__rail-foot">
           {!isLast ? (
             <div className="onb__rail-actions">
-              <button
+              <RowButton
                 className="onb__rail-back"
                 type="button"
                 disabled={stepIndex === 0}
                 onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
               >
                 <ArrowLeft size={15} /> Back
-              </button>
-              <button className="primary-button" type="button" onClick={continueStep}>
+              </RowButton>
+              <Button type="button" onClick={continueStep}>
                 {currentRailKey === "welcome" ? "Start setup" : "Continue"} <ArrowRight size={16} />
-              </button>
+              </Button>
               {optionalKeys.has(currentRailKey) ? (
-                <button className="onb__rail-skipstep" type="button" onClick={skipCurrentStep}>
+                <RowButton className="onb__rail-skipstep" type="button" onClick={skipCurrentStep}>
                   Skip this step
-                </button>
+                </RowButton>
               ) : null}
             </div>
           ) : null}
-          <button className="onb__skipall" type="button" onClick={requestSkip}>
+          <RowButton className="onb__skipall" type="button" onClick={requestSkip}>
             <LogIn size={15} /> Skip setup
-          </button>
+          </RowButton>
           <p className="onb__skiphint">
             Skip setup and open the app. You can complete the configuration later in Settings.
           </p>
@@ -269,9 +270,9 @@ export function OnboardingWizard(props: {
           <span className="onb__mbar-prog">
             {isLast ? "Done" : `${completedCount} / ${progressTotal}`}
           </span>
-          <button className="onb__mbar-skip" type="button" onClick={requestSkip}>
+          <RowButton className="onb__mbar-skip" type="button" onClick={requestSkip}>
             Skip
-          </button>
+          </RowButton>
         </div>
 
         {statusQuery.isError ? (
@@ -308,23 +309,23 @@ export function OnboardingWizard(props: {
         {!isLast ? (
           <footer className="onb-nav">
             <div className="onb-nav__inner">
-              <button
+              <RowButton
                 className="onb-nav__back"
                 type="button"
                 disabled={stepIndex === 0}
                 onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
               >
                 <ArrowLeft size={15} /> Back
-              </button>
+              </RowButton>
               <span className="onb-nav__spacer" />
               {optionalKeys.has(currentRailKey) ? (
-                <button className="onb-nav__skipstep" type="button" onClick={skipCurrentStep}>
+                <RowButton className="onb-nav__skipstep" type="button" onClick={skipCurrentStep}>
                   Skip this step <span className="sub">· set up later</span>
-                </button>
+                </RowButton>
               ) : null}
-              <button className="primary-button" type="button" onClick={continueStep}>
+              <Button type="button" onClick={continueStep}>
                 {currentRailKey === "welcome" ? "Start setup" : "Continue"} <ArrowRight size={16} />
-              </button>
+              </Button>
             </div>
           </footer>
         ) : null}
@@ -402,14 +403,9 @@ export function FinishStep(props: {
         ))}
       </div>
       <div className="onb-finish__cta">
-        <button
-          className="primary-button"
-          type="button"
-          disabled={props.pending}
-          onClick={props.onFinish}
-        >
+        <Button type="button" disabled={props.pending} onClick={props.onFinish}>
           Finish setup <ArrowRight size={16} aria-hidden="true" />
-        </button>
+        </Button>
       </div>
       <div className="onb-signoff">
         {isMember ? personalize("Welcome to Moss.") : "Your setup is complete."}

@@ -56,6 +56,8 @@ describe("ActivityPane", () => {
   it("shows bounded recovery instead of endless loading or false empty state", () => {
     const html = renderToString(createElement(ActivityPane, { me, onNavigate: () => undefined }));
 
+    expect(html).toContain('<h2 class="pane__title">Activity</h2>');
+    expect(html).not.toContain("settings-section__");
     expect(html).toContain("Activity unavailable");
     expect(html).toContain("Try again");
     expect(html).not.toContain("Loading…");

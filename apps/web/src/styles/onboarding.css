@@ -120,7 +120,7 @@
   margin-bottom: 0.85rem;
 }
 
-.onb__rail-actions .primary-button {
+.onb__rail-actions .jds-btn--primary {
   width: 100%;
   justify-content: center;
 }
@@ -367,55 +367,4 @@
   .onb-nav__skipstep span {
     display: none;
   }
-}
-
-/* #369 — "Skip setup" consequence confirmation. Shown when no provider is connected so the
-   skip is honest about the dead-end (chat won't work until a provider is connected). */
-
-.onb-skipconfirm {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.25rem;
-}
-
-.onb-skipconfirm__scrim {
-  position: absolute;
-  inset: 0;
-  padding: 0;
-  cursor: pointer;
-}
-
-.onb-skipconfirm__card {
-  position: relative;
-  z-index: 1;
-  width: min(28rem, 100%);
-  padding: 1.5rem;
-}
-
-.onb-skipconfirm__mark {
-  width: 2.5rem;
-  height: 2.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.onb-skipconfirm__t {
-  margin: 0.9rem 0 0;
-}
-
-.onb-skipconfirm__s {
-  margin: 0.4rem 0 0;
-  line-height: 1.5;
-}
-
-.onb-skipconfirm__actions {
-  margin-top: 1.25rem;
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.6rem;
 }

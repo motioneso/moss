@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import { CircleCheck, Compass, Lock } from "lucide-react";
 
 import { FootNote, StepHeader } from "./onboarding-ui";
@@ -7,6 +8,7 @@ export function MemberWelcomeStep(props: { readonly onSkipAll: () => void }) {
   return (
     <section className="onb-step" aria-labelledby="member-welcome-title">
       <StepHeader
+        titleId="member-welcome-title"
         eyebrow="Welcome"
         title={personalize("You’ve got your own Moss.")}
         lede={
@@ -54,9 +56,9 @@ export function MemberWelcomeStep(props: { readonly onSkipAll: () => void }) {
       <FootNote>
         You can skip the tour and explore the app directly. None of these steps are required.
       </FootNote>
-      <button className="onb-inline-skip" type="button" onClick={props.onSkipAll}>
+      <Button variant="link" onClick={props.onSkipAll}>
         Skip for now
-      </button>
+      </Button>
     </section>
   );
 }

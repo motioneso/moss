@@ -46,7 +46,7 @@ function statusText(status: FamilyKeyStatusDto): string {
 
 export function EncryptionKeysPane() {
   const queryClient = useQueryClient();
-  const { toast } = useFeedback();
+  const { toast, confirm } = useFeedback();
 
   const statusQuery = useQuery({
     queryKey: queryKeys.ai.familyKeys,
@@ -124,13 +124,13 @@ export function EncryptionKeysPane() {
                     size="sm"
                     disabled={busy}
                     onClick={() => {
-                      if (
-                        window.confirm(
-                          "Replace this key? Anything locked under the old one stays unreadable."
-                        )
-                      ) {
-                        rotateMutation.mutate(status.family);
-                      }
+                      confirm({
+                        title: "Replace this key?",
+                        description: "Anything locked under the old one stays unreadable.",
+                        confirmLabel: "Replace key",
+                        danger: true,
+                        onConfirm: () => rotateMutation.mutate(status.family)
+                      });
                     }}
                   >
                     {rotateMutation.isPending ? "Replacing…" : "Replace key"}

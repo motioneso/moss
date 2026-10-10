@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import { Plug, Radio, ShieldCheck, Terminal } from "lucide-react";
 
 import { FootNote, StepHeader } from "./onboarding-ui";
@@ -7,6 +8,7 @@ export function WelcomeStep(props: { readonly onSkipAll: () => void }) {
   return (
     <section className="onb-step" aria-labelledby="onboarding-welcome-title">
       <StepHeader
+        titleId="onboarding-welcome-title"
         eyebrow={personalize("Setting up Moss")}
         title={personalize("Let’s get your Moss set up.")}
         lede={
@@ -56,9 +58,9 @@ export function WelcomeStep(props: { readonly onSkipAll: () => void }) {
       <FootNote icon={<ShieldCheck size={15} aria-hidden="true" />}>
         All setup steps are optional. If you skip, you can configure everything later in Settings.
       </FootNote>
-      <button className="onb-inline-skip" type="button" onClick={props.onSkipAll}>
+      <Button variant="link" onClick={props.onSkipAll}>
         Skip for now
-      </button>
+      </Button>
     </section>
   );
 }

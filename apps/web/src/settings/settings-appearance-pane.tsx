@@ -170,7 +170,7 @@ const PICKER_WIDTH = 240;
 
 export function AppearancePane() {
   const queryClient = useQueryClient();
-  const { toast } = useFeedback();
+  const { toast, confirm } = useFeedback();
   const themesQuery = useQuery({ queryKey: queryKeys.settings.themes, queryFn: listThemes });
   const [draft, setDraft] = useState<DraftTheme | null>(null);
   const [draftIsNew, setDraftIsNew] = useState(true);
@@ -437,9 +437,13 @@ export function AppearancePane() {
                   onEdit={() => openEditor(theme, false)}
                   onDuplicate={() => makeDraft(`${theme.name} copy`, theme.tokens)}
                   onDelete={() => {
-                    if (window.confirm(`Delete "${theme.name}"? This can't be undone.`)) {
-                      deleteMutation.mutate(theme.id);
-                    }
+                    confirm({
+                      title: `Delete "${theme.name}"?`,
+                      description: "This can't be undone.",
+                      confirmLabel: "Delete theme",
+                      danger: true,
+                      onConfirm: () => deleteMutation.mutate(theme.id)
+                    });
                   }}
                 />
               ))}

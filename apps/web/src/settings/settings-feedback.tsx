@@ -73,6 +73,7 @@ export function FeedbackProvider(props: {
   const [confirmInput, setConfirmInput] = useState("");
   const nextId = useRef(1);
   const titleId = useId();
+  const cancelRef = useRef<HTMLButtonElement>(null);
 
   const toast = useCallback((message: string, options?: ToastOptions) => {
     const id = nextId.current++;
@@ -139,12 +140,13 @@ export function FeedbackProvider(props: {
       {dialog ? (
         <Dialog
           onClose={closeDialog}
+          initialFocusRef={cancelRef}
           aria-labelledby={titleId}
           title={<span id={titleId}>{dialog.title}</span>}
           description={dialog.description}
           footer={
             <>
-              <Button variant="quiet" onClick={closeDialog}>
+              <Button ref={cancelRef} variant="quiet" onClick={closeDialog}>
                 {dialog.cancelLabel ?? "Cancel"}
               </Button>
               <Button

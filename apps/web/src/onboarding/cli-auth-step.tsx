@@ -1,3 +1,4 @@
+import { Button, ButtonLink } from "@moss/ui";
 import { useState } from "react";
 import {
   CircleCheck,
@@ -256,6 +257,7 @@ export function CliAuthStep(props: {
   return (
     <section className="onb-step" aria-labelledby="onboarding-cli-title">
       <StepHeader
+        titleId="onboarding-cli-title"
         eyebrow="Step 2 · Your provider"
         title="Connect your AI provider."
         lede={`Pick a provider and ${assistantName} installs it and signs you in — no terminal, no API keys. When it’s connected, chat is ready.`}
@@ -362,14 +364,9 @@ export function ProviderCard(props: {
 
           {model.status === "not_installed" ? (
             <>
-              <button
-                className="onb-auth__btn"
-                type="button"
-                disabled={model.busy}
-                onClick={props.onConnect}
-              >
+              <Button size="sm" type="button" disabled={model.busy} onClick={props.onConnect}>
                 <LogIn size={14} aria-hidden="true" /> Connect
-              </button>
+              </Button>
               <span className="onb-auth__note">Installs {label} and signs you in · ~30–90s.</span>
             </>
           ) : null}
@@ -381,14 +378,9 @@ export function ProviderCard(props: {
           ) : null}
 
           {model.status === "needs_login" ? (
-            <button
-              className="onb-auth__btn"
-              type="button"
-              disabled={model.busy}
-              onClick={props.onLogin}
-            >
+            <Button size="sm" type="button" disabled={model.busy} onClick={props.onLogin}>
               <LogIn size={14} aria-hidden="true" /> Log in
-            </button>
+            </Button>
           ) : null}
 
           {model.status === "logging_in" ? (
@@ -399,21 +391,23 @@ export function ProviderCard(props: {
                   you’re finished.
                 </div>
                 <div className="onb-auth__outhd">
-                  <a
-                    className="onb-cli__guide"
+                  <ButtonLink
+                    variant="quiet"
+                    size="sm"
                     href={model.authorizationUrl}
                     target="_blank"
                     rel="noreferrer"
                   >
                     Open sign-in page <ExternalLink size={12} aria-hidden="true" />
-                  </a>
-                  <button
-                    className="onb-auth__re"
+                  </ButtonLink>
+                  <Button
+                    variant="quiet"
+                    size="sm"
                     type="button"
                     onClick={() => void copyText(model.userCode ?? "")}
                   >
                     <Copy size={12} aria-hidden="true" /> Copy code
-                  </button>
+                  </Button>
                 </div>
                 <code>{model.userCode}</code>
               </div>
@@ -423,21 +417,23 @@ export function ProviderCard(props: {
                   Open the sign-in page, approve access, then paste the code it gives you.
                 </div>
                 <div className="onb-auth__outhd">
-                  <a
-                    className="onb-cli__guide"
+                  <ButtonLink
+                    variant="quiet"
+                    size="sm"
                     href={model.authorizationUrl}
                     target="_blank"
                     rel="noreferrer"
                   >
                     Open sign-in page <ExternalLink size={12} aria-hidden="true" />
-                  </a>
-                  <button
-                    className="onb-auth__re"
+                  </ButtonLink>
+                  <Button
+                    variant="quiet"
+                    size="sm"
                     type="button"
                     onClick={() => void copyText(model.authorizationUrl ?? "")}
                   >
                     <Copy size={12} aria-hidden="true" /> Copy link
-                  </button>
+                  </Button>
                 </div>
                 <div className="onb-auth__paste">
                   <input
@@ -450,14 +446,14 @@ export function ProviderCard(props: {
                     value={props.tokenValue}
                     onChange={(event) => props.onTokenChange(event.target.value)}
                   />
-                  <button
-                    className="onb-auth__btn"
+                  <Button
+                    size="sm"
                     type="button"
                     disabled={model.busy || props.tokenValue.length === 0}
                     onClick={() => props.onSubmitToken(props.tokenValue)}
                   >
                     Submit
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -481,9 +477,9 @@ export function ProviderCard(props: {
           ) : null}
 
           {model.status === "error" ? (
-            <button className="onb-auth__btn" type="button" onClick={props.onConnect}>
+            <Button size="sm" type="button" onClick={props.onConnect}>
               Try again
-            </button>
+            </Button>
           ) : null}
 
           {model.busy ? (

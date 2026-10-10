@@ -5,13 +5,14 @@ import {
   ChevronsRight,
   Layers3,
   LogOut,
-  Settings
+  Settings,
+  X
 } from "lucide-react";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { NavLink } from "react-router";
 
 import type { MeResponse, ModuleNavigationEntryDto } from "@moss/shared";
-import { BrandMark, IconButton } from "@moss/ui";
+import { Avatar, BrandMark, IconButton, Menu, useDialogLifecycle } from "@moss/ui";
 import type { NavSection } from "../app-route-metadata.js";
 import { ModulePersistentControls } from "./module-persistent-controls.js";
 import { NAV_ICON_MAP } from "./nav-icons.js";
@@ -37,25 +38,41 @@ export interface ShellNavProps {
 export function ShellNav(props: ShellNavProps) {
   const collapsed = props.navMode === "rail";
 
+  const sidebarRef = useRef<HTMLElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const onDialogKeyDown = useDialogLifecycle({
+    ref: sidebarRef,
+    backdropRef: scrimRef,
+    enabled: props.mobileNavOpen,
+    onClose: props.closeMobileNav,
+    returnFocusRef: props.openNavButtonRef
+  });
+
   useEffect(() => {
     if (!props.mobileNavOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      props.closeMobileNav();
-      props.openNavButtonRef.current?.focus();
+    const media = window.matchMedia("(max-width: 920px)");
+    const closeOnDesktop = () => {
+      if (!media.matches) props.closeMobileNav();
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [props.mobileNavOpen, props.closeMobileNav, props.openNavButtonRef]);
+    closeOnDesktop();
+    media.addEventListener("change", closeOnDesktop);
+    return () => media.removeEventListener("change", closeOnDesktop);
+  }, [props.mobileNavOpen, props.closeMobileNav]);
 
-  const closeAndRefocus = () => {
-    props.closeMobileNav();
-    props.openNavButtonRef.current?.focus();
-  };
+  const closeAndRefocus = () => props.closeMobileNav();
 
   return (
     <>
-      <aside className={`sidebar ${props.mobileNavOpen ? "open" : ""}`}>
+      <aside
+        id="moss-main-navigation"
+        ref={sidebarRef}
+        className={`sidebar ${props.mobileNavOpen ? "open" : ""}`}
+        role={props.mobileNavOpen ? "dialog" : undefined}
+        aria-modal={props.mobileNavOpen ? true : undefined}
+        aria-label={props.mobileNavOpen ? "Navigation" : undefined}
+        tabIndex={props.mobileNavOpen ? -1 : undefined}
+        onKeyDown={onDialogKeyDown}
+      >
         <div className="brand-row">
           <div className="brand-lockup">
             <span className="brand-mark">
@@ -64,6 +81,13 @@ export function ShellNav(props: ShellNavProps) {
             <span className="brand-wordmark">{assistantName()}</span>
           </div>
 
+          {props.mobileNavOpen ? (
+            <span className="sidebar-mobile-close">
+              <IconButton aria-label="Close navigation" onClick={closeAndRefocus}>
+                <X aria-hidden="true" />
+              </IconButton>
+            </span>
+          ) : null}
           <span className="nav-collapse">
             <IconButton
               aria-expanded={!collapsed}
@@ -117,10 +141,10 @@ export function ShellNav(props: ShellNavProps) {
       </aside>
 
       {props.mobileNavOpen ? (
-        <button
-          aria-label="Close navigation"
+        <div
+          aria-hidden="true"
+          ref={scrimRef}
           className="sidebar-scrim"
-          type="button"
           onClick={closeAndRefocus}
         />
       ) : null}
@@ -132,12 +156,7 @@ function formatUnreadCount(unreadCount: number): string {
   return unreadCount > 99 ? "99+" : String(unreadCount);
 }
 
-function initialOf(value: string): string {
-  return (value.trim()[0] ?? "?").toUpperCase();
-}
-
-/** Account quick-menu at the rail foot: click the profile to open Notifications,
-    Settings, the dark-mode toggle, and Log out in a popover. */
+/** Account actions share the menu's keyboard and focus behavior. */
 function RailUserMenu(props: {
   readonly me: MeResponse;
   readonly unreadCount: number;
@@ -145,96 +164,53 @@ function RailUserMenu(props: {
   readonly onSignOut: () => void;
   readonly onNavigate: (to: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
   const name = props.me.user.name.trim() || props.me.user.email;
-
   return (
-    <div className={`jds-usermenu ${open ? "is-open" : ""}`} ref={ref}>
-      <button
-        className={`jds-usermenu__trigger ${open ? "is-open" : ""}`}
-        type="button"
-        aria-label={
-          props.unreadCount > 0
-            ? `Account menu, ${formatUnreadCount(props.unreadCount)} unread notification${props.unreadCount === 1 ? "" : "s"}`
-            : "Account menu"
-        }
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="jds-usermenu__av">
-          <span className="jds-avatar jds-avatar--sm">{initialOf(name)}</span>
-        </span>
-        <span className="jds-usermenu__id">
-          <span className="jds-usermenu__nm">{name}</span>
-        </span>
-        {!open && props.unreadCount > 0 ? (
-          <span className="jds-badge-count" aria-hidden="true">
-            {formatUnreadCount(props.unreadCount)}
+    <Menu
+      className="shell-account-menu"
+      placement="top"
+      triggerVariant="content"
+      triggerLabel={
+        props.unreadCount > 0
+          ? `Account menu, ${formatUnreadCount(props.unreadCount)} unread notification${props.unreadCount === 1 ? "" : "s"}`
+          : "Account menu"
+      }
+      triggerContent={
+        <>
+          <Avatar name={name} size="sm" />
+          <span className="jds-usermenu__id">
+            <span className="jds-usermenu__nm">{name}</span>
           </span>
-        ) : null}
-        <span className="jds-usermenu__chev">
+          {props.unreadCount > 0 ? (
+            <span className="jds-badge-count" aria-hidden="true">
+              {formatUnreadCount(props.unreadCount)}
+            </span>
+          ) : null}
           <ChevronUp size={16} aria-hidden="true" />
-        </span>
-      </button>
-      {open ? (
-        <div className="jds-usermenu__pop">
-          <div className="jds-usermenu__list">
-            <button
-              className="jds-usermenu__item"
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                props.onNavigate("/notifications");
-              }}
-            >
-              <span className="jds-usermenu__ic">
-                <Bell size={16} aria-hidden="true" />
-              </span>
-              <span className="jds-usermenu__lbl">Notifications</span>
-              {props.unreadCount > 0 ? (
-                <span className="jds-usermenu__tr">
-                  <span className="jds-badge-count">{formatUnreadCount(props.unreadCount)}</span>
-                </span>
-              ) : null}
-            </button>
-            <button
-              className="jds-usermenu__item"
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                props.onNavigate("/settings");
-              }}
-            >
-              <span className="jds-usermenu__ic">
-                <Settings size={16} aria-hidden="true" />
-              </span>
-              <span className="jds-usermenu__lbl">Settings</span>
-            </button>
-            <div className="jds-usermenu__div" />
-            <button
-              className="jds-usermenu__item is-danger"
-              type="button"
-              disabled={props.signOutPending}
-              onClick={props.onSignOut}
-            >
-              <span className="jds-usermenu__ic">
-                <LogOut size={16} aria-hidden="true" />
-              </span>
-              <span className="jds-usermenu__lbl">Log out</span>
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
+        </>
+      }
+      items={[
+        {
+          id: "notifications",
+          label:
+            props.unreadCount > 0
+              ? `Notifications (${formatUnreadCount(props.unreadCount)})`
+              : "Notifications",
+          icon: <Bell size={16} aria-hidden="true" />
+        },
+        { id: "settings", label: "Settings", icon: <Settings size={16} aria-hidden="true" /> },
+        {
+          id: "sign-out",
+          label: "Log out",
+          icon: <LogOut size={16} aria-hidden="true" />,
+          disabled: props.signOutPending
+        }
+      ]}
+      onSelect={(id) => {
+        if (id === "sign-out") props.onSignOut();
+        else props.onNavigate(id === "notifications" ? "/notifications" : "/settings");
+      }}
+    />
   );
 }
 

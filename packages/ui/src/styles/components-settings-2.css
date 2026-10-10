@@ -137,7 +137,7 @@
 }
 .provpick__on {
   font-family: var(--font-sans);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--accent-fg);
 }
@@ -176,7 +176,7 @@
 }
 .prov__modelshd {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -184,7 +184,7 @@
   border: 0;
   background: transparent;
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--accent-fg);
 }
@@ -196,7 +196,7 @@
 }
 .tier {
   font-family: var(--font-sans);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-subtle);
 }
@@ -206,7 +206,7 @@
 }
 .cap {
   font-family: var(--font-sans);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   color: var(--text-subtle);
   background: var(--surface-2);
@@ -280,7 +280,7 @@
 }
 .ppv__hd {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -298,7 +298,7 @@
 }
 .ppv__cap {
   font-family: var(--font-sans);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -375,7 +375,7 @@
 }
 .aud__cat {
   font-family: var(--font-sans);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -388,7 +388,7 @@
 }
 .aud__count {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   color: var(--text-faint);
 }
 .not-wired {
@@ -548,7 +548,7 @@
 }
 .onb-cred__hd {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-subtle);
 }
@@ -606,7 +606,7 @@
 }
 .vault__ro {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
   background: var(--surface-2);
@@ -646,12 +646,12 @@
 }
 .vroot__path {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   color: var(--text-faint);
 }
 .vroot__ro {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
   border: 1px solid var(--border-subtle);
@@ -742,7 +742,7 @@
 }
 .vselect__lbl {
   font-family: var(--font-sans);
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -803,4 +803,42 @@
 }
 .chatd-lock-warn b {
   font-weight: 600;
+}
+
+/* Memory records use shared disclosure/field controls and the settings type roles. */
+.memdash-item {
+  border-top: 1px solid var(--border);
+}
+.memdash-item__header {
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+.memdash-item__header:hover {
+  color: var(--accent-fg);
+}
+.memdash-item__header:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: var(--space-1);
+}
+.memdash-item__title {
+  font-weight: var(--weight-semibold);
+}
+.memdash-item__date,
+.memdash-drawer__meta {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.memdash-item__summary,
+.memdash-empty {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+.memdash-form-check {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.memdash-form-check input[type="checkbox"] {
+  accent-color: var(--accent);
 }

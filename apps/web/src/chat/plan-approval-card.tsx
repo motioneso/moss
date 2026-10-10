@@ -1,3 +1,5 @@
+import { Button, Card, Eyebrow } from "@moss/ui";
+
 /**
  * The plan-approval card (#1756) — the raised card in the chat transcript that lays out what
  * Moss means to build before it builds it. Fixture-shaped for now: `ModuleBuildPlan` mirrors the
@@ -50,32 +52,26 @@ export function PlanApprovalCard(props: PlanApprovalCardProps) {
   }
 
   return (
-    <div className="jds-card jds-card--raised plan-card">
-      <span className="jds-eyebrow jds-eyebrow--gold">Agree this plan?</span>
-      <dl className="plan-card__rows">
-        {lines.map((line) => (
-          <div className="plan-card__row" key={line.label}>
-            <dt className="jds-eyebrow">{line.label}</dt>
-            <dd>{line.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="plan-card__actions">
-        <button
-          className="jds-btn jds-btn--primary jds-btn--sm"
-          type="button"
-          onClick={props.onBuildIt}
-        >
-          Build it
-        </button>
-        <button
-          className="jds-btn jds-btn--quiet jds-btn--sm"
-          type="button"
-          onClick={props.onNotYet}
-        >
-          Not yet
-        </button>
-      </div>
+    <div className="plan-card">
+      <Card raised>
+        <Eyebrow tone="gold">Agree this plan?</Eyebrow>
+        <dl className="plan-card__rows">
+          {lines.map((line) => (
+            <div className="plan-card__row" key={line.label}>
+              <Eyebrow as="dt">{line.label}</Eyebrow>
+              <dd>{line.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="plan-card__actions">
+          <Button size="sm" type="button" onClick={props.onBuildIt}>
+            Build it
+          </Button>
+          <Button variant="quiet" size="sm" type="button" onClick={props.onNotYet}>
+            Not yet
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

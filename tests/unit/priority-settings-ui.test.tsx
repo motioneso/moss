@@ -92,6 +92,35 @@ describe("PrioritySettings", () => {
     ).toContain("label");
   });
 
+  it("associates each visible priority label with its own input", () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(["priority-model"], {
+      ...savedModel,
+      anchors: [
+        {
+          id: "anchor-label-test",
+          kind: "project",
+          label: "Launch",
+          aliases: ["release"],
+          weight: 1,
+          enabled: true,
+          createdAt: "now",
+          updatedAt: "now"
+        }
+      ]
+    });
+    const html = renderToString(
+      <QueryClientProvider client={queryClient}>
+        <PrioritySettings />
+      </QueryClientProvider>
+    );
+    const labels = [...html.matchAll(/<label[^>]*for="([^"]+)"[^>]*>([^<]+)<\/label>/g)];
+    expect(labels.map((label) => label[2])).toEqual(
+      expect.arrayContaining(["Mode", "What matters right now", "Also match"])
+    );
+    for (const label of labels) expect(html).toContain(`id="${label[1]}"`);
+  });
+
   it("renders its loading state inside a query client", () => {
     const queryClient = new QueryClient();
 
