@@ -11,6 +11,8 @@ function makeThread(overrides: Partial<ChatThread> = {}): ChatThread {
     is_main: false,
     surface: "drawer",
     conversation_summary: null,
+    summary_covered_through_message_id: null,
+    summary_revision: 0,
     created_at: new Date("2026-06-06T12:00:00.000Z"),
     updated_at: new Date("2026-06-06T12:00:00.000Z"),
     last_active_at: new Date("2026-06-06T12:00:00.000Z"),

@@ -2368,6 +2368,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           candidatesRepository: new MemoryCandidatesRepository(),
           graphRepository: new MemoryGraphRepository()
         },
+        createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
+        probeConstrainedCli: deps.probeConstrainedCli,
         logger: deps.logger ? createModuleLogger(deps.logger, "chat") : undefined
       })
   },
