@@ -107,10 +107,7 @@ test("attaching a file really uploads to the vault and the turn carries its id (
   await drawer.locator(".chatd-input textarea").fill("Please read this file.");
   await drawer.getByRole("button", { name: "Send" }).click();
 
-  // The turn body carries the server-issued id (never bytes) into the REAL /turn handler.
-  // Its attachment gates (UUID shape, ownership resolution, incognito, count cap) all sit
-  // BEFORE engine dispatch, so passing them and reaching the no-model rejection proves the
-  // wiring end-to-end minus the model itself.
+  // The turn body carries the server-issued id (never bytes) into the real /turn handler.
   await expect
     .poll(() => turnBody)
     .toEqual({
@@ -119,8 +116,9 @@ test("attaching a file really uploads to the vault and the turn carries its id (
       surface: "drawer"
     });
 
-  // The scripted model answers the turn. The first turn in a chat starts the scripted provider
-  // cold, which takes several seconds, so this waits longer than the default 10s.
+  // The scripted reply proves the turn reached the engine and the answer came back to the drawer.
+  // The first turn in a chat starts the scripted provider cold, which takes several seconds, so
+  // this waits longer than the default 10s.
   await expect(drawer.getByText("Received the attached file.")).toBeVisible({ timeout: 60_000 });
 
   // Pending chips cleared on send — the staged upload doesn't linger in the composer.
@@ -154,7 +152,7 @@ test("the real server rejects an unsupported attachment type with 415 (#1133)", 
 
 // Still fixme: the full exchange (the model receives the <attachments> manifest, calls
 // chat.readAttachment, and answers about the file's content) has no scripted turn in this file
-// yet. The tool read path is proven at unit level (tests/unit/chat-attachment-tool.test.ts: text
-// render+cap, image media pass-through, ownership) and the manifest/turn wiring by
-// tests/integration/chat-attachments-turn.test.ts.
-test.fixme("model reads an attached file and answers about its content (#1121)", async () => {});
+// yet. Tracked in #3343. The tool read path is proven at unit level
+// (tests/unit/chat-attachment-tool.test.ts: text render+cap, image media pass-through, ownership)
+// and the manifest/turn wiring by tests/integration/chat-attachments-turn.test.ts.
+test.fixme("model reads an attached file and answers about its content (#3343)", async () => {});
