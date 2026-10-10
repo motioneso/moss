@@ -44,6 +44,33 @@ describe("PersonContextService", () => {
     expect(result).toBeNull();
   });
 
+  it("resolve finds a person by display name and by a title-cased alias, ignoring case", async () => {
+    const ac = { actorUserId: ids.userA, requestId: "s2b" };
+
+    await runner.withDataContext(ac, async (sdb) => {
+      const person = await repo.upsertPerson(sdb, {
+        ownerUserId: ids.userA,
+        displayName: "Grace Hopper",
+        status: "active"
+      });
+      await repo.upsertIdentity(sdb, {
+        ownerUserId: ids.userA,
+        personId: person.id,
+        identityKind: "alias",
+        sourceKind: "note",
+        normalizedValue: "Ada",
+        displayValue: "Ada",
+        sourceRef: null,
+        sourceRefHash: null
+      });
+
+      const byName = await svc.resolve(sdb, ids.userA, "grace hopper");
+      expect(byName?.id).toBe(person.id);
+      const byAlias = await svc.resolve(sdb, ids.userA, "ada");
+      expect(byAlias?.id).toBe(person.id);
+    });
+  });
+
   it("acceptCandidate for link_identity succeeds", async () => {
     const ac = { actorUserId: ids.userA, requestId: "s3" };
 

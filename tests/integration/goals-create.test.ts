@@ -41,4 +41,36 @@ describe("goals repository creation", () => {
     expect(evidence.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(evidence.goalId).toBe(goal.id);
   });
+
+  it("clears nullable metadata when explicit null is sent and keeps it when omitted", async () => {
+    const access = { actorUserId: ids.userA, requestId: "req-goals-clear" };
+
+    const { kept, cleared } = await dataContext.withDataContext(access, async (scopedDb) => {
+      const goal = await repo.create(scopedDb, ids.userA, {
+        title: "Clear me",
+        desiredOutcome: "Fields can be cleared",
+        targetAt: "2030-01-01T00:00:00.000Z"
+      });
+      await repo.update(scopedDb, goal.id, {
+        lastProgressSummary: "progress",
+        blockerSummary: "blocked",
+        nextSuggestedAction: "do it"
+      });
+      const kept = await repo.update(scopedDb, goal.id, { title: "Clear me too" });
+      const cleared = await repo.update(scopedDb, goal.id, {
+        targetAt: null,
+        lastProgressSummary: null,
+        blockerSummary: null,
+        nextSuggestedAction: null
+      });
+      return { kept, cleared };
+    });
+
+    expect(kept.targetAt).toBe("2030-01-01T00:00:00.000Z");
+    expect(kept.blockerSummary).toBe("blocked");
+    expect(cleared.targetAt).toBeNull();
+    expect(cleared.lastProgressSummary).toBeNull();
+    expect(cleared.blockerSummary).toBeNull();
+    expect(cleared.nextSuggestedAction).toBeNull();
+  });
 });

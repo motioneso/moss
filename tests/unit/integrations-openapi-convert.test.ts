@@ -62,6 +62,32 @@ describe("convertOpenApiSpec", () => {
     expect(queue.group).toBe("Other");
   });
 
+  it("resolves a $ref requestBody", () => {
+    const refSpec = {
+      openapi: "3.0.0",
+      components: {
+        schemas: { Item: { type: "object", properties: { name: { type: "string" } } } },
+        requestBodies: {
+          NewItem: {
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Item" } } }
+          }
+        }
+      },
+      paths: {
+        "/items": {
+          post: {
+            operationId: "createItem",
+            requestBody: { $ref: "#/components/requestBodies/NewItem" }
+          }
+        }
+      }
+    };
+    const post = convertOpenApiSpec(refSpec).find((t) => t.name === "createItem")!;
+    expect(post.invoke!.hasBody).toBe(true);
+    const props = (post.inputSchema as { properties: Record<string, unknown> }).properties;
+    expect(props.body).toBeDefined();
+  });
+
   it("never emits a top-level combinator", () => {
     for (const t of convertOpenApiSpec(spec)) {
       for (const k of ["anyOf", "oneOf", "allOf", "not"])
