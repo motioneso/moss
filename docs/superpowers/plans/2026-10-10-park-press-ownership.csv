@@ -880,6 +880,7 @@ tests/unit/web-shell-nav.test.tsx,C2,reserved,,Reserved existing surface UI test
 tests/unit/web-shell-theme.test.ts,C2,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/wellness-export-modal-contract.test.ts,L3,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/wellness-export-render.test.ts,L3,reserved,,Specific existing UI tests delegated by domain owner
+tests/e2e/wellness-export-columns.spec.ts,L3,reserved,,Measured print-layout regression for Wellness export medication tables
 tests/unit/wellness-manage-meds-modal.test.tsx,L3,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/wellness-med-builder-form.test.ts,L3,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/workflow-approval-card.test.tsx,C5,reserved,,Existing approval-card regression test assigned before edit
