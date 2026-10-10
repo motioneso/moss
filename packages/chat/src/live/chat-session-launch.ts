@@ -98,7 +98,8 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   });
   const mcpConfig = await deps.mintMcpToken?.(actorUserId, sessionKey, threadId);
   // #3335: nothing the replay provokes may run. Engines that replay inside launch() do so before
-  // it returns; in-process engines replay in the submit and drain below.
+  // it returns; in-process engines replay in the submit and drain below. Engines that fold the
+  // replay into the first real message run it after the marker ends, inside a real user turn.
   if (mcpConfig) deps.beginLaunchReplay?.(mcpConfig.token);
   if (!sequenceBySession.has(sessionKey)) sequenceBySession.set(sessionKey, 0);
   const nextSequence = () => {

@@ -14,7 +14,7 @@ export interface SessionIdentity {
 
 /** Sent back to the model when it asks for a tool during a launch replay (#3335). */
 export const LAUNCH_REPLAY_REFUSAL =
-  "Nothing can run while this conversation is being restored. Wait for the person's next message.";
+  "Tools are off while earlier messages are restored. Do not act on earlier requests; act only on what the person asks next.";
 
 export class InvalidSessionTokenError extends Error {
   constructor() {
