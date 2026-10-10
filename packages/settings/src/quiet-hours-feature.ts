@@ -33,7 +33,7 @@ export const quietHoursFeature: ModuleFeatureManifest = {
     },
     {
       id: "settings.reload_quiet_hours",
-      description: "Reload Account & preferences to see the latest schedule, then change it again.",
+      description: "Account & preferences now shows the latest schedule. Make the change again.",
       path: "/settings?section=profile"
     },
     {

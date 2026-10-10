@@ -18,6 +18,8 @@ const NOTIFICATION_TITLE = "Your morning briefing is ready";
 const TIME_ZONE = "America/Chicago";
 const ALERTS_KEY = "proactive.monitoring.v1";
 const ALERTS_URL = "/api/me/proactive-monitoring-settings";
+const STALE_SAVE_MESSAGE =
+  "Quiet hours changed somewhere else, so this change was not saved. The latest schedule is showing now.";
 
 const LEGACY_ALERTS = {
   version: 1,
@@ -241,6 +243,20 @@ test("Profile, alert settings and the briefing worker keep quiet hours safe (#31
   await page.reload();
   await expect(page.getByLabel("Quiet hours from")).toHaveValue("22:00");
   await expect(page.getByLabel("Quiet hours to")).toHaveValue("07:00");
+
+  // A save from the screen over a newer competing save is refused and shows the newer schedule.
+  const loaded = await quietHours(page);
+  const competing = { ...loaded.quietHours, start: "20:00", end: "08:00" };
+  const competingSave = await putQuietHours(page, competing, loaded.version);
+  expect(competingSave.status).toBe(200);
+  await page.getByLabel("Quiet hours from").fill("19:00");
+  await expect(page.getByText(STALE_SAVE_MESSAGE)).toBeVisible();
+  await expect(page.getByLabel("Quiet hours from")).toHaveValue("20:00");
+  await expect(page.getByLabel("Quiet hours to")).toHaveValue("08:00");
+  expect((await quietHours(page)).quietHours).toEqual(competing);
+  console.log(
+    `[3164 screen stale save] competing save 20:00-08:00 kept; screen edit to 19:00 refused with message`
+  );
 
   // Invalid Profile saves change nothing, not even the version.
   const before = await quietHours(page);
