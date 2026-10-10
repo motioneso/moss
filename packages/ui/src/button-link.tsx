@@ -6,7 +6,8 @@ export type ButtonLinkVariant =
   | "quiet"
   | "accentSoft"
   | "danger"
-  | "field";
+  | "field"
+  | "link";
 export type ButtonLinkSize = "sm" | "md" | "lg";
 
 export interface ButtonLinkProps extends Omit<

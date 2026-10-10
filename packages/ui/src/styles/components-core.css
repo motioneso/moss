@@ -282,7 +282,6 @@
 .jds-card--interactive:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
 }
 
 /* ---------------------------------------------------------------
@@ -559,14 +558,14 @@
   color: var(--gold-ink);
 }
 .jds-eyebrow--muted {
-  color: var(--ink-3);
+  color: var(--text-faint);
 }
 /* Bold weight and the hero-band tone (Today's eyebrow). */
 .jds-eyebrow--strong {
   font-weight: var(--weight-bold);
 }
 .jds-eyebrow--hero {
-  color: var(--hero-fg-muted);
+  color: var(--hero-fg);
 }
 /* The board hero's "credible matches" label, baseline-aligned beside the 72px count — same
    eyebrow size (--text-2xs already matches its 11px override), just accent-toned. */

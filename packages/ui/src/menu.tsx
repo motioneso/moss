@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type KeyboardEvent as ReactKeyboardEvent
+} from "react";
 
 export interface MenuItem {
   readonly id: string;
@@ -14,7 +21,12 @@ export interface MenuItem {
 }
 
 export interface MenuProps {
-  readonly triggerIcon: ReactNode;
+  readonly triggerIcon?: ReactNode;
+  readonly triggerContent?: ReactNode;
+  readonly triggerVariant?: "icon" | "content";
+  readonly placement?: "bottom" | "top";
+  /** Layout-only wrapper hook. */
+  readonly className?: string;
   readonly triggerLabel: string;
   readonly items: readonly MenuItem[];
   readonly onSelect: (id: string) => void;
@@ -29,23 +41,52 @@ function isOutsideTarget(container: HTMLElement, target: EventTarget | null): bo
 export function Menu(props: MenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  const openAtEnd = useRef(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const close = () => {
+  const close = (restoreFocus = true) => {
     setOpen(false);
-    triggerRef.current?.focus();
+    if (restoreFocus) triggerRef.current?.focus();
+  };
+  const enabledItems = () =>
+    Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!open) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    } else if (event.key === "Tab") {
+      // Focus the trigger before native Tab computes the next outside control.
+      close();
+    } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+      event.preventDefault();
+      const items = enabledItems();
+      const current = items.indexOf(document.activeElement as HTMLButtonElement);
+      const index =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? items.length - 1
+            : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      items[index]?.focus();
+    }
   };
 
   useEffect(() => {
     if (!open) return;
     const container = ref.current;
     if (!container) return;
+    const items = enabledItems();
+    (openAtEnd.current ? items.at(-1) : items[0])?.focus();
 
     function onPointerDown(event: PointerEvent) {
-      if (container && isOutsideTarget(container, event.target)) close();
+      if (container && isOutsideTarget(container, event.target)) close(false);
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape" && !event.defaultPrevented) close();
     }
 
     document.addEventListener("pointerdown", onPointerDown);
@@ -57,19 +98,54 @@ export function Menu(props: MenuProps) {
   }, [open]);
 
   return (
-    <div className="jds-menu" ref={ref}>
+    <div
+      className={[
+        "jds-menu",
+        props.triggerVariant === "content" ? "jds-menu--content" : null,
+        props.className
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      ref={ref}
+      onKeyDown={onKeyDown}
+    >
       <button
         type="button"
         ref={triggerRef}
-        className="jds-menu__trigger"
+        className={
+          props.triggerVariant === "content"
+            ? "jds-menu__trigger jds-menu__trigger--content"
+            : "jds-menu__trigger"
+        }
         aria-label={props.triggerLabel}
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        aria-haspopup="menu"
+        aria-controls={open ? listId : undefined}
+        onKeyDown={(event) => {
+          if (!open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+            event.preventDefault();
+            event.stopPropagation();
+            openAtEnd.current = event.key === "ArrowUp";
+            setOpen(true);
+          }
+        }}
+        onClick={() => {
+          openAtEnd.current = false;
+          setOpen(!open);
+        }}
       >
-        {props.triggerIcon}
+        {props.triggerContent ?? props.triggerIcon}
       </button>
       {open ? (
-        <div className="jds-menu__list" role="menu">
+        <div
+          ref={listRef}
+          id={listId}
+          className={
+            props.placement === "top" ? "jds-menu__list jds-menu__list--top" : "jds-menu__list"
+          }
+          role="menu"
+          aria-label={props.triggerLabel}
+        >
           {props.items.map((item) => (
             <button
               key={item.id}
@@ -78,6 +154,7 @@ export function Menu(props: MenuProps) {
               aria-checked={item.checked}
               aria-label={item.ariaLabel}
               disabled={item.disabled}
+              tabIndex={-1}
               onClick={() => {
                 close();
                 props.onSelect(item.id);

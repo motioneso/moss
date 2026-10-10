@@ -85,7 +85,7 @@
         {
           "prop": "variant",
           "kind": "enum",
-          "values": ["primary", "secondary", "quiet", "accentSoft", "danger", "field"],
+          "values": ["primary", "secondary", "quiet", "accentSoft", "danger", "field", "link"],
           "optional": true,
           "default": "primary"
         },
@@ -245,10 +245,14 @@
       "name": "dialog",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/dialog.tsx", "type": "registry:ui" }],
-      "dependencies": [],
+      "dependencies": ["lucide-react"],
       "exports": ["Dialog"],
       "options": [],
-      "flags": []
+      "flags": [
+        { "prop": "dismissOnEscape", "optional": true },
+        { "prop": "dismissOnBackdrop", "optional": true },
+        { "prop": "closeDisabled", "optional": true }
+      ]
     },
     {
       "name": "disclosure-toggle",
@@ -443,7 +447,22 @@
       "files": [{ "path": "packages/ui/src/menu.tsx", "type": "registry:ui" }],
       "dependencies": [],
       "exports": ["Menu"],
-      "options": [],
+      "options": [
+        {
+          "prop": "triggerVariant",
+          "kind": "enum",
+          "values": ["icon", "content"],
+          "optional": true,
+          "default": null
+        },
+        {
+          "prop": "placement",
+          "kind": "enum",
+          "values": ["bottom", "top"],
+          "optional": true,
+          "default": null
+        }
+      ],
       "flags": []
     },
     {
@@ -506,7 +525,10 @@
       "dependencies": [],
       "exports": ["PeekPanel"],
       "options": [],
-      "flags": []
+      "flags": [
+        { "prop": "modal", "optional": true },
+        { "prop": "dismissOnEscape", "optional": true }
+      ]
     },
     {
       "name": "radio-card-group",
@@ -515,7 +537,7 @@
       "dependencies": [],
       "exports": ["RadioCardGroup"],
       "options": [],
-      "flags": []
+      "flags": [{ "prop": "disabled", "optional": true }]
     },
     {
       "name": "row-button",

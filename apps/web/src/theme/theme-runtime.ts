@@ -250,7 +250,7 @@ export function applyThemeTokens(
   style.setProperty("--forest-soft-2", style.getPropertyValue("--accent-soft-2"));
   style.setProperty("--forest-ink", style.getPropertyValue("--accent-soft-fg"));
   style.setProperty("--accent-strong", "var(--accent-hover)");
-  style.setProperty("--focus-ring", `color-mix(in srgb, ${tokens.accent} 45%, transparent)`);
+  style.setProperty("--focus-ring", "var(--accent-fg)");
 
   if (tokens.highlight) {
     const gold = parseThemeColor(tokens.highlight);

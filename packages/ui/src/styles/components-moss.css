@@ -63,12 +63,22 @@
   box-shadow: var(--shadow-xl);
   width: 100%;
   max-width: 460px;
-  overflow: hidden;
+  max-height: calc(100dvh - var(--space-8));
+  overflow-y: auto;
 }
 .jds-dialog__head {
   padding: var(--space-5) var(--space-6) var(--space-3);
 }
+.jds-dialog__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
 .jds-dialog__title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: var(--weight-semibold);
@@ -85,6 +95,7 @@
 }
 .jds-dialog__foot {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-3);
   padding: var(--space-5) var(--space-6);
@@ -731,7 +742,7 @@
   padding: 6px;
   z-index: 70;
   transform-origin: bottom left;
-  animation: jds-menu-in 0.14s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: jds-menu-in var(--dur-fast) var(--ease-out) both;
 }
 @keyframes jds-menu-in {
   from {
@@ -837,7 +848,7 @@
   border-radius: 50%;
   background: var(--white);
   box-shadow: var(--shadow-xs);
-  transition: left 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: left var(--dur-fast) var(--ease-out);
 }
 .jds-miniswitch[data-on] > span {
   left: 14px;

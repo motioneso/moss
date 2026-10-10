@@ -110,7 +110,7 @@
 
 .jds-instrument__label {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: var(--weight-medium);
-  color: var(--ink-3);
+  color: var(--text-faint);
 }

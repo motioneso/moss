@@ -12,18 +12,22 @@
   font-feature-settings: "ss01", "cv01";
 }
 
-/* Park Press: one grotesk family carries both display and chrome duty —
-   headings differentiate by weight, not by switching to a serif. */
+/* Display headings use Archivo; shell chrome retains the sans role. */
 .auth-panel h1,
 .page-heading h1,
-.coming-title,
-.topbar-title {
-  font-family: var(--font-sans);
+.coming-title {
+  font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: var(--tracking-tight);
 }
 
-/* Numerics / timestamps / durations are tabular mono (instrument seasoning). */
+.topbar-title {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+}
+
+/* Numeric columns line up without introducing a monospace face. */
 .tnum,
 .topbar-subtitle {
   font-family: var(--font-sans);
@@ -36,7 +40,7 @@
 }
 
 body {
-  min-width: 320px;
+  min-width: min(320px, 100%);
   min-height: 100vh;
   margin: 0;
   background-color: var(--bg);
@@ -123,21 +127,23 @@ a {
   gap: 0.875rem;
 }
 
-label {
+:where(label) {
   display: grid;
-  gap: 0.35rem;
+  gap: var(--space-2);
   color: var(--muted);
   font-size: 0.84rem;
   font-weight: var(--weight-strong);
 }
 
-input:where(:not(.meeting-settings .jds-radio-card input[type="radio"])),
-select,
-textarea {
+:where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea
+) {
   width: 100%;
   min-height: 2.5rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-raised);
   color: var(--ink);
   padding: 0.6rem 0.7rem;
@@ -161,13 +167,13 @@ input,
 select,
 textarea,
 a {
-  transition: box-shadow 0.1s var(--ease-out);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
 }
 
 button {
   transition:
-    box-shadow 0.1s var(--ease-out),
-    background-color 0.1s var(--ease-out);
+    box-shadow var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
 }
 
 .primary-button,
@@ -179,7 +185,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   padding: 0.55rem 0.85rem;
   font-weight: 750;
@@ -232,7 +238,7 @@ button {
   background: var(--danger);
   color: var(--text-on-accent);
   padding: 0 0.25rem;
-  font-size: 0.68rem;
+  font-size: var(--text-2xs);
   font-weight: 850;
   line-height: 1;
 }
@@ -250,7 +256,7 @@ button {
   grid-auto-columns: 1fr;
   gap: 0.25rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-track);
   padding: 0.25rem;
 }
@@ -369,7 +375,7 @@ button {
   padding: 24px 14px 4px;
   color: var(--muted);
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -801,7 +807,7 @@ button.module-link {
   gap: 0.75rem;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-raised);
   padding: 0.75rem;
 }
@@ -818,7 +824,7 @@ button.module-link {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.35rem 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0.75rem;
 }
 
@@ -840,7 +846,7 @@ button.module-link {
   align-items: center;
   gap: 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-raised);
   padding: 0.6rem 0.7rem;
   font-weight: 750;
@@ -868,7 +874,7 @@ button.module-link {
   place-items: center;
   gap: 0.5rem;
   border: 1px dashed var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface-raised);
   color: var(--muted);
   padding: 1rem;
@@ -909,7 +915,7 @@ button.module-link {
        overshoot it while a phone browser toolbar is showing. */
     height: auto;
     transform: translateX(-100%);
-    transition: transform 160ms ease;
+    transition: transform var(--dur-fast) var(--ease-out);
     overflow-y: hidden;
   }
 

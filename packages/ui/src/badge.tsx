@@ -1,10 +1,7 @@
 import { type ReactNode } from "react";
 
-/**
- * 1:1 with apps/web/src/styles/components-core.css .jds-badge--* — there is no bare "pine"
- * tone (that class doesn't exist; see #1388 D6 change list for the compat mapping). "solid-pine"
- * and "solid-amber" are their own solid-fill treatments, not a `solid` variant of every tone.
- */
+/** Canonical public tones. Legacy settings "pine" is translated to "forest" at the
+ * settings adapter boundary; the CSS alias remains for existing external callers. */
 export type BadgeTone =
   | "neutral"
   | "forest"

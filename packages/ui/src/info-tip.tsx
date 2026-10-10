@@ -1,5 +1,5 @@
 import { Info } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { IconButton } from "./icon-button.js";
 
@@ -18,6 +18,7 @@ function isOutsideTarget(container: HTMLElement | null, target: EventTarget | nu
 /** A small info icon that opens a plain-text explanation panel on click. */
 export function InfoTip(props: InfoTipProps) {
   const [open, setOpen] = useState(false);
+  const tooltipId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -29,10 +30,10 @@ export function InfoTip(props: InfoTipProps) {
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (isOutsideTarget(ref.current, event.target)) close();
+      if (isOutsideTarget(ref.current, event.target)) setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape" && !event.defaultPrevented) close();
     };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -43,19 +44,30 @@ export function InfoTip(props: InfoTipProps) {
   }, [open]);
 
   return (
-    <div className="jds-infotip" ref={ref}>
+    <div
+      className="jds-infotip"
+      ref={ref}
+      onKeyDown={(event) => {
+        if (open && event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          close();
+        }
+      }}
+    >
       <IconButton
         ref={triggerRef}
         size="sm"
         active={open}
         aria-label={props.label}
         aria-expanded={open}
+        aria-describedby={open ? tooltipId : undefined}
         onClick={() => setOpen(!open)}
       >
         <Info size={15} aria-hidden="true" />
       </IconButton>
       {open ? (
-        <div className="jds-menu__list jds-infotip__panel" role="tooltip">
+        <div className="jds-menu__list jds-infotip__panel" role="tooltip" id={tooltipId}>
           {props.children}
         </div>
       ) : null}
