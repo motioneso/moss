@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const execFileSyncMock = vi.fn<(...args: unknown[]) => string>();
 vi.mock("node:child_process", () => ({
@@ -12,7 +12,13 @@ vi.mock("node:fs", () => ({
   readFileSync: (path: string) => readFileSyncMock(path)
 }));
 
-const { installUatRealChatCodexAuth, hostCodexAuthPath } = await import("./real-chat-env.js");
+const {
+  installUatRealChatAuth,
+  installUatRealChatCodexAuth,
+  hostCodexAuthPath,
+  uatRealChatProvider,
+  uatRealChatProviderKind
+} = await import("./real-chat-env.js");
 
 const SECRET = Buffer.from('{"token":"super-secret-value"}');
 
@@ -136,5 +142,101 @@ describe("installUatRealChatCodexAuth (#2732)", () => {
     expect(hostCodexAuthPath()).toMatch(/\.codex\/auth\.json$/);
     process.env.JARVIS_UAT_REAL_CHAT_CODEX_AUTH_FILE = "/tmp/custom-auth.json";
     expect(hostCodexAuthPath()).toBe("/tmp/custom-auth.json");
+  });
+});
+
+describe("installUatRealChatAuth provider choice (#3361)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    delete process.env.JARVIS_UAT_REAL_CHAT_PROVIDER;
+    delete process.env.JARVIS_UAT_REAL_CHAT_CODEX_AUTH_FILE;
+    process.env.MOSS_UAT_CAPTURE_OFF = "1";
+  });
+
+  afterEach(() => {
+    delete process.env.MOSS_UAT_CAPTURE_OFF;
+  });
+
+  it("refuses Claude while captures are on, because a kept trace records the sign-in code", () => {
+    process.env.JARVIS_UAT_REAL_CHAT_PROVIDER = "claude";
+    delete process.env.MOSS_UAT_CAPTURE_OFF;
+    expect(() => uatRealChatProvider()).toThrow(/needs MOSS_UAT_CAPTURE_OFF=1/);
+    expect(() => installUatRealChatAuth("uat-test", "actor-1", buildComposeArgs)).toThrow(
+      /needs MOSS_UAT_CAPTURE_OFF=1/
+    );
+    expect(execFileSyncMock).not.toHaveBeenCalled();
+    process.env.JARVIS_UAT_REAL_CHAT_PROVIDER = "codex";
+    expect(uatRealChatProvider()).toBe("codex");
+  });
+
+  it("defaults to Codex and rejects an unknown provider", () => {
+    expect(uatRealChatProvider()).toBe("codex");
+    expect(uatRealChatProviderKind()).toBe("openai-compatible");
+    process.env.JARVIS_UAT_REAL_CHAT_PROVIDER = "claude";
+    expect(uatRealChatProvider()).toBe("claude");
+    expect(uatRealChatProviderKind()).toBe("anthropic");
+    process.env.JARVIS_UAT_REAL_CHAT_PROVIDER = "gemini";
+    expect(() => uatRealChatProvider()).toThrow(/must be "codex" or "claude"/);
+  });
+
+  it("keeps the Codex host-login copy when Codex is selected", () => {
+    existsSyncMock.mockReturnValue(false);
+    expect(installUatRealChatAuth("uat-test", "actor-1", buildComposeArgs)).toBeUndefined();
+    expect(existsSyncMock).toHaveBeenCalledWith(hostCodexAuthPath());
+  });
+
+  it("with Claude selected, copies no host login into the stack", () => {
+    process.env.JARVIS_UAT_REAL_CHAT_PROVIDER = "claude";
+    existsSyncMock.mockReturnValue(true);
+    readFileSyncMock.mockReturnValue(SECRET);
+    execFileSyncMock.mockReturnValueOnce("1000:1000\n");
+
+    const result = installUatRealChatAuth("uat-test", "actor-1", buildComposeArgs);
+
+    expect(result).toBeDefined();
+    expect(readFileSyncMock).not.toHaveBeenCalled();
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+    for (const call of execFileSyncMock.mock.calls) {
+      const [, args, options] = call as [string, readonly string[], { input?: Buffer }];
+      expect(options?.input).toBeUndefined();
+      expect(args.join(" ")).not.toMatch(/\.codex|\.claude/);
+    }
+  });
+
+  it("with Claude selected, cleanup removes the minted token from the instance and agent homes", async () => {
+    process.env.JARVIS_UAT_REAL_CHAT_PROVIDER = "claude";
+    execFileSyncMock
+      .mockReturnValueOnce("1000:1000\n") // cli-auth owner
+      .mockReturnValueOnce("") // rm instance token
+      .mockReturnValueOnce("100001:100001\n") // agent home owner
+      .mockReturnValueOnce(""); // rm agent token
+
+    const result = installUatRealChatAuth("uat-test", "actor-1", buildComposeArgs);
+    await result!.cleanup();
+    await result!.cleanup();
+
+    const calls = execFileSyncMock.mock.calls as [string, readonly string[]][];
+    expect(calls).toHaveLength(4);
+    const [, instanceRm, , agentRm] = calls.map(([, args]) => args.join(" "));
+    expect(instanceRm).toContain("--user 1000:1000");
+    expect(instanceRm).toContain("/data/cli-auth/.jarvis/cli-tokens/anthropic");
+    expect(instanceRm).toContain("/data/cli-auth/.jarvis/cli-tokens/anthropic.tmp");
+    expect(agentRm).toContain("--user 100001:100001");
+    expect(agentRm).toContain("/data/cli-auth/agents/actor-1/.jarvis/cli-tokens/anthropic");
+  });
+
+  it("with Claude selected, a failed token removal fails loudly", async () => {
+    process.env.JARVIS_UAT_REAL_CHAT_PROVIDER = "claude";
+    execFileSyncMock
+      .mockReturnValueOnce("1000:1000\n")
+      .mockImplementationOnce(() => {
+        throw new Error("container already exited");
+      })
+      .mockImplementationOnce(() => {
+        throw new Error("no agent home");
+      });
+
+    const result = installUatRealChatAuth("uat-test", "actor-1", buildComposeArgs);
+    await expect(result!.cleanup()).rejects.toThrow(/Claude token cleanup failed for uat-test/);
   });
 });

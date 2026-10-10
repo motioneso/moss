@@ -7,6 +7,7 @@ import {
   requireUatProjectName,
   signInUatAdmin
 } from "./real-chat-signin.js";
+import { uatRealChatProvider } from "../real-chat-env.js";
 
 // #2689 slice 2: chat runs the Codex chat adapter from the tools volume when it is installed, and
 // from the image copy once it is gone. Opt-in like real-chat-onboarding: needs the operator's own
@@ -14,6 +15,8 @@ import {
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
+// The adapter under test belongs to the Codex CLI; a Claude run never starts it.
+const CODEX_SELECTED = uatRealChatProvider() === "codex";
 const SCAN = String.raw`for d in /proc/[0-9]*; do tr '\0' ' ' < $d/cmdline 2>/dev/null | grep -q "codex-acp/dist/index[.]js" && echo $d | cut -d/ -f3; done; true`;
 const ADAPTER_SLOT = "/data/cli-tools/providers/openai-compatible-adapter";
 
@@ -49,7 +52,10 @@ async function turn(page: Page): Promise<void> {
 test("chat answers through the tools volume adapter, then through the image copy once it is deleted", async ({
   page
 }) => {
-  test.skip(!REAL_CHAT_CONFIGURED, "no real-chat login configured for this run (#2689)");
+  test.skip(
+    !REAL_CHAT_CONFIGURED || !CODEX_SELECTED,
+    "needs the Codex real-chat login for this run (#2689)"
+  );
   test.setTimeout(300_000);
   await signInUatAdmin(page);
   await bringUpRealChatModel(page);
