@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { ActionAuditLogEntryDto, ActivityLineDto, LocaleSettingsDto } from "@moss/shared";
 import { localDay } from "@moss/shared";
-import { Button, Checklist, type ChecklistItem } from "@moss/ui";
+import { Button, Checklist, Eyebrow, type ChecklistItem } from "@moss/ui";
 
 import { listActionAuditLog, listActivityLines } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
@@ -605,7 +605,7 @@ export function ActivityPane({ me }: PaneProps) {
               className="act-day"
               aria-label={dayLabel(day.key, day.sample, locale)}
             >
-              <span className="jds-eyebrow">{dayLabel(day.key, day.sample, locale)}</span>
+              <Eyebrow>{dayLabel(day.key, day.sample, locale)}</Eyebrow>
               {day.rows.map((row) =>
                 row.kind === "line" ? (
                   <ActivityLineRow

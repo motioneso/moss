@@ -205,7 +205,7 @@
   --info-soft: var(--steel-soft);
   --info-soft-fg: var(--steel-ink);
 
-  --focus-ring: rgba(41, 75, 57, 0.45);
+  --focus-ring: var(--accent-fg);
   --governor-opacity: 0.7;
 
   /* Riso paper tooth (spec §3.1): static grain, multiply on light. */
@@ -490,13 +490,11 @@
      clear 4.5:1 on --surface-3 and --forest-soft. Park themes re-point these. */
   --accent-fg: #79a68d;
   --accent-fg-hover: #83b096;
-  --focus-ring: rgba(121, 166, 141, 0.5);
+  --focus-ring: var(--accent-fg);
 
   --texture-opacity: 0.03;
   --texture-blend: screen;
 
-  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.3);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.36), 0 1px 3px rgba(0, 0, 0, 0.28);
   --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 20px rgba(0, 0, 0, 0.44);
   --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.44), 0 18px 44px rgba(0, 0, 0, 0.52);
   --shadow-xl: 0 8px 28px rgba(0, 0, 0, 0.52), 0 36px 70px rgba(0, 0, 0, 0.6);
@@ -565,7 +563,7 @@
   --forest-soft: #dee2cd;
   --forest-soft-2: #cdd4b6;
   --forest-ink: #35432a;
-  --focus-ring: rgba(74, 93, 58, 0.45);
+  --focus-ring: var(--accent-fg);
   --accent-soft-border: rgb(74 93 58 / 0.45);
   --accent-soft-border-weak: rgb(74 93 58 / 0.32);
 }
@@ -577,7 +575,7 @@
   --forest-soft: #ecdccc;
   --forest-soft-2: #e0c8b0;
   --forest-ink: #63361f;
-  --focus-ring: rgba(138, 75, 43, 0.45);
+  --focus-ring: var(--accent-fg);
   --accent-soft-border: rgb(138 75 43 / 0.45);
   --accent-soft-border-weak: rgb(138 75 43 / 0.32);
   /* Canyon needs the heavier quiet-text wash to clear 4.5:1 on its field. */
@@ -594,7 +592,7 @@
   --forest-soft: #d5e2dd;
   --forest-soft-2: #c2d5cf;
   --forest-ink: #224e4c;
-  --focus-ring: rgba(47, 109, 106, 0.45);
+  --focus-ring: var(--accent-fg);
   --accent-soft-border: rgb(47 109 106 / 0.45);
   --accent-soft-border-weak: rgb(47 109 106 / 0.32);
   /* No wash clears 4.5:1 on teal, so quiet text falls back to full strength. */
@@ -608,7 +606,7 @@
   --forest-soft: #dcdbe2;
   --forest-soft-2: #cbcad5;
   --forest-ink: #363547;
-  --focus-ring: rgba(75, 74, 99, 0.45);
+  --focus-ring: var(--accent-fg);
   --accent-soft-border: rgb(75 74 99 / 0.45);
   --accent-soft-border-weak: rgb(75 74 99 / 0.32);
 }
@@ -621,7 +619,7 @@
   --forest-ink: #b9d8a0;
   --accent-fg: #89a274;
   --accent-fg-hover: #94ad7f;
-  --focus-ring: rgba(137, 162, 116, 0.5);
+  --focus-ring: var(--accent-fg);
   --accent-soft-border: rgb(137 162 116 / 0.5);
   --accent-soft-border-weak: rgb(137 162 116 / 0.36);
   --accent-rule: #697d58;
@@ -635,7 +633,7 @@
   --forest-ink: #f0b08a;
   --accent-fg: #d5835a;
   --accent-fg-hover: #e59168;
-  --focus-ring: rgba(213, 131, 90, 0.5);
+  --focus-ring: var(--accent-fg);
   --accent-soft-border: rgb(213 131 90 / 0.5);
   --accent-soft-border-weak: rgb(213 131 90 / 0.36);
   --accent-rule: #a96746;
@@ -649,7 +647,7 @@
   --forest-ink: #a3ded9;
   --accent-fg: #5ca9a5;
   --accent-fg-hover: #66b3af;
-  --focus-ring: rgba(92, 169, 165, 0.5);
+  --focus-ring: var(--accent-fg);
   --accent-soft-border: rgb(92 169 165 / 0.5);
   --accent-soft-border-weak: rgb(92 169 165 / 0.36);
   --accent-rule: #44817e;
@@ -663,12 +661,163 @@
   --forest-ink: #c9c7e6;
   --accent-fg: #9695b7;
   --accent-fg-hover: #a4a3c6;
-  --focus-ring: rgba(150, 149, 183, 0.5);
+  --focus-ring: var(--accent-fg);
   --accent-soft-border: rgb(150 149 183 / 0.5);
   --accent-soft-border-weak: rgb(150 149 183 / 0.36);
   --accent-rule: #767590;
   --accent-meter: #8787a2;
   --hover-tint: rgb(150 149 183 / 0.12);
+}
+
+/* Stable Wellness categories: hue carries the same meaning in either mode. */
+:root {
+  --wellness-happy-soft: oklch(0.955 0.028 150);
+  --wellness-happy-soft2: oklch(0.905 0.045 150);
+  --wellness-happy-tint: oklch(0.62 0.115 150);
+  --wellness-happy-ink: oklch(0.45 0.09 150);
+  --wellness-happy-line: oklch(0.58 0.12 150);
+  --wellness-happy-on-tint: #171914;
+  --wellness-sad-soft: oklch(0.955 0.028 245);
+  --wellness-sad-soft2: oklch(0.905 0.045 245);
+  --wellness-sad-tint: oklch(0.62 0.115 245);
+  --wellness-sad-ink: oklch(0.45 0.09 245);
+  --wellness-sad-line: oklch(0.58 0.12 245);
+  --wellness-sad-on-tint: #171914;
+  --wellness-fear-soft: oklch(0.955 0.028 65);
+  --wellness-fear-soft2: oklch(0.905 0.045 65);
+  --wellness-fear-tint: oklch(0.62 0.115 65);
+  --wellness-fear-ink: oklch(0.45 0.09 65);
+  --wellness-fear-line: oklch(0.58 0.12 65);
+  --wellness-fear-on-tint: #171914;
+  --wellness-anger-soft: oklch(0.955 0.028 28);
+  --wellness-anger-soft2: oklch(0.905 0.045 28);
+  --wellness-anger-tint: oklch(0.62 0.115 28);
+  --wellness-anger-ink: oklch(0.45 0.09 28);
+  --wellness-anger-line: oklch(0.58 0.12 28);
+  --wellness-anger-on-tint: #171914;
+  --wellness-disgust-soft: oklch(0.955 0.028 318);
+  --wellness-disgust-soft2: oklch(0.905 0.045 318);
+  --wellness-disgust-tint: oklch(0.62 0.115 318);
+  --wellness-disgust-ink: oklch(0.45 0.09 318);
+  --wellness-disgust-line: oklch(0.58 0.12 318);
+  --wellness-disgust-on-tint: #171914;
+  --wellness-surprise-soft: oklch(0.955 0.028 100);
+  --wellness-surprise-soft2: oklch(0.905 0.045 100);
+  --wellness-surprise-tint: oklch(0.62 0.115 100);
+  --wellness-surprise-ink: oklch(0.45 0.09 100);
+  --wellness-surprise-line: oklch(0.58 0.12 100);
+  --wellness-surprise-on-tint: #171914;
+  --wellness-med-1-soft: oklch(0.955 0.028 200);
+  --wellness-med-1-soft2: oklch(0.905 0.045 200);
+  --wellness-med-1-tint: oklch(0.62 0.115 200);
+  --wellness-med-1-ink: oklch(0.45 0.09 200);
+  --wellness-med-1-line: oklch(0.58 0.12 200);
+  --wellness-med-1-on-tint: #171914;
+  --wellness-med-2-soft: oklch(0.955 0.028 340);
+  --wellness-med-2-soft2: oklch(0.905 0.045 340);
+  --wellness-med-2-tint: oklch(0.62 0.115 340);
+  --wellness-med-2-ink: oklch(0.45 0.09 340);
+  --wellness-med-2-line: oklch(0.58 0.12 340);
+  --wellness-med-2-on-tint: #171914;
+  --wellness-med-3-soft: oklch(0.955 0.028 130);
+  --wellness-med-3-soft2: oklch(0.905 0.045 130);
+  --wellness-med-3-tint: oklch(0.62 0.115 130);
+  --wellness-med-3-ink: oklch(0.45 0.09 130);
+  --wellness-med-3-line: oklch(0.58 0.12 130);
+  --wellness-med-3-on-tint: #171914;
+  --wellness-med-4-soft: oklch(0.955 0.028 45);
+  --wellness-med-4-soft2: oklch(0.905 0.045 45);
+  --wellness-med-4-tint: oklch(0.62 0.115 45);
+  --wellness-med-4-ink: oklch(0.45 0.09 45);
+  --wellness-med-4-line: oklch(0.58 0.12 45);
+  --wellness-med-4-on-tint: #171914;
+  --wellness-med-5-soft: oklch(0.955 0.028 280);
+  --wellness-med-5-soft2: oklch(0.905 0.045 280);
+  --wellness-med-5-tint: oklch(0.62 0.115 280);
+  --wellness-med-5-ink: oklch(0.45 0.09 280);
+  --wellness-med-5-line: oklch(0.58 0.12 280);
+  --wellness-med-5-on-tint: #171914;
+  --wellness-med-6-soft: oklch(0.955 0.028 95);
+  --wellness-med-6-soft2: oklch(0.905 0.045 95);
+  --wellness-med-6-tint: oklch(0.62 0.115 95);
+  --wellness-med-6-ink: oklch(0.45 0.09 95);
+  --wellness-med-6-line: oklch(0.58 0.12 95);
+  --wellness-med-6-on-tint: #171914;
+  --wellness-med-7-soft: oklch(0.955 0.028 15);
+  --wellness-med-7-soft2: oklch(0.905 0.045 15);
+  --wellness-med-7-tint: oklch(0.62 0.115 15);
+  --wellness-med-7-ink: oklch(0.45 0.09 15);
+  --wellness-med-7-line: oklch(0.58 0.12 15);
+  --wellness-med-7-on-tint: #171914;
+}
+
+[data-theme="dark"],
+[data-color-mode="dark"] {
+  --wellness-happy-soft: oklch(0.32 0.045 150);
+  --wellness-happy-soft2: oklch(0.39 0.055 150);
+  --wellness-happy-tint: oklch(0.7 0.11 150);
+  --wellness-happy-ink: oklch(0.84 0.08 150);
+  --wellness-happy-line: oklch(0.72 0.115 150);
+  --wellness-sad-soft: oklch(0.32 0.045 245);
+  --wellness-sad-soft2: oklch(0.39 0.055 245);
+  --wellness-sad-tint: oklch(0.7 0.11 245);
+  --wellness-sad-ink: oklch(0.84 0.08 245);
+  --wellness-sad-line: oklch(0.72 0.115 245);
+  --wellness-fear-soft: oklch(0.32 0.045 65);
+  --wellness-fear-soft2: oklch(0.39 0.055 65);
+  --wellness-fear-tint: oklch(0.7 0.11 65);
+  --wellness-fear-ink: oklch(0.84 0.08 65);
+  --wellness-fear-line: oklch(0.72 0.115 65);
+  --wellness-anger-soft: oklch(0.32 0.045 28);
+  --wellness-anger-soft2: oklch(0.39 0.055 28);
+  --wellness-anger-tint: oklch(0.7 0.11 28);
+  --wellness-anger-ink: oklch(0.84 0.08 28);
+  --wellness-anger-line: oklch(0.72 0.115 28);
+  --wellness-disgust-soft: oklch(0.32 0.045 318);
+  --wellness-disgust-soft2: oklch(0.39 0.055 318);
+  --wellness-disgust-tint: oklch(0.7 0.11 318);
+  --wellness-disgust-ink: oklch(0.84 0.08 318);
+  --wellness-disgust-line: oklch(0.72 0.115 318);
+  --wellness-surprise-soft: oklch(0.32 0.045 100);
+  --wellness-surprise-soft2: oklch(0.39 0.055 100);
+  --wellness-surprise-tint: oklch(0.7 0.11 100);
+  --wellness-surprise-ink: oklch(0.84 0.08 100);
+  --wellness-surprise-line: oklch(0.72 0.115 100);
+  --wellness-med-1-soft: oklch(0.32 0.045 200);
+  --wellness-med-1-soft2: oklch(0.39 0.055 200);
+  --wellness-med-1-tint: oklch(0.7 0.11 200);
+  --wellness-med-1-ink: oklch(0.84 0.08 200);
+  --wellness-med-1-line: oklch(0.72 0.115 200);
+  --wellness-med-2-soft: oklch(0.32 0.045 340);
+  --wellness-med-2-soft2: oklch(0.39 0.055 340);
+  --wellness-med-2-tint: oklch(0.7 0.11 340);
+  --wellness-med-2-ink: oklch(0.84 0.08 340);
+  --wellness-med-2-line: oklch(0.72 0.115 340);
+  --wellness-med-3-soft: oklch(0.32 0.045 130);
+  --wellness-med-3-soft2: oklch(0.39 0.055 130);
+  --wellness-med-3-tint: oklch(0.7 0.11 130);
+  --wellness-med-3-ink: oklch(0.84 0.08 130);
+  --wellness-med-3-line: oklch(0.72 0.115 130);
+  --wellness-med-4-soft: oklch(0.32 0.045 45);
+  --wellness-med-4-soft2: oklch(0.39 0.055 45);
+  --wellness-med-4-tint: oklch(0.7 0.11 45);
+  --wellness-med-4-ink: oklch(0.84 0.08 45);
+  --wellness-med-4-line: oklch(0.72 0.115 45);
+  --wellness-med-5-soft: oklch(0.32 0.045 280);
+  --wellness-med-5-soft2: oklch(0.39 0.055 280);
+  --wellness-med-5-tint: oklch(0.7 0.11 280);
+  --wellness-med-5-ink: oklch(0.84 0.08 280);
+  --wellness-med-5-line: oklch(0.72 0.115 280);
+  --wellness-med-6-soft: oklch(0.32 0.045 95);
+  --wellness-med-6-soft2: oklch(0.39 0.055 95);
+  --wellness-med-6-tint: oklch(0.7 0.11 95);
+  --wellness-med-6-ink: oklch(0.84 0.08 95);
+  --wellness-med-6-line: oklch(0.72 0.115 95);
+  --wellness-med-7-soft: oklch(0.32 0.045 15);
+  --wellness-med-7-soft2: oklch(0.39 0.055 15);
+  --wellness-med-7-tint: oklch(0.7 0.11 15);
+  --wellness-med-7-ink: oklch(0.84 0.08 15);
+  --wellness-med-7-line: oklch(0.72 0.115 15);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -678,5 +827,17 @@
     --dur-base: 0ms;
     --dur-slow: 0ms;
     --dur-deliberate: 0ms;
+  }
+}
+
+/* Literal legacy animations must respect the same preference as tokenized controls. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }

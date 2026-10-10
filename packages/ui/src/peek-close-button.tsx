@@ -8,7 +8,7 @@ export interface PeekCloseButtonProps {
 
 export function PeekCloseButton({ children, ...rest }: PeekCloseButtonProps) {
   return (
-    <button type="button" className="cal-peek__x" {...rest}>
+    <button type="button" className="cal-peek__x" aria-label="Close details" {...rest}>
       {children}
     </button>
   );
