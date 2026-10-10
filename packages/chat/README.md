@@ -45,7 +45,7 @@ launch refuses with an actionable message and queues a summary run.
 - `JARVIS_CHAT_REPLAY_K` (default 40): newest uncovered turns kept raw when a summary run is planned.
   A run starts once more than twice this many turns, or more than the raw token allowance, sit
   outside the summary.
-- `JARVIS_CHAT_REPLAY_TOKENS`: replay budget. Raw turns kept beside a summary stay under half of it,
+- `JARVIS_CHAT_REPLAY_TOKENS` (default 8000): replay budget. Raw turns kept beside a summary stay under half of it,
   and never more than a launch with a full seed and summary can still fit.
 
 ## Deferred — agent-path PreToolUse policy
