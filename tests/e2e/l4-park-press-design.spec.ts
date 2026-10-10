@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
-import type { MeetingRecord } from "@moss/shared";
+import { meetingChatSurface, type MeetingRecord } from "@moss/shared";
 import { mockApi } from "./mock-api.js";
 import { modulesResponse, myModulesResponse } from "./mock-modules.js";
 import { historyItem } from "../unit/fixtures/meeting-history.js";
@@ -23,13 +23,22 @@ const meeting: MeetingRecord = {
 };
 const deviceId = "22334455-1122-4122-8122-112233445566";
 
-async function meetingsFixture(page: Page) {
+async function meetingsFixture(page: Page, context: "available" | "denied" = "available") {
   await mockApi(page, {
     authenticated: true,
     connectorAccounts: [],
     connectorProviders: [],
     notifications: [],
     tasks: []
+  });
+  await page.route("**/api/chat/meeting-context?*", (route) => {
+    const request = route.request();
+    const surface = new URL(request.url()).searchParams.get("surface");
+    if (request.method() !== "GET")
+      return route.fulfill({ status: 405, json: { error: "No writes in visual fixture" } });
+    if (context === "denied" || surface !== meetingChatSurface(meeting.id))
+      return route.fulfill({ status: 404, json: { error: "Meeting unavailable" } });
+    return route.fulfill({ json: { available: true } });
   });
   await page.route("**/api/modules", (route) =>
     route.fulfill({
@@ -276,5 +285,19 @@ test("Meetings destructive dialog uses shared focus containment and returns focu
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(menu).toBeFocused();
+  await expect(page.locator("#meeting-personal-notes")).toHaveValue(meeting.personalNotes);
+});
+
+test("Meetings does not expose the conversation when its context read is denied", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 390, height: 950 });
+  await meetingsFixture(page, "denied");
+  await page.goto(`/meetings?id=${meeting.id}`);
+  await page.getByRole("button", { name: "Chat with Moss", exact: true }).click();
+  const unavailable = page.getByRole("dialog", { name: "Meeting chat", exact: true });
+  await expect(unavailable).toBeVisible();
+  await expect(unavailable.getByText("Meeting unavailable", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Chat with Moss", exact: true })).toHaveCount(0);
   await expect(page.locator("#meeting-personal-notes")).toHaveValue(meeting.personalNotes);
 });

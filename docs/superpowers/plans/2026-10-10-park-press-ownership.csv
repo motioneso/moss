@@ -640,7 +640,7 @@ tests/e2e/f0-park-press-design.spec.ts,F0,registered-new,,Exact path reservation
 tests/e2e/l1-park-press-design.spec.ts,L1,registered-new,,Exact path reservation
 tests/e2e/l2-park-press-design.spec.ts,L2,registered-new,,Exact path reservation
 tests/e2e/l3-park-press-design.spec.ts,L3,registered-new,,Exact path reservation
-tests/e2e/l4-park-press-design.spec.ts,L4,registered-new,,Exact path reservation
+tests/e2e/l4-park-press-design.spec.ts,I0,registered-new,,Parent-approved temporary transfer from L4: intended meeting-context read fixture only; preserve unavailable coverage
 tests/e2e/l6-park-press-design.spec.ts,L6,registered-new,,Exact path reservation
 tests/e2e/p1-park-press-design.spec.ts,P1,registered-new,,Exact path reservation
 tests/e2e/p2-park-press-design.spec.ts,P2,registered-new,,Exact path reservation
