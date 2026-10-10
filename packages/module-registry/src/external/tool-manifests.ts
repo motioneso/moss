@@ -11,6 +11,9 @@ import type {
   ToolResult
 } from "@moss/module-sdk";
 
+import { PreferencesRepository } from "@moss/structured-state";
+
+import { modulePreferenceKey } from "./preferences.js";
 import type { ExternalModuleDiscovery, ReconciledExternalModule } from "./types.js";
 import { hashCanonicalManifest } from "./hash.js";
 
@@ -83,15 +86,70 @@ export type ExternalCandidateInvoker = (
   signal: AbortSignal
 ) => Promise<unknown>;
 
+/** Reads the actor's stored preferences (module-namespaced keys) under their data context. */
+export type ExternalPreferenceReader = (scopedDb: unknown) => Promise<Record<string, unknown>>;
+
+const readStoredPreferences: ExternalPreferenceReader = (scopedDb) =>
+  new PreferencesRepository().list(scopedDb as Parameters<PreferencesRepository["list"]>[0]);
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * True when the change exceeds the limit, and also when it cannot be judged. Every unreadable
+ * piece (input, declared base, preference) asks, so the rule fails closed.
+ */
+async function exceedsConfirmAbove(
+  module: ExternalModuleDiscovery,
+  rule: NonNullable<ExternalModuleAssistantToolDeclaration["confirmAbove"]>,
+  scopedDb: unknown,
+  input: ToolInput,
+  readPreferences: ExternalPreferenceReader
+): Promise<boolean> {
+  try {
+    const amount = input[rule.inputKey];
+    if (!isFiniteNumber(amount)) return true;
+    let base = 0;
+    if (rule.baseKey !== undefined) {
+      const declaredBase = input[rule.baseKey];
+      if (!isFiniteNumber(declaredBase)) return true;
+      base = declaredBase;
+    }
+    if (!isFiniteNumber(rule.scale) || rule.scale <= 0) return true;
+
+    const declaration = module.manifest.preferences?.find((p) => p.key === rule.preferenceKey);
+    if (declaration?.type !== "integer") return true;
+    const stored = (await readPreferences(scopedDb))[
+      modulePreferenceKey(module.id, rule.preferenceKey)
+    ];
+    // Only a missing value uses the default. A cleared (null) or unreadable stored value
+    // leaves no known limit, so the tool asks.
+    const limit = stored === undefined ? declaration.default : stored;
+    if (typeof limit !== "number" || !Number.isSafeInteger(limit)) return true;
+
+    return Math.abs(amount - base) > limit * rule.scale;
+  } catch {
+    return true;
+  }
+}
+
 function synthesizeRequiresConfirmation(
-  tool: ExternalModuleAssistantToolDeclaration
+  module: ExternalModuleDiscovery,
+  tool: ExternalModuleAssistantToolDeclaration,
+  readPreferences: ExternalPreferenceReader
 ): ToolRequiresConfirmation | undefined {
-  if (!tool.confirmWhen?.length && !tool.confirmWhenKeys?.length) return undefined;
-  return (_scopedDb, input) =>
+  const confirmAbove = tool.confirmAbove;
+  if (!tool.confirmWhen?.length && !tool.confirmWhenKeys?.length && !confirmAbove) {
+    return undefined;
+  }
+  return async (scopedDb, input) =>
     tool.confirmWhenKeys?.some((key) => Object.hasOwn(input, key)) === true ||
     tool.confirmWhen?.some(
       ({ key, equals }) => Object.hasOwn(input, key) && input[key] === equals
-    ) === true;
+    ) === true ||
+    (confirmAbove !== undefined &&
+      (await exceedsConfirmAbove(module, confirmAbove, scopedDb, input, readPreferences)));
 }
 
 /**
@@ -129,7 +187,8 @@ function synthesizeClassifier(
 export function createExternalToolManifests(
   discoveries: readonly ExternalModuleDiscovery[],
   invoke: ExternalToolInvoker,
-  invokeCandidates?: ExternalCandidateInvoker
+  invokeCandidates?: ExternalCandidateInvoker,
+  readPreferences: ExternalPreferenceReader = readStoredPreferences
 ): MossModuleManifest[] {
   return discoveries
     .filter((module) => module.manifest.runtime && module.manifest.assistantTools?.length)
@@ -151,7 +210,11 @@ export function createExternalToolManifests(
           supportsUserDisable: module.manifest.lifecycle === "user-toggleable"
         },
         assistantTools: module.manifest.assistantTools?.map((tool) => {
-          const requiresConfirmation = synthesizeRequiresConfirmation(tool);
+          const requiresConfirmation = synthesizeRequiresConfirmation(
+            module,
+            tool,
+            readPreferences
+          );
           // #2152: `safeErrors` is deliberately NOT copied here. It opts a tool into echoing its
           // own thrown HttpError text to the user and the model (#1679/#2148), and the gateway
           // repeats that text verbatim — a first-party trust decision, not something an installed

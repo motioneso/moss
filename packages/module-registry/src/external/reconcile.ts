@@ -37,6 +37,8 @@ export function reconcileExternalModules(
       // and the settings pane can then treat "declares none" and "declares an empty list"
       // identically without an undefined check.
       preferences: manifest.preferences ?? [],
+      // #3184: absent means the gear and Settings use the host-rendered page.
+      ...(manifest.settingsPath ? { settingsPath: manifest.settingsPath } : {}),
       // #3168: absent means the module adds nothing to the app map.
       ...(manifest.appMap ? { appMap: manifest.appMap } : {})
     };

@@ -44,6 +44,8 @@ import {
   getAiActionPoliciesResponseSchema,
   patchAiActionPolicyRequestSchema,
   patchAiActionPolicyResponseSchema,
+  postAiActionFreedomRequestSchema,
+  postAiActionFreedomResponseSchema,
   listActionAuditLogRouteSchema,
   listActivityLinesRouteSchema,
   approveModuleBuildResponseSchema,
@@ -659,6 +661,14 @@ export const aiModuleManifest = {
       chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: patchAiActionPolicyRequestSchema,
       responseSchema: patchAiActionPolicyResponseSchema,
+      permissionId: "ai.manage"
+    },
+    {
+      method: "POST",
+      path: "/api/ai/action-policy/:moduleId/freedom",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
+      requestSchema: postAiActionFreedomRequestSchema,
+      responseSchema: postAiActionFreedomResponseSchema,
       permissionId: "ai.manage"
     },
     {
