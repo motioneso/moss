@@ -365,6 +365,8 @@ function WorkshopProjectContent({
       setText((current) => (current ? current : input.text));
     }
   });
+  const [now, setNow] = useState(() => Date.now());
+  const firstSeenRef = useRef(new Map<string, number>());
   const messages = useInfiniteQuery({
     queryKey: projectKeys.messages(projectId),
     queryFn: ({ pageParam }) => listMessages(projectId, pageParam),
@@ -380,13 +382,38 @@ function WorkshopProjectContent({
       const pages = query.state.data?.pages;
       const waiting =
         Array.isArray(pages) &&
-        pages.flatMap((page) => page.entries).some((entry) => entry.delivery === "pending");
+        isAwaitingReply(
+          pendingSince(
+            pages.flatMap((page) => page.entries),
+            firstSeenRef.current
+          ),
+          Date.now()
+        );
       return mutation.isPending || pending.length > 0 || waiting ? 2000 : false;
     }
   });
 
   const entries = messages.data?.pages.flatMap((page) => page.entries) ?? [];
-  const awaitingDelivery = entries.some((entry) => entry.delivery === "pending");
+  // Only the newest message can be waiting on a reply; older failures were superseded.
+  const sentAt = pendingSince(entries, firstSeenRef.current);
+  const awaitingDelivery = isAwaitingReply(sentAt, now);
+  const unanswered = Number.isFinite(sentAt) && !awaitingDelivery;
+  // The feed is oldest-first, so keep loading forward until the newest entry is in hand.
+  const { hasNextPage, isFetching, isError, fetchNextPage } = messages;
+  useEffect(() => {
+    if (hasNextPage && !isFetching && !isError) void fetchNextPage();
+  }, [hasNextPage, isFetching, isError, fetchNextPage]);
+  // Re-render when the newest pending message passes its give-up time.
+  useEffect(() => {
+    if (!Number.isFinite(sentAt)) return;
+    const wait = sentAt + REPLY_GIVE_UP_MS - Date.now();
+    if (wait <= 0) {
+      setNow(Date.now());
+      return;
+    }
+    const timer = setTimeout(() => setNow(Date.now()), wait + 50);
+    return () => clearTimeout(timer);
+  }, [sentAt]);
   // The model is working while a turn is saving, sent but not yet shown, or saved and
   // still awaiting its reply.
   const thinking = mutation.isPending || pending.length > 0 || awaitingDelivery;
@@ -487,17 +514,6 @@ function WorkshopProjectContent({
           retry={() => void project.refetch()}
         />
       ) : null}
-      {messages.hasNextPage ? (
-        <div className="workshop-chat__earlier">
-          <Button
-            variant="quiet"
-            disabled={messages.isFetching || !canMutate}
-            onClick={() => void messages.fetchNextPage()}
-          >
-            {messages.isFetching ? "Loading…" : "Earlier messages"}
-          </Button>
-        </div>
-      ) : null}
       <div className="workshop-chat__history" ref={historyRef} onScroll={handleHistoryScroll}>
         {messages.isPending ? <p role="status">Loading messages…</p> : null}
         {messages.isError ? (
@@ -510,6 +526,11 @@ function WorkshopProjectContent({
           <Thread records={visibleTranscript} working={thinking} />
         ) : null}
         {thinking ? <ActivityPeek records={[]} inProgress /> : null}
+        {unanswered && !thinking ? (
+          <p role="status" className="workshop-status">
+            Moss did not reply to your last message. Send it again to retry.
+          </p>
+        ) : null}
       </div>
       <WorkshopComposer
         label="Add to your project"
@@ -540,6 +561,25 @@ function WorkshopProjectContent({
       />
     </section>
   );
+}
+
+// A reply attempt gives up after 45s on the server; later than this a pending row is stale.
+const REPLY_GIVE_UP_MS = 90_000;
+
+/**
+ * Start time of the newest user message when it is still unanswered, else NaN. The earlier
+ * of the server stamp and the time this page first saw the row keeps a client clock that
+ * runs behind the server from stretching the wait.
+ */
+function pendingSince(entries: WorkshopFeedEntry[], firstSeen: Map<string, number>): number {
+  const newest = [...entries].reverse().find((entry) => entry.kind === "user_message");
+  if (!newest || newest.delivery !== "pending") return NaN;
+  if (!firstSeen.has(newest.messageId)) firstSeen.set(newest.messageId, Date.now());
+  return Math.min(Date.parse(newest.createdAt), firstSeen.get(newest.messageId)!);
+}
+
+function isAwaitingReply(sentAt: number, now: number): boolean {
+  return now - sentAt < REPLY_GIVE_UP_MS;
 }
 
 /**
