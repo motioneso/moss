@@ -21,8 +21,8 @@ test("long medication notes keep schedule and state columns readable", async ({ 
           {
             name: "Example medication",
             dosage: "10 mg",
-            frequencyType: "daily",
-            scheduleTimes: ["08:00", "20:00"],
+            frequencyType: "once_daily",
+            scheduleTimes: ["08:00"],
             active: true,
             notes: longNote
           }
@@ -41,7 +41,7 @@ test("long medication notes keep schedule and state columns readable", async ({ 
     }
   });
 
-  await page.setViewportSize({ width: 794, height: 1123 });
+  await page.setViewportSize({ width: 658, height: 1123 });
   await page.setContent(html);
   await page.emulateMedia({ media: "print" });
 
@@ -62,7 +62,7 @@ test("long medication notes keep schedule and state columns readable", async ({ 
 
   const schedule = page.locator("table").first().locator("tbody td").nth(1);
   const state = page.locator("table").first().locator("tbody td").nth(2);
-  await expect(schedule).toHaveText("daily — 08:00, 20:00");
+  await expect(schedule).toHaveText("once_daily — 08:00");
   await expect(state).toHaveText("active");
   for (const cell of [schedule, state]) {
     const lines = await cell.evaluate((element) => {
