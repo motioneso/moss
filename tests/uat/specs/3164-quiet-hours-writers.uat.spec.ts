@@ -147,7 +147,27 @@ async function sendReal(page: Page, drawer: Locator, text: string): Promise<stri
   );
   await drawer.getByLabel("Message Moss").fill(text);
   await drawer.getByLabel("Message Moss").press("Enter");
-  const response = await completed;
+
+  // Installs that ask before tool use show an action card; approve it as a user would.
+  let finished = false;
+  const settled = completed.then((response) => {
+    finished = true;
+    return response;
+  });
+  const approve = page
+    .getByRole("region", { name: "Action request" })
+    .getByRole("button", { name: "Approve", exact: true })
+    .last();
+  while (!finished) {
+    const shown = await approve.isVisible().catch(() => false);
+    if (shown && (await approve.isEnabled().catch(() => false))) {
+      await approve.click();
+      console.log(`[3164 approved] ${JSON.stringify(text)}`);
+      break;
+    }
+    await page.waitForTimeout(500);
+  }
+  const response = await settled;
   expect(response.ok(), `real UI turn returned ${response.status()}`).toBe(true);
   const result = (await response.json()) as { reply?: string };
   expect(typeof result.reply).toBe("string");
