@@ -35,17 +35,17 @@ for (const viewport of [
         ...myModulesResponse.modules,
         {
           id: "workshop",
-          name: "The Workshop",
+          name: "Workshop",
           version: "0.1.0",
-          lifecycle: "user-toggleable",
-          required: false,
-          supportsUserDisable: true,
+          lifecycle: "required",
+          required: true,
+          supportsUserDisable: false,
           instanceDisabled: false,
           userDisabled: false,
           active: true,
           hasPreferences: false,
           hasUserCredentials: false,
-          scope: "admin"
+          scope: "everyone"
         }
       ]
     };
