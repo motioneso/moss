@@ -341,7 +341,7 @@ test("saved quiet hours carry into Profile and the installed workers (#3165)", a
   expect(rawPreference(ALERTS_KEY)).toEqual(alertsBeforeRestart);
   await page.reload();
   await expect(page.getByLabel("Quiet hours from")).toHaveValue("21:45");
-  await expect(page.getByText("Email alerts still follow an older schedule")).toHaveCount(0);
+  await expect(page.getByText("Your saved quiet hours differ.")).toHaveCount(0);
   console.log(`[3165 profile edit] 21:45-06:15 canonical after reload, alert record untouched`);
 
   // 6. Identical older records carry, including a Profile zone equal to the owner zone.
@@ -376,13 +376,13 @@ test("saved quiet hours carry into Profile and the installed workers (#3165)", a
       label: "schedule",
       profile: { enabled: true, start: "22:00", end: "07:00", timezone: null },
       alerts: { enabled: true, start: "23:00", end: "08:00" },
-      note: "Email alerts still follow an older schedule, 23:00 to 08:00."
+      choice: "Use 23:00 to 08:00"
     },
     {
       label: "enabled",
       profile: { enabled: false, start: "22:00", end: "07:00", timezone: null },
       alerts: { enabled: true, start: "22:00", end: "07:00" },
-      note: "Email alerts still follow an older schedule, 22:00 to 07:00."
+      choice: "Use 22:00 to 07:00"
     }
   ];
   for (const [index, conflict] of conflicts.entries()) {
@@ -402,7 +402,8 @@ test("saved quiet hours carry into Profile and the installed workers (#3165)", a
     }
     await openQuietHours(page);
     await page.reload();
-    await expect(page.getByText(conflict.note)).toBeVisible();
+    await expect(page.getByText("Your saved quiet hours differ.")).toBeVisible();
+    await expect(page.getByRole("button", { name: conflict.choice })).toBeVisible();
     expect(rawPreference(PROFILE_KEY)).toEqual(conflict.profile);
     expect((await quietHours(page)).authority.status).toBe("conflict");
     console.log(`[3165 conflict ${conflict.label}] unchanged after email save, reload and restart`);
