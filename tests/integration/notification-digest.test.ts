@@ -355,6 +355,42 @@ describe("notification digest settings", () => {
     expect(sent[1]).toContain("Held back");
   });
 
+  it("sets the watermark from the clock read before the send, not after", async () => {
+    await setDigestPreference({ enabled: true, lastDigestSentAt: null });
+    const repository = new NotificationsRepository();
+    await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "digest:seed-clock" },
+      (scopedDb) => repository.create(scopedDb, { moduleId: "briefings", title: "Clock item" })
+    );
+
+    const before = new Date("2030-01-01T00:00:00.000Z");
+    const after = new Date("2030-01-01T00:05:00.000Z");
+    let sendFinished = false;
+    const result = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "digest:clock" },
+      (scopedDb) =>
+        runNotificationDigestCompose(scopedDb, {
+          baseUrl: "https://jarvis.example.test",
+          notificationsRepository: repository,
+          preferencesRepository: new PreferencesRepository(),
+          now: () => (sendFinished ? after : before),
+          sender: {
+            sendDigest: async () => {
+              sendFinished = true;
+              return { ok: true };
+            }
+          }
+        })
+    );
+    expect(result).toEqual({ status: "sent", count: 1 });
+
+    const stored = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "digest:clock-read" },
+      (scopedDb) => new PreferencesRepository().get(scopedDb, "notifications:digest")
+    );
+    expect((stored as { lastDigestSentAt: string }).lastDigestSentAt).toBe(before.toISOString());
+  });
+
   async function runDigest(
     repository: NotificationsRepository,
     sent: string[] = []

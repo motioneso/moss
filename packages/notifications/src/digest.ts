@@ -173,6 +173,8 @@ export async function runNotificationDigestCompose(
   if (!preference.enabled) return { status: "skipped", reason: "disabled" };
 
   const repository = deps.notificationsRepository ?? new NotificationsRepository();
+  // Read before the query so rows created while the email sends stay after the watermark.
+  const startedAt = deps.now?.() ?? new Date();
   const rows = await repository.listDigestEligible(scopedDb, {
     since: preference.lastDigestSentAt,
     sinceId: preference.lastDigestSentId ?? null,
@@ -189,7 +191,7 @@ export async function runNotificationDigestCompose(
       NOTIFICATION_DIGEST_PREFERENCE_KEY,
       digestPreferenceToRaw({
         ...preference,
-        lastDigestSentAt: watermark ?? deps.now?.() ?? new Date(),
+        lastDigestSentAt: watermark ?? startedAt,
         lastDigestSentId: watermark && lastRow ? lastRow.id : null
       })
     );
