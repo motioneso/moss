@@ -16,9 +16,9 @@ export interface SessionRolloverHost {
 
 /**
  * Before the next admitted turn, hand an over-budget provider session off to a fresh one
- * for the same owner, conversation and provider. The handoff runs only when the accepted
- * summary plus every uncovered turn fits a fresh launch; otherwise the healthy session
- * keeps serving and condensing is requested. Returns the session the turn must submit to,
+ * for the same owner, conversation and provider. The handoff runs only when an accepted
+ * summary exists and it plus every uncovered turn fits a fresh launch; otherwise the healthy
+ * session keeps serving and condensing is requested. Returns the session the turn must submit to,
  * and whether the check awaited, after which the caller re-checks stop, privacy and provider.
  */
 export async function rollOverSessionIfDue(
@@ -52,7 +52,9 @@ export async function rollOverSessionIfDue(
     summaryTokens: estimateTokens(retained.oldSummary ?? ""),
     replayMessages: retained.recent.length
   };
-  if (!retainedContextFits(seedBudget, retained, seedBudget)) {
+  // Only an accepted, current summary keeps earlier decisions across the handoff.
+  const hasAcceptedSummary = (retained.oldSummary ?? "").trim().length > 0;
+  if (!hasAcceptedSummary || !retainedContextFits(seedBudget, retained, seedBudget)) {
     const status = await host.deps.persistence
       .requestConversationSummary?.(actorUserId, binding, session.surface)
       .catch(() => undefined);

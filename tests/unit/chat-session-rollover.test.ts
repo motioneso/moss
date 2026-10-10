@@ -206,6 +206,24 @@ describe("automatic session handoff (#3157)", () => {
     );
   });
 
+  it("keeps the healthy session and asks for condensing when no accepted summary exists yet", async () => {
+    vi.stubEnv("JARVIS_CHAT_SESSION_BUDGET_TOKENS", BUDGET);
+    // A missing, empty or stale summary all reach the handoff as no accepted summary.
+    for (const oldSummary of [null, "", "   "]) {
+      const h = harness({ oldSummary });
+      await h.manager.submitTurn("u1", "Ben", "first");
+      await h.manager.submitTurn("u1", "Ben", "second");
+      expect(h.engines).toHaveLength(1);
+      expect(h.engines[0]!.killed).toBe(false);
+      expect(h.engines[0]!.submitted[1]).toContain("second");
+      expect(h.requestConversationSummary).toHaveBeenCalledWith(
+        "u1",
+        { threadId: THREAD },
+        expect.any(String)
+      );
+    }
+  });
+
   it("keeps the healthy session when the condense request fails", async () => {
     vi.stubEnv("JARVIS_CHAT_SESSION_BUDGET_TOKENS", BUDGET);
     vi.stubEnv("JARVIS_CHAT_REPLAY_TOKENS", "2000");
