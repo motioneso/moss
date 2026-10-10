@@ -842,6 +842,11 @@ tests/unit/sports-newsband.test.tsx,L2,reserved,,Specific existing UI tests dele
 tests/unit/sports-page.test.tsx,L2,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/sports-result-row-layout-css.test.ts,L2,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/sports-settings-follow-invalidates-overview.test.tsx,L2,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/sports-standings-picker.test.tsx,L2,reserved,,Approved LN10 retained Sports controls and settings presentation regression; preserve domain behavior
+tests/unit/sports-standings-warning.test.tsx,L2,reserved,,Approved LN10 retained Sports controls and settings presentation regression; preserve domain behavior
+tests/unit/sports-standings.test.tsx,L2,reserved,,Approved LN10 retained Sports controls and settings presentation regression; preserve domain behavior
+tests/unit/sports-ticker.test.tsx,L2,reserved,,Approved LN10 retained Sports controls and settings presentation regression; preserve domain behavior
+tests/unit/sports-today-widget.test.tsx,L2,reserved,,Approved LN10 retained Sports controls and settings presentation regression; preserve domain behavior
 tests/unit/theme-runtime-highlight.test.ts,F0,reserved,,Shared component/token behavior tests
 tests/unit/theme-runtime-nav.test.ts,F0,reserved,,Shared component/token behavior tests
 tests/unit/theme-runtime.test.ts,F0,reserved,,Shared component/token behavior tests
