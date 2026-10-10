@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { useState } from "react";
+import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { CheckinModal } from "../../apps/web/src/wellness/checkin-modal.js";
 import { ManageMedsModal } from "../../apps/web/src/wellness/manage-meds-modal.js";
@@ -291,6 +291,160 @@ describe("Wellness shared dialog consumers", () => {
       }
     }
   );
+});
+
+describe("Check-in selection focus handoff", () => {
+  async function mountCheckin() {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const onSave = vi.fn(async () => {});
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Start check-in</button>
+          <CheckinModal open={open} onClose={() => setOpen(false)} onSave={onSave} />
+        </>
+      );
+    }
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <Harness />
+        </StrictMode>
+      )
+    );
+    const opener = host.querySelector<HTMLButtonElement>("button")!;
+    opener.focus();
+    await act(async () => opener.click());
+    return {
+      host,
+      opener,
+      onSave,
+      cleanup: async () => {
+        await act(async () => root.unmount());
+        host.remove();
+      }
+    };
+  }
+
+  async function revealChoice(
+    host: HTMLElement,
+    source: "shade" | "search-feeling" | "search-core"
+  ) {
+    if (source === "shade") {
+      const core = host.querySelector<HTMLInputElement>(
+        '[aria-label="Core emotion"] input[value="happy"]'
+      )!;
+      await act(async () => {
+        core.focus();
+        core.click();
+      });
+      return host.querySelector<HTMLInputElement>('input[name="checkin-feeling"][value="Joy"]')!;
+    }
+    const search = host.querySelector<HTMLInputElement>('[aria-label="Search feelings"]')!;
+    await act(async () => {
+      search.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+        search,
+        source === "search-feeling" ? "Joy" : "Happy"
+      );
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    return host.querySelector<HTMLButtonElement>(".wl-search__item")!;
+  }
+
+  const selections = (["shade", "search-feeling", "search-core"] as const).flatMap((source) =>
+    (["keyboard", "pointer"] as const).map((activation) => ({ source, activation }))
+  );
+  it.each(selections)(
+    "$source $activation selection hands off focus, then Escape restores the opener",
+    async ({ source, activation }) => {
+      const fixture = await mountCheckin();
+      const { host, opener, onSave } = fixture;
+      try {
+        const choice = await revealChoice(host, source);
+        expect(choice).not.toBeNull();
+        await act(async () => {
+          choice.focus();
+          // jsdom has no native Space activation; use the browser's resulting click shape.
+          choice.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, detail: activation === "pointer" ? 1 : 0 })
+          );
+        });
+        expect(choice.isConnected).toBe(false);
+        expect(document.activeElement?.tagName).toBe("H3");
+        expect(document.activeElement?.textContent).toBe(
+          source === "search-core" ? "Which shade of Happy?" : "Where do you feel it?"
+        );
+        expect(host.querySelector('[role="dialog"]')!.contains(document.activeElement)).toBe(true);
+        await act(async () => {
+          document.activeElement!.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+          );
+        });
+        expect(host.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.activeElement).toBe(opener);
+        expect(onSave).not.toHaveBeenCalled();
+      } finally {
+        await fixture.cleanup();
+      }
+    }
+  );
+
+  it.each(["before", "after"] as const)(
+    "does not steal a connected control's focus chosen %s selection",
+    async (timing) => {
+      const fixture = await mountCheckin();
+      const { host } = fixture;
+      try {
+        const choice = await revealChoice(host, "shade");
+        const search = host.querySelector<HTMLInputElement>('[aria-label="Search feelings"]')!;
+        await act(async () => {
+          choice.focus();
+          if (timing === "before") search.focus();
+          choice.click();
+          if (timing === "after") search.focus();
+        });
+        expect(choice.isConnected).toBe(false);
+        expect(document.activeElement).toBe(search);
+      } finally {
+        await fixture.cleanup();
+      }
+    }
+  );
+
+  it("does not move initial edit focus from the safe dialog surface to details", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+      await act(async () =>
+        root.render(
+          <StrictMode>
+            <CheckinModal
+              open
+              onClose={() => {}}
+              onSave={async () => {}}
+              initial={{
+                emotion: "happy",
+                feeling: "Joy",
+                sensations: [],
+                intensity: 3,
+                note: "Existing note"
+              }}
+            />
+          </StrictMode>
+        )
+      );
+      expect(document.activeElement).toBe(host.querySelector('[role="dialog"]'));
+      expect(host.querySelector("textarea")!.value).toBe("Existing note");
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
+  });
 });
 
 describe("Check-in pending save dismissal", () => {
