@@ -281,6 +281,15 @@
   display: none;
 }
 @media (max-width: 920px) {
+  /* Translation alone leaves offscreen links in the keyboard and accessibility
+     trees. Hide the closed sheet immediately; retain the shared transform and
+     reduced-motion rules for opening, and leave desktop navigation visible. */
+  .sidebar:not(.open) {
+    visibility: hidden;
+  }
+  .sidebar.open {
+    visibility: visible;
+  }
   .sidebar-mobile-close {
     display: inline-flex;
   }
