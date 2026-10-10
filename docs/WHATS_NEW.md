@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Update check and restart after update.** The daily check for new versions now saves its result, and restarting after an update now works on the standard production setup. [PR #3294](https://github.com/motioneso/moss/pull/3294)
 - **Snoozed commitments come back.** Commitments you snooze now return to your review list when the snooze ends, and the assistant now respects which kind of commitments you ask it to list. [PR #3297](https://github.com/motioneso/moss/pull/3297)
 - **Small fixes to goals, people, chat and Food.** Clearing a goal's target date now works, name lookups ignore capital letters, the chat box keeps your text if a message is refused, and the Food day view updates after Moss logs something for you. [PR #3304](https://github.com/motioneso/moss/pull/3304)
 - **Job Search buttons and warnings.** Roles that have not been scored no longer show Save and Pass buttons that did nothing, turning a job source on or off now confirms the real result, and the resume warning says exactly which roles will be scored again. [PR #3302](https://github.com/motioneso/moss/pull/3302)
