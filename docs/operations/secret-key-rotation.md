@@ -97,9 +97,12 @@ Restart the API and worker with the updated env. New writes (token refresh, cred
 update) are immediately encrypted with `v2`. Old `v1` envelopes decrypt normally via
 the retired-keys map.
 
-### Step 6 — (Optional) Force-rewrap remaining v1 rows
+### Step 6 — Force-rewrap remaining v1 rows
 
-To retire the old key promptly, run the rewrap script again with both keys in scope:
+Required before retiring the old AI key. The AI key also seals the settings-managed family
+keys, the Brave search key, and the push signing key and subscriptions, so those rows must be
+rewrapped too. The script covers all of them. To retire the old key, run the rewrap script
+again with both keys in scope:
 
 ```bash
 # API and worker should be stopped or traffic frozen for this step.
@@ -114,6 +117,11 @@ pnpm tsx scripts/rewrap-secrets.ts --confirm-owner-email <target's bootstrap own
 
 The script logs each row id and the new `keyId` — never plaintext secrets.
 
+After rewrapping, the script reopens every sealed row (connector, AI, family key, Brave key,
+push) using the current keys alone, with the retired-key lists ignored. It prints
+`Verified: all N sealed row(s) open with the current keys alone` on success. If any row does
+not open, it lists the row, exits non-zero, and you must NOT retire the old key.
+
 ### Step 7 — Verify
 
 Check application logs for AES decryption errors after deployment. If none appear,
@@ -121,8 +129,8 @@ the rotation is complete.
 
 ### Step 8 — Retire the old key
 
-Once confident all rows have been re-encrypted (either lazily or via step 6), remove
-the old key from `JARVIS_*_SECRET_KEYS` and redeploy.
+Only after step 6 printed the `Verified:` line, remove the old key from
+`JARVIS_*_SECRET_KEYS` and redeploy. A rewrapped-row count alone is not evidence.
 
 ```bash
 # No longer needed:

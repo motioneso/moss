@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
+import pg from "pg";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import { ConnectorsRepository, createConnectorSecretCipher } from "@moss/connectors";
@@ -299,6 +300,117 @@ describe("notification digest settings", () => {
       ]
     ]);
   });
+
+  it("carries unread notifications beyond the first 50 into the next digest", async () => {
+    await setDigestPreference({ enabled: true, lastDigestSentAt: null });
+    const repository = new NotificationsRepository();
+
+    await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "digest:seed-many" },
+      async (scopedDb) => {
+        for (let i = 0; i < 55; i += 1) {
+          await repository.create(scopedDb, { moduleId: "briefings", title: `Item ${i}` });
+        }
+      }
+    );
+
+    const first = await runDigest(repository);
+    const second = await runDigest(repository);
+    const third = await runDigest(repository);
+
+    expect(first).toEqual({ status: "sent", count: 50 });
+    expect(second).toEqual({ status: "sent", count: 5 });
+    expect(third).toEqual({ status: "skipped", reason: "empty" });
+  });
+
+  it("includes a notification that was still deferred when an earlier digest was sent", async () => {
+    await setDigestPreference({ enabled: true, lastDigestSentAt: null });
+    const repository = new NotificationsRepository();
+    const ctx = { actorUserId: ids.userA, requestId: "digest:seed-deferred" };
+
+    const [visible, deferred] = await dataContext.withDataContext(ctx, async (scopedDb) => [
+      await repository.create(scopedDb, { moduleId: "briefings", title: "Visible now" }),
+      await repository.create(scopedDb, { moduleId: "briefings", title: "Held back" })
+    ]);
+    expect(visible).not.toBeNull();
+    const bootstrap = new pg.Client({ connectionString: connectionStrings.bootstrap });
+    await bootstrap.connect();
+    try {
+      await bootstrap.query(
+        "UPDATE app.notifications SET deferred_until = now() + interval '1500 milliseconds' WHERE id = $1",
+        [deferred?.id]
+      );
+    } finally {
+      await bootstrap.end();
+    }
+
+    const sent: string[] = [];
+    const first = await runDigest(repository, sent);
+    expect(first).toEqual({ status: "sent", count: 1 });
+
+    await new Promise((resolve) => setTimeout(resolve, 1700));
+    const second = await runDigest(repository, sent);
+
+    expect(second).toEqual({ status: "sent", count: 1 });
+    expect(sent[1]).toContain("Held back");
+  });
+
+  it("sets the watermark from the clock read before the send, not after", async () => {
+    await setDigestPreference({ enabled: true, lastDigestSentAt: null });
+    const repository = new NotificationsRepository();
+    await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "digest:seed-clock" },
+      (scopedDb) => repository.create(scopedDb, { moduleId: "briefings", title: "Clock item" })
+    );
+
+    const before = new Date("2030-01-01T00:00:00.000Z");
+    const after = new Date("2030-01-01T00:05:00.000Z");
+    let sendFinished = false;
+    const result = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "digest:clock" },
+      (scopedDb) =>
+        runNotificationDigestCompose(scopedDb, {
+          baseUrl: "https://jarvis.example.test",
+          notificationsRepository: repository,
+          preferencesRepository: new PreferencesRepository(),
+          now: () => (sendFinished ? after : before),
+          sender: {
+            sendDigest: async () => {
+              sendFinished = true;
+              return { ok: true };
+            }
+          }
+        })
+    );
+    expect(result).toEqual({ status: "sent", count: 1 });
+
+    const stored = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "digest:clock-read" },
+      (scopedDb) => new PreferencesRepository().get(scopedDb, "notifications:digest")
+    );
+    expect((stored as { lastDigestSentAt: string }).lastDigestSentAt).toBe(before.toISOString());
+  });
+
+  async function runDigest(
+    repository: NotificationsRepository,
+    sent: string[] = []
+  ): Promise<unknown> {
+    return dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: `digest:run:${sent.length}` },
+      (scopedDb) =>
+        runNotificationDigestCompose(scopedDb, {
+          baseUrl: "https://jarvis.example.test",
+          notificationsRepository: repository,
+          preferencesRepository: new PreferencesRepository(),
+          sender: {
+            sendDigest: async (_scopedDb, input) => {
+              sent.push(input.text);
+              return { ok: true };
+            }
+          }
+        })
+    );
+  }
 
   async function seedGoogleAccount(): Promise<void> {
     const cipher = createConnectorSecretCipher();

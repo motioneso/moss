@@ -45,6 +45,13 @@ describe("apply selection", () => {
     });
   });
 
+  it("keeps only the explicit selection when additions are not widened", () => {
+    const selection = resolveApplySelection([ADD_A, MOVE_B, PLAIN_D], ["block-b"], {
+      includePendingAdditions: false
+    });
+    expect(selection.map((entry) => entry.blockId)).toEqual(["block-b"]);
+  });
+
   it("treats an omitted selection as all eligible additions", () => {
     const selection = resolveApplySelection([ADD_A, MOVE_B, REMOVE_C, PLAIN_D]);
     expect(selection.map((entry) => entry.blockId)).toEqual(["block-a"]);

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { kvStore, NS } from "../../external-modules/finance/src/domain/index.js";
 import type {
+  ActivityInput,
   FinanceKv,
   TransactionRecord
 } from "../../external-modules/finance/src/domain/index.js";
@@ -47,7 +48,7 @@ function fakeKv(): FinanceKv {
 
 // Budget handlers are pure KV reads/writes — same isolation contract as the
 // feed handlers: touching Plaid creds, tokens, or instance settings throws.
-function fakePorts(kv: FinanceKv): WorkerPorts {
+function fakePorts(kv: FinanceKv, activity: ActivityInput[] = []): WorkerPorts {
   return {
     kv,
     // FIN-04 (#1149): mirror writes are share/sync-handler territory only.
@@ -90,7 +91,23 @@ function fakePorts(kv: FinanceKv): WorkerPorts {
     now: () => NOW,
     // FIN-06b (#1166): pre-cutover handler tests stay on kvStore — the
     // FIN-06c cutover (Tasks 8-10) is what makes handlers actually call this.
-    store: async () => kvStore(kv)
+    store: async () => ({
+      ...kvStore(kv),
+      appendActivity: async (entry) => {
+        activity.push(entry);
+      },
+      // Mirrors the SQL store: the newest budget.assign row for the category.
+      lastLoggedAssignment: async (month, categoryId) => {
+        const rows = activity.filter(
+          (row) =>
+            row.kind === "budget.assign" &&
+            row.params.month === month &&
+            row.params.categoryId === categoryId
+        );
+        const last = rows[rows.length - 1];
+        return last === undefined ? null : Number(last.params.amountCents);
+      }
+    })
   };
 }
 
@@ -124,6 +141,31 @@ async function seedJuly(kv: FinanceKv): Promise<void> {
 }
 
 describe("finance budget.status (#1148)", () => {
+  it("reads each month and the assignment list once (review finding 9)", async () => {
+    const kv = fakeKv();
+    await seedJuly(kv);
+    const ports = fakePorts(kv);
+    const inner = await ports.store();
+    const reads: string[] = [];
+    const counting: WorkerPorts = {
+      ...ports,
+      store: async () => ({
+        ...inner,
+        listMonthTransactions: async (month) => {
+          reads.push(`month:${month}`);
+          return inner.listMonthTransactions(month);
+        },
+        listAssignmentMonths: async () => {
+          reads.push("assignments");
+          return inner.listAssignmentMonths();
+        }
+      })
+    };
+    await budgetStatusHandler(counting)({ month: "2026-07" });
+    expect(reads.filter((entry) => entry === "month:2026-07")).toHaveLength(1);
+    expect(reads.filter((entry) => entry === "assignments")).toHaveLength(1);
+  });
+
   it("derives the month from ledger + chunks", async () => {
     const kv = fakeKv();
     await seedJuly(kv);
@@ -143,6 +185,57 @@ describe("finance budget.status (#1148)", () => {
     expect((result.categories as Array<{ id: string }>).some((c) => c.id === "groceries")).toBe(
       true
     );
+  });
+
+  it("counts the month's transactions whose review state needs a look (#3176)", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [
+        // Uncategorized but confirmed: not a review item any more.
+        txRecord({ categoryId: null, amountCents: 100, reviewState: "confirmed" }),
+        txRecord({ categoryId: "groceries", amountCents: 200, reviewState: "needs_look" }),
+        txRecord({ categoryId: "dining", amountCents: 300, reviewState: "needs_look" }),
+        // Rows written before review state existed read as confirmed.
+        txRecord({ categoryId: "dining", amountCents: 400 })
+      ]
+    });
+    const result = await budgetStatusHandler(fakePorts(kv))({ month: "2026-07" });
+    expect(result.needsLookCount).toBe(2);
+  });
+
+  it("reports ready to assign from account balances, card debt and each envelope (#3173)", async () => {
+    const kv = fakeKv();
+    await seedJuly(kv);
+    await kv.set(NS.connections, "item:i1", {
+      itemId: "i1",
+      institutionId: "ins_1",
+      connectedAt: NOW.toISOString(),
+      status: "reauth-required"
+    });
+    const account = (accountId: string, type: string, balanceCents: number) => ({
+      accountId,
+      itemId: "i1",
+      name: accountId,
+      officialName: null,
+      type,
+      subtype: null,
+      mask: null,
+      balanceCents,
+      isoCurrency: "USD",
+      updatedAt: "2026-07-17T00:00:00Z"
+    });
+    await kv.set(NS.accounts, "acc-1", account("acc-1", "depository", 187_655));
+    await kv.set(NS.accounts, "acc-2", account("acc-2", "credit", 10_000));
+
+    const result = await budgetStatusHandler(fakePorts(kv))({ month: "2026-07" });
+
+    // 1876.55 in checking - 100.00 owed on the card - 376.55 left in groceries.
+    expect(result.readyToAssignCents).toBe(140_000);
+    expect(result.hasBank).toBe(true);
+    expect(result.accounts).toEqual([
+      expect.objectContaining({ accountId: "acc-1", balanceCents: 187_655, stale: true }),
+      expect.objectContaining({ accountId: "acc-2", balanceCents: -10_000, stale: true })
+    ]);
   });
 
   it("rolls carry and TBB into a later month with no data of its own", async () => {
@@ -202,14 +295,17 @@ describe("finance budget.assign — tool path (#1148)", () => {
     const result = await budgetAssignHandler(fakePorts(kv))({
       month: "2026-07",
       categoryId: "groceries",
-      amountCents: 50_000
+      amountCents: 50_000,
+      previousCents: 0
     });
 
     expect(result).toEqual({
       status: "ok",
       month: "2026-07",
       categoryId: "groceries",
-      amountCents: 50_000
+      amountCents: 50_000,
+      before: { assignedCents: 0 },
+      after: { assignedCents: 50_000 }
     });
     expect(await kv.get(NS.budgets, "ledger:2026-07")).toEqual({
       assignments: { dining: 5_000, groceries: 50_000 }
@@ -219,8 +315,18 @@ describe("finance budget.assign — tool path (#1148)", () => {
   it("replaces on re-assign — set semantics, never increment", async () => {
     const kv = fakeKv();
     const assign = budgetAssignHandler(fakePorts(kv));
-    await assign({ month: "2026-07", categoryId: "groceries", amountCents: 50_000 });
-    await assign({ month: "2026-07", categoryId: "groceries", amountCents: 20_000 });
+    await assign({
+      month: "2026-07",
+      categoryId: "groceries",
+      amountCents: 50_000,
+      previousCents: 0
+    });
+    await assign({
+      month: "2026-07",
+      categoryId: "groceries",
+      amountCents: 20_000,
+      previousCents: 50_000
+    });
 
     expect(await kv.get(NS.budgets, "ledger:2026-07")).toEqual({
       assignments: { groceries: 20_000 }
@@ -231,13 +337,18 @@ describe("finance budget.assign — tool path (#1148)", () => {
     const kv = fakeKv();
     const assign = budgetAssignHandler(fakePorts(kv));
     await expect(
-      assign({ month: "2026-07", categoryId: "yachts", amountCents: 1 })
+      assign({ month: "2026-07", categoryId: "yachts", amountCents: 1, previousCents: 0 })
     ).rejects.toThrow("not a live category");
     await expect(
-      assign({ month: "2026-07", categoryId: "groceries", amountCents: 10.5 })
+      assign({ month: "2026-07", categoryId: "groceries", amountCents: 10.5, previousCents: 0 })
     ).rejects.toThrow();
     await expect(
-      assign({ month: "2026-07", categoryId: "groceries", amountCents: 100_000_001 })
+      assign({
+        month: "2026-07",
+        categoryId: "groceries",
+        amountCents: 100_000_001,
+        previousCents: 0
+      })
     ).rejects.toThrow();
     expect(await kv.get(NS.budgets, "ledger:2026-07")).toBeNull();
   });
@@ -278,5 +389,133 @@ describe("finance budget-apply — queue path (#1148)", () => {
         params: { month: "2026-07", categoryId: "groceries", amountCents: 1 }
       })
     ).rejects.toThrow("jobKind is not supported");
+  });
+});
+
+describe("finance budget activity rows (#3174)", () => {
+  it("queue path logs a user row holding ids and cents only, with undo to the old total", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.budgets, "ledger:2026-07", { assignments: { groceries: 20_000 } });
+    const activity: ActivityInput[] = [];
+
+    await budgetApplyHandler(fakePorts(kv, activity))({
+      jobKind: "finance.budget-apply",
+      params: { month: "2026-07", categoryId: "groceries", amountCents: 50_000 }
+    });
+
+    expect(activity).toEqual([
+      {
+        actor: "user",
+        kind: "budget.assign",
+        params: {
+          month: "2026-07",
+          categoryId: "groceries",
+          amountCents: 50_000,
+          previousCents: 20_000
+        },
+        undo: { month: "2026-07", categoryId: "groceries", amountCents: 20_000 }
+      }
+    ]);
+  });
+
+  it("tool path logs the row as moss", async () => {
+    const kv = fakeKv();
+    const activity: ActivityInput[] = [];
+    await budgetAssignHandler(fakePorts(kv, activity))({
+      month: "2026-07",
+      categoryId: "groceries",
+      amountCents: 7_500,
+      previousCents: 0
+    });
+    expect(activity).toHaveLength(1);
+    expect(activity[0]).toMatchObject({
+      actor: "moss",
+      params: { amountCents: 7_500, previousCents: 0 }
+    });
+  });
+
+  it("logs nothing when the amount did not change", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.budgets, "ledger:2026-07", { assignments: { groceries: 20_000 } });
+    const activity: ActivityInput[] = [];
+    await budgetAssignHandler(fakePorts(kv, activity))({
+      month: "2026-07",
+      categoryId: "groceries",
+      amountCents: 20_000,
+      previousCents: 20_000
+    });
+    expect(activity).toEqual([]);
+  });
+
+  it("a retry after a lost activity row adds the missing row (review A10)", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.budgets, "ledger:2026-07", { assignments: { groceries: 20_000 } });
+    const activity: ActivityInput[] = [];
+    // An earlier, fully logged change from 5000 to 20000.
+    activity.push({
+      actor: "user",
+      kind: "budget.assign",
+      params: {
+        month: "2026-07",
+        categoryId: "groceries",
+        amountCents: 20_000,
+        previousCents: 5_000
+      },
+      undo: null
+    });
+    // The total was then set to 50000 but the run died before its row was written.
+    await kv.set(NS.budgets, "ledger:2026-07", { assignments: { groceries: 50_000 } });
+
+    await budgetApplyHandler(fakePorts(kv, activity))({
+      jobKind: "finance.budget-apply",
+      params: { month: "2026-07", categoryId: "groceries", amountCents: 50_000 }
+    });
+
+    expect(activity).toHaveLength(2);
+    expect(activity[1]).toMatchObject({
+      params: { amountCents: 50_000, previousCents: 20_000 }
+    });
+  });
+
+  it("a batch applies every category and logs each change (review A3)", async () => {
+    const kv = fakeKv();
+    const activity: ActivityInput[] = [];
+    await budgetApplyHandler(fakePorts(kv, activity))({
+      jobKind: "finance.budget-apply",
+      params: {
+        month: "2026-07",
+        categoryIds: ["groceries", "dining"],
+        amountsCents: [30_000, 12_000]
+      }
+    });
+    expect((await kv.get(NS.budgets, "ledger:2026-07"))?.assignments).toEqual({
+      groceries: 30_000,
+      dining: 12_000
+    });
+    expect(activity.map((row) => row.params.categoryId)).toEqual(["groceries", "dining"]);
+  });
+
+  it("a batch with mismatched lengths is rejected whole", async () => {
+    const kv = fakeKv();
+    await expect(
+      budgetApplyHandler(fakePorts(kv, []))({
+        jobKind: "finance.budget-apply",
+        params: { month: "2026-07", categoryIds: ["groceries"], amountsCents: [] }
+      })
+    ).rejects.toThrow();
+  });
+
+  it("logs nothing when the category is rejected", async () => {
+    const kv = fakeKv();
+    const activity: ActivityInput[] = [];
+    await expect(
+      budgetAssignHandler(fakePorts(kv, activity))({
+        month: "2026-07",
+        categoryId: "no-such-category",
+        amountCents: 100,
+        previousCents: 0
+      })
+    ).rejects.toThrow();
+    expect(activity).toEqual([]);
   });
 });

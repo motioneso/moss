@@ -136,6 +136,7 @@ describe("finance.accounts.list (#1146)", () => {
     const result = await accountsListHandler(ports(fakeKv()))({ actorUserId: ACTOR });
     expect(result).toEqual({
       accounts: [],
+      banks: [],
       nextStep: "connect a bank with finance.connect.start"
     });
   });
@@ -158,6 +159,7 @@ describe("finance.accounts.list (#1146)", () => {
     expect(result.accounts.map((a) => a.accountId)).toEqual(["acc-1", "acc-2"]);
     expect(result.accounts[0]).toEqual({
       accountId: "acc-1",
+      itemId: "item-1",
       name: "Checking",
       mask: "0000",
       type: "depository",
@@ -176,6 +178,54 @@ describe("finance.accounts.list (#1146)", () => {
       institutionId: "ins_2",
       itemStatus: "reauth-required"
     });
+  });
+
+  it("reports one bank per item with status, last sync and the stored display message (#3177)", async () => {
+    const kv = fakeKv();
+    await seed(kv);
+    await kv.set(NS.connections, "item:item-1", {
+      itemId: "item-1",
+      institutionId: "ins_1",
+      institutionName: "Sandbox First Bank",
+      connectedAt: "2026-07-01T00:00:00Z",
+      status: "connected",
+      lastSyncAt: "2026-07-18T10:00:00Z"
+    });
+    await kv.set(NS.connections, "item:item-2", {
+      itemId: "item-2",
+      institutionId: "ins_2",
+      connectedAt: "2026-07-02T00:00:00Z",
+      status: "reauth-required",
+      lastError: "ITEM_LOGIN_REQUIRED",
+      lastSyncAt: "2026-07-05T10:00:00Z",
+      lastErrorDetail: {
+        type: "ITEM_ERROR",
+        code: "ITEM_LOGIN_REQUIRED",
+        message: "The login details of this item have changed.",
+        requestId: "req-1"
+      }
+    });
+    const result = (await accountsListHandler(ports(kv))({ actorUserId: ACTOR })) as {
+      banks: Record<string, unknown>[];
+    };
+    expect(result.banks).toEqual([
+      {
+        itemId: "item-1",
+        institutionId: "ins_1",
+        institutionName: "Sandbox First Bank",
+        status: "connected",
+        lastSyncAt: "2026-07-18T10:00:00Z",
+        message: null
+      },
+      {
+        itemId: "item-2",
+        institutionId: "ins_2",
+        institutionName: null,
+        status: "reauth-required",
+        lastSyncAt: "2026-07-05T10:00:00Z",
+        message: "The login details of this item have changed."
+      }
+    ]);
   });
 
   it("surfaces an orphaned account (item record missing) rather than hiding it", async () => {
@@ -245,7 +295,10 @@ describe("finance.accounts.list household merge (#1149)", () => {
       // Month chunks under the mirror are not accounts — meta suffix only.
       [sharedMonthKey(OTHER, "acc-x", "2026-07")]: { transactions: [] }
     });
-    const result = (await accountsListHandler(ports(kv, mirror))({ actorUserId: ACTOR })) as {
+    const result = (await accountsListHandler(ports(kv, mirror))({
+      actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER]
+    })) as {
       accounts: Record<string, unknown>[];
     };
     expect(result.accounts.map((a) => a.accountId)).toEqual(["acc-1", "acc-2", "acc-x"]);
@@ -270,7 +323,8 @@ describe("finance.accounts.list household merge (#1149)", () => {
   it("shows shared accounts to a member with no own accounts, keeping nextStep", async () => {
     const mirror = readOnlyMirror({ [sharedMetaKey(OTHER, "acc-x")]: otherMeta });
     const result = (await accountsListHandler(ports(fakeKv(), mirror))({
-      actorUserId: ACTOR
+      actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER]
     })) as Record<string, unknown>;
     expect((result.accounts as Record<string, unknown>[]).map((a) => a.accountId)).toEqual([
       "acc-x"
@@ -287,9 +341,25 @@ describe("finance.accounts.list household merge (#1149)", () => {
       [`${OTHER}:acc-y:meta`]: null as unknown as Record<string, unknown>,
       [sharedMetaKey(OTHER, "acc-x")]: otherMeta
     });
-    const result = (await accountsListHandler(ports(kv, mirror))({ actorUserId: ACTOR })) as {
+    const result = (await accountsListHandler(ports(kv, mirror))({
+      actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER]
+    })) as {
       accounts: Record<string, unknown>[];
     };
     expect(result.accounts.map((a) => a.accountId)).toEqual(["acc-1", "acc-2", "acc-x"]);
+  });
+
+  it("drops shared accounts of owners missing from the active list, and fails closed without it", async () => {
+    const mirror = readOnlyMirror({ [sharedMetaKey(OTHER, "acc-x")]: otherMeta });
+    const run = async (extra: Record<string, unknown>) =>
+      (
+        (await accountsListHandler(ports(fakeKv(), mirror))({
+          actorUserId: ACTOR,
+          ...extra
+        })) as { accounts: unknown[] }
+      ).accounts;
+    expect(await run({ activeUserIds: [ACTOR] })).toEqual([]);
+    expect(await run({})).toEqual([]);
   });
 });

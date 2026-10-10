@@ -67,5 +67,6 @@ export const chatListTodaysTurnsExecute: ToolExecute = async (
   }
 
   turns.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  return { data: { turns: turns.slice(0, MAX_TURNS) } };
+  // Keep the newest turns; the list stays in ascending order.
+  return { data: { turns: turns.slice(-MAX_TURNS) } };
 };

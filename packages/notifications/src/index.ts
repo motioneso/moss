@@ -9,6 +9,7 @@ export * from "./app-path.js";
 export * from "./manifest.js";
 export * from "./metadata.js";
 export * from "./digest.js";
+export * from "./sensitivity.js";
 export * from "./repository.js";
 export * from "./routes.js";
 export * from "./push-crypto.js";

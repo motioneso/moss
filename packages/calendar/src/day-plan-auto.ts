@@ -340,7 +340,9 @@ export async function reserveAutoPlanBlocks(
       planId: drafted.id,
       expectedRevision: drafted.revision,
       idempotencyKey: batchKey,
-      selectedBlockIds: autoIds
+      selectedBlockIds: autoIds,
+      // Unapproved manual drafts must not ride along in an unattended batch.
+      includePendingAdditions: false
     });
     return {
       planId: drafted.id,

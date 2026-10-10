@@ -450,6 +450,7 @@ export default defineConfig({
       "packages/calendar/src/*.test.ts",
       "packages/settings/src/app-action-tools.test.ts",
       "packages/ai/src/gateway/per-call-resolver.test.ts",
+      "packages/ai/src/gateway/policy.test.ts",
       "packages/focus-judgment/src/*.test.ts",
       "packages/ai/src/structured/*.test.ts"
     ],

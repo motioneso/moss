@@ -54,7 +54,8 @@ function fakeDb(
     "app.finance_accounts": [],
     "app.finance_transactions": [],
     "app.finance_balance_snapshots": [],
-    "app.finance_budget_assignments": []
+    "app.finance_budget_assignments": [],
+    "app.finance_categories": []
   };
   const db = {
     calls,
@@ -240,14 +241,53 @@ describe("finance.storage-migrate (FIN-06b #1166)", () => {
     }
   });
 
-  it("replay with marker already set is a no-op: zero db calls", async () => {
+  it("replay with marker already set copies only categories (insert-ignore) and nothing else", async () => {
     const kv = fakeKv({
       [NS.meta]: { [MIGRATED_MARKER_KEY]: { migratedAt: "2026-07-01T00:00:00.000Z" } }
     });
     const db = fakeDb();
     const result = await callHandler(kv, db);
     expect(result).toEqual({ status: "already-migrated" });
-    expect(db.calls).toHaveLength(0);
+    expect(db.calls).toHaveLength(16);
+    for (const call of db.calls) {
+      expect(call.text).toContain("app.finance_categories");
+      expect(call.text).toContain("DO NOTHING");
+    }
+  });
+
+  it("copies the stored taxonomy into the categories table with groups, order, income flag and archive date", async () => {
+    const kv = fakeKv({
+      [NS.meta]: { [MIGRATED_MARKER_KEY]: { migratedAt: "2026-07-01T00:00:00.000Z" } },
+      [NS.categories]: {
+        taxonomy: {
+          categories: [
+            { id: "rent-mortgage", group: "fixed", name: "Rent & mortgage", archived: false },
+            { id: "income", group: "income", name: "Income", archived: false },
+            { id: "my-pets", group: "custom", name: "Pets", archived: true }
+          ]
+        }
+      }
+    });
+    const db = fakeDb();
+    await callHandler(kv, db);
+    expect(db.calls.map((call) => call.params)).toEqual([
+      ["rent-mortgage", "Bills", "Rent & mortgage", 0, false, null],
+      ["income", "Income", "Income", 1, true, null],
+      ["my-pets", "Everyday", "Pets", 2, false, "2026-07-18T12:00:00.000Z"]
+    ]);
+    // The KV taxonomy is left in place.
+    expect(await kv.get(NS.categories, "taxonomy")).not.toBeNull();
+  });
+
+  it("assigns the 16 defaults to the five groups when no taxonomy is stored", async () => {
+    const kv = fakeKv({
+      [NS.meta]: { [MIGRATED_MARKER_KEY]: { migratedAt: "2026-07-01T00:00:00.000Z" } }
+    });
+    const db = fakeDb();
+    await callHandler(kv, db);
+    const groups = new Set(db.calls.map((call) => call.params?.[1]));
+    expect([...groups].sort()).toEqual(["Bills", "Everyday", "Fun", "Income", "Savings"]);
+    expect(db.calls.filter((call) => call.params?.[4] === true)).toHaveLength(1);
   });
 
   it("throws when ctx.db is absent (older host) — never marks", async () => {

@@ -218,7 +218,9 @@ function memoryLabel(item: MemoryRecallItem): string {
 }
 
 function memoryText(item: MemoryRecallItem): string {
-  const text = neutralizeSeedFraming(item.text);
+  const text = item.subjectName
+    ? `About ${neutralizeSeedFraming(item.subjectName)}: ${neutralizeSeedFraming(item.text)}`
+    : neutralizeSeedFraming(item.text);
   if (item.status === "conflicting" || item.conflictGroupId) return `Conflicting memory: ${text}`;
   if (item.status === "stale" || item.staleAt) return `This may be outdated: ${text}`;
   return text;

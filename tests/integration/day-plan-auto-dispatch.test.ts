@@ -32,9 +32,9 @@ import type { MemoryRetriever } from "@moss/memory";
 import { ConnectorsRepository, createConnectorSecretCipher } from "@moss/connectors";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
 import { buildCalendarFollowThroughPort } from "@moss/module-registry";
-import type { MossModuleManifest, ToolExecute } from "@moss/module-sdk";
 import { TasksRepository } from "@moss/tasks";
 
+import { fakeManifests, prefsFake } from "./day-plan-auto-dispatch-fakes.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -54,62 +54,6 @@ function prepEvent() {
     startsAt: todayAt("10:00"),
     endsAt: todayAt("11:00"),
     attendeeCount: 6
-  };
-}
-
-function fakeManifests(events: () => unknown[]): MossModuleManifest[] {
-  const tools: Record<string, unknown> = {
-    "commitments.listVisible": { commitments: [] },
-    "tasks.list": { items: [] },
-    "calendar.listVisibleEvents": () => ({
-      events: events(),
-      accounts: [],
-      gaps: []
-    }),
-    "email.listVisibleMessages": { messages: [], accounts: [], gaps: [] },
-    "chat.listTodaysTurns": { turns: [] }
-  };
-  const assistantTools = Object.keys(tools).map((name) => {
-    const execute: ToolExecute = async () => {
-      const data = tools[name];
-      const resolved = typeof data === "function" ? (data as () => unknown)() : data;
-      return { data: resolved as Record<string, unknown> };
-    };
-    return {
-      name,
-      description: name,
-      permissionId: "x.view",
-      risk: "read" as const,
-      inputSchema: { type: "object", properties: {} },
-      execute
-    };
-  });
-  return [
-    {
-      id: "fake-auto",
-      name: "FakeAuto",
-      version: "0.0.0",
-      publisher: "test",
-      lifecycle: "required",
-      compatibility: { jarv1s: ">=0.0.0" },
-      assistantTools,
-      sourceBehaviors: []
-    }
-  ];
-}
-
-function prefsFake(values: Record<string, unknown>) {
-  return {
-    async get(_scopedDb: DataContextDb, key: string) {
-      return values[key] ?? null;
-    },
-    async getWithMetadata<T>(_scopedDb: DataContextDb, key: string) {
-      const value = (values[key] ?? null) as T | null;
-      return value === null ? null : { value, updatedAt: new Date() };
-    },
-    async upsert(_scopedDb: DataContextDb, key: string, value: unknown) {
-      values[key] = value;
-    }
   };
 }
 
@@ -524,6 +468,27 @@ describe("automatic plan generation and dispatch", () => {
   it("executes a reserved batch through the same execution service", async () => {
     Object.assign(world.prefs, autoModes());
     const definition = await createDefinition(world.dataContext, world.briefings);
+    // An unapproved manual draft addition already sits in today's plan.
+    const day = new Date().toISOString().slice(0, 10);
+    const base = { localDay: day, timeZone: "UTC" };
+    const manual = await world.dataContext.withDataContext(userA(), async (db) => {
+      const plan = await world.plans.createForDay(db, { ...base, sourceRunId: null });
+      const pendingChange = {
+        kind: "add" as const,
+        startsAt: todayAt("14:00"),
+        durationMinutes: 30
+      };
+      const blocks = [
+        { kind: "focus" as const, taskId: null, title: "Manual draft", pendingChange }
+      ];
+      const saved = await world.plans.saveDraft(db, {
+        ...base,
+        planId: plan.id,
+        expectedRevision: plan.revision,
+        blocks
+      });
+      return saved.blocks[0]!.id;
+    });
     const outcome = await generateScheduled(definition.id, () => [prepEvent()]);
     const auto = outcome!.auto!;
     const creates: string[] = [];
@@ -567,6 +532,13 @@ describe("automatic plan generation and dispatch", () => {
     });
     expect(report.status).toBe("completed");
     expect(creates).toHaveLength(1);
+    expect(creates).not.toContain(manual);
+    const plan = await world.dataContext.withDataContext(userA(), (db) =>
+      world.plans.getById(db, auto.planId)
+    );
+    expect(plan?.blocks.find((block) => block.id === manual)?.pendingChange).toMatchObject({
+      kind: "add"
+    });
   });
 
   it("denies when the block task was deleted between commit and apply", async () => {

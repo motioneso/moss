@@ -10,6 +10,7 @@ import type { DataContextDb } from "@moss/db";
 import { extractListingHeadlines, sampleFeedHeadlines } from "./discovery/feed-discovery.js";
 import { decideSourcePolicy, validateTopic } from "./discovery/policy-validation.js";
 import type { NewsAiPort, NewsFetchPort, NewsSafeFetchPort } from "./discovery/ports.js";
+import { readSubreddit, subredditNameFromUrl } from "./source/reddit-reader.js";
 import type {
   NewsPersonalizationRepository,
   NewsSourceValidationState,
@@ -104,11 +105,49 @@ export async function revalidateOwnerNews(
   for (const source of sourcesBefore) {
     // Idempotency: an approved verdict under the current fingerprint is still valid.
     if (source.validationStatus === "approved" && source.validationFingerprint === fingerprint) {
+      // An approved source marked temporarily unavailable is re-fetched so Retry can clear
+      // the flag. authentication_failed stays with the credentialed refresh path.
+      if (source.healthStatus === "temporarily_unavailable") {
+        sourcesChecked += 1;
+        // Reddit needs its own reader (headers, host guard, atom parsing); the plain fetcher
+        // would keep failing and the source could never recover.
+        const subreddit =
+          source.retrievalMethod === "reddit" && deps.fetchWithOptions
+            ? subredditNameFromUrl(source.feedUrl ?? source.homepageUrl)
+            : null;
+        const recovered =
+          subreddit !== null && deps.fetchWithOptions
+            ? (await readSubreddit(deps.fetchWithOptions, subreddit)).ok
+            : (await deps.fetch(source.feedUrl ?? source.homepageUrl)).ok;
+        if (recovered) {
+          await deps.repository.updateSourceHealth(scopedDb, source.id, "healthy");
+        }
+      }
       continue;
     }
     sourcesChecked += 1;
-    const fetched = await deps.fetch(source.feedUrl ?? source.homepageUrl);
-    if (!fetched.ok) {
+    // Same Reddit rule as the recovery branch above.
+    const subreddit =
+      source.retrievalMethod === "reddit" && deps.fetchWithOptions
+        ? subredditNameFromUrl(source.feedUrl ?? source.homepageUrl)
+        : null;
+    let sampleHeadlines: string[] | null;
+    if (subreddit !== null && deps.fetchWithOptions) {
+      const read = await readSubreddit(deps.fetchWithOptions, subreddit);
+      sampleHeadlines = read.ok
+        ? read.headlines.slice(0, HEADLINE_SAMPLE_CAP).map((item) => item.title)
+        : null;
+    } else {
+      const fetched = await deps.fetch(source.feedUrl ?? source.homepageUrl);
+      sampleHeadlines = !fetched.ok
+        ? null
+        : source.retrievalMethod === "feed"
+          ? sampleFeedHeadlines(fetched.body, HEADLINE_SAMPLE_CAP).map((item) => item.headline)
+          : extractListingHeadlines(fetched.body, source.homepageUrl, HEADLINE_SAMPLE_CAP).map(
+              (item) => item.headline
+            );
+    }
+    if (sampleHeadlines === null) {
       // Unreachable → owner action required: surface both the health problem and that the
       // verdict is stale under the new fingerprint (so retry re-checks it).
       if (source.healthStatus !== "authentication_failed") {
@@ -120,12 +159,6 @@ export async function revalidateOwnerNews(
       });
       continue;
     }
-    const sampleHeadlines =
-      source.retrievalMethod === "feed"
-        ? sampleFeedHeadlines(fetched.body, HEADLINE_SAMPLE_CAP).map((item) => item.headline)
-        : extractListingHeadlines(fetched.body, source.homepageUrl, HEADLINE_SAMPLE_CAP).map(
-            (item) => item.headline
-          );
     const policy = await decideSourcePolicy(
       scopedDb,
       { ai: deps.ai, repo: deps.repository },
