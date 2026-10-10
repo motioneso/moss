@@ -217,6 +217,71 @@ describe("finance.budget.move (#3185)", () => {
   });
 });
 
+describe("money moves are all-or-nothing (#3160 review)", () => {
+  it("changes nothing when the single write fails", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.budgets, "ledger:2026-07", { assignments: { dining: 20_000, travel: 1_000 } });
+    const ports = fakePorts(kv, []);
+    const base = await ports.store();
+    let commits = 0;
+    ports.store = async () => ({
+      ...base,
+      // Any partial write would show up as a direct total change before this throws.
+      setAssignment: async () => {
+        throw new Error("a move must not write totals one at a time");
+      },
+      appendActivity: async () => {
+        throw new Error("a move must not log separately");
+      },
+      commitBudgetChange: async () => {
+        commits += 1;
+        throw new Error("database went away");
+      }
+    });
+    await expect(
+      budgetMoveHandler(ports)({
+        month: "2026-07",
+        fromCategoryId: "dining",
+        toCategoryId: "travel",
+        amountCents: 7_500
+      })
+    ).rejects.toThrow("database went away");
+    expect(commits).toBe(1);
+    expect(await kv.get(NS.budgets, "ledger:2026-07")).toEqual({
+      assignments: { dining: 20_000, travel: 1_000 }
+    });
+  });
+
+  it("refuses to assign or move money into an archived category", async () => {
+    const kv = fakeKv();
+    await seedBank(kv, 50_000);
+    const ports = fakePorts(kv, []);
+    const created = (await categoryUpsertHandler(ports)({
+      name: "Pets",
+      groupName: "Everyday"
+    })) as { categoryId: string };
+    const pets = created.categoryId;
+    await categoryArchiveHandler(ports)({ id: pets });
+    await expect(
+      budgetAssignHandler(ports)({
+        month: "2026-07",
+        categoryId: pets,
+        amountCents: 1_000,
+        previousCents: 0
+      })
+    ).rejects.toThrow();
+    await expect(
+      budgetMoveHandler(ports)({
+        month: "2026-07",
+        fromCategoryId: "ready_to_assign",
+        toCategoryId: pets,
+        amountCents: 1_000
+      })
+    ).rejects.toThrow();
+    expect(await kv.get(NS.budgets, "ledger:2026-07")).toBeNull();
+  });
+});
+
 describe("finance.rule.set (#3185)", () => {
   it("stores a rule, reports before and after, and logs ids only", async () => {
     const kv = fakeKv();

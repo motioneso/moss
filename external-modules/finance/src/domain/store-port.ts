@@ -19,6 +19,20 @@ export interface ActivityInput {
   undo?: Record<string, string | number | null> | null;
 }
 
+/**
+ * Budget totals, their activity rows and an optional draft start or undo mark, applied as one
+ * unit. Either every part lands or none does.
+ */
+export interface BudgetChange {
+  month: string;
+  assignments: { categoryId: string; amountCents: number }[];
+  activity: ActivityInput[];
+  /** Marks this open draft started; the change applies only while the draft is still open. */
+  startDraft?: { draftId: string; at: string };
+  /** Marks this row undone; the change applies only while the row is not yet undone. */
+  markUndone?: { activityId: string; at: string };
+}
+
 /** One stored activity row as the Settings list reads it. */
 export interface ActivityRecord {
   id: string;
@@ -74,6 +88,13 @@ export interface FinanceStore {
   getLedger(month: string): Promise<BudgetLedger | null>;
   /** Sets the TOTAL for one category (FIN-03 replay-safe semantics). */
   setAssignment(month: string, categoryId: string, amountCents: number): Promise<void>;
+
+  /**
+   * Writes every assignment total, every activity row and the optional draft start or undo mark
+   * in one atomic step. Returns false (and writes nothing) when a guard fails: the draft is no
+   * longer open or the row was already undone.
+   */
+  commitBudgetChange(change: BudgetChange): Promise<boolean>;
 
   /** Appends one activity row for the acting user, stamped with the current time. */
   appendActivity(entry: ActivityInput): Promise<void>;

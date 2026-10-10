@@ -20,6 +20,7 @@ import {
   linePlanCents,
   pickBasisMonths,
   tableGroupFor,
+  type ActivityInput,
   type BudgetDraft,
   type Category,
   type TransactionRecord
@@ -32,6 +33,9 @@ import { loadCategories } from "./feed.js";
 const QUEUE_BUILD = "finance.draft-build";
 const QUEUE_START = "finance.draft-start";
 const QUEUE_SET = "finance.draft-set";
+
+/** Categories money is never budgeted into. */
+const PROTECTED_KEYS: ReadonlySet<string> = new Set(["income", "transfers"]);
 
 export interface DraftViewLine {
   categoryKey: string;
@@ -136,6 +140,15 @@ async function editDraftLine(
   }
   if (draft.status !== "open") {
     throw new InputError("draft_not_open", "the draft has already been started");
+  }
+  if (PROTECTED_KEYS.has(args.categoryKey)) {
+    throw new InputError("protected_category", "income and transfers cannot be budgeted");
+  }
+  const archivedKeys = (await loadCategories(ports))
+    .filter((category) => category.archived)
+    .map((category) => category.id);
+  if (archivedKeys.includes(args.categoryKey)) {
+    throw new InputError("archived_category", "that category is archived; unarchive it first");
   }
   const existing = draft.lines.find((line) => line.categoryKey === args.categoryKey);
   if (existing === undefined) {
@@ -280,9 +293,27 @@ const LEGACY_GROUP: Readonly<Record<string, string>> = {
  */
 async function ensureCategories(ports: WorkerPorts, draft: BudgetDraft): Promise<void> {
   const live = await loadCategories(ports);
-  const known = new Set(live.map((category) => category.id));
-  const missing = draft.lines.filter((line) => !line.dropped && !known.has(line.categoryKey));
-  if (missing.length === 0) return;
+  const byId = new Map(live.map((category) => [category.id, category]));
+  const planned = draft.lines.filter((line) => !line.dropped && linePlanCents(line) > 0);
+
+  for (const line of planned) {
+    if (PROTECTED_KEYS.has(line.categoryKey)) {
+      throw new InputError("protected_category", "income and transfers cannot be budgeted");
+    }
+    if (byId.get(line.categoryKey)?.archived) {
+      throw new InputError(
+        "archived_category",
+        "a planned line points at an archived category; drop the line or unarchive the category"
+      );
+    }
+  }
+
+  const missing = draft.lines.filter((line) => !line.dropped && !byId.has(line.categoryKey));
+  const renamed = planned.filter((line) => {
+    const existing = byId.get(line.categoryKey);
+    return existing !== undefined && existing.name !== line.categoryName;
+  });
+  if (missing.length === 0 && renamed.length === 0) return;
 
   const created: Category[] = missing.map((line) => ({
     id: line.categoryKey,
@@ -290,12 +321,22 @@ async function ensureCategories(ports: WorkerPorts, draft: BudgetDraft): Promise
     name: line.categoryName,
     archived: false
   }));
-  const taxonomy = [...(live.length > 0 ? live : DEFAULT_CATEGORIES), ...created];
+  const renames = new Map(renamed.map((line) => [line.categoryKey, line.categoryName]));
+  const base = (live.length > 0 ? live : DEFAULT_CATEGORIES).map((category) =>
+    renames.has(category.id) ? { ...category, name: renames.get(category.id)! } : category
+  );
+  const taxonomy = [...base, ...created];
   await ports.kv.set(NS.categories, "taxonomy", {
     categories: taxonomy
   } as unknown as Record<string, unknown>);
 
   if (ports.db) {
+    for (const line of renamed) {
+      await ports.db.query(
+        "UPDATE app.finance_categories SET name = $2 WHERE id = $1 AND archived_at IS NULL",
+        [line.categoryKey, line.categoryName]
+      );
+    }
     for (const [offset, category] of created.entries()) {
       await ports.db.query(
         "INSERT INTO app.finance_categories (owner_user_id, id, group_name, name, sort_order, " +
@@ -326,24 +367,33 @@ export const draftStartHandler: ToolFactory = (ports) => async (input) => {
 
   await ensureCategories(ports, draft);
 
+  // Every line's total, its activity row and the started mark land in one atomic write. A
+  // failure part-way changes nothing, and a retry reads the same inputs and writes the same rows.
   const month = ports.now().toISOString().slice(0, 7);
-  let assigned = 0;
+  const ledger = (await store.getLedger(month))?.assignments ?? {};
+  const assignments: { categoryId: string; amountCents: number }[] = [];
+  const activity: ActivityInput[] = [];
   for (const line of draft.lines) {
     const amountCents = linePlanCents(line);
     if (line.dropped || amountCents <= 0) continue;
-    const previousCents = (await store.getLedger(month))?.assignments[line.categoryKey] ?? 0;
-    await store.setAssignment(month, line.categoryKey, amountCents);
+    const previousCents = ledger[line.categoryKey] ?? 0;
+    assignments.push({ categoryId: line.categoryKey, amountCents });
     if (previousCents !== amountCents) {
-      await store.appendActivity({
+      activity.push({
         actor: "user",
         kind: "budget.assign",
         params: { month, categoryId: line.categoryKey, amountCents, previousCents },
         undo: { month, categoryId: line.categoryKey, amountCents: previousCents }
       });
     }
-    assigned += 1;
   }
 
-  await store.markDraftStarted(draft.id, ports.now().toISOString());
-  return { status: "ok", started: true, assigned };
+  const applied = await store.commitBudgetChange({
+    month,
+    assignments,
+    activity,
+    startDraft: { draftId: draft.id, at: ports.now().toISOString() }
+  });
+  if (!applied) return { status: "ok", started: true, alreadyStarted: true };
+  return { status: "ok", started: true, assigned: assignments.length };
 };

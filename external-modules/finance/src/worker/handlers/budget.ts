@@ -167,7 +167,11 @@ async function applyAssignment(
   actor: "user" | "moss",
   liveIds?: ReadonlySet<string>
 ): Promise<Record<string, unknown>> {
-  const live = liveIds ?? new Set((await loadCategories(ports)).map((category) => category.id));
+  const live =
+    liveIds ??
+    new Set(
+      (await loadCategories(ports)).filter((entry) => !entry.archived).map((entry) => entry.id)
+    );
   if (!live.has(args.categoryId)) {
     throw new InputError("invalid_category", "categoryId is not a live category");
   }
@@ -276,21 +280,29 @@ export const budgetMoveHandler: ToolFactory = (ports) => async (input) => {
     }
   }
 
-  if (fromBefore !== null) {
-    await store.setAssignment(month, fromCategoryId, fromBefore - amountCents);
-  }
-  await store.setAssignment(month, toCategoryId, toBefore + amountCents);
-  await store.appendActivity({
-    actor: "moss",
-    kind: "budget.move",
-    params: { month, fromCategoryId, toCategoryId, amountCents },
-    undo: {
-      month,
-      fromCategoryId,
-      toCategoryId,
-      fromPreviousCents: fromBefore,
-      toPreviousCents: toBefore
-    }
+  // Both totals and the activity row land in one atomic write, so a failure changes nothing.
+  await store.commitBudgetChange({
+    month,
+    assignments: [
+      ...(fromBefore === null
+        ? []
+        : [{ categoryId: fromCategoryId, amountCents: fromBefore - amountCents }]),
+      { categoryId: toCategoryId, amountCents: toBefore + amountCents }
+    ],
+    activity: [
+      {
+        actor: "moss",
+        kind: "budget.move",
+        params: { month, fromCategoryId, toCategoryId, amountCents },
+        undo: {
+          month,
+          fromCategoryId,
+          toCategoryId,
+          fromPreviousCents: fromBefore,
+          toPreviousCents: toBefore
+        }
+      }
+    ]
   });
 
   return {
@@ -319,7 +331,9 @@ export const budgetApplyHandler: ToolFactory = (ports) => async (input) => {
   }
   const command = params as Record<string, unknown>;
   const month = readMonth(command);
-  const liveIds = new Set((await loadCategories(ports)).map((category) => category.id));
+  const liveIds = new Set(
+    (await loadCategories(ports)).filter((entry) => !entry.archived).map((entry) => entry.id)
+  );
 
   // Batch shape: parallel arrays. The single-category shape stays readable for jobs
   // queued before the batch shape existed.
