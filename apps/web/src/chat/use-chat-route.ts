@@ -11,7 +11,7 @@ export function chatAvailableFromRoute(data: LookupAiCapabilityRouteResponse | u
 /**
  * Asks the server whether chat has a model, again on every open, so a model
  * added after an earlier answer shows at once. A cached "unavailable" answer
- * is not trusted while that recheck is in flight.
+ * is not trusted while any recheck is in flight.
  */
 export function useChatRoute(open: boolean) {
   const query = useQuery({

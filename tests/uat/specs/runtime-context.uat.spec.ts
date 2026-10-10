@@ -4,8 +4,8 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 // Chat turns here run on the harness's scripted chat model (fixture: chat-scripts/runtime-context.json).
 // Its reply is fixed text, so the check below covers only what a turn sends: the turn body carries no
 // page snapshot. Page-context pushes are not counted here. The debounced sync
-// (apps/web/src/chat/use-page-context-sync.ts) also runs on DOM changes, and a sent message changes the
-// DOM, so a push can follow a send. withoutNewsJsonBinding keeps the scripted provider the only
+// (apps/web/src/chat/use-page-context-sync.ts) also runs on focus changes and DOM changes. Clicking
+// Send moves focus, and the sent message changes the DOM, so a push can follow a send. withoutNewsJsonBinding keeps the scripted provider the only
 // assistant provider, so it becomes the default model (see 1533-chat-surface-live-path.uat.spec.ts).
 //
 // Two behaviours need a real model to judge, so they stay test.fixme (#1121): the screenshot refusal,

@@ -147,6 +147,8 @@ test("transient discovery error is surfaced deterministically via previewOverrid
 test("non-admin map query never reveals admin settings", async ({ page }) => {
   await signIn(page, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_PASSWORD);
   await ask(page, "List every settings screen I can use");
+  // Wait for the scripted reply first, so the negative check runs after the turn has finished.
+  await expect(page.getByText("Scripted reply for the settings question.").first()).toBeVisible();
   await expect(page.getByText(/Advanced host setup|People & access|Instance modules/i)).toHaveCount(
     0
   );

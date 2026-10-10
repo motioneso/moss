@@ -5,7 +5,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_CHAT_SURFACE, type LookupAiCapabilityRouteResponse } from "@moss/shared";
 
@@ -58,6 +58,13 @@ type MountOptions = {
   readonly fresh?: LookupAiCapabilityRouteResponse;
 };
 
+// Unmounts every drawer a test mounted, including when an assertion fails before the test ends.
+const mountedDrawers: Array<{ unmount: () => void }> = [];
+
+afterEach(() => {
+  for (const view of mountedDrawers.splice(0)) view.unmount();
+});
+
 // Mounts the drawer the way a user opens it: a cached answer, then a recheck.
 async function mountDrawer({ cached, fresh }: MountOptions) {
   vi.stubGlobal("fetch", (input: RequestInfo | URL) =>
@@ -107,7 +114,7 @@ async function mountDrawer({ cached, fresh }: MountOptions) {
     );
   });
 
-  return {
+  const view = {
     container,
     seenText,
     settle: (text: string) =>
@@ -122,6 +129,8 @@ async function mountDrawer({ cached, fresh }: MountOptions) {
       vi.unstubAllGlobals();
     }
   };
+  mountedDrawers.push(view);
+  return view;
 }
 
 describe("ChatDrawer unavailable routes (rendered)", () => {
@@ -132,14 +141,11 @@ describe("ChatDrawer unavailable routes (rendered)", () => {
     expect(view.container.textContent).toContain("Model unavailable");
     expect(view.container.textContent).not.toContain("Here when you need me");
     expect(view.container.textContent).not.toContain("Connect a provider to start chatting");
-    view.unmount();
   });
 
   it("renders provider setup when no chat model is available", async () => {
     const view = await mountDrawer({ cached: noModel, fresh: noModel });
     await view.settle("Connect a provider to start chatting");
-
-    view.unmount();
   });
 
   it("says no model is connected and replaces the message box when none is available", async () => {
@@ -149,7 +155,6 @@ describe("ChatDrawer unavailable routes (rendered)", () => {
     expect(view.container.textContent).not.toContain("Here when you need me");
     expect(view.container.querySelector("textarea")).toBeNull();
     expect(view.container.querySelector(".chatd-connect-cta")).not.toBeNull();
-    view.unmount();
   });
 
   it("keeps the ready status and message box when a model is available", () => {
@@ -183,7 +188,6 @@ describe("ChatDrawer recheck on open (#3324)", () => {
     expect(view.container.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(view.seenText.some((text) => text.includes("Connect a provider"))).toBe(false);
     expect(view.seenText.some((text) => text.includes("Not connected"))).toBe(false);
-    view.unmount();
   });
 
   it("never shows the connect prompt when a model was added after the stale answer", async () => {
@@ -192,6 +196,5 @@ describe("ChatDrawer recheck on open (#3324)", () => {
 
     expect(view.seenText.some((text) => text.includes("Connect a provider"))).toBe(false);
     expect(view.container.querySelector("textarea")).not.toBeNull();
-    view.unmount();
   });
 });
