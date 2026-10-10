@@ -310,7 +310,9 @@ describe("owner resolves differing saved quiet hours", () => {
       const read = await getQuietHours(user.cookie);
 
       // Hold the owner's quiet-hours lock and Profile row so both choices are in flight together.
-      let racing!: Promise<Awaited<ReturnType<typeof resolve>>[]>;
+      let racing!: Promise<
+        [Awaited<ReturnType<typeof resolve>>, Awaited<ReturnType<typeof resolve>>]
+      >;
       await asUser(user.id, async (scopedDb) => {
         await sql`select pg_advisory_xact_lock(hashtext('quiet-hours:' || app.current_actor_user_id()))`.execute(
           scopedDb.db
