@@ -14,7 +14,8 @@
   font-size: var(--text-xs);
   color: var(--text-subtle);
 }
-.jds-hint--error {
+.jds-hint--error,
+.jds-hint.jds-hint--error {
   color: var(--danger-fg);
 }
 

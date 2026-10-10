@@ -61,6 +61,22 @@ const allowList = new Set([
   "--nav-brand"
 ]);
 
+// Cross-file CSS customization contracts are allowed only in their actual consuming sheet.
+// They are not promoted to global tokens merely because another surface declares them.
+const componentInputs: Readonly<Record<string, readonly string[]>> = {
+  "packages/ui/src/styles/components-core.css": [
+    "--btn-link-color", // Button link foreground set by reversed bands.
+    "--iconbtn-border-w",
+    "--iconbtn-radius",
+    "--iconbtn-color",
+    "--iconbtn-hover-bg",
+    "--iconbtn-hover-color" // IconButton's documented skin hooks.
+  ],
+  "packages/sports/src/web/styles/sports-1.css": [
+    "--sp-board-game-h" // Sports board row-height contract in sports-5-editorial.css.
+  ]
+};
+
 export interface TokenViolation {
   readonly path: string;
   readonly line: number;
@@ -149,7 +165,7 @@ export const MIGRATED_SECTION_CSS_FILES: readonly string[] = [
 async function loadValidTokens(root: string): Promise<Set<string>> {
   const tokensFile = await readFile(join(root, allowedColorLiteralFile), "utf8");
   const validTokens = new Set<string>();
-  const tokenDefPattern = /^\s*(--[a-zA-Z0-9-]+)\s*:/gm;
+  const tokenDefPattern = /(?:^|[;{])\s*(--[a-zA-Z0-9-]+)\s*:/gm;
   let match;
   while ((match = tokenDefPattern.exec(tokensFile)) !== null) {
     if (match[1]) validTokens.add(match[1]);
@@ -184,14 +200,6 @@ export async function checkTokens(root: string): Promise<TokenViolation[]> {
   for (const scanRoot of scanRoots) {
     for await (const filePath of walk(join(root, scanRoot))) files.push(filePath);
   }
-  // Component-local custom properties are contracts too. Read their declarations so only
-  // truly undefined references fail; runtime-only inputs remain explicitly enumerated.
-  for (const filePath of files.filter((path) => extname(path) === ".css")) {
-    const css = stripCssComments(await readFile(filePath, "utf8"));
-    for (const match of css.matchAll(/(?:^|[;{])\s*(--[a-zA-Z0-9-]+)\s*:/gm)) {
-      if (match[1]) validTokens.add(match[1]);
-    }
-  }
   for (const filePath of files) {
     const ext = extname(filePath);
     if (ext !== ".css" && ext !== ".ts" && ext !== ".tsx") continue;
@@ -199,6 +207,14 @@ export async function checkTokens(root: string): Promise<TokenViolation[]> {
     const relativePath = normalizePath(relative(root, filePath));
     const contents = await readFile(filePath, "utf8");
     const searchable = stripCssComments(contents);
+    // A declaration in another component/module is not a global token. Permit same-file
+    // contracts only; cross-file runtime inputs must be documented in the explicit allowlist.
+    const localTokens = new Set<string>();
+    if (ext === ".css") {
+      for (const match of searchable.matchAll(/(?:^|[;{])\s*(--[a-zA-Z0-9-]+)\s*:/gm)) {
+        if (match[1]) localTokens.add(match[1]);
+      }
+    }
     const lines = searchable.split(/\r\n|\r|\n/);
     const originalLines = contents.split(/\r\n|\r|\n/);
 
@@ -221,7 +237,13 @@ export async function checkTokens(root: string): Promise<TokenViolation[]> {
       let varMatch;
       while ((varMatch = varUsagePattern.exec(line)) !== null) {
         const tokenName = varMatch[1];
-        if (tokenName && !validTokens.has(tokenName) && !allowList.has(tokenName)) {
+        if (
+          tokenName &&
+          !validTokens.has(tokenName) &&
+          !localTokens.has(tokenName) &&
+          !allowList.has(tokenName) &&
+          !componentInputs[relativePath]?.includes(tokenName)
+        ) {
           violations.push({
             path: relativePath,
             line: index + 1,

@@ -101,4 +101,23 @@ describe("token scan includes shared primitives", () => {
       (await checkTokens(second)).some((item) => item.text.includes("Undefined token --first"))
     ).toBe(true);
   });
+  it("does not promote another module's scoped custom properties to global tokens", async () => {
+    const root = await buildFixture(".unrelated-page { color: var(--example-local-color); }");
+    await writeFile(
+      join(root, "apps/web/src/styles/tokens.css"),
+      ":root {\n --text: #282c25;\n}\n"
+    );
+    await mkdir(join(root, "packages/example/src"), { recursive: true });
+    await writeFile(
+      join(root, "packages/example/src/styles.css"),
+      ".example-local { --example-local-color: var(--text); color: var(--example-local-color); }\n"
+    );
+    const violations = await checkTokens(root);
+    expect(violations).toEqual([
+      expect.objectContaining({
+        path: "apps/web/src/styles/kit-example.css",
+        text: expect.stringContaining("Undefined token --example-local-color")
+      })
+    ]);
+  });
 });

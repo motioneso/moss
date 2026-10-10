@@ -371,4 +371,83 @@ describe("shared modal lifecycle", () => {
     expect(document.body.style.overflow).toBe("");
     expect(document.body.querySelector("[inert]")).toBeNull();
   });
+  it("refreshes the opener when a persistent nested surface is enabled repeatedly", async () => {
+    function Inner({ open, onClose }: { open: boolean; onClose: () => void }) {
+      const ref = useRef<HTMLDivElement>(null);
+      const onKeyDown = useDialogLifecycle({ ref, enabled: open, onClose });
+      return open ? (
+        <div
+          ref={ref}
+          role="dialog"
+          aria-label="Persistent inner"
+          tabIndex={-1}
+          onKeyDown={onKeyDown}
+        >
+          <button onClick={onClose}>Close inner</button>
+        </div>
+      ) : null;
+    }
+    function Example() {
+      const [open, setOpen] = useState(false);
+      return (
+        <Dialog title="Outer" onClose={vi.fn()}>
+          <button onClick={() => setOpen(true)}>Open persistent inner</button>
+          <Inner open={open} onClose={() => setOpen(false)} />
+        </Dialog>
+      );
+    }
+    mount(<Example />);
+    const opener = host!.querySelector<HTMLButtonElement>("button")!;
+    for (let i = 0; i < 3; i++) {
+      opener.focus();
+      click(opener);
+      const inner = host!.querySelector<HTMLElement>('[aria-label="Persistent inner"]')!;
+      expect(document.activeElement).toBe(inner);
+      await act(async () => click(inner.querySelector("button")!));
+      expect(document.activeElement).toBe(opener);
+    }
+  });
+
+  it("removes a previous modal's native-inert barrier before focusing a sibling surface", async () => {
+    const nativeFocus = HTMLElement.prototype.focus;
+    const focus = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (
+      this: HTMLElement
+    ) {
+      // jsdom does not implement inert. Model the browser's refusal to focus an inert subtree.
+      if (!this.closest("[inert]")) nativeFocus.call(this);
+    });
+    try {
+      function Example() {
+        const [open, setOpen] = useState(false);
+        return (
+          <>
+            <Dialog title="Sibling A" onClose={vi.fn()}>
+              <button onClick={() => setOpen(true)}>Open sibling B</button>
+            </Dialog>
+            <div data-sibling-host="true">
+              {open ? (
+                <Dialog title="Sibling B" onClose={() => setOpen(false)}>
+                  <button onClick={() => setOpen(false)}>Close sibling B</button>
+                </Dialog>
+              ) : null}
+            </div>
+          </>
+        );
+      }
+      mount(<Example />);
+      const opener = host!.querySelector<HTMLButtonElement>("button")!;
+      expect(host!.querySelector("[data-sibling-host]")?.hasAttribute("inert")).toBe(true);
+      for (let i = 0; i < 2; i++) {
+        opener.focus();
+        click(opener);
+        const sibling = host!.querySelectorAll<HTMLElement>('[role="dialog"]')[1]!;
+        expect(document.activeElement).toBe(sibling);
+        expect(sibling.closest("[inert]")).toBeNull();
+        await act(async () => click(sibling.querySelector("button")!));
+        expect(document.activeElement).toBe(opener);
+      }
+    } finally {
+      focus.mockRestore();
+    }
+  });
 });

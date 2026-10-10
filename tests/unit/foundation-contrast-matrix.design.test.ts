@@ -160,4 +160,14 @@ describe("shared selector and ground contracts", () => {
     expect(active).toContain("background: var(--accent-soft)");
     expect(active).toContain("color: var(--accent-soft-fg)");
   });
+  it("lets complex title slots fill the header and retains settings error emphasis", () => {
+    const title = read("packages/ui/src/styles/components-moss.css").match(
+      /\.jds-dialog__title\s*\{([^}]*)\}/
+    )?.[1];
+    expect(title).toContain("flex: 1");
+    expect(title).toContain("min-width: 0");
+    expect(read("packages/ui/src/styles/components-forms.css")).toMatch(
+      /\.jds-hint\.jds-hint--error\s*\{\s*color:\s*var\(--danger-fg\)/
+    );
+  });
 });

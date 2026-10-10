@@ -76,6 +76,7 @@
   gap: var(--space-3);
 }
 .jds-dialog__title {
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
   font-family: var(--font-display);

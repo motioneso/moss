@@ -22,8 +22,8 @@ export interface ColorPopoverProps {
 
 const EDGE_GAP = 8;
 
-/* The picker panel: pasted palette on top, any color below. Escape or an
-   outside press closes it. Callers position it. */
+/* The nonmodal picker: pasted palette on top, any color below. Escape while focus is
+   inside, or an outside pointer press, closes it. Callers position it. */
 export function ColorPopover(props: ColorPopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(props.onClose);

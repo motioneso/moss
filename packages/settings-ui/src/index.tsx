@@ -161,7 +161,7 @@ export function Field(props: {
         </div>
       ) : null}
       {props.error ? (
-        <div className="fld__hint jds-hint--error" id={props.errorId} role="alert">
+        <div className="fld__hint jds-hint jds-hint--error" id={props.errorId} role="alert">
           {props.error}
         </div>
       ) : null}

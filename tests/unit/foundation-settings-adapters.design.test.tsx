@@ -57,6 +57,7 @@ describe("settings canonical adapters", () => {
     expect(input.getAttribute("aria-describedby")).toBe("hint error");
     expect(host.querySelector("#hint")?.textContent).toBe("Use your display name");
     expect(host.querySelector("#error")?.getAttribute("role")).toBe("alert");
+    expect(host.querySelector("#error")?.classList.contains("jds-hint")).toBe(true);
     act(() => root.unmount());
     host.remove();
   });

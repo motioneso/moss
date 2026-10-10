@@ -139,12 +139,10 @@ export function useDialogLifecycle(options: DialogLifecycleOptions) {
     if (!enabled || !panel) return;
     const state = modalState();
     const { modals } = state;
-    // Capture again on a closed -> open transition, but never replace a surviving opener
-    // with a child dialog that mounted earlier in the same React commit.
-    if (
-      !panel.contains(document.activeElement) &&
-      !topModal()?.panel.contains(document.activeElement)
-    ) {
+    // Refresh on every closed -> open transition, including an opener in an outer modal.
+    // A child that mounted earlier in this commit is already inside this panel, so it must
+    // not replace the opener captured before that child took focus.
+    if (!panel.contains(document.activeElement)) {
       openerRef.current = document.activeElement as HTMLElement | null;
     }
     if (modal) {
@@ -155,6 +153,9 @@ export function useDialogLifecycle(options: DialogLifecycleOptions) {
         state.isolationObserver.observe(document.body, { childList: true, subtree: true });
       }
       modals.push({ panel, backdrop: backdropRef?.current });
+      // A previously open sibling may have isolated this surface. Remove the old isolation
+      // before focus(), because native inert prevents focusing even a registered top modal.
+      restoreIsolation();
     }
     const focusPanel = () => {
       const initial = initialFocusRef?.current;
