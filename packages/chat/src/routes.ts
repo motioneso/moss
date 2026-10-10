@@ -51,7 +51,7 @@ import { type MossModuleManifest, type RouteCatalogHolder } from "@moss/module-s
 import { type ChatGatewayNotifier, createChatGatewayNotifier } from "./gateway-notifier.js";
 import { ClassifierShadowRepository } from "./classifier-shadow-repository.js";
 import { readRouteSurface } from "./live/chat-surface.js";
-import { reconcileInterruptedTurns } from "./live-turns.js";
+import { CHAT_PROCESS_BOOT_ID } from "./live-turns.js";
 import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes.js";
 import { handleRouteError } from "./route-errors.js";
 import { createCurrentViewReadService, type CurrentViewReadService } from "./live/current-view.js";
@@ -694,7 +694,7 @@ export function registerChatRoutes(
             if (thread?.owner_user_id !== access.actorUserId) return null;
             if (!thread) return null;
             // #3128: reopening a chat stores any reply an earlier boot left unfinished.
-            await reconcileInterruptedTurns(scopedDb, thread.id);
+            await repository.reconcileInterruptedTurns(scopedDb, thread.id, CHAT_PROCESS_BOOT_ID);
             return repository.listMessages(scopedDb, thread.id);
           }
         );

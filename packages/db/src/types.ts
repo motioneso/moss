@@ -1043,13 +1043,25 @@ export interface ChatRemindersTable {
   created_at: TimestampColumn;
 }
 
+/** Attachment metadata kept on a live turn; mirrors the shared ChatAttachmentDto. */
+export interface ChatLiveTurnAttachment {
+  readonly id: string;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+}
+
 export interface ChatLiveTurnsTable {
   turn_id: string;
   owner_user_id: string;
   thread_id: string;
   boot_id: string;
   user_text: string;
-  attachments: ColumnType<unknown[], unknown[] | undefined, unknown[]>;
+  attachments: ColumnType<
+    ChatLiveTurnAttachment[],
+    ChatLiveTurnAttachment[] | undefined,
+    ChatLiveTurnAttachment[]
+  >;
   started_at: TimestampColumn;
 }
 

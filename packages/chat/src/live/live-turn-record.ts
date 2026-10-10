@@ -2,8 +2,21 @@ import type { StoredAttachmentMeta } from "../attachments-service.js";
 import type { ChatPersistencePort } from "./chat-session-ports.js";
 
 /**
- * #3128: records the reply in flight before the model receives it. A failed write leaves this
- * turn without restart recovery but never blocks it. Returns whether a record now exists.
+ * #3128: the in-flight record of one live reply. A turn that never saves is settled as
+ * interrupted (its question plus the note) or discarded (a stop or refusal).
+ */
+export interface LiveTurnRecord {
+  /** The completed turn landed; its save already removed the record. */
+  saved(): void;
+  /** The reply failed after the model received it. */
+  interrupted(): void;
+  /** Closes an unsaved record. Never throws. */
+  settle(): Promise<void>;
+}
+
+/**
+ * Records the reply in flight before the model receives it. A failed write leaves this turn
+ * without restart recovery but never blocks it, so the result is undefined then.
  */
 export async function openLiveTurnRecord(
   persistence: ChatPersistencePort,
@@ -14,12 +27,13 @@ export async function openLiveTurnRecord(
     readonly userText: string;
     readonly attachments: readonly StoredAttachmentMeta[];
   }
-): Promise<boolean> {
-  if (!persistence.beginLiveTurn || session.incognito || !session.threadId) return false;
+): Promise<LiveTurnRecord | undefined> {
+  const threadId = session.threadId;
+  if (!persistence.beginLiveTurn || session.incognito || !threadId) return undefined;
   try {
     await persistence.beginLiveTurn(actorUserId, {
       turnId: turn.turnId,
-      threadId: session.threadId,
+      threadId,
       userText: turn.userText,
       attachments: turn.attachments.map((meta) => ({
         id: meta.id,
@@ -28,25 +42,32 @@ export async function openLiveTurnRecord(
         sizeBytes: meta.sizeBytes
       }))
     });
-    return true;
   } catch (error) {
     logLiveTurnFailure("chat.live_turn.begin_failed", turn.turnId, error);
-    return false;
+    return undefined;
   }
-}
 
-/** Closes an unsaved live turn; `interrupted` stores its question and the interrupted note. */
-export async function settleLiveTurnRecord(
-  persistence: ChatPersistencePort,
-  actorUserId: string,
-  turnId: string,
-  interrupted: boolean
-): Promise<void> {
-  try {
-    await persistence.settleLiveTurn?.(actorUserId, turnId, interrupted);
-  } catch (error) {
-    logLiveTurnFailure("chat.live_turn.settle_failed", turnId, error);
-  }
+  let outcome: "open" | "saved" | "interrupted" = "open";
+  return {
+    saved: () => {
+      outcome = "saved";
+    },
+    interrupted: () => {
+      if (outcome === "open") outcome = "interrupted";
+    },
+    settle: async () => {
+      if (outcome === "saved") return;
+      try {
+        if (outcome === "interrupted") {
+          await persistence.storeInterruptedLiveTurn?.(actorUserId, threadId, turn.turnId);
+        } else {
+          await persistence.discardLiveTurn?.(actorUserId, turn.turnId);
+        }
+      } catch (error) {
+        logLiveTurnFailure("chat.live_turn.settle_failed", turn.turnId, error);
+      }
+    }
+  };
 }
 
 // Ids and error class only; the question text never reaches logs.

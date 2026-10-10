@@ -85,7 +85,8 @@ export const chatModuleManifest = {
       "app.chat_classifier_release_eligibility",
       "app.chat_classifier_shadow_reviews",
       "app.chat_conversation_provenance",
-      "app.chat_automatic_action_reservations"
+      "app.chat_automatic_action_reservations",
+      "app.chat_live_turns"
     ]
   },
   permissions: [

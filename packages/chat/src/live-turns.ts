@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { sql } from "kysely";
 
-import { assertDataContextDb, type ChatMessage, type DataContextDb } from "@moss/db";
+import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import type { ChatAttachmentDto } from "@moss/shared";
 
 /**
@@ -36,7 +36,7 @@ export async function insertLiveTurn(scopedDb: DataContextDb, turn: LiveTurnStar
       boot_id: turn.bootId,
       user_text: turn.userText,
       // pg sends a bare JS array as a Postgres array literal, so encode the list as JSON.
-      attachments: sql<unknown[]>`${JSON.stringify(turn.attachments ?? [])}::jsonb`
+      attachments: sql<ChatAttachmentDto[]>`${JSON.stringify(turn.attachments ?? [])}::jsonb`
     })
     .execute();
 }
@@ -47,108 +47,61 @@ export async function deleteLiveTurn(scopedDb: DataContextDb, turnId: string): P
   await scopedDb.db.deleteFrom("app.chat_live_turns").where("turn_id", "=", turnId).execute();
 }
 
-/** The stored user and assistant rows of a completed turn, when this turn id already landed. */
-export async function findStoredTurn(
-  scopedDb: DataContextDb,
-  threadId: string,
-  turnId: string
-): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
-  assertDataContextDb(scopedDb);
-  const rows = await scopedDb.db
-    .selectFrom("app.chat_messages")
-    .selectAll()
-    .where("thread_id", "=", threadId)
-    .where(sql<boolean>`tool_metadata @> ${JSON.stringify({ turnId })}::jsonb`)
-    .execute();
-  const userMessage = rows.find((row) => row.role === "user");
-  const assistantMessage = rows.find((row) => row.role === "assistant");
-  return userMessage && assistantMessage ? { userMessage, assistantMessage } : undefined;
-}
-
-/**
- * Turns each claimed live-turn row into its stored question plus an interrupted note. The
- * delete claims the rows, so concurrent readers convert each one at most once. Nothing is
- * resubmitted: a tool the interrupted reply started may or may not have run.
- */
-async function storeInterrupted(
-  scopedDb: DataContextDb,
-  claim: (scopedDb: DataContextDb) => Promise<readonly ClaimedLiveTurn[]>
-): Promise<number> {
-  const claimed = await claim(scopedDb);
-  for (const turn of claimed) {
-    const now = new Date();
-    const base = {
-      thread_id: turn.thread_id,
-      owner_user_id: sql<string>`app.current_actor_user_id()`,
-      model_metadata: {},
-      created_at: now,
-      updated_at: now
-    };
-    await scopedDb.db
-      .insertInto("app.chat_messages")
-      .values([
-        {
-          ...base,
-          id: randomUUID(),
-          role: "user",
-          status: "stored",
-          body: turn.user_text,
-          tool_metadata: {
-            selectedTools: [],
-            turnId: turn.turn_id,
-            ...(turn.attachments.length > 0 ? { attachments: turn.attachments } : {})
-          }
-        },
-        {
-          ...base,
-          id: randomUUID(),
-          role: "assistant",
-          status: "error",
-          body: INTERRUPTED_REPLY_TEXT,
-          tool_metadata: { selectedTools: [], turnId: turn.turn_id, interruptedTurn: true }
-        }
-      ])
-      .execute();
-  }
-  return claimed.length;
-}
-
-interface ClaimedLiveTurn {
+export interface ClaimedLiveTurn {
   readonly turn_id: string;
   readonly thread_id: string;
   readonly user_text: string;
-  readonly attachments: unknown[];
+  readonly attachments: ChatAttachmentDto[];
 }
 
-/** Stores every reply in this thread that an earlier API boot left unfinished. */
-export async function reconcileInterruptedTurns(
+const CLAIMED_COLUMNS = ["turn_id", "thread_id", "user_text", "attachments"] as const;
+
+/** Whether this thread holds a live-turn row from another boot. Lets readers skip the locks. */
+export async function hasStaleLiveTurns(
   scopedDb: DataContextDb,
   threadId: string,
-  bootId: string = CHAT_PROCESS_BOOT_ID
-): Promise<number> {
-  assertDataContextDb(scopedDb);
-  return storeInterrupted(scopedDb, (db) =>
-    db.db
-      .deleteFrom("app.chat_live_turns")
-      .where("thread_id", "=", threadId)
-      .where("boot_id", "<>", bootId)
-      .returning(["turn_id", "thread_id", "user_text", "attachments"])
-      .execute()
-  );
-}
-
-/** Stores one reply that failed in this process after the model received it. */
-export async function storeInterruptedTurn(
-  scopedDb: DataContextDb,
-  turnId: string
+  bootId: string
 ): Promise<boolean> {
   assertDataContextDb(scopedDb);
-  const stored = await storeInterrupted(scopedDb, (db) =>
-    db.db
-      .deleteFrom("app.chat_live_turns")
-      .where("turn_id", "=", turnId)
-      .returning(["turn_id", "thread_id", "user_text", "attachments"])
-      .execute()
-  );
-  return stored > 0;
+  const row = await scopedDb.db
+    .selectFrom("app.chat_live_turns")
+    .select("turn_id")
+    .where("thread_id", "=", threadId)
+    .where("boot_id", "<>", bootId)
+    .limit(1)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
+/**
+ * Claims every live-turn row in this thread that another boot left behind. The delete is the
+ * claim, so concurrent readers each convert a row at most once.
+ */
+export async function claimStaleLiveTurns(
+  scopedDb: DataContextDb,
+  threadId: string,
+  bootId: string
+): Promise<ClaimedLiveTurn[]> {
+  assertDataContextDb(scopedDb);
+  return scopedDb.db
+    .deleteFrom("app.chat_live_turns")
+    .where("thread_id", "=", threadId)
+    .where("boot_id", "<>", bootId)
+    .returning(CLAIMED_COLUMNS)
+    .execute();
+}
+
+/** Claims one live-turn row by id. */
+export async function claimLiveTurn(
+  scopedDb: DataContextDb,
+  threadId: string,
+  turnId: string
+): Promise<ClaimedLiveTurn[]> {
+  assertDataContextDb(scopedDb);
+  return scopedDb.db
+    .deleteFrom("app.chat_live_turns")
+    .where("thread_id", "=", threadId)
+    .where("turn_id", "=", turnId)
+    .returning(CLAIMED_COLUMNS)
+    .execute();
 }

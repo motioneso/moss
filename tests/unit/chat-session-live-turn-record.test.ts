@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ChatSessionManager } from "../../packages/chat/src/live/chat-session-manager.js";
 import type { TranscriptRecord } from "../../packages/chat/src/live/types.js";
+import { CliChatDeliveryUnknownError } from "../../packages/chat/src/live/errors.js";
 import { FakeEngine, makeMinimalDeps } from "./chat-session-manager.test.js";
 
 // #3128: the live turn writes its in-flight record before the model receives the question,
@@ -13,7 +14,8 @@ const replyScript = () => [
 
 function recordingDeps(
   engine: FakeEngine,
-  opts: { readonly incognito?: boolean; readonly beginFails?: boolean } = {}
+  opts: { readonly incognito?: boolean; readonly beginFails?: boolean } = {},
+  extraDeps: Partial<Parameters<typeof makeMinimalDeps>[0]> = {}
 ) {
   const events: string[] = [];
   const thread = { id: "thread-1", incognito: opts.incognito ?? false };
@@ -34,8 +36,11 @@ function recordingDeps(
       events.push(`begin:${turn.turnId}:${turn.userText}`);
       if (opts.beginFails) throw new Error("database down");
     }),
-    settleLiveTurn: vi.fn(async (_actor: string, turnId: string, interrupted: boolean) => {
-      events.push(`settle:${turnId}:${interrupted ? "interrupted" : "discard"}`);
+    storeInterruptedLiveTurn: vi.fn(async (_actor: string, _threadId: string, turnId: string) => {
+      events.push(`settle:${turnId}:interrupted`);
+    }),
+    discardLiveTurn: vi.fn(async (_actor: string, turnId: string) => {
+      events.push(`settle:${turnId}:discard`);
     })
   };
   const originalSubmit = engine.submit.bind(engine);
@@ -43,7 +48,12 @@ function recordingDeps(
     events.push("submit");
     await originalSubmit(text);
   };
-  const deps = makeMinimalDeps({ engineFactory: () => engine, pollMs: 0, persistence });
+  const deps = makeMinimalDeps({
+    engineFactory: () => engine,
+    pollMs: 0,
+    persistence,
+    ...extraDeps
+  });
   return { deps, events, persistence };
 }
 
@@ -63,7 +73,8 @@ describe("live turn in-flight record (#3128)", () => {
     const turnId = turnIdOf(events);
     expect(turnId).not.toBe("");
     expect(events).toEqual([`begin:${turnId}:what is due today?`, "submit", `record:${turnId}`]);
-    expect(persistence.settleLiveTurn).not.toHaveBeenCalled();
+    expect(persistence.storeInterruptedLiveTurn).not.toHaveBeenCalled();
+    expect(persistence.discardLiveTurn).not.toHaveBeenCalled();
   });
 
   it("stores the question as interrupted when the reply fails after the model received it", async () => {
@@ -84,6 +95,49 @@ describe("live turn in-flight record (#3128)", () => {
       `settle:${turnId}:interrupted`
     ]);
     expect(persistence.recordTurn).not.toHaveBeenCalled();
+  });
+
+  it("stores the question as interrupted when the model goes silent past the idle watchdog", async () => {
+    let now = 0;
+    const idleWatchdogMs = 500;
+    class SilentEngine extends FakeEngine {
+      override async readNew(afterOffset: number) {
+        now += idleWatchdogMs + 100;
+        return { records: [] as TranscriptRecord[], offset: afterOffset, complete: false };
+      }
+    }
+    const { deps, events, persistence } = recordingDeps(
+      new SilentEngine(),
+      {},
+      { idleWatchdogMs, clock: { now: () => now } }
+    );
+    const manager = new ChatSessionManager(deps);
+
+    await manager.submitTurn("u1", "Ben", "check the boiler");
+
+    expect(events.at(-1)).toBe(`settle:${turnIdOf(events)}:interrupted`);
+    expect(persistence.recordTurn).not.toHaveBeenCalled();
+  });
+
+  it("stores the question as interrupted, without resubmitting, when delivery is uncertain", async () => {
+    class UncertainSubmitEngine extends FakeEngine {
+      override async submit(): Promise<never> {
+        throw new CliChatDeliveryUnknownError("chat input delivery is unknown");
+      }
+    }
+    const { deps, events } = recordingDeps(new UncertainSubmitEngine());
+    const manager = new ChatSessionManager(deps);
+
+    await expect(manager.submitTurn("u1", "Ben", "pay the invoice")).rejects.toThrow(
+      CliChatDeliveryUnknownError
+    );
+
+    const turnId = turnIdOf(events);
+    expect(events).toEqual([
+      `begin:${turnId}:pay the invoice`,
+      "submit",
+      `settle:${turnId}:interrupted`
+    ]);
   });
 
   it("drops the record when the user stops the reply", async () => {
@@ -126,7 +180,8 @@ describe("live turn in-flight record (#3128)", () => {
     expect(reply).toBe("done");
 
     expect(persistence.beginLiveTurn).not.toHaveBeenCalled();
-    expect(persistence.settleLiveTurn).not.toHaveBeenCalled();
+    expect(persistence.storeInterruptedLiveTurn).not.toHaveBeenCalled();
+    expect(persistence.discardLiveTurn).not.toHaveBeenCalled();
   });
 
   it("still answers when the record cannot be written", async () => {
@@ -139,6 +194,7 @@ describe("live turn in-flight record (#3128)", () => {
 
     expect(reply).toBe("done");
     expect(persistence.recordTurn).toHaveBeenCalledTimes(1);
-    expect(persistence.settleLiveTurn).not.toHaveBeenCalled();
+    expect(persistence.storeInterruptedLiveTurn).not.toHaveBeenCalled();
+    expect(persistence.discardLiveTurn).not.toHaveBeenCalled();
   });
 });

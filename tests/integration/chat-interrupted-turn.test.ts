@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -165,13 +165,25 @@ describe("interrupted live replies (#3128)", () => {
     expect(await history(threadId)).toHaveLength(2);
   });
 
-  it("replays an uncertain outcome as answered by the note, so nothing asks the model to redo it", async () => {
-    const threadId = await newThread(ids.userA);
-    await begin(BOOT_A, threadId, "email the landlord");
+  it("titles a chat from its first answered question when the first reply was interrupted", async () => {
+    const threadId = await app.withDataContext({ actorUserId: ids.userA }, async (db) => {
+      const thread = await chat.openNewThread(db, { title: "Conversation" });
+      return thread.id;
+    });
+    await begin(BOOT_A, threadId, "first question");
+    await boot(BOOT_B).listPriorTurns(ids.userA, { threadId });
 
-    const replay = await boot(BOOT_B).listPriorTurns(ids.userA, { threadId });
+    const turnId = await begin(BOOT_B, threadId, "plan the garden");
+    await boot(BOOT_B).recordTurn(ids.userA, "plan the garden", "Here is a plan.", EXECUTED, {
+      threadId,
+      turnId
+    });
 
-    expect(replay.recent.at(-1)).toEqual({ role: "assistant", content: INTERRUPTED_REPLY_TEXT });
+    const title = await bootstrap.query<{ title: string }>(
+      "SELECT title FROM app.chat_threads WHERE id = $1",
+      [threadId]
+    );
+    expect(title.rows[0]!.title).toMatch(/garden/i);
   });
 
   it("lets the next real turn save and replay after the interrupted one", async () => {
@@ -199,8 +211,8 @@ describe("interrupted live replies (#3128)", () => {
     const failed = await begin(BOOT_A, threadId, "the engine died");
     const stopped = await begin(BOOT_A, threadId, "the user stopped");
 
-    await boot(BOOT_A).settleLiveTurn(ids.userA, failed, true);
-    await boot(BOOT_A).settleLiveTurn(ids.userA, stopped, false);
+    await boot(BOOT_A).storeInterruptedLiveTurn(ids.userA, threadId, failed);
+    await boot(BOOT_A).discardLiveTurn(ids.userA, stopped);
 
     expect((await history(threadId)).map((row) => row.body)).toEqual([
       "the engine died",
@@ -212,16 +224,23 @@ describe("interrupted live replies (#3128)", () => {
   it("never records a private chat's question", async () => {
     const threadId = await newThread(ids.userA, true);
 
-    await expect(begin(BOOT_A, threadId, "private question")).rejects.toThrow();
+    await expect(begin(BOOT_A, threadId, "private question")).rejects.toThrow(/row-level security/);
     expect(await liveTurnCount()).toBe(0);
   });
 
-  it("keeps one owner's in-flight question away from another user", async () => {
+  it("keeps one owner's in-flight question away from another user, even on a shared chat", async () => {
     const threadId = await newThread(ids.userA);
     const turnId = await begin(BOOT_A, threadId, "my private question");
+    await app.withDataContext({ actorUserId: ids.userA }, (db) =>
+      sql`INSERT INTO app.shares (resource_type, resource_id, owner_user_id, grantee_user_id, level)
+          VALUES ('chat_thread', ${threadId}::uuid, ${ids.userA}::uuid, ${ids.userB}::uuid, 'manage')`.execute(
+        db.db
+      )
+    );
     const intruder = boot(BOOT_B);
 
-    await intruder.settleLiveTurn(ids.userB, turnId, true);
+    await intruder.storeInterruptedLiveTurn(ids.userB, threadId, turnId);
+    await intruder.discardLiveTurn(ids.userB, turnId);
     await intruder.listPriorTurns(ids.userB, { threadId });
     const seen = await app.withDataContext({ actorUserId: ids.userB }, (db) =>
       db.db.selectFrom("app.chat_live_turns").selectAll().execute()
@@ -232,11 +251,26 @@ describe("interrupted live replies (#3128)", () => {
         threadId,
         userText: "planted question"
       })
-    ).rejects.toThrow();
+    ).rejects.toThrow(/row-level security/);
 
     expect(seen).toEqual([]);
     expect(await liveTurnCount()).toBe(1);
     expect(await history(threadId)).toEqual([]);
+  });
+
+  it("grants the app role no update and the worker role nothing", async () => {
+    const grants = await bootstrap.query<Record<string, boolean>>(`SELECT
+      has_table_privilege('jarvis_app_runtime', 'app.chat_live_turns', 'UPDATE') AS app_update,
+      has_table_privilege('jarvis_worker_runtime', 'app.chat_live_turns', 'SELECT') AS worker_select,
+      has_table_privilege('jarvis_worker_runtime', 'app.chat_live_turns', 'INSERT') AS worker_insert,
+      has_table_privilege('jarvis_worker_runtime', 'app.chat_live_turns', 'DELETE') AS worker_delete`);
+
+    expect(grants.rows[0]).toEqual({
+      app_update: false,
+      worker_select: false,
+      worker_insert: false,
+      worker_delete: false
+    });
   });
 });
 

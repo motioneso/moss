@@ -119,11 +119,10 @@ export interface ChatPersistencePort {
       readonly attachments?: readonly ChatAttachmentDto[];
     }
   ): Promise<void>;
-  /**
-   * #3128 — close an unsaved live turn. `interrupted` stores the question and the interrupted
-   * note; otherwise the record is dropped, as for a stopped turn.
-   */
-  settleLiveTurn?(actorUserId: string, turnId: string, interrupted: boolean): Promise<void>;
+  /** #3128 — store an unsaved live turn that failed as its question plus the interrupted note. */
+  storeInterruptedLiveTurn?(actorUserId: string, threadId: string, turnId: string): Promise<void>;
+  /** #3128 — drop an unsaved live turn's record, as for a stopped or refused turn. */
+  discardLiveTurn?(actorUserId: string, turnId: string): Promise<void>;
   /**
    * #3311 — delivered reminders whose context is still pending in this exact Main chat, oldest
    * first and bounded. Optional: embedders without reminders omit it.
