@@ -168,18 +168,24 @@ describe("ChatRepository.publishConversationSummary", () => {
 
   it("refuses a candidate prepared against an older revision", async () => {
     const { thread, messageIds } = await seededThread("stale revision");
-    const publish = (expectedRevision: number, through: string, summary: string) =>
+    const publish = (
+      expectedRevision: number,
+      expectedFrontier: string | null,
+      through: string,
+      summary: string
+    ) =>
       dataContext.withDataContext(userAContext(), (db) =>
         repository.publishConversationSummary(db, {
           threadId: thread.id,
           expectedRevision,
-          expectedCoveredThroughMessageId: null,
+          expectedCoveredThroughMessageId: expectedFrontier,
           throughMessageId: through,
           summary
         })
       );
-    expect(await publish(0, messageIds[1]!, "first")).toBe("published");
-    expect(await publish(0, messageIds[3]!, "late loser")).toBe("stale");
+    expect(await publish(0, null, messageIds[1]!, "first")).toBe("published");
+    // Frontier matches the live row; only the revision is behind.
+    expect(await publish(0, messageIds[1]!, messageIds[3]!, "late loser")).toBe("stale");
     const after = await readThread(thread.id);
     expect(after?.conversation_summary).toBe("first");
     expect(after?.summary_revision).toBe(1);
@@ -207,6 +213,36 @@ describe("ChatRepository.publishConversationSummary", () => {
     );
     expect(result).toBe("stale");
     expect((await readThread(thread.id))?.conversation_summary).toBe("first");
+  });
+
+  it("refuses a frontier that does not move past the current one", async () => {
+    const { thread, messageIds } = await seededThread("frontier regress");
+    const publish = (through: string, summary: string) =>
+      dataContext.withDataContext(userAContext(), (db) =>
+        repository.publishConversationSummary(db, {
+          threadId: thread.id,
+          expectedRevision: 1,
+          expectedCoveredThroughMessageId: messageIds[1]!,
+          throughMessageId: through,
+          summary
+        })
+      );
+    await dataContext.withDataContext(userAContext(), (db) =>
+      repository.publishConversationSummary(db, {
+        threadId: thread.id,
+        expectedRevision: 0,
+        expectedCoveredThroughMessageId: null,
+        throughMessageId: messageIds[1]!,
+        summary: "first"
+      })
+    );
+    expect(await publish(messageIds[0]!, "backwards")).toBe("stale");
+    expect(await publish(messageIds[1]!, "same frontier")).toBe("stale");
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBe("first");
+    expect(after?.summary_covered_through_message_id).toBe(messageIds[1]);
+    expect(after?.summary_revision).toBe(1);
+    expect(await publish(messageIds[3]!, "forward")).toBe("published");
   });
 
   it("refuses a frontier that belongs to another thread", async () => {

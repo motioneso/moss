@@ -587,8 +587,9 @@ export class ChatRepository {
    * Takes the actor/surface selection lock, then the thread row, matching every
    * other writer. The candidate lands only when the thread is still the owner's,
    * not private, at the expected revision and frontier, and the new frontier is a
-   * visible message of this thread. Activity time is never touched, so a publish
-   * cannot select the thread.
+   * visible message of this thread that sorts after the current frontier in
+   * replay order. Activity time is never touched, so a publish cannot select the
+   * thread.
    */
   async publishConversationSummary(
     scopedDb: DataContextDb,
@@ -625,6 +626,21 @@ export class ChatRepository {
       .where(visibleChatMessage())
       .where("id", "=", input.throughMessageId)
       .where("thread_id", "=", input.threadId)
+      .where(
+        sql<boolean>`(
+          not exists (
+            select 1 from app.chat_messages prior
+            where prior.id = ${input.expectedCoveredThroughMessageId}
+              and prior.thread_id = ${input.threadId}
+          )
+          or (created_at, case when role = 'user' then 0 else 1 end, id) > (
+            select prior.created_at, case when prior.role = 'user' then 0 else 1 end, prior.id
+            from app.chat_messages prior
+            where prior.id = ${input.expectedCoveredThroughMessageId}
+              and prior.thread_id = ${input.threadId}
+          )
+        )`
+      )
       .executeTakeFirst();
     if (!frontier) return "stale";
 
