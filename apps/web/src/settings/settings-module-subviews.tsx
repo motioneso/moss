@@ -541,8 +541,8 @@ export function NotificationSettings(props: {
       <Note icon={<MoonStar size={13} />}>
         Quiet hours always win — {assistantName} stays silent then unless something is urgent. Set
         them in{" "}
-        <button type="button" className="note__link" onClick={() => props.onCat?.("general")}>
-          General
+        <button type="button" className="note__link" onClick={() => props.onCat?.("alerts")}>
+          Alerts &amp; quiet hours
         </button>
         .
       </Note>

@@ -3,8 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { execUatSql } from "./job-search-board-sql.js";
 
-// Uses the actual Settings controls and installed scheduling worker. Its disposable third-party
-// briefing writer fixture is scripted, so this does not prove a real model reply or push device.
+// Uses the actual Settings controls (the Alerts & quiet hours editor) and installed scheduling
+// worker. Its disposable third-party briefing writer fixture is scripted, so this does not prove
+// a real model reply or push device.
 export const uatLevel = {
   level: "admin+data",
   without: [],
@@ -47,6 +48,11 @@ async function signIn(page: Page): Promise<void> {
     await page.getByRole("button", { name: "Skip anyway" }).click();
   }
   await expect(menu).toBeVisible({ timeout: 30_000 });
+}
+
+async function saveQuietHours(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Save quiet hours" }).click();
+  await expect(page.getByText("Quiet hours saved.")).toBeVisible();
 }
 
 async function quietHours(page: Page) {
@@ -93,7 +99,7 @@ function summaryJob(releaseAt: Date): { readonly state: string; readonly output:
   return { state, output: JSON.parse(output) };
 }
 
-test("Profile quiet hours defer a scheduled briefing notification until the saved local end (#3158)", async ({
+test("Saved quiet hours defer a scheduled briefing notification until the saved local end (#3158)", async ({
   page
 }) => {
   test.setTimeout(600_000);
@@ -109,16 +115,17 @@ test("Profile quiet hours defer a scheduled briefing notification until the save
       locale: { timezone: TIME_ZONE }
     });
 
+  await page.goto(`${baseUrl()}/settings?section=alerts`);
   const from = page.getByLabel("Quiet hours from");
-  const to = page.getByLabel("Quiet hours to");
+  const to = page.getByLabel("Quiet hours until");
+  await expect(from).toBeEnabled({ timeout: 30_000 });
   await from.fill("22:00");
-  await expect.poll(async () => (await quietHours(page)).quietHours.start).toBe("22:00");
   await to.fill("07:00");
-  await expect.poll(async () => (await quietHours(page)).quietHours.end).toBe("07:00");
   await page
     .locator("label.jds-switch")
     .filter({ has: page.locator('input[aria-label="Enable quiet hours"]') })
     .click();
+  await saveQuietHours(page);
   await expect
     .poll(async () => (await quietHours(page)).quietHours)
     .toMatchObject({
@@ -129,7 +136,7 @@ test("Profile quiet hours defer a scheduled briefing notification until the save
     });
   await page.reload();
   await expect(page.getByLabel("Quiet hours from")).toHaveValue("22:00");
-  await expect(page.getByLabel("Quiet hours to")).toHaveValue("07:00");
+  await expect(page.getByLabel("Quiet hours until")).toHaveValue("07:00");
   await expect
     .poll(async () => (await page.request.get("/api/me/locale")).json())
     .toMatchObject({ locale: { timezone: TIME_ZONE } });
@@ -143,9 +150,8 @@ test("Profile quiet hours defer a scheduled briefing notification until the save
   const end = hhmm(releaseAt);
 
   await from.fill(start);
-  await expect.poll(async () => (await quietHours(page)).quietHours.start).toBe(start);
   await to.fill(end);
-  await expect.poll(async () => (await quietHours(page)).quietHours.end).toBe(end);
+  await saveQuietHours(page);
   await expect
     .poll(async () => (await quietHours(page)).quietHours)
     .toMatchObject({
@@ -207,7 +213,7 @@ test("Profile quiet hours defer a scheduled briefing notification until the save
       output: { delivered: 0, alreadyDelivered: 0, temporaryFailures: 0, reasons: [] }
     });
   console.log(
-    `[3158 live proof] Profile saved and reloaded overnight ${TIME_ZONE} 22:00-07:00, then saved ` +
+    `[3158 live proof] Alerts & quiet hours saved and reloaded overnight ${TIME_ZONE} 22:00-07:00, then saved ` +
       `${start}-${end}; scheduled fixture briefing completed before its notification released once at ` +
       `${releaseAt.toISOString()}`
   );

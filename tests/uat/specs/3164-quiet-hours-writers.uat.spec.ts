@@ -250,24 +250,26 @@ test("Profile, alert settings and the briefing worker keep quiet hours safe (#31
     .poll(async () => (await page.request.get("/api/me/locale")).json())
     .toMatchObject({ locale: { timezone: TIME_ZONE } });
 
+  await page.goto(`${baseUrl()}/settings?section=alerts`);
   const from = page.getByLabel("Quiet hours from");
-  const to = page.getByLabel("Quiet hours to");
+  const to = page.getByLabel("Quiet hours until");
+  await expect(from).toBeEnabled({ timeout: 30_000 });
   await from.fill("22:00");
-  await expect.poll(async () => (await quietHours(page)).quietHours.start).toBe("22:00");
   await to.fill("07:00");
-  await expect.poll(async () => (await quietHours(page)).quietHours.end).toBe("07:00");
   const enable = page
     .locator("label.jds-switch")
     .filter({ has: page.locator('input[aria-label="Enable quiet hours"]') });
   if (!(await page.locator('input[aria-label="Enable quiet hours"]').isChecked())) {
     await enable.click();
   }
+  await page.getByRole("button", { name: "Save quiet hours" }).click();
+  await expect(page.getByText("Quiet hours saved.")).toBeVisible();
   await expect
     .poll(async () => (await quietHours(page)).quietHours)
     .toMatchObject({ enabled: true, start: "22:00", end: "07:00" });
   await page.reload();
   await expect(page.getByLabel("Quiet hours from")).toHaveValue("22:00");
-  await expect(page.getByLabel("Quiet hours to")).toHaveValue("07:00");
+  await expect(page.getByLabel("Quiet hours until")).toHaveValue("07:00");
 
   // A save from the screen over a newer competing save is refused and shows the newer schedule.
   const loaded = await quietHours(page);
@@ -275,9 +277,10 @@ test("Profile, alert settings and the briefing worker keep quiet hours safe (#31
   const competingSave = await putQuietHours(page, competing, loaded.version);
   expect(competingSave.status).toBe(200);
   await page.getByLabel("Quiet hours from").fill("19:00");
+  await page.getByRole("button", { name: "Save quiet hours" }).click();
   await expect(page.getByText(STALE_SAVE_MESSAGE)).toBeVisible();
   await expect(page.getByLabel("Quiet hours from")).toHaveValue("20:00");
-  await expect(page.getByLabel("Quiet hours to")).toHaveValue("08:00");
+  await expect(page.getByLabel("Quiet hours until")).toHaveValue("08:00");
   expect((await quietHours(page)).quietHours).toEqual(competing);
   console.log(
     `[3164 screen stale save] competing save 20:00-08:00 kept; screen edit to 19:00 refused with message`
