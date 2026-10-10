@@ -313,23 +313,61 @@ function nearestScope(node: ts.Node): ts.Block | ts.SourceFile {
   while (!ts.isBlock(current) && !ts.isSourceFile(current)) current = current.parent;
   return current;
 }
+function bindingContains(name: ts.BindingName, text: string): boolean {
+  return ts.isIdentifier(name)
+    ? name.text === text
+    : name.elements.some(
+        (element) => ts.isBindingElement(element) && bindingContains(element.name, text)
+      );
+}
 function findLocalBinding(node: ts.Identifier): ts.VariableDeclaration | undefined {
   let scope: ts.Node | undefined = nearestScope(node);
   while (scope) {
     if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
       for (const statement of scope.statements) {
+        if (
+          (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+          statement.name?.text === node.text
+        ) {
+          return undefined;
+        }
         if (!ts.isVariableStatement(statement)) continue;
         for (const declaration of statement.declarationList.declarations) {
-          if (ts.isIdentifier(declaration.name) && declaration.name.text === node.text) {
-            return declaration;
+          if (bindingContains(declaration.name, node.text)) {
+            return ts.isIdentifier(declaration.name) ? declaration : undefined;
           }
         }
       }
+    }
+    if (
+      ts.isFunctionLike(scope) &&
+      scope.parameters.some((parameter) => bindingContains(parameter.name, node.text))
+    ) {
+      return undefined; // A parameter shadows outer constants, including destructured props.
+    }
+    if (
+      ts.isCatchClause(scope) &&
+      scope.variableDeclaration &&
+      bindingContains(scope.variableDeclaration.name, node.text)
+    ) {
+      return undefined;
+    }
+    if (
+      (ts.isForOfStatement(scope) || ts.isForInStatement(scope) || ts.isForStatement(scope)) &&
+      scope.initializer &&
+      ts.isVariableDeclarationList(scope.initializer) &&
+      scope.initializer.declarations.some((declaration) =>
+        bindingContains(declaration.name, node.text)
+      )
+    ) {
+      return undefined;
     }
     scope = scope.parent;
   }
   return undefined;
 }
+
+type ClassValueContext = "jsx" | "string" | "array" | "filtered-array";
 
 /** Static finite class values only; unknown expressions fail rather than silently disappear. */
 function moduleClassValues(
@@ -338,14 +376,15 @@ function moduleClassValues(
   path: string,
   contracts: readonly DynamicClassValues[],
   unknown: Set<ts.Node>,
-  visiting = new Set<ts.Node>()
+  visiting = new Set<ts.Node>(),
+  context: ClassValueContext = "jsx"
 ): string[] {
   const contract = contracts.find(
     (entry) => entry.path === path && entry.expression === expression.getText(source)
   );
   if (contract?.reason.trim() && contract.values.length) return [...contract.values];
-  const values = (node: ts.Expression) =>
-    moduleClassValues(node, source, path, contracts, unknown, visiting);
+  const values = (node: ts.Expression, mode = context) =>
+    moduleClassValues(node, source, path, contracts, unknown, visiting, mode);
   const product = (left: string[], right: string[], separator = "") => {
     if (left.length * right.length > 256) {
       unknown.add(expression);
@@ -364,8 +403,11 @@ function moduleClassValues(
     expression.kind === ts.SyntaxKind.NullKeyword ||
     expression.kind === ts.SyntaxKind.FalseKeyword ||
     (ts.isIdentifier(expression) && expression.text === "undefined")
-  )
-    return [""];
+  ) {
+    if (context === "jsx" || context === "filtered-array") return [""];
+    unknown.add(expression);
+    return []; // Falsy template/concatenation values stringify; do not invent an empty string.
+  }
   if (
     ts.isParenthesizedExpression(expression) ||
     ts.isAsExpression(expression) ||
@@ -378,10 +420,12 @@ function moduleClassValues(
   }
   if (ts.isBinaryExpression(expression)) {
     if (expression.operatorToken.kind === ts.SyntaxKind.PlusToken) {
-      return product(values(expression.left), values(expression.right));
+      return product(values(expression.left, "string"), values(expression.right, "string"));
     }
     if (expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
-      return ["", ...values(expression.right)];
+      if (context === "filtered-array") return ["", ...values(expression.right)];
+      unknown.add(expression);
+      return [];
     }
     if (
       [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(
@@ -394,11 +438,17 @@ function moduleClassValues(
   if (ts.isTemplateExpression(expression)) {
     let result = [expression.head.text];
     for (const span of expression.templateSpans) {
-      result = product(result, values(span.expression)).map((value) => value + span.literal.text);
+      result = product(result, values(span.expression, "string")).map(
+        (value) => value + span.literal.text
+      );
     }
     return result;
   }
   if (ts.isArrayLiteralExpression(expression)) {
+    if (context !== "array" && context !== "filtered-array") {
+      unknown.add(expression); // JSX arrays stringify with commas; only explicit joins are modeled.
+      return [];
+    }
     let result = [""];
     for (const element of expression.elements) {
       if (ts.isSpreadElement(element)) {
@@ -417,10 +467,46 @@ function moduleClassValues(
       // Only immutable values and explicit array pushes are supported. Do not silently
       // trust a valid initializer when later assignment or a mutating method changes it.
       const scope = nearestScope(declaration);
-      const referencesBinding = (node: ts.Node): boolean =>
-        ts.isIdentifier(node) && findLocalBinding(node) === declaration;
+      const referencesBinding = (node: ts.Node): boolean => {
+        if (!ts.isIdentifier(node)) return false;
+        const parent = node.parent;
+        if (
+          (ts.isJsxAttribute(parent) && parent.name === node) ||
+          (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+          (ts.isPropertyAssignment(parent) && parent.name === node) ||
+          ((ts.isVariableDeclaration(parent) ||
+            ts.isParameter(parent) ||
+            ts.isBindingElement(parent)) &&
+            parent.name === node) ||
+          ((ts.isFunctionDeclaration(parent) || ts.isClassDeclaration(parent)) &&
+            parent.name === node)
+        )
+          return false;
+        return findLocalBinding(node) === declaration;
+      };
+      const arrayBinding = ts.isArrayLiteralExpression(declaration.initializer);
+      const mutableBinding = arrayBinding || !(declaration.parent.flags & ts.NodeFlags.Const);
       const visit = (node: ts.Node) => {
-        if (node !== scope && ts.isFunctionLike(node)) return;
+        if (node !== scope && ts.isFunctionLike(node)) {
+          if (mutableBinding) {
+            const capture = (child: ts.Node) => {
+              if (referencesBinding(child)) unknown.add(node);
+              ts.forEachChild(child, capture);
+            };
+            capture(node);
+          }
+          return;
+        }
+        if (arrayBinding && referencesBinding(node)) {
+          const parent = node.parent;
+          const knownMethod =
+            ts.isPropertyAccessExpression(parent) &&
+            parent.expression === node &&
+            ts.isCallExpression(parent.parent) &&
+            parent.parent.expression === parent &&
+            ["push", "filter", "join"].includes(parent.name.text);
+          if (!knownMethod) unknown.add(node); // Any alias/escape can mutate outside supported pushes.
+        }
         if (
           ts.isBinaryExpression(node) &&
           node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
@@ -458,7 +544,11 @@ function moduleClassValues(
       expression.arguments.length === 1 &&
       expression.arguments[0]!.getText(source) === "Boolean"
     ) {
-      return values(expression.expression.expression);
+      if (context === "array" || context === "filtered-array") {
+        return values(expression.expression.expression, "filtered-array");
+      }
+      unknown.add(expression);
+      return [];
     }
     if (
       method === "join" &&
@@ -466,7 +556,7 @@ function moduleClassValues(
       ts.isStringLiteral(expression.arguments[0]!) &&
       expression.arguments[0]!.text === " "
     ) {
-      return values(expression.expression.expression);
+      return values(expression.expression.expression, "array");
     }
   }
   unknown.add(expression);

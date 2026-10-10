@@ -205,6 +205,13 @@ describe("bounded module-local class guard", () => {
       "nw-card--typo"
     ]);
   });
+  it("does not mistake JSX attribute names for references to a className array", async () => {
+    const root = await localFixture(
+      'function Example() { const className = ["nw-card"]; return <div className={className.join(" ")}><span className="nw-card" /></div>; }',
+      ".nw-card {}"
+    );
+    expect(await checkModuleLocalClasses(root)).toEqual([]);
+  });
   it("reports unsupported reassignment instead of trusting an earlier valid initializer", async () => {
     const root = await localFixture(
       'function Example() { let names = "nw-card"; names = "nw-missing"; return <div className={names} />; }',
@@ -246,6 +253,23 @@ describe("bounded module-local class guard", () => {
       ]
     });
     expect(result.map((item) => item.className)).toEqual(["nw-other"]);
+  });
+  it.each([
+    'const names = "nw-card"; function Example({ names }) { return <div className={names} />; }',
+    'function Example() { const names = ["nw-card"]; function alter() { names.push("nw-missing"); } alter(); return <div className={names.join(" ")} />; }',
+    'function Example() { const names = ["nw-card"]; const alias = names; alias.push("nw-missing"); return <div className={names.join(" ")} />; }',
+    'function Example({on}) { return <div className={`nw-card${on && " "}`} />; }',
+    "<div className={`nw-card${null}`} />",
+    '<div className={"nw-card" + false} />',
+    '<div className={["nw-card", "nw-second"]} />',
+    'const names = "nw-card"; try {} catch (names) { const element = <div className={names} />; }',
+    'function Example() { const names = ["nw-card"]; mutate({names}); return <div className={names.join(" ")} />; }',
+    'function Example({count}) { return <div className={count && "nw-card"} />; }'
+  ])("fails closed for unsupported binding, mutation or string coercion: %s", async (source) => {
+    const root = await localFixture(source, ".nw-card {} .nw-second {}");
+    expect(
+      (await checkModuleLocalClasses(root)).some((item) => item.kind === "unresolved-expression")
+    ).toBe(true);
   });
   it("preserves the exact Meetings provisional-contrast test hook without excusing siblings", async () => {
     const root = await buildFixture();
