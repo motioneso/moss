@@ -695,10 +695,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       herdrInstall,
       hostRestart,
       externalModules: {
-        // #996/#860: always-on since the JARVIS_ENABLE_EXTERNAL_MODULES flag removal —
-        // packages/settings routes-module-registry.ts / routes-modules.ts gate on this
-        // field with `if (!ext?.enabled) throw 409`; hardcoding true here means those
-        // guards simply never fire, which is correct (verified — no change needed there).
+        // #996/#860: always-on since the JARVIS_ENABLE_EXTERNAL_MODULES flag removal. The
+        // `if (!ext?.enabled) throw 409` guards in packages/settings routes-module-registry.ts
+        // and routes-modules.ts therefore never fire, which is correct.
         // #1319 D6: options.__testExternalModulesEnabled is TEST-ONLY (undefined in
         // production, so `?? true` keeps the always-on default).
         enabled: options.__testExternalModulesEnabled ?? true,
