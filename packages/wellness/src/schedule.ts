@@ -67,7 +67,7 @@ export function computeSchedule(
         medicationId: med.id,
         name: med.name,
         scheduledFor: occurrence.at.toISOString(),
-        localTime: occurrence.time,
+        localTime: occurrence.time.slice(0, 5),
         asNeeded: false,
         status: slotStatusFromLogs(med.id, occurrence.at, logs)
       });

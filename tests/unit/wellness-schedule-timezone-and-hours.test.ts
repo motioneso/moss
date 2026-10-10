@@ -70,6 +70,19 @@ describe("schedule time zone and every-N-hours", () => {
     expect(slot).toMatchObject({ scheduledFor: "2026-10-09T15:00:00.000Z", localTime: "08:00" });
   });
 
+  it("WEB-30: a stored time with seconds still shows as hours and minutes", () => {
+    const m = med({
+      frequency_type: "monthly",
+      month_kind: "date",
+      month_day: 9,
+      schedule_times: ["21:00:00"],
+      schedule_start_date: "2026-01-01" as unknown as Medication["schedule_start_date"],
+      time_zone: "America/Los_Angeles"
+    });
+    const [slot] = computeSchedule([m], [], new Date("2026-10-09T00:00:00.000Z"));
+    expect(slot?.localTime).toBe("21:00");
+  });
+
   it("DOM-015: every 8 hours anchored at 20:00 gives 04:00, 12:00 and 20:00", () => {
     const m = med({
       frequency_type: "every_n_hours",
