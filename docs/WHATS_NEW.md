@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-10
+
+#### Fixed
+
+- **Chat no longer flashes a connect prompt.** The chat drawer no longer briefly shows the connect-a-provider message when you open it after a model has been added. [PR #3329](https://github.com/motioneso/moss/pull/3329)
+
 ### 2026-10-09
 
 #### Fixed
