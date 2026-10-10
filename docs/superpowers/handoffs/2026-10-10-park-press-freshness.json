@@ -425,5 +425,35 @@
         ".github/workflows/release-notes.yml"
       ]
     }
+  ],
+  "rechecks": [
+    {
+      "checked_at": "2026-10-10T13:22:00Z",
+      "main": "bc9e76df2caa0f8a2351674786fef2da81db129a",
+      "new_open_pr": {
+        "number": 3341,
+        "title": "fix(chat): a launch replay never runs a tool or raises a card (#3335)",
+        "url": "https://github.com/motioneso/moss/pull/3341",
+        "head": "eb970896b88c17325c78d5e62cb786c8f4fe379f",
+        "base": "integration/scheduled-proactive",
+        "files": [
+          "docs/evidence/3335-launch-replay-never-acts/live-proof.md",
+          "packages/ai/src/gateway/acp-permission.ts",
+          "packages/ai/src/gateway/gateway.ts",
+          "packages/ai/src/gateway/native-permission-handler.ts",
+          "packages/ai/src/gateway/session-tokens.ts",
+          "packages/chat/src/live/chat-session-launch.ts",
+          "packages/chat/src/live/chat-session-ports.ts",
+          "packages/chat/src/live/runtime.ts",
+          "packages/chat/src/routes.ts",
+          "tests/unit/chat-launch-replay-never-acts.test.ts",
+          "tests/unit/chat-routes-launch-replay-wiring.test.ts",
+          "tests/unit/chat-runtime-launch-replay-wiring.test.ts",
+          "tests/unit/gateway-launch-replay-refusal.test.ts",
+          "tests/unit/gateway-tool-progress.test.ts"
+        ]
+      },
+      "previous_heads": "Unchanged from the initial snapshot; new PR has no migration-owned frontend or metadata overlap."
+    }
   ]
 }

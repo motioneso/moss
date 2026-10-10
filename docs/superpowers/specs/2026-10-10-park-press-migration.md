@@ -8,7 +8,7 @@ review and tests. Merging, deployment and release acceptance remain separate gat
 ## Source and intent
 
 Implement the actionable findings in the delivered **Moss design audit and migration
-plan** dated 2026-10-10. The user approved implementation after reviewing that report.
+plan** dated 2026-10-10. The user approved implementation of the delivered plan.
 This is a repair and alignment of retained screens, not a new module or feature flow.
 The original audit baseline is `815fd0342b3489c7a4ed4f17dba49910a5de282b`;
 the implementation base is `bc9e76df2caa0f8a2351674786fef2da81db129a`.
@@ -79,8 +79,10 @@ changes receive truthful declarations in the same eventual PR as their implement
 ## Existing work and safety
 
 Active-PR overlaps are held, even when a previous audit considered them available.
-No worker replaces a current owner's change or cherry-picks an external branch
-without coordinated approval. Finance #3312 is merged in the implementation base.
+Narrow demonstrably disjoint edits explicitly approved during coordination are
+marked `active-disjoint-only` in the ownership manifest and must preserve the active
+patch's applicability. No worker replaces a current owner's change or cherry-picks
+an external branch without coordinated approval. Finance #3312 is merged in the implementation base.
 Scheduled work #3154, Memory #3084 and Today clock #3337 remain active at the initial
 freshness check. Exact heads and touched paths are recorded in the adjacent handoff.
 
