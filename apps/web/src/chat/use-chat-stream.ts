@@ -28,11 +28,8 @@ import {
   applyStreamRecord,
   isBackgroundRecord,
   mergeBackgroundRecords,
-  mergeHydratedRecords,
-  upsertTranscriptRecord
+  mergeHydratedRecords
 } from "./stream-record-identity.js";
-
-export { upsertTranscriptRecord };
 
 function parsePreview(value: unknown): ActionRequestPreview | undefined {
   if (!value || typeof value !== "object") return undefined;

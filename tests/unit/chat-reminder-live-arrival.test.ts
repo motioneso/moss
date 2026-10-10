@@ -24,10 +24,14 @@ const ids: ReminderArrival = {
 class FakeClient extends EventEmitter {
   readonly queries: string[] = [];
   ended = false;
+  connecting = false;
+  hold: Promise<void> = Promise.resolve();
   constructor(private readonly failConnect = false) {
     super();
   }
   async connect() {
+    this.connecting = true;
+    await this.hold;
     if (this.failConnect) throw new Error("refused");
     return this;
   }
@@ -49,14 +53,13 @@ function message(arrival: ReminderArrival): MainBackgroundMessage {
   return {
     actorUserId: arrival.actorUserId,
     mainThreadId: arrival.threadId,
-    drawerThreadId: arrival.threadId,
     record: { kind: "reply", text: "Reminder", messageId: arrival.messageId, background: true }
   };
 }
 
 function start(clients: FakeClient[]) {
   const read = vi.fn(async (arrival: ReminderArrival) => message(arrival));
-  const deliver = vi.fn(() => true);
+  const deliver = vi.fn(async () => undefined);
   const warn = vi.fn();
   let next = 0;
   const listener = startReminderArrivalListener({
@@ -117,8 +120,12 @@ describe("startReminderArrivalListener", () => {
     read.mockResolvedValueOnce(undefined as never);
     await listener.ready;
     client.notify(JSON.stringify(ids));
-    await listener.stop();
+    await vi.waitFor(() => expect(read).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Checked before stop, so the stopped flag cannot be what skips delivery.
     expect(deliver).not.toHaveBeenCalled();
+    await listener.stop();
   });
 
   it("reconnects after a refused connection and after a dropped one", async () => {
@@ -131,10 +138,34 @@ describe("startReminderArrivalListener", () => {
     await vi.waitFor(() => expect(first.queries).toHaveLength(1));
 
     await first.end();
+    expect(warn).toHaveBeenCalledWith(undefined, expect.stringContaining("lost its connection"));
     await vi.waitFor(() => expect(second.queries).toHaveLength(1));
     second.notify(JSON.stringify(ids));
     await vi.waitFor(() => expect(deliver).toHaveBeenCalledTimes(1));
     await listener.stop();
+  });
+
+  it("waits for a reconnect already under way, then closes it", async () => {
+    const first = new FakeClient();
+    const slow = new FakeClient();
+    let open!: () => void;
+    slow.hold = new Promise((resolve) => {
+      open = resolve;
+    });
+    const { listener } = start([first, slow]);
+    await listener.ready;
+    await first.end();
+    await vi.waitFor(() => expect(slow.connecting).toBe(true));
+
+    let done = false;
+    const stopped = listener.stop().then(() => {
+      done = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(done).toBe(false);
+    open();
+    await stopped;
+    expect(slow.ended).toBe(true);
   });
 
   it("stays stopped after stop, even when the connection then drops", async () => {

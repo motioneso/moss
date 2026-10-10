@@ -9,6 +9,7 @@ import { sql } from "kysely";
 
 import {
   getOwnedPgClientConstructor,
+  isUuid,
   type DataContextDb,
   type DataContextRunner,
   type OwnedPgClient
@@ -16,7 +17,6 @@ import {
 
 import type { MainBackgroundMessage } from "../live/background-message-routing.js";
 import type { ChatSessionManager } from "../live/chat-session-manager.js";
-import { DEFAULT_CHAT_SURFACE } from "../live/chat-surface.js";
 import { ChatRepository } from "../repository.js";
 import { asRecord, readOrigin } from "../route-serializers.js";
 
@@ -29,11 +29,11 @@ export interface ReminderArrival {
   readonly messageId: string;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RETRY_MS = 5_000;
+const CONNECT_TIMEOUT_MS = 10_000;
 
-function isUuid(value: unknown): value is string {
-  return typeof value === "string" && UUID.test(value);
+function isId(value: unknown): value is string {
+  return typeof value === "string" && isUuid(value);
 }
 
 export async function notifyReminderArrival(
@@ -56,14 +56,15 @@ export function parseReminderArrival(payload: string | undefined): ReminderArriv
     return undefined;
   }
   const { actorUserId, threadId, messageId } = asRecord(value);
-  if (!isUuid(actorUserId) || !isUuid(threadId) || !isUuid(messageId)) return undefined;
+  if (!isId(actorUserId) || !isId(threadId) || !isId(messageId)) return undefined;
   return { actorUserId, threadId, messageId };
 }
 
 /**
- * Re-reads a notified reminder as its owner. Row access rules hide another owner's message, so
- * a forged payload finds nothing; the checks below also refuse anything but a stored delivered
- * reminder in the owner's Main thread.
+ * Re-reads a notified reminder as the named owner. Any role can notify, so the checks below
+ * accept only a stored delivered reminder that the owner wrote into the owner's own Main thread.
+ * A forged payload can at most re-send that owner's own reminder to that owner, which the
+ * browser drops as a duplicate.
  */
 export async function readReminderArrival(
   dataContext: DataContextRunner,
@@ -85,11 +86,9 @@ export async function readReminderArrival(
       return undefined;
     const origin = readOrigin(asRecord(message.model_metadata).origin);
     if (origin?.kind !== "reminder" || origin.event !== "delivered") return undefined;
-    const drawer = await chat.getCurrentThread(scopedDb, actorUserId, DEFAULT_CHAT_SURFACE);
     return {
       actorUserId,
       mainThreadId: main.id,
-      drawerThreadId: drawer?.id ?? null,
       record: { kind: "reply", text: message.body, messageId: message.id, background: true }
     };
   });
@@ -108,17 +107,23 @@ export interface ReminderArrivalListener {
 export function startReminderArrivalListener(deps: {
   readonly connectionString: string;
   readonly read: (arrival: ReminderArrival) => Promise<MainBackgroundMessage | undefined>;
-  readonly deliver: (message: MainBackgroundMessage) => boolean;
+  readonly deliver: (message: MainBackgroundMessage) => Promise<void>;
   readonly warn: (error: unknown, message: string) => void;
   readonly retryMs?: number;
   readonly createClient?: (connectionString: string) => OwnedPgClient;
 }): ReminderArrivalListener {
   const createClient =
     deps.createClient ??
-    ((connectionString: string) => new (getOwnedPgClientConstructor())({ connectionString }));
+    ((connectionString: string) =>
+      new (getOwnedPgClientConstructor())({
+        connectionString,
+        connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+        keepAlive: true
+      }));
   let stopped = false;
   let client: OwnedPgClient | undefined;
   let retry: NodeJS.Timeout | undefined;
+  let connecting: Promise<void> = Promise.resolve();
   let queue = Promise.resolve();
 
   const handle = (payload: string | undefined) => {
@@ -127,7 +132,7 @@ export function startReminderArrivalListener(deps: {
     queue = queue
       .then(async () => {
         const message = await deps.read(arrival);
-        if (message && !stopped) deps.deliver(message);
+        if (message && !stopped) await deps.deliver(message);
       })
       .catch((error: unknown) => deps.warn(error, "reminder arrival read failed"));
   };
@@ -136,7 +141,7 @@ export function startReminderArrivalListener(deps: {
     if (stopped || retry) return;
     retry = setTimeout(() => {
       retry = undefined;
-      void connect();
+      connecting = connect();
     }, deps.retryMs ?? RETRY_MS);
     retry.unref?.();
   };
@@ -148,7 +153,10 @@ export function startReminderArrivalListener(deps: {
       if (notification.channel === REMINDER_ARRIVAL_CHANNEL) handle(notification.payload);
     });
     next.once("end", () => {
-      if (client === next) client = undefined;
+      if (client === next) {
+        client = undefined;
+        if (!stopped) deps.warn(undefined, "reminder arrival listener lost its connection");
+      }
       scheduleRetry();
     });
     try {
@@ -164,13 +172,14 @@ export function startReminderArrivalListener(deps: {
   };
 
   const ready = connect();
+  connecting = ready;
   return {
     ready,
     async stop() {
       stopped = true;
       clearTimeout(retry);
       retry = undefined;
-      await ready;
+      await connecting;
       await client?.end().catch(() => undefined);
       client = undefined;
       await queue;

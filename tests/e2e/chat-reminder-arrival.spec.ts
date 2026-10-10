@@ -7,7 +7,8 @@ import { createMockConnectorProviders } from "./mock-api.js";
 import { mockApi } from "./mock-chat-model.js";
 
 // #3195: a delivered reminder appears at once in the open Main chat beside a streaming reply,
-// each keeps its own identity through reconnect and reload, and a side chat never shows it.
+// each keeps its own identity through reconnect and reload, a side chat never shows it, and Main
+// shows it again once a private chat ends.
 
 const reminderRecord = {
   kind: "reply",
@@ -40,10 +41,12 @@ function gate(): { promise: Promise<void>; release: () => void } {
 async function mockChat(
   page: Page,
   threads: ReturnType<typeof createMockChatThread>[],
-  chatMessages: Record<string, ChatMessageDto[]>
+  chatMessages: Record<string, ChatMessageDto[]>,
+  incognito = false
 ): Promise<void> {
   await mockApi(page, {
     authenticated: true,
+    incognito,
     chatThreads: threads,
     chatMessages,
     connectorAccounts: [],
@@ -185,4 +188,47 @@ test("a new side chat never shows a reminder and keeps its draft and focus", asy
   await expect(drawer.getByText("Reminder: stretch", { exact: true })).toHaveCount(0);
   await expect(composer).toHaveValue("Book the train for");
   await expect(composer).toBeFocused();
+});
+
+test("Main shows a reminder that arrives after a private chat ends", async ({ page }) => {
+  const main = createMockChatThread("own-main", "Main chat", { isMain: true });
+  await mockChat(page, [main], { [main.id]: [] }, true);
+  let privateEnded = false;
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/private/end"),
+    async (route) => {
+      privateEnded = true;
+      await route.fulfill({ status: 204, body: "" });
+    }
+  );
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/privacy"),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          privateEnded ? { incognito: false, threadId: main.id } : { incognito: true }
+        )
+      })
+  );
+
+  // Hold every stream open until the private chat has ended, then deliver the reminder.
+  const arrival = gate();
+  await page.route("**/api/chat/stream*", async (route) => {
+    await arrival.promise;
+    await fulfillStream(route, sse(reminderRecord)).catch(() => undefined);
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
+  const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+  const privateBanner = drawer.locator(".chatd-private").filter({ hasText: "not saved" });
+  await expect(privateBanner).toBeVisible();
+  await privateBanner.getByRole("button", { name: "End" }).click();
+  await expect(privateBanner).toHaveCount(0);
+  await expect.poll(() => privateEnded).toBe(true);
+
+  arrival.release();
+  await expect(drawer.getByText("Reminder: stretch", { exact: true })).toHaveCount(1);
 });

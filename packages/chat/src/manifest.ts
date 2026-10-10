@@ -176,7 +176,8 @@ export const chatModuleManifest = {
       id: "chat.reminder_live_arrival",
       description:
         "A due chat reminder appears at once in the open Main chat, even while Moss is replying; both " +
-        "messages stay separate after a reload. Side, private and module chats never show it.",
+        "stay separate after a reload. Side, private and module chats never show it. If it is late, " +
+        "reopen Main or reload.",
       featureFlagId: "chat.module"
     },
     {

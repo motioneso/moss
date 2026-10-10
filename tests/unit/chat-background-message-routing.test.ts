@@ -3,96 +3,86 @@
 
 import { describe, expect, it } from "vitest";
 
-import { routeMainBackgroundMessage } from "../../packages/chat/src/live/background-message-routing.js";
-import type { UserSession } from "../../packages/chat/src/live/chat-session-provider-identity.js";
+import {
+  routeMainBackgroundMessage,
+  type BackgroundRecord,
+  type ShownDrawerThread
+} from "../../packages/chat/src/live/background-message-routing.js";
 import { surfaceSessionKey } from "../../packages/chat/src/live/chat-surface.js";
 import type { OriginThreadTransition } from "../../packages/chat/src/live/origin-record-routing.js";
 import type { TranscriptRecord } from "../../packages/chat/src/live/types.js";
 
-const reminder: TranscriptRecord = {
+const reminder: BackgroundRecord = {
   kind: "reply",
   text: "Reminder: stretch",
   messageId: "reminder-1",
   background: true
 };
 
-function session(over: Partial<UserSession> = {}): UserSession {
-  return {
-    actorUserId: "user-1",
-    surface: "drawer",
-    threadId: "main-1",
-    incognito: false,
-    ...over
-  } as UserSession;
-}
+const drawerKey = surfaceSessionKey("user-1", "drawer");
+const switching = (): OriginThreadTransition => ({
+  version: 1,
+  pending: 1,
+  settled: Promise.resolve()
+});
 
-function route(
+async function route(
   over: {
-    sessions?: Map<string, UserSession>;
+    shown?: ShownDrawerThread;
     transitions?: Map<string, OriginThreadTransition>;
-    drawerThreadId?: string | null;
-    record?: TranscriptRecord;
-    actorUserId?: string;
+    onShownRead?: () => void;
   } = {}
 ) {
   const emitted: { surface: string; record: TranscriptRecord }[] = [];
-  const delivered = routeMainBackgroundMessage({
-    actorUserId: over.actorUserId ?? "user-1",
+  const asked: string[] = [];
+  await routeMainBackgroundMessage({
+    actorUserId: "user-1",
     mainThreadId: "main-1",
-    drawerThreadId: over.drawerThreadId === undefined ? "main-1" : over.drawerThreadId,
-    record: over.record ?? reminder,
-    sessions: over.sessions ?? new Map(),
+    record: reminder,
+    shown: async (actorUserId) => {
+      asked.push(actorUserId);
+      over.onShownRead?.();
+      return over.shown ?? { incognito: false, threadId: "main-1" };
+    },
     transitions: over.transitions ?? new Map(),
     emit: (surface, record) => emitted.push({ surface, record })
   });
-  return { delivered, emitted };
+  return { emitted, asked };
 }
 
-const drawerKey = surfaceSessionKey("user-1", "drawer");
-
 describe("routeMainBackgroundMessage", () => {
-  it("shows the reminder on a drawer whose live session is on Main", () => {
-    const result = route({ sessions: new Map([[drawerKey, session()]]), drawerThreadId: null });
-    expect(result).toEqual({ delivered: true, emitted: [{ surface: "drawer", record: reminder }] });
+  it("shows the reminder on the owner's drawer while it shows Main", async () => {
+    expect(await route()).toEqual({
+      emitted: [{ surface: "drawer", record: reminder }],
+      asked: ["user-1"]
+    });
   });
 
-  it("shows the reminder on a drawer with no session whose current thread is Main", () => {
-    expect(route().emitted).toEqual([{ surface: "drawer", record: reminder }]);
+  it("does not show it while the drawer shows a side chat", async () => {
+    const { emitted } = await route({ shown: { incognito: false, threadId: "side-1" } });
+    expect(emitted).toEqual([]);
   });
 
-  it("does not show it on a drawer whose live session is on a side chat", () => {
-    const sessions = new Map([[drawerKey, session({ threadId: "side-1" })]]);
-    expect(route({ sessions })).toEqual({ delivered: false, emitted: [] });
+  it("does not show it while the drawer shows no chat", async () => {
+    expect((await route({ shown: { incognito: false } })).emitted).toEqual([]);
   });
 
-  it("does not show it on a drawer with no session whose current thread is a side chat", () => {
-    expect(route({ drawerThreadId: "side-1" })).toEqual({ delivered: false, emitted: [] });
+  it("does not show it in a private chat", async () => {
+    const { emitted } = await route({ shown: { incognito: true, threadId: "main-1" } });
+    expect(emitted).toEqual([]);
   });
 
-  it("does not show it in a private chat", () => {
-    const sessions = new Map([[drawerKey, session({ incognito: true })]]);
-    expect(route({ sessions })).toEqual({ delivered: false, emitted: [] });
+  it("does not show it while the drawer is switching chats", async () => {
+    const transitions = new Map([[drawerKey, switching()]]);
+    expect((await route({ transitions })).emitted).toEqual([]);
   });
 
-  it("does not show it while the drawer is switching chats", () => {
-    const transitions = new Map([
-      [drawerKey, { version: 1, pending: 1, settled: Promise.resolve() }]
-    ]);
-    expect(route({ transitions })).toEqual({ delivered: false, emitted: [] });
-  });
-
-  it("does not show it through a session that belongs to someone else", () => {
-    const sessions = new Map([[drawerKey, session({ actorUserId: "user-2" })]]);
-    expect(route({ sessions })).toEqual({ delivered: false, emitted: [] });
-  });
-
-  it("only routes stored background replies", () => {
-    for (const record of [
-      { ...reminder, background: undefined },
-      { ...reminder, messageId: undefined },
-      { ...reminder, kind: "status" as const }
-    ]) {
-      expect(route({ record })).toEqual({ delivered: false, emitted: [] });
-    }
+  it("does not show it when a switch starts while the shown chat is read", async () => {
+    const transitions = new Map<string, OriginThreadTransition>();
+    const { emitted } = await route({
+      transitions,
+      onShownRead: () => transitions.set(drawerKey, switching())
+    });
+    expect(emitted).toEqual([]);
   });
 });

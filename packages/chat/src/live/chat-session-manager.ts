@@ -27,7 +27,12 @@ import {
   schedulePrivateDetachTimer,
   reconcileChatSessions
 } from "./session-runtime-helpers.js";
-import { normalizeChatSurface, surfaceSessionKey, type ChatSurface } from "./chat-surface.js";
+import {
+  DEFAULT_CHAT_SURFACE,
+  normalizeChatSurface,
+  surfaceSessionKey,
+  type ChatSurface
+} from "./chat-surface.js";
 
 export {
   combineHiddenContextBlocks,
@@ -406,10 +411,10 @@ export class ChatSessionManager {
   }
 
   /** #3195: show a stored background message in the owner's open Main drawer, if any. */
-  deliverMainBackgroundMessage(message: MainBackgroundMessage): boolean {
+  deliverMainBackgroundMessage(message: MainBackgroundMessage): Promise<void> {
     return routeMainBackgroundMessage({
       ...message,
-      sessions: this.sessions,
+      shown: (actorUserId) => this.getPrivacyState(actorUserId, DEFAULT_CHAT_SURFACE),
       transitions: this.originTransitions,
       emit: (surface, record) => this.emit(message.actorUserId, surface, record)
     });

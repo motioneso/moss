@@ -10,11 +10,8 @@ import type { ChatMessageDto, TranscriptRecord } from "@moss/shared";
 import { RecordRow } from "../../apps/web/src/chat/message-row.js";
 import type * as ApiClient from "../../apps/web/src/api/client.js";
 import { ApiError, resolveActionRequest } from "../../apps/web/src/api/client.js";
-import {
-  parseRecord,
-  recordsFromMessages,
-  upsertTranscriptRecord
-} from "../../apps/web/src/chat/use-chat-stream.js";
+import { upsertTranscriptRecord } from "../../apps/web/src/chat/stream-record-identity.js";
+import { parseRecord, recordsFromMessages } from "../../apps/web/src/chat/use-chat-stream.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (original) => ({
   ...(await original<typeof ApiClient>()),

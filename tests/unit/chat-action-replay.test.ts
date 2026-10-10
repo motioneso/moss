@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { TranscriptRecord } from "@moss/shared";
 import { injectActionResultRecord } from "../../packages/chat/src/live/session-runtime-helpers.js";
-import { parseRecord, upsertTranscriptRecord } from "../../apps/web/src/chat/use-chat-stream.js";
+import { upsertTranscriptRecord } from "../../apps/web/src/chat/stream-record-identity.js";
+import { parseRecord } from "../../apps/web/src/chat/use-chat-stream.js";
 import { groupRecords } from "../../packages/ui/src/chat-thread.js";
 
 describe("gateway approval notification replay", () => {

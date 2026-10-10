@@ -217,7 +217,6 @@ describe("the API's owner re-read", () => {
     expect(message).toEqual({
       actorUserId: ids.userA,
       mainThreadId: saved.threadId,
-      drawerThreadId: saved.threadId,
       record: {
         kind: "reply",
         text: expect.stringContaining("call mum"),
@@ -233,7 +232,7 @@ describe("the API's owner re-read", () => {
     const otherMain = await mainThreadId(ids.userB);
 
     await expect(readReminderArrival(app, arrivalOf(saved, ids.userB))).resolves.toBeUndefined();
-    // Row access rules hide the message even when the thread named is the other owner's Main.
+    // Read as the other owner, row access hides the message, and it is not in that owner's Main.
     await expect(
       readReminderArrival(app, { ...arrivalOf(saved, ids.userB), threadId: otherMain })
     ).resolves.toBeUndefined();
@@ -257,11 +256,6 @@ describe("the API's owner re-read", () => {
     await expect(
       readReminderArrival(app, { ...arrivalOf(saved), threadId: side.id })
     ).resolves.toBeUndefined();
-    // The side chat is now the drawer's current thread, so the drawer is not on Main.
-    await expect(readReminderArrival(app, arrivalOf(saved))).resolves.toMatchObject({
-      mainThreadId: saved.threadId,
-      drawerThreadId: side.id
-    });
   });
 });
 
@@ -271,7 +265,9 @@ describe("the API listener", () => {
     const running = startReminderArrivalListener({
       connectionString: connectionStrings.app,
       read: (arrival) => readReminderArrival(app, arrival),
-      deliver: (message) => delivered.push(message) > 0,
+      deliver: async (message) => {
+        delivered.push(message);
+      },
       warn: (error) => {
         throw error;
       }

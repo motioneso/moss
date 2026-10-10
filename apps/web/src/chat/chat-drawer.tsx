@@ -2,6 +2,7 @@ import { randomUuid, requestJson } from "@moss/module-web-sdk";
 import type { MeetingChatSelection, MeetingChatTurnResponse } from "@moss/shared";
 import { findOwnerMainThread, SideChatOverlay } from "./side-chat-overlay";
 import { loadChatDrafts, saveChatDrafts } from "./chat-draft-storage";
+import { shownMainThread } from "./drawer-main-landing";
 import { useChatTransition, type ChatTransition } from "./use-chat-transition";
 import { useInitialCallerDraft } from "./use-initial-caller-draft";
 import { useChatSelectionConfirmation } from "./use-chat-selection-confirmation";
@@ -647,8 +648,9 @@ export function ChatDrawer(props: {
     void (async () => {
       try {
         await endPrivateChat(initiatingSurface);
+        const landedOnMain = await shownMainThread(initiatingSurface, mainThreadId);
         if (!transition.isCurrent(change)) return;
-        props.clearRecords();
+        props.clearRecords(landedOnMain);
         setFallbackRecords([]);
       } catch (caught) {
         if (transition.isCurrent(change)) {

@@ -503,14 +503,17 @@ describe("ChatSessionManager", () => {
     const turn = manager.submitTurn("user-1", "Ben", "plan my week");
     while (engine.submitted.length === 0) await Promise.resolve();
 
-    const reminder: TranscriptRecord = {
+    const reminder = {
       kind: "reply",
       text: "Reminder: stretch",
       messageId: "reminder-1",
       background: true
-    };
-    const message = { mainThreadId: "thread-0", drawerThreadId: "thread-0", record: reminder };
-    expect(manager.deliverMainBackgroundMessage({ actorUserId: "user-1", ...message })).toBe(true);
+    } as const;
+    await manager.deliverMainBackgroundMessage({
+      actorUserId: "user-1",
+      mainThreadId: "thread-0",
+      record: reminder
+    });
     expect(drawer.at(-1)).toEqual(reminder);
     engine.open();
     await turn;

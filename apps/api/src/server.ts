@@ -113,8 +113,6 @@ import { registerModulePreferenceRoutes } from "./module-preferences.js";
 
 export interface CreateApiServerOptions {
   readonly appDb?: Kysely<MossDatabase>;
-  /** #3195: tests that inject their own database also name where reminder arrivals are heard. */
-  readonly chatReminderArrivalConnectionString?: string;
   readonly workerDb?: Kysely<MossDatabase>;
   readonly boss?: PgBoss;
   /** Override the maintenance lifecycle; the API still awaits start and drains close. */
@@ -669,9 +667,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       verifySelfPassword: authRuntime.verifySelfPassword,
       hasPasswordCredential: authRuntime.hasPasswordCredential,
       bootstrapConnectionString: ownsAppDb ? getMossDatabaseUrls().bootstrap : undefined,
-      chatReminderArrivalConnectionString:
-        options.chatReminderArrivalConnectionString ??
-        (ownsAppDb ? getMossDatabaseUrls().app : undefined),
+      appConnectionString: ownsAppDb ? getMossDatabaseUrls().app : undefined,
       googleConnectionService,
       googleApiClient,
       connectorsRepository,
