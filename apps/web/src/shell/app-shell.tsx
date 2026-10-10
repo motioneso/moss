@@ -67,7 +67,9 @@ const KNOWN_MODULES_WITH_SETTINGS = new Set(["calendar", "news", "sports", "task
 export function hasModuleSettings(moduleId: string, modules: readonly ModuleDto[] = []): boolean {
   if (KNOWN_MODULES_WITH_SETTINGS.has(moduleId)) return true;
   return modules.some(
-    (m) => m.id === moduleId && Array.isArray(m.settings) && m.settings.length > 0
+    (m) =>
+      m.id === moduleId &&
+      (Boolean(m.settingsPath) || (Array.isArray(m.settings) && m.settings.length > 0))
   );
 }
 
@@ -526,6 +528,7 @@ export function AppShell(props: AppShellProps) {
               subtitle={subtitle}
               showSettingsButton={showSettingsButton}
               moduleId={activeModuleId}
+              modules={props.modules}
             />
 
             <div className="topbar-actions">
@@ -623,6 +626,7 @@ function TopbarTitles(props: {
   readonly subtitle: string;
   readonly showSettingsButton: boolean;
   readonly moduleId: string | null;
+  readonly modules: readonly ModuleDto[];
 }) {
   const trail = usePageTrailDisplay();
   if (!trail) {
@@ -631,7 +635,11 @@ function TopbarTitles(props: {
         <div className="topbar-title-row">
           <span className="topbar-title">{props.title}</span>
           {props.showSettingsButton && props.moduleId ? (
-            <ModuleSettingsButton moduleId={props.moduleId} moduleName={props.title} />
+            <ModuleSettingsButton
+              moduleId={props.moduleId}
+              moduleName={props.title}
+              modules={props.modules}
+            />
           ) : null}
         </div>
         {props.subtitle ? <span className="topbar-subtitle">{props.subtitle}</span> : null}
@@ -648,7 +656,11 @@ function TopbarTitles(props: {
         onRename={trail.onRename}
         trailing={
           props.showSettingsButton && props.moduleId ? (
-            <ModuleSettingsButton moduleId={props.moduleId} moduleName={trail.name} />
+            <ModuleSettingsButton
+              moduleId={props.moduleId}
+              moduleName={trail.name}
+              modules={props.modules}
+            />
           ) : null
         }
       />
