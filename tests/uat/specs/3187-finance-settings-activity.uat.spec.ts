@@ -114,7 +114,7 @@ test("Finance Settings saves the step and limit, lists activity, and undoes it",
     await expect(
       settings.getByRole("radio", { name: /Handle routine, ask about new/ })
     ).toBeChecked({ timeout: 5_000 });
-    await expect(settings.getByLabel("Moss can move up to, per move")).toHaveValue("100", {
+    await expect(settings.getByLabel("Moss can move up to, per move")).toHaveValue("$100", {
       timeout: 5_000
     });
   }).toPass({ timeout: 60_000, intervals: [3_000] });
