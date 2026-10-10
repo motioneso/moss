@@ -2,6 +2,7 @@ import "../styles/settings.css";
 import "../styles/settings-panes.css";
 import "../styles/settings-panes-2.css";
 import "../styles/settings-panes-3.css";
+import "../styles/settings-quiet-hours.css";
 import "../styles/settings-activity.css";
 
 import {
@@ -354,8 +355,6 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
     "fahrenheit",
     "celsius",
     "location",
-    "quiet hours",
-    "do not disturb",
     "sessions",
     "sign out",
     "export",

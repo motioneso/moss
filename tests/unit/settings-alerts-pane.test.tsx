@@ -33,6 +33,9 @@ describe("AlertsPane", () => {
     );
     expect(html).toContain("Notifications and email digest");
     expect(html).toContain("Quiet hours");
+    expect(html).toContain("Save quiet hours");
+    expect(html).toContain('aria-label="Quiet hours from"');
+    expect(html).not.toContain("Open quiet hours");
     expect(html).toContain(
       "No email can be checked until a connected account is active and permitted."
     );
