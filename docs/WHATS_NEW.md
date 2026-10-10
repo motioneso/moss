@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Small fixes to goals, people, chat and Food.** Clearing a goal's target date now works, name lookups ignore capital letters, the chat box keeps your text if a message is refused, and the Food day view updates after Moss logs something for you. [PR #3304](https://github.com/motioneso/moss/pull/3304)
 - **Job Search buttons and warnings.** Roles that have not been scored no longer show Save and Pass buttons that did nothing, turning a job source on or off now confirms the real result, and the resume warning says exactly which roles will be scored again. [PR #3302](https://github.com/motioneso/moss/pull/3302)
 - **Briefings show the right all-day events and tools.** Evening briefings now list tomorrow's all-day events correctly, and briefings can use tools from added modules. [PR #3295](https://github.com/motioneso/moss/pull/3295)
 - **Reply works for family members.** The Reply button on Today now works for family members whenever chat is available, instead of staying greyed out. The member setup no longer shows a personal key box that did nothing. [PR #3293](https://github.com/motioneso/moss/pull/3293)
