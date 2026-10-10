@@ -9,7 +9,7 @@ import {
   type TaskDto,
   type TaskListDto
 } from "@moss/shared";
-import { Button, Dialog, Field, FormLabel, Segmented, Select } from "@moss/ui";
+import { Button, Dialog, EmptyState, Field, FormLabel, Segmented, Select } from "@moss/ui";
 
 import {
   addTaskActivity,
@@ -49,6 +49,7 @@ import {
 // task straight from Today rendered the status split-button unstyled. Order mirrors
 // tasks-page.tsx (kit-tasks base first, tasks.css overrides second).
 import "../styles/kit-tasks.css";
+import "../styles/kit-tasks-modal.css";
 import "./tasks.css";
 
 const EFFORTS: readonly { readonly value: TaskEffort; readonly label: string }[] = [
@@ -75,32 +76,6 @@ export function TaskDetailsDialog(props: {
 }) {
   const isNew = props.taskId === null;
   const headingId = useId();
-
-  // Captured during render, before the title field's autoFocus moves focus into the dialog.
-  const [opener] = useState(() =>
-    document.activeElement instanceof HTMLElement ? document.activeElement : null
-  );
-  const onCloseRef = useRef(props.onClose);
-  onCloseRef.current = props.onClose;
-
-  const mountedRef = useRef(false);
-
-  // Escape closes the dialog; focus returns to the control that opened it. The restore waits
-  // a microtask so StrictMode's effect replay, which remounts at once, keeps focus inside.
-  useEffect(() => {
-    mountedRef.current = true;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) onCloseRef.current();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      mountedRef.current = false;
-      document.removeEventListener("keydown", onKeyDown);
-      queueMicrotask(() => {
-        if (!mountedRef.current && opener?.isConnected) opener.focus();
-      });
-    };
-  }, [opener]);
 
   const requireTaskId = () => {
     if (!props.taskId) throw new Error("Task id required for this operation");
@@ -365,6 +340,7 @@ export function TaskDetailsDialog(props: {
               className="tk-modal__titlein"
               value={form.title}
               autoFocus
+              disabled={!isNew && !task}
               placeholder="What needs doing?"
               aria-label="Task title"
               onChange={(event) => setForm((f) => ({ ...f, title: event.target.value }))}
@@ -377,190 +353,271 @@ export function TaskDetailsDialog(props: {
       }
       footer={
         <>
-          {!isNew ? (
+          {!isNew && task ? (
             <TaskStatusControl
               status={form.status}
               onChange={(status) => setForm((f) => ({ ...f, status }))}
             />
           ) : null}
-          <span className="sp" style={{ flex: 1 }} />
           {saveMutation.isError ? (
-            <span className="jds-hint jds-hint--error" role="alert">
-              Could not save. Try again.
-            </span>
+            <p className="tk-modal__save-error jds-hint jds-hint--error" role="alert">
+              Could not save. Your changes are still here; try again.
+            </p>
           ) : null}
-          <Button variant="quiet" onClick={props.onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            disabled={saveMutation.isPending || (!isNew && !task)}
-            onClick={() => saveMutation.mutate()}
-          >
-            {isNew ? "Add task" : "Save changes"}
-          </Button>
+          <div className="tk-modal__save-actions">
+            <Button variant="quiet" onClick={props.onClose}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              disabled={saveMutation.isPending || (!isNew && !task)}
+              onClick={() => saveMutation.mutate()}
+            >
+              {isNew ? "Add task" : "Save changes"}
+            </Button>
+          </div>
         </>
       }
     >
-      <div className="tk-form">
-        {/* Comment stream first — surface activity without scrolling. */}
-        {!isNew ? (
-          <div className="tk-field--full">
+      {!isNew && !task ? (
+        taskQuery.isError ? (
+          <div role="alert">
+            <EmptyState
+              title="Could not load this task"
+              description="Try again to load its saved details."
+            >
+              <Button variant="secondary" size="sm" onClick={() => void taskQuery.refetch()}>
+                Retry task
+              </Button>
+            </EmptyState>
+          </div>
+        ) : (
+          <p className="jds-hint" role="status">
+            Loading task details…
+          </p>
+        )
+      ) : (
+        <>
+          {taskQuery.isError ? (
+            <div className="tasks-notice" role="alert">
+              <p className="jds-hint jds-hint--error">
+                Could not refresh this task. Your current details and edits are still here.
+              </p>
+              <Button variant="secondary" size="sm" onClick={() => void taskQuery.refetch()}>
+                Retry task
+              </Button>
+            </div>
+          ) : null}
+          <div className="tk-form">
+            {/* Comment stream first — surface activity without scrolling. */}
+            {!isNew ? (
+              <div className="tk-field--full">
+                <Field>
+                  <FormLabel>Activity</FormLabel>
+                  <TaskActivityPanel
+                    entries={activity}
+                    currentUserLabel={props.currentUserLabel}
+                    draft={comment}
+                    pending={commentMutation.isPending}
+                    loading={activityQuery.isPending}
+                    loadError={activityQuery.isError}
+                    saveError={commentMutation.isError}
+                    onRetry={() => void activityQuery.refetch()}
+                    onDraft={setComment}
+                    onPost={() => {
+                      const body = comment.trim();
+                      if (body) commentMutation.mutate(body);
+                    }}
+                  />
+                </Field>
+              </div>
+            ) : null}
+
+            <div className="tk-field--full">
+              <Field>
+                <FormLabel htmlFor="task-notes-input">Notes</FormLabel>
+                <textarea
+                  id="task-notes-input"
+                  className="tk-textarea"
+                  value={form.description}
+                  placeholder="Context, links, anything worth remembering…"
+                  onChange={(event) => setForm((f) => ({ ...f, description: event.target.value }))}
+                />
+              </Field>
+            </div>
+
+            <div className="tk-field--full">
+              <Field>
+                <FormLabel>Assigned to</FormLabel>
+                <AssignedPersonField currentUserLabel={props.currentUserLabel} />
+              </Field>
+            </div>
+
             <Field>
-              <FormLabel>Activity</FormLabel>
-              <TaskActivityPanel
-                entries={activity}
-                currentUserLabel={props.currentUserLabel}
-                draft={comment}
-                pending={commentMutation.isPending}
-                onDraft={setComment}
-                onPost={() => {
-                  const body = comment.trim();
-                  if (body) commentMutation.mutate(body);
-                }}
+              <FormLabel htmlFor="task-list-select">List</FormLabel>
+              <Select
+                id="task-list-select"
+                value={form.listId}
+                onChange={(event) => setForm((f) => ({ ...f, listId: event.target.value }))}
+              >
+                {props.lists.map((list) => (
+                  <option key={list.id} value={list.id}>
+                    {list.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field>
+              <FormLabel htmlFor="task-priority-select">Priority</FormLabel>
+              <Select
+                id="task-priority-select"
+                value={form.priority}
+                onChange={(event) => setForm((f) => ({ ...f, priority: event.target.value }))}
+              >
+                <option value="">No priority</option>
+                {PRIORITY_LEVELS.map((level) => (
+                  <option key={level.value} value={level.value}>
+                    {level.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field>
+              <FormLabel htmlFor="task-due-input">Due date</FormLabel>
+              <input
+                id="task-due-input"
+                type="date"
+                className="jds-input"
+                value={form.dueAt}
+                onChange={(event) => setForm((f) => ({ ...f, dueAt: event.target.value }))}
               />
             </Field>
+            <Field>
+              <FormLabel htmlFor="task-reminder-input">Reminder</FormLabel>
+              <input
+                id="task-reminder-input"
+                type="date"
+                className="jds-input"
+                value={form.doAt}
+                onChange={(event) => setForm((f) => ({ ...f, doAt: event.target.value }))}
+              />
+            </Field>
+
+            <div className="tk-field--full">
+              <Field>
+                <FormLabel>Effort</FormLabel>
+                <Segmented
+                  value={form.effort}
+                  options={EFFORTS}
+                  ariaLabel="Effort"
+                  onChange={(value) =>
+                    setForm((f) => ({ ...f, effort: f.effort === value ? "" : value }))
+                  }
+                />
+              </Field>
+            </div>
+
+            <Field>
+              <FormLabel htmlFor="task-repeat-select">Repeats</FormLabel>
+              <Select
+                id="task-repeat-select"
+                value={form.repeat}
+                onChange={(event) =>
+                  setForm((f) => ({ ...f, repeat: event.target.value as Repeat }))
+                }
+              >
+                {REPEATS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <div className="tk-field--full">
+              <Field>
+                <FormLabel>Tags</FormLabel>
+                <TaskTagsField
+                  isNew={isNew}
+                  newTags={newTags}
+                  tags={tags}
+                  tagSuggestions={tagSuggestions}
+                  draft={tagDraft}
+                  onDraft={setTagDraft}
+                  onCommitDraft={commitTagDraft}
+                  onAddSuggestion={addTagName}
+                  onRemoveNewTag={(name) => setNewTags((t) => t.filter((x) => x !== name))}
+                  onUnassignTag={(tagId) => unassignTagMutation.mutate(tagId)}
+                />
+                {listTagsQuery.isError ? (
+                  <div className="tasks-notice" role="alert">
+                    <p className="jds-hint jds-hint--error">
+                      Could not load tag suggestions. Assigned tags are still shown.
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void listTagsQuery.refetch()}
+                    >
+                      Retry tags
+                    </Button>
+                  </div>
+                ) : null}
+                {assignTagMutation.isError || unassignTagMutation.isError ? (
+                  <p className="jds-hint jds-hint--error" role="alert">
+                    Could not update tags. Try that change again.
+                  </p>
+                ) : null}
+              </Field>
+            </div>
+
+            <div className="tk-field--full">
+              <Field>
+                <FormLabel>Subtasks</FormLabel>
+                {!isNew && subtasksQuery.isPending ? (
+                  <p className="jds-hint" role="status">
+                    Loading subtasks…
+                  </p>
+                ) : null}
+                {!isNew && subtasksQuery.isError ? (
+                  <div className="tasks-notice" role="alert">
+                    <p className="jds-hint jds-hint--error">
+                      Could not load subtasks. Any previously loaded subtasks are still shown.
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void subtasksQuery.refetch()}
+                    >
+                      Retry subtasks
+                    </Button>
+                  </div>
+                ) : null}
+                <TaskSubtasksField
+                  isNew={isNew}
+                  newSubs={newSubs}
+                  subs={subs}
+                  draft={subDraft}
+                  onNewSubChange={(index, value) =>
+                    setNewSubs((s) => s.map((item, i) => (i === index ? value : item)))
+                  }
+                  onNewSubRemove={(index) => setNewSubs((s) => s.filter((_, i) => i !== index))}
+                  onNewSubAdd={() => setNewSubs((s) => [...s, ""])}
+                  onToggleExisting={(id, status) => toggleSubMutation.mutate({ id, status })}
+                  onDraft={setSubDraft}
+                  onAddExisting={addExistingSubtask}
+                />
+                {addSubMutation.isError || toggleSubMutation.isError ? (
+                  <p className="jds-hint jds-hint--error" role="alert">
+                    Could not update the subtask. Your text is still here; try again.
+                  </p>
+                ) : null}
+              </Field>
+            </div>
           </div>
-        ) : null}
-
-        <div className="tk-field--full">
-          <Field>
-            <FormLabel htmlFor="task-notes-input">Notes</FormLabel>
-            <textarea
-              id="task-notes-input"
-              className="tk-textarea"
-              value={form.description}
-              placeholder="Context, links, anything worth remembering…"
-              onChange={(event) => setForm((f) => ({ ...f, description: event.target.value }))}
-            />
-          </Field>
-        </div>
-
-        <div className="tk-field--full">
-          <Field>
-            <FormLabel>Assigned to</FormLabel>
-            <AssignedPersonField currentUserLabel={props.currentUserLabel} />
-          </Field>
-        </div>
-
-        <Field>
-          <FormLabel htmlFor="task-list-select">List</FormLabel>
-          <Select
-            id="task-list-select"
-            value={form.listId}
-            onChange={(event) => setForm((f) => ({ ...f, listId: event.target.value }))}
-          >
-            {props.lists.map((list) => (
-              <option key={list.id} value={list.id}>
-                {list.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field>
-          <FormLabel htmlFor="task-priority-select">Priority</FormLabel>
-          <Select
-            id="task-priority-select"
-            value={form.priority}
-            onChange={(event) => setForm((f) => ({ ...f, priority: event.target.value }))}
-          >
-            <option value="">No priority</option>
-            {PRIORITY_LEVELS.map((level) => (
-              <option key={level.value} value={level.value}>
-                {level.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Field>
-          <FormLabel htmlFor="task-due-input">Due date</FormLabel>
-          <input
-            id="task-due-input"
-            type="date"
-            className="jds-input"
-            value={form.dueAt}
-            onChange={(event) => setForm((f) => ({ ...f, dueAt: event.target.value }))}
-          />
-        </Field>
-        <Field>
-          <FormLabel htmlFor="task-reminder-input">Reminder</FormLabel>
-          <input
-            id="task-reminder-input"
-            type="date"
-            className="jds-input"
-            value={form.doAt}
-            onChange={(event) => setForm((f) => ({ ...f, doAt: event.target.value }))}
-          />
-        </Field>
-
-        <div className="tk-field--full">
-          <Field>
-            <FormLabel>Effort</FormLabel>
-            <Segmented
-              value={form.effort}
-              options={EFFORTS}
-              ariaLabel="Effort"
-              onChange={(value) =>
-                setForm((f) => ({ ...f, effort: f.effort === value ? "" : value }))
-              }
-            />
-          </Field>
-        </div>
-
-        <Field>
-          <FormLabel htmlFor="task-repeat-select">Repeats</FormLabel>
-          <Select
-            id="task-repeat-select"
-            value={form.repeat}
-            onChange={(event) => setForm((f) => ({ ...f, repeat: event.target.value as Repeat }))}
-          >
-            {REPEATS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <div className="tk-field--full">
-          <Field>
-            <FormLabel>Tags</FormLabel>
-            <TaskTagsField
-              isNew={isNew}
-              newTags={newTags}
-              tags={tags}
-              tagSuggestions={tagSuggestions}
-              draft={tagDraft}
-              onDraft={setTagDraft}
-              onCommitDraft={commitTagDraft}
-              onAddSuggestion={addTagName}
-              onRemoveNewTag={(name) => setNewTags((t) => t.filter((x) => x !== name))}
-              onUnassignTag={(tagId) => unassignTagMutation.mutate(tagId)}
-            />
-          </Field>
-        </div>
-
-        <div className="tk-field--full">
-          <Field>
-            <FormLabel>Subtasks</FormLabel>
-            <TaskSubtasksField
-              isNew={isNew}
-              newSubs={newSubs}
-              subs={subs}
-              draft={subDraft}
-              onNewSubChange={(index, value) =>
-                setNewSubs((s) => s.map((item, i) => (i === index ? value : item)))
-              }
-              onNewSubRemove={(index) => setNewSubs((s) => s.filter((_, i) => i !== index))}
-              onNewSubAdd={() => setNewSubs((s) => [...s, ""])}
-              onToggleExisting={(id, status) => toggleSubMutation.mutate({ id, status })}
-              onDraft={setSubDraft}
-              onAddExisting={addExistingSubtask}
-            />
-          </Field>
-        </div>
-      </div>
+        </>
+      )}
     </Dialog>
   );
 }

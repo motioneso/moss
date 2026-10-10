@@ -8,49 +8,16 @@ import type {
   TaskDto,
   TaskTagDto
 } from "@moss/shared";
-import { Button, Chip, EmptyState } from "@moss/ui";
+import { Avatar, Button, Chip, EmptyState } from "@moss/ui";
 
 import { formatDate, useUserLocale } from "../locale/locale-format";
 import { useDismissableMenu } from "../shared/use-dismissable-menu.js";
-
-const AVA_PALETTE = ["var(--steel)", "var(--amber)", "var(--ink-3)"];
-
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return (parts[0]?.[0] ?? "?").toUpperCase();
-  return ((parts[0]?.[0] ?? "") + (parts[parts.length - 1]?.[0] ?? "")).toUpperCase();
-}
-
-function avaColor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h + name.charCodeAt(i)) % AVA_PALETTE.length;
-  return AVA_PALETTE[h] ?? "var(--steel)";
-}
-
-function Ava(props: { readonly name: string; readonly size?: number }) {
-  const size = props.size ?? 24;
-  return (
-    <span
-      className="tk-ava"
-      style={
-        {
-          width: size,
-          height: size,
-          "--tk-ava-bg": avaColor(props.name),
-          "--tk-ava-fs": `${Math.round(size * 0.4)}px`
-        } as React.CSSProperties
-      }
-    >
-      {initialsOf(props.name)}
-    </span>
-  );
-}
 
 export function AssignedPersonField(props: { readonly currentUserLabel: string }) {
   return (
     <div className="tk-peoplefield">
       <span className="tk-person">
-        <Ava name={props.currentUserLabel} size={20} />
+        <Avatar name={props.currentUserLabel} size="xs" />
         <span className="tk-person__nm">
           {props.currentUserLabel}
           <span className="tk-person__me"> · you</span>
@@ -269,17 +236,36 @@ export function TaskActivityPanel(props: {
   readonly currentUserLabel: string;
   readonly draft: string;
   readonly pending: boolean;
+  readonly loading: boolean;
+  readonly loadError: boolean;
+  readonly saveError: boolean;
+  readonly onRetry: () => void;
   readonly onDraft: (value: string) => void;
   readonly onPost: () => void;
 }) {
   const locale = useUserLocale();
   return (
     <div className="tk-activity">
+      {props.loading ? (
+        <p className="jds-hint" role="status">
+          Loading activity…
+        </p>
+      ) : null}
+      {props.loadError ? (
+        <div className="tasks-notice" role="alert">
+          <p className="jds-hint jds-hint--error">
+            Could not load activity. Any previously loaded comments are still shown.
+          </p>
+          <Button size="sm" variant="secondary" onClick={props.onRetry}>
+            Retry activity
+          </Button>
+        </div>
+      ) : null}
       {props.entries.length > 0 ? (
         <div className="tk-act-list">
           {props.entries.map((entry) => (
             <div className="tk-act" key={entry.id}>
-              <Ava name={props.currentUserLabel} size={28} />
+              <Avatar name={props.currentUserLabel} size="sm" />
               <div className="tk-act__body">
                 <div className="tk-act__head">
                   <span className="tk-act__who">{props.currentUserLabel}</span>
@@ -290,9 +276,9 @@ export function TaskActivityPanel(props: {
             </div>
           ))}
         </div>
-      ) : (
+      ) : !props.loading && !props.loadError ? (
         <EmptyState title="No activity yet. Log progress as you go." />
-      )}
+      ) : null}
 
       <div className="tk-act-composer">
         <textarea
@@ -315,6 +301,11 @@ export function TaskActivityPanel(props: {
           aria-label="Post comment"
         />
       </div>
+      {props.saveError ? (
+        <p className="jds-hint jds-hint--error" role="alert">
+          Could not post your comment. Your text is still here; try again.
+        </p>
+      ) : null}
       <div className="tk-act-hint">Enter to post · Shift+Enter for a new line</div>
     </div>
   );
