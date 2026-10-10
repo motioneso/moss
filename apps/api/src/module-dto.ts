@@ -67,6 +67,8 @@ export function serializeExternalModule(m: ReconciledExternalModule): ModuleDto 
     })),
     settings: [],
     external: true,
+    // #3184: the one place a module-relative settings path becomes a real app route.
+    ...(m.settingsPath ? { settingsPath: `/m/${m.id}${m.settingsPath}` } : {}),
     // #918: ModuleDto.web is optional — omit rather than emit null when the module
     // declares no web surface (ReconciledExternalModule.web itself IS nullable).
     ...(m.web ? { web: m.web } : {}),

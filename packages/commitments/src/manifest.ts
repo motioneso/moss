@@ -211,7 +211,8 @@ export const commitmentsModuleManifest: MossModuleManifest = {
       name: "commitments.snooze",
       actionLabel: "Snooze commitment",
       approvalPresentation: commitmentPresentation("snooze"),
-      description: "Snooze a commitment candidate until a later date.",
+      description:
+        "Snooze a commitment candidate until a later date; it returns to pending review once that date passes.",
       permissionId: "commitments.update",
       risk: "write",
       content: "user_authored",

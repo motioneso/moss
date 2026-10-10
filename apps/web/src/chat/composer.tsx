@@ -86,7 +86,8 @@ export function Composer(props: {
   /** Owned by the drawer (chat-drawer.tsx), not this component, so it survives this composer
    *  unmounting and remounting mid-turn. Null means nothing is queued. */
   readonly queuedText: string | null;
-  readonly onSend: (text: string, attachments?: readonly ChatAttachmentDto[]) => void;
+  /** Returns false when the send was refused, so the draft and attachments are kept. */
+  readonly onSend: (text: string, attachments?: readonly ChatAttachmentDto[]) => boolean;
   readonly onQueue: (text: string) => void;
   readonly onDiscardQueuedText: () => void;
   readonly onStop: () => void;
@@ -270,7 +271,11 @@ export function Composer(props: {
       setBoundSkillId(null);
       return;
     }
-    props.onSend(composedText, readyAttachments.length > 0 ? readyAttachments : undefined);
+    const accepted = props.onSend(
+      composedText,
+      readyAttachments.length > 0 ? readyAttachments : undefined
+    );
+    if (!accepted) return;
     setText("");
     setBoundSkillId(null);
     setPending([]);

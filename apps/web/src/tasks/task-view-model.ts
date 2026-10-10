@@ -37,7 +37,10 @@ export interface TaskFilterResult {
 type QuadrantTaskGroups = Record<TaskQuadrant, TaskDto[]>;
 
 export function deriveTaskFilters(input: TaskFilterInput): TaskFilterResult {
-  const needle = (input.searchIntent?.text ?? input.search).trim().toLowerCase();
+  // An interpreted query owns the literal text: text null means no residual text search.
+  const needle = (input.searchIntent ? (input.searchIntent.text ?? "") : input.search)
+    .trim()
+    .toLowerCase();
   const tagSet = new Set(input.tagFilter);
   const soloIds = input.lists
     .filter((list) => input.listStates[list.id] === "solo")

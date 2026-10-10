@@ -11,7 +11,8 @@ import { isValidTimeZone } from "./time.js";
 import type {
   ExternalModulePreferenceValue,
   ModuleFetchRequest,
-  ModuleFetchResponse
+  ModuleFetchResponse,
+  MossActionPermissionTier
 } from "./index.js";
 
 export { MODULE_WORKER_CONTRACT_VERSION } from "./worker-protocol.js";
@@ -166,6 +167,15 @@ export interface ModuleWorkerContext {
   };
   /** In-app notification post — see ModuleNotifyPort. */
   readonly notify: ModuleNotifyPort;
+  /**
+   * The acting user's permission tier for an action family this module declared in its
+   * manifest (`assistantActionFamilies`), or the family's default when the user never chose.
+   * A family the module did not declare rejects, so a module cannot read another module's
+   * settings.
+   */
+  readonly actionPolicy: {
+    get(familyId: string): Promise<MossActionPermissionTier>;
+  };
 }
 
 type Handler = (ctx: ModuleWorkerContext) => Promise<unknown>;
@@ -236,6 +246,12 @@ export function defineModuleWorker(input: {
   };
   const notify: ModuleNotifyPort = {
     post: (postInput) => callParent("notify.post", postInput) as Promise<void>
+  };
+
+  const actionPolicy: ModuleWorkerContext["actionPolicy"] = {
+    get: async (familyId) =>
+      ((await callParent("actionPolicy.get", { familyId })) as { tier: MossActionPermissionTier })
+        .tier
   };
 
   createInterface({ input: process.stdin }).on("line", (line) => {
@@ -318,7 +334,8 @@ export function defineModuleWorker(input: {
           db,
           embed,
           attachments,
-          notify
+          notify,
+          actionPolicy
         });
         send({ jsonrpc: "2.0", id: message.id, result });
       } catch (error) {

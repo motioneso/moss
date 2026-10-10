@@ -2,7 +2,8 @@ import AVFoundation
 import AppKit
 
 /// Querying authorization never requests it. System-audio permission has no equivalent public
-/// preflight here: only an explicit Start may create/start a tap and let macOS ask.
+/// preflight here. Explicit Start and verified same-source recovery may start a tap;
+/// macOS can itself ask if access was reset. The person must answer; recovery never accepts consent.
 enum MeetingCapturePermissions {
     static var microphone: MeetingCapturePermission {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {

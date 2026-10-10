@@ -42,12 +42,14 @@ it("adapts declarations into executable tools with parent-bound identity", async
   const execute = manifest?.assistantTools?.[0]?.execute;
   if (!execute) throw new Error("expected execute");
   const context = { actorUserId: "actor", requestId: "request", chatSessionId: "chat" };
-  await execute({} as never, { moduleId: "evil" }, context, {});
+  const scopedDb = {} as never;
+  await execute(scopedDb, { moduleId: "evil" }, context, {});
   expect(invoke).toHaveBeenCalledWith(
     discovery,
     discovery.manifest.assistantTools?.[0],
     { moduleId: "evil" },
-    context
+    context,
+    scopedDb
   );
 });
 

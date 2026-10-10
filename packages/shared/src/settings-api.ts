@@ -99,6 +99,18 @@ export interface PutNotificationDigestPreferenceRequest {
 
 export type PutNotificationDigestPreferenceResponse = GetNotificationDigestPreferenceResponse;
 
+export type NotificationSensitivityDto = "quiet" | "balanced" | "proactive";
+
+export interface GetNotificationSensitivityResponse {
+  readonly sensitivity: NotificationSensitivityDto;
+}
+
+export interface PutNotificationSensitivityRequest {
+  readonly sensitivity: NotificationSensitivityDto;
+}
+
+export type PutNotificationSensitivityResponse = GetNotificationSensitivityResponse;
+
 const quietHoursSchema = {
   type: "object",
   additionalProperties: false,
@@ -314,5 +326,25 @@ export const putNotificationDigestPreferenceRouteSchema = {
     400: errorResponseSchema,
     401: errorResponseSchema,
     422: errorResponseSchema
+  }
+} as const;
+
+const notificationSensitivityResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sensitivity"],
+  properties: { sensitivity: { type: "string", enum: ["quiet", "balanced", "proactive"] } }
+} as const;
+
+export const getNotificationSensitivityRouteSchema = {
+  response: { 200: notificationSensitivityResponseSchema, 401: errorResponseSchema }
+} as const;
+
+export const putNotificationSensitivityRouteSchema = {
+  body: notificationSensitivityResponseSchema,
+  response: {
+    200: notificationSensitivityResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema
   }
 } as const;

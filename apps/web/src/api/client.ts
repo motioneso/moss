@@ -46,6 +46,7 @@ import type {
   DeleteWebSearchKeyResponse,
   GetLocaleSettingsResponse,
   GetNotificationDigestPreferenceResponse,
+  GetNotificationSensitivityResponse,
   ListNotificationPreferencesResponse,
   GetQuietHoursSettingsResponse,
   GetAiSummaryResponse,
@@ -79,6 +80,8 @@ import type {
   PutNotificationPreferenceResponse,
   PutNotificationDigestPreferenceRequest,
   PutNotificationDigestPreferenceResponse,
+  PutNotificationSensitivityRequest,
+  PutNotificationSensitivityResponse,
   PushConfigResponse,
   RegisterPushSubscriptionRequest,
   RegisterPushSubscriptionResponse,
@@ -349,6 +352,19 @@ export async function resolveQuietHoursConflict(
 
 export async function getNotificationPreferences(): Promise<ListNotificationPreferencesResponse> {
   return requestJson<ListNotificationPreferencesResponse>("/api/me/notification-preferences");
+}
+
+export async function getNotificationSensitivity(): Promise<GetNotificationSensitivityResponse> {
+  return requestJson<GetNotificationSensitivityResponse>("/api/me/notification-sensitivity");
+}
+
+export async function putNotificationSensitivity(
+  body: PutNotificationSensitivityRequest
+): Promise<PutNotificationSensitivityResponse> {
+  return requestJson<PutNotificationSensitivityResponse>("/api/me/notification-sensitivity", {
+    method: "PUT",
+    body
+  });
 }
 
 export async function getNotificationDigestPreference(): Promise<GetNotificationDigestPreferenceResponse> {

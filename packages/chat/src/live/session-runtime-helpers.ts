@@ -87,13 +87,19 @@ export function applyRemoteReap(
 }
 
 export async function drainEngine(
-  engine: { readNew: (offset: number) => Promise<{ offset: number; complete: boolean }> },
+  engine: {
+    readNew: (
+      offset: number
+    ) => Promise<{ offset: number; complete: boolean; records?: readonly TranscriptRecord[] }>;
+  },
   fromOffset: number,
-  pollMs: number
+  pollMs: number,
+  onRecord?: (record: TranscriptRecord) => void
 ): Promise<number> {
   let offset = fromOffset;
   for (;;) {
-    const { offset: next, complete } = await engine.readNew(offset);
+    const { offset: next, complete, records } = await engine.readNew(offset);
+    if (onRecord) for (const record of records ?? []) onRecord(record);
     offset = next;
     if (complete) break;
     if (pollMs > 0) await delay(pollMs);

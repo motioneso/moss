@@ -8,6 +8,8 @@ import {
   ensureSessionForCurrentProvider,
   switchChatProviderSession,
   type ActiveChatProvider,
+  type EnsureSessionOpts,
+  type LaunchSessionOpts,
   type UserSession
 } from "./chat-session-provider-identity.js";
 import { launchChatSession, seedChatContext } from "./chat-session-launch.js";
@@ -127,7 +129,7 @@ export class ChatSessionManager {
   async ensureSession(
     actorUserId: string,
     userName: string,
-    opts?: { readonly forceReplay?: boolean; readonly signal?: AbortSignal },
+    opts?: EnsureSessionOpts & { readonly signal?: AbortSignal },
     surface?: string
   ): Promise<UserSession> {
     const chatSurface = normalizeChatSurface(surface);
@@ -160,7 +162,7 @@ export class ChatSessionManager {
   private async launchSession(
     actorUserId: string,
     userName: string,
-    opts: { readonly forceReplay?: boolean } | undefined,
+    opts: Partial<LaunchSessionOpts> | undefined,
     surface: ChatSurface,
     providerIdentity: ActiveChatProvider
   ): Promise<UserSession> {

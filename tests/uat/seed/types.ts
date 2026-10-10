@@ -56,7 +56,11 @@ export type UatChatScript =
   | "3065-app-actions"
   | "classifier-shadow"
   | "3125-main-chat"
-  | "3192-shared-main";
+  | "3192-shared-main"
+  | "runtime-context"
+  | "moss-assistant-name"
+  | "app-map-grounding"
+  | "1133-chat-attachments";
 
 export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "phase1-smoke",
@@ -70,7 +74,11 @@ export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "3065-app-actions",
   "classifier-shadow",
   "3125-main-chat",
-  "3192-shared-main"
+  "3192-shared-main",
+  "runtime-context",
+  "moss-assistant-name",
+  "app-map-grounding",
+  "1133-chat-attachments"
 ];
 
 export interface SeedOptions {

@@ -1,5 +1,6 @@
 // tests/unit/external-module-finance-handlers-sync.test.ts
-import { describe, expect, it } from "vitest";
+import { FinanceFetchError } from "../../external-modules/finance/src/adapters/types.js";
+import { describe, expect, it, vi } from "vitest";
 
 import type {
   PlaidAccount,
@@ -8,7 +9,7 @@ import type {
 } from "../../external-modules/finance/src/adapters/plaid.js";
 import { PlaidError } from "../../external-modules/finance/src/adapters/plaid.js";
 import { kvStore, NS } from "../../external-modules/finance/src/domain/index.js";
-import type { FinanceKv } from "../../external-modules/finance/src/domain/index.js";
+import type { ActivityInput, FinanceKv } from "../../external-modules/finance/src/domain/index.js";
 import { syncRunHandler } from "../../external-modules/finance/src/worker/handlers/sync.js";
 import type { TokenMap, WorkerPorts } from "../../external-modules/finance/src/worker/ports.js";
 import { InputError } from "../../external-modules/finance/src/worker/validate.js";
@@ -19,7 +20,7 @@ import { InputError } from "../../external-modules/finance/src/worker/validate.j
 // chunks are written (at-least-once + idempotent reducer = no data loss),
 // balance snapshots append once per day, item failures are isolated (a
 // broken bank never blocks the others), the D5 token-map guard aborts the
-// whole run, and the per-run page loop is bounded at 20.
+// whole run, and the per-run page loop is bounded at 100.
 
 const NOW = new Date("2026-07-18T12:00:00Z");
 const TODAY = "2026-07-18";
@@ -111,6 +112,10 @@ function fakePlaid(overrides: PlaidOverrides = {}) {
       "accountsGet",
       overrides.accountsGet ?? (async () => ({ institutionId: null, accounts: [] }))
     ) as PlaidClient["accountsGet"],
+    institutionGet: record(
+      "institutionGet",
+      overrides.institutionGet ?? (async () => ({ name: "Sandbox First Bank" }))
+    ) as PlaidClient["institutionGet"],
     accountsBalanceGet: record(
       "accountsBalanceGet",
       overrides.accountsBalanceGet ?? (async () => ({ accounts: [balanceAccount()] }))
@@ -205,7 +210,7 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     expect(error).toBeInstanceOf(InputError);
     expect((error as InputError).code).toBe("token_read_failed");
     // No partial writes: the abort happens before any item is touched.
-    expect(kv.ops).toHaveLength(1); // just the seed
+    expect(kv.ops).toHaveLength(2); // the seed, then the sync lease being taken
   });
 
   it("syncs a multi-page run, persisting each cursor only after its chunks", async () => {
@@ -244,7 +249,7 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
       .map((op) => op.key);
     expect(ordered).toEqual(["acc-1:2026-07", "cursor:item-1", "acc-1:2026-07", "cursor:item-1"]);
     const cursorValues = kv.ops.filter((op) => op.key === "cursor:item-1").map((op) => op.value);
-    expect(cursorValues).toEqual([{ cursor: "c1" }, { cursor: "c2" }]);
+    expect(cursorValues).toEqual([{ cursor: "c1", paginationStart: null }, { cursor: "c2" }]);
 
     // Cursor threading: first call starts fresh (null), second resumes at c1.
     const syncCalls = plaid.callsTo("transactionsSync").map((c) => c.args[1]);
@@ -376,6 +381,41 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     });
   });
 
+  it("saves the bank name on the next sync and does not look it up again once known", async () => {
+    const actor = { actorUserId: "00000000-0000-4000-8000-0000000000aa" };
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid();
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(actor);
+    expect(await kv.get(NS.connections, "item:item-1")).toMatchObject({
+      institutionName: "Sandbox First Bank"
+    });
+    expect(plaid.callsTo("institutionGet")).toHaveLength(1);
+    await syncRunHandler(ports)(actor);
+    expect(plaid.callsTo("institutionGet")).toHaveLength(1);
+  });
+
+  it("still finishes the sync when the bank name lookup fails", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      institutionGet: async () => {
+        throw new PlaidError("INTERNAL_SERVER_ERROR", 500, {
+          type: null,
+          message: null,
+          requestId: null
+        });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = (await syncRunHandler(ports)({
+      actorUserId: "00000000-0000-4000-8000-0000000000aa"
+    })) as { items: Record<string, unknown>[] };
+    expect(result.items[0]).toMatchObject({ itemId: "item-1", status: "connected" });
+    expect(await kv.get(NS.connections, "item:item-1")).not.toHaveProperty("institutionName");
+  });
+
   it("recovers a reauth-required item to connected after a successful sync", async () => {
     const kv = fakeKv();
     await kv.set(NS.connections, "item:item-1", {
@@ -435,7 +475,11 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     );
     expect(byId["t-rule"]).toMatchObject({ categoryId: "subscriptions", categorizedBy: "rule" });
     expect(byId["t-pfc"]).toMatchObject({ categoryId: "dining", categorizedBy: "plaid-map" });
-    expect(byId["t-none"]).toMatchObject({ categoryId: null, categorizedBy: null });
+    expect(byId["t-none"]).toMatchObject({
+      categoryId: null,
+      categorizedBy: null,
+      reviewState: "needs_look"
+    });
 
     // First read seeds the default taxonomy so the feed and rules always
     // have a category list to resolve against.
@@ -445,7 +489,143 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     expect(taxonomy.categories.map((category) => category.id)).toContain("dining");
   });
 
-  it("bounds a runaway sync at 20 pages per item per run", async () => {
+  it("lets the newest rule win when one merchant holds two (review finding 5)", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    await kv.set(NS.rules, "rule:newer", {
+      payeeKey: "coffee shop",
+      categoryId: "dining",
+      createdAt: "2026-08-01T00:00:00Z"
+    });
+    await kv.set(NS.rules, "aaa-older", {
+      payeeKey: "coffee shop",
+      categoryId: "subscriptions",
+      createdAt: "2026-07-01T00:00:00Z"
+    });
+    const plaid = fakePlaid({
+      transactionsSync: async () =>
+        syncPage({ added: [tx({ transaction_id: "t-rule", name: "COFFEE SHOP #42" })] })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)({ actorUserId: "00000000-0000-4000-8000-0000000000aa" });
+    const chunk = (await kv.get(NS.transactions, "acc-1:2026-07")) as {
+      transactions: Record<string, unknown>[];
+    };
+    expect(chunk.transactions[0]).toMatchObject({ categoryId: "dining" });
+  });
+
+  describe("review state (#3175)", () => {
+    type Tier = "ask_each_time" | "trusted_auto" | "always_confirm";
+    const ACTOR = "00000000-0000-4000-8000-0000000000aa";
+
+    async function runWithTiers(
+      tiers: Partial<Record<string, Tier | "throw">>,
+      activity: ActivityInput[] = []
+    ) {
+      const kv = fakeKv();
+      await seedItem(kv, "item-1");
+      // A confirmed, categorized earlier row makes "Known Diner" a seen merchant.
+      await kv.set(NS.transactions, "acc-1:2026-06", {
+        transactions: [
+          {
+            id: "t-old",
+            accountId: "acc-1",
+            date: "2026-06-10",
+            amountCents: 900,
+            isoCurrency: "USD",
+            name: "Known Diner 7",
+            merchant: null,
+            plaidCategory: null,
+            categoryId: "dining",
+            pending: false,
+            pendingTransactionId: null,
+            categorizedBy: "user"
+          }
+        ]
+      });
+      const plaid = fakePlaid({
+        transactionsSync: async () =>
+          syncPage({
+            added: [
+              tx({ transaction_id: "t-seen", name: "Known Diner 8" }),
+              tx({ transaction_id: "t-new", name: "Some Diner" })
+            ]
+          })
+      });
+      const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+      const withPolicy: WorkerPorts = {
+        ...ports,
+        store: async () => ({
+          ...kvStore(kv),
+          appendActivity: async (entry) => {
+            activity.push(entry);
+          }
+        }),
+        actionPolicy: {
+          get: async (familyId) => {
+            const tier = tiers[familyId];
+            if (tier === "throw") throw new Error("rpc_failed");
+            return tier ?? "ask_each_time";
+          }
+        }
+      };
+      await syncRunHandler(withPolicy)({ actorUserId: ACTOR });
+      const chunk = (await kv.get(NS.transactions, "acc-1:2026-07")) as {
+        transactions: Record<string, unknown>[];
+      };
+      return Object.fromEntries(chunk.transactions.map((record) => [record.id as string, record]));
+    }
+
+    it("sorting trusted and sorting_new asking: seen merchant confirmed, new one needs a look", async () => {
+      const byId = await runWithTiers({ sorting: "trusted_auto", sorting_new: "ask_each_time" });
+      expect(byId["t-seen"]).toMatchObject({ categoryId: "dining", reviewState: "confirmed" });
+      expect(byId["t-new"]).toMatchObject({ categoryId: "dining", reviewState: "needs_look" });
+    });
+
+    it("sorting asking and sorting_new trusted: the reverse", async () => {
+      const byId = await runWithTiers({ sorting: "ask_each_time", sorting_new: "trusted_auto" });
+      expect(byId["t-seen"]).toMatchObject({ reviewState: "needs_look" });
+      expect(byId["t-new"]).toMatchObject({ reviewState: "confirmed" });
+    });
+
+    it("logs an activity row (actor moss, ids only) for each guess Moss confirms itself", async () => {
+      const activity: ActivityInput[] = [];
+      await runWithTiers({ sorting: "trusted_auto", sorting_new: "ask_each_time" }, activity);
+      expect(activity).toEqual([
+        {
+          actor: "moss",
+          kind: "transaction.categorize",
+          params: {
+            transactionId: "t-seen",
+            accountId: "acc-1",
+            month: "2026-07",
+            categoryId: "dining",
+            previousCategoryId: null
+          },
+          undo: {
+            transactionId: "t-seen",
+            accountId: "acc-1",
+            month: "2026-07",
+            categoryId: null
+          }
+        }
+      ]);
+    });
+
+    it("logs nothing when Moss only suggests and leaves the row for review", async () => {
+      const activity: ActivityInput[] = [];
+      await runWithTiers({}, activity);
+      expect(activity).toEqual([]);
+    });
+
+    it("an unreadable tier fails closed to needs_look", async () => {
+      const byId = await runWithTiers({ sorting: "throw", sorting_new: "throw" });
+      expect(byId["t-seen"]).toMatchObject({ reviewState: "needs_look" });
+      expect(byId["t-new"]).toMatchObject({ reviewState: "needs_look" });
+    });
+  });
+
+  it("bounds a runaway sync at 100 pages per item per run", async () => {
     const kv = fakeKv();
     await seedItem(kv, "item-1");
     let call = 0;
@@ -463,9 +643,348 @@ describe("finance.sync.run (#1146, D3 shared queue/tool handler)", () => {
     })) as {
       items: Record<string, unknown>[];
     };
-    expect(plaid.callsTo("transactionsSync")).toHaveLength(20);
-    expect(result.items[0]).toMatchObject({ status: "connected", pages: 20, added: 20 });
-    // Progress is durable: the 20th cursor is persisted, the next run resumes.
-    expect(await kv.get(NS.connections, "cursor:item-1")).toEqual({ cursor: "c-19" });
+    expect(plaid.callsTo("transactionsSync")).toHaveLength(100);
+    expect(result.items[0]).toMatchObject({ status: "connected", pages: 100, added: 100 });
+    // Progress is durable: the last cursor is persisted, the next run resumes.
+    expect(await kv.get(NS.connections, "cursor:item-1")).toEqual({
+      cursor: "c-99",
+      paginationStart: null
+    });
+  });
+});
+
+// #3161: a failed live balance check must not block transactions, Plaid's full
+// error is kept for diagnosis, removal-only batches delete, mutation-during-
+// pagination restarts, and connect triggers a first sync.
+describe("finance.sync.run (#3161 sync resilience)", () => {
+  const ACTOR = { actorUserId: "00000000-0000-4000-8000-0000000000aa" };
+  const invalidProduct = () =>
+    new PlaidError("INVALID_PRODUCT", 400, {
+      type: "INVALID_REQUEST",
+      message: "client is not authorized to access the following products: balance",
+      requestId: "req-abc123"
+    });
+
+  it("falls back to the accounts lookup balances and still pulls transactions", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      accountsBalanceGet: async () => {
+        throw invalidProduct();
+      },
+      accountsGet: async () => ({
+        institutionId: "ins_1",
+        accounts: [balanceAccount({ balanceCents: 4200 })]
+      }),
+      transactionsSync: async () =>
+        syncPage({ added: [tx({ transaction_id: "t1" })], nextCursor: "c1" })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.items).toEqual([
+      { itemId: "item-1", status: "connected", added: 1, modified: 0, removed: 0, pages: 1 }
+    ]);
+    expect(await kv.get(NS.accounts, "acc-1")).toMatchObject({ balanceCents: 4200 });
+    const chunk = await kv.get(NS.transactions, "acc-1:2026-07");
+    expect((chunk as { transactions: { id: string }[] }).transactions.map((r) => r.id)).toEqual([
+      "t1"
+    ]);
+  });
+
+  it("still marks reauth when the balance check says login is required", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      accountsBalanceGet: async () => {
+        throw new PlaidError("ITEM_LOGIN_REQUIRED", 400);
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.items).toMatchObject([{ status: "reauth-required" }]);
+  });
+
+  it("persists Plaid's full error detail on a failed item, never the token", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        throw invalidProduct();
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    const stored = await kv.get(NS.connections, "item:item-1");
+    expect(stored).toMatchObject({
+      status: "error",
+      lastError: "INVALID_PRODUCT",
+      lastErrorDetail: {
+        type: "INVALID_REQUEST",
+        code: "INVALID_PRODUCT",
+        message: "client is not authorized to access the following products: balance",
+        requestId: "req-abc123"
+      }
+    });
+    expect(JSON.stringify(stored)).not.toContain("access-1");
+  });
+
+  it("clears the stored error detail after a good sync", async () => {
+    const kv = fakeKv();
+    await kv.set(NS.connections, "item:item-1", {
+      itemId: "item-1",
+      institutionId: "ins_1",
+      connectedAt: "2026-07-01T00:00:00Z",
+      status: "error",
+      lastError: "X",
+      lastErrorDetail: { type: "T", code: "X", message: "m", requestId: "r" }
+    });
+    const { ports } = fakePorts({ kv, plaid: fakePlaid().client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    const stored = (await kv.get(NS.connections, "item:item-1")) as Record<string, unknown>;
+    expect(stored.lastError).toBeUndefined();
+    expect(stored.lastErrorDetail).toBeUndefined();
+  });
+
+  it("logs a metadata-only line on failure", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        throw invalidProduct();
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "warn").mockImplementation((...a) => {
+      lines.push(a.join(" "));
+    });
+    try {
+      await syncRunHandler(ports)(ACTOR);
+    } finally {
+      spy.mockRestore();
+    }
+    const line = lines.find((l) => l.includes("INVALID_PRODUCT"));
+    expect(line).toBeDefined();
+    expect(line).toContain("item-1");
+    expect(line).not.toContain("access-1");
+  });
+
+  it("deletes removed transactions when the batch carries only removals", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    await kv.set(NS.accounts, "acc-1", { ...balanceAccount(), itemId: "item-1", updatedAt: "x" });
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [
+        {
+          id: "pend-1",
+          accountId: "acc-1",
+          date: "2026-07-10",
+          amountCents: 1234,
+          isoCurrency: "USD",
+          name: "X",
+          merchant: null,
+          plaidCategory: null,
+          categoryId: null,
+          pending: true,
+          pendingTransactionId: null,
+          categorizedBy: null
+        }
+      ]
+    });
+    const plaid = fakePlaid({
+      transactionsSync: async () => syncPage({ removed: [{ transaction_id: "pend-1" }] })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    const chunk = (await kv.get(NS.transactions, "acc-1:2026-07")) as {
+      transactions: unknown[];
+    } | null;
+    expect(chunk?.transactions ?? []).toEqual([]);
+  });
+
+  it("restarts from the starting cursor on mutation-during-pagination", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    await kv.set(NS.connections, "cursor:item-1", { cursor: "c-start" });
+    const cursorsSeen: (string | null)[] = [];
+    let n = 0;
+    const plaid = fakePlaid({
+      transactionsSync: async (_token: string, cursor: string | null) => {
+        cursorsSeen.push(cursor);
+        n += 1;
+        if (n === 1) {
+          return syncPage({
+            added: [tx({ transaction_id: "t1" })],
+            nextCursor: "c-mid",
+            hasMore: true
+          });
+        }
+        if (n === 2) {
+          throw new PlaidError("TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION", 400);
+        }
+        return syncPage({ added: [tx({ transaction_id: "t1" })], nextCursor: "c-end" });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(cursorsSeen).toEqual(["c-start", "c-mid", "c-start"]);
+    expect(result.items).toMatchObject([{ status: "connected", added: 1, pages: 1 }]);
+  });
+
+  it("gives up after repeated mutation errors and records the item error", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        throw new PlaidError("TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION", 400);
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.items).toMatchObject([{ status: "error" }]);
+    expect(plaid.callsTo("transactionsSync").length).toBeLessThanOrEqual(4);
+  });
+
+  it("falls back when the balance check fails on the network, not just on a Plaid error", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      accountsBalanceGet: async () => {
+        throw new FinanceFetchError("fetch_failed", "network down");
+      },
+      transactionsSync: async () =>
+        syncPage({ added: [tx({ transaction_id: "t1" })], nextCursor: "c1" })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.items).toMatchObject([{ status: "connected", added: 1 }]);
+    expect(plaid.callsTo("accountsGet")).toHaveLength(1);
+  });
+
+  it("keeps the balance-check error on a connected item after falling back", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      accountsBalanceGet: async () => {
+        throw invalidProduct();
+      },
+      transactionsSync: async () => syncPage({ nextCursor: "c1" })
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    const stored = await kv.get(NS.connections, "item:item-1");
+    expect(stored).toMatchObject({
+      status: "connected",
+      lastErrorDetail: { code: "INVALID_PRODUCT", requestId: "req-abc123" }
+    });
+    expect(stored).not.toHaveProperty("lastError");
+  });
+
+  it("leaves nothing from an abandoned download after a restart", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    let n = 0;
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        n += 1;
+        if (n === 1) {
+          return syncPage({
+            added: [tx({ transaction_id: "ghost" })],
+            nextCursor: "c-mid",
+            hasMore: true
+          });
+        }
+        if (n === 2) throw new PlaidError("TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION", 400);
+        return syncPage({ added: [tx({ transaction_id: "real" })], nextCursor: "c-end" });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    const chunk = await kv.get(NS.transactions, "acc-1:2026-07");
+    expect((chunk as { transactions: { id: string }[] }).transactions.map((r) => r.id)).toEqual([
+      "real"
+    ]);
+  });
+
+  it("skips a second sync while one holds the lease", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({});
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await kv.set(NS.connections, "lock:sync", { at: ports.now().getTime() });
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.status).toBe("busy");
+    expect(plaid.callsTo("transactionsSync")).toHaveLength(0);
+  });
+
+  it("keeps the pagination start on every checkpoint until the last page is applied", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    await kv.set(NS.connections, "cursor:item-1", { cursor: "c-start" });
+    let n = 0;
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        n += 1;
+        return syncPage({
+          added: [tx({ transaction_id: `t${n}` })],
+          nextCursor: `c${n}`,
+          hasMore: n < 2
+        });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const sets: unknown[] = [];
+    const realSet = ports.kv.set.bind(ports.kv);
+    ports.kv.set = async (ns, key, value) => {
+      if (key === "cursor:item-1") sets.push(value);
+      return realSet(ns, key, value);
+    };
+    await syncRunHandler(ports)(ACTOR);
+    expect(sets).toEqual([{ cursor: "c1", paginationStart: "c-start" }, { cursor: "c2" }]);
+  });
+
+  it("does not run when another sync took the lease first", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({});
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    const realGet = ports.kv.get.bind(ports.kv);
+    ports.kv.get = async (ns, key) => {
+      const value = await realGet(ns, key);
+      // A rival overwrites the lease between our write and our read-back.
+      if (key === "lock:sync" && value?.owner !== undefined) {
+        await ports.kv.set(ns, key, { at: ports.now().getTime(), owner: "rival" });
+        return { at: ports.now().getTime(), owner: "rival" };
+      }
+      return value;
+    };
+    const result = await syncRunHandler(ports)(ACTOR);
+    expect(result.status).toBe("busy");
+    expect(plaid.callsTo("transactionsSync")).toHaveLength(0);
+  });
+
+  it("takes the lease and releases it when done", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({ transactionsSync: async () => syncPage({ nextCursor: "c1" }) });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    expect(kv.ops.some((op) => JSON.stringify(op).includes("lock:sync"))).toBe(true);
+    expect(await kv.get(NS.connections, "lock:sync")).toBeNull();
+  });
+
+  it("leaves a replacement lease alone when it finishes", async () => {
+    const kv = fakeKv();
+    await seedItem(kv, "item-1");
+    const plaid = fakePlaid({
+      transactionsSync: async () => {
+        // Another owner takes over the lease while this sync is running.
+        await kv.set(NS.connections, "lock:sync", { at: NOW.getTime(), owner: "other" });
+        return syncPage({ nextCursor: "c1" });
+      }
+    });
+    const { ports } = fakePorts({ kv, plaid: plaid.client, tokens: TOKENS });
+    await syncRunHandler(ports)(ACTOR);
+    expect(await kv.get(NS.connections, "lock:sync")).toMatchObject({ owner: "other" });
   });
 });

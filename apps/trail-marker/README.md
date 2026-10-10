@@ -163,7 +163,7 @@ Transcription is configured only through AI providers in Moss.
 Each accepted Start shows a small draggable pill above ordinary windows on every Space, including
 alongside full-screen apps. The 222 × 32-point pure-white capsule (including dark mode) shows a compact source menu,
 a red three-bar level meter, a grey-ringed round Pause button and a solid red Stop button, without visible status text, elapsed time
-or meeting title. Its far-right X is always visible; it only hides the
+or meeting title during normal capture. During automatic same-source recovery it shows “Recovering audio…”; a hard interruption expands it with a persistent warning and reason, even if it was hidden. Hide is unavailable until that warning is resolved. Its far-right X otherwise only hides the
 pill, as does a native window-close command. Recording continues, and the red Meeting menu retains
 Pause/Stop plus **Show recording pill** to restore it. Showing a paused pill does not resume capture.
 Every new accepted Start shows the pill again. Its accessibility value still describes Recording, Paused,
@@ -189,8 +189,8 @@ reply was lost before Stop. The old and new intervals keep their respective sour
 
 The Trail Marker menu-bar mark shows a red dot from accepted Start until Stop, including Pause.
 The existing meeting menu retains local Pause/Stop controls across browser navigation.
-Stop or a terminal authorization, expiry, identity or cleanup path clears both
-recording surfaces. Moss also keeps controls available while visiting History or other modules.
+Stop or a terminal authorization, expiry or identity path clears the ordinary
+recording surfaces. Failed cleanup instead retains a persistent warning with Stop available. Moss also keeps controls available while visiting History or other modules.
 Pause closes inputs and starts no new audio uploads. Stop fixes the cutoff and drains only retained
 pre-cutoff audio for up to 60 seconds; a new native recording waits for this bounded finalization.
 Pause All, Unlink and quit close capture. A lease expiration discards unsent audio even when paused.
@@ -252,3 +252,13 @@ concurrent producers and guard-removal checks. `python3 scripts/check-meeting-li
 --check --self-test` only validates native mutation anchors and the result-validation harness; it
 does not compile Swift or execute XCTest. macOS build/test, visible all-Spaces behavior and a real
 linked-Mac Start/Unlink trial remain separate required gates. A design mockup is not live proof.
+
+### Same-source audio recovery (#3123)
+
+A verified format or valid sample-clock reconfiguration quiesces both selected tracks, confirms a new server epoch for the identical sources, and restarts automatically with labelled gaps. One episode permits at most three control attempts within a 12-second monotonic budget capped by the current lease; every request and backoff consumes it. Continuously advancing callbacks from the sources that actually faulted restore a later episode budget after two seconds. Service retires an acknowledged recovery's local episode once 30 seconds have elapsed since acknowledgment without another recovery attempt, even if the faulted source stays quiet. This is evaluated on service before processing a newly observed fault; it does not timestamp the hardware fault itself. This cooldown never resets pending control, device acquisition or recording acknowledgment; immediate recurring faults keep the original attempts/deadline, and the recording-wide allowance never resets. Pause, Stop and lost authority cancel async recovery. Replacement acquisition runs on a separate serial owner queue, keeping controls and server polling responsive. Cancellation closes its gates immediately; a blocked native call itself cannot be preempted, so disposal remains owned until it returns. The recovery deadline stays separate from the recording authorization lease, upload remains closed during acquisition, and late acquisition is discarded. Recovery exhaustion pauses with “Audio recovery could not finish. Capture is paused. Press Resume in Moss to try again.” This also covers a slow OS permission answer; it does not imply a server outage or expire a still-live recording grant. Initial device quiescence retains the existing synchronous stop path. Physical microphone/speaker routes, selected-app membership and Moss exclusions remain pinned; real source loss stays a hard pause. Expired old-epoch audio is retired as a gap before Resume and cannot pause the replacement segment. Installed-Mac browser-call and native Teams proof is required before this draft is considered verified.
+
+Automatic recovery may cause macOS to show its own system-audio consent dialog if access was reset. Only the person answers it; Moss never accepts permission automatically. Reported permission-denied errors pause capture; refusal may instead yield silent tap callbacks, so that behavior remains an installed-Mac proof requirement. An unknown preflight is not treated as proof of permission.
+
+Each recording permits at most eight accepted automatic recovery controls, and automatic recovery preserves the last eight of the 64 segments for manual controls. Each accepted control counts even if native acquisition later fails; idempotent retries are free. Neither healthy audio nor the completed 30-second cooldown resets that recording-wide allowance. Frequent failures therefore pause visibly instead of exhausting every segment automatically.
+
+Deploy the matching Moss server before updating Trail Marker: an older server rejects the new recovery command and status. With computer audio selected, a speaker/reference change during echo-cancellation startup fails the pinned Start, rather than falling back to plain microphone capture; eligible format/setup incompatibilities can still use the same-microphone fallback after complete disposal.

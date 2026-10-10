@@ -1,5 +1,6 @@
 import { sql } from "kysely";
 
+import { AiRepository } from "@moss/ai";
 import {
   createModuleStorageRpc,
   ModuleQueryError,
@@ -47,6 +48,9 @@ export class ExternalModuleRpcError extends Error {
       | "forbidden_db_statement"
       | "forbidden_db_mutation"
       | "invalid_rpc"
+      // P4: actionPolicy.get named a family this module did not declare. The module sees only
+      // the code, never another module's tier.
+      | "undeclared_action_family"
       // Task 2b (#1283): notify.post's own two failure modes. forbidden_notify_mutation
       // mirrors forbidden_kv_mutation/forbidden_credential_write — a read-risk tool may
       // not post a notification, because unlike db.query there is no degraded read-only
@@ -321,6 +325,25 @@ export function createExternalModuleRpcHandler(input: {
         await sql`SELECT set_config('app.current_module_id', ${input.module.id}, true)`.execute(
           scopedDb.db
         );
+
+        if (method === "actionPolicy.get") {
+          // A module reads only families its own manifest declares. The module id is bound
+          // here, never taken from the caller, so another module's family cannot be named.
+          const familyId = actionFamilyIdParam(params);
+          const family = (input.module.manifest.assistantActionFamilies ?? []).find(
+            (f) => f.id === familyId
+          );
+          if (!family) {
+            throw new ExternalModuleRpcError(
+              "undeclared_action_family",
+              `module ${input.module.id} does not declare action family ${familyId}`
+            );
+          }
+          const stored = (await new AiRepository().listActionPolicies(scopedDb)).find(
+            (p) => p.moduleId === input.module.id && p.actionFamilyId === family.id
+          );
+          return { tier: stored?.tier ?? family.defaultTier };
+        }
 
         if (method === "db.query") {
           // #1167: only modules that declared owned tables get the SQL door; the
@@ -698,4 +721,12 @@ function notifyHref(value: unknown): string | undefined {
     throw new ExternalModuleRpcError("invalid_rpc", "notify.post href must be a same-origin path");
   }
   return value;
+}
+
+function actionFamilyIdParam(params: Record<string, unknown>): string {
+  const familyId = params.familyId;
+  if (typeof familyId !== "string" || familyId.length === 0 || familyId.length > 128) {
+    throw new ExternalModuleRpcError("invalid_rpc", "actionPolicy.get requires a familyId");
+  }
+  return familyId;
 }

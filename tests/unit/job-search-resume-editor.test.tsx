@@ -193,7 +193,8 @@ describe("ResumeSection / ResumeEditor", () => {
     // Confirm dialog up, save not yet called.
     expect(resumeSave.saveResume).not.toHaveBeenCalled();
     expect(text(renderer)).toContain("Replace résumé?");
-    expect(text(renderer)).toContain("Postings not yet read will be cleared");
+    expect(text(renderer)).toContain("scored again against the new");
+    expect(text(renderer)).not.toContain("stays exactly as it is");
 
     await act(async () => {
       findButton(renderer, /^Replace résumé$/, /jds-btn--danger/).props.onClick();

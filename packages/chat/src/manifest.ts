@@ -165,6 +165,27 @@ export const chatModuleManifest = {
       ]
     },
     {
+      id: "chat.automatic_session_handoff",
+      description:
+        "Moss counts what a chat's model session holds. Before a turn passes the budget, Moss starts a fresh session " +
+        "for the same chat and model from its summary and newer turns, once a summary is ready. Not in private chats.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat_changed_during_handoff",
+          class: "transient",
+          description:
+            "You switched chats while Moss was starting the fresh session, so the message was not sent. Moss says your chat changed while it was starting. Send it again."
+        },
+        {
+          code: "chat_model_changed_during_handoff",
+          class: "transient",
+          description:
+            "The chat's AI provider or model changed while Moss was starting the fresh session, so the message was not sent. Send it again."
+        }
+      ]
+    },
+    {
       id: "chat.relative_reminders",
       description:
         "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder Moss posts once in Main, " +

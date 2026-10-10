@@ -55,7 +55,12 @@ export interface ChatPersistencePort {
   /** The accepted summary plus every stored turn after its covered frontier. */
   listPriorTurns(
     actorUserId: string,
-    opts?: { readonly forceReplay?: boolean; readonly threadId?: string | null },
+    opts?: {
+      readonly forceReplay?: boolean;
+      readonly threadId?: string | null;
+      /** Read the retained context without logging a replay injection. */
+      readonly measureOnly?: boolean;
+    },
     surface?: ChatSurface
   ): Promise<{
     recent: readonly { role: "user" | "assistant"; content: string }[];

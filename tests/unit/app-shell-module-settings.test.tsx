@@ -135,7 +135,7 @@ const MODULES: readonly ModuleDto[] = [
   }
 ];
 
-function renderShell(path: string): string {
+function renderShell(path: string, modules: readonly ModuleDto[] = MODULES): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(queryKeys.notifications.list, {
     notifications: [],
@@ -151,7 +151,7 @@ function renderShell(path: string): string {
         { initialEntries: [path] },
         createElement(AppShell, {
           me: ME,
-          modules: MODULES,
+          modules,
           modulesLoading: false,
           children: createElement("div", null, "content")
         })
@@ -206,6 +206,25 @@ describe("AppShell module settings button in topbar", () => {
     expect(html).toContain('class="topbar-title-row"');
     expect(html).toContain('aria-label="Tasks settings"');
     expect(html).toContain('href="/settings?section=modules&amp;module=tasks"');
+  });
+
+  it("points the cogwheel at the module's own settings page when it declares one", () => {
+    const ledger: ModuleDto = {
+      id: "ledger",
+      name: "Ledger",
+      version: "1.0.0",
+      lifecycle: "optional",
+      navigation: [{ id: "ledger", label: "Ledger", path: "/m/ledger", icon: null, order: 40 }],
+      settings: [],
+      external: true,
+      settingsPath: "/m/ledger/settings"
+    };
+    expect(hasModuleSettings("ledger", [ledger])).toBe(true);
+    expect(moduleSettingsHref("ledger", [ledger])).toBe("/m/ledger/settings");
+    expect(moduleSettingsHref("news", [ledger])).toBe("/settings?section=modules&module=news");
+    const html = renderShell("/m/ledger", [...MODULES, ledger]);
+    expect(html).toContain('aria-label="Ledger settings"');
+    expect(html).toContain('href="/m/ledger/settings"');
   });
 
   it("does not render the settings cogwheel on Today or Workshop pages", () => {
