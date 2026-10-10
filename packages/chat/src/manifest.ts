@@ -173,6 +173,13 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     {
+      id: "chat.reminder_live_arrival",
+      description:
+        "A due chat reminder appears at once in the open Main chat, even while Moss is replying; both " +
+        "messages stay separate after a reload. Side, private and module chats never show it.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.reminder_list",
       description:
         "In Main chat, 'list my reminders' shows reminders set in chat: waiting ones with time left, then " +
