@@ -166,6 +166,58 @@ describe("ChatRepository.publishConversationSummary", () => {
     expect(after?.last_active_at).toEqual(thread.last_active_at);
   });
 
+  it("publishes from the worker role, which is how the summary job runs", async () => {
+    const { thread, messageIds } = await seededThread("publish as worker");
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      const result = await new DataContextRunner(workerDb).withDataContext(userAContext(), (db) =>
+        repository.publishConversationSummary(db, {
+          threadId: thread.id,
+          expectedRevision: 0,
+          expectedCoveredThroughMessageId: null,
+          throughMessageId: messageIds[1]!,
+          summary: "Decided: cedar"
+        })
+      );
+      expect(result).toBe("published");
+    } finally {
+      await workerDb.destroy();
+    }
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBe("Decided: cedar");
+    expect(after?.summary_revision).toBe(1);
+  });
+
+  it("never lets the worker publish into another owner's thread", async () => {
+    const { thread, messageIds } = await seededThread("worker other owner");
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      const result = await new DataContextRunner(workerDb).withDataContext(
+        { actorUserId: ids.userB, requestId: "test" },
+        (db) =>
+          repository.publishConversationSummary(db, {
+            threadId: thread.id,
+            expectedRevision: 0,
+            expectedCoveredThroughMessageId: null,
+            throughMessageId: messageIds[1]!,
+            summary: "stolen"
+          })
+      );
+      expect(result).toBe("missing");
+    } finally {
+      await workerDb.destroy();
+    }
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBeNull();
+    expect(after?.summary_revision).toBe(0);
+  });
+
   it("refuses a candidate prepared against an older revision", async () => {
     const { thread, messageIds } = await seededThread("stale revision");
     const publish = (
