@@ -36,6 +36,18 @@ export interface PutQuietHoursSettingsRequest {
 
 export type PutQuietHoursSettingsResponse = GetQuietHoursSettingsResponse;
 
+/** The owner's explicit pick between two differing saved schedules. */
+export interface ResolveQuietHoursConflictRequest {
+  /** "profile" keeps Profile's own schedule; "alerts" adopts the older alert schedule. */
+  readonly choice: "profile" | "alerts";
+
+  /** The chosen schedule as the owner saw it; a different current value is refused with 409. */
+  readonly quietHours: QuietHoursSettingsDto;
+  readonly expectedVersion: string | null;
+}
+
+export type ResolveQuietHoursConflictResponse = GetQuietHoursSettingsResponse;
+
 export interface NotificationPreferenceDto {
   readonly moduleId: string;
   readonly moduleName: string;
@@ -142,6 +154,25 @@ export const putQuietHoursSettingsRouteSchema = {
     additionalProperties: false,
     required: ["quietHours", "expectedVersion"],
     properties: { quietHours: quietHoursSchema, expectedVersion: quietHoursVersionSchema }
+  },
+  response: {
+    200: quietHoursResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    409: errorResponseSchema
+  }
+} as const;
+
+export const resolveQuietHoursConflictRouteSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    required: ["choice", "quietHours", "expectedVersion"],
+    properties: {
+      choice: { type: "string", enum: ["profile", "alerts"] },
+      quietHours: quietHoursSchema,
+      expectedVersion: quietHoursVersionSchema
+    }
   },
   response: {
     200: quietHoursResponseSchema,

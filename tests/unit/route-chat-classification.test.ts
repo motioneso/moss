@@ -88,6 +88,7 @@ const EXPECTED: readonly string[] = [
   "settings GET /api/me/install-manifest read",
   "settings PUT /api/me/persona blocked prompt_shaping",
   "settings POST /api/me/persona/preview blocked prompt_shaping",
+  "settings POST /api/me/quiet-hours/resolution blocked module_promise",
   "settings GET /api/me/source-behaviors read user_authored",
   "settings PUT /api/me/source-behaviors/:id blocked prompt_shaping",
   "settings GET /api/me/priority-model read user_authored",
