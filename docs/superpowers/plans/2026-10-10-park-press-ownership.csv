@@ -385,11 +385,13 @@ packages/ai/src/manifest.ts,I0,reserved,,"Single metadata owner, including activ
 packages/backtrack/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
 packages/backtrack/src/settings/index.tsx,L6,reserved,,"Notifications and utility settings, not feature-owned backend logic"
 packages/briefings/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/calendar/package.json,I0,reserved,,Direct @moss/ui dependency for approved settings consumer; match lane batch and lockfile
 packages/calendar/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
 packages/calendar/src/settings/index.tsx,P4,reserved,,Exact planning report ownership
 packages/chat/src/manifest.ts,I0,active-owner-hold,3328;3154;3088,"Single metadata owner, including active PR overlaps"
 packages/commitments/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
 packages/connectors/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/email/package.json,I0,reserved,,Direct @moss/ui dependency for approved settings consumer; match lane batch and lockfile
 packages/email/src/manifest.ts,I0,active-disjoint-only,3154,"Single metadata owner, including active PR overlaps"
 packages/email/src/settings/index.tsx,L6,reserved,,"Notifications and utility settings, not feature-owned backend logic"
 packages/goals/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
@@ -521,6 +523,7 @@ packages/sports/src/web/today-scores.tsx,L2,reserved,,Sports editorial surface
 packages/sports/src/web/today-widget.tsx,L2,reserved,,Sports editorial surface
 packages/sports/src/web/use-auto-advance.ts,L2,reserved,,Sports editorial surface
 packages/structured-state/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/tasks/package.json,I0,reserved,,Direct @moss/ui dependency for approved settings consumer; match lane batch and lockfile
 packages/tasks/src/manifest.ts,I0,active-disjoint-only,3154,"Single metadata owner, including active PR overlaps"
 packages/tasks/src/settings/index.tsx,P4,reserved,,Exact planning report ownership
 packages/ui/OPTIONS.md,F0,reserved,,Shared primitive/contract/catalogue owner
@@ -606,6 +609,7 @@ packages/ui/tsconfig.json,F0,reserved,,Shared primitive/contract/catalogue owner
 packages/usefulness-feedback/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
 packages/weather/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
 packages/web-research/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/wellness/package.json,I0,reserved,,Direct @moss/ui dependency for approved settings consumer; match lane batch and lockfile
 packages/wellness/src/export-render.ts,L3,reserved,,Wellness layout and user-visible export
 packages/wellness/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
 packages/wellness/src/settings/index.tsx,L3,reserved,,Wellness surface
