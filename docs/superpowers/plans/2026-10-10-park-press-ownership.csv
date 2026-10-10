@@ -834,7 +834,7 @@ tests/unit/settings-released-pane.test.tsx,C4,reserved,,Reserved existing surfac
 tests/unit/settings-setup-link-navigation.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/settings-skills-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/settings-sports-pane.test.tsx,L2,reserved,,Specific existing UI tests delegated by domain owner
-tests/unit/settings-sports-search-groups.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-sports-search-groups.test.tsx,L2,reserved,,Transferred existing untouched Sports grouping regression from C4 for approved LN10 canonical-control assertions
 tests/unit/settings-sports-sources.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/settings-vault-chooser.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/settings-yolo-admin-group.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
