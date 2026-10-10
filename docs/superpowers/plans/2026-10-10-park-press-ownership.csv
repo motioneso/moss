@@ -769,6 +769,7 @@ tests/unit/foundation-control-contracts.design.test.tsx,F0,registered-new,,Imple
 tests/unit/foundation-dialog-lifecycle.design.test.tsx,F0,registered-new,,Exact path reservation
 tests/unit/foundation-settings-adapters.design.test.tsx,F0,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
 tests/unit/foundation-viewport.design.test.ts,F0,reserved,,Standalone boot/main usable viewport regression; independent of planning host extraction
+tests/unit/foundation-workspace-layout.design.test.ts,F0,reserved,,Approved host layout extraction boundaries and visible-conversation layout regression
 tests/unit/lifestyle-settings-design.test.tsx,L6,registered-new,,Implementation exact-path registration before edit
 tests/unit/lifestyle-wellness-design.test.tsx,L3,registered-new,,Implementation exact-path registration before edit
 tests/unit/loading-screen-theme.test.tsx,C1,reserved,,Recovery display test follows C1
