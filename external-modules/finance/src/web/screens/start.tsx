@@ -16,6 +16,7 @@ import {
 } from "@moss/module-web-sdk";
 import { fetchIsAdmin } from "../api";
 import { LoadingState, outcomeGate } from "../states";
+import { FirstBudget } from "./first-budget";
 import { useToolQuery } from "../store";
 import type { HostActions } from "../root";
 
@@ -92,14 +93,23 @@ export function StartScreen(props: { hostActions: HostActions }): ReactNodeLike 
   if (isAdmin === null) return <LoadingState label="Loading" />;
   return outcomeGate(
     status,
-    (result) => (
-      <StartView
-        keysConfigured={result.keysConfigured !== false}
-        hasBank={result.hasBank === true}
-        isAdmin={isAdmin}
-        hostActions={props.hostActions}
-      />
-    ),
+    (result) => {
+      const view = (
+        <StartView
+          keysConfigured={result.keysConfigured !== false}
+          hasBank={result.hasBank === true}
+          isAdmin={isAdmin}
+          hostActions={props.hostActions}
+        />
+      );
+      // With a bank connected, the screen shows the first-budget draft; the steps view
+      // stays as the fallback until the first sync lands.
+      return result.hasBank === true ? (
+        <FirstBudget hostActions={props.hostActions} fallback={view} />
+      ) : (
+        view
+      );
+    },
     { loadingLabel: "Loading" }
   );
 }

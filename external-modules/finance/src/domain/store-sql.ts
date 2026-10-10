@@ -11,6 +11,7 @@ import type {
   ReviewState,
   TransactionRecord
 } from "./records.js";
+import type { BudgetDraft, DraftLine } from "./draft.js";
 import type { FinanceStore } from "./store-port.js";
 
 // Structural twin of #1167 ctx.db — domain files never import @moss/*, so
@@ -173,6 +174,56 @@ function rowToAccount(row: AccountRow): AccountRecord {
     isoCurrency: row.iso_currency,
     updatedAt: row.updated_at,
     sharedToHousehold: row.shared_to_household
+  };
+}
+
+type DraftRow = {
+  id: string;
+  status: BudgetDraft["status"];
+  basis_from: string;
+  basis_to: string;
+  monthly_income_cents: string | number;
+  created_at: string | Date;
+  started_at: string | Date | null;
+};
+
+type DraftLineRow = {
+  category_key: string;
+  group_name: string;
+  category_name: string;
+  basis_monthly_cents: string | number;
+  proposed_cents: string | number;
+  adjusted_cents: string | number | null;
+  adjusted_by: DraftLine["adjustedBy"];
+  dropped: boolean;
+};
+
+const isoText = (value: string | Date): string =>
+  value instanceof Date ? value.toISOString() : value;
+
+function rowToDraftLine(row: DraftLineRow): DraftLine {
+  return {
+    categoryKey: row.category_key,
+    groupName: row.group_name,
+    categoryName: row.category_name,
+    basisMonthlyCents: Number(row.basis_monthly_cents),
+    proposedCents: Number(row.proposed_cents),
+    adjustedCents: row.adjusted_cents === null ? null : Number(row.adjusted_cents),
+    adjustedBy: row.adjusted_by,
+    dropped: row.dropped
+  };
+}
+
+function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
+  return {
+    id: row.id,
+    status: row.status,
+    basisFrom: row.basis_from,
+    basisTo: row.basis_to,
+    monthlyIncomeCents: Number(row.monthly_income_cents),
+    createdAt: isoText(row.created_at),
+    startedAt: row.started_at === null ? null : isoText(row.started_at),
+    lines
   };
 }
 
@@ -387,6 +438,65 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       );
       const row = result.rows[0];
       return row === undefined ? null : Number(row.amount);
+    },
+
+    async getLatestDraft() {
+      const head = await db.query<DraftRow>(
+        "SELECT id, status, basis_from::text AS basis_from, basis_to::text AS basis_to, " +
+          "monthly_income_cents, created_at, started_at FROM app.finance_budget_drafts " +
+          "WHERE status IN ('open', 'started') ORDER BY created_at DESC LIMIT 1"
+      );
+      const row = head.rows[0];
+      if (row === undefined) return null;
+      const lines = await db.query<DraftLineRow>(
+        "SELECT category_key, group_name, category_name, basis_monthly_cents, proposed_cents, " +
+          "adjusted_cents, adjusted_by, dropped FROM app.finance_budget_draft_lines " +
+          "WHERE draft_id = $1 ORDER BY category_key",
+        [row.id]
+      );
+      return rowToDraft(row, lines.rows.map(rowToDraftLine));
+    },
+
+    // The draft goes in as 'discarded' and flips to 'open' last, so a worker that dies
+    // part-way leaves no half-written draft for the screen to read.
+    async createDraft(build, createdAt) {
+      await db.query(
+        "UPDATE app.finance_budget_drafts SET status = 'discarded' WHERE status = 'open'"
+      );
+      const created = await db.query<{ id: string }>(
+        "INSERT INTO app.finance_budget_drafts (owner_user_id, id, status, basis_from, basis_to, " +
+          "monthly_income_cents, created_at) " +
+          "VALUES (app.current_actor_user_id(), gen_random_uuid(), 'discarded', $1, $2, $3, $4) RETURNING id",
+        [build.basisFrom, build.basisTo, build.monthlyIncomeCents, createdAt]
+      );
+      const draftId = created.rows[0]!.id;
+      for (const line of build.lines) {
+        await db.query(
+          "INSERT INTO app.finance_budget_draft_lines (owner_user_id, draft_id, category_key, " +
+            "group_name, category_name, basis_monthly_cents, proposed_cents) " +
+            "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6)",
+          [
+            draftId,
+            line.categoryKey,
+            line.groupName,
+            line.categoryName,
+            line.basisMonthlyCents,
+            line.proposedCents
+          ]
+        );
+      }
+      await db.query("UPDATE app.finance_budget_drafts SET status = 'open' WHERE id = $1", [
+        draftId
+      ]);
+      return draftId;
+    },
+
+    async markDraftStarted(draftId, startedAt) {
+      await db.query(
+        "UPDATE app.finance_budget_drafts SET status = 'started', started_at = $2 " +
+          "WHERE id = $1 AND status = 'open'",
+        [draftId, startedAt]
+      );
     }
   } satisfies FinanceStore;
 }

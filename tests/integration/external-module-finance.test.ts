@@ -292,6 +292,10 @@ describe("finance job reconciliation (#1146)", () => {
       'update:finance.share-apply:{"retryLimit":1}',
       "create:finance.storage-migrate",
       'update:finance.storage-migrate:{"retryLimit":1}',
+      "create:finance.draft-build",
+      'update:finance.draft-build:{"retryLimit":1}',
+      "create:finance.draft-start",
+      'update:finance.draft-start:{"retryLimit":1}',
       "create:finance.review-apply",
       'update:finance.review-apply:{"retryLimit":1}'
     ]);
