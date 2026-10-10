@@ -62,6 +62,28 @@ Direct installed Node CLIs are equivalent to the repository scripts here; the
   independent negative repairs. The final PR body records the exact test count
   and code head used for its final verification.
 
+### Follow-up from first draft CI and browser review
+
+The first published head, `8bddc23c88ea49d700acb2c97d036e2541f990a2`, did not
+pass CI. Its unit run found three stale Meetings input-boundary assertions after
+the deliberate shared selector change. Its web run found two ambiguous label
+queries because a fallback named Field group duplicated an independently named
+input. These are recorded failures, not flakes or a claimed initial green run.
+
+The correction lifts the existing matching Meetings regression into this
+foundation batch without removing control-type or boundary combinations. Field
+wrappers are neutral by default, retain explicit single-control association, and
+provide an explicit named-group opt-in for genuine multiple controls. Existing
+independently named inputs no longer get a second matching accessible element.
+
+Source-faithful consumer review also exposed a StrictMode effect-replay race:
+queued cleanup could return focus after a replacement setup had focused the
+surface. Per-hook setup generations now cancel only stale cleanup restoration;
+true unmount, nesting and nonmodal outside-focus behavior remain covered. Both
+new replay cases and both CI label cases were observed failing before repair.
+Independent source review and focused regressions passed on the correction.
+A fresh CI result must be observed for the updated remote head.
+
 ### Source-faithful browser observations
 
 The supported cloud Chromium browser rendered the actual shared source against
