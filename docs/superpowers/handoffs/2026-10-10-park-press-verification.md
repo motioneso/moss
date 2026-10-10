@@ -387,6 +387,24 @@ replacements, Meals/Food and Job Search replacements, native branding, Reports
 retirement and real-data/native/AT
 proof are still held or unverified, not counted as completed repairs.
 
+### Complete browser CI partitions
+
+The optional-capture native head completed all 277 browser cases (276 passed and
+one known skip) in 7.5 minutes, plus its separate Service Worker regression. The
+same suite on the guard head still reached the ten-minute cap after 267 reported
+outcomes. This does not establish screenshot timing as the cause or a reliable
+single-runner budget. No further unchanged-head retry is used as a remedy.
+
+The final tooling batch partitions the complete browser suite into two jobs using
+Playwright's built-in sharding. Collection proves a disjoint union of 142 and 135
+cases, exactly the original 277 names, with no omitted or duplicated case. Each
+shard retains the ten-minute phase cap and existing worker configuration; neither
+cancels the other on failure. The production Service Worker regression runs once,
+on shard 1, with its unchanged five-minute cap. The existing required CI gate
+still waits for the full browser job matrix and rejects failure or cancellation.
+No product source, browser assertions, fixtures or runtime timeouts change. The
+new exact-head CI result must still verify both partitions and the aggregate.
+
 ## Explicit outstanding gates
 
 - The original foundation-stage requirement for consumer source/test/browser

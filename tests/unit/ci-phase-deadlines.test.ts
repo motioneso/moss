@@ -67,6 +67,42 @@ describe("CI phase deadlines (#1534, #1724)", () => {
     expect(source).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
   });
 
+  it("runs both complete browser shards without changing phase deadlines or worker count", () => {
+    const browserJob = source.slice(
+      source.indexOf("\n  browser:"),
+      source.indexOf("\n  compose-smoke:")
+    );
+    expect(browserJob).toContain("name: Verify web and browser tests (${{ matrix.shard }}/2)");
+    expect(browserJob).toContain("fail-fast: false");
+    expect(browserJob).toContain("shard: [1, 2]");
+    expect(steps.get("Run Playwright smoke tests")).toContain(
+      "timeout --verbose --signal=TERM 10m pnpm test:e2e --shard=${{ matrix.shard }}/2"
+    );
+    expect(steps.get("Run Playwright smoke tests")).toContain(
+      "CI_PHASE_TIMEOUT phase=playwright-${{ matrix.shard }}-of-2 budget=10m"
+    );
+    expect(browserJob).not.toContain("--workers");
+    expect(browserJob).not.toContain("--grep");
+  });
+
+  it("retains exactly one production Service Worker run and requires the full browser matrix", () => {
+    const sw = steps.get("Run Service Worker regression test");
+    expect(sw).toContain("if: matrix.shard == 1");
+    expect(sw).toContain("timeout --verbose --signal=TERM 5m pnpm test:sw");
+    expect(sw).toContain("CI_PHASE_TIMEOUT phase=playwright-sw budget=5m");
+    const gate = source.slice(source.indexOf("\n  ci-gate:"), source.indexOf("\n  build-image:"));
+    expect(gate).toContain(
+      "[changes, docs-gate, verify, unit, integration, browser, compose-smoke, prod-compose-smoke]"
+    );
+    expect(gate).toContain("if: always()");
+    expect(gate).toContain(
+      "for job in changes docs-gate verify unit integration browser compose-smoke prod-compose-smoke"
+    );
+    expect(gate).toContain('*) failed="$failed $job=$result" ;;');
+    expect(gate).toContain('if [ -n "$failed" ]; then');
+    expect(gate).toContain("exit 1");
+  });
+
   it("builds the app map on each integration runner before DB-backed tests", () => {
     const integrationJob = source.slice(
       source.indexOf("\n  integration:"),
