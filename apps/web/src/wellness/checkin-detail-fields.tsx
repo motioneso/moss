@@ -1,8 +1,10 @@
+import type { RefObject } from "react";
 import { Button, RadioCardGroup } from "@moss/ui";
 import { EMOTIONS, moodIndex, moodBand } from "@moss/shared";
 import { emVars, MOOD_BAND_LABELS, type WellnessEmotionCore, type Theme } from "./emotion-taxonomy";
 
 interface Props {
+  headingRef?: RefObject<HTMLHeadingElement | null>;
   emotion: WellnessEmotionCore;
   feeling: string;
   sensations: string[];
@@ -15,6 +17,7 @@ interface Props {
 }
 
 export function CheckinDetailFields({
+  headingRef,
   emotion,
   feeling,
   sensations,
@@ -43,9 +46,9 @@ export function CheckinDetailFields({
 
   return (
     <div style={emVars(emotion, theme)}>
-      <div className="wl-q" style={{ marginTop: 4 }}>
+      <h3 ref={headingRef} tabIndex={-1} className="wl-q" style={{ marginTop: 4 }}>
         Where do you feel it?
-      </div>
+      </h3>
       <div className="wl-qsub">
         Body sensations that come with &ldquo;{feeling}.&rdquo; Pick any that fit — or none.
       </div>

@@ -284,6 +284,13 @@ adoption. A native h2 in the existing title slot restores those semantics while
 inheriting the shared typography. Both existing browser heading assertions remain
 unchanged, with negative-before unit regressions added.
 
+Native after-verification also exposed focus falling to the document body when a
+selected feeling radio was removed. The owned check-in transition now focuses a
+meaningful revealed heading only if that removed control owned focus and no other
+connected control has since received it. Keyboard/pointer and search transitions,
+StrictMode, safe Escape/opener return, edit hydration and deliberate-focus
+preservation have regression coverage; shared modal/save guards are unchanged.
+
 The Sports viewport test now proves its start/end trigger precondition with
 measured distinct edges before retaining every popup, item-hit and keyboard
 assertion. Earlier private true-edge fixture proof remains distinct from this
