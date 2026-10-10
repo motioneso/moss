@@ -321,6 +321,23 @@ describe("delivering a due reminder", () => {
     }
   });
 
+  it("does not deliver into the old chat when another chat has become Main", async () => {
+    const saved = await save(ids.userB);
+    await makeDue(saved.id, 30);
+    await setMain(ids.userB, saved.threadId, false);
+    const other = await asOwner(ids.userB, (db) => chat.openNewThread(db, { title: "Other" }));
+    await setMain(ids.userB, other.id, true);
+
+    try {
+      await expect(deliver(saved, payload(saved, ids.userB))).resolves.toBe("not_main");
+      expect((await readRow(saved.id)).state).toBe("queued");
+      expect(await deliveredMessages(saved.id)).toHaveLength(0);
+    } finally {
+      await setMain(ids.userB, other.id, false);
+      await setMain(ids.userB, saved.threadId, true);
+    }
+  });
+
   it("delivers once when two workers run the same job at the same time", async () => {
     const saved = await save(ids.userA, "stand up");
     await makeDue(saved.id, 30);

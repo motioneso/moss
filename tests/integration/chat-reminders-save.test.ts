@@ -14,6 +14,7 @@ import {
   REMINDER_CAPACITY_REPLY,
   REMINDER_MAIN_ONLY_REPLY,
   REMINDER_OPEN_LIMIT,
+  reminderRefusedReply,
   reminderSavedReply
 } from "../../packages/chat/src/reminders/wording.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
@@ -200,6 +201,33 @@ describe("saving a reminder from a chat turn (#3309)", () => {
       threadId
     });
     expect(refused?.reply).toBe(REMINDER_MAIN_ONLY_REPLY);
+    expect(await counts(ids.userA)).toEqual({ ...before, messages: before.messages + 2 });
+  });
+
+  it("refuses a module-controlled request even in Main", async () => {
+    const threadId = await mainThreadId(ids.userA);
+    const before = await counts(ids.userA);
+    const refused = await persistenceWith(appBoss).recordReminderTurn(
+      ids.userA,
+      SAY,
+      { kind: "main_only" },
+      { threadId }
+    );
+    expect(refused?.reply).toBe(REMINDER_MAIN_ONLY_REPLY);
+    expect(await counts(ids.userA)).toEqual({ ...before, messages: before.messages + 2 });
+  });
+
+  it("refuses an unsupported request with a reply and saves no reminder", async () => {
+    const threadId = await mainThreadId(ids.userA);
+    const before = await counts(ids.userA);
+    const refused = await persistenceWith(appBoss).recordReminderTurn(
+      ids.userA,
+      "remind me tomorrow at 9am to stretch",
+      { kind: "unsupported", reason: "needs_relative_duration" },
+      { threadId }
+    );
+    expect(refused?.reply).toBe(reminderRefusedReply("needs_relative_duration"));
+    expect(refused?.origin).toMatchObject({ event: "refused", reminderId: null });
     expect(await counts(ids.userA)).toEqual({ ...before, messages: before.messages + 2 });
   });
 
