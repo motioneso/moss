@@ -334,7 +334,15 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "messages go to that provider. While the Chat gate is in Shadow, each eligible, non-private " +
       "message is also classified so the record shows whether the gate would have handled it; no " +
       "tool runs, no approval card appears and the main model still answers, and private chats and " +
-      "oversized messages are never sent to the classifier. The classifier " +
+      "oversized messages are never sent to the classifier. How long the gate waits for the " +
+      "classifier follows that model's own measured speed per question. A fast model keeps a " +
+      "short wait, so a one-off stall hands the message to the main model within a few " +
+      "seconds; if stalls become frequent, the wait grows. A slower model is given about " +
+      "twice the time a full tool request takes it, up to 30 seconds, and a signed-in " +
+      "command-line model simply gets the full 30 seconds. After Moss restarts or a new " +
+      "classifier model is chosen, the wait starts at 30 seconds while the model is measured, " +
+      "and nothing about the wait can be set by hand. " +
+      "The classifier " +
       "sorts each new email into junk, needs a reply, needs action, receipt or notice, " +
       "waiting on someone, time-sensitive, or for your information; receipts, order and booking " +
       "confirmations and account or policy notices stay kept and searchable but are left out of " +
