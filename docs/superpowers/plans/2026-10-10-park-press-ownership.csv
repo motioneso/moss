@@ -864,7 +864,7 @@ tests/unit/today-evening-loops-save.test.tsx,C3,reserved,,Reserved existing surf
 tests/unit/today-evening-mode.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/today-evening-reader.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/today-module-widgets.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
-tests/unit/today-quick-actions.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-quick-actions.test.tsx,L3,reserved,,Temporary C3 transfer for native Input selector regression after shared Wellness check-in migration
 tests/unit/today-rail-preparation.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/today-states.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/today-weather-row.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
