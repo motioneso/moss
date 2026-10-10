@@ -308,7 +308,7 @@ export async function runChatTurn(
         if (record.sequence !== undefined) flushPending(record.sequence);
         const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
         if (!rejectionOnly) {
-          host.emit(actorUserId, surface, record);
+          host.emit(actorUserId, surface, record.kind === "reply" ? { ...record, turnId } : record);
           if (record.kind !== "reply" && record.kind !== "status") {
             upsertActivityRecord(turnActivityRecords, record);
           }
@@ -454,6 +454,7 @@ export async function runChatTurn(
         kind: "reply",
         text: reply,
         messageId: stored.assistantMessageId,
+        turnId,
         sourceFreshness: stored.sourceFreshness,
         ...(turnElapsedMs !== undefined ? { elapsedMs: turnElapsedMs } : {}),
         ...(turnUsage !== undefined ? { usage: turnUsage } : {})
