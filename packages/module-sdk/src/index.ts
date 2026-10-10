@@ -85,10 +85,17 @@ export type ModuleAssistantToolSelfOperationGrant =
   | "confirm_always"
   | "user_promotable";
 
+/**
+ * Tags a family for the freedom presets. `routine` families run on their own from step 2;
+ * `new` families ask until step 3. An untagged family is never touched by a preset.
+ */
+export type ModuleActionFamilyFreedom = "routine" | "new";
+
 export interface ModuleAssistantActionFamilyManifest {
   readonly id: string;
   readonly label: string;
   readonly description: string;
+  readonly freedom?: ModuleActionFamilyFreedom;
   readonly defaultTier: "ask_each_time" | "always_confirm";
   readonly allowedTiers: readonly MossActionPermissionTier[];
 }

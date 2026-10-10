@@ -55,6 +55,23 @@ describe("external module action families (#1246)", () => {
     });
   });
 
+  it("keeps a freedom tag and rejects an unknown one", () => {
+    const ok = validateExternalModuleManifest(
+      { ...base, assistantActionFamilies: [{ ...family, freedom: "routine" }] },
+      "demo",
+      "0.1.0"
+    );
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.manifest.assistantActionFamilies?.[0]?.freedom).toBe("routine");
+
+    const bad = validateExternalModuleManifest(
+      { ...base, assistantActionFamilies: [{ ...family, freedom: "wild" }] },
+      "demo",
+      "0.1.0"
+    );
+    expect(bad.ok).toBe(false);
+  });
+
   it("rejects a tool naming a family the module did not declare", () => {
     const result = validateExternalModuleManifest(
       { ...base, assistantTools: [grantedTool] },

@@ -317,6 +317,7 @@
       "id": "sorting",
       "label": "Sort purchases from merchants you've seen",
       "description": "Put transactions into categories.",
+      "freedom": "routine",
       "defaultTier": "ask_each_time",
       "allowedTiers": ["ask_each_time", "trusted_auto"]
     },
@@ -324,6 +325,7 @@
       "id": "sorting_new",
       "label": "Sort purchases from new merchants",
       "description": "Decide the category the first time a merchant appears.",
+      "freedom": "new",
       "defaultTier": "ask_each_time",
       "allowedTiers": ["ask_each_time", "trusted_auto"]
     },
