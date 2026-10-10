@@ -139,10 +139,10 @@ describe("chat reminder turn (#3309)", () => {
   );
 
   it("stores nothing when the user stops the turn before it saves", async () => {
-    let manager!: ChatSessionManager;
-    const ctx = setup({ abortDuringThreadRead: () => void manager.stopTurn("u1") });
-    manager = ctx.manager;
-    const result = await manager.submitTurn("u1", "Ben", "remind me in 10 minutes to stretch");
+    const holder: { manager?: ChatSessionManager } = {};
+    const ctx = setup({ abortDuringThreadRead: () => void holder.manager?.stopTurn("u1") });
+    holder.manager = ctx.manager;
+    const result = await ctx.manager.submitTurn("u1", "Ben", "remind me in 10 minutes to stretch");
     expect(ctx.recordReminderTurn).not.toHaveBeenCalled();
     expect(ctx.engine.launchCount).toBe(0);
     expect(result.reply).toBe("");
