@@ -5,11 +5,14 @@ import { HttpError } from "@moss/module-sdk";
 import type { ToolExecute, ToolResult } from "@moss/module-sdk";
 import { PreferenceRevisionConflictError, PreferencesRepository } from "@moss/structured-state";
 
+import { QUIET_HOURS_PREFERENCE_KEY } from "./quiet-hours-application.js";
+import { readQuietHoursAuthority } from "./quiet-hours-authority.js";
 import {
-  applyQuietHoursEdit,
-  normalizeQuietHours,
-  QUIET_HOURS_PREFERENCE_KEY
-} from "./quiet-hours-application.js";
+  displayedQuietHours,
+  quietHoursAuthorityDto,
+  readQuietHoursForWrite,
+  saveQuietHours
+} from "./quiet-hours-writer.js";
 import { settingsUndoStack } from "./undo-stack.js";
 
 const MAX_WRITE_ATTEMPTS = 3;
@@ -37,9 +40,32 @@ export const quietHoursOutputSchema = {
     enabled: { type: "boolean" },
     start: { type: "string" },
     end: { type: "string" },
-    timezone: { type: ["string", "null"] }
+    timezone: { type: ["string", "null"] },
+    authority: {
+      type: "object",
+      description:
+        "A conflict means alert cards still follow the older alerts schedule until the owner settles it.",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["default", "carried", "canonical", "conflict", "malformed"]
+        },
+        alerts: {
+          type: ["object", "null"],
+          properties: {
+            enabled: { type: "boolean" },
+            start: { type: "string" },
+            end: { type: "string" }
+          },
+          required: ["enabled", "start", "end"],
+          additionalProperties: false
+        }
+      },
+      required: ["status", "alerts"],
+      additionalProperties: false
+    }
   },
-  required: ["enabled", "start", "end", "timezone"],
+  required: ["enabled", "start", "end", "timezone", "authority"],
   additionalProperties: false
 } as const;
 
@@ -61,34 +87,19 @@ export const quietHoursSetExecute: ToolExecute = async (
     timezone?: string | null;
   };
 
-  // The row lock serialises this write against REST saves; the retry only covers a concurrent
-  // first insert of an absent row.
+  // The advisory lock serialises this write against every other quiet-hours writer; the retry
+  // only covers a writer that skipped the lock.
   for (let attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
-    const current = await preferences.getVersioned(scopedDb, QUIET_HOURS_PREFERENCE_KEY, {
-      forUpdate: true
-    });
-    const edit = applyQuietHoursEdit(
-      current?.value,
-      {
+    const before = await readQuietHoursForWrite(scopedDb);
+    let saved;
+    try {
+      saved = await saveQuietHours(scopedDb, preferences, before, {
         enabled,
         start,
         end,
-        // An omitted timezone keeps the saved one; an explicit null clears it.
-        timezone:
-          rawTimezone === undefined ? normalizeQuietHours(current?.value).timezone : rawTimezone
-      },
-      current !== null
-    );
-    if (!edit.changed) return { data: { ...edit.effective } };
-
-    let written: { revision: number };
-    try {
-      written = await preferences.upsertWithRevision(
-        scopedDb,
-        QUIET_HOURS_PREFERENCE_KEY,
-        edit.next,
-        current?.revision ?? null
-      );
+        // An omitted timezone keeps the current one; an explicit null clears it.
+        timezone: rawTimezone === undefined ? displayedQuietHours(before).timezone : rawTimezone
+      });
     } catch (error) {
       if (error instanceof PreferenceRevisionConflictError && attempt < MAX_WRITE_ATTEMPTS)
         continue;
@@ -97,15 +108,20 @@ export const quietHoursSetExecute: ToolExecute = async (
       }
       throw error;
     }
-    settingsUndoStack.push(ctx.actorUserId, ctx.chatSessionId, {
-      mutationId: randomUUID(),
-      key: QUIET_HOURS_PREFERENCE_KEY,
-      previousValue: current?.value ?? null,
-      previousRevision: current?.revision ?? null,
-      resultingRevision: written.revision,
-      appliedAt: Date.now()
-    });
-    return { data: { ...edit.effective } };
+    if (saved.changed && saved.revision !== null) {
+      settingsUndoStack.push(ctx.actorUserId, ctx.chatSessionId, {
+        mutationId: randomUUID(),
+        key: QUIET_HOURS_PREFERENCE_KEY,
+
+        // The whole prior row, migration marker included, so undo restores the prior authority.
+        previousValue: before.profileRow?.value ?? null,
+        previousRevision: before.profileRow?.revision ?? null,
+        resultingRevision: saved.revision,
+        appliedAt: Date.now()
+      });
+    }
+    const after = await readQuietHoursAuthority(scopedDb);
+    return { data: { ...saved.effective, authority: quietHoursAuthorityDto(after) } };
   }
   throw new HttpError(409, "Quiet hours changed while saving. Ask again to retry.");
 };

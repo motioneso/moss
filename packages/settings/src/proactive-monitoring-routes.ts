@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import { resolveMossEnv, type AccessContext, type DataContextRunner } from "@moss/db";
+import {
+  resolveMossEnv,
+  type AccessContext,
+  type DataContextDb,
+  type DataContextRunner
+} from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 import { sessionRateLimitKey } from "@moss/module-sdk/server";
 import {
@@ -12,7 +17,11 @@ import {
 import type { ProactiveMonitoringPreferenceV1 } from "@moss/shared";
 import { defaultProactiveMonitoringPreference, parsePositiveIntEnv } from "@moss/shared";
 
-import { isStrictLocalTime } from "./quiet-hours-application.js";
+import {
+  applyLegacyQuietHoursPatch,
+  assertNewQuietTimesValid
+} from "./legacy-quiet-hours-patch.js";
+import { readQuietHoursAuthority, type QuietHoursAuthorityRead } from "./quiet-hours-authority.js";
 import { handleSettingsRouteError } from "./route-error.js";
 
 const PROACTIVE_SETTINGS_MAX = parsePositiveIntEnv(
@@ -40,30 +49,46 @@ interface ProactiveMonitoringSettingsRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly reconcileProactiveSchedule?: ReconcileProactiveScheduleFn;
   readonly repository?: ProactiveMonitoringPreferencesRepository;
+  readonly quietHours?: LegacyQuietHoursPort;
 }
+
+/** The quiet-hours authority this route reads and writes through; tests inject a fake. */
+export interface LegacyQuietHoursPort {
+  read(scopedDb: DataContextDb): Promise<Pick<QuietHoursAuthorityRead, "authority">>;
+  applyLegacyPatch: typeof applyLegacyQuietHoursPatch;
+}
+
+const defaultQuietHoursPort: LegacyQuietHoursPort = {
+  read: readQuietHoursAuthority,
+  applyLegacyPatch: applyLegacyQuietHoursPatch
+};
 
 export function registerProactiveMonitoringSettingsRoutes(
   server: FastifyInstance,
   dependencies: ProactiveMonitoringSettingsRoutesDependencies
 ): void {
   const repository = dependencies.repository ?? new ProactiveMonitoringPreferencesRepository();
+  const quietHours = dependencies.quietHours ?? defaultQuietHoursPort;
 
   server.get("/api/me/proactive-monitoring-settings", async (request, reply) => {
     try {
       const ctx = await dependencies.resolveAccessContext(request);
-      const saved = await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
-        const saved = await repository.initializeAutomaticEmailAlerts(scopedDb);
-        if (saved === null) throw new HttpError(409, "Saved alert preference needs recovery");
-        if (!saved) throw new HttpError(409, "Saved alert preference needs recovery");
-        return saved;
-      });
+      const { saved, quiet } = await dependencies.dataContext.withDataContext(
+        ctx,
+        async (scopedDb) => {
+          const saved = await repository.initializeAutomaticEmailAlerts(scopedDb);
+          if (saved === null) throw new HttpError(409, "Saved alert preference needs recovery");
+          if (!saved) throw new HttpError(409, "Saved alert preference needs recovery");
+          return { saved, quiet: await quietHours.read(scopedDb) };
+        }
+      );
       await reconcileScheduleSafe(
         dependencies.reconcileProactiveSchedule,
         ctx.actorUserId,
         saved.preference,
         saved
       );
-      return reply.send({ settings: settingsResponse(saved) });
+      return reply.send({ settings: settingsResponse(saved, quiet) });
     } catch (error) {
       return handleSettingsRouteError(error, reply);
     }
@@ -85,37 +110,38 @@ export function registerProactiveMonitoringSettingsRoutes(
         const ctx = await dependencies.resolveAccessContext(request);
         const patch = parseSettingsPatch(request.body);
 
-        // The row lock serialises concurrent PATCHes; the retry only covers a concurrent first
-        // insert of an absent row. Callers send partial patches, so the merge always applies to
-        // the latest committed record.
-        const updated = await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
-          for (let attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
-            const current = await repository.getSavedWithRevision(scopedDb, { forUpdate: true });
-            if (current?.saved === null) {
-              throw new HttpError(409, "Saved alert preference needs recovery");
+        // Quiet hours go first, under the shared quiet-hours lock, so this route takes its locks in
+        // the same order as every other quiet-hours writer. An unambiguous owner's quiet hours
+        // land on the one Profile record and leave the alert record untouched.
+        const { updated, quiet } = await dependencies.dataContext.withDataContext(
+          ctx,
+          async (scopedDb) => {
+            let nestedPatch = patch;
+            if (patch.quietHours !== undefined) {
+              const routed = await quietHours.applyLegacyPatch(scopedDb, patch.quietHours);
+              if (routed.target === "profile") {
+                const { quietHours: _routed, ...rest } = patch;
+                nestedPatch = rest;
+              }
             }
-            assertNewQuietTimesValid(current?.saved.preference, patch);
-            try {
-              return await repository.upsertWithRevision(
-                scopedDb,
-                mergePreference(current?.saved.raw, patch),
-                current?.revision ?? null
-              );
-            } catch (error) {
-              if (!(error instanceof ProactivePreferenceRevisionConflictError)) throw error;
-            }
+            const updated =
+              Object.keys(nestedPatch).length === 0
+                ? await readSavedPreference(repository, scopedDb)
+                : await patchAlertRecord(repository, scopedDb, nestedPatch);
+            return { updated, quiet: await quietHours.read(scopedDb) };
           }
-          throw new HttpError(409, PROACTIVE_SETTINGS_CONFLICT_MESSAGE);
-        });
-
-        await reconcileScheduleSafe(
-          dependencies.reconcileProactiveSchedule,
-          ctx.actorUserId,
-          updated.preference,
-          updated
         );
 
-        return reply.send({ settings: settingsResponse(updated) });
+        if (updated) {
+          await reconcileScheduleSafe(
+            dependencies.reconcileProactiveSchedule,
+            ctx.actorUserId,
+            updated.preference,
+            updated
+          );
+        }
+
+        return reply.send({ settings: settingsResponse(updated, quiet) });
       } catch (error) {
         return handleSettingsRouteError(error, reply);
       }
@@ -142,30 +168,48 @@ function parseSettingsPatch(body: unknown): Partial<ProactiveMonitoringPreferenc
   return value as Partial<ProactiveMonitoringPreferenceV1>;
 }
 
-/**
- * Validates only quiet times the patch changes. Saved legacy values (loose HH:MM, equal times)
- * stay effective until the user edits them.
- */
-function assertNewQuietTimesValid(
-  current: ProactiveMonitoringPreferenceV1 | undefined,
+// The row lock serialises concurrent PATCHes; the retry only covers a concurrent first insert of
+// an absent row. Callers send partial patches, so the merge always applies to the latest record.
+async function patchAlertRecord(
+  repository: ProactiveMonitoringPreferencesRepository,
+  scopedDb: DataContextDb,
   patch: Partial<ProactiveMonitoringPreferenceV1>
-): void {
-  if (patch.quietHours === undefined) return;
-  const submitted = objectValue(patch.quietHours);
-  const effective = current?.quietHours ?? defaultProactiveMonitoringPreference().quietHours;
-  const start = "startLocalTime" in submitted ? submitted.startLocalTime : effective.startLocalTime;
-  const end = "endLocalTime" in submitted ? submitted.endLocalTime : effective.endLocalTime;
-  const startChanged = start !== effective.startLocalTime;
-  const endChanged = end !== effective.endLocalTime;
-  if (startChanged && !isStrictLocalTime(start)) {
-    throw new HttpError(400, "quietHours.startLocalTime must be HH:MM (00:00-23:59)");
+): Promise<SavedProactiveMonitoringPreference> {
+  for (let attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+    const current = await repository.getSavedWithRevision(scopedDb, { forUpdate: true });
+    if (current?.saved === null) {
+      throw new HttpError(409, "Saved alert preference needs recovery");
+    }
+    if (patch.quietHours !== undefined) {
+      const submitted = objectValue(patch.quietHours);
+      const effective =
+        current?.saved.preference.quietHours ?? defaultProactiveMonitoringPreference().quietHours;
+      assertNewQuietTimesValid(
+        effective,
+        "startLocalTime" in submitted ? submitted.startLocalTime : effective.startLocalTime,
+        "endLocalTime" in submitted ? submitted.endLocalTime : effective.endLocalTime
+      );
+    }
+    try {
+      return await repository.upsertWithRevision(
+        scopedDb,
+        mergePreference(current?.saved.raw, patch),
+        current?.revision ?? null
+      );
+    } catch (error) {
+      if (!(error instanceof ProactivePreferenceRevisionConflictError)) throw error;
+    }
   }
-  if (endChanged && !isStrictLocalTime(end)) {
-    throw new HttpError(400, "quietHours.endLocalTime must be HH:MM (00:00-23:59)");
-  }
-  if ((startChanged || endChanged) && start === end) {
-    throw new HttpError(400, "Quiet hours must start and end at different times");
-  }
+  throw new HttpError(409, PROACTIVE_SETTINGS_CONFLICT_MESSAGE);
+}
+
+async function readSavedPreference(
+  repository: ProactiveMonitoringPreferencesRepository,
+  scopedDb: DataContextDb
+): Promise<SavedProactiveMonitoringPreference | undefined> {
+  const saved = await repository.getSaved(scopedDb);
+  if (saved === null) throw new HttpError(409, "Saved alert preference needs recovery");
+  return saved;
 }
 
 function mergePreference(
@@ -183,11 +227,29 @@ function mergePreference(
   };
 }
 
+/**
+ * An unambiguous owner sees the one quiet-hours schedule. A conflict or a malformed record keeps
+ * showing the alert record's own schedule, which is what alert workers still use.
+ */
 function settingsResponse(
-  saved: SavedProactiveMonitoringPreference | undefined
+  saved: SavedProactiveMonitoringPreference | undefined,
+  quiet: Pick<QuietHoursAuthorityRead, "authority">
 ): ProactiveMonitoringPreferenceV1 {
   const preference = saved?.preference ?? defaultProactiveMonitoringPreference();
-  return { ...preference, automaticEmailAlerts: resolveAutomaticEmailAlertsEnabled(saved) };
+  const effective = quiet.authority.effective;
+  return {
+    ...preference,
+    automaticEmailAlerts: resolveAutomaticEmailAlertsEnabled(saved),
+    ...(effective
+      ? {
+          quietHours: {
+            enabled: effective.enabled,
+            startLocalTime: effective.start,
+            endLocalTime: effective.end
+          }
+        }
+      : {})
+  };
 }
 
 function objectValue(value: unknown): Record<string, unknown> {

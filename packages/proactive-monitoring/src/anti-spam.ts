@@ -4,6 +4,7 @@ import type { ProactiveMonitoringPreferenceV1, ProactiveSource } from "@moss/sha
 
 import type { CardRepository } from "./card-repository.js";
 import { resolveSourcePreference } from "./preferences-repository.js";
+import type { ProactiveQuietPolicy } from "./types.js";
 
 export type AntiSpamVerdict =
   | { readonly allow: true; readonly deferredUntil: string | null }
@@ -19,7 +20,8 @@ export class AntiSpamPolicy {
     stableKey: string,
     pref: ProactiveMonitoringPreferenceV1,
     nowIso: string,
-    timeZone: string
+    timeZone: string,
+    quiet?: ProactiveQuietPolicy | null
   ): Promise<AntiSpamVerdict> {
     // Dismissed stable key: suppress for 30 days.
     const dismissed = await this.cardRepository.isDismissedStableKeySuppressed(
@@ -57,9 +59,10 @@ export class AntiSpamPolicy {
       return { allow: false, reason: "source_hourly_cap" };
     }
 
-    // Quiet hours deferral.
-    if (pref.quietHours.enabled) {
-      const deferredUntil = quietHoursDeferral(nowIso, timeZone, pref.quietHours);
+    // Quiet hours deferral. The saved schedule, when one governs, replaces the nested one.
+    const quietHours = quiet ?? { ...pref.quietHours, timeZone };
+    if (quietHours.enabled) {
+      const deferredUntil = quietHoursDeferral(nowIso, quietHours.timeZone, quietHours);
       if (deferredUntil) {
         return { allow: true, deferredUntil };
       }

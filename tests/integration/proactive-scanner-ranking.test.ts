@@ -119,7 +119,8 @@ describe("ProactiveScanner — signal/result pairing after ranking", () => {
       monitorStateRepository: mockStateRepo,
       cardRepository: mockCardRepo,
       antiSpamPolicy: mockAntiSpam,
-      getLocalePreference: async () => ({ timezone: "UTC" })
+      getLocalePreference: async () => ({ timezone: "UTC" }),
+      resolveQuietHours: async () => null
     });
 
     await scanner.scan(

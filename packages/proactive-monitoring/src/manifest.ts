@@ -26,8 +26,9 @@ export const proactiveMonitoringModuleManifest = {
     {
       id: "proactive-monitoring.quiet_hours",
       description:
-        "Proactive cards found during their separate saved quiet-hours window defer until its " +
-        "local daily end."
+        "Proactive cards found during quiet hours defer until the local daily end. They follow " +
+        "the saved quiet-hours schedule in its own time zone; while an older alert schedule " +
+        "differs from it, they keep following the older one."
     }
   ],
   permissions: [

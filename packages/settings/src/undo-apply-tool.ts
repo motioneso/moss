@@ -2,8 +2,12 @@ import { assertDataContextDb } from "@moss/db";
 import type { ToolExecute, ToolResult } from "@moss/module-sdk";
 import { PreferenceRevisionConflictError, PreferencesRepository } from "@moss/structured-state";
 
+import { QUIET_HOURS_PREFERENCE_KEY } from "./quiet-hours-application.js";
+import { undoQuietHoursValue } from "./quiet-hours-authority.js";
+import { freezeQuietHoursBeforeLocaleWrite, readQuietHoursForWrite } from "./quiet-hours-writer.js";
 import { settingsUndoStack } from "./undo-stack.js";
 
+const LOCALE_PREFERENCE_KEY = "locale";
 const preferences = new PreferencesRepository();
 
 export const settingsUndoLastInputSchema = {
@@ -38,6 +42,13 @@ export const settingsUndoLastExecute: ToolExecute = async (
     };
   }
   try {
+    let restoredValue = entry.previousValue;
+    if (entry.key === QUIET_HOURS_PREFERENCE_KEY) {
+      const current = await readQuietHoursForWrite(scopedDb);
+      restoredValue = undoQuietHoursValue(current.input, entry.previousValue);
+    } else if (entry.key === LOCALE_PREFERENCE_KEY) {
+      await freezeQuietHoursBeforeLocaleWrite(scopedDb, preferences);
+    }
     if (entry.previousValue === null && entry.previousRevision === null) {
       // The tracked write created this row from nothing — undo removes it rather than pinning
       // the old default back in (spec: undo over an absent row deletes the override).
@@ -48,7 +59,7 @@ export const settingsUndoLastExecute: ToolExecute = async (
       await preferences.upsertWithRevision(
         scopedDb,
         entry.key,
-        entry.previousValue,
+        restoredValue,
         entry.resultingRevision
       );
     }

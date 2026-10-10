@@ -9,12 +9,15 @@ import {
 import { PreferenceRevisionConflictError } from "@moss/structured-state";
 
 import type { QuietHoursPreferencesPort } from "./preferences-port.js";
+import { QUIET_HOURS_PREFERENCE_KEY } from "./quiet-hours-application.js";
+import { readQuietHoursAuthority, type QuietHoursAuthorityRead } from "./quiet-hours-authority.js";
 import {
-  applyQuietHoursEdit,
-  normalizeQuietHours,
-  QUIET_HOURS_PREFERENCE_KEY,
-  quietHoursVersion
-} from "./quiet-hours-application.js";
+  displayedQuietHours,
+  quietHoursAuthorityDto,
+  quietHoursAuthorityVersion,
+  readQuietHoursForWrite,
+  saveQuietHours
+} from "./quiet-hours-writer.js";
 import { handleSettingsRouteError } from "./route-error.js";
 
 export const QUIET_HOURS_CONFLICT_MESSAGE =
@@ -36,10 +39,12 @@ export function registerQuietHoursRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const row = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          dependencies.preferencesRepository.getVersioned(scopedDb, QUIET_HOURS_PREFERENCE_KEY)
+
+        // Read-only: classification never materializes a carried schedule.
+        const read = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          readQuietHoursAuthority(scopedDb)
         );
-        return { quietHours: normalizeQuietHours(row?.value), version: quietHoursVersion(row) };
+        return quietHoursResponse(read);
       } catch (error) {
         return handleSettingsRouteError(error, reply);
       }
@@ -54,30 +59,22 @@ export function registerQuietHoursRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const body = request.body as PutQuietHoursSettingsRequest;
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-          const repository = dependencies.preferencesRepository;
-          const row = await repository.getVersioned(scopedDb, QUIET_HOURS_PREFERENCE_KEY, {
-            forUpdate: true
-          });
+          const before = await readQuietHoursForWrite(scopedDb);
 
           // The caller's full schedule was built from the version it read; any other version means
           // a newer save (or an undo) landed in between and this payload would overwrite it.
-          if (quietHoursVersion(row) !== body.expectedVersion) {
+          if (quietHoursAuthorityVersion(before) !== body.expectedVersion) {
             throw new PreferenceRevisionConflictError(QUIET_HOURS_PREFERENCE_KEY);
           }
 
-          const edit = applyQuietHoursEdit(row?.value, body.quietHours, row !== null);
-          if (!edit.changed) {
-            return { quietHours: edit.effective, version: quietHoursVersion(row) };
-          }
-
-          await repository.upsertWithRevision(
+          const saved = await saveQuietHours(
             scopedDb,
-            QUIET_HOURS_PREFERENCE_KEY,
-            edit.next,
-            row?.revision ?? null
+            dependencies.preferencesRepository,
+            before,
+            body.quietHours
           );
-          const saved = await repository.getVersioned(scopedDb, QUIET_HOURS_PREFERENCE_KEY);
-          return { quietHours: edit.effective, version: quietHoursVersion(saved) };
+          const after = saved.changed ? await readQuietHoursAuthority(scopedDb) : before;
+          return quietHoursResponse(after);
         });
       } catch (error) {
         if (error instanceof PreferenceRevisionConflictError) {
@@ -87,4 +84,12 @@ export function registerQuietHoursRoutes(
       }
     }
   );
+}
+
+function quietHoursResponse(read: QuietHoursAuthorityRead) {
+  return {
+    quietHours: displayedQuietHours(read),
+    authority: quietHoursAuthorityDto(read),
+    version: quietHoursAuthorityVersion(read)
+  };
 }
