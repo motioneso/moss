@@ -40,7 +40,12 @@ describe("infra/host restart unit", () => {
       new URL("../../infra/docker-compose.prod.yml", import.meta.url),
       "utf8"
     );
-    expect(compose).toContain("./control:/data/control");
+    // The app container itself must see the control directory, not just the ops helper.
+    const appService = compose.slice(
+      compose.indexOf("\n  jarv1s:\n"),
+      compose.indexOf("\n  sports-browser-socket-init:\n")
+    );
+    expect(appService).toContain("- ./control:/data/control");
     expect(compose).toContain("JARVIS_HOST_CONTROL_DIR: /data/control");
     // The whole point of the design. A socket mount here would make any code execution
     // inside the app container root on the host.
