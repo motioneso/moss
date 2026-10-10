@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -52,6 +52,7 @@
       "app.finance_budget_draft_lines"
     ]
   },
+  "settingsPath": "/settings",
   "appMap": {
     "screens": [
       {
@@ -77,6 +78,12 @@
         "label": "Getting started",
         "description": "Connect a first bank, let Moss sort the spending, then build the budget together. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin. After the first sync it shows Your first budget, a draft built from up to three months of history, with a Build my budget with Moss button and a Start this budget button.",
         "path": "/start"
+      },
+      {
+        "id": "finance.settings",
+        "label": "Finance settings",
+        "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom), the Moss can move up to dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button.",
+        "path": "/settings"
       }
     ],
     "features": [
@@ -103,6 +110,26 @@
       {
         "id": "finance.chat-money-actions",
         "description": "In chat, Moss can move money between categories, set a category's assigned total, make a merchant rule, and add, rename or archive categories. Each reports what it changed, before and after, and is logged. A move or change larger than the Moss can move up to setting in Finance settings (default $100) asks for approval first; smaller ones follow the freedom setting."
+      },
+      {
+        "id": "finance.settings-freedom",
+        "description": "On Finance settings, How much Moss does alone offers three steps plus Custom. Ask about everything makes Moss suggest every change. Handle routine, ask about new lets Moss sort merchants it knows and move money up to the limit, and asks about anything new. Run it all, review weekly lets Moss do everything up to the limit. Custom shows when the switches under Customize match none of the three. A step saves at once; if saving fails the choice goes back with an error."
+      },
+      {
+        "id": "finance.settings-limit",
+        "description": "On Finance settings, Moss can move up to, per move sets the dollar limit (a whole number from 0 to 100000, default 100). Moss asks for approval before any move or assigned total above it, at every step. It saves when you press Enter or click away; a bad or failed entry goes back to the saved amount with an error."
+      },
+      {
+        "id": "finance.settings-actions",
+        "description": "On Finance settings, Customize lists one switch per action Moss can take (sort purchases from merchants you have seen, move money between categories, sort purchases from new merchants, make merchant rules, add, rename or archive categories). On lets Moss do it alone, off makes Moss ask first. Connect a bank and Share an account show Always asks and cannot be switched."
+      },
+      {
+        "id": "finance.settings-bank-keys",
+        "description": "On Finance settings, an admin sees Bank connection with the Plaid client ID and Plaid secret, each marked Saved or Not set, and a Replace button that takes a new value. Everyone else does not see this section. Saved values are never shown."
+      },
+      {
+        "id": "finance.settings-activity",
+        "description": "On Finance settings, the activity list shows this week's changes by you and by Moss, newest first, each with who did it and when. Undo reverses a row (a budget amount, a move between categories, a sorted purchase, a merchant rule or a category change) and says so inline if the data changed since. Earlier weeks loads the week before. With nothing yet it says Moss hasn't done anything on its own yet."
       }
     ]
   },
@@ -476,6 +503,23 @@
         }
       },
       "handler": "reports.net-worth"
+    },
+    {
+      "name": "finance.activity.list",
+      "permissionId": "finance.activity.list",
+      "description": "List the changes Finance recorded between two times, newest first: who made each one (you or Moss), what it was in plain words, and whether it can be undone. Reads only.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string", "description": "Start of the window, an ISO timestamp." },
+          "to": { "type": "string", "description": "End of the window, an ISO timestamp." },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 200 }
+        },
+        "required": ["from", "to"]
+      },
+      "handler": "activity.list"
     }
   ],
   "assistantActionFamilies": [
@@ -637,6 +681,18 @@
             "months": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
             "categoryIds": { "type": "array", "maxItems": 200, "items": { "type": "identifier" } },
             "createRule": { "type": "boolean" }
+          }
+        }
+      },
+      {
+        "name": "finance.activity-undo",
+        "handler": "activity.undo",
+        "retryLimit": 1,
+        "allowManualRun": true,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "activityId": { "type": "uuid" }
           }
         }
       }

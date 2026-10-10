@@ -12,7 +12,7 @@ import type {
   TransactionRecord
 } from "./records.js";
 import type { BudgetDraft, DraftLine } from "./draft.js";
-import type { FinanceStore } from "./store-port.js";
+import type { ActivityRecord, FinanceStore } from "./store-port.js";
 
 // Structural twin of #1167 ctx.db — domain files never import @moss/*, so
 // this is redeclared rather than imported (bundler independence, see
@@ -200,6 +200,28 @@ type DraftLineRow = {
 
 const isoText = (value: string | Date): string =>
   value instanceof Date ? value.toISOString() : value;
+
+interface ActivityRow {
+  id: string;
+  at: string | Date;
+  actor: "user" | "moss";
+  kind: string;
+  params: Record<string, string | number | null>;
+  undo: Record<string, string | number | null> | null;
+  undone_at: string | Date | null;
+}
+
+function rowToActivity(row: ActivityRow): ActivityRecord {
+  return {
+    id: row.id,
+    at: isoText(row.at),
+    actor: row.actor,
+    kind: row.kind,
+    params: row.params,
+    undo: row.undo,
+    undoneAt: row.undone_at === null ? null : isoText(row.undone_at)
+  };
+}
 
 function rowToDraftLine(row: DraftLineRow): DraftLine {
   return {
@@ -427,6 +449,32 @@ export function sqlStore(db: FinanceDb): FinanceStore {
           entry.undo ? JSON.stringify(entry.undo) : null
         ]
       );
+    },
+
+    async listActivity(from, to, limit) {
+      const result = await db.query<ActivityRow>(
+        "SELECT id, at, actor, kind, params, undo, undone_at FROM app.finance_activity " +
+          "WHERE at >= $1 AND at < $2 ORDER BY at DESC, id LIMIT $3",
+        [from, to, limit]
+      );
+      return result.rows.map(rowToActivity);
+    },
+
+    async getActivity(id) {
+      const result = await db.query<ActivityRow>(
+        "SELECT id, at, actor, kind, params, undo, undone_at FROM app.finance_activity WHERE id = $1",
+        [id]
+      );
+      const row = result.rows[0];
+      return row === undefined ? null : rowToActivity(row);
+    },
+
+    async markActivityUndone(id, at) {
+      const result = await db.query(
+        "UPDATE app.finance_activity SET undone_at = $2 WHERE id = $1 AND undone_at IS NULL RETURNING id",
+        [id, at]
+      );
+      return result.rows.length > 0;
     },
 
     async lastLoggedAssignment(month, categoryId) {

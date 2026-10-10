@@ -20,7 +20,7 @@ import { FirstBudget } from "./first-budget";
 import { useToolQuery } from "../store";
 import type { HostActions } from "../root";
 
-export const SETTINGS_HREF = "/settings?section=modules&module=finance";
+export const SETTINGS_HREF = "/m/finance/settings";
 
 export interface StartViewProps {
   keysConfigured: boolean;
