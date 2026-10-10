@@ -270,7 +270,8 @@ export function ChatDrawer(props: {
     queryKey: queryKeys.ai.capability("chat"),
     queryFn: () => lookupAiCapabilityRoute("chat"),
     enabled: props.open,
-    retry: false
+    retry: false,
+    staleTime: 0 // Today caches this route; a newly added model must show on open.
   });
   const lockedModelUnavailable = chatRouteQuery.data?.route?.reason === "admin-pin-unavailable";
   const chatAvailable = chatAvailableFromRoute(chatRouteQuery.data);
