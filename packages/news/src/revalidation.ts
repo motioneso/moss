@@ -10,6 +10,7 @@ import type { DataContextDb } from "@moss/db";
 import { extractListingHeadlines, sampleFeedHeadlines } from "./discovery/feed-discovery.js";
 import { decideSourcePolicy, validateTopic } from "./discovery/policy-validation.js";
 import type { NewsAiPort, NewsFetchPort, NewsSafeFetchPort } from "./discovery/ports.js";
+import { readSubreddit, subredditNameFromUrl } from "./source/reddit-reader.js";
 import type {
   NewsPersonalizationRepository,
   NewsSourceValidationState,
@@ -108,8 +109,17 @@ export async function revalidateOwnerNews(
       // the flag. authentication_failed stays with the credentialed refresh path.
       if (source.healthStatus === "temporarily_unavailable") {
         sourcesChecked += 1;
-        const probe = await deps.fetch(source.feedUrl ?? source.homepageUrl);
-        if (probe.ok) {
+        // Reddit needs its own reader (headers, host guard, atom parsing); the plain fetcher
+        // would keep failing and the source could never recover.
+        const subreddit =
+          source.retrievalMethod === "reddit" && deps.fetchWithOptions
+            ? subredditNameFromUrl(source.feedUrl ?? source.homepageUrl)
+            : null;
+        const recovered =
+          subreddit !== null && deps.fetchWithOptions
+            ? (await readSubreddit(deps.fetchWithOptions, subreddit)).ok
+            : (await deps.fetch(source.feedUrl ?? source.homepageUrl)).ok;
+        if (recovered) {
           await deps.repository.updateSourceHealth(scopedDb, source.id, "healthy");
         }
       }

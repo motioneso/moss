@@ -202,6 +202,46 @@ describe("news revalidation core (#975 Slice 4)", () => {
     expect(sources[0]).toMatchObject({ validationStatus: "approved", healthStatus: "healthy" });
   });
 
+  it("recovers a stuck Reddit source through the Reddit reader, not the plain fetcher (#3227)", async () => {
+    const { repository, sources } = makeRepository(
+      [
+        makeSource({
+          canonicalDomain: "reddit.com",
+          homepageUrl: "https://www.reddit.com/r/technology",
+          feedUrl: "https://www.reddit.com/r/technology/hot.rss",
+          retrievalMethod: "reddit",
+          healthStatus: "temporarily_unavailable"
+        })
+      ],
+      []
+    );
+    const { logger } = makeLogger();
+    const requested: string[] = [];
+    const outcome = await revalidateOwnerNews(scopedDb, {
+      // The plain fetcher cannot read Reddit; only the options-capable one can.
+      fetch: fetchFail,
+      fetchWithOptions: async (url) => {
+        requested.push(url);
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: url,
+          contentType: "application/atom+xml",
+          body:
+            `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">` +
+            `<category term="technology" label="r/technology"/><title>t</title></feed>`,
+          truncated: false
+        } as never;
+      },
+      ai: makeAi({ fingerprint: "fp2" }),
+      repository,
+      logger
+    });
+    expect(requested).toHaveLength(1);
+    expect(outcome).toMatchObject({ sourcesChecked: 1, sourcesNeedingAttention: 0 });
+    expect(sources[0]).toMatchObject({ healthStatus: "healthy" });
+  });
+
   it("leaves an approved temporarily_unavailable source alone while it still fails (#3227)", async () => {
     const { repository, sources } = makeRepository(
       [makeSource({ healthStatus: "temporarily_unavailable" })],
