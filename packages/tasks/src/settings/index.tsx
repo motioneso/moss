@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Group, Note, PaneHead, Row, Switch } from "@moss/settings-ui";
+import { Button } from "@moss/ui";
 import type {
   TaskAgencyAutoExecuteResponse,
   UpdateTaskAgencyAutoExecuteRequest
@@ -42,13 +43,30 @@ export default function TasksSettings() {
     onSuccess: (data) => queryClient.setQueryData(AGENCY_AUTO_EXECUTE_KEY, data)
   });
 
-  const enabled = (mutation.data ?? query.data)?.enabled ?? false;
-  const disabled = query.isLoading || mutation.isPending;
-  const error = query.isError || mutation.isError;
+  const enabled = query.data?.enabled ?? false;
+  const disabled = !query.data || mutation.isPending;
 
   return (
     <>
       <PaneHead title="Tasks" desc="How your assistant handles task changes from chat." />
+      {query.isPending ? <p role="status">Loading task settings…</p> : null}
+      {query.isError ? (
+        <div role="alert">
+          <Note>
+            {query.data
+              ? "Could not refresh task settings. Your last saved preference is shown."
+              : "Could not load task settings. Your saved preference is unavailable."}
+          </Note>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={query.isFetching}
+            onClick={() => void query.refetch()}
+          >
+            Retry loading
+          </Button>
+        </div>
+      ) : null}
       <Group title="Assistant actions">
         <Row
           name="Let your assistant create and update tasks without asking"
@@ -63,7 +81,14 @@ export default function TasksSettings() {
           }
         />
       </Group>
-      {error ? <Note>Could not save task action preference. Try again.</Note> : null}
+      {mutation.isError ? (
+        <div role="alert">
+          <Note>
+            Could not save task action preference. Your last confirmed preference is shown. Try
+            again.
+          </Note>
+        </div>
+      ) : null}
     </>
   );
 }
