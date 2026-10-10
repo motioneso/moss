@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -82,7 +82,7 @@
       {
         "id": "finance.settings",
         "label": "Finance settings",
-        "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom), the Moss can move up to dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button.",
+        "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom; a new install starts on Handle routine and ask about new), the Moss can move up to dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button.",
         "path": "/settings"
       }
     ],
@@ -129,13 +129,13 @@
       },
       {
         "id": "finance.settings-activity",
-        "description": "On Finance settings, the activity list shows this week's changes by you and by Moss, newest first, each with who did it and when. Undo reverses a row (a budget amount, a move between categories, a sorted purchase, a merchant rule or a category change) and says so inline if the data changed since. Earlier weeks loads the week before. With nothing yet it says Moss hasn't done anything on its own yet."
+        "description": "On Finance settings, the activity list shows this week's changes by you and by Moss, newest first, each with who did it and when. Undo reverses a row (a budget amount, a move between categories, a sorted purchase, a merchant rule, or a category added or archived) and says so inline if the data changed since. Earlier weeks loads the week before. With nothing yet it says Nothing yet."
       }
     ]
   },
   "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },
   "assistantOnboarding": {
-    "guidance": "Finance holds the user's budget. Read before you write: call finance.budget.status or finance.transactions.query first. Amounts are integer cents. To move money, call finance.budget.move with both category ids; use \"ready_to_assign\" as the source when the money is unassigned. To set a category's total, call finance.budget.assign with previousCents, the total it has now. Example: \"move 50 to groceries\" with 80 ready to assign becomes finance.budget.move { fromCategoryId: \"ready_to_assign\", toCategoryId: \"groceries\", amountCents: 5000 }. Moves above the user's dollar limit ask for approval first. Report the before and after the tool returns. Never guess a category id; list categories first."
+    "guidance": "Finance holds the user's budget. Read before you write: call finance.budget.status or finance.transactions.query first. Amounts are integer cents. To move money, call finance.budget.move with both category ids; use \"ready_to_assign\" as the source when the money is unassigned. To set a category's total, call finance.budget.assign with previousCents, the total it has now. Example: \"move 50 to groceries\" with 80 ready to assign becomes finance.budget.move { fromCategoryId: \"ready_to_assign\", toCategoryId: \"groceries\", amountCents: 5000 }. Moves above the user's dollar limit ask for approval first. Report the before and after the tool returns. Never guess a category id; list categories first. While a first-budget draft is open, change it with finance.budget.draft.update after reading finance.budget.draft.get, and quote the totals it returns. Never start the budget; the user does that."
   },
   "preferences": [
     {

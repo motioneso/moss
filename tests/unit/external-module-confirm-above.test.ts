@@ -60,16 +60,19 @@ const moveRule: Rule = {
 const assignRule: Rule = { ...moveRule, baseKey: "previousCents" };
 const limit100 = { "module:demo:freedomLimitDollars": 100 };
 
-function check(rule: Rule, stored: Record<string, unknown> | Error) {
-  const [manifest] = createExternalToolManifests(
-    [moneyModule(rule)],
-    invoke,
-    undefined,
-    async () => {
-      if (stored instanceof Error) throw stored;
-      return stored;
-    }
-  );
+function check(
+  rule: Rule,
+  stored: Record<string, unknown> | Error,
+  declaredDefault: number | null = null
+) {
+  const demo = moneyModule(rule);
+  demo.manifest.preferences = [
+    { key: "freedomLimitDollars", label: "Limit", type: "integer", default: declaredDefault }
+  ];
+  const [manifest] = createExternalToolManifests([demo], invoke, undefined, async () => {
+    if (stored instanceof Error) throw stored;
+    return stored;
+  });
   const hook = manifest?.assistantTools?.[0]?.requiresConfirmation;
   return async (input: Record<string, unknown>) => hook?.({} as never, input, {} as never);
 }
@@ -92,6 +95,21 @@ describe("confirmAbove numeric confirmation rule (#3183)", () => {
     expect(
       await check(moveRule, { "module:demo:freedomLimitDollars": null })({ amountCents: 1 })
     ).toBe(true);
+  });
+
+  it("uses the declared default only when nothing is stored, and asks on a garbled value", async () => {
+    expect(await check(moveRule, {}, 100)({ amountCents: 10000 })).toBe(false);
+    for (const garbled of ["50", 12.5, { v: 1 }, Number.NaN]) {
+      expect(
+        await check(
+          moveRule,
+          { "module:demo:freedomLimitDollars": garbled },
+          100
+        )({
+          amountCents: 1
+        })
+      ).toBe(true);
+    }
   });
 
   it("asks when the declared base is absent or the amount is not a number", async () => {

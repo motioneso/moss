@@ -119,12 +119,10 @@ async function exceedsConfirmAbove(
     const stored = (await readPreferences(scopedDb))[
       modulePreferenceKey(module.id, rule.preferenceKey)
     ];
-    // A stored null is the user clearing the limit, so no limit is known and the tool asks.
-    const limit =
-      stored === undefined || (stored !== null && !Number.isSafeInteger(stored))
-        ? declaration.default
-        : stored;
-    if (!isFiniteNumber(limit)) return true;
+    // Only a missing value uses the default. A cleared (null) or unreadable stored value
+    // leaves no known limit, so the tool asks.
+    const limit = stored === undefined ? declaration.default : stored;
+    if (typeof limit !== "number" || !Number.isSafeInteger(limit)) return true;
 
     return Math.abs(amount - base) > limit * rule.scale;
   } catch {
