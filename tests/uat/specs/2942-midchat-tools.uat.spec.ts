@@ -94,10 +94,27 @@ async function openIntegrations(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "Connections" }).first()).toBeVisible();
 }
 
+// The drawer keeps its last conversation; a fresh chat comes from the Conversations overlay.
+// Sending waits until the drawer's clear is acknowledged and the old replies have left.
+async function startSideChat(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Open conversations" }).click();
+  const cleared = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname === "/api/chat/clear" &&
+      url.searchParams.get("surface") === "drawer"
+    );
+  });
+  await page.getByRole("button", { name: "New side chat", exact: true }).click();
+  expect((await cleared).status()).toBe(204);
+  await expect(page.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")).toHaveCount(0);
+}
+
 async function openChat(page: Page): Promise<void> {
   await page.goto(`${requireUatBaseURL()}/today`);
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
-  await page.getByRole("button", { name: "New chat" }).click();
+  await startSideChat(page);
   // The new conversation starts its protocol session in the background; sending before it is
   // ready gets "Live chat is temporarily unavailable".
   await page.waitForTimeout(8_000);
@@ -166,6 +183,9 @@ test("tools connected mid-conversation stay out of the open chat (#2942)", async
         );
       }
       await bringUpRealChatModel(page);
+      // Every page load starts the drawer on Main and moves the server's drawer session there.
+      // Load the settings tab now so connecting later cannot pull the open chat off its session.
+      await openIntegrations(page);
     });
 
     await test.step("open a chat while no hub exists", async () => {
@@ -175,7 +195,6 @@ test("tools connected mid-conversation stay out of the open chat (#2942)", async
     });
 
     await test.step("connect the hub mid-conversation through the real screen", async () => {
-      await openIntegrations(page);
       await page.getByRole("button", { name: "Add connection" }).click();
       await page.getByLabel("Name").fill(CONNECTION_NAME);
       await page.getByLabel("URL").fill(classifierMcpFixtureEndpointFor(requireUatProjectName()));
@@ -213,7 +232,7 @@ test("tools connected mid-conversation stay out of the open chat (#2942)", async
 
     await test.step("a new chat runs the tool after one approval", async () => {
       await chat.bringToFront();
-      await chat.getByRole("button", { name: "New chat" }).click();
+      await startSideChat(chat);
       await chat.waitForTimeout(8_000);
       // The fresh protocol session starts in the background; sending before the composer
       // is enabled dispatches nothing.
