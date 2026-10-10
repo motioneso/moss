@@ -316,10 +316,10 @@ export function FirstBudget(props: {
   const [startSent, setStartSent] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const buildSent = useRef(false);
+  // Start was clicked and is held until every typed amount has been saved.
+  const [startWanted, setStartWanted] = useState(false);
 
-  // Ask for a draft once the first sync is in and none exists yet.
-  useEffect(() => {
-    if (!needsBuild || buildSent.current) return;
+  const sendBuild = (): void => {
     buildSent.current = true;
     void runWrite("finance.draft-build", "finance.draft-build").then((outcome) => {
       if (outcome.kind !== "queued") {
@@ -327,10 +327,17 @@ export function FirstBudget(props: {
         announce("Couldn't start building your draft.");
       }
     });
+  };
+
+  // Ask for a draft once the first sync is in and none exists yet.
+  useEffect(() => {
+    if (!needsBuild || buildSent.current) return;
+    sendBuild();
   }, [needsBuild]);
 
   // Re-read while waiting on the build or on a start that was sent.
-  const waiting = (needsBuild && polls < MAX_POLLS) || (startSent && draft?.status === "open");
+  const startWaiting = startSent && draft?.status === "open";
+  const waiting = (needsBuild && polls < MAX_POLLS) || (startWaiting && polls < MAX_POLLS);
   const watching = draft?.status === "open";
   useEffect(() => {
     if (!waiting && !watching) return;
@@ -341,6 +348,14 @@ export function FirstBudget(props: {
     }, POLL_MS);
     return () => clearTimeout(timer);
   }, [waiting, watching, polls, tick]);
+
+  // A start the worker never finished stops waiting and offers a retry.
+  useEffect(() => {
+    if (!startWaiting || polls < MAX_POLLS) return;
+    setStartSent(false);
+    setStartError("Your budget did not start. Try again.");
+    announce("Your budget did not start.");
+  }, [startWaiting, polls]);
 
   // After each re-read: drop typed amounts the record now shows, and put back any the
   // worker never confirmed.
@@ -410,25 +425,39 @@ export function FirstBudget(props: {
     if (done) navigate("/");
   }, [done]);
 
-  const onStart = (): void => {
-    if (!draft) return;
+  const sendStart = (draftId: string): void => {
     setStartError(null);
     setStartSent(true);
     setPolls(0);
-    void runWrite("finance.draft-start", "finance.draft-start", { draftId: draft.id }).then(
-      (outcome) => {
-        if (outcome.kind !== "queued") {
-          setStartSent(false);
-          setStartError("Couldn't start your budget. Try again.");
-          announce("Couldn't start your budget.");
-        }
+    void runWrite("finance.draft-start", "finance.draft-start", { draftId }).then((outcome) => {
+      if (outcome.kind !== "queued") {
+        setStartSent(false);
+        setStartError("Couldn't start your budget. Try again.");
+        announce("Couldn't start your budget.");
       }
-    );
+    });
   };
 
+  const onStart = (): void => {
+    if (!draft) return;
+    setStartError(null);
+    setStartWanted(true);
+  };
+
+  // Start waits for typed amounts to be saved, so the budget starts with what is on screen.
+  useEffect(() => {
+    if (!startWanted || !draft || Object.keys(pending).length > 0) return;
+    setStartWanted(false);
+    if (Object.keys(errors).length > 0) {
+      setStartError("Fix the amounts that didn't save, then start.");
+      return;
+    }
+    sendStart(draft.id);
+  }, [startWanted, pending, draft?.id]);
+
   const retryBuild = (): void => {
-    buildSent.current = false;
     setPolls(0);
+    sendBuild();
     invalidateQueries();
   };
 
@@ -444,7 +473,7 @@ export function FirstBudget(props: {
             onSave={onSave}
             onBadAmount={onBadAmount}
             hostActions={props.hostActions}
-            starting={startSent}
+            starting={startSent || startWanted}
             startError={startError}
             onStart={onStart}
           />
