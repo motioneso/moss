@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Job Search buttons and warnings.** Roles that have not been scored no longer show Save and Pass buttons that did nothing, turning a job source on or off now confirms the real result, and the resume warning says exactly which roles will be scored again. [PR #3302](https://github.com/motioneso/moss/pull/3302)
 - **Briefings show the right all-day events and tools.** Evening briefings now list tomorrow's all-day events correctly, and briefings can use tools from added modules. [PR #3295](https://github.com/motioneso/moss/pull/3295)
 - **Reply works for family members.** The Reply button on Today now works for family members whenever chat is available, instead of staying greyed out. The member setup no longer shows a personal key box that did nothing. [PR #3293](https://github.com/motioneso/moss/pull/3293)
 - **Notification sensitivity is now saved.** The Quiet, Balanced and Proactive setting now stays where you put it and changes how often Moss sends you push notifications. Balanced, the default, no longer sends low-urgency pushes straight away, even for people who never changed the setting. [PR #3289](https://github.com/motioneso/moss/pull/3289)
