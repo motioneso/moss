@@ -8,7 +8,6 @@ import type { AcpBuiltInPermissionRequest, AdmissionPath } from "@moss/ai";
 import { CONTEXT_ADMISSION_UNAVAILABLE } from "../../packages/ai/src/gateway/content-admission.js";
 import {
   admissionFixture,
-  admissionTool,
   deferred,
   rejectAdmissionCard,
   untrustedWrite
