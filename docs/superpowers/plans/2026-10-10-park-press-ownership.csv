@@ -245,6 +245,7 @@ apps/web/src/styles/tokens.css,F0,reserved,,Shared base/reset/token/compatibilit
 apps/web/src/styles/wellness-1.css,L3,reserved,,Wellness layout and user-visible export
 apps/web/src/styles/wellness-2.css,L3,reserved,,Wellness layout and user-visible export
 apps/web/src/styles/wellness-3.css,L3,reserved,,Wellness layout and user-visible export
+apps/web/src/styles/workspace-layout.css,F0,reserved,,Approved coherent host workspace layout extraction and opt-in visible Workshop conversation bounds
 apps/web/src/tasks/task-capture.tsx,P1,active-owner-hold,3154,Exact planning report ownership
 apps/web/src/tasks/task-details-dialog.tsx,P1,reserved,,Exact planning report ownership
 apps/web/src/tasks/task-details-sections.tsx,P1,reserved,,Exact planning report ownership
