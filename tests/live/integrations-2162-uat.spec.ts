@@ -19,8 +19,8 @@ import { readFileSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { REAL_CHAT_CONFIGURED_ENV } from "../uat/real-chat-env.js";
 import { bringUpRealChatModel } from "../uat/specs/real-chat-signin.js";
+import { shouldBindCheapestModel } from "./live-chat-model.js";
 
 const OWNER_EMAIL = process.env.LIVE_OWNER_EMAIL;
 const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
@@ -66,14 +66,14 @@ async function signInThroughUi(page: Page) {
   await expect(nav).toBeVisible();
 }
 
-// LIVE_BIND_CHEAPEST_MODEL=1 (set by run-live-2162.ts) binds the disposable stack's copied Codex
-// login to the account's cheapest model. A long-lived instance already has a model configured.
 async function ensureChatModel(page: Page) {
-  if (process.env.LIVE_BIND_CHEAPEST_MODEL !== "1") return;
-  if (!process.env[REAL_CHAT_CONFIGURED_ENV]) {
-    throw new Error("no Codex sign-in was copied into this stack; refusing to fake the model");
-  }
-  await bringUpRealChatModel(page);
+  if (shouldBindCheapestModel(process.env)) await bringUpRealChatModel(page);
+}
+
+// A failed check names the leak without echoing the credential into the report.
+async function expectCredentialAbsent(page: Page, credential: string) {
+  const pageText = (await page.locator("body").textContent()) ?? "";
+  expect(pageText.includes(credential), "credential leaked to the page").toBe(false);
 }
 
 // The drawer keeps its last conversation; a fresh chat comes from the Conversations overlay.
@@ -135,8 +135,7 @@ test.describe("integrations live path (#2162)", () => {
     expect(Number.parseInt(toolsOn, 10)).toBeGreaterThan(0);
 
     // The credential must never come back to the browser.
-    const pageText = (await page.locator("body").textContent()) ?? "";
-    expect(pageText).not.toContain(HA_TOKEN);
+    await expectCredentialAbsent(page, HA_TOKEN);
 
     // The list row shows the connection as a real MCP connection.
     await openIntegrationsPane(page);
@@ -191,6 +190,7 @@ test.describe("integrations live path (#2162)", () => {
     await expect(
       page.getByText("This app has a lot of tools, so they start off.", { exact: false })
     ).toBeVisible({ timeout: 60_000 });
+    // The tools count reads "N of M on" since #3033 dropped the "always ask" tally.
     await expect(toolsMeta(page)).toHaveText(/^0 of \d+ on$/);
 
     // Turn on the movie tools through their real switches. Each switch's checkbox input is
@@ -204,8 +204,7 @@ test.describe("integrations live path (#2162)", () => {
     await expect(toolsMeta(page)).toHaveText(/^[1-9]\d* of \d+ on$/, { timeout: 15_000 });
 
     // The credential must never come back to the browser.
-    const pageText = (await page.locator("body").textContent()) ?? "";
-    expect(pageText).not.toContain(RADARR_KEY);
+    await expectCredentialAbsent(page, RADARR_KEY);
 
     // Chat proof: a fresh conversation, an ask only a real Radarr call can answer.
     await page.getByRole("button", { name: /^(Chat with .+|Open chat)$/ }).click();
@@ -234,5 +233,6 @@ test.describe("integrations live path (#2162)", () => {
     await expect(page.getByRole("dialog").getByText(probeMovie.title).first()).toBeVisible({
       timeout: 300_000
     });
+    await expectCredentialAbsent(page, RADARR_KEY);
   });
 });
