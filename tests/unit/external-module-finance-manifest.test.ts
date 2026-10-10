@@ -80,6 +80,21 @@ describe("finance manifest app map (#3177)", () => {
     expect(manifest.assistantTools.filter((t) => t.handler === "draft.build")).toEqual([]);
   });
 
+  it("lets chat adjust the draft through the drafting family, never start it (#3181)", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      assistantTools: { name: string; handler?: string; risk: string; actionFamilyId?: string }[];
+      assistantActionFamilies: { id: string }[];
+      worker: { queues: { name: string; handler: string }[] };
+    };
+    const update = manifest.assistantTools.find((t) => t.name === "finance.budget.draft.update");
+    expect(update).toMatchObject({ risk: "write", actionFamilyId: "drafting" });
+    expect(manifest.assistantActionFamilies.map((f) => f.id)).toContain("drafting");
+    expect(manifest.worker.queues).toContainEqual(
+      expect.objectContaining({ name: "finance.draft-set", handler: "draft.set" })
+    );
+    expect(manifest.assistantTools.filter((t) => t.handler === "draft.set")).toEqual([]);
+  });
+
   it("the duplicate-key check really counts a repeated block", () => {
     expect(countTopLevelKeys('{"appMap":{"a":1},"x":{"appMap":2},"appMap":{}}', "appMap")).toBe(2);
   });
@@ -118,6 +133,7 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.transaction.categorize-new", "transaction.categorize-new"],
         ["finance.budget.status", "budget.status"],
         ["finance.budget.draft.get", "budget.draft.get"],
+        ["finance.budget.draft.update", "budget.draft.update"],
         ["finance.budget.assign", "budget.assign"],
         ["finance.budget.move", "budget.move"],
         ["finance.rule.set", "rule.set"],
@@ -200,6 +216,7 @@ describe("finance manifest contract (#1146)", () => {
       ["moving_money", "ask_each_time"],
       ["categories", "ask_each_time"],
       ["bank_connections", "always_confirm"],
+      ["drafting", "ask_each_time"],
       ["sharing", "always_confirm"]
     ]);
     // Sharing balances with the household must always ask, even unattended (review A1).
@@ -357,6 +374,21 @@ describe("finance manifest contract (#1146)", () => {
         retryLimit: 1,
         allowManualRun: true,
         paramsSchema: { type: "object", fields: { draftId: { type: "uuid" } } }
+      },
+      {
+        // #3181: a plan amount typed on the draft screen.
+        name: "finance.draft-set",
+        handler: "draft.set",
+        retryLimit: 1,
+        allowManualRun: true,
+        paramsSchema: {
+          type: "object",
+          fields: {
+            draftId: { type: "uuid" },
+            categoryKey: { type: "identifier" },
+            amountCents: { type: "integer", min: 0, max: 100000000 }
+          }
+        }
       },
       {
         // #3176: confirm or change Needs a look rows. Parallel id lists (queue params

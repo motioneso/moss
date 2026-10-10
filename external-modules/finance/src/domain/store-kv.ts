@@ -225,6 +225,21 @@ export function kvStore(kv: FinanceKv): FinanceStore {
         status: "started",
         startedAt
       } as unknown as Record<string, unknown>);
+    },
+
+    async saveDraftLine(draftId, line) {
+      const stored = (await kv.get(NS.budgets, DRAFT_KEY)) as unknown as BudgetDraft | null;
+      if (!stored || stored.id !== draftId || stored.status !== "open") return;
+      const exists = stored.lines.some((existing) => existing.categoryKey === line.categoryKey);
+      const lines = exists
+        ? stored.lines.map((existing) =>
+            existing.categoryKey === line.categoryKey ? line : existing
+          )
+        : [...stored.lines, line];
+      await kv.set(NS.budgets, DRAFT_KEY, { ...stored, lines } as unknown as Record<
+        string,
+        unknown
+      >);
     }
   };
 }

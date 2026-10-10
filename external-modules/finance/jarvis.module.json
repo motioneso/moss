@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -101,7 +101,7 @@
       },
       {
         "id": "finance.first-budget",
-        "description": "After a bank has synced, Getting started builds a first budget from up to three months of history without asking Moss: each category's monthly average rounded up to the next five dollars, the middle monthly income, and merchants that charge about the same every month under Bills. It shows the plan total and how much income is still unplanned. Start this budget on that screen creates any missing categories and sets this month's amounts, then opens Budget. Only the button starts a budget; Moss in chat cannot, and can read the draft."
+        "description": "After a bank has synced, Getting started builds a first budget from up to three months of history without asking Moss: each category's monthly average rounded up to the next five dollars, the middle monthly income, and merchants that charge about the same every month under Bills. It shows the plan total and how much income is still unplanned. Start this budget on that screen creates any missing categories and sets this month's amounts, then opens Budget. Only the button starts a budget; Moss in chat cannot. You can type a plan amount on any line, and Moss in chat can change, add or drop lines; the plan total and the unplanned amount always add up from the lines."
       },
       {
         "id": "finance.needs-a-look",
@@ -307,6 +307,39 @@
       "risk": "read",
       "inputSchema": { "type": "object", "additionalProperties": false },
       "handler": "budget.draft.get"
+    },
+    {
+      "name": "finance.budget.draft.update",
+      "permissionId": "finance.budget.draft.update",
+      "description": "Change one line of the first-budget draft: set its plan amount, rename it, move it to another group, or drop it. Read the draft first with finance.budget.draft.get for the draft id and category keys. To add a line that is not in the draft, give a new lowercase categoryKey with categoryName, groupName (Bills, Everyday, Fun or Savings) and amountCents. Returns the line and the draft total before and after; quote those numbers instead of adding them up. It cannot start the budget.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "draftId": {
+            "type": "string",
+            "description": "The draft id from finance.budget.draft.get."
+          },
+          "categoryKey": {
+            "type": "string",
+            "description": "The line's category key from the draft, or a new lowercase slug to add a line."
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000,
+            "description": "The monthly plan amount in integer cents (600 dollars is 60000)."
+          },
+          "categoryName": { "type": "string", "maxLength": 80 },
+          "groupName": { "type": "string", "enum": ["Bills", "Everyday", "Fun", "Savings"] },
+          "dropped": { "type": "boolean", "description": "True takes the line out of the budget." }
+        },
+        "required": ["draftId", "categoryKey"]
+      },
+      "handler": "budget.draft.update",
+      "actionFamilyId": "drafting",
+      "executionPolicy": "auto"
     },
     {
       "name": "finance.budget.assign",
@@ -571,6 +604,13 @@
       "allowedTiers": ["always_confirm"]
     },
     {
+      "id": "drafting",
+      "label": "Adjust a draft budget",
+      "description": "Change a budget that hasn't started yet.",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto"]
+    },
+    {
       "id": "sharing",
       "label": "Share an account with the household",
       "description": "Show or hide one of your bank accounts to the people you live with.",
@@ -661,6 +701,20 @@
           "type": "object",
           "fields": {
             "draftId": { "type": "uuid" }
+          }
+        }
+      },
+      {
+        "name": "finance.draft-set",
+        "handler": "draft.set",
+        "retryLimit": 1,
+        "allowManualRun": true,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "draftId": { "type": "uuid" },
+            "categoryKey": { "type": "identifier" },
+            "amountCents": { "type": "integer", "min": 0, "max": 100000000 }
           }
         }
       },

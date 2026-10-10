@@ -27,7 +27,13 @@ import {
   transactionCategorizeHandler,
   transactionsQueryHandler
 } from "./handlers/feed.js";
-import { draftBuildHandler, draftGetHandler, draftStartHandler } from "./handlers/draft.js";
+import {
+  draftBuildHandler,
+  draftGetHandler,
+  draftSetHandler,
+  draftStartHandler,
+  draftUpdateHandler
+} from "./handlers/draft.js";
 import { storageMigrateHandler } from "./handlers/migrate.js";
 import { reportsNetWorthHandler, reportsSpendingHandler } from "./handlers/reports.js";
 import { accountSetSharedHandler, shareApplyHandler } from "./handlers/shared.js";
@@ -62,6 +68,8 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "budget.draft.get": draftGetHandler,
   "draft.build": draftBuildHandler,
   "draft.start": draftStartHandler,
+  "budget.draft.update": draftUpdateHandler,
+  "draft.set": draftSetHandler,
   // #3185: chat money and category actions.
   "budget.move": budgetMoveHandler,
   "rule.set": ruleSetHandler,
