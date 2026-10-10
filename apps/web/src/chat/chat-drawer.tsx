@@ -92,6 +92,7 @@ export function ChatDrawer(props: {
   const latestRecordsRef = useRef(props.records);
   latestRecordsRef.current = props.records;
   const [reviewThreadId, setReviewThreadId] = useState<string | null>(null);
+  const [liveThreadId, setLiveThreadId] = useState<string | null>(null);
   const [conversationOverlayOpen, setConversationOverlayOpen] = useState(false);
   const [drafts, setDrafts] = useState(() => loadChatDrafts(props.ownerId));
   const callerDraft = useInitialCallerDraft(props.initialText, props.surface, generationRef);
@@ -153,6 +154,7 @@ export function ChatDrawer(props: {
       if (!transition.isCurrent(vars.transition)) return;
       callerDraft.retire(vars.surface, vars.transition.generation);
       setReviewThreadId(null);
+      setLiveThreadId(null);
       setConversationOverlayOpen(true);
     },
     onSettled: (_data, _error, vars) => transition.finish(vars.transition)
@@ -192,6 +194,7 @@ export function ChatDrawer(props: {
     setPrivateMode(false);
     setPrivateEnded(false);
     setReviewThreadId(null);
+    setLiveThreadId(null);
     setConversationOverlayOpen(false);
     setIsSending(false);
     setSendError(null);
@@ -451,10 +454,13 @@ export function ChatDrawer(props: {
   const reviewing = reviewThreadId !== null;
   const persistedRecords = reviewing ? recordsFromMessages(messagesQuery.data?.messages ?? []) : [];
 
-  // A reviewed thread shows its stored history plus the live turn not yet stored. The live tail
-  // waits for activation so the previous thread's stream never shows under this one.
+  // A side chat started here shows its stored history plus the live turn not yet stored. A
+  // reopened thread shows stored history only, so the previous thread's stream never shows under it.
   const liveTail =
-    reviewing && !historyActivationPending && !props.meetingContext
+    reviewing &&
+    liveThreadId === reviewThreadId &&
+    !historyActivationPending &&
+    !props.meetingContext
       ? reconcileFallbacks(props.records, persistedRecords)
       : [];
   const displayRecords = reviewing ? [...persistedRecords, ...liveTail] : props.records;
@@ -574,6 +580,7 @@ export function ChatDrawer(props: {
         if (state.threadId)
           callerDraft.bind(state.threadId, change.surface, change.generation, true);
         setReviewThreadId(state.threadId ?? null);
+        setLiveThreadId(state.threadId ?? null);
         focusComposerAfterNewSideChat.current = true;
         setIsSending(false);
         setSendError(null);
@@ -612,6 +619,7 @@ export function ChatDrawer(props: {
     if (!change) return;
     callerDraft.retire(change.surface);
     setReviewThreadId(null);
+    setLiveThreadId(null);
     setIsSending(false);
     setSendError(null);
     setNeedsProvider(false);
@@ -747,6 +755,7 @@ export function ChatDrawer(props: {
             setQueuedSendText(null);
             setSendError(null);
             setReviewThreadId(id);
+            setLiveThreadId(null);
             if (change) {
               resumeMutation.mutate({ threadId: id, surface: props.surface, transition: change });
             }

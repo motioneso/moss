@@ -1012,3 +1012,60 @@ it("shows the live turn in a new side chat before the turn ends", async () => {
     vi.mocked(listChatThreadMessages).mockReset();
   }
 });
+
+it("keeps the previous conversation's live turn out of a reopened side chat", async () => {
+  vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false, threadId: "a" });
+  vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
+  vi.mocked(listChatThreads).mockResolvedValue({
+    threads: [chatThread("a", "Main", true), chatThread("b", "Porch planning")]
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = (records: readonly TranscriptRecord[]) =>
+    createElement(
+      QueryClientProvider,
+      { client },
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(ChatDrawer, {
+          open: true,
+          onClose: () => undefined,
+          records,
+          clearRecords: () => undefined,
+          streamErrorCount: 0,
+          isFounder: false,
+          ownerId: "owner",
+          surface: DEFAULT_CHAT_SURFACE
+        }) as ReactElement
+      )
+    );
+  const mainTurn: readonly TranscriptRecord[] = [{ kind: "user", text: "Question asked in Main" }];
+  let renderer!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      renderer = create(view(mainTurn));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => findByAriaLabel(renderer, "Open conversations")!.props.onClick());
+    await act(async () => {
+      findByAriaLabel(renderer, "Porch planning")!.props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      renderer.update(view(mainTurn));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(vi.mocked(resumeChat)).toHaveBeenCalled();
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Question asked in Main");
+  } finally {
+    await act(async () => renderer?.unmount());
+    client.clear();
+    vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false });
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [] });
+    vi.mocked(listChatThreadMessages).mockReset();
+  }
+});
