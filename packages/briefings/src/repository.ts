@@ -306,6 +306,9 @@ export class BriefingsRepository {
 
     const blocked = definition.selected_tool_names.some((name) => {
       if (name === "vault" || name === "chats") return false;
+      if (input.composeDeps.externalBriefingManifests?.some((m) => m.briefing?.toolName === name)) {
+        return false;
+      }
       const tool = findAssistantToolFromManifests(input.composeDeps.moduleManifests, name);
       return !tool || tool.risk !== "read";
     });
