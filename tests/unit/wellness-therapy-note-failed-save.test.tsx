@@ -47,16 +47,31 @@ async function addNote(save: () => Promise<unknown>) {
   return tree;
 }
 
+// React Query settles the mutation on a later tick, so poll until the expectation holds.
+async function settle(check: () => void) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      check();
+      return;
+    } catch (error) {
+      if (attempt >= 50) throw error;
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+    }
+  }
+}
+
 describe("therapy note save failure", () => {
   it("keeps the text in the box and shows an error when the save fails", async () => {
     const tree = await addNote(() => Promise.reject(new Error("boom")));
+    await settle(() => expect(textOf(tree.toJSON())).toContain("Couldn't save that note"));
     expect(tree.root.findByType("textarea").props.value).toBe("bring up sleep");
-    expect(textOf(tree.toJSON())).toContain("Couldn't save that note");
   });
 
   it("clears the box when the save succeeds", async () => {
     const tree = await addNote(() => Promise.resolve({ note: { id: "n1" } }));
-    expect(tree.root.findByType("textarea").props.value).toBe("");
+    await settle(() => expect(tree.root.findByType("textarea").props.value).toBe(""));
     expect(textOf(tree.toJSON())).not.toContain("Couldn't save that note");
   });
 });
