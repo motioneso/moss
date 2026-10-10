@@ -723,6 +723,16 @@ tests/uat/specs/job-search-board.uat.spec.ts,I0,scoped-test-transfer,,Parent-app
 tests/uat/specs/module-install.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/moss-assistant-name.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/no-plan-review.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
+tests/uat/specs/park-press-4-news-sports.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-4-notifications.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-4-settings-recovery.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-4-sports-links.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-4-wellness-checkin.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-5-finance-settings.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-5-fresh-owner-companion.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-5-meetings-companion.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-6-reduced-motion.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-7-wellness-export.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
 tests/uat/specs/real-chat-signin.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/runtime-context.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/shadow-report.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
