@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Chat no longer flashes a connect prompt.** The chat drawer no longer briefly shows the connect-a-provider message when you open it after a model has been added. [PR #3329](https://github.com/motioneso/moss/pull/3329)
 
+#### Added
+
+- **Finance first budget, money moves in chat and Finance settings.** Finance drafts your first budget for you, Moss can move money between categories and sort transactions when you ask, and Finance has a settings page where you choose how much it does on its own. [PR #3312](https://github.com/motioneso/moss/pull/3312)
+
 ### 2026-10-09
 
 #### Fixed
