@@ -254,7 +254,8 @@ describe("settings.undoLast over quiet-hours writes", () => {
       enabled: true,
       start: "20:00",
       end: "05:00",
-      timezone: "Europe/Paris"
+      timezone: "Europe/Paris",
+      authority: "canonical"
     });
   });
 
@@ -306,7 +307,7 @@ describe("settings.undoLast over quiet-hours writes", () => {
     expect(await readQuiet(actor)).toEqual(latest);
   });
 
-  it("leaves the separate alert quiet hours alone when undoing a Profile change", async () => {
+  it("treats a legacy alert-settings quiet save as a later save to the one Profile record", async () => {
     const actor = ids.userA;
     settingsUndoStack.clear(actor, "");
     await setQuietHours(actor, { enabled: true, start: "22:30", end: "06:45", timezone: null });
@@ -317,17 +318,22 @@ describe("settings.undoLast over quiet-hours writes", () => {
       payload: { quietHours: { enabled: true, startLocalTime: "21:00", endLocalTime: "08:00" } }
     });
     expect(patch.statusCode).toBe(200);
+    const latest = await readQuiet(actor);
+    expect(latest?.value).toEqual({
+      enabled: true,
+      start: "21:00",
+      end: "08:00",
+      timezone: null,
+      authority: "canonical"
+    });
 
-    expect((await undo(actor)).status).toBe("undone");
+    expect((await undo(actor)).status).toBe("cancelled");
+    expect(await readQuiet(actor)).toEqual(latest);
     const alerts = await dataContext.withDataContext(
       { actorUserId: actor, requestId: "req:undo-quiet-proactive" },
       (scopedDb) => proactive.getSaved(scopedDb)
     );
-    expect(alerts?.raw.quietHours).toEqual({
-      enabled: true,
-      startLocalTime: "21:00",
-      endLocalTime: "08:00"
-    });
+    expect(alerts?.raw.quietHours).toBeUndefined();
   });
 
   function setQuietHours(actor: string, input: Record<string, unknown>) {

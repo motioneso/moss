@@ -11,7 +11,7 @@ import type {
 } from "@moss/shared";
 import { formatInZone } from "@moss/shared";
 import { Button, Combobox, type ComboboxOption } from "@moss/ui";
-import { Check, LoaderCircle } from "lucide-react";
+import { Check, LoaderCircle, MoonStar } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -41,6 +41,7 @@ import {
   Badge,
   Field,
   Group,
+  Note,
   PaneHead,
   Row,
   Segmented,
@@ -250,6 +251,10 @@ export function ProfilePane({ me }: PaneProps) {
     retry: false
   });
   const quietHours = quietHoursQuery.data?.quietHours ?? DEFAULT_QUIET_HOURS;
+  const olderAlertSchedule =
+    quietHoursQuery.data?.authority.status === "conflict"
+      ? quietHoursQuery.data.authority.alerts
+      : null;
   const quietHoursMutation = useMutation({
     mutationFn: (next: QuietHoursSettingsDto) =>
       putQuietHoursSettings(quietHoursSaveRequest(next, quietHoursQuery.data)),
@@ -268,6 +273,8 @@ export function ProfilePane({ me }: PaneProps) {
   const updateQuietHours = (patch: Partial<QuietHoursSettingsDto>) => {
     quietHoursMutation.mutate({ ...quietHours, ...patch });
   };
+  const quietHoursHeld =
+    quietHoursQuery.isLoading || quietHoursQuery.isError || quietHoursMutation.isPending;
 
   const weatherLocationQuery = useQuery({
     queryKey: queryKeys.weather.location,
@@ -507,13 +514,29 @@ export function ProfilePane({ me }: PaneProps) {
         title="Quiet hours"
         desc={`${assistantName} stays silent during these hours — no nudges unless something is genuinely urgent.`}
       >
+        {quietHoursQuery.isLoading ? <p role="status">Loading quiet hours…</p> : null}
+        {quietHoursQuery.isError ? (
+          <Note icon={<MoonStar size={13} aria-hidden="true" />}>
+            {readError(quietHoursQuery.error)}{" "}
+            <Button variant="link" size="sm" onClick={() => void quietHoursQuery.refetch()}>
+              Try again
+            </Button>
+          </Note>
+        ) : null}
+        {olderAlertSchedule ? (
+          <Note icon={<MoonStar size={13} aria-hidden="true" />}>
+            {olderAlertSchedule.enabled
+              ? `Alerts still follow an older schedule, ${olderAlertSchedule.start} to ${olderAlertSchedule.end}.`
+              : "Alerts still follow an older schedule, which is switched off."}
+          </Note>
+        ) : null}
         <Row
           name="Enable quiet hours"
           control={
             <Switch
               ariaLabel="Enable quiet hours"
               checked={quietHours.enabled}
-              disabled={quietHoursQuery.isLoading || quietHoursMutation.isPending}
+              disabled={quietHoursHeld}
               onChange={(enabled) => updateQuietHours({ enabled })}
             />
           }
@@ -526,7 +549,7 @@ export function ProfilePane({ me }: PaneProps) {
               type="time"
               value={quietHours.start}
               aria-label="Quiet hours from"
-              disabled={quietHoursQuery.isLoading || quietHoursMutation.isPending}
+              disabled={quietHoursHeld}
               onChange={(event) => {
                 const value = event.currentTarget.value;
                 if (isValidQuietHoursTime(value)) updateQuietHours({ start: value });
@@ -539,7 +562,7 @@ export function ProfilePane({ me }: PaneProps) {
               type="time"
               value={quietHours.end}
               aria-label="Quiet hours to"
-              disabled={quietHoursQuery.isLoading || quietHoursMutation.isPending}
+              disabled={quietHoursHeld}
               onChange={(event) => {
                 const value = event.currentTarget.value;
                 if (isValidQuietHoursTime(value)) updateQuietHours({ end: value });

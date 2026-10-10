@@ -3,7 +3,7 @@ import type { ModuleFeatureManifest } from "@moss/module-sdk";
 export const quietHoursFeature: ModuleFeatureManifest = {
   id: "settings.quietHours",
   description:
-    "Save the quiet-hours schedule from Account & preferences or chat, and undo the last chat change. Overnight windows are allowed; a schedule with no time zone follows the profile time zone, then UTC.",
+    "One quiet-hours schedule for notifications, focus and alert cards, saved in Account & preferences or chat; undo reverts a chat edit. Nothing saved means off, 22:00-07:00. A differing older alert schedule is kept and named.",
   errors: [
     {
       code: "invalid_schedule",

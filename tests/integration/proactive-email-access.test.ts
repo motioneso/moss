@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 import pg from "pg";
 
@@ -21,6 +21,8 @@ import {
   resolveAutomaticEmailAlertsEnabled
 } from "@moss/proactive-monitoring";
 import { PriorityPreferencesRepository } from "@moss/priority";
+import type { ProactiveMonitorProvider } from "@moss/module-sdk";
+import { resolveAlertsQuietPolicy } from "@moss/settings";
 import {
   defaultProactiveMonitoringPreference,
   PROACTIVE_MONITORING_PREFERENCE_KEY
@@ -222,7 +224,8 @@ it("scheduled and manual scans collect only currently permitted mail through the
     monitorStateRepository: new MonitorStateRepository(),
     cardRepository: cards,
     antiSpamPolicy: new AntiSpamPolicy(cards),
-    getLocalePreference: async () => null
+    getLocalePreference: async () => null,
+    resolveQuietHours: async () => null
   });
   await appContext.withDataContext({ actorUserId: ids.userA }, async (scopedDb) => {
     const pref = defaultProactiveMonitoringPreference();
@@ -253,4 +256,140 @@ it("scheduled and manual scans collect only currently permitted mail through the
     scanner.scan(scopedDb, ids.userA, "email", monitor, "source-sync")
   );
   expect(unavailable).toMatchObject({ signalsReceived: 0, cardsCreated: 0, skipped: false });
+});
+
+describe("quiet hours through the real authority", () => {
+  const now = new Date();
+
+  function windowAround(timeZone: string): { start: string; end: string } {
+    const at = (offsetMinutes: number) =>
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23"
+      }).format(new Date(now.getTime() + offsetMinutes * 60_000));
+    return { start: at(-60), end: at(60) };
+  }
+
+  function nested(enabled: boolean, window: { start: string; end: string }) {
+    return { enabled, startLocalTime: window.start, endLocalTime: window.end };
+  }
+
+  /** Seeds the owner's stored rows, scans one critical signal, and returns its deferral. */
+  async function deferralFor(
+    key: string,
+    rows: {
+      alerts: ReturnType<typeof nested>;
+      profile?: Record<string, unknown>;
+      locale?: Record<string, unknown>;
+    }
+  ): Promise<Date | null> {
+    const bootstrap = new pg.Client({ connectionString: connectionStrings.bootstrap });
+    await bootstrap.connect();
+    try {
+      await bootstrap.query(`DELETE FROM app.proactive_cards WHERE owner_user_id = $1`, [
+        ids.userA
+      ]);
+    } finally {
+      await bootstrap.end();
+    }
+    await appContext.withDataContext({ actorUserId: ids.userA }, async (scopedDb) => {
+      await scopedDb.db
+        .deleteFrom("app.preferences")
+        .where("key", "in", ["quiet-hours", "locale"])
+        .execute();
+      const pref = defaultProactiveMonitoringPreference();
+      await preferences.upsert(scopedDb, PROACTIVE_MONITORING_PREFERENCE_KEY, {
+        ...pref,
+        enabled: true,
+        sources: { ...pref.sources, email: { enabled: true, dailyCardCap: 3 } },
+        quietHours: rows.alerts
+      });
+      if (rows.profile) await preferences.upsert(scopedDb, "quiet-hours", rows.profile);
+      if (rows.locale) await preferences.upsert(scopedDb, "locale", rows.locale);
+    });
+
+    const cards = new CardRepository();
+    const scanner = new ProactiveScanner({
+      preferencesRepository: new ProactiveMonitoringPreferencesRepository(),
+      priorityPreferencesRepository: new PriorityPreferencesRepository(),
+      monitorStateRepository: new MonitorStateRepository(),
+      cardRepository: cards,
+      antiSpamPolicy: new AntiSpamPolicy(cards),
+      getLocalePreference: async (scopedDb) =>
+        ((await preferences.get(scopedDb, "locale")) as { timezone?: string } | null) ?? null,
+      resolveQuietHours: resolveAlertsQuietPolicy
+    });
+    const monitor: ProactiveMonitorProvider = {
+      source: "email",
+      moduleId: "email",
+      collectSignals: async () => ({
+        signals: [
+          {
+            source: "email",
+            stableKey: key,
+            sourceRefHash: `hash:${key}`,
+            signalType: "time_sensitive_follow_up",
+            title: `Quiet hours ${key}`,
+            summary: "Signature required",
+            occurredAt: now.toISOString(),
+            priorityCandidate: { explicitPriority: 5, dueAt: "2020-01-01T00:00:00Z" }
+          }
+        ],
+        nextCursor: {}
+      })
+    };
+    const result = await context.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+      scanner.scan(scopedDb, ids.userA, "email", monitor, "source-sync", now)
+    );
+    expect(result.cardsCreated + result.cardsDeferred).toBe(1);
+
+    const card = await context.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
+      scopedDb.db
+        .selectFrom("app.proactive_cards")
+        .select("deferred_until")
+        .where("stable_key", "=", key)
+        .executeTakeFirstOrThrow()
+    );
+    return card.deferred_until === null ? null : new Date(card.deferred_until);
+  }
+
+  it("a carried alerts schedule defers in the owner zone", async () => {
+    const deferral = await deferralFor("quiet:carried", {
+      alerts: nested(true, windowAround("Asia/Tokyo")),
+      locale: { timezone: "Asia/Tokyo" }
+    });
+    expect(deferral).not.toBeNull();
+  });
+
+  it("a canonical Profile schedule governs over the alerts schedule, in its own zone", async () => {
+    const tokyo = windowAround("Asia/Tokyo");
+    const deferral = await deferralFor("quiet:canonical-zone", {
+      alerts: nested(false, tokyo),
+      profile: { enabled: true, ...tokyo, timezone: "Asia/Tokyo", authority: "canonical" }
+    });
+    expect(deferral).not.toBeNull();
+
+    const off = await deferralFor("quiet:canonical-off", {
+      alerts: nested(true, windowAround("UTC")),
+      profile: {
+        enabled: false,
+        start: "22:00",
+        end: "07:00",
+        timezone: null,
+        authority: "canonical"
+      }
+    });
+    expect(off).toBeNull();
+  });
+
+  it("a conflicted pair keeps the alert workers on the alerts schedule", async () => {
+    const utc = windowAround("UTC");
+    const deferral = await deferralFor("quiet:conflict", {
+      alerts: nested(false, utc),
+      profile: { enabled: true, ...utc, timezone: null }
+    });
+    expect(deferral).toBeNull();
+  });
 });

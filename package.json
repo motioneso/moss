@@ -93,7 +93,7 @@
     "test:chat-classifier-shadow-report": "tsx scripts/test-integration.ts tests/integration/chat-classifier-shadow-report.test.ts",
     "test:chat-classifier-gate": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/chat-classifier-shadow-review.test.ts tests/integration/chat-classifier-shadow-report.test.ts tests/integration/classifier-gate-setting-routes.test.ts tests/integration/foundation-schema-catalog.test.ts",
     "test:chat-live-api": "tsx scripts/test-integration.ts tests/integration/chat-live-api.test.ts",
-    "test:settings-quiet-hours": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/settings-quiet-hours.test.ts tests/integration/settings-quiet-hours-tool.test.ts tests/integration/settings-undo-apply-tool.test.ts",
+    "test:settings-quiet-hours": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/settings-quiet-hours.test.ts tests/integration/settings-quiet-hours-tool.test.ts tests/integration/settings-undo-apply-tool.test.ts tests/integration/settings-quiet-hours-carry-forward.test.ts",
     "test:proactive-email-access": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/proactive-email-access.test.ts tests/integration/proactive-monitoring.test.ts tests/integration/module-registry-proactive-schedule.test.ts tests/integration/proactive-scanner-ranking.test.ts tests/integration/settings-proactive-monitoring-patch.test.ts",
     "test:main-chat": "tsx scripts/test-integration.ts tests/integration/main-chat.test.ts",
     "test:main-chat-regressions": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/main-chat.test.ts tests/integration/chat-origin-action-history.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/ai-assistant-action-thread-hydration.test.ts tests/integration/chat-action-history-permissions.test.ts tests/integration/chat-live-api.test.ts",
@@ -138,7 +138,8 @@
     "test:uat:3191-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3191-caller-provider-real.uat.spec.ts",
     "test:uat:3126-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3126-side-chat-overlay-real.uat.spec.ts",
     "test:uat:3192": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3192-owner-main.uat.spec.ts",
-    "test:uat:3164": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3164-quiet-hours-writers.uat.spec.ts"
+    "test:uat:3164": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3164-quiet-hours-writers.uat.spec.ts",
+    "test:uat:3165": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3165-quiet-hours-carry-forward.uat.spec.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",

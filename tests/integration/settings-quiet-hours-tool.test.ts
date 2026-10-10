@@ -10,6 +10,7 @@ import { settingsUndoStack } from "../../packages/settings/src/undo-stack.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const QUIET_HOURS_PREFERENCE_KEY = "quiet-hours";
+const CANONICAL = { status: "canonical", alerts: null } as const;
 
 function toolCtx(actorUserId: string): ToolContext {
   return { actorUserId, requestId: "req:quiet-hours-tool-test", chatSessionId: "" };
@@ -44,7 +45,8 @@ describe("settings.quietHours.set tool", () => {
       enabled: true,
       start: "22:00",
       end: "07:00",
-      timezone: "America/Denver"
+      timezone: "America/Denver",
+      authority: CANONICAL
     });
 
     const stored = await dataContext.withDataContext(
@@ -55,7 +57,8 @@ describe("settings.quietHours.set tool", () => {
       enabled: true,
       start: "22:00",
       end: "07:00",
-      timezone: "America/Denver"
+      timezone: "America/Denver",
+      authority: "canonical"
     });
     expect(stored?.revision).toBe(1);
   });
@@ -70,7 +73,13 @@ describe("settings.quietHours.set tool", () => {
           toolCtx(ids.userB)
         )
     );
-    expect(result.data).toEqual({ enabled: false, start: "23:00", end: "06:30", timezone: null });
+    expect(result.data).toEqual({
+      enabled: false,
+      start: "23:00",
+      end: "06:30",
+      timezone: null,
+      authority: CANONICAL
+    });
   });
 
   it("rejects a malformed start time", async () => {
@@ -130,7 +139,8 @@ describe("settings.quietHours.set tool", () => {
       enabled: true,
       start: "22:00",
       end: "07:00",
-      timezone: "America/Denver"
+      timezone: "America/Denver",
+      authority: CANONICAL
     });
 
     const after = await dataContext.withDataContext(
@@ -170,7 +180,8 @@ describe("settings.quietHours.set tool", () => {
       enabled: true,
       start: "23:30",
       end: "06:15",
-      timezone: "America/Denver"
+      timezone: "America/Denver",
+      authority: CANONICAL
     });
   });
 
@@ -198,7 +209,8 @@ describe("settings.quietHours.set tool", () => {
       enabled: true,
       start: "22:00",
       end: "22:00",
-      timezone: null
+      timezone: null,
+      authority: "canonical"
     });
   });
 

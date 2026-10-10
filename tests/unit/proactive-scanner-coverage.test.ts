@@ -128,7 +128,8 @@ function harness(pref: ProactiveMonitoringPreferenceV1): ScannerHarness {
     monitorStateRepository: stateRepo,
     cardRepository: cardRepo,
     antiSpamPolicy: antiSpam,
-    getLocalePreference: vi.fn().mockResolvedValue({ timezone: "UTC" })
+    getLocalePreference: vi.fn().mockResolvedValue({ timezone: "UTC" }),
+    resolveQuietHours: async () => null
   });
   return { scanner, prefsRepo, stateRepo, cardRepo, antiSpam };
 }
@@ -315,7 +316,8 @@ describe("scanner skip paths", () => {
       monitorStateRepository: stateRepo,
       cardRepository: cardRepo,
       antiSpamPolicy: antiSpam,
-      getLocalePreference: vi.fn().mockResolvedValue(null)
+      getLocalePreference: vi.fn().mockResolvedValue(null),
+      resolveQuietHours: async () => null
     });
     const provider = providerReturning([]);
     await scanner.scan(fakeScopedDb(), OWNER_A, "calendar", provider, "source-sync", NOW);
@@ -640,6 +642,7 @@ describe("scan worker", () => {
     const workers = await registerProactiveMonitoringWorkers(boss, {
       dataContext,
       getLocalePreference: async () => ({ timezone: "UTC" }),
+      resolveQuietHours: async () => null,
       providers: new Map()
     });
     expect(workers).toEqual(["worker-1"]);
@@ -654,6 +657,7 @@ describe("scan worker", () => {
     await registerProactiveMonitoringWorkers(boss, {
       dataContext: { withDataContext } as unknown as DepsParam["dataContext"],
       getLocalePreference: async () => ({ timezone: "UTC" }),
+      resolveQuietHours: async () => null,
       providers: new Map()
     });
     await expect(
@@ -675,6 +679,7 @@ describe("scan worker", () => {
     await registerProactiveMonitoringWorkers(boss, {
       dataContext: { withDataContext } as unknown as DepsParam["dataContext"],
       getLocalePreference: async () => ({ timezone: "UTC" }),
+      resolveQuietHours: async () => null,
       providers: new Map()
     });
     await expect(
@@ -710,6 +715,7 @@ describe("scan worker", () => {
     await registerProactiveMonitoringWorkers(boss, {
       dataContext,
       getLocalePreference: async () => ({ timezone: "UTC" }),
+      resolveQuietHours: async () => null,
       providers: new Map([["tasks", provider]] as never)
     });
     await captured.handler([
