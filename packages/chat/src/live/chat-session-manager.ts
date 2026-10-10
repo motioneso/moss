@@ -43,6 +43,10 @@ import type {
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
+import {
+  routeMainBackgroundMessage,
+  type MainBackgroundMessage
+} from "./background-message-routing.js";
 import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 import {
   routeOriginRecord,
@@ -398,6 +402,16 @@ export class ChatSessionManager {
       originThreadId,
       record,
       surface
+    });
+  }
+
+  /** #3195: show a stored background message in the owner's open Main drawer, if any. */
+  deliverMainBackgroundMessage(message: MainBackgroundMessage): boolean {
+    return routeMainBackgroundMessage({
+      ...message,
+      sessions: this.sessions,
+      transitions: this.originTransitions,
+      emit: (surface, record) => this.emit(message.actorUserId, surface, record)
     });
   }
 

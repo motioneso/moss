@@ -489,6 +489,41 @@ describe("ChatSessionManager", () => {
     });
   });
 
+  // #3195: a reminder delivered mid-turn appears at once in the owner's Main drawer only, and
+  // the turn's own reply still arrives after it with its own identity.
+  it("shows a delivered reminder in the owner's Main drawer while a reply is streaming", async () => {
+    const engine = new GatedEngine("anthropic", "user-1");
+    const { manager } = makeManager({ engineFactory: () => engine });
+    const drawer: TranscriptRecord[] = [];
+    const moduleChat: TranscriptRecord[] = [];
+    const otherOwner: TranscriptRecord[] = [];
+    manager.subscribe("user-1", (r) => drawer.push(r));
+    manager.subscribe("user-1", (r) => moduleChat.push(r), "m-1111111111111111");
+    manager.subscribe("user-2", (r) => otherOwner.push(r));
+    const turn = manager.submitTurn("user-1", "Ben", "plan my week");
+    while (engine.submitted.length === 0) await Promise.resolve();
+
+    const reminder: TranscriptRecord = {
+      kind: "reply",
+      text: "Reminder: stretch",
+      messageId: "reminder-1",
+      background: true
+    };
+    const message = { mainThreadId: "thread-0", drawerThreadId: "thread-0", record: reminder };
+    expect(manager.deliverMainBackgroundMessage({ actorUserId: "user-1", ...message })).toBe(true);
+    expect(drawer.at(-1)).toEqual(reminder);
+    engine.open();
+    await turn;
+
+    expect(drawer.filter((r) => r.kind === "reply").map((r) => r.messageId)).toEqual([
+      "reminder-1",
+      undefined
+    ]);
+    expect(drawer.at(-1)?.turnId).toEqual(expect.any(String));
+    expect(moduleChat).toEqual([]);
+    expect(otherOwner).toEqual([]);
+  });
+
   it("persists only capped terminal action outcomes from the live turn", async () => {
     const engine = new GatedEngine("anthropic", "user-1");
     const { manager, persistence } = makeManager({ engineFactory: () => engine });

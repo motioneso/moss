@@ -26,6 +26,7 @@ import {
 import { listWorkflowApprovals } from "../api/workflows-client.js";
 import {
   applyStreamRecord,
+  isBackgroundRecord,
   mergeBackgroundRecords,
   mergeHydratedRecords,
   upsertTranscriptRecord
@@ -134,6 +135,8 @@ export function useChatStream(
   const hydrationGeneration = useRef(0);
   // The owned Main thread this drawer hydrated, so a reconnect can catch up its reminders.
   const hydratedMainThread = useRef<string | undefined>(undefined);
+  // A side or module chat never shows a background message, even one sent before a switch.
+  const hydratedSideThread = useRef(false);
   const streamScope = useRef({ surface, enabled });
   streamScope.current = { surface, enabled };
 
@@ -192,7 +195,7 @@ export function useChatStream(
         // #1135 — reset error count on successful message so transient errors don't lock private chat
         setStreamErrorCount(0);
         const record = parseRecord(event.data);
-        if (record) {
+        if (record && !(record.background && hydratedSideThread.current)) {
           setRecords((current) => (isCurrent() ? applyStreamRecord(current, record) : current));
         }
       };
@@ -220,6 +223,7 @@ export function useChatStream(
   useEffect(() => {
     setHydratedSurface(undefined);
     hydratedMainThread.current = undefined;
+    hydratedSideThread.current = false;
     if (!surface || !enabled) return;
     let active = true;
     const generation = hydrationGeneration.current;
@@ -272,6 +276,7 @@ export function useChatStream(
         if (!active || generation !== hydrationGeneration.current) return;
         const history = recordsFromMessages(messages);
         if (isDrawer && thread.isMain) hydratedMainThread.current = thread.id;
+        hydratedSideThread.current = !(isDrawer && thread.isMain);
         // #1253 — re-hydrate pending action request cards (only "pending" status; others already resolved)
         const pendingActions = actionsResult.actions.filter((a) => a.status === "pending");
         const actionRecords: TranscriptRecord[] = pendingActions.map((action) => {
@@ -300,7 +305,10 @@ export function useChatStream(
           };
         });
         setRecords((current) =>
-          mergeHydratedRecords(current, [...history, ...actionRecords, ...workflowRecords])
+          mergeHydratedRecords(
+            hydratedSideThread.current ? current.filter((r) => !isBackgroundRecord(r)) : current,
+            [...history, ...actionRecords, ...workflowRecords]
+          )
         );
       } catch {
         // The live stream remains authoritative; an unavailable history read must not block chat.
