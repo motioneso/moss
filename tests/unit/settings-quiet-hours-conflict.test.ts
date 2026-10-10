@@ -35,17 +35,52 @@ describe("quietHoursChoices", () => {
     });
   });
 
-  it("names Profile's own zone and offers to turn quiet hours off", () => {
+  it("names Profile's own zone by its city and offers to turn quiet hours off", () => {
     const choices = quietHoursChoices(
       conflict(
-        { enabled: true, start: "22:00", end: "07:00", timezone: "Europe/London" },
+        { enabled: true, start: "22:00", end: "07:00", timezone: "America/Argentina/Buenos_Aires" },
         { enabled: false, start: "22:00", end: "07:00" }
       )
     );
     expect(choices.map((c) => c.label)).toEqual([
-      "Use 22:00 to 07:00 (Europe/London)",
+      "Use 22:00 to 07:00 (Buenos Aires)",
       "Turn quiet hours off"
     ]);
+  });
+
+  it("says the alert window runs in the Profile time zone when Profile names its own", () => {
+    const choices = quietHoursChoices(
+      conflict(
+        { enabled: true, start: "22:00", end: "07:00", timezone: "Europe/London" },
+        { enabled: true, start: "22:00", end: "07:00" }
+      )
+    );
+    expect(choices.map((c) => c.label)).toEqual([
+      "Use 22:00 to 07:00 (London)",
+      "Use 22:00 to 07:00 (Profile time zone)"
+    ]);
+  });
+
+  it("keeps every label short enough for one line on a phone", () => {
+    const longestCity = Intl.supportedValuesOf("timeZone").reduce((longest, zone) =>
+      zone.length > longest.length ? zone : longest
+    );
+    const cases = [
+      conflict(
+        { enabled: true, start: "22:00", end: "07:00", timezone: longestCity },
+        { enabled: true, start: "23:00", end: "08:00" }
+      ),
+      conflict(
+        { enabled: true, start: "22:00", end: "07:00", timezone: "Europe/London" },
+        { enabled: true, start: "22:00", end: "07:00" }
+      ),
+      conflict(off, { enabled: false, start: "23:00", end: "08:00" })
+    ];
+    for (const loaded of cases) {
+      for (const choice of quietHoursChoices(loaded)) {
+        expect(choice.label.length).toBeLessThanOrEqual(40);
+      }
+    }
   });
 
   it("tells two off schedules apart by the window each keeps", () => {
@@ -53,8 +88,8 @@ describe("quietHoursChoices", () => {
       conflict(off, { enabled: false, start: "23:00", end: "08:00" })
     );
     expect(choices.map((c) => c.label)).toEqual([
-      "Keep quiet hours off (22:00 to 07:00 when on)",
-      "Keep quiet hours off (23:00 to 08:00 when on)"
+      "Keep off (saved 22:00 to 07:00)",
+      "Keep off (saved 23:00 to 08:00)"
     ]);
   });
 

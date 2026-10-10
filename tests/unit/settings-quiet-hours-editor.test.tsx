@@ -342,8 +342,8 @@ describe("QuietHoursEditor", () => {
 
     expect(out(tree)).toContain("Your saved quiet hours differ.");
     expect(out(tree)).toContain("Nothing changes until you choose.");
-    expect(button(tree, "Use 22:00 to 07:00 (America/Chicago)")).toHaveLength(1);
-    expect(button(tree, "Use 23:00 to 08:00")).toHaveLength(1);
+    expect(button(tree, "Use 22:00 to 07:00 (Chicago)")).toHaveLength(1);
+    expect(button(tree, "Use 23:00 to 08:00 (Profile time zone)")).toHaveLength(1);
     expect(button(tree, "Save quiet hours")).toHaveLength(0);
     expect(tree.root.findAll((n) => n.props["aria-label"] === "Enable quiet hours")).toHaveLength(
       0
@@ -359,7 +359,7 @@ describe("QuietHoursEditor", () => {
     );
     const tree = await mount();
 
-    await choose(tree, "Use 23:00 to 08:00");
+    await choose(tree, "Use 23:00 to 08:00 (Profile time zone)");
 
     expect(api.chosen).toEqual([
       { choice: "alerts", quietHours: fromAlerts, expectedVersion: "1:100:abc" }
@@ -383,13 +383,13 @@ describe("QuietHoursEditor", () => {
     );
     const tree = await mount();
 
-    await choose(tree, "Use 22:00 to 07:00 (America/Chicago)");
+    await choose(tree, "Use 22:00 to 07:00 (Chicago)");
 
     expect(out(tree)).toContain(
       "Your choice could not save: Settings are unavailable. Your previous schedules still apply."
     );
     expect(out(tree)).toContain("Your saved quiet hours differ.");
-    expect(button(tree, "Use 23:00 to 08:00")).toHaveLength(1);
+    expect(button(tree, "Use 23:00 to 08:00 (Profile time zone)")).toHaveLength(1);
     expect(button(tree, "Save quiet hours")).toHaveLength(0);
 
     await choose(tree, "Try again");
@@ -417,7 +417,7 @@ describe("QuietHoursEditor", () => {
     );
     const tree = await mount();
 
-    await choose(tree, "Use 23:00 to 08:00");
+    await choose(tree, "Use 23:00 to 08:00 (Profile time zone)");
 
     expect(out(tree)).toContain(
       "Quiet hours changed somewhere else, so your choice was not saved."
@@ -431,10 +431,10 @@ describe("QuietHoursEditor", () => {
     serve(differing, [], [() => new Promise<Response>((resolve) => (answer = resolve))]);
     const tree = await mount();
 
-    await choose(tree, "Use 23:00 to 08:00");
+    await choose(tree, "Use 23:00 to 08:00 (Profile time zone)");
 
-    expect(button(tree, "Use 23:00 to 08:00")[0]!.props.disabled).toBe(true);
-    expect(button(tree, "Use 22:00 to 07:00 (America/Chicago)")[0]!.props.disabled).toBe(true);
+    expect(button(tree, "Use 23:00 to 08:00 (Profile time zone)")[0]!.props.disabled).toBe(true);
+    expect(button(tree, "Use 22:00 to 07:00 (Chicago)")[0]!.props.disabled).toBe(true);
     await act(async () => {
       answer(new Response(JSON.stringify(loaded(fromAlerts, "2:200")), { status: 200 }));
     });

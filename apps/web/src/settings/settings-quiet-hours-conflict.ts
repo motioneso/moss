@@ -31,13 +31,19 @@ export function quietHoursChoices(
   const alerts = loaded.authority.alerts ? { ...loaded.authority.alerts, timezone: null } : null;
   const bothOff = !profile.enabled && alerts !== null && !alerts.enabled;
   const choices: QuietHoursChoice[] = [
-    { choice: "profile", quietHours: profile, label: choiceLabel(profile, "Keep", bothOff) }
+    {
+      choice: "profile",
+      quietHours: profile,
+      label: choiceLabel(profile, "Keep", bothOff, zoneCity(profile.timezone))
+    }
   ];
   if (alerts && !sameSchedule(profile, alerts)) {
+    // Beside a Profile window that names its own zone, say which zone the alert window runs in.
+    const alertsZone = profile.enabled && profile.timezone ? "Profile time zone" : null;
     choices.push({
       choice: "alerts",
       quietHours: alerts,
-      label: choiceLabel(alerts, bothOff ? "Keep" : "Turn", bothOff)
+      label: choiceLabel(alerts, bothOff ? "Keep" : "Turn", bothOff, alertsZone)
     });
   }
   return choices;
@@ -63,16 +69,26 @@ export function quietHoursChoiceFailure(error: unknown): string {
   return `Your choice could not save: ${reason}. Your previous schedules still apply.`;
 }
 
-function choiceLabel(schedule: QuietHoursSettingsDto, offVerb: string, bothOff: boolean): string {
+function choiceLabel(
+  schedule: QuietHoursSettingsDto,
+  offVerb: string,
+  bothOff: boolean,
+  zone: string | null
+): string {
   if (schedule.enabled) {
-    const zone = schedule.timezone ? ` (${schedule.timezone})` : "";
-    return `Use ${schedule.start} to ${schedule.end}${zone}`;
+    return `Use ${schedule.start} to ${schedule.end}${zone ? ` (${zone})` : ""}`;
   }
 
   // Both sides off differ only in the window each keeps for later, so the label names it.
   return bothOff
-    ? `${offVerb} quiet hours off (${schedule.start} to ${schedule.end} when on)`
+    ? `${offVerb} off (saved ${schedule.start} to ${schedule.end})`
     : `${offVerb} quiet hours off`;
+}
+
+/** "America/Argentina/Buenos_Aires" reads as "Buenos Aires", short enough for a phone button. */
+function zoneCity(timezone: string | null): string | null {
+  if (!timezone) return null;
+  return (timezone.split("/").at(-1) ?? timezone).replace(/_/g, " ");
 }
 
 function scheduleSummary(schedule: QuietHoursSettingsDto): string {
