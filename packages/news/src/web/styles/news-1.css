@@ -203,6 +203,12 @@
 
 /* --------------------------------------------------------------- Empty state */
 
+/* Keep native heading semantics while inheriting the shared empty-state title skin. */
+.nw-wrap .jds-empty__title > h2 {
+  margin: 0;
+  font: inherit;
+}
+
 .nw-empty {
   margin-top: var(--space-6);
   padding: var(--space-7) var(--space-5);
