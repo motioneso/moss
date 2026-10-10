@@ -12,13 +12,13 @@ import {
 import type { ProactiveMonitoringPreferenceV1 } from "@moss/shared";
 import { defaultProactiveMonitoringPreference, parsePositiveIntEnv } from "@moss/shared";
 
+import { isStrictLocalTime } from "./quiet-hours-application.js";
+import { handleSettingsRouteError } from "./route-error.js";
+
 const PROACTIVE_SETTINGS_MAX = parsePositiveIntEnv(
   resolveMossEnv(process.env, "JARVIS_RL_PROACTIVE_SETTINGS_MAX"),
   20
 );
-
-import { isStrictLocalTime } from "./quiet-hours-application.js";
-import { handleSettingsRouteError } from "./route-error.js";
 
 const MAX_WRITE_ATTEMPTS = 3;
 
