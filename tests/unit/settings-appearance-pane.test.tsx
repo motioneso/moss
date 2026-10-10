@@ -5,7 +5,7 @@ import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-import type { AestheticThemeTokens } from "@moss/shared";
+import type { AestheticThemeTokens, PutCustomThemeRequest } from "@moss/shared";
 import { ColorBox } from "@moss/ui";
 import {
   AppearancePane,
@@ -296,8 +296,8 @@ describe("semantic theme readability", () => {
 
   it("keeps low-contrast palette saving unchanged", async () => {
     const low = { ...tokens, ink: tokens.paper, accent: tokens.paper };
-    const put = vi.fn(async (id: string, body: { name?: string }) => ({
-      theme: { id, name: body.name ?? "", builtIn: false, tokens: low }
+    const put = vi.fn(async (id: string, body: PutCustomThemeRequest) => ({
+      theme: { id, name: body.name ?? "", builtIn: false as const, tokens: low }
     }));
     const activate = vi.fn(async (body: { id: string }) => ({
       builtIn: [],
