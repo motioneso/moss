@@ -68,7 +68,7 @@ export const chatModuleManifest = {
       "sql/0293_chat_automatic_action_reservations.sql",
       "sql/0297_chat_action_history_permissions.sql",
       "sql/0299_main_chat.sql",
-      "sql/0303_chat_summary_frontier.sql"
+      "sql/0305_chat_summary_frontier.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -140,8 +140,17 @@ export const chatModuleManifest = {
         {
           code: "conversation_needs_summary_model",
           class: "prerequisite",
+          remediationRef: "chat.add_summary_model",
           description:
             "The conversation is too long to restore in full and no AI model that can summarize is set up. Add one in Settings or start a new chat."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.add_summary_model",
+          description:
+            "Set up a model in Settings, AI providers, or ask an admin, then reopen the chat. Starting a new chat also works.",
+          path: "/settings?section=aiproviders"
         }
       ]
     },

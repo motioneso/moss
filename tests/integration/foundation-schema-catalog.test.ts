@@ -612,7 +612,7 @@ describe("MVP foundation schema catalog", () => {
         { version: "0297", name: "0297_chat_action_history_permissions.sql" },
         { version: "0298", name: "0298_ai_action_outcome_delivery.sql" },
         { version: "0299", name: "0299_main_chat.sql" },
-        { version: "0303", name: "0303_chat_summary_frontier.sql" }
+        { version: "0305", name: "0305_chat_summary_frontier.sql" }
       ]);
     } finally {
       await client.end();
