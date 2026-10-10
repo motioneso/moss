@@ -24,6 +24,7 @@ import {
 import {
   registerDataContextWorker,
   sendJob,
+  toAccessContext,
   type ActorScopedJobPayload,
   type QueueDefinition
 } from "@moss/jobs";
@@ -47,6 +48,7 @@ import { PreferencesRepository } from "@moss/structured-state";
 
 import { extractTimezone } from "./locale-utils.js";
 import { ChatRepository } from "./repository.js";
+import { handleSummarizeConversationJob, type SummaryJobDeps } from "./summary-job.js";
 import {
   buildDistillationPrompt,
   containsSensitiveMemoryText,
@@ -63,11 +65,17 @@ import {
 export const CHAT_EMBED_TURN_QUEUE = "chat.embed-turn";
 export const CHAT_EXTRACT_FACTS_QUEUE = "chat.extract-facts";
 export const CHAT_ARCHIVE_DAY_QUEUE = "chat.archive-day";
+export const CHAT_SUMMARIZE_CONVERSATION_QUEUE = "chat.summarize-conversation";
 
 export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   { name: CHAT_EMBED_TURN_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
   { name: CHAT_EXTRACT_FACTS_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
-  { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } }
+  { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
+  // Exclusive: the singleton key (thread + expected revision) keeps one candidate per checkpoint.
+  {
+    name: CHAT_SUMMARIZE_CONVERSATION_QUEUE,
+    options: { retryLimit: 2, deleteAfterSeconds: 600, policy: "exclusive" }
+  }
 ];
 
 /**
@@ -92,6 +100,14 @@ export interface ExtractFactsJobPayload extends ActorScopedJobPayload {
 
 export interface ArchiveDayJobPayload extends ActorScopedJobPayload {
   readonly localDate: string;
+}
+
+/** Ids and a revision counter only: the checkpoint a summary candidate must still match. */
+export interface SummarizeConversationJobPayload extends ActorScopedJobPayload {
+  readonly threadId: string;
+  readonly expectedRevision: number;
+  readonly expectedCoveredThroughMessageId: string | null;
+  readonly throughMessageId: string;
 }
 
 // ── Embed-turn handler ────────────────────────────────────────────────────────
@@ -465,6 +481,9 @@ export interface RegisterChatJobWorkersOptions {
    * worker logger (observability spec: no console.* in prod).
    */
   readonly logger?: FastifyBaseLogger;
+  /** Constrained CLI structured transport for the summarize-conversation worker. */
+  readonly createConstrainedCliStructuredAdapter?: SummaryJobDeps["createConstrainedCliStructuredAdapter"];
+  readonly probeConstrainedCli?: SummaryJobDeps["probeConstrainedCli"];
 }
 
 function defaultExtractFactsDeps(): ExtractFactsDeps {
@@ -540,7 +559,29 @@ export async function registerChatJobWorkers(
     options.workOptions
   );
 
-  const workIds = [embedWorkId, extractWorkId, archiveWorkId];
+  // Not a data-context worker: the model call must run outside any transaction, so the
+  // handler opens its own short owner-scoped transactions.
+  const summarizeWorkId = await boss.work<SummarizeConversationJobPayload, void>(
+    CHAT_SUMMARIZE_CONVERSATION_QUEUE,
+    options.workOptions ?? {},
+    async ([job]) => {
+      if (!job) return;
+      await handleSummarizeConversationJob(toAccessContext(job), job.data, {
+        dataContext,
+        chatRepository: chatRepo,
+        createConstrainedCliStructuredAdapter: options.createConstrainedCliStructuredAdapter,
+        probeConstrainedCli: options.probeConstrainedCli,
+        logger: options.logger,
+        enqueueNext: async (next) => {
+          await sendJob(boss, CHAT_SUMMARIZE_CONVERSATION_QUEUE, next, {
+            singletonKey: `${next.threadId}:${next.expectedRevision}`
+          });
+        }
+      });
+    }
+  );
+
+  const workIds = [embedWorkId, extractWorkId, archiveWorkId, summarizeWorkId];
   return workIds;
 }
 

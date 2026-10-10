@@ -30,6 +30,15 @@ export interface SummaryCoveragePlan<T extends CoverageTurn> {
   readonly throughMessageId: string;
 }
 
+/** Stored user and assistant turns, in history order, as coverage turns. */
+export function storedCoverageTurns(
+  messages: readonly { id: string; role: string; status: string; body: string }[]
+): CoverageTurn[] {
+  return messages
+    .filter((m) => m.status === "stored" && (m.role === "user" || m.role === "assistant"))
+    .map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.body }));
+}
+
 export function coverageTurnTokens(turn: Pick<CoverageTurn, "role" | "content">): number {
   return estimateTokens(`${turn.role}: ${turn.content}`);
 }

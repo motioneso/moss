@@ -13,6 +13,7 @@ import { extractTimezone, resolveEffectiveTimezone } from "../locale-utils.js";
 import { sql, type Kysely } from "kysely";
 import {
   assertDataContextDb,
+  type ChatThread,
   resolveMossEnv,
   type DataContextDb,
   type DataContextRunner,
@@ -41,7 +42,9 @@ import {
   CHAT_ARCHIVE_DAY_QUEUE,
   CHAT_EMBED_TURN_QUEUE,
   CHAT_EXTRACT_FACTS_QUEUE,
+  CHAT_SUMMARIZE_CONVERSATION_QUEUE,
   type ArchiveDayJobPayload,
+  type SummarizeConversationJobPayload,
   type EmbedTurnJobPayload,
   type ExtractFactsJobPayload
 } from "../jobs.js";
@@ -53,10 +56,16 @@ import { normalizeChatSurface } from "./chat-surface.js";
 import { terminalActionRecord } from "../action-record-history.js";
 import { estimateTokens } from "./recall-seed.js";
 import { UnsupportedLegacyCliProviderError } from "./errors.js";
-import { DEFAULT_REPLAY_MESSAGES, type ReplayMessage } from "./replay-window.js";
+import { getReplayK, getReplayTokenCap, type ReplayMessage } from "./replay-window.js";
 
 export { getReplayK, getReplayTokenCap } from "./replay-window.js";
-import { splitAtSummaryFrontier, type CoverageTurn } from "./summary-coverage.js";
+import {
+  SUMMARY_RUN_INPUT_TOKENS,
+  planSummaryCoverage,
+  splitAtSummaryFrontier,
+  storedCoverageTurns,
+  type CoverageTurn
+} from "./summary-coverage.js";
 
 /** Provider-kinds the live CLI runtime can drive (the narrow ProviderKind set). */
 const LIVE_PROVIDER_KINDS: readonly ProviderKind[] = ["anthropic", "openai-compatible", "google"];
@@ -421,9 +430,6 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         return undefined;
       }
 
-      // Update rolling summary when stored turns exceed the replay window. D3:
-      // the write gate uses the constant, not the (possibly opted-out) env —
-      // summaries keep accruing for long threads regardless of replay overrides.
       const allMessages = await this.chat.listMessages(scopedDb, thread.id);
       const storedTurns = allMessages.filter(
         (m) => m.status === "stored" && (m.role === "user" || m.role === "assistant")
@@ -431,18 +437,6 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       // Auto-title the thread from the first user turn (#403).
       if (storedTurns.length === 2 && thread.title === DEFAULT_CONVERSATION_TITLE) {
         await this.chat.updateThreadTitle(scopedDb, thread.id, deriveChatTitle(userText));
-      }
-
-      if (storedTurns.length > DEFAULT_REPLAY_MESSAGES) {
-        const oldTurns = storedTurns.slice(0, -DEFAULT_REPLAY_MESSAGES).map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.body
-        }));
-        await this.chat.updateConversationSummary(
-          scopedDb,
-          thread.id,
-          buildRollingSummary(oldTurns)
-        );
       }
 
       if (this.boss && result && !thread.incognito) {
@@ -460,6 +454,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         };
         await sendJob(this.boss, CHAT_EMBED_TURN_QUEUE, embedPayload);
         await sendJob(this.boss, CHAT_EXTRACT_FACTS_QUEUE, extractPayload);
+        await this.sendSummaryJobIfDue(actorUserId, thread, storedCoverageTurns(allMessages));
 
         const archiveEnabled = await this.localePreferences?.get(
           scopedDb,
@@ -510,6 +505,60 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       this.chat.touchThread(scopedDb, threadId, chatSurface)
     );
     return found !== undefined;
+  }
+
+  /**
+   * Ask for the conversation's uncovered history to be condensed. Used when a fresh
+   * launch refuses an over-budget replay. Private, foreign and other-surface threads
+   * are ignored.
+   */
+  async requestConversationSummary(
+    actorUserId: string,
+    binding: { readonly threadId?: string | null },
+    surface?: ChatSurface
+  ): Promise<void> {
+    const threadId = binding.threadId;
+    if (!this.boss || threadId === null) return;
+    const chatSurface = normalizeChatSurface(surface);
+    await this.run(actorUserId, "request-conversation-summary", async (scopedDb) => {
+      const thread =
+        threadId === undefined
+          ? await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)
+          : await this.chat.getThreadById(scopedDb, threadId, chatSurface);
+      if (!thread || thread.owner_user_id !== actorUserId || thread.surface !== chatSurface) return;
+      const messages = await this.chat.listMessages(scopedDb, thread.id);
+      await this.sendSummaryJobIfDue(actorUserId, thread, storedCoverageTurns(messages));
+    });
+  }
+
+  /** Queue one summarization run when the uncovered suffix outgrows the replay window. */
+  private async sendSummaryJobIfDue(
+    actorUserId: string,
+    thread: ChatThread,
+    turns: readonly CoverageTurn[]
+  ): Promise<void> {
+    if (!this.boss || thread.incognito) return;
+    const split = splitAtSummaryFrontier(turns, {
+      summary: thread.conversation_summary,
+      coveredThroughMessageId: thread.summary_covered_through_message_id,
+      revision: thread.summary_revision
+    });
+    const plan = planSummaryCoverage(split.uncovered, {
+      keep: getReplayK(),
+      replayTokens: getReplayTokenCap(),
+      maxInputTokens: SUMMARY_RUN_INPUT_TOKENS
+    });
+    if (!plan) return;
+    const payload: SummarizeConversationJobPayload = {
+      actorUserId,
+      threadId: thread.id,
+      expectedRevision: thread.summary_revision,
+      expectedCoveredThroughMessageId: thread.summary_covered_through_message_id,
+      throughMessageId: plan.throughMessageId
+    };
+    await sendJob(this.boss, CHAT_SUMMARIZE_CONVERSATION_QUEUE, payload, {
+      singletonKey: `${thread.id}:${thread.summary_revision}`
+    });
   }
 
   async getCurrentThreadState(
@@ -671,14 +720,6 @@ function toLiveProvider(model: AiConfiguredModelSafeRow): ProviderKind {
   );
 }
 
-function storedCoverageTurns(
-  messages: readonly { id: string; role: string; status: string; body: string }[]
-): CoverageTurn[] {
-  return messages
-    .filter((m) => m.status === "stored" && (m.role === "user" || m.role === "assistant"))
-    .map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.body }));
-}
-
 function deriveChatTitle(userText: string): string {
   const first = userText.split(/[.!?\n]/)[0] ?? userText;
   const cleaned = first.replace(/[^\S\r\n]+/g, " ").trim();
@@ -686,16 +727,4 @@ function deriveChatTitle(userText: string): string {
   const titled = capped.charAt(0).toUpperCase() + capped.slice(1);
   if (!titled || containsSensitiveMemoryText(titled)) return DEFAULT_CONVERSATION_TITLE;
   return titled;
-}
-
-function buildRollingSummary(
-  oldTurns: readonly { role: "user" | "assistant"; content: string }[]
-): string {
-  const priorContent = oldTurns
-    .map((m) => `${m.role}: ${m.content.trim()}`)
-    .filter(Boolean)
-    .join(" ");
-  const raw = `As of turn ${oldTurns.length}: ${priorContent}`;
-  // Cap to 2000 chars so the column stays bounded while retaining the oldest summarized facts.
-  return raw.length > 2000 ? `${raw.slice(0, 1997)}...` : raw;
 }

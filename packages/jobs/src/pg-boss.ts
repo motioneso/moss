@@ -167,7 +167,12 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "releaseAt",
   // #2638 Backtrack phase 2a §4.4: ids only, never the segment text — the index job re-reads
   // each row by id under the owner's own data context.
-  "segmentIds"
+  "segmentIds",
+  // #3156: the conversation-summary checkpoint a candidate must still match to publish.
+  // A revision counter and message ids only - never summary or turn content.
+  "expectedRevision",
+  "expectedCoveredThroughMessageId",
+  "throughMessageId"
 ]);
 
 export function assertMetadataOnlyPayload(payload: unknown): void {
