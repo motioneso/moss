@@ -634,6 +634,7 @@ tests/e2e/c5-park-press-design.spec.ts,C5,registered-new,,Exact path reservation
 tests/e2e/calendar-email.spec.ts,P2,reserved,,Exact planning report ownership
 tests/e2e/companion-link.spec.ts,L5,reserved,,Companion link existing fixture regression test assigned before edit
 tests/e2e/e1-park-press-design.spec.ts,E1,registered-new,,Exact path reservation
+tests/e2e/encryption-keys.spec.ts,I0,scoped-test-transfer,,Parent-approved real shared confirmation and Today medication dialog assertion migration; preserve cancellation and outcomes
 tests/e2e/f0-park-press-design.spec.ts,F0,registered-new,,Exact path reservation
 tests/e2e/l1-park-press-design.spec.ts,L1,registered-new,,Exact path reservation
 tests/e2e/l2-park-press-design.spec.ts,L2,registered-new,,Exact path reservation
@@ -645,6 +646,7 @@ tests/e2e/p2-park-press-design.spec.ts,P2,registered-new,,Exact path reservation
 tests/e2e/p3-park-press-design.spec.ts,P3,registered-new,,Exact path reservation
 tests/e2e/p4-park-press-design.spec.ts,P4,registered-new,,Exact path reservation
 tests/e2e/tasks.spec.ts,P1,active-owner-hold,3154,Exact planning report ownership
+tests/e2e/wellness.spec.ts,I0,scoped-test-transfer,,Parent-approved real shared confirmation and Today medication dialog assertion migration; preserve cancellation and outcomes
 tests/e2e/workshop-design.spec.ts,P3,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
 tests/live/classifier-2984-r26-helpers.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/1089-1090-chat-drawer-private.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
@@ -664,8 +666,8 @@ tests/uat/specs/1588-recently-released.uat.spec.ts,I0,scoped-test-transfer,,Pare
 tests/uat/specs/1883-vault-search-dependency-failure.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/1930-sports-standings-picker.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/1961-sports-source-assignment-review.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
-tests/uat/specs/1970-medication-builder.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
-tests/uat/specs/1971-medication-edit.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
+tests/uat/specs/1970-medication-builder.uat.spec.ts,I0,scoped-test-transfer,,Account menu locators plus lifestyle Manage medications named Dialog assertions only; preserve all medication save and edit outcomes
+tests/uat/specs/1971-medication-edit.uat.spec.ts,I0,scoped-test-transfer,,Account menu locators plus lifestyle Manage medications named Dialog assertions only; preserve all medication save and edit outcomes
 tests/uat/specs/1974-chat-archive-settings.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/1987-chat-archive-backfill.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/1992-chat-archive-status.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
