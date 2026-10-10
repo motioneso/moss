@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Notification sensitivity is now saved.** The Quiet, Balanced and Proactive setting now stays where you put it and changes how often Moss sends you push notifications. Balanced, the default, no longer sends low-urgency pushes straight away, even for people who never changed the setting. [PR #3289](https://github.com/motioneso/moss/pull/3289)
 - **Expired alerts and digest gaps.** Alert cards that have expired now disappear and cannot be restored, and the notification digest no longer skips notifications when more than 50 are waiting. [PR #3301](https://github.com/motioneso/moss/pull/3301)
 - **News refresh, topic filters and dismissed stories.** News sources that had a temporary outage now come back on their own, topic filters show the matching headlines again, and stories you dismissed no longer reappear in your briefings. [PR #3298](https://github.com/motioneso/moss/pull/3298)
 - **Sports briefing and ticker fixes.** The morning briefing now shows a followed team's current game instead of yesterday's result, and the sports ticker no longer breaks when you follow your first team. [PR #3300](https://github.com/motioneso/moss/pull/3300)
