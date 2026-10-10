@@ -503,6 +503,8 @@ export function registerChatRoutes(
           },
           revoke: (chatSessionId: string) => wiring.tokens.revokeBySessionId(chatSessionId),
           touch: (chatSessionId: string) => wiring.tokens.touchBySessionId(chatSessionId),
+          beginLaunchReplay: (token: string) => wiring.tokens.beginLaunchReplay(token),
+          endLaunchReplay: (token: string) => wiring.tokens.endLaunchReplay(token),
           // #2956: the chat manager files a session's tool rows under its
           // running turn; the gateway reads the same map at tool time.
           setCurrentTurn: (chatSessionId: string, turnId: string) =>
