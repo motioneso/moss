@@ -648,6 +648,7 @@ tests/e2e/p3-park-press-design.spec.ts,P3,registered-new,,Exact path reservation
 tests/e2e/p4-park-press-design.spec.ts,P4,registered-new,,Exact path reservation
 tests/e2e/sports-standings-picker-layout.spec.ts,L2,registered-new,,Approved bounded picker viewport and item hit-test regression with retained hierarchical selection and focus return
 tests/e2e/tasks.spec.ts,P1,approved-disjoint-correction,3154,Only task detail loading and focus regression assertions; preserve active quick-add tests
+tests/e2e/wellness-export-columns.spec.ts,L3,registered-new,,Measured print-layout regression for Wellness export medication tables
 tests/e2e/wellness.spec.ts,L3,scoped-test-transfer,,Parent-approved feeling-selection accessibility assertion alignment; preserve shared Today dialog and all save payload checks
 tests/e2e/workshop-design.spec.ts,P3,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
 tests/live/classifier-2984-r26-helpers.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions

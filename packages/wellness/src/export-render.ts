@@ -174,14 +174,16 @@ function renderMedicationsSection(
     : '    <tr><td colspan="3">' + emptySectionNote("Medication logs") + "</td></tr>";
 
   return `  <h3>Medication schedule</h3>
-  <table>
+  <table class="fixed-columns">
+    <colgroup><col class="col-medication"><col class="col-schedule"><col class="col-state"></colgroup>
     <thead><tr><th>Medication</th><th>Schedule</th><th>State</th></tr></thead>
     <tbody>
 ${medRows}
     </tbody>
   </table>
   <h3>Medication logs</h3>
-  <table>
+  <table class="fixed-columns">
+    <colgroup><col class="col-log-medication"><col class="col-log-status"><col class="col-log-when"></colgroup>
     <thead><tr><th>Medication</th><th>Status</th><th>When</th></tr></thead>
     <tbody>
 ${logRows}
@@ -244,6 +246,16 @@ const PRINT_STYLE = `
   tr { break-inside: avoid; }
   th, td { border-bottom: 1px solid var(--print-rule); padding: .5em .6em; text-align: left; vertical-align: top; font-size: 11pt; overflow-wrap: anywhere; }
   th { border-bottom-color: var(--print-ink); }
+
+  /* Fixed column shares: break-anywhere cells in an auto table let long notes starve short columns. */
+  .fixed-columns { table-layout: fixed; }
+  .col-medication { width: 50%; }
+  .col-schedule { width: 32%; }
+  .col-state { width: 18%; }
+  .col-log-medication { width: 34%; }
+  .col-log-status { width: 36%; }
+  .col-log-when { width: 30%; }
+
   .therapy-note, .insight { margin-bottom: 1em; }
   .body { margin: .2em 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .empty { color: var(--print-muted); font-style: italic; }
