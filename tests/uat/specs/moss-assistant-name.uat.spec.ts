@@ -133,12 +133,12 @@ test.describe
     await page.getByRole("button", { name: /^Account menu/ }).click();
     await page.getByRole("menuitem", { name: "Log out", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
-    await expect(page.locator(".auth-form .jds-eyebrow")).toHaveText(ASSISTANT_NAME);
+    await expect(page.locator(".auth-panel .jds-eyebrow")).toHaveText(ASSISTANT_NAME);
     await expect(page).toHaveTitle(ASSISTANT_NAME);
 
     await page.reload();
     await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
-    await expect(page.locator(".auth-form .jds-eyebrow")).toHaveText(ASSISTANT_NAME);
+    await expect(page.locator(".auth-panel .jds-eyebrow")).toHaveText(ASSISTANT_NAME);
     await expect(page).toHaveTitle(ASSISTANT_NAME);
     await expectNoJarvis(page);
   });
@@ -175,7 +175,7 @@ test.describe
 
     await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
     await expect(page).toHaveTitle("Moss");
-    await expect(page.locator(".auth-form .jds-eyebrow")).toHaveText("Moss");
+    await expect(page.locator(".auth-panel .jds-eyebrow")).toHaveText("Moss");
 
     await expectNoJarvis(page);
   });
