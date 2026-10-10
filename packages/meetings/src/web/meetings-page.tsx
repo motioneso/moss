@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { randomUuid } from "@moss/module-web-sdk";
-import { Button, SectionHead } from "@moss/ui";
+import { Button, SectionHead, buttonLinkClassName } from "@moss/ui";
 import { MeetingNotLinked } from "./meeting-not-linked.js";
 import { useMeetingConnection } from "./meeting-connection.js";
 import { MeetingHistory } from "./meeting-history.js";
@@ -81,7 +81,12 @@ export function MeetingsPage() {
         <>
           <div className="meetings-list-heading">
             <SectionHead title="Meetings" titleAs="h1" />
-            <Link to="/settings?section=modules&module=meetings">Settings</Link>
+            <Link
+              className={buttonLinkClassName("link")}
+              to="/settings?section=modules&module=meetings"
+            >
+              Settings
+            </Link>
             {connection.linked.length ? (
               <Button
                 disabled={

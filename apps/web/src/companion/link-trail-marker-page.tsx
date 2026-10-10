@@ -6,7 +6,7 @@ import { Laptop, ShieldCheck } from "lucide-react";
 import { Button, Card } from "@moss/ui";
 import { COMPANION_PRODUCT_NAME, type PairAttemptSummaryResponse } from "@moss/shared";
 
-import { decideCompanionPairAttempt, getCompanionPairAttempt } from "../api/client";
+import { ApiError, decideCompanionPairAttempt, getCompanionPairAttempt } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name.js";
 
@@ -22,6 +22,30 @@ function pickHeading(
   if (decided === "denied") return "Nothing was connected";
   if (status === "pending") return "Do you recognise this Mac?";
   return "Connect a Mac to your account";
+}
+
+function requestErrorMessage(error: unknown, deciding = false): string {
+  if (error instanceof ApiError) {
+    if (error.status === 400) {
+      return "This request link couldn't be used. Reopen it from the Mac and review the connection details.";
+    }
+    if (error.status === 404) {
+      return "That request is no longer open. Start a new one from the Mac and try again.";
+    }
+    if (error.status === 409) {
+      return "That request was already answered. Start a new one from the Mac if you need to.";
+    }
+    if (error.status === 401 || error.status === 403) {
+      return "Your account access couldn't be verified. Sign in again, then reopen the request from the Mac.";
+    }
+  }
+  return deciding
+    ? "Couldn't confirm your answer. Check the request again before trying to approve or decline."
+    : "Couldn't check this request. Check your connection and try again.";
+}
+
+function canRetryRequest(error: unknown): boolean {
+  return !(error instanceof ApiError && [400, 401, 403, 404, 409].includes(error.status));
 }
 
 /**
@@ -48,13 +72,17 @@ export function LinkTrailMarkerPage() {
   // the query string instead would mean the server logged it on every page load.
   const { hash } = useLocation();
   const code = new URLSearchParams(hash.replace(/^#/, "")).get("code") ?? "";
+  return <LinkRequest key={code} code={code} />;
+}
+
+function LinkRequest({ code }: { readonly code: string }) {
   const assistantName = useAssistantName();
   const [decided, setDecided] = useState<"approved" | "denied" | null>(null);
 
   const attemptQuery = useQuery<PairAttemptSummaryResponse>({
     queryKey: queryKeys.companionPairAttempt(code),
     queryFn: () => getCompanionPairAttempt(code),
-    enabled: code.length > 0,
+    enabled: code.length > 0 && decided === null,
     retry: false
   });
 
@@ -71,6 +99,12 @@ export function LinkTrailMarkerPage() {
   });
 
   const deviceName = attemptQuery.data?.deviceName;
+  const checking = attemptQuery.isFetching;
+  const answerUnavailable = attemptQuery.isError || attemptQuery.isFetching || decide.isError;
+  const retryRequest = () => {
+    decide.reset();
+    void attemptQuery.refetch();
+  };
 
   // The shell already labels the page, so the heading says what this moment asks of you
   // rather than repeating that label.
@@ -78,41 +112,45 @@ export function LinkTrailMarkerPage() {
 
   return (
     <section className="page-stack" aria-label={`Link ${COMPANION_PRODUCT_NAME}`}>
-      <Card padding="lg">
+      <Card padding="lg" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
         <h1 className="jds-section-title">{heading}</h1>
 
         {code.length === 0 ? (
-          <p>
+          <p role="alert">
             This link is missing its request code. Start again from {COMPANION_PRODUCT_NAME} on the
             Mac you want to connect.
           </p>
         ) : null}
 
-        {attemptQuery.isLoading ? <p>Checking the request…</p> : null}
+        {checking ? <p role="status">Checking the request…</p> : null}
 
-        {attemptQuery.isError ? (
-          <p>
-            That request is no longer open. Requests last ten minutes, so start a new one from the
-            Mac and try again.
-          </p>
+        {attemptQuery.isError && !checking ? (
+          <div>
+            <p role="alert">{requestErrorMessage(attemptQuery.error)}</p>
+            {canRetryRequest(attemptQuery.error) ? (
+              <Button variant="link" onClick={retryRequest}>
+                Check request again
+              </Button>
+            ) : null}
+          </div>
         ) : null}
 
         {decided === "approved" ? (
-          <p>
+          <p role="status">
             <strong>{deviceName}</strong> is linked. Keep using this tab to start a meeting when
             you’re ready. You can sign the Mac out any time from Settings, under Active sessions.
           </p>
         ) : null}
 
         {decided === "denied" ? (
-          <p>Request declined. Nothing was linked and the Mac gets no access.</p>
+          <p role="status">Request declined. Nothing was linked and the Mac gets no access.</p>
         ) : null}
 
         {decided === null && attemptQuery.data?.status === "pending" ? (
           <>
             <p style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)" }}>
               <Laptop size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
-              <span>
+              <span style={{ minWidth: 0 }}>
                 <strong>{deviceName}</strong> is asking to connect to your {assistantName} account.
                 Approve it only if you started this on that Mac.
               </span>
@@ -132,30 +170,54 @@ export function LinkTrailMarkerPage() {
                 <span>It never gets your password or your browser session.</span>
               </div>
             </div>
-            <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "var(--space-2)",
+                marginTop: "var(--space-4)"
+              }}
+            >
               <Button
                 variant="primary"
                 onClick={() => decide.mutate("approve")}
-                disabled={decide.isPending}
+                disabled={decide.isPending || answerUnavailable}
               >
                 Approve
               </Button>
               <Button
                 variant="secondary"
                 onClick={() => decide.mutate("deny")}
-                disabled={decide.isPending}
+                disabled={decide.isPending || answerUnavailable}
               >
                 Decline
               </Button>
             </div>
+            {decide.isPending ? (
+              <p role="status">
+                {decide.variables === "approve" ? "Approving this Mac…" : "Declining this request…"}
+              </p>
+            ) : null}
           </>
         ) : null}
 
         {decided === null && attemptQuery.data && attemptQuery.data.status !== "pending" ? (
-          <p>That request was already answered. Start a new one from the Mac if you need to.</p>
+          <p role="status">
+            The request for <strong>{deviceName}</strong> was already answered. Start a new one from
+            the Mac if you need to.
+          </p>
         ) : null}
 
-        {decide.isError ? <p>Something went wrong answering the request. Try again.</p> : null}
+        {decide.isError ? (
+          <div>
+            <p role="alert">{requestErrorMessage(decide.error, true)}</p>
+            {canRetryRequest(decide.error) ? (
+              <Button variant="link" onClick={retryRequest}>
+                Check request again
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </Card>
     </section>
   );

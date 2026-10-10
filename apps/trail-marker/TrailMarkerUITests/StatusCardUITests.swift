@@ -67,7 +67,7 @@ final class StatusCardUITests: XCTestCase {
         let settings = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Settings")).firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.click()
-        for section in ["Connection", "This Mac", "Focus", "Backtrack", "Permissions", "Updates"] {
+        for section in ["Connection", "This Mac", "Focus", "Backtrack", "Meetings", "Permissions", "Updates"] {
             XCTAssertTrue(app.staticTexts[section].waitForExistence(timeout: 5), "missing \(section)")
         }
     }

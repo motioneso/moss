@@ -633,14 +633,14 @@ tests/e2e/c3-park-press-design.spec.ts,C3,registered-new,,Exact path reservation
 tests/e2e/c4-park-press-design.spec.ts,C4,registered-new,,Exact path reservation
 tests/e2e/c5-park-press-design.spec.ts,C5,registered-new,,Exact path reservation
 tests/e2e/calendar-email.spec.ts,P2,reserved,,Exact planning report ownership
-tests/e2e/companion-link.spec.ts,L5,reserved,,Companion link existing fixture regression test assigned before edit
-tests/e2e/e1-park-press-design.spec.ts,E1,registered-new,,Exact path reservation
+tests/e2e/companion-link.spec.ts,I0,scoped-test-transfer,,Parent-approved optional non-asserting capture helper only; preserve every case assertion fixture and timeout
+tests/e2e/e1-park-press-design.spec.ts,I0,scoped-test-transfer,,Parent-approved optional non-asserting capture helper only; preserve every case assertion fixture and timeout
 tests/e2e/encryption-keys.spec.ts,I0,scoped-test-transfer,,Parent-approved real shared confirmation and Today medication dialog assertion migration; preserve cancellation and outcomes
 tests/e2e/f0-park-press-design.spec.ts,F0,registered-new,,Exact path reservation
 tests/e2e/l1-park-press-design.spec.ts,L1,registered-new,,Exact path reservation
 tests/e2e/l2-park-press-design.spec.ts,L2,registered-new,,Exact path reservation
 tests/e2e/l3-park-press-design.spec.ts,L3,registered-new,,Exact path reservation
-tests/e2e/l4-park-press-design.spec.ts,L4,registered-new,,Exact path reservation
+tests/e2e/l4-park-press-design.spec.ts,I0,scoped-test-transfer,,Parent-approved optional non-asserting capture helper only; preserve every case assertion fixture and timeout
 tests/e2e/l6-park-press-design.spec.ts,L6,registered-new,,Exact path reservation
 tests/e2e/p1-park-press-design.spec.ts,P1,registered-new,,Exact path reservation
 tests/e2e/p2-park-press-design.spec.ts,P2,registered-new,,Exact path reservation
@@ -887,3 +887,5 @@ tests/unit/workflow-approval-card.test.tsx,C5,reserved,,Existing approval-card r
 tests/unit/workshop-project-pages.test.tsx,P3,reserved,,Exact planning report ownership
 tests/e2e/news-overview.spec.ts,L1,scoped-test-transfer,,Parent-approved shared empty-state accessibility assertions; preserve source settings links and unavailable states
 tests/integration/wellness-export-job.test.ts,L3,scoped-test-transfer,,Parent-approved Moss export provenance assertion only; preserve content/security/job assertions and do not run without isolated DB gate
+tests/e2e/visual-artifacts.ts,I0,registered-new,,Parent-approved opt-in visual artifact helper and focused tests before creation
+tests/unit/park-press-visual-artifacts.design.test.ts,I0,registered-new,,Parent-approved opt-in visual artifact helper and focused tests before creation

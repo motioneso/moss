@@ -1,3 +1,4 @@
+import { captureVisualArtifact } from "./visual-artifacts.js";
 import { expect, test } from "@playwright/test";
 
 import { createMockConnectorProviders, mockApi, type MockApiState } from "./mock-api.js";
@@ -50,4 +51,185 @@ test("declining a waiting Mac links nothing", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Nothing was connected" })).toBeVisible();
   expect(state.companionPairAttempt?.lastDecision?.decision).toBe("deny");
+});
+
+test("a long Mac name stays within the phone viewport before and after approval", async ({
+  page
+}) => {
+  const deviceName = `Example-${"LongDeviceName".repeat(4)}`;
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 850 });
+    const state: MockApiState = {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: [],
+      notifications: [],
+      tasks: [],
+      companionPairAttempt: { deviceName, status: "pending" }
+    };
+    await mockApi(page, state);
+    await page.goto(`/link/trail-marker#code=long-name-${width}`);
+    await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+    await expect(page.getByText(deviceName, { exact: true })).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      )
+    ).toBeLessThanOrEqual(1);
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "is linked" })).toContainText(
+      deviceName
+    );
+    expect(state.companionPairAttempt?.lastDecision).toEqual({
+      code: `long-name-${width}`,
+      decision: "approve"
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      )
+    ).toBeLessThanOrEqual(1);
+  }
+});
+
+// These use the real page with synthetic responses. They establish UI behavior only;
+// native linking, device permissions and live recording still require separate Mac proof.
+test("request checking and failed transport are announced with a read-only retry", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 320, height: 850 });
+  await mockApi(page, {
+    authenticated: true,
+    connectorAccounts: [],
+    connectorProviders: [],
+    notifications: [],
+    tasks: []
+  });
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/companion/pair/attempt", async (route) => {
+    await pending;
+    await route.fulfill({ status: 503, json: { error: "Synthetic unavailable response" } });
+  });
+  await page.goto("/link/trail-marker#code=example-request");
+  await expect(page.getByRole("status").filter({ hasText: "Checking the request" })).toBeVisible();
+  release();
+  await expect(page.getByRole("alert")).toContainText("Couldn't check this request.");
+  await expect(page.getByText("That request is no longer open")).toHaveCount(0);
+  await captureVisualArtifact(page, "link-request-transport-failure-320.png");
+  let decisions = 0;
+  await page.route("**/api/companion/pair/decide", async (route) => {
+    decisions += 1;
+    await route.fulfill({ json: { status: "approved" } });
+  });
+  await page.route("**/api/companion/pair/attempt", (route) =>
+    route.fulfill({
+      json: {
+        deviceName: `Example-${"LongDeviceName".repeat(4)}`,
+        status: "pending",
+        recordingPolicyVersion: 1
+      }
+    })
+  );
+  await page.getByRole("button", { name: "Check request again" }).click();
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+  await expect(page.getByText("Record meetings when you choose Start")).toBeVisible();
+  expect(decisions).toBe(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    )
+  ).toBeLessThanOrEqual(1);
+});
+
+test("a closed request is distinct from a transport problem", async ({ page }) => {
+  await mockApi(page, {
+    authenticated: true,
+    connectorAccounts: [],
+    connectorProviders: [],
+    notifications: [],
+    tasks: []
+  });
+  await page.route("**/api/companion/pair/attempt", (route) =>
+    route.fulfill({
+      status: 404,
+      json: { error: "That link request is no longer open" }
+    })
+  );
+  await page.goto("/link/trail-marker#code=closed-request");
+  await expect(page.getByRole("alert")).toContainText("Start a new one from the Mac");
+  await expect(page.getByRole("button", { name: "Check request again" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+});
+
+test("an uncertain answer requires a status check before another decision", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await mockApi(page, {
+    authenticated: true,
+    connectorAccounts: [],
+    connectorProviders: [],
+    notifications: [],
+    tasks: [],
+    companionPairAttempt: { deviceName: "Example Mac", status: "pending" }
+  });
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/companion/pair/decide", async (route) => {
+    await pending;
+    await route.fulfill({ status: 503, json: { error: "Synthetic uncertain response" } });
+  });
+  await page.goto("/link/trail-marker#code=example-request");
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Approving this Mac" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Decline", exact: true })).toBeDisabled();
+  await captureVisualArtifact(page, "link-request-approving-390.png");
+  release();
+  await expect(page.getByRole("alert")).toContainText("Couldn't confirm your answer");
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeDisabled();
+  let releaseRecheck!: () => void;
+  const rechecking = new Promise<void>((resolve) => {
+    releaseRecheck = resolve;
+  });
+  await page.route("**/api/companion/pair/attempt", async (route) => {
+    await rechecking;
+    await route.fulfill({ json: { deviceName: "Example Mac", status: "approved" } });
+  });
+  await page.getByRole("button", { name: "Check request again" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Checking the request" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeDisabled();
+  releaseRecheck();
+  await expect(page.getByRole("status").filter({ hasText: "was already answered" })).toContainText(
+    "Example Mac"
+  );
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+});
+
+test("a new request in the same tab does not inherit the previous decision", async ({ page }) => {
+  await mockApi(page, {
+    authenticated: true,
+    connectorAccounts: [],
+    connectorProviders: [],
+    notifications: [],
+    tasks: [],
+    companionPairAttempt: { deviceName: "First example Mac", status: "pending" }
+  });
+  await page.goto("/link/trail-marker#code=first-example-request");
+  await page.getByRole("button", { name: "Decline", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Request declined" })).toBeVisible();
+  await page.route("**/api/companion/pair/attempt", (route) =>
+    route.fulfill({
+      json: { deviceName: "Second example Mac", status: "pending" }
+    })
+  );
+  await page.evaluate(() => {
+    window.location.hash = "code=second-example-request";
+  });
+  await expect(page.getByRole("heading", { name: "Do you recognise this Mac?" })).toBeVisible();
+  await expect(page.getByText("Second example Mac")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+  await expect(page.getByText("Request declined.")).toHaveCount(0);
 });

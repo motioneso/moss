@@ -45,39 +45,11 @@ export function DeleteMeetingDialog({
       if (active.current) onDeleted();
     }
   });
-  useEffect(() => {
-    const previous = typeof document === "undefined" ? null : document.activeElement;
-    cancel.current?.focus();
-    return () => {
-      if (typeof HTMLElement !== "undefined" && previous instanceof HTMLElement) previous.focus();
-    };
-  }, []);
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !mutation.isPending) {
-        event.preventDefault();
-        onClose();
-      }
-      if (event.key !== "Tab") return;
-      const buttons = cancel.current
-        ?.closest('[role="dialog"]')
-        ?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
-      const first = buttons?.[0];
-      const last = buttons?.[buttons.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    document.addEventListener("keydown", keydown);
-    return () => document.removeEventListener("keydown", keydown);
-  }, [mutation.isPending, onClose]);
   return (
     <Dialog
+      initialFocusRef={cancel}
+      dismissOnEscape={!mutation.isPending}
+      dismissOnBackdrop={!mutation.isPending}
       className="meetings-dialog"
       title={<span id="meeting-delete-title">Delete this meeting?</span>}
       aria-labelledby="meeting-delete-title"

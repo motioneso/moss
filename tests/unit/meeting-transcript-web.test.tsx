@@ -171,6 +171,8 @@ describe("retained transcript review", () => {
     expect(html).toContain("0:01");
     expect(html).not.toContain("Epoch ");
     expect(html).toContain("Still being finalised");
+    expect(html).toContain('class="meetings-transcript-turn meetings-transcript-turn--live"');
+    expect(html).toContain('class="meetings-transcript-text jds-hint"');
     expect(html).toContain("lines are outside");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("anonymous-1");
@@ -194,6 +196,7 @@ describe("retained transcript review", () => {
       </QueryClientProvider>
     );
     expect(html).toContain("Transcript access is unavailable");
+    expect(html).toContain('<section class="meetings-section" aria-label="Transcript">');
     expect(html).not.toContain("A correction");
     client.clear();
   });
