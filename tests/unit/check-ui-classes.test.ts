@@ -247,6 +247,17 @@ describe("bounded module-local class guard", () => {
     });
     expect(result.map((item) => item.className)).toEqual(["nw-other"]);
   });
+  it("preserves the exact Meetings provisional-contrast test hook without excusing siblings", async () => {
+    const root = await buildFixture();
+    await mkdir(join(root, "packages/meetings/src/web"), { recursive: true });
+    await writeFile(
+      join(root, "packages/meetings/src/web/meeting-transcript.tsx"),
+      '<div className="meetings-transcript-turn--live meetings-transcript-turn--typo" />'
+    );
+    expect((await checkModuleLocalClasses(root)).map((item) => item.className)).toEqual([
+      "meetings-transcript-turn--typo"
+    ]);
+  });
   it("reads Finance's static module stylesheet and ignores source comments", async () => {
     const root = await buildFixture();
     await mkdir(join(root, "external-modules/finance/src/web"), { recursive: true });

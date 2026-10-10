@@ -219,6 +219,12 @@ export interface ModuleLocalClassViolation extends ClassViolation {
 // Exceptions identify one intentional nonvisual hook, never a whole file or prefix.
 const STRUCTURAL_MODULE_HOOKS: readonly StructuralHook[] = [
   {
+    path: "packages/meetings/src/web/meeting-transcript.tsx",
+    className: "meetings-transcript-turn--live",
+    reason:
+      "meeting-review-layout UAT measures provisional transcript text contrast across three themes."
+  },
+  {
     path: "packages/news/src/web/today-widget.tsx",
     className: "nw-twnote__eyebrow",
     reason: "Today context-note UAT locator verifies heading content and shared Eyebrow weight."
