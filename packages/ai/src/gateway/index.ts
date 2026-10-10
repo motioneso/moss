@@ -8,7 +8,6 @@ export {
 export {
   SessionTokenRegistry,
   InvalidSessionTokenError,
-  LAUNCH_REPLAY_REFUSAL,
   type SessionIdentity
 } from "./session-tokens.js";
 export {

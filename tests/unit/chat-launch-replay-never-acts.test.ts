@@ -69,11 +69,13 @@ function harness(serverOwnsDrain: boolean) {
     () => h.gateway.callTool(h.token, tool.name, {}),
     serverOwnsDrain
   );
+  const revokeMcpToken = vi.fn();
   const deps = makeMinimalDeps({
     engineFactory: () => engine,
     pollMs: 0,
     serverOwnsDrain,
     mintMcpToken: vi.fn(async () => ({ token: h.token, mcpServerUrl: "http://mcp.test" })),
+    revokeMcpToken,
     beginLaunchReplay: (token: string) => h.tokens.beginLaunchReplay(token),
     endLaunchReplay: (token: string) => h.tokens.endLaunchReplay(token),
     persistence: {
@@ -93,7 +95,7 @@ function harness(serverOwnsDrain: boolean) {
       touchExistingThread: vi.fn(async () => true)
     }
   });
-  return { h, tool, engine, manager: new ChatSessionManager(deps as never) };
+  return { h, tool, engine, revokeMcpToken, manager: new ChatSessionManager(deps as never) };
 }
 
 describe("a resumed chat replaying a code-answered request", () => {
@@ -128,10 +130,14 @@ describe("a resumed chat replaying a code-answered request", () => {
   });
 
   it("relaunches cleanly after a replay that failed to drain", async () => {
-    const { h, engine, manager } = harness(false);
+    const { h, engine, revokeMcpToken, manager } = harness(false);
     vi.spyOn(engine, "readNew").mockRejectedValueOnce(new Error("engine exited"));
+    const kill = vi.spyOn(engine, "kill");
     await manager.resumeThread("actor-a", "thread-a");
+    revokeMcpToken.mockClear();
     await expect(manager.ensureSession("actor-a", "Ben")).rejects.toThrow("engine exited");
+    expect(revokeMcpToken).toHaveBeenCalledWith("actor-a:drawer");
+    expect(kill).toHaveBeenCalledTimes(1);
 
     await manager.ensureSession("actor-a", "Ben");
     expect(engine.launchCount).toBe(2);
