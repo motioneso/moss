@@ -47,11 +47,15 @@ async function signIn(page: Page, email: string, password: string) {
   // (Skip setup → "Skip anyway" confirmation). Conditional so it's correct for both users and stays
   // idempotent across the shared, non-reset UAT DB.
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
+  const skipAnyway = page.getByRole("button", { name: "Skip anyway" });
   const userMenu = page.locator(".jds-usermenu__trigger");
   await expect(skipSetup.or(userMenu).first()).toBeVisible();
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
+    // The "Skip anyway" confirmation opens only while no chat model is available. The scripted
+    // model is loaded here, so Skip setup can finish without it.
+    await expect(skipAnyway.or(userMenu).first()).toBeVisible();
+    if (await skipAnyway.isVisible()) await skipAnyway.click();
   }
   await expect(userMenu).toBeVisible();
 }
