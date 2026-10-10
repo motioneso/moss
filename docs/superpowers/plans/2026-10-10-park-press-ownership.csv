@@ -1,0 +1,781 @@
+path,owner,status,active_prs,reason
+.claude/skills/design-system/SKILL.md,F0,reserved,,Normative docs and centralized guard configuration
+apps/trail-marker/TrailMarker/App/FocusDebugLog.swift,L5,reserved,,Native diagnostic UI only; preserve logging/runtime behavior
+apps/trail-marker/TrailMarker/Backtrack/BacktrackPane.swift,L5,reserved,,Specific native UI-only files
+apps/trail-marker/TrailMarker/Backtrack/BacktrackTextView.swift,L5,reserved,,Specific native UI-only files
+apps/trail-marker/TrailMarker/Design/DesignTokens.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Meetings/MeetingCaptureView.swift,L5,reserved,,Specific native UI-only files
+apps/trail-marker/TrailMarker/Meetings/MeetingRecordingPill.swift,L5,reserved,,Specific native UI-only files
+apps/trail-marker/TrailMarker/Meetings/MeetingRecordingSourceMenu.swift,L5,reserved,,Specific native UI-only files
+apps/trail-marker/TrailMarker/Views/Menu/LastJudgmentPanel.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Menu/MenuModel.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Menu/StatusActions.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Menu/StatusCardView.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Onboarding/BrandPanel.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Onboarding/DeviceSetupView.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Onboarding/OnboardingError.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Onboarding/OnboardingFlow.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Onboarding/OnboardingViewModel.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Onboarding/SuccessView.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Onboarding/WaitingForApprovalView.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Onboarding/WelcomeView.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Settings/ConnectionPane.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Settings/FocusPane.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Settings/PermissionsPane.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Settings/SettingsWindow.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Settings/ThisMacPane.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarker/Views/Settings/UpdatesPane.swift,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/trail-marker/TrailMarkerUITests/StatusCardUITests.swift,L5,reserved,,Native visual interaction test
+apps/web/index.html,I0,reserved,,Single integration owner; feature lanes submit exact amendments
+apps/web/public/boot-theme.js,F0,reserved,,Shared base/reset/token/compatibility owner
+apps/web/public/fonts/archivo/OFL.txt,F0,reserved,,Shared theme/font/material owner
+apps/web/public/fonts/archivo/archivo-latin-400-normal.woff2,F0,reserved,,Shared theme/font/material owner
+apps/web/public/fonts/archivo/archivo-latin-500-normal.woff2,F0,reserved,,Shared theme/font/material owner
+apps/web/public/fonts/archivo/archivo-latin-600-normal.woff2,F0,reserved,,Shared theme/font/material owner
+apps/web/public/fonts/archivo/archivo-latin-700-normal.woff2,F0,reserved,,Shared theme/font/material owner
+apps/web/public/fonts/archivo/archivo-latin-800-normal.woff2,F0,reserved,,Shared theme/font/material owner
+apps/web/public/fonts/archivo/archivo-latin-900-normal.woff2,F0,reserved,,Shared theme/font/material owner
+apps/web/public/manifest.webmanifest,I0,reserved,,Single integration owner; feature lanes submit exact amendments
+apps/web/public/offline-name.js,C1,reserved,,Auth/onboarding/recovery exact core report ownership
+apps/web/public/offline.html,C1,reserved,,Auth/onboarding/recovery exact core report ownership
+apps/web/public/service-worker.js,I0,reserved,,Single integration owner; feature lanes submit exact amendments
+apps/web/public/textures/hero-contours.svg,F0,reserved,,Shared theme/font/material owner
+apps/web/src/app-route-metadata.ts,I0,reserved,,Single integration owner; feature lanes submit exact amendments
+apps/web/src/app.tsx,I0,reserved,,Single integration owner; feature lanes submit exact amendments
+apps/web/src/auth/auth-screen.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/calendar/calendar-month.tsx,P2,reserved,,Exact planning report ownership
+apps/web/src/calendar/calendar-page.tsx,P2,reserved,,Exact planning report ownership
+apps/web/src/calendar/calendar-peek.tsx,P2,reserved,,Exact planning report ownership
+apps/web/src/calendar/calendar-time-grid.tsx,P2,reserved,,Exact planning report ownership
+apps/web/src/calendar/calendar.css,P2,reserved,,Exact planning report ownership
+apps/web/src/chat/action-request-card.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/answer-provenance.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/assistant-surface/assistant-surface.css,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/assistant-surface/contracts.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/assistant-surface/handle.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/assistant-surface/host-context.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/assistant-surface/index.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/assistant-surface/surface.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/attachments.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/chat-draft-storage.ts,C5,active-owner-hold,3154,"Active PR added path, absent from baseline; do not recreate on another branch"
+apps/web/src/chat/chat-drawer.tsx,C5,active-owner-hold,3154,Chat consumer and state logic
+apps/web/src/chat/chat-empty-state.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/chat-model-picker-menu.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/chat-model-picker-model.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/chat-model-pill.css,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/chat-model-pill.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/composer.tsx,C5,active-owner-hold,3154,Chat consumer and state logic
+apps/web/src/chat/connect-provider-empty.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/draft-banner.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/history-list.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/markdown-message.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/meeting-chat-drawer.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/meeting-source-link.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/message-row.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/module-build-plan-record.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/page-context.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/plan-approval-card.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/seeds.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/side-chat-overlay.tsx,C5,active-owner-hold,3154,"Active PR added path, absent from baseline; do not recreate on another branch"
+apps/web/src/chat/skill-autocomplete.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/throw-away-draft-dialog.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/use-action-query-refresh.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/use-chat-autoscroll.ts,C5,active-owner-hold,3154,"Active PR added path, absent from baseline; do not recreate on another branch"
+apps/web/src/chat/use-chat-draft-binding.ts,C5,active-owner-hold,3154,"Active PR added path, absent from baseline; do not recreate on another branch"
+apps/web/src/chat/use-chat-selection-confirmation.ts,C5,active-owner-hold,3154,"Active PR added path, absent from baseline; do not recreate on another branch"
+apps/web/src/chat/use-chat-stream.ts,C5,active-owner-hold,3154,Chat consumer and state logic
+apps/web/src/chat/use-chat-transition.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/use-initial-caller-draft.ts,C5,active-owner-hold,3154,"Active PR added path, absent from baseline; do not recreate on another branch"
+apps/web/src/chat/use-page-context-sync.ts,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/use-phone-layout.ts,C5,active-owner-hold,3154,"Active PR added path, absent from baseline; do not recreate on another branch"
+apps/web/src/chat/workflow-approval-card.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/chat/workshop-project-record.tsx,C5,reserved,,Chat consumer and state logic
+apps/web/src/companion/link-trail-marker-page.tsx,L5,reserved,,Native and companion views; respect native approved exceptions
+apps/web/src/loading-screen.tsx,C1,reserved,,Auth/onboarding/recovery exact core report ownership
+apps/web/src/main.tsx,I0,reserved,,Single integration owner; feature lanes submit exact amendments
+apps/web/src/notifications/notifications-page.tsx,L6,reserved,,"Notifications and utility settings, not feature-owned backend logic"
+apps/web/src/notifications/notifications.css,L6,registered-new,,Exact path reservation
+apps/web/src/onboarding/MOCKUP-feelings-wheel-modal.md,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/api-key-opt-out-step.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/chat-availability.ts,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/cli-auth-step.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/connector-step.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/google-connector-step.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/member-connector-step.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/member-welcome-step.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/onboarding-ui.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/onboarding-wizard.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/provider-connect-machine.ts,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/resume.ts,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/section-tour-model.ts,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/section-tour-step.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/skip-confirm.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/onboarding/welcome-step.tsx,C1,reserved,,Core auth and onboarding surface
+apps/web/src/settings/cli-update-status.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/delete-account.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/host-health-summary.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/integration-classifier-block.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/integration-classifier-state.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/integration-detail-state.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/integration-group-state.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/integration-tool-groups.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/memory-facts-view.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/memory-provenance.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/module-credentials-section.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/module-settings-deep-link.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/push-browser-subscription.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-activity-dialog.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-activity-filters.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-activity-labels.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-activity-line.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-activity-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-admin-panes.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-admin-policy.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-ai-admin-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-ai-chat-lock-group.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-ai-edit-model-form.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-ai-opencode-card.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-ai-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-ai-provider-catalog.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-ai-provider-models.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-ai-provider-picker.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-ai-sorting-row.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-alerts-pane.tsx,C4,active-owner-hold,3154,"Active PR added path, absent from baseline; do not recreate on another branch"
+apps/web/src/settings/settings-appearance-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-audit-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-audit.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-connections-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-connector-sync.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-encryption-keys-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-feedback.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-google-connect.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-imap-connect.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-instance-modules-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-integrations-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-memory-dashboard.tsx,C4,active-owner-hold,3084,Settings consumer and state logic
+apps/web/src/settings/settings-memory-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-module-availability.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-module-own-page-link.tsx,C4,reserved,,"Active PR added path, absent from baseline; do not recreate on another branch"
+apps/web/src/settings/settings-module-preference-control.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-module-preferences.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-module-registry-section.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-module-search.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-module-subviews.tsx,C4,active-owner-hold,3154,Settings consumer and state logic
+apps/web/src/settings/settings-module-view-model.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-navigation.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-page.tsx,I0,active-owner-hold,3154,Single integration owner; feature lanes submit exact amendments
+apps/web/src/settings/settings-people-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-persona-preview.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-personal-data-panes.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-personal-panes.tsx,C4,active-owner-hold,3154,Settings consumer and state logic
+apps/web/src/settings/settings-profile-subviews.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-provider-login-dialog.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-quiet-hours-draft.ts,C4,active-owner-hold,3154,New scheduled-work path; do not recreate or overwrite current owner
+apps/web/src/settings/settings-quiet-hours-editor.tsx,C4,active-owner-hold,3154,New scheduled-work path; do not recreate or overwrite current owner
+apps/web/src/settings/settings-released-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-sample-data.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-search.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-shadow-report-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-skills-pane.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-source-behaviors.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-storage.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-theme-preview.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-time-zones.ts,C4,active-owner-hold,3154,New scheduled-work path; do not recreate or overwrite current owner
+apps/web/src/settings/settings-types.ts,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-ui.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-vault-chooser.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-voice-config-group.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-web-search-key-group.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/settings-yolo-admin-group.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/settings/terminal-modal.tsx,C4,reserved,,Settings consumer and state logic
+apps/web/src/shell/app-shell.tsx,I0,active-owner-hold,3154,Single integration owner; feature lanes submit exact amendments
+apps/web/src/shell/chat-controls-context.ts,C2,reserved,,Core shell surface
+apps/web/src/shell/chat-surface-key.ts,C2,reserved,,Core shell surface
+apps/web/src/shell/command-palette-model.ts,C2,reserved,,Core shell surface
+apps/web/src/shell/command-palette.tsx,C2,reserved,,Core shell surface
+apps/web/src/shell/error-boundary.tsx,C2,reserved,,Core shell surface
+apps/web/src/shell/global-error-handler.ts,C2,reserved,,Core shell surface
+apps/web/src/shell/meeting-route-context.ts,C2,reserved,,Core shell surface
+apps/web/src/shell/module-persistent-controls.tsx,C2,reserved,,Core shell surface
+apps/web/src/shell/module-settings-button.tsx,C2,reserved,,Core shell surface
+apps/web/src/shell/nav-icons.ts,C2,reserved,,Core shell surface
+apps/web/src/shell/nav-storage.ts,C2,reserved,,Core shell surface
+apps/web/src/shell/page-trail.tsx,C2,reserved,,Core shell surface
+apps/web/src/shell/shell-appearance.ts,C2,reserved,,Core shell surface
+apps/web/src/shell/shell-nav.tsx,C2,reserved,,Core shell surface
+apps/web/src/shell/sign-out-confirmation.tsx,C2,reserved,,Core shell surface
+apps/web/src/shell/theme-color-meta.ts,C2,reserved,,Core shell surface
+apps/web/src/shell/theme-storage.ts,C2,reserved,,Core shell surface
+apps/web/src/shell/use-sign-out-guard.ts,C2,reserved,,Core shell surface
+apps/web/src/styles.css,F0,reserved,,Shared base/reset/token/compatibility owner
+apps/web/src/styles/boot.css,F0,reserved,,Shared base/reset/token/compatibility owner
+apps/web/src/styles/command-palette.css,C2,reserved,,Shell and recovery surface
+apps/web/src/styles/components-forms.css,F0,reserved,,Shared base/reset/token/compatibility owner
+apps/web/src/styles/components-keyline.css,F0,reserved,,Shared base/reset/token/compatibility owner
+apps/web/src/styles/index.css,F0,reserved,,Shared base/reset/token/compatibility owner
+apps/web/src/styles/kit-briefing-reader.css,C3,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-calendar.css,P2,reserved,,Exact planning report ownership
+apps/web/src/styles/kit-chat-attach.css,C5,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-chat-skills.css,C5,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-chat.css,C5,active-owner-hold,3154,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-day-plan-review.css,C3,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-evening-loops.css,C3,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-evening-planning.css,C3,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-shell-nav.css,C2,reserved,,Shell and recovery surface
+apps/web/src/styles/kit-shell-rename.css,C2,reserved,,Shell and recovery surface
+apps/web/src/styles/kit-tasks-modal.css,P1,reserved,,Exact planning report ownership
+apps/web/src/styles/kit-tasks.css,P1,reserved,,Exact planning report ownership
+apps/web/src/styles/kit-today-desks.css,C3,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-today-feeds.css,C3,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-today-hero.css,C3,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-today-misc.css,C3,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-today-timeline.css,C3,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/kit-today.css,C3,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/onboarding-connectors.css,C1,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/onboarding-design.css,C1,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/onboarding.css,C1,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/settings-activity.css,C4,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/settings-panes-2.css,C4,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/settings-panes-3.css,C4,active-owner-hold,3154,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/settings-panes.css,C4,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/settings-quiet-hours.css,C4,active-owner-hold,3154,New scheduled-work path; do not recreate or overwrite current owner
+apps/web/src/styles/settings.css,C4,reserved,,Feature-owned layout CSS; shared visual requests go to F0
+apps/web/src/styles/texture.css,F0,reserved,,Shared base/reset/token/compatibility owner
+apps/web/src/styles/tokens.css,F0,reserved,,Shared base/reset/token/compatibility owner
+apps/web/src/styles/wellness-1.css,L3,reserved,,Wellness layout and user-visible export
+apps/web/src/styles/wellness-2.css,L3,reserved,,Wellness layout and user-visible export
+apps/web/src/styles/wellness-3.css,L3,reserved,,Wellness layout and user-visible export
+apps/web/src/tasks/task-capture.tsx,P1,active-owner-hold,3154,Exact planning report ownership
+apps/web/src/tasks/task-details-dialog.tsx,P1,reserved,,Exact planning report ownership
+apps/web/src/tasks/task-details-sections.tsx,P1,reserved,,Exact planning report ownership
+apps/web/src/tasks/task-list-navigation.tsx,P1,reserved,,Exact planning report ownership
+apps/web/src/tasks/task-list-view.tsx,P1,reserved,,Exact planning report ownership
+apps/web/src/tasks/task-matrix-view.tsx,P1,reserved,,Exact planning report ownership
+apps/web/src/tasks/tasks-page.tsx,P1,reserved,,Exact planning report ownership
+apps/web/src/tasks/tasks.css,P1,reserved,,Exact planning report ownership
+apps/web/src/theme/color-mode.ts,F0,reserved,,Shared theme/font/material owner
+apps/web/src/theme/theme-runtime.ts,F0,reserved,,Shared theme/font/material owner
+apps/web/src/today/brief-task-row.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/briefing-action-rows.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/briefing-callout.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/briefing-contributions.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/briefing-dialog.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/briefing-feedback-menu.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/briefing-freshness.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/briefing-markdown.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/briefing-reply-prompt.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/briefing-report-shell.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/catch-up-digest.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/day-plan-gaps.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/day-plan-review-controller.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/day-plan-review-model.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/day-plan-review-row.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/day-plan-review.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/day-plan-view-model.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/day-plan.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/evening-mode.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/evening-planning-controller.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/evening-planning-finished.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/evening-planning-frame.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/evening-planning-model.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/evening-planning-review.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/evening-planning-sections.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/evening-planning.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/evening-report.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/feed-source.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/goals-section.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/header-weather.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/module-today-widgets.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/morning-briefing.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/news-desk.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/overnight-section.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/practical-note.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/proactive-cards.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/since-last-night.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/today-email-refresh.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/today-hero.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/today-labels.ts,C3,reserved,,Today consumer and state logic
+apps/web/src/today/today-page.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/today-quick-actions.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/today-quiet-line.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/today-rail.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/today/today-timeline.tsx,C3,reserved,,Today consumer and state logic
+apps/web/src/vite-env.d.ts,I0,reserved,,Single integration owner; feature lanes submit exact amendments
+apps/web/src/wellness/checkin-detail-fields.tsx,L3,reserved,,Wellness surface
+apps/web/src/wellness/checkin-modal.tsx,L3,reserved,,Wellness surface
+apps/web/src/wellness/emotion-taxonomy.ts,L3,reserved,,Wellness surface
+apps/web/src/wellness/export-modal.tsx,L3,reserved,,Wellness surface
+apps/web/src/wellness/manage-meds-modal.tsx,L3,reserved,,Wellness surface
+apps/web/src/wellness/medication-schedule-form.ts,L3,reserved,,Wellness surface
+apps/web/src/wellness/radial-dial.tsx,L3,reserved,,Wellness surface
+apps/web/src/wellness/wellness-chart.tsx,L3,reserved,,Wellness surface
+apps/web/src/wellness/wellness-date-utils.ts,L3,reserved,,Wellness surface
+apps/web/src/wellness/wellness-history.tsx,L3,reserved,,Wellness surface
+apps/web/src/wellness/wellness-insights.tsx,L3,reserved,,Wellness surface
+apps/web/src/wellness/wellness-page.tsx,L3,reserved,,Wellness surface
+apps/web/src/wellness/wellness-therapy-notes.tsx,L3,reserved,,Wellness surface
+apps/web/src/wellness/wellness-today.tsx,L3,active-owner-hold,3337,Wellness surface
+apps/web/src/wellness/wellness-trends.tsx,L3,reserved,,Wellness surface
+docs/DEVELOPMENT_STANDARDS.md,F0,reserved,,Normative docs and centralized guard configuration
+docs/design-system.md,F0,reserved,,Normative docs and centralized guard configuration
+docs/superpowers/handoffs/2026-10-10-park-press-freshness.json,I0,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+docs/superpowers/handoffs/2026-10-10-park-press-verification.md,I0,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+docs/superpowers/plans/2026-10-10-park-press-migration.md,I0,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+docs/superpowers/plans/2026-10-10-park-press-ownership.csv,I0,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+docs/superpowers/plans/2026-10-10-park-press-screen-migration.md,I0,registered-new,,Exact path reservation
+docs/superpowers/specs/2026-10-10-park-press-migration.md,I0,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+docs/superpowers/specs/2026-10-10-park-press-reconciliation.md,I0,registered-new,,Exact path reservation
+external-modules/finance/src/web/accounts-view.ts,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/api.ts,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/assign.ts,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/draft-edit.ts,E1,reserved,,"Active PR added path, absent from baseline; do not recreate on another branch"
+external-modules/finance/src/web/format.ts,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/household.ts,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/index.ts,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/jsx.d.ts,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/root.tsx,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/router.ts,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/screens/accounts.tsx,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/screens/budget.tsx,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/screens/first-budget.tsx,E1,reserved,,"Active PR added path, absent from baseline; do not recreate on another branch"
+external-modules/finance/src/web/screens/reports.tsx,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/screens/settings.tsx,E1,reserved,,"Active PR added path, absent from baseline; do not recreate on another branch"
+external-modules/finance/src/web/screens/start.tsx,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/screens/transactions.tsx,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/settings-api.ts,E1,reserved,,"Active PR added path, absent from baseline; do not recreate on another branch"
+external-modules/finance/src/web/states.tsx,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/store.ts,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/finance/src/web/styles.ts,E1,reserved,,"Existing Finance redesign owner; rebase on #3312, no duplicate implementation"
+external-modules/food/src/web/api.ts,H1,preserve-design-hold,,Read-only hold; Meals approval/replacement gate
+external-modules/food/src/web/index.ts,H1,preserve-design-hold,,Read-only hold; Meals approval/replacement gate
+external-modules/food/src/web/jsx.d.ts,H1,preserve-design-hold,,Read-only hold; Meals approval/replacement gate
+external-modules/food/src/web/root.tsx,H1,preserve-design-hold,,Read-only hold; Meals approval/replacement gate
+external-modules/food/src/web/runtime.ts,H1,preserve-design-hold,,Read-only hold; Meals approval/replacement gate
+external-modules/food/src/web/styles.ts,H1,preserve-design-hold,,Read-only hold; Meals approval/replacement gate
+external-modules/job-search/src/web/api.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/board-types.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/css.d.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/index.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/jsx.d.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/keyline.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/latch.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/read-board.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/root.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/runtime.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/score.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/board-filters.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/board.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/discuss.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/inspector.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/match-row.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/onboarding.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/overview.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/profile.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/resume-editor.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/resume-save.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/screens/settings.tsx,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/styles-board.css,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/styles-screens.css,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/styles.css,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/use-profiles.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+external-modules/job-search/src/web/use-search-run.ts,H2,preserve-design-hold,,Read-only hold; closed/not-planned #3314 and replacement decision
+package.json,I0,active-owner-hold,3154;3084,Single integration owner; feature lanes submit exact amendments
+packages/ai/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/backtrack/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/backtrack/src/settings/index.tsx,L6,reserved,,"Notifications and utility settings, not feature-owned backend logic"
+packages/briefings/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/calendar/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/calendar/src/settings/index.tsx,P4,reserved,,Exact planning report ownership
+packages/chat/src/manifest.ts,I0,active-owner-hold,3328;3154;3088,"Single metadata owner, including active PR overlaps"
+packages/commitments/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/connectors/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/email/src/manifest.ts,I0,active-owner-hold,3154,"Single metadata owner, including active PR overlaps"
+packages/email/src/settings/index.tsx,L6,reserved,,"Notifications and utility settings, not feature-owned backend logic"
+packages/goals/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/integrations/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/meetings/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/meetings/src/web/capture-client.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/capture-clock.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/capture-controls.css,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/capture-controls.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/capture-devices.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/capture-gaps.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/capture-panel.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/capture-presentation.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/capture-session.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/capture-status.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/capture-strip.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/client.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/delete-meeting-dialog.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/editor-state.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/history-client.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/history-presentation.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/index.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/locale.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-action-review.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-candidate-source.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-connection.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-history.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-link-state.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-markdown-copy.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-not-linked.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-notes-pane.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-output-editor.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-record.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-settings-form.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-settings-state.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-settings.css,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-settings.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-summary.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-title.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-transcript.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-unlink-dialog.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meeting-vault-export.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/meetings-page.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/output-access.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/output-client.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/output-evidence.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/output-session.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/persistent-controls.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/session-draft.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/styles.css,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/summary-generation-error.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/transcript-evidence.tsx,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/transcript-time.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/meetings/src/web/use-meeting-notes.ts,L4,reserved,,Meetings web surface; recording behavior remains unchanged
+packages/memory/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/module-web-sdk/src/index.ts,I0,reserved,,"Public module integration contracts, not consumer-owned"
+packages/module-web-sdk/src/jsx-runtime.ts,I0,reserved,,"Public module integration contracts, not consumer-owned"
+packages/module-web-sdk/src/meeting-chat.ts,I0,reserved,,"Public module integration contracts, not consumer-owned"
+packages/module-web-sdk/src/page-trail.ts,I0,reserved,,"Public module integration contracts, not consumer-owned"
+packages/module-web-sdk/src/react-dom-runtime.ts,I0,reserved,,"Public module integration contracts, not consumer-owned"
+packages/module-web-sdk/src/runtime.ts,I0,reserved,,"Public module integration contracts, not consumer-owned"
+packages/module-web-sdk/src/session-unsaved-changes.ts,I0,reserved,,"Public module integration contracts, not consumer-owned"
+packages/news/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/news/src/settings/add-source.tsx,L1,reserved,,News editorial surface
+packages/news/src/settings/connect-publisher.tsx,L1,reserved,,News editorial surface
+packages/news/src/settings/describe-topics.tsx,L1,reserved,,News editorial surface
+packages/news/src/settings/index.tsx,L1,reserved,,News editorial surface
+packages/news/src/settings/news-settings.css,L1,reserved,,News editorial surface
+packages/news/src/settings/story-feedback.tsx,L1,reserved,,News editorial surface
+packages/news/src/web/dismissed-story-tracker.ts,L1,reserved,,News editorial surface
+packages/news/src/web/index.tsx,L1,reserved,,News editorial surface
+packages/news/src/web/lead-art.tsx,L1,reserved,,News editorial surface
+packages/news/src/web/news-client.ts,L1,reserved,,News editorial surface
+packages/news/src/web/news-mosaic.tsx,L1,reserved,,News editorial surface
+packages/news/src/web/news-overview-filters.ts,L1,reserved,,News editorial surface
+packages/news/src/web/news-page.tsx,L1,reserved,,News editorial surface
+packages/news/src/web/query-keys.ts,L1,reserved,,News editorial surface
+packages/news/src/web/story-feedback-client.ts,L1,reserved,,News editorial surface
+packages/news/src/web/story-feedback-menu.tsx,L1,reserved,,News editorial surface
+packages/news/src/web/story-feedback.css,L1,reserved,,News editorial surface
+packages/news/src/web/styles.d.ts,L1,reserved,,News editorial surface
+packages/news/src/web/styles/news-1.css,L1,reserved,,News editorial surface
+packages/news/src/web/styles/news-2.css,L1,reserved,,News editorial surface
+packages/news/src/web/today-widget.tsx,L1,reserved,,News editorial surface
+packages/notes/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/notifications/src/manifest.ts,I0,active-owner-hold,3154,"Single metadata owner, including active PR overlaps"
+packages/people/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/proactive-monitoring/src/manifest.ts,I0,active-owner-hold,3154,"Single metadata owner, including active PR overlaps"
+packages/scratchpad/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/settings-ui/src/index.tsx,F0,reserved,,Shared base/reset/token/compatibility owner
+packages/settings-ui/src/priority/index.tsx,C4,reserved,,"Core settings registration and priority consumer ownership, reconciled with planning"
+packages/settings-ui/src/router.tsx,I0,reserved,,Single integration owner; feature lanes submit exact amendments
+packages/settings-ui/src/scanner.ts,C4,reserved,,"Core settings registration and priority consumer ownership, reconciled with planning"
+packages/settings-ui/src/vite.ts,C4,reserved,,"Core settings registration and priority consumer ownership, reconciled with planning"
+packages/settings/src/manifest.ts,I0,active-owner-hold,3154,"Single metadata owner, including active PR overlaps"
+packages/shared/src/app-map-core.ts,I0,active-owner-hold,3154,Single integration owner; feature lanes submit exact amendments
+packages/sports/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/sports/src/settings/index.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/settings/source-assignment-picker.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/settings/source-photos.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/settings/sources.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/settings/sports-2.css,L2,reserved,,Sports editorial surface
+packages/sports/src/settings/sports-sources.css,L2,reserved,,Sports editorial surface
+packages/sports/src/settings/standings-leagues.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/settings/story-preferences.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/competitions.ts,L2,reserved,,Sports editorial surface
+packages/sports/src/web/index.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/locale.ts,L2,reserved,,Sports editorial surface
+packages/sports/src/web/query-keys.ts,L2,reserved,,Sports editorial surface
+packages/sports/src/web/sports-around-ticker.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/sports-client.ts,L2,reserved,,Sports editorial surface
+packages/sports/src/web/sports-news.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/sports-page.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/sports-parts.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/sports-standings-picker.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/sports-standings.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/sports-ticker.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/story-feedback-menu.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/styles.d.ts,L2,reserved,,Sports editorial surface
+packages/sports/src/web/styles/sports-1.css,L2,reserved,,Sports editorial surface
+packages/sports/src/web/styles/sports-3.css,L2,reserved,,Sports editorial surface
+packages/sports/src/web/styles/sports-4-grid.css,L2,reserved,,Sports editorial surface
+packages/sports/src/web/styles/sports-5-editorial.css,L2,reserved,,Sports editorial surface
+packages/sports/src/web/styles/sports-6-newsband.css,L2,reserved,,Sports editorial surface
+packages/sports/src/web/styles/sports-7-sidelines.css,L2,reserved,,Sports editorial surface
+packages/sports/src/web/styles/sports-8-clippings.css,L2,reserved,,Sports editorial surface
+packages/sports/src/web/team-colors.ts,L2,reserved,,Sports editorial surface
+packages/sports/src/web/today-scores.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/today-widget.tsx,L2,reserved,,Sports editorial surface
+packages/sports/src/web/use-auto-advance.ts,L2,reserved,,Sports editorial surface
+packages/structured-state/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/tasks/src/manifest.ts,I0,active-owner-hold,3154,"Single metadata owner, including active PR overlaps"
+packages/tasks/src/settings/index.tsx,P4,reserved,,Exact planning report ownership
+packages/ui/OPTIONS.md,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/catalogue.json,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/package.json,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/agenda-row.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/all-day-chip.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/avatar.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/badge.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/brand-mark.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/button-link.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/button.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/card.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/category-dot.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/chat-thread.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/checklist.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/chip.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/color-box.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/combobox.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/control-pill.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/day-cell.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/dialog.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/disclosure-toggle.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/divider.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/empty-state.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/event-chip.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/eyebrow.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/field.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/held-banner.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/highlight.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/icon-button.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/index.ts,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/indicator.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/info-tip.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/legend-swatch.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/masthead.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/menu.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/month-chip.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/nav-index.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/note.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/now-line.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/peek-close-button.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/peek-panel.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/radio-card-group.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/row-button.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/row-index.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/section-head.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/segmented.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/select.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/stat-tile.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-calendar.css,P2,reserved,,Exact planning report ownership
+packages/ui/src/styles/components-chat.css,C5,active-owner-hold,3154,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-checklist.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-command-palette.css,C2,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-core.css,F0,active-owner-hold,3154,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-empty.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-forms.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-keyline.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-moss-today.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-moss.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-news.css,L1,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-onboarding-connectors.css,C1,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-onboarding.css,C1,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-row-controls.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-sections.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-settings-1.css,C4,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-settings-2.css,C4,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-sports-1.css,L2,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-sports-2.css,L2,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-tabs.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-tasks.css,P1,reserved,,Exact planning report ownership
+packages/ui/src/styles/components-theme-editor.css,C4,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-web.css,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/styles/components-wellness-1.css,L3,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/styles/components-wellness-2.css,L3,reserved,,"Exclusive dedicated visual-skin exception, after F0 contract freeze"
+packages/ui/src/switch.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/tabs.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/today-pill.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/src/use-dialog-lifecycle.ts,F0,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+packages/ui/src/weather-chip.tsx,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/ui/tsconfig.json,F0,reserved,,Shared primitive/contract/catalogue owner
+packages/usefulness-feedback/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/weather/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/web-research/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/wellness/src/export-render.ts,L3,reserved,,Wellness layout and user-visible export
+packages/wellness/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/wellness/src/settings/index.tsx,L3,reserved,,Wellness surface
+packages/workflows/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/workshop/src/manifest.ts,I0,reserved,,"Single metadata owner, including active PR overlaps"
+packages/workshop/src/web/index.tsx,P3,reserved,,Exact planning report ownership
+packages/workshop/src/web/project-pages.tsx,P3,reserved,,Exact planning report ownership
+packages/workshop/src/web/project-routes.tsx,P3,reserved,,Exact planning report ownership
+packages/workshop/src/web/workshop.css,P3,reserved,,Exact planning report ownership
+pnpm-lock.yaml,I0,reserved,,Single integration owner; feature lanes submit exact amendments
+scripts/build-ui-catalogue.ts,F0,reserved,,Normative docs and centralized guard configuration
+scripts/check-design-tokens.ts,F0,active-owner-hold,3154,Normative docs and centralized guard configuration
+scripts/check-migrated-sections.ts,F0,reserved,,Normative docs and centralized guard configuration
+scripts/check-ui-catalogue.ts,F0,reserved,,Normative docs and centralized guard configuration
+scripts/check-ui-classes.ts,F0,reserved,,Normative docs and centralized guard configuration
+tests/e2e/c1-park-press-design.spec.ts,C1,registered-new,,Exact path reservation
+tests/e2e/c2-park-press-design.spec.ts,C2,registered-new,,Exact path reservation
+tests/e2e/c3-park-press-design.spec.ts,C3,registered-new,,Exact path reservation
+tests/e2e/c4-park-press-design.spec.ts,C4,registered-new,,Exact path reservation
+tests/e2e/c5-park-press-design.spec.ts,C5,registered-new,,Exact path reservation
+tests/e2e/calendar-email.spec.ts,P2,reserved,,Exact planning report ownership
+tests/e2e/e1-park-press-design.spec.ts,E1,registered-new,,Exact path reservation
+tests/e2e/f0-park-press-design.spec.ts,F0,registered-new,,Exact path reservation
+tests/e2e/l1-park-press-design.spec.ts,L1,registered-new,,Exact path reservation
+tests/e2e/l2-park-press-design.spec.ts,L2,registered-new,,Exact path reservation
+tests/e2e/l3-park-press-design.spec.ts,L3,registered-new,,Exact path reservation
+tests/e2e/l4-park-press-design.spec.ts,L4,registered-new,,Exact path reservation
+tests/e2e/l6-park-press-design.spec.ts,L6,registered-new,,Exact path reservation
+tests/e2e/p1-park-press-design.spec.ts,P1,registered-new,,Exact path reservation
+tests/e2e/p2-park-press-design.spec.ts,P2,registered-new,,Exact path reservation
+tests/e2e/p3-park-press-design.spec.ts,P3,registered-new,,Exact path reservation
+tests/e2e/p4-park-press-design.spec.ts,P4,registered-new,,Exact path reservation
+tests/e2e/tasks.spec.ts,P1,active-owner-hold,3154,Exact planning report ownership
+tests/e2e/workshop-design.spec.ts,P3,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+tests/uat/specs/3187-finance-r1-freedom-moves.uat.spec.ts,E1,reserved,,"Active PR added path, absent from baseline; do not recreate on another branch"
+tests/uat/specs/3187-finance-settings-activity.uat.spec.ts,E1,reserved,,"Active PR added path, absent from baseline; do not recreate on another branch"
+tests/unit/briefing-dialog.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/briefing-freshness-ui.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-action-hydration.test.tsx,C5,active-owner-hold,3154,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-composer-voice.test.tsx,C5,active-owner-hold,3154,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-connect-provider-empty.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-drawer-activity.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-drawer-availability.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-drawer-docked.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-drawer-notes.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-drawer-privacy-transitions.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-drawer-refused-send.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-drawer-route-empty-state.test.tsx,C5,active-owner-hold,3154,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-drawer-surface.test.tsx,C5,active-owner-hold,3154,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-feedback-menu.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-freshness-footer.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-model-pill-surface.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/chat-thread-markdown.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/check-design-tokens.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/check-migrated-sections.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/check-ui-catalogue.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/check-ui-classes.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/core-onboarding-design.test.tsx,C1,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+tests/unit/core-settings-design.test.tsx,C4,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+tests/unit/design-tokens-contrast.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/design-tokens-parity.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/evening-planning-frame.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/evening-planning.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/evening-report-split.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/evening-snapshot-notes.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/external-module-finance-web-settings.test.tsx,E1,reserved,,Implementation exact-path registration before edit
+tests/unit/foundation-contrast-matrix.design.test.ts,F0,registered-new,,Exact path reservation
+tests/unit/foundation-control-contracts.design.test.tsx,F0,registered-new,,Implementation exact-path registration before edit
+tests/unit/foundation-dialog-lifecycle.design.test.tsx,F0,registered-new,,Exact path reservation
+tests/unit/foundation-settings-adapters.design.test.tsx,F0,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+tests/unit/lifestyle-settings-design.test.tsx,L6,registered-new,,Implementation exact-path registration before edit
+tests/unit/lifestyle-wellness-design.test.tsx,L3,registered-new,,Implementation exact-path registration before edit
+tests/unit/loading-screen-theme.test.tsx,C1,reserved,,Recovery display test follows C1
+tests/unit/masthead-tokens-contrast.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/masthead-ui.test.tsx,F0,reserved,,Shared component/token behavior tests
+tests/unit/meeting-capture-web.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/meeting-chat-ui.test.tsx,C5,active-owner-hold,3337;3154,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/meeting-history-web.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/meeting-review-primitives.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/meeting-settings-web.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/meeting-summary-web.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/meeting-title-web.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/meeting-transcript-web.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/meeting-web-interaction.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/meeting-web.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/meetings-css-boundaries.test.ts,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/module-build-plan-record.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/module-settings-ui-contract.test.ts,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/module-web-sdk-ui-smoke.test.tsx,F0,reserved,,Shared component/token behavior tests
+tests/unit/news-connect-publisher.test.tsx,L1,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/news-mosaic-render.test.tsx,L1,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/news-page.test.tsx,L1,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/news-settings-pane.test.tsx,L1,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/news-settings-retry-refresh.test.tsx,L1,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/news-story-feedback-settings.test.tsx,L1,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/notifications-page-design.test.tsx,L6,registered-new,,Implementation exact-path registration before edit
+tests/unit/onboarding-finish-ask-jarvis.test.tsx,C1,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/onboarding-provider-connect-step.test.tsx,C1,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/onboarding-skip-confirm.test.tsx,C1,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/park-press-integration.design.test.ts,I0,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+tests/unit/planning-calendar-design.test.tsx,P2,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+tests/unit/planning-settings-design.test.tsx,P4,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+tests/unit/planning-tasks-design.test.tsx,P1,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+tests/unit/priority-settings-ui.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/row-index-ui.test.tsx,F0,reserved,,Shared component/token behavior tests
+tests/unit/settings-activity-dialog.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-activity-filterbar.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-activity-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-admin-panes.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-ai-admin-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-ai-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-ai-provider-models.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-ai-sorting-row.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-appearance-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-connector-sync.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-imap-connect.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-instance-modules-pane-render.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-integrations-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-memory-dashboard.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-memory-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-page-priorities.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-page-wide-connection.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-people-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-personal-panes.test.tsx,C4,active-owner-hold,3154,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-provider-login-dialog-strictmode.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-provider-login-support.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-quiet-hours-pane.test.tsx,C4,active-owner-hold,3154,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-released-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-setup-link-navigation.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-skills-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-sports-pane.test.tsx,L2,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/settings-sports-search-groups.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-sports-sources.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-vault-chooser.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-yolo-admin-group.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/sports-newsband.test.tsx,L2,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/sports-page.test.tsx,L2,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/sports-result-row-layout-css.test.ts,L2,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/sports-settings-follow-invalidates-overview.test.tsx,L2,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/theme-runtime-highlight.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/theme-runtime-nav.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/theme-runtime.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/throw-away-draft-dialog.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-a11y.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-briefing-action-rows.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-briefing-prose.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-catch-up-digest.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-closing-polish.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-day-plan-gap-rows.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-day-plan-view-model.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-day-plan.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-email-refresh.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-evening-loops-save.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-evening-mode.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-evening-reader.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-module-widgets.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-quick-actions.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-rail-preparation.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-states.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-weather-row.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/trail-marker-approval-copy.test.tsx,L5,reserved,,Implementation exact-path registration before edit
+tests/unit/truthful-chat-settings-ui.test.ts,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/ui-checklist.test.tsx,F0,reserved,,Shared component/token behavior tests
+tests/unit/ui-combobox.test.tsx,F0,reserved,,Shared component/token behavior tests
+tests/unit/ui-info-tip.test.tsx,F0,reserved,,Shared component/token behavior tests
+tests/unit/ui-menu.test.tsx,F0,reserved,,Shared component/token behavior tests
+tests/unit/web-section-tour.test.ts,C1,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/web-shell-nav.test.tsx,C2,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/web-shell-theme.test.ts,C2,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/wellness-export-modal-contract.test.ts,L3,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/wellness-export-render.test.ts,L3,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/wellness-manage-meds-modal.test.tsx,L3,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/wellness-med-builder-form.test.ts,L3,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/workshop-project-pages.test.tsx,P3,reserved,,Exact planning report ownership
