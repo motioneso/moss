@@ -44,7 +44,9 @@ describe("upgrade check as the worker role", () => {
         json: async () => ({ tag_name: "v1.1.0", body: "Release notes" })
       }))
     );
-    const boss = { send: vi.fn(async () => "job-id") };
+    const boss = {
+      send: vi.fn(async (_queue: string, _data: object, _options: object) => "job-id")
+    };
 
     await handleUpgradeCheckJob(worker, boss as never);
 
@@ -58,7 +60,10 @@ describe("upgrade check as the worker role", () => {
       expect.anything()
     );
 
-    const payload = boss.send.mock.calls[0]?.[1] as { actorUserId: string; version: string };
+    const payload = boss.send.mock.calls[0]?.[1] as {
+      actorUserId: string;
+      version: string;
+    };
     await new DataContextRunner(appDb).withDataContext(
       { actorUserId: payload.actorUserId, requestId: "req-upgrade-notify" },
       async (scopedDb) => {
