@@ -48,6 +48,10 @@ import { PreferencesRepository } from "@moss/structured-state";
 import { extractTimezone } from "./locale-utils.js";
 import { ChatRepository } from "./repository.js";
 import {
+  CHAT_DELIVER_REMINDER_QUEUE_DEFINITION,
+  registerReminderDeliveryWorker
+} from "./reminders/deliver.js";
+import {
   buildDistillationPrompt,
   containsSensitiveMemoryText,
   decideCandidatePromotion,
@@ -67,7 +71,8 @@ export const CHAT_ARCHIVE_DAY_QUEUE = "chat.archive-day";
 export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   { name: CHAT_EMBED_TURN_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
   { name: CHAT_EXTRACT_FACTS_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
-  { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } }
+  { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
+  CHAT_DELIVER_REMINDER_QUEUE_DEFINITION
 ];
 
 /**
@@ -540,7 +545,13 @@ export async function registerChatJobWorkers(
     options.workOptions
   );
 
-  const workIds = [embedWorkId, extractWorkId, archiveWorkId];
+  const reminderWorkId = await registerReminderDeliveryWorker(
+    boss,
+    dataContext,
+    options.workOptions
+  );
+
+  const workIds = [embedWorkId, extractWorkId, archiveWorkId, reminderWorkId];
   return workIds;
 }
 

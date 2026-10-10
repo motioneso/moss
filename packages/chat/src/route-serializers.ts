@@ -134,6 +134,7 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
  */
 export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
   const record = asRecord(value);
+  if (record.kind === "reminder" && record.version === 1) return readReminderOrigin(record);
   if (record.kind !== "classifier_gate" || record.version !== 1) return undefined;
   const outcome =
     record.outcome === "executed-success" || record.outcome === "executed-failure-or-unknown"
@@ -148,6 +149,18 @@ export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
     moduleId: typeof record.moduleId === "string" ? record.moduleId : null,
     toolName: typeof record.toolName === "string" ? record.toolName : null,
     outcome
+  };
+}
+
+function readReminderOrigin(record: Record<string, unknown>): ChatTurnOriginV1 | undefined {
+  const event = record.event;
+  if (event !== "saved" && event !== "refused" && event !== "delivered") return undefined;
+  return {
+    version: 1,
+    kind: "reminder",
+    event,
+    reminderId: typeof record.reminderId === "string" ? record.reminderId : null,
+    ...(typeof record.late === "boolean" ? { late: record.late } : {})
   };
 }
 

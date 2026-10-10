@@ -25,6 +25,7 @@ import type {
   AiAuthMethod,
   ChatAttachmentDto,
   ChatSurface,
+  ChatClassifierGateOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   SourceFreshnessEntry,
@@ -47,8 +48,10 @@ import {
 } from "../jobs.js";
 import { containsSensitiveMemoryText } from "../memory-distillation.js";
 import type { ChatPersistencePort } from "./chat-session-manager.js";
-import type { HandledTurnOptions } from "./chat-session-ports.js";
+import type { HandledTurnOptions, ReminderTurnOptions } from "./chat-session-ports.js";
 import type { ChatRepository } from "../repository.js";
+import { ReminderRepository } from "../reminders/repository.js";
+import { decideReminderTurn, type ReminderTurnPlan } from "../reminders/turn.js";
 import { normalizeChatSurface } from "./chat-surface.js";
 import { terminalActionRecord } from "../action-record-history.js";
 import { estimateTokens } from "./recall-seed.js";
@@ -156,6 +159,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly dataContext: DataContextRunner;
   private readonly rootDb: Kysely<MossDatabase> | undefined;
   private readonly chat: ChatRepository;
+  private readonly reminders = new ReminderRepository();
   private readonly ai: AiRepository;
   private readonly boss: PgBoss | undefined;
   private readonly connectorSyncAt: DataContextChatPersistenceDeps["connectorSyncAt"];
@@ -311,7 +315,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     actorUserId: string,
     userText: string,
     assistantReply: string,
-    origin: ChatTurnOriginV1,
+    origin: ChatClassifierGateOriginV1,
     opts?: HandledTurnOptions,
     surface?: ChatSurface
   ): Promise<
@@ -334,6 +338,52 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   }
 
   /**
+   * #3309: persist the code-written answer to a recognised reminder request. The reply and origin
+   * are decided inside the turn's transaction, and an accepted reminder commits with the turn.
+   */
+  async recordReminderTurn(
+    actorUserId: string,
+    userText: string,
+    plan: ReminderTurnPlan,
+    opts?: ReminderTurnOptions,
+    surface?: ChatSurface
+  ): Promise<
+    | {
+        readonly userMessageId: string;
+        readonly assistantMessageId: string;
+        readonly reply: string;
+        readonly origin: ChatTurnOriginV1;
+      }
+    | "stopped"
+    | undefined
+  > {
+    const { stopSignal, ...turnOpts } = opts ?? {};
+    let stored: Awaited<ReturnType<typeof this.persistCompletedTurn>>;
+    try {
+      stored = await this.persistCompletedTurn(
+        actorUserId,
+        "record-reminder-turn",
+        userText,
+        "",
+        turnOpts,
+        surface,
+        { reminder: plan, stopSignal }
+      );
+    } catch (error) {
+      if (error instanceof ReminderTurnStopped) return "stopped";
+      throw error;
+    }
+    return stored?.reply !== undefined && stored.origin !== undefined
+      ? {
+          userMessageId: stored.userMessageId,
+          assistantMessageId: stored.assistantMessageId,
+          reply: stored.reply,
+          origin: stored.origin
+        }
+      : undefined;
+  }
+
+  /**
    * The one completed-turn pipeline shared by model turns and gate-handled turns. `turn` is a
    * discriminated union: either the executing provider/model or the gate origin, never both, so a
    * handled turn can never accidentally write a fabricated `executed` or `usage`.
@@ -348,11 +398,14 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     turn:
       | { readonly executed: { provider: ProviderKind; model: string } }
       | { readonly origin: ChatTurnOriginV1 }
+      | { readonly reminder: ReminderTurnPlan; readonly stopSignal?: AbortSignal }
   ): Promise<
     | {
         readonly userMessageId: string;
         readonly assistantMessageId: string;
         readonly sourceFreshness?: SourceFreshnessV1 | null;
+        readonly reply?: string;
+        readonly origin?: ChatTurnOriginV1;
       }
     | undefined
   > {
@@ -396,6 +449,18 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         elapsedMs: opts?.elapsedMs,
         usage: opts?.usage
       };
+      const handled =
+        "reminder" in turn
+          ? await decideReminderTurn(
+              scopedDb,
+              { reminders: this.reminders, boss: this.boss },
+              actorUserId,
+              thread,
+              turn.reminder
+            )
+          : "origin" in turn
+            ? { reply: assistantReply, origin: turn.origin }
+            : undefined;
       const result = thread.incognito
         ? undefined
         : "executed" in turn
@@ -408,15 +473,21 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               completedOpts,
               chatSurface
             )
-          : await this.chat.recordGateCompletedTurn(
-              scopedDb,
-              thread.id,
-              userText,
-              assistantReply,
-              turn.origin,
-              completedOpts,
-              chatSurface
-            );
+          : handled
+            ? await this.chat.recordGateCompletedTurn(
+                scopedDb,
+                thread.id,
+                userText,
+                handled.reply,
+                handled.origin,
+                completedOpts,
+                chatSurface
+              )
+            : undefined;
+      if (result && handled && "save" in handled) await handled.save?.(result.userMessage.id);
+
+      // Throwing here rolls back the turn, the reminder and its delivery job together.
+      if ("reminder" in turn && turn.stopSignal?.aborted) throw new ReminderTurnStopped();
 
       if (thread.incognito) {
         return undefined;
@@ -480,7 +551,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         ? {
             userMessageId: result.userMessage.id,
             assistantMessageId: result.assistantMessage.id,
-            sourceFreshness
+            sourceFreshness,
+            ...(handled ? { reply: handled.reply, origin: handled.origin } : {})
           }
         : undefined;
     });
@@ -724,3 +796,5 @@ function buildRollingSummary(
   // Cap to 2000 chars so the column stays bounded while retaining the oldest summarized facts.
   return raw.length > 2000 ? `${raw.slice(0, 1997)}...` : raw;
 }
+
+class ReminderTurnStopped extends Error {}

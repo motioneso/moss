@@ -67,7 +67,8 @@ export const chatModuleManifest = {
       "sql/0291_chat_conversation_provenance.sql",
       "sql/0293_chat_automatic_action_reservations.sql",
       "sql/0297_chat_action_history_permissions.sql",
-      "sql/0299_main_chat.sql"
+      "sql/0299_main_chat.sql",
+      "sql/0306_chat_relative_reminders.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -121,6 +122,13 @@ export const chatModuleManifest = {
       description:
         "Reopening Moss returns to your stable Main chat and saved history. The composer waits while Main is restored, " +
         "and the next turn waits for an active conversation resume to finish. Explicit new and private chats keep their selection.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.relative_reminders",
+      description:
+        "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder that Moss posts once in Main, " +
+        "noting if late. Up to 20 at once, 30 days ahead. No clock times, repeats or private chats.",
       featureFlagId: "chat.module"
     },
     {
