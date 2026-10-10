@@ -19,6 +19,17 @@ export interface ActivityInput {
   undo?: Record<string, string | number | null> | null;
 }
 
+/** One stored activity row as the Settings list reads it. */
+export interface ActivityRecord {
+  id: string;
+  at: string;
+  actor: "user" | "moss";
+  kind: string;
+  params: Record<string, string | number | null>;
+  undo: Record<string, string | number | null> | null;
+  undoneAt: string | null;
+}
+
 export interface FinanceStore {
   listItems(): Promise<ItemRecord[]>;
   getItem(itemId: string): Promise<ItemRecord | null>;
@@ -66,6 +77,12 @@ export interface FinanceStore {
 
   /** Appends one activity row for the acting user, stamped with the current time. */
   appendActivity(entry: ActivityInput): Promise<void>;
+
+  /** Activity rows with `from <= at < to`, newest first, at most `limit`. */
+  listActivity(from: string, to: string, limit: number): Promise<ActivityRecord[]>;
+  getActivity(id: string): Promise<ActivityRecord | null>;
+  /** Marks a row undone. False when it was already undone or does not exist. */
+  markActivityUndone(id: string, at: string): Promise<boolean>;
 
   /** Amount of the newest budget.assign row for one category and month; null when none. */
   lastLoggedAssignment(month: string, categoryId: string): Promise<number | null>;

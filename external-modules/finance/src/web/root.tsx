@@ -7,10 +7,11 @@ import {
   useSyncExternalStore,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
-import { navigate, useModulePath } from "./router";
+import { ModuleLink, navigate, useModulePath } from "./router";
 import { AccountsScreen } from "./screens/accounts";
 import { BudgetScreen } from "./screens/budget";
 import { ReportsScreen } from "./screens/reports";
+import { SettingsScreen } from "./screens/settings";
 import { StartScreen } from "./screens/start";
 import { TransactionsScreen } from "./screens/transactions";
 import { currentLiveMessage, subscribeLive } from "./states";
@@ -55,17 +56,9 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
     <div className="fnm-root">
       <LiveRegion />
       <header className="fnm-header">
-        {/*
-         * #1759 — a way back to this module's own settings, where the bank sign-in lives.
-         * A plain anchor, not a router push: the module runtime hands a web surface React and
-         * nothing else, so there is no host navigate to call (same reasoning as Food's link).
-         */}
-        <a
-          className="jds-btn jds-btn--quiet jds-btn--sm fnm-settings-link"
-          href="/settings?section=modules&module=finance"
-        >
+        <ModuleLink to="/settings" variant="quiet" size="sm">
           Settings
-        </a>
+        </ModuleLink>
       </header>
       <div className="fnm-tabs">
         <Segmented
@@ -89,6 +82,8 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
         <AccountsScreen hostActions={props.hostActions} />
       ) : path === "/reports" ? (
         <ReportsScreen />
+      ) : path === "/settings" ? (
+        <SettingsScreen />
       ) : null}
     </div>
   );

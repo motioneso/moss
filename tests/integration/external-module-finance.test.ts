@@ -297,7 +297,9 @@ describe("finance job reconciliation (#1146)", () => {
       "create:finance.draft-start",
       'update:finance.draft-start:{"retryLimit":1}',
       "create:finance.review-apply",
-      'update:finance.review-apply:{"retryLimit":1}'
+      'update:finance.review-apply:{"retryLimit":1}',
+      "create:finance.activity-undo",
+      'update:finance.activity-undo:{"retryLimit":1}'
     ]);
     // One schedule per active user; payload is metadata-only (D6) and the
     // key is the reconciler's module/schedule/user triple ("/"-separated —

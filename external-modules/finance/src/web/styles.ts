@@ -37,6 +37,11 @@ export const MODULE_STYLES = `
 .fnm-bank-status-row { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .fnm-bank-status { display: none; }
 .fnm-bal { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; font-variant-numeric: tabular-nums; }
+.fnm-switch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: var(--border-w) solid var(--border-subtle); }
+.fnm-switch-text { display: flex; flex-direction: column; gap: var(--space-1); }
+.fnm-limit { max-width: 14rem; }
+.fnm-disclosure-head { display: inline-flex; align-items: center; gap: var(--space-2); }
+.fnm-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 @media (max-width: 720px) {
   .fnm-bank-meta { display: none; }
   .fnm-bank-status { display: block; }
