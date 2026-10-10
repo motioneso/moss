@@ -128,7 +128,9 @@ async function renderProfilePane(
     locale: { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "24" }
   });
   client.setQueryData(queryKeys.settings.quietHours, {
-    quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: null }
+    quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: null },
+    authority: { status: "default", alerts: null },
+    version: null
   });
   client.setQueryData(queryKeys.weather.location, weatherLocation);
   client.setQueryData(queryKeys.weather.unit, { unit: weatherUnit });
