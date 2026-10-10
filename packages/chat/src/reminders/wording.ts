@@ -63,7 +63,7 @@ export function describeDelay(totalSeconds: number): string {
 }
 
 export const REMINDER_MANAGE_MAIN_ONLY_REPLY =
-  "I can only list or cancel reminders in your Main chat, so nothing changed.";
+  "I can only list or cancel chat reminders in your Main chat, so nothing changed.";
 
 const FINISHED_LABEL: Readonly<Record<Exclude<ChatReminderState, "queued">, string>> = {
   delivered: "sent",

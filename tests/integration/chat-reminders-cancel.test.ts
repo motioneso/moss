@@ -20,6 +20,7 @@ import {
   ReminderRepository,
   type SavedReminder
 } from "../../packages/chat/src/reminders/repository.js";
+import { REMINDER_OPEN_LIMIT } from "../../packages/chat/src/reminders/wording.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -277,6 +278,18 @@ describe("cancelling after delivery", () => {
     const again = await cancelInTurn(ids.userA, saved.threadId, "take the bins out");
     expect(again).toMatchObject({ kind: "already_delivered" });
     expect(await openCount(ids.userA)).toBe(before - 1);
+  });
+
+  it("lets a full owner save again once a delivered reminder is cancelled", async () => {
+    const first = await save(ids.userD, "the first one");
+    for (let n = 2; n <= REMINDER_OPEN_LIMIT; n += 1) await save(ids.userD, `filler number ${n}`);
+    await makeDue(first.id);
+    await expect(deliver(first, ids.userD)).resolves.toBe("delivered");
+    await expect(save(ids.userD, "one too many")).rejects.toThrow(/chat_reminder_capacity_reached/);
+
+    const result = await cancelInTurn(ids.userD, first.threadId, "the first one");
+    expect(result).toMatchObject({ kind: "already_delivered", reminder: { id: first.id } });
+    await expect(save(ids.userD, "fits now")).resolves.toMatchObject({ version: 1 });
   });
 });
 
