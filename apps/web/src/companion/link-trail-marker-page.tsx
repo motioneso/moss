@@ -112,7 +112,7 @@ function LinkRequest({ code }: { readonly code: string }) {
 
   return (
     <section className="page-stack" aria-label={`Link ${COMPANION_PRODUCT_NAME}`}>
-      <Card padding="lg">
+      <Card padding="lg" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
         <h1 className="jds-section-title">{heading}</h1>
 
         {code.length === 0 ? (
@@ -150,7 +150,7 @@ function LinkRequest({ code }: { readonly code: string }) {
           <>
             <p style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-2)" }}>
               <Laptop size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
-              <span>
+              <span style={{ minWidth: 0 }}>
                 <strong>{deviceName}</strong> is asking to connect to your {assistantName} account.
                 Approve it only if you started this on that Mac.
               </span>

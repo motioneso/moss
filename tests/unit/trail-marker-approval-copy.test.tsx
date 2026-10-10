@@ -67,6 +67,21 @@ function renderReadError(status: number): string {
 }
 
 describe("Trail Marker request status", () => {
+  it.each(["pending", "approved"])("keeps a long device name wrappable when %s", (status) => {
+    const client = new QueryClient();
+    const deviceName = `Example-${"LongDeviceName".repeat(4)}`;
+    client.setQueryData(queryKeys.companionPairAttempt("abc"), { deviceName, status });
+    const host = document.createElement("div");
+    host.innerHTML = renderRequest("/link/trail-marker#code=abc", client);
+    const card = host.querySelector<HTMLElement>(".jds-card")!;
+    expect(card.style.minWidth).toBe("0px");
+    expect(card.style.overflowWrap).toBe("anywhere");
+    const name = card.querySelector("strong")!;
+    expect(name.textContent).toBe(deviceName);
+    if (status === "pending") expect(name.parentElement!.style.minWidth).toBe("0px");
+    client.clear();
+  });
+
   it("announces a missing request code and offers no approval", () => {
     const html = renderRequest("/link/trail-marker");
     expect(html).toContain('role="alert"');

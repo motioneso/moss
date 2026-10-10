@@ -58,6 +58,45 @@ test("declining a waiting Mac links nothing", async ({ page }) => {
   expect(state.companionPairAttempt?.lastDecision?.decision).toBe("deny");
 });
 
+test("a long Mac name stays within the phone viewport before and after approval", async ({
+  page
+}) => {
+  const deviceName = `Example-${"LongDeviceName".repeat(4)}`;
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 850 });
+    const state: MockApiState = {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: [],
+      notifications: [],
+      tasks: [],
+      companionPairAttempt: { deviceName, status: "pending" }
+    };
+    await mockApi(page, state);
+    await page.goto(`/link/trail-marker#code=long-name-${width}`);
+    await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+    await expect(page.getByText(deviceName, { exact: true })).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      )
+    ).toBeLessThanOrEqual(1);
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "is linked" })).toContainText(
+      deviceName
+    );
+    expect(state.companionPairAttempt?.lastDecision).toEqual({
+      code: `long-name-${width}`,
+      decision: "approve"
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      )
+    ).toBeLessThanOrEqual(1);
+  }
+});
+
 // These use the real page with synthetic responses. They establish UI behavior only;
 // native linking, device permissions and live recording still require separate Mac proof.
 test("request checking and failed transport are announced with a read-only retry", async ({
