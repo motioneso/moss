@@ -358,6 +358,8 @@
   opacity: 1;
 }
 .sp-standings__hd {
+  /* Anchor the league popup to the full header, not the short selected-league trigger. */
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -382,6 +384,9 @@
   flex-wrap: wrap;
   gap: var(--space-1);
 }
+.sp-standings__hd .sp-standings-picker {
+  position: static;
+}
 .sp-standings-picker > .jds-btn {
   width: auto;
   max-width: 180px;
@@ -394,7 +399,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sp-standings-picker__popup {
+.sp-standings__hd .sp-standings-picker__popup {
+  right: 0;
+  left: auto;
+  min-width: 0;
+  max-width: 100%;
   width: min(280px, calc(100vw - var(--space-6)));
   max-height: min(420px, 70vh);
   overflow-y: auto;
