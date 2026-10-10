@@ -10,7 +10,8 @@ import {
   admissionFixture,
   admissionTool,
   deferred,
-  rejectAdmissionCard
+  rejectAdmissionCard,
+  untrustedWrite
 } from "./helpers/gateway-admission-fixture.js";
 
 const acpBase = {
@@ -149,9 +150,9 @@ describe("outside-agent permission admission", () => {
   });
 
   it.each(acpCases.filter(({ mode }) => mode !== "person"))(
-    "$label makes a following dedicated write ask",
+    "$label makes a following untrusted write ask",
     async ({ input }) => {
-      const tool = admissionTool("settings.themeMode.set", { risk: "write" });
+      const tool = untrustedWrite();
       const h = admissionFixture([tool]);
       expect(
         await h.gateway.requestAcpBuiltInPermission(h.token, { ...acpBase, ...input })
@@ -201,7 +202,7 @@ describe("permission audit interleavings", () => {
   });
 
   it("records durable outside-agent taint before the post-admission audit wait", async () => {
-    const tool = admissionTool("settings.themeMode.set", { risk: "write" });
+    const tool = untrustedWrite();
     const h = admissionFixture([tool]);
     const audit = deferred();
     h.audit.mockImplementation(async () => {
@@ -332,7 +333,7 @@ describe("native YOLO durable permission status", () => {
   };
 
   it("creates pending under guard, then admits before confirming the permission", async () => {
-    const tool = admissionTool("settings.themeMode.set", { risk: "write" });
+    const tool = untrustedWrite();
     const h = admissionFixture([tool]);
     const admission = deferred();
     const resolution = deferred();

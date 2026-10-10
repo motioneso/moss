@@ -43,6 +43,18 @@ export function admissionTool(
   };
 }
 
+/**
+ * A write no user setting trusts: an owned connected tool that sends data out. It runs in a
+ * clean chat under fixture YOLO and asks once the chat holds outside content (#3338).
+ */
+export function untrustedWrite(name = "connected.send"): ModuleAssistantToolManifest {
+  return admissionTool(name, {
+    risk: "outbound",
+    isExternal: true,
+    descriptorOwnerUserId: "actor-a"
+  });
+}
+
 export function admissionModule(tools: readonly ModuleAssistantToolManifest[]): MossModuleManifest {
   return {
     id: "example",

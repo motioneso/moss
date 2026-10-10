@@ -33,6 +33,10 @@ export interface AgencyPrefLookup {
  * A composition-owned per-call resolver has already authorized an ordinary app write when
  * `perCallResolved` is true; it needs no mutable action-family tier. All confirmation floors
  * above that ordinary-write rule still apply.
+ *
+ * A tainted conversation (#3338) keeps only the user's own trust: a promoted family still runs,
+ * and its `confirmOverride` limit still applies. Moss's own ratings (`sortedSafe`, per-call app
+ * writes) ask, as do outbound tools and any `confirmWhenTainted` call.
  */
 export async function resolvePolicy(
   tool: ModuleAssistantToolManifest,
@@ -44,13 +48,15 @@ export async function resolvePolicy(
   conversationTainted = false,
   confirmWhenTainted = false
 ): Promise<PolicyDecision> {
-  if (conversationTainted && (tool.risk !== "read" || confirmWhenTainted)) return "confirm";
+  if (conversationTainted && confirmWhenTainted) return "confirm";
   if (tool.risk === "read") return "run";
   if (tool.risk === "destructive") return "confirm";
-  if (sortedSafe && tool.isExternal === true) return confirmOverride ? "confirm" : "run";
+  if (sortedSafe && tool.isExternal === true && !conversationTainted) {
+    return confirmOverride ? "confirm" : "run";
+  }
   if (tool.risk === "outbound") return "confirm";
   if (confirmOverride) return "confirm";
-  if (perCallResolved) return "run";
+  if (perCallResolved) return conversationTainted ? "confirm" : "run";
 
   const familyId = tool.actionFamilyId;
   if (!familyId) {
