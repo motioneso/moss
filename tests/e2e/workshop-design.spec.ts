@@ -39,7 +39,7 @@ for (const viewport of [
           version: "0.1.0",
           lifecycle: "required",
           required: true,
-          supportsUserDisable: false,
+          supportsUserDisable: true,
           instanceDisabled: false,
           userDisabled: false,
           active: true,
