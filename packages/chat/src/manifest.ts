@@ -125,6 +125,21 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     {
+      id: "chat.resume_keeps_decisions",
+      description:
+        "Returning to the same chat after Moss restarts keeps earlier decisions. Older turns are condensed into a summary " +
+        "in the background, and the summary plus every newer turn is restored. Private chats are never condensed.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "conversation_too_long_to_resume",
+          class: "transient",
+          description:
+            "The conversation is too long to restore in full, so Moss is condensing it. Nothing is lost. Try again shortly or start a new chat."
+        }
+      ]
+    },
+    {
       id: "chat.pending_action_disclosure",
       description:
         "App cards show exact server targets and human-readable changes. Memory and note deletion use red Approve. " +

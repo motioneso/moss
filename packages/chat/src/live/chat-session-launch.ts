@@ -25,7 +25,11 @@ import { CliChatUnavailableError } from "./errors.js";
 import { renderPersona } from "./persona.js";
 import { estimateTokens, renderMemorySeedBlock } from "./recall-seed.js";
 import { getReplayTokenCap, SUMMARY_TOKEN_CAP } from "./replay-window.js";
-import { coverageTurnTokens, launchContextFits } from "./summary-coverage.js";
+import {
+  CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE,
+  coverageTurnTokens,
+  launchContextFits
+} from "./summary-coverage.js";
 import { drainEngine } from "./session-runtime-helpers.js";
 import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 
@@ -167,9 +171,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
       .catch(() => undefined);
     await engine.kill().catch(() => undefined);
     deps.revokeMcpToken?.(sessionKey);
-    throw new CliChatUnavailableError(
-      "This conversation is too long to resume right now. It is being condensed, so try again shortly or start a new chat."
-    );
+    throw new CliChatUnavailableError(CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE);
   }
   const replayParts: string[] = [];
   if (memorySeed) replayParts.push(memorySeed.text);

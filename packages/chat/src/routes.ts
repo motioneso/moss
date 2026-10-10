@@ -59,6 +59,7 @@ import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes
 import { CliChatUnavailableError } from "./live/errors.js";
 import { knownAuthFailureMessage } from "./live/auth-errors.js";
 import { CLI_VERSION_TOO_OLD_MESSAGE, notifyCliVersionTooOld } from "./live/cli-version-errors.js";
+import { CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE } from "./live/summary-coverage.js";
 import { createCurrentViewReadService, type CurrentViewReadService } from "./live/current-view.js";
 import { PageContextStore } from "./live/page-context-store.js";
 import type { PassiveMemoryGraphRecallPort } from "./live/passive-retrieval.js";
@@ -991,6 +992,9 @@ function handleRouteError(error: unknown, reply: FastifyReply) {
     if (error.message === CLI_VERSION_TOO_OLD_MESSAGE) {
       notifyCliVersionTooOld();
       return reply.code(503).send({ error: CLI_VERSION_TOO_OLD_MESSAGE });
+    }
+    if (error.message === CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE) {
+      return reply.code(503).send({ error: CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE });
     }
     reply.log?.warn?.({ err: error }, "live chat unavailable");
     return reply.code(503).send({ error: "Live chat is currently unavailable on this host." });
