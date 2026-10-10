@@ -202,6 +202,34 @@ describe("settings.quietHours.set tool", () => {
     });
   });
 
+  it("retries a first save that races another first save and keeps both writes ordered", async () => {
+    // Separate pool so the two transactions really run at once against the absent row.
+    const raceDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
+    const raceContext = new DataContextRunner(raceDb);
+    const save = (start: string) =>
+      raceContext.withDataContext(
+        { actorUserId: ids.userD, requestId: `req:quiet-hours-race-${start}` },
+        (scopedDb) =>
+          quietHoursSetExecute(
+            scopedDb,
+            { enabled: true, start, end: "06:00", timezone: "UTC" },
+            toolCtx(ids.userD)
+          )
+      );
+    try {
+      expect(await readAs(ids.userD)).toBeNull();
+
+      const results = await Promise.allSettled([save("21:00"), save("23:00")]);
+
+      expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+      const stored = await readAs(ids.userD);
+      expect(stored?.revision).toBe(2);
+      expect(["21:00", "23:00"]).toContain((stored?.value as { start: string }).start);
+    } finally {
+      await raceDb.destroy();
+    }
+  });
+
   function readAs(actorUserId: string) {
     return dataContext.withDataContext(
       { actorUserId, requestId: "req:quiet-hours-read" },
