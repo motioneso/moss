@@ -140,10 +140,15 @@ function validateActionFamilies(
       errors.push(`action family ${family.id} defaultTier must appear in allowedTiers`);
       continue;
     }
+    if (family.freedom !== undefined && family.freedom !== "routine" && family.freedom !== "new") {
+      errors.push(`action family ${family.id} freedom must be "routine" or "new"`);
+      continue;
+    }
     families.push({
       id: family.id,
       label: family.label,
       description: family.description,
+      ...(family.freedom !== undefined ? { freedom: family.freedom } : {}),
       defaultTier: family.defaultTier,
       allowedTiers: family.allowedTiers as readonly MossActionPermissionTier[]
     });
