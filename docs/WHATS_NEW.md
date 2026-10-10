@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Medication times follow your clock format.** Medication times on Today now follow your 12-hour or 24-hour time setting. [PR #3337](https://github.com/motioneso/moss/pull/3337)
 - **Chat no longer flashes a connect prompt.** The chat drawer no longer briefly shows the connect-a-provider message when you open it after a model has been added. [PR #3329](https://github.com/motioneso/moss/pull/3329)
 
 #### Added
