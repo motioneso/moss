@@ -759,6 +759,7 @@ tests/unit/core-settings-design.test.tsx,C4,registered-new,,Implementation reser
 tests/unit/core-source-tray-design.test.tsx,C5,reserved,,Approved disjoint SourceTray nonmodal keyboard/name/trigger regression; no active chat CSS edits
 tests/unit/design-tokens-contrast.test.ts,F0,reserved,,Shared component/token behavior tests
 tests/unit/design-tokens-parity.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/email-settings-draft-policy.test.tsx,L6,reserved,,Confirmed-settings fixture update for approved unknown-read control gating; preserve policy assertions
 tests/unit/evening-planning-frame.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/evening-planning.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/evening-report-split.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
