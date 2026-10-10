@@ -147,6 +147,45 @@ test("the Alerts & quiet hours editor saves, survives a failed save, and governs
   await expect(page.getByText("Unsaved changes")).toHaveCount(0);
   console.log(`[3130 overnight] saved and reloaded 22:00-07:00, ${TIME_ZONE} via profile zone`);
 
+  // The saved editor at desktop and phone width in light, dark and teal. Pictures of the quiet
+  // column only are bounded evidence; the layout asserts carry the check.
+  const desktop = page.viewportSize();
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of [
+      { name: "light", mode: "light", park: null },
+      { name: "dark", mode: "dark", park: null },
+      { name: "teal", mode: "light", park: "teal" }
+    ] as const) {
+      await page.evaluate((t) => {
+        document.documentElement.setAttribute("data-color-mode", t.mode);
+        if (t.park) document.documentElement.setAttribute("data-theme", t.park);
+        else document.documentElement.removeAttribute("data-theme");
+      }, theme);
+      const column = page.locator(".alerts-pane__quiet");
+      await expect(column.getByText(savedOvernight)).toBeVisible();
+      await expect(column.getByRole("button", { name: "Save quiet hours" })).toBeVisible();
+      const fromBox = await from.boundingBox();
+      const untilBox = await until.boundingBox();
+      expect(fromBox && untilBox && Math.abs(fromBox.y - untilBox.y) < 2).toBe(true);
+      expect(fromBox && untilBox && untilBox.x - (fromBox.x + fromBox.width) >= 8).toBe(true);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+      await column.screenshot({
+        path: test.info().outputPath(`quiet-hours-${width}-${theme.name}.png`)
+      });
+    }
+  }
+  await page.evaluate(() => {
+    document.documentElement.setAttribute("data-color-mode", "light");
+    document.documentElement.removeAttribute("data-theme");
+  });
+  if (desktop) await page.setViewportSize(desktop);
+  console.log(`[3130 look] desktop and phone, light/dark/teal: fields side by side, no overflow`);
+  console.log(`[3130 look] pictures in ${test.info().outputDir}`);
+
   // 2. The same start and end time is refused on screen and nothing is sent.
   const versionBefore = (await quietHours(page)).version;
   await until.fill("22:00");
