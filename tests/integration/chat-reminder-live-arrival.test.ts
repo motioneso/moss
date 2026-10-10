@@ -128,7 +128,6 @@ async function saveDue(actorUserId: string = ids.userA, text = "stretch"): Promi
   const saved = await asOwner(actorUserId, (db) =>
     reminders.create(db, { threadId, sourceMessageId, delaySeconds: 60, text })
   );
-  let reservedMessageId = "";
   await bootstrap.query("BEGIN");
   try {
     await bootstrap.query("SET LOCAL session_replication_role = replica");
@@ -137,13 +136,13 @@ async function saveDue(actorUserId: string = ids.userA, text = "stretch"): Promi
        RETURNING reserved_message_id`,
       [saved.id]
     );
-    reservedMessageId = updated.rows[0]!.reserved_message_id;
     await bootstrap.query("COMMIT");
+    const reservedMessageId = updated.rows[0]!.reserved_message_id;
+    return { id: saved.id, version: saved.version, threadId, reservedMessageId };
   } catch (error) {
     await bootstrap.query("ROLLBACK");
     throw error;
   }
-  return { id: saved.id, version: saved.version, threadId, reservedMessageId };
 }
 
 function deliver(saved: DueSaved, actorUserId: string = ids.userA) {

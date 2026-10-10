@@ -64,7 +64,7 @@ export function ChatDrawer(props: {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly records: readonly TranscriptRecord[];
-  readonly clearRecords: () => void;
+  readonly clearRecords: (mainThreadId?: string) => void;
   readonly streamErrorCount: number;
   readonly selectionPending?: boolean;
   readonly isFounder: boolean;
@@ -136,7 +136,7 @@ export function ChatDrawer(props: {
       if (!transition.isCurrent(vars.transition)) return;
       selection.confirm(vars.threadId, vars.transition);
       callerDraft.bind(vars.threadId, vars.surface, vars.transition.generation, true);
-      props.clearRecords();
+      props.clearRecords(vars.threadId === mainThreadId ? vars.threadId : undefined);
       privateModeDecidedLocally.current = true;
       setPrivateMode(false);
       setPrivateEnded(false);

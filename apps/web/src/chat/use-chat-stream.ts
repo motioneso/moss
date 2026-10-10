@@ -124,7 +124,7 @@ export function useChatStream(
   enabled = true
 ): {
   readonly records: readonly TranscriptRecord[];
-  readonly clearRecords: () => void;
+  readonly clearRecords: (mainThreadId?: string) => void;
   readonly streamErrorCount: number;
   readonly selectionPending: boolean;
 } {
@@ -140,7 +140,14 @@ export function useChatStream(
   const streamScope = useRef({ surface, enabled });
   streamScope.current = { surface, enabled };
 
-  const clearRecords = useCallback(() => {
+  // A switch clears the log without re-hydrating, so the caller names Main when it lands there.
+  // Any other chat drops background messages and never catches up Main's reminders.
+  const clearRecords = useCallback((mainThreadId?: string) => {
+    const onMain =
+      mainThreadId !== undefined &&
+      (streamScope.current.surface ?? DEFAULT_CHAT_SURFACE) === DEFAULT_CHAT_SURFACE;
+    hydratedMainThread.current = onMain ? mainThreadId : undefined;
+    hydratedSideThread.current = !onMain;
     hydrationGeneration.current += 1;
     setRecords([]);
     setStreamGeneration(hydrationGeneration.current);

@@ -251,6 +251,47 @@ describe("Main stream reconnect", () => {
     expect(text).not.toContain("Reminder: stretch");
   });
 
+  it("drops reminders after a switch away from Main and shows them again on return", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [mainThread] });
+    vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [reminderMessage] });
+    let clear!: (mainThreadId?: string) => void;
+    function SwitchProbe() {
+      const { records, clearRecords } = useChatStream("drawer" as ChatSurface);
+      clear = clearRecords;
+      return createElement("div", null, records.map((record) => record.text).join("|"));
+    }
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(SwitchProbe));
+    });
+    await vi.waitFor(() =>
+      expect(JSON.stringify(renderer!.toJSON())).toContain("Reminder: stretch")
+    );
+    const later = { ...reminder, messageId: "reminder-2", text: "Reminder: drink water" };
+
+    // A switch to a side chat neither shows a live reminder nor catches up Main's history.
+    await act(async () => clear());
+    const side = FakeEventSource.instances.at(-1)!;
+    await act(async () => {
+      side.onopen?.();
+      side.onmessage?.({ data: JSON.stringify(later) });
+      side.onerror?.();
+      side.onopen?.();
+    });
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain("Reminder");
+    expect(listChatThreadMessages).toHaveBeenCalledTimes(1);
+
+    await act(async () => clear("main-thread"));
+    const main = FakeEventSource.instances.at(-1)!;
+    expect(main).not.toBe(side);
+    await act(async () => {
+      main.onopen?.();
+      main.onmessage?.({ data: JSON.stringify(later) });
+    });
+    expect(JSON.stringify(renderer!.toJSON())).toContain("Reminder: drink water");
+  });
+
   it("does not catch up a side chat stream", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const side = { ...mainThread, id: "side-thread", isMain: false };
