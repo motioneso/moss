@@ -6,7 +6,10 @@ import type { PutWellnessAiConsentRequest, WellnessAiConsentResponse } from "@mo
 
 const AI_CONSENT_KEY = ["wellness", "ai-consent"] as const;
 
-async function requestJson<T>(path: string, init?: RequestInit & { body?: unknown }): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  init?: Omit<RequestInit, "body"> & { body?: unknown }
+): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("accept", "application/json");
   if (init?.body !== undefined) headers.set("content-type", "application/json");

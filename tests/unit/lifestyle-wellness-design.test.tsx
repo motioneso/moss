@@ -277,11 +277,11 @@ describe("Wellness shared dialog consumers", () => {
           document.getElementById(dialog.getAttribute("aria-labelledby")!)?.textContent
         ).toBeTruthy();
         expect(dialog.contains(document.activeElement)).toBe(true);
-        await act(async () =>
+        await act(async () => {
           document.activeElement!.dispatchEvent(
             new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
-          )
-        );
+          );
+        });
         expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(document.activeElement).toBe(trigger);
       } finally {
