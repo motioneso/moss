@@ -497,6 +497,31 @@ export function sqlStore(db: FinanceDb): FinanceStore {
           "WHERE id = $1 AND status = 'open'",
         [draftId, startedAt]
       );
+    },
+
+    async saveDraftLine(draftId, line) {
+      await db.query(
+        "INSERT INTO app.finance_budget_draft_lines (owner_user_id, draft_id, category_key, " +
+          "group_name, category_name, basis_monthly_cents, proposed_cents, adjusted_cents, " +
+          "adjusted_by, dropped) " +
+          "SELECT app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9 " +
+          "WHERE EXISTS (SELECT 1 FROM app.finance_budget_drafts WHERE id = $1 AND status = 'open') " +
+          "ON CONFLICT (owner_user_id, draft_id, category_key) DO UPDATE SET " +
+          "group_name = EXCLUDED.group_name, category_name = EXCLUDED.category_name, " +
+          "adjusted_cents = EXCLUDED.adjusted_cents, adjusted_by = EXCLUDED.adjusted_by, " +
+          "dropped = EXCLUDED.dropped",
+        [
+          draftId,
+          line.categoryKey,
+          line.groupName,
+          line.categoryName,
+          line.basisMonthlyCents,
+          line.proposedCents,
+          line.adjustedCents,
+          line.adjustedBy,
+          line.dropped
+        ]
+      );
     }
   } satisfies FinanceStore;
 }

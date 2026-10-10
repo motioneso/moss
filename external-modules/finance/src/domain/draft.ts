@@ -71,6 +71,54 @@ export function draftUnplannedCents(
   return draft.monthlyIncomeCents - draftTotalCents(draft.lines);
 }
 
+/** Groups a draft line can sit in. */
+export const DRAFT_LINE_GROUPS = ["Bills", "Everyday", "Fun", "Savings"] as const;
+/** Category keys are short lowercase slugs. */
+export const DRAFT_CATEGORY_KEY_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+/** Largest plan amount a line accepts (cents). */
+export const DRAFT_AMOUNT_MAX_CENTS = 100_000_000;
+
+export interface DraftLineEdit {
+  amountCents?: number;
+  categoryName?: string;
+  groupName?: string;
+  dropped?: boolean;
+}
+
+/**
+ * Apply one edit to a draft line and return the new line. An amount un-drops the line
+ * unless the same edit says otherwise. An edit that sets an amount or drops the line
+ * records who made it; a rename or regroup alone leaves that record alone.
+ * A line that does not exist yet starts empty, so the caller must supply its name,
+ * group and amount.
+ */
+export function applyLineEdit(
+  categoryKey: string,
+  existing: DraftLine | undefined,
+  edit: DraftLineEdit,
+  by: "user" | "moss"
+): DraftLine {
+  const changesPlan = edit.amountCents !== undefined || edit.dropped !== undefined;
+  const base: DraftLine = existing ?? {
+    categoryKey,
+    groupName: "",
+    categoryName: "",
+    basisMonthlyCents: 0,
+    proposedCents: 0,
+    adjustedCents: null,
+    adjustedBy: null,
+    dropped: false
+  };
+  return {
+    ...base,
+    groupName: edit.groupName ?? base.groupName,
+    categoryName: edit.categoryName ?? base.categoryName,
+    adjustedCents: edit.amountCents ?? base.adjustedCents,
+    adjustedBy: changesPlan ? by : base.adjustedBy,
+    dropped: edit.dropped ?? (edit.amountCents !== undefined ? false : base.dropped)
+  };
+}
+
 function median(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);

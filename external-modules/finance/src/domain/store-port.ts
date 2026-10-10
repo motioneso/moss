@@ -5,7 +5,7 @@
 // Domain files never import @moss/* (bundler independence — see kv-port.ts).
 import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetLedger } from "./envelope.js";
-import type { BudgetDraft, DraftBuild } from "./draft.js";
+import type { BudgetDraft, DraftBuild, DraftLine } from "./draft.js";
 
 /**
  * One row of the activity trail (#3174). `params` and `undo` hold ids, cents
@@ -80,4 +80,9 @@ export interface FinanceStore {
   createDraft(build: DraftBuild, createdAt: string): Promise<string>;
   /** Mark an open draft started. A draft that is not open is left alone. */
   markDraftStarted(draftId: string, startedAt: string): Promise<void>;
+  /**
+   * Insert or replace one line of an open draft. A draft that is not open (started,
+   * discarded or unknown) is left alone, so a late edit cannot change a started budget.
+   */
+  saveDraftLine(draftId: string, line: DraftLine): Promise<void>;
 }
