@@ -1,14 +1,9 @@
-import { join } from "node:path";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { captureVisualArtifact } from "./visual-artifacts.js";
+import { expect, test, type Page } from "@playwright/test";
 import { meetingChatSurface, type MeetingRecord } from "@moss/shared";
 import { mockApi } from "./mock-api.js";
 import { modulesResponse, myModulesResponse } from "./mock-modules.js";
 import { historyItem } from "../unit/fixtures/meeting-history.js";
-
-function visualPath(testInfo: TestInfo, filename: string): string {
-  const directory = process.env.MOSS_VISUAL_ARTIFACT_DIR;
-  return directory ? join(directory, filename) : testInfo.outputPath(filename);
-}
 
 // Real Meetings and shell source, fictional data and no live capture. These checks verify
 // presentation and keyboard behavior only, never recording authority or live-path acceptance.
@@ -220,7 +215,7 @@ async function meetingsFixture(page: Page, context: "available" | "denied" = "av
 for (const width of [1440, 1080, 768, 390, 320]) {
   test(`Meetings keeps its minimal workspace and styled Settings link at ${width}`, async ({
     page
-  }, testInfo) => {
+  }) => {
     await page.setViewportSize({ width, height: 950 });
     await meetingsFixture(page);
     await page.goto(`/meetings?id=${meeting.id}`);
@@ -237,10 +232,7 @@ for (const width of [1440, 1080, 768, 390, 320]) {
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth
       )
     ).toBeLessThanOrEqual(1);
-    await page.screenshot({
-      path: visualPath(testInfo, `meetings-workspace-${width}.png`),
-      fullPage: true
-    });
+    await captureVisualArtifact(page, `meetings-workspace-${width}.png`);
     if (width <= 390) {
       const start = page.getByRole("button", { name: "Start recording", exact: true });
       await expect(start).toBeVisible();
@@ -256,10 +248,7 @@ for (const width of [1440, 1080, 768, 390, 320]) {
         { x: startBox!.x + startBox!.width / 2, y: startBox!.y + startBox!.height / 2 }
       );
       expect(coveredByDrawer).toBe(true);
-      await page.screenshot({
-        path: visualPath(testInfo, `meetings-chat-drawer-${width}.png`),
-        fullPage: true
-      });
+      await captureVisualArtifact(page, `meetings-chat-drawer-${width}.png`);
       await page.keyboard.press("Escape");
       await expect(drawer).toHaveCount(0);
       await expect(notes).toHaveValue(meeting.personalNotes);

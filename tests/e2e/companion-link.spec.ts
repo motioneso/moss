@@ -1,12 +1,7 @@
-import { join } from "node:path";
-import { expect, test, type TestInfo } from "@playwright/test";
+import { captureVisualArtifact } from "./visual-artifacts.js";
+import { expect, test } from "@playwright/test";
 
 import { createMockConnectorProviders, mockApi, type MockApiState } from "./mock-api.js";
-
-function visualPath(testInfo: TestInfo, filename: string): string {
-  const directory = process.env.MOSS_VISUAL_ARTIFACT_DIR;
-  return directory ? join(directory, filename) : testInfo.outputPath(filename);
-}
 
 // The page a Mac sends someone to when it wants to link (#2560). It runs against the mock API
 // with a pending request, and checks what the person is shown before they agree and what the
@@ -101,7 +96,7 @@ test("a long Mac name stays within the phone viewport before and after approval"
 // native linking, device permissions and live recording still require separate Mac proof.
 test("request checking and failed transport are announced with a read-only retry", async ({
   page
-}, testInfo) => {
+}) => {
   await page.setViewportSize({ width: 320, height: 850 });
   await mockApi(page, {
     authenticated: true,
@@ -123,10 +118,7 @@ test("request checking and failed transport are announced with a read-only retry
   release();
   await expect(page.getByRole("alert")).toContainText("Couldn't check this request.");
   await expect(page.getByText("That request is no longer open")).toHaveCount(0);
-  await page.screenshot({
-    path: visualPath(testInfo, "link-request-transport-failure-320.png"),
-    fullPage: true
-  });
+  await captureVisualArtifact(page, "link-request-transport-failure-320.png");
   let decisions = 0;
   await page.route("**/api/companion/pair/decide", async (route) => {
     decisions += 1;
@@ -172,9 +164,7 @@ test("a closed request is distinct from a transport problem", async ({ page }) =
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
 });
 
-test("an uncertain answer requires a status check before another decision", async ({
-  page
-}, testInfo) => {
+test("an uncertain answer requires a status check before another decision", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
   await mockApi(page, {
     authenticated: true,
@@ -196,10 +186,7 @@ test("an uncertain answer requires a status check before another decision", asyn
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Approving this Mac" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Decline", exact: true })).toBeDisabled();
-  await page.screenshot({
-    path: visualPath(testInfo, "link-request-approving-390.png"),
-    fullPage: true
-  });
+  await captureVisualArtifact(page, "link-request-approving-390.png");
   release();
   await expect(page.getByRole("alert")).toContainText("Couldn't confirm your answer");
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeDisabled();
