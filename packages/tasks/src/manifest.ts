@@ -136,7 +136,7 @@ export const tasksModuleManifest = {
       id: "tasks.module-settings",
       label: "Tasks",
       description:
-        "Choose whether your assistant can create, update, schedule, and complete tasks from chat without asking first.",
+        "Choose which task actions your assistant may perform from chat without asking. Unknown settings stay unavailable; Retry reloads failed reads. Failed refreshes preserve confirmed choices, and failed saves keep the previous value.",
       path: "/settings?section=modules&module=tasks",
       scope: "user",
       order: 10,
@@ -864,12 +864,12 @@ export const tasksModuleManifest = {
     {
       id: "tasks.details_window",
       description:
-        "Open a task from List or Grid to edit it in the Task details window. The close button (X) is in the top right corner. Closing it, or Cancel or Escape, discards unsaved edits to the task's fields; subtasks, tags and comments save as you go."
+        "Open a task from List or Grid in Task details. X, Cancel or Escape discards unsaved field edits; subtasks, tags and comments save as you go. Each read distinguishes loading and failure with Retry; refresh failure keeps loaded fields."
     },
     {
       id: "tasks.details_save",
       description:
-        "In the Task details window, Save changes waits until the task has loaded. A failed save says Could not save, try again, and keeps your edits. Adding again resumes, not duplicates. Repeats shows the stored repeat."
+        "Save changes waits for the task to load. Failed saves keep edits; adding again resumes without duplicating. Repeats shows the stored repeat. Failed comment, tag and subtask writes explain the error beside the action and keep draft text."
     },
     {
       id: "tasks.breakdown",
