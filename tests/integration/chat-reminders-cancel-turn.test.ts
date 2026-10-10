@@ -10,12 +10,17 @@ import { createPgBossClient } from "@moss/jobs";
 
 import { CHAT_DELIVER_REMINDER_QUEUE } from "../../packages/chat/src/reminders/deliver.js";
 import type { ReminderTurnPlan } from "../../packages/chat/src/reminders/turn.js";
-import { REMINDER_MANAGE_MAIN_ONLY_REPLY } from "../../packages/chat/src/reminders/wording.js";
+import {
+  REMINDER_MANAGE_MAIN_ONLY_REPLY,
+  reminderCancelReply
+} from "../../packages/chat/src/reminders/wording.js";
 import { ChatRepository } from "../../packages/chat/src/repository.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 // #3310: list and cancel run through the chat's own turn writer, in the same transaction as the
 // user's message and the code-written reply, so a refused or stopped turn changes no reminder.
+
+const NOT_FOUND_REPLY = reminderCancelReply({ kind: "not_found" });
 
 const { Client } = pg;
 
@@ -162,7 +167,7 @@ describe("listing and cancelling reminders from a chat turn (#3310)", () => {
       { threadId }
     );
     assertNotStopped(stored);
-    expect(stored?.reply).toMatch(/^Waiting:\n- stretch, in (9|10) minutes/);
+    expect(stored?.reply).toMatch(/^Chat reminders waiting:\n- stretch, in (9|10) minutes/);
     expect(stored?.origin).toEqual({
       kind: "reminder",
       event: "listed",
@@ -177,7 +182,7 @@ describe("listing and cancelling reminders from a chat turn (#3310)", () => {
       threadId
     });
     assertNotStopped(stored);
-    expect(stored?.reply).toBe("I couldn't find a reminder like that, so nothing changed.");
+    expect(stored?.reply).toBe(NOT_FOUND_REPLY);
     expect(stored?.origin).toMatchObject({ event: "cancel_refused", reminderId: null });
   });
 
@@ -213,7 +218,7 @@ describe("listing and cancelling reminders from a chat turn (#3310)", () => {
       threadId
     });
     assertNotStopped(stored);
-    expect(stored?.reply).toBe("I couldn't find a reminder like that, so nothing changed.");
+    expect(stored?.reply).toBe(NOT_FOUND_REPLY);
     expect(await stateOf(reminderId)).toBe("queued");
   });
 

@@ -149,6 +149,14 @@ async function readRow(reminderId: string) {
   return result.rows[0]!;
 }
 
+async function readReservation(reminderId: string) {
+  const result = await bootstrap.query<{ reserved_message_id: string }>(
+    "SELECT reserved_message_id FROM app.chat_reminders WHERE id = $1",
+    [reminderId]
+  );
+  return { reservedMessageId: result.rows[0]!.reserved_message_id };
+}
+
 async function deliveredMessages(reminderId: string) {
   const result = await bootstrap.query<{ id: string }>(
     `SELECT m.id FROM app.chat_messages m
@@ -405,20 +413,66 @@ describe("what the database refuses", () => {
       )
     ).rejects.toThrow(/row-level security/);
     expect((await readRow(saved.id)).state).toBe("queued");
+
+    // The worker can only see queued rows for update, so a delivered one is untouched.
+    const delivered = await save(ids.userA, "worker may not dismiss");
+    await makeDue(delivered.id);
+    await deliver(delivered, ids.userA);
+    const dismissed = await asWorker(ids.userA, (db) =>
+      db.db
+        .updateTable("app.chat_reminders")
+        .set({ context_state: "dismissed" })
+        .where("id", "=", delivered.id)
+        .executeTakeFirst()
+    );
+    expect(dismissed.numUpdatedRows).toBe(0n);
+    expect((await readRow(delivered.id)).context_state).toBe("pending");
   });
 
   it("does not let the app forge a delivery", async () => {
     const saved = await save(ids.userA, "app may not deliver");
+    const markDelivered = (db: DataContextDb) =>
+      db.db
+        .updateTable("app.chat_reminders")
+        .set({ state: "delivered" })
+        .where("id", "=", saved.id)
+        .execute();
+    await expect(asOwner(ids.userA, markDelivered)).rejects.toThrow(
+      /delivery needs its reserved message/
+    );
+
+    // With the reserved message written by the app itself, the policy still refuses.
+    const { reservedMessageId } = await readReservation(saved.id);
+    await expect(
+      asOwner(ids.userA, async (db) => {
+        await chat.insertReservedAssistantMessage(db, {
+          id: reservedMessageId,
+          threadId: saved.threadId,
+          body: "forged",
+          origin: {
+            version: 1,
+            kind: "reminder",
+            event: "delivered",
+            reminderId: saved.id,
+            late: false
+          },
+          now: new Date()
+        });
+        await markDelivered(db);
+      })
+    ).rejects.toThrow(/row-level security/);
+    expect((await readRow(saved.id)).state).toBe("queued");
+    expect(await messageExists(reservedMessageId)).toBe(false);
+
     await expect(
       asOwner(ids.userA, (db) =>
         db.db
           .updateTable("app.chat_reminders")
-          .set({ state: "delivered", delivered_at: sql<Date>`now()`, late: false })
+          .set({ delivered_at: sql<Date>`now()`, late: false })
           .where("id", "=", saved.id)
           .execute()
       )
-    ).rejects.toThrow(/delivery needs its reserved message/);
-    expect((await readRow(saved.id)).state).toBe("queued");
+    ).rejects.toThrow(/permission denied/);
   });
 
   it("does not let the app mark a reminder failed", async () => {
@@ -478,7 +532,7 @@ describe("what the database refuses", () => {
     expect((await readRow(delivered.id)).state).toBe("delivered");
   });
 
-  it("does not let a cancel change the reminder text", async () => {
+  it("does not let the app write any column but state and context", async () => {
     const saved = await save(ids.userA, "keep my words");
     await expect(
       asOwner(ids.userA, (db) =>
@@ -488,7 +542,7 @@ describe("what the database refuses", () => {
           .where("id", "=", saved.id)
           .execute()
       )
-    ).rejects.toThrow(/identity cannot be changed/);
+    ).rejects.toThrow(/permission denied/);
     expect(await readRow(saved.id)).toMatchObject({
       state: "queued",
       reminder_text: "keep my words"

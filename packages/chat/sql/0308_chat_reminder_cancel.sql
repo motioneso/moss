@@ -80,4 +80,4 @@ CREATE POLICY chat_reminders_owner_cancel ON app.chat_reminders
     AND (state = 'cancelled' OR (state = 'delivered' AND context_state = 'dismissed'))
   );
 
-GRANT UPDATE ON app.chat_reminders TO jarvis_app_runtime;
+GRANT UPDATE (state, context_state) ON app.chat_reminders TO jarvis_app_runtime;

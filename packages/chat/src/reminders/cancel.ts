@@ -19,7 +19,13 @@ export interface ReminderList {
 }
 
 export type ReminderCancelResult =
-  | { readonly kind: "cancelled"; readonly reminder: OwnedReminder }
+  | {
+      readonly kind: "cancelled";
+      readonly reminder: OwnedReminder;
+
+      /** Other waiting reminders with the same words, left in place. */
+      readonly alike: number;
+    }
   | { readonly kind: "already_cancelled"; readonly reminder: OwnedReminder }
   | { readonly kind: "already_delivered"; readonly reminder: OwnedReminder }
   | { readonly kind: "already_failed"; readonly reminder: OwnedReminder }
@@ -36,9 +42,7 @@ export async function listReminders(
   const now = await reminders.now(scopedDb);
   return {
     now,
-    open: owned
-      .filter((reminder) => reminder.state === "queued")
-      .sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime()),
+    open: bySoonest(owned.filter((reminder) => reminder.state === "queued")),
     finished: owned
       .filter((reminder) => reminder.state !== "queued")
       .slice(0, REMINDER_LIST_FINISHED_LIMIT)
@@ -46,8 +50,8 @@ export async function listReminders(
 }
 
 /**
- * Runs inside the turn's transaction, so a stopped turn rolls the cancel back. A null target
- * acts only when exactly one reminder is waiting.
+ * Runs inside the turn's transaction, so a stopped turn rolls the cancel back. Waiting reminders
+ * are matched first; a finished match only explains what already happened to it.
  */
 export async function cancelReminder(
   scopedDb: DataContextDb,
@@ -55,22 +59,39 @@ export async function cancelReminder(
   target: string | null
 ): Promise<ReminderCancelResult> {
   const owned = await reminders.listOwned(scopedDb);
+  const waiting = bySoonest(owned.filter((reminder) => reminder.state === "queued"));
 
   if (target === null) {
-    const waiting = owned.filter((reminder) => reminder.state === "queued");
-    if (waiting.length === 0) return { kind: "none_waiting" };
     if (waiting.length > 1) return { kind: "needs_target", open: waiting };
-    return settle(scopedDb, reminders, waiting[0]!);
+    if (waiting.length === 1) return settle(scopedDb, reminders, waiting[0]!);
+
+    // Just after delivery, the one reminder still holding a slot is the one the user means.
+    const holding = owned.filter(
+      (reminder) => reminder.state === "delivered" && reminder.contextState === "pending"
+    );
+    return holding.length === 1
+      ? settle(scopedDb, reminders, holding[0]!)
+      : { kind: "none_waiting" };
   }
 
-  const matches = matchTarget(owned, target);
-  if (matches.length === 0) return { kind: "not_found" };
+  const waitingMatches = matchTarget(waiting, target);
+  if (waitingMatches.length > 1 && !sameText(waitingMatches)) {
+    return { kind: "ambiguous", matches: waitingMatches };
+  }
+  if (waitingMatches.length > 0) {
+    // Reminders with the same words are interchangeable, so the soonest one goes.
+    const result = await settle(scopedDb, reminders, waitingMatches[0]!);
+    return result.kind === "cancelled" ? { ...result, alike: waitingMatches.length - 1 } : result;
+  }
 
-  const waiting = matches.filter((reminder) => reminder.state === "queued");
-  if (waiting.length > 1) return { kind: "ambiguous", matches: waiting };
-
-  // With nothing waiting, the newest finished match says what already happened to it.
-  return settle(scopedDb, reminders, waiting[0] ?? matches[0]!);
+  // Newest first, so a finished match reports the latest reminder with those words.
+  const finishedMatches = matchTarget(
+    owned.filter((reminder) => reminder.state !== "queued"),
+    target
+  );
+  return finishedMatches.length > 0
+    ? settle(scopedDb, reminders, finishedMatches[0]!)
+    : { kind: "not_found" };
 }
 
 /** Exact text matches win; otherwise every reminder whose text contains the target. */
@@ -83,6 +104,15 @@ export function matchTarget(
   const exact = owned.filter((reminder) => normalizeReminderText(reminder.text) === wanted);
   if (exact.length > 0) return exact;
   return owned.filter((reminder) => normalizeReminderText(reminder.text).includes(wanted));
+}
+
+function bySoonest(reminders: readonly OwnedReminder[]): OwnedReminder[] {
+  return [...reminders].sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
+}
+
+function sameText(reminders: readonly OwnedReminder[]): boolean {
+  const first = normalizeReminderText(reminders[0]!.text);
+  return reminders.every((reminder) => normalizeReminderText(reminder.text) === first);
 }
 
 export function normalizeReminderText(text: string): string {
@@ -104,7 +134,7 @@ async function settle(
   switch (locked.state) {
     case "queued":
       await reminders.markCancelled(scopedDb, locked.id);
-      return { kind: "cancelled", reminder: { ...locked, state: "cancelled" } };
+      return { kind: "cancelled", reminder: { ...locked, state: "cancelled" }, alike: 0 };
     case "delivered":
       if (locked.contextState === "pending") {
         await reminders.dismissContext(scopedDb, locked.id);

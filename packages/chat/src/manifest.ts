@@ -173,16 +173,16 @@ export const chatModuleManifest = {
     {
       id: "chat.reminder_list",
       description:
-        "In Main chat, 'list my reminders' shows waiting reminders with time left, then up to 10 recent " +
-        "ones marked sent, cancelled or couldn't be sent. Only your own reminders; not in other chats.",
+        "In Main chat, 'list my reminders' shows reminders set in chat: waiting ones with time left, then " +
+        "up to 10 recent ones marked sent, cancelled or couldn't be sent. Task reminders are not included.",
       featureFlagId: "chat.module"
     },
     {
       id: "chat.reminder_cancel",
       description:
-        "In Main chat, 'cancel the reminder to stretch' stops a waiting reminder so it never arrives. " +
-        "If it was already sent, Moss says so and it stops counting toward the limit of 20. " +
-        "When several match, Moss names them and cancels none.",
+        "In Main chat, 'cancel the reminder to stretch' stops a waiting chat reminder so it never arrives. " +
+        "If already sent, Moss says so and frees its place under the limit of 20. " +
+        "If different reminders match, Moss names them and cancels none.",
       featureFlagId: "chat.module"
     },
     {

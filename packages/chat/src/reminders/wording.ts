@@ -73,17 +73,17 @@ const FINISHED_LABEL: Readonly<Record<Exclude<ChatReminderState, "queued">, stri
 
 export function reminderListReply(list: ReminderList): string {
   if (list.open.length === 0 && list.finished.length === 0) {
-    return "You don't have any reminders.";
+    return "You haven't set any reminders in chat.";
   }
   const lines: string[] = [];
   lines.push(
     list.open.length === 0
-      ? "Nothing is waiting."
-      : `Waiting:\n${list.open.map((reminder) => `- ${reminder.text}, ${timeLeft(reminder.dueAt, list.now)}`).join("\n")}`
+      ? "No chat reminders are waiting."
+      : `Chat reminders waiting:\n${list.open.map((reminder) => `- ${reminder.text}, ${timeLeft(reminder.dueAt, list.now)}`).join("\n")}`
   );
   if (list.finished.length > 0) {
     lines.push(
-      `Recent:\n${list.finished
+      `Recent chat reminders:\n${list.finished
         .map((reminder) => `- ${reminder.text} (${finishedLabel(reminder.state)})`)
         .join("\n")}`
     );
@@ -94,7 +94,9 @@ export function reminderListReply(list: ReminderList): string {
 export function reminderCancelReply(result: ReminderCancelResult): string {
   switch (result.kind) {
     case "cancelled":
-      return `Cancelled. I won't remind you: ${result.reminder.text}`;
+      return result.alike === 0
+        ? `Cancelled. I won't remind you: ${result.reminder.text}`
+        : `Cancelled the soonest one: ${result.reminder.text}\n${result.alike} more with the same words ${result.alike === 1 ? "is" : "are"} still waiting.`;
     case "already_cancelled":
       return `That reminder was already cancelled: ${result.reminder.text}`;
     case "already_delivered":
@@ -104,11 +106,11 @@ export function reminderCancelReply(result: ReminderCancelResult): string {
     case "ambiguous":
       return `More than one reminder matches, so I didn't cancel any. Which one?\n${bullets(result.matches)}`;
     case "needs_target":
-      return `You have ${result.open.length} reminders waiting. Which one should I cancel?\n${bullets(result.open)}`;
+      return `You have ${result.open.length} chat reminders waiting. Which one should I cancel?\n${bullets(result.open)}`;
     case "not_found":
-      return "I couldn't find a reminder like that, so nothing changed.";
+      return "I couldn't find a chat reminder like that, so nothing changed. I can only cancel reminders you set here in chat.";
     case "none_waiting":
-      return "You don't have any reminders waiting, so nothing changed.";
+      return "You don't have any chat reminders waiting, so nothing changed.";
   }
 }
 
