@@ -287,11 +287,39 @@ Native production code is unchanged. Local Linux checks do not replace the recor
 macOS, real-data live-path or capture/accessibility gates. No release or merge
 acceptance is implied.
 
+## Final bounded class-guard batch
+
+The remaining F-07 module-local class coverage is now implemented after its consumer
+cleanup prerequisites. The existing UI-class gate checks direct JSX `className`
+attributes in the six audited module roots. It validates literal and supported
+finite expressions against owned styles and explicit, file-bounded contracts.
+
+The gate rejects unsupported shadowing, array aliases/escapes, closure mutation,
+unsafe coercions and arbitrary callbacks instead of silently accepting an unknown
+class. Six independent negative reproductions were repaired; the integrated
+real-tree assertion and all thirty guard tests pass with the consumer cleanup.
+Real UAT/test hooks have narrow, documented exceptions rather than wildcard skips.
+
+This is deliberately bounded static coverage. JSX spreads, other props, runtime
+`classList` changes, arbitrary external CSS and the correctness of declared finite
+runtime domains are not proved by it. It is not universal CSS or accessibility
+certification. Source review approved the full corrective sequence and the precise
+coverage documentation.
+
+The final owner freshness check keeps main at the recorded merged baseline and
+preserves active work. The new trust/approval branch overlaps only separate Finance
+UAT locator lines; its behavior assertions apply cleanly and are not imported.
+Other approved disjoint patches remain compatible, apart from the explicitly
+pre-existing assistant-name fixture conflict and the preserved current Finance
+manifest version. Remaining Conversations/Alerts replacements, Meals/Food and Job
+Search replacements, native branding, Reports retirement and real-data/native/AT
+proof are still held or unverified, not counted as completed repairs.
+
 ## Explicit outstanding gates
 
 - The original foundation-stage requirement for consumer source/test/browser
   review and same-PR metadata is satisfied for the included batches above. The
-  bounded module-local class guard remains a separate dependent followup.
+  bounded module-local class guard is closed by the final batch described above.
 - Active PR-owned Conversations/Alerts changes are not imported or rewritten by
   this foundation batch. Relevant disjoint patch compatibility is recorded in the
   freshness handoff; overlapping future changes still need reconciliation.
