@@ -49,8 +49,15 @@ describe("finance manifest app map (#3177)", () => {
     expect(countTopLevelKeys(readFileSync(manifestPath, "utf8"), "appMap")).toBe(1);
   });
 
-  it("promises no history-built first budget, which phase 1 does not do (review A4)", () => {
-    expect(readFileSync(manifestPath, "utf8")).not.toMatch(/three months|months of history/i);
+  it("declares the history-built first budget and no assistant tool that starts one (#3180)", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      appMap: { features: { id: string }[] };
+      assistantTools: { name: string; handler?: string }[];
+    };
+    expect(manifest.appMap.features.map((f) => f.id)).toContain("finance.first-budget");
+    expect(manifest.assistantTools.map((t) => t.name)).toContain("finance.budget.draft.get");
+    expect(manifest.assistantTools.filter((t) => t.handler === "draft.start")).toEqual([]);
+    expect(manifest.assistantTools.filter((t) => t.handler === "draft.build")).toEqual([]);
   });
 
   it("the duplicate-key check really counts a repeated block", () => {
@@ -90,6 +97,7 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.transaction.categorize", "transaction.categorize"],
         ["finance.transaction.categorize-new", "transaction.categorize-new"],
         ["finance.budget.status", "budget.status"],
+        ["finance.budget.draft.get", "budget.draft.get"],
         ["finance.budget.assign", "budget.assign"],
         ["finance.account.set-shared", "account.set-shared"],
         // FIN-05 (#1150): read-only report tools.
@@ -276,6 +284,21 @@ describe("finance manifest contract (#1146)", () => {
         handler: "storage.migrate",
         retryLimit: 1,
         allowManualRun: true
+      },
+      {
+        // #3180: build the first-budget draft; no params.
+        name: "finance.draft-build",
+        handler: "draft.build",
+        retryLimit: 1,
+        allowManualRun: true
+      },
+      {
+        // #3180: the only path that starts a budget; the button sends it.
+        name: "finance.draft-start",
+        handler: "draft.start",
+        retryLimit: 1,
+        allowManualRun: true,
+        paramsSchema: { type: "object", fields: { draftId: { type: "uuid" } } }
       },
       {
         // #3176: confirm or change Needs a look rows. Parallel id lists (queue params

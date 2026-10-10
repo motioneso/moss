@@ -16,6 +16,7 @@ import {
   transactionCategorizeHandler,
   transactionsQueryHandler
 } from "./handlers/feed.js";
+import { draftBuildHandler, draftGetHandler, draftStartHandler } from "./handlers/draft.js";
 import { storageMigrateHandler } from "./handlers/migrate.js";
 import { reportsNetWorthHandler, reportsSpendingHandler } from "./handlers/reports.js";
 import { accountSetSharedHandler, shareApplyHandler } from "./handlers/shared.js";
@@ -46,6 +47,10 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "budget.status": budgetStatusHandler,
   "budget.assign": budgetAssignHandler,
   "budget.apply": budgetApplyHandler,
+  // #3180: the first-budget draft. Starting is queue-only, never a tool.
+  "budget.draft.get": draftGetHandler,
+  "draft.build": draftBuildHandler,
+  "draft.start": draftStartHandler,
   // FIN-04 (#1149) Task 4: the household-sharing surface of manifest v0.3.0.
   "account.set-shared": accountSetSharedHandler,
   "share.apply": shareApplyHandler,

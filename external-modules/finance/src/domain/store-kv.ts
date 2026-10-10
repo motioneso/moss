@@ -9,6 +9,7 @@ import { NS } from "./kv-port.js";
 import { monthKey } from "./keys.js";
 import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetLedger } from "./envelope.js";
+import type { BudgetDraft } from "./draft.js";
 import type { FinanceStore } from "./store-port.js";
 
 // Same prefix connect.ts's loadItems() filters on — duplicated here (not
@@ -16,6 +17,7 @@ import type { FinanceStore } from "./store-port.js";
 // convention: worker depends on domain, never the reverse).
 const ITEM_PREFIX = "item:";
 const LEDGER_PREFIX = "ledger:";
+const DRAFT_KEY = "draft:first-budget";
 
 function transactionChunkKey(accountId: string, month: string): string {
   return `${accountId}:${month}`;
@@ -176,6 +178,44 @@ export function kvStore(kv: FinanceKv): FinanceStore {
 
     async lastLoggedAssignment() {
       return null;
+    },
+
+    // One draft per owner, kept under the budgets namespace beside the ledgers.
+    async getLatestDraft() {
+      const stored = await kv.get(NS.budgets, DRAFT_KEY);
+      const draft = (stored as unknown as BudgetDraft | null) ?? null;
+      return draft && draft.status !== "discarded" ? draft : null;
+    },
+
+    async createDraft(build, createdAt) {
+      const id = globalThis.crypto.randomUUID();
+      const draft: BudgetDraft = {
+        id,
+        status: "open",
+        basisFrom: build.basisFrom,
+        basisTo: build.basisTo,
+        monthlyIncomeCents: build.monthlyIncomeCents,
+        createdAt,
+        startedAt: null,
+        lines: build.lines.map((line) => ({
+          ...line,
+          adjustedCents: null,
+          adjustedBy: null,
+          dropped: false
+        }))
+      };
+      await kv.set(NS.budgets, DRAFT_KEY, draft as unknown as Record<string, unknown>);
+      return id;
+    },
+
+    async markDraftStarted(draftId, startedAt) {
+      const stored = (await kv.get(NS.budgets, DRAFT_KEY)) as unknown as BudgetDraft | null;
+      if (!stored || stored.id !== draftId || stored.status !== "open") return;
+      await kv.set(NS.budgets, DRAFT_KEY, {
+        ...stored,
+        status: "started",
+        startedAt
+      } as unknown as Record<string, unknown>);
     }
   };
 }

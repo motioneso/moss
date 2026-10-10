@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -47,7 +47,9 @@
       "app.finance_balance_snapshots",
       "app.finance_budget_assignments",
       "app.finance_categories",
-      "app.finance_activity"
+      "app.finance_activity",
+      "app.finance_budget_drafts",
+      "app.finance_budget_draft_lines"
     ]
   },
   "appMap": {
@@ -73,7 +75,7 @@
       {
         "id": "finance.start",
         "label": "Getting started",
-        "description": "Connect a first bank, let Moss sort the spending, then build the budget together. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin.",
+        "description": "Connect a first bank, let Moss sort the spending, then build the budget together. With no bank keys set, an admin sees an Add bank keys button and everyone else sees Waiting on your admin. After the first sync it shows Your first budget, a draft built from up to three months of history, with a Build my budget with Moss button and a Start this budget button.",
         "path": "/start"
       }
     ],
@@ -89,6 +91,10 @@
       {
         "id": "finance.getting-started",
         "description": "Getting started shows three steps (connect a bank, Moss sorts spending, build a budget together) with each step's state. A bank cannot be connected until an admin sets the bank keys in Finance settings."
+      },
+      {
+        "id": "finance.first-budget",
+        "description": "After a bank has synced, Getting started builds a first budget from up to three months of history without asking Moss: each category's monthly average rounded up to the next five dollars, the middle monthly income, and merchants that charge about the same every month under Bills. It shows the plan total and how much income is still unplanned. Start this budget on that screen creates any missing categories and sets this month's amounts, then opens Budget. Only the button starts a budget; Moss in chat cannot, and can read the draft."
       },
       {
         "id": "finance.needs-a-look",
@@ -250,6 +256,14 @@
       "handler": "budget.status"
     },
     {
+      "name": "finance.budget.draft.get",
+      "permissionId": "finance.budget.draft.get",
+      "description": "Read the first-budget draft: its lines by group, the plan total, monthly income and the amount still unplanned. Reads only; the draft is started from the Getting started screen.",
+      "risk": "read",
+      "inputSchema": { "type": "object", "additionalProperties": false },
+      "handler": "budget.draft.get"
+    },
+    {
       "name": "finance.budget.assign",
       "permissionId": "finance.budget.assign",
       "description": "Set a category's assigned amount for a month (envelope budgeting).",
@@ -409,6 +423,24 @@
         "handler": "storage.migrate",
         "retryLimit": 1,
         "allowManualRun": true
+      },
+      {
+        "name": "finance.draft-build",
+        "handler": "draft.build",
+        "retryLimit": 1,
+        "allowManualRun": true
+      },
+      {
+        "name": "finance.draft-start",
+        "handler": "draft.start",
+        "retryLimit": 1,
+        "allowManualRun": true,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "draftId": { "type": "uuid" }
+          }
+        }
       },
       {
         "name": "finance.review-apply",
