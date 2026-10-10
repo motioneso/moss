@@ -1,26 +1,11 @@
 // Park Press acceptance check 2 (PR 3346, Core): fresh owner signup, onboarding skip cancel,
-// phone navigation open/close/reopen/Escape, and a genuine read failure on the People settings
-// page (database container stopped), its retry, and recovery. No Moss response is intercepted.
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+// and phone navigation open/close/reopen/Escape. Read failures live in park-press-2b.
 import { expect, test, type Page } from "@playwright/test";
-import { buildUatComposeArgs } from "../provisioner.js";
 
 export const uatLevel = { level: "bare", without: [] } as const;
 
-const execFileAsync = promisify(execFile);
 const OWNER_EMAIL = "park-press-owner@example.test";
 const OWNER_PASSWORD = "park-press-pass-1234";
-
-function project(): string {
-  const value = process.env.JARVIS_UAT_PROJECT_NAME;
-  if (!value?.startsWith("uat-")) throw new Error("Run through the isolated UAT provisioner");
-  return value;
-}
-
-async function compose(...args: string[]): Promise<void> {
-  await execFileAsync("docker", buildUatComposeArgs(project(), args), { maxBuffer: 1_000_000 });
-}
 
 async function activeLabel(page: Page): Promise<string> {
   return page.evaluate(() => {

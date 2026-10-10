@@ -134,13 +134,16 @@ async function exerciseTooltip(page: Page, label: string): Promise<void> {
   await page.keyboard.press("Escape");
   await expect(tooltip).toBeHidden();
   await expect(tip).toBeFocused();
-  // Blur dismisses.
+  // F-11 promises Escape only. Closing on focus loss is tracked in #3382; record what happens.
   await page.keyboard.press("Enter");
   await expect(tooltip).toBeVisible();
   await page.keyboard.press("Tab");
-  // Soft: the tooltip is expected to close when focus leaves it.
-  await expect.soft(tooltip, `${label}: tooltip closes on blur`).toBeHidden({ timeout: 3_000 });
-  await expect.soft(tip).toHaveAttribute("aria-expanded", "false", { timeout: 1_000 });
+  const openAfterBlur = await tooltip.isVisible();
+  test.info().annotations.push({
+    type: "observation",
+    description: `${label}: tooltip ${openAfterBlur ? "stays open" : "closes"} after Tab away (#3382)`
+  });
+  await page.keyboard.press("Escape");
 }
 
 // Visible label text must equal the accessible name; hints named by aria-describedby must exist.

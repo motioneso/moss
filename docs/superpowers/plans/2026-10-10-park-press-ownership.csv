@@ -723,6 +723,10 @@ tests/uat/specs/job-search-board.uat.spec.ts,I0,scoped-test-transfer,,Parent-app
 tests/uat/specs/module-install.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/moss-assistant-name.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/no-plan-review.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
+tests/uat/specs/park-press-1-foundations.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-2-core.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-2b-core-failure.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
+tests/uat/specs/park-press-3-planning.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
 tests/uat/specs/park-press-4-news-sports.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
 tests/uat/specs/park-press-4-notifications.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
 tests/uat/specs/park-press-4-settings-recovery.uat.spec.ts,I0,registered-new,,Park Press acceptance live-path spec; test-only
