@@ -645,4 +645,101 @@ describe("Workshop project browser interactions", () => {
     );
     expect(container.querySelector("#project-message")).toBeNull();
   });
+
+  it("contains destructive confirmation, focuses Keep it and restores More after Escape", async () => {
+    await render(`/workshop/${project.id}`);
+    await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
+    click("More");
+    click("Delete project");
+    await eventually(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull());
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(button("Delete project").classList.contains("jds-btn--danger")).toBe(true);
+    expect(document.activeElement).toBe(button("Keep it"));
+    act(() =>
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })
+      )
+    );
+    await eventually(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect(document.activeElement).toBe(button("More"));
+    expect(writes).toEqual([]);
+    click("More");
+    click("Delete project");
+    click("Keep it");
+    await eventually(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect(document.activeElement).toBe(button("More"));
+    expect(writes).toEqual([]);
+  });
+
+  it("keeps a pending or failed delete inside its confirmation without changing the project", async () => {
+    await render(`/workshop/${project.id}`);
+    await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
+    let finishDelete!: (response: Response) => void;
+    const previousFetch = fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "DELETE")
+          return new Promise<Response>((resolve) => {
+            finishDelete = resolve;
+          });
+        return previousFetch(input, init);
+      })
+    );
+    click("More");
+    click("Delete project");
+    click("Delete project");
+    await eventually(() => expect(button("Deleting…").disabled).toBe(true));
+    expect(button("Keep it").disabled).toBe(true);
+    act(() =>
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })
+      )
+    );
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => finishDelete(response({ error: "Temporary failure" }, 503)));
+    await eventually(() =>
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+        "could not be deleted"
+      )
+    );
+    expect(button("Delete project").disabled).toBe(false);
+    expect(container.querySelector("output")?.textContent).toBe(`/workshop/${project.id}`);
+  });
+
+  it("keeps a loaded transcript visible when its refresh fails", async () => {
+    entries = [
+      {
+        projectId: project.id,
+        messageId: "retained-message",
+        sequence: "1",
+        kind: "assistant_message",
+        delivery: "delivered",
+        text: "Keep the saved conversation visible",
+        createdAt: project.createdAt
+      }
+    ];
+    await render(`/workshop/${project.id}`);
+    await eventually(() =>
+      expect(container.textContent).toContain("Keep the saved conversation visible")
+    );
+    const previousFetch = fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).startsWith(`${base}/${project.id}/messages?`))
+          return Promise.resolve(response({}, 503));
+        return previousFetch(input, init);
+      })
+    );
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["workshop"] });
+    });
+    await eventually(() =>
+      expect(container.textContent).toContain("Messages could not be refreshed")
+    );
+    expect(container.textContent).toContain("Keep the saved conversation visible");
+    expect(container.querySelector("#project-message")).not.toBeNull();
+  });
 });
