@@ -6,6 +6,12 @@ import {
   attachNotesFailureEvidence,
   captureActionAuditEvidence
 } from "./notes-failure-evidence.js";
+import {
+  drawerThreadId,
+  expectOnlyUserTurn,
+  expectThreadCarries,
+  startNewSideChat
+} from "./notes-new-side-chat.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import {
   bringUpRealChatProvider,
@@ -20,6 +26,7 @@ export const uatLevel = { level: "admin+data", without: [] } as const;
 const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED);
 const POLL_DEADLINE_MS = 60_000;
 const FACT = "kumquat focaccia";
+const RETRIEVAL_QUESTION = "What was our snack decision?";
 const NOTES_ROOT = `/data/vaults/${UAT_ADMIN_ID}`;
 const TURN_ANNOTATION_TYPE = "2737-notes-turn";
 const RETRIEVAL_TURN_ANNOTATION_TYPE = "2737-retrieval-turn";
@@ -97,10 +104,8 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
 
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const composer = page.getByRole("textbox", { name: "Message Moss" });
-  const createdNotes = page
-    .getByRole("dialog", { name: "Chat with Moss" })
-    .getByRole("status")
-    .filter({ hasText: /^Done: Create note$/ });
+  const chatDialog = page.getByRole("dialog", { name: "Chat with Moss" });
+  const createdNotes = chatDialog.getByRole("status").filter({ hasText: /^Done: Create note$/ });
   const createCount = await createdNotes.count();
   const path = `uat/notes-default-retrieval-${Date.now()}.md`;
   const syncNotBefore = Date.now();
@@ -164,14 +169,13 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
     )
     .toBe(true);
 
-  const cleared = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === "/api/chat/clear" &&
-      response.status() === 204
-  );
-  await page.getByRole("button", { name: "New chat" }).click();
-  await cleared;
+  // The recall must come from the indexed note. The note-writing conversation keeps the fact,
+  // while the fresh side chat starts empty on screen and in storage.
+  const noteThreadId = await drawerThreadId(page);
+  expect(noteThreadId, "the note-writing conversation has an id").toBeDefined();
+  await expectThreadCarries(page, noteThreadId!, FACT);
+  const freshThreadId = await startNewSideChat(page, chatDialog);
+  await expect(chatDialog.getByText(new RegExp(FACT, "i"))).toHaveCount(0);
 
   // #2737: same bookkeeping as the note-writing turn — records where the note turn's own time
   // window ends, synchronously, nothing awaited.
@@ -179,11 +183,15 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
     type: RETRIEVAL_TURN_ANNOTATION_TYPE,
     description: JSON.stringify({ retrievalTurnStartIso: new Date().toISOString() })
   });
-  await composer.fill("What was our snack decision?");
+  await composer.fill(RETRIEVAL_QUESTION);
   await composer.press("Enter");
 
-  await expect(page.getByText(new RegExp(FACT, "i"))).toBeVisible({ timeout: 60_000 });
-  const threadText = await page.getByRole("dialog", { name: "Chat with Moss" }).innerText();
+  await expect(chatDialog.getByText(new RegExp(FACT, "i"))).toBeVisible({ timeout: 60_000 });
+  // The question never names the fact, so the only stored turn cannot carry it.
+  expect(RETRIEVAL_QUESTION).not.toMatch(new RegExp(FACT, "i"));
+  await expectOnlyUserTurn(page, freshThreadId, RETRIEVAL_QUESTION);
+  expect(await drawerThreadId(page)).toBe(freshThreadId);
+  const threadText = await chatDialog.innerText();
   expect(threadText).not.toMatch(
     /searching (?:your )?notes|checking (?:your )?notes|let me (?:check|search)/i
   );
