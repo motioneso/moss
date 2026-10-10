@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MedicationLog } from "@moss/db";
+import { computeSchedule } from "@moss/wellness";
+import type { Medication } from "@moss/db";
 import { medicationLogBelongsToDate } from "../../packages/wellness/src/repository.js";
 
 // Regression pin for issue #877 finding 6 (wellness medication day-window).
@@ -71,5 +73,36 @@ describe("medicationLogBelongsToDate — #877 finding 6 day-window pin", () => {
 
     expect(medicationLogBelongsToDate(log, date, "America/Los_Angeles")).toBe(true);
     expect(medicationLogBelongsToDate(log, date, "UTC")).toBe(true);
+  });
+});
+
+// #3217: a zoned evening dose sits on the next UTC day, so every per-day reader must still
+// pair its log with the slot on the local date.
+describe("medicationLogBelongsToDate - zoned evening dose", () => {
+  const monthlyLa = {
+    id: "med-1",
+    owner_user_id: "user-1",
+    name: "Evening med",
+    frequency_type: "monthly",
+    month_kind: "date",
+    month_day: 9,
+    month_day_is_last: false,
+    schedule_times: ["21:00"],
+    schedule_start_date: "2026-01-01",
+    time_zone: "America/Los_Angeles",
+    active: true,
+    created_at: new Date("2026-01-01T00:00:00.000Z"),
+    updated_at: new Date("2026-01-01T00:00:00.000Z")
+  } as unknown as Medication;
+
+  it("the taken log for a 21:00 Los Angeles dose shows the slot as taken on its local day", () => {
+    const log = medicationLog({
+      scheduled_for: new Date("2026-10-10T04:00:00.000Z"),
+      logged_at: new Date("2026-10-10T04:05:00.000Z")
+    });
+    const day = new Date("2026-10-09T00:00:00.000Z");
+    const dayLogs = [log].filter((l) => medicationLogBelongsToDate(l, day, "America/Los_Angeles"));
+    const slots = computeSchedule([monthlyLa], dayLogs, day);
+    expect(slots.map((s) => s.status)).toEqual(["taken"]);
   });
 });

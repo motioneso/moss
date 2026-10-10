@@ -18,7 +18,7 @@ import { parseSharedKey } from "../../domain/index.js";
 import type { ItemRecord, SharedAccountMeta } from "../../domain/index.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
-import { readString } from "../validate.js";
+import { readActiveUserIds, readString } from "../validate.js";
 
 type AccountView = {
   accountId: string;
@@ -68,7 +68,8 @@ type SharedAccountView = {
 
 async function listSharedAccounts(
   ports: WorkerPorts,
-  actorUserId: string
+  actorUserId: string,
+  activeUserIds: ReadonlySet<string>
 ): Promise<SharedAccountView[]> {
   const shared: SharedAccountView[] = [];
   for (const key of await ports.mirror.list()) {
@@ -77,6 +78,8 @@ async function listSharedAccounts(
     // mirror is a disposable projection, not a place to throw from a read.
     if (!parsed || parsed.suffix !== "meta") continue;
     if (parsed.ownerUserId === actorUserId) continue;
+    // Deleted/deactivated owners leave mirror residue; never surface it.
+    if (!activeUserIds.has(parsed.ownerUserId)) continue;
     const stored = (await ports.mirror.get(key)) as SharedAccountMeta | null;
     if (!stored || typeof stored.accountId !== "string" || typeof stored.name !== "string") {
       continue;
@@ -174,7 +177,7 @@ export const accountsListHandler: ToolFactory = (ports) => async (input) => {
 
   const accounts: (AccountView | SharedAccountView)[] = [
     ...own,
-    ...(await listSharedAccounts(ports, actorUserId))
+    ...(await listSharedAccounts(ports, actorUserId, readActiveUserIds(input)))
   ];
   // nextStep keys off OWN accounts: a member seeing only shared accounts
   // still hasn't connected a bank of their own.

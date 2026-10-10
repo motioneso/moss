@@ -504,6 +504,7 @@ describe("finance transactions.query household merge (#1149)", () => {
     const writesBefore = (kv as ReturnType<typeof fakeKv>).ops.length;
     const result = await transactionsQueryHandler(fakePorts(kv, sharedMirror()))({
       actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER],
       limit: 200
     });
     expect(ids(result)).toEqual(["t-a", "t-x1", "t-c", "t-x2", "t-b"]);
@@ -525,7 +526,8 @@ describe("finance transactions.query household merge (#1149)", () => {
     const kv = fakeKv();
     await seedFeed(kv);
     const query = transactionsQueryHandler(fakePorts(kv, sharedMirror()));
-    const handler = (input: Record<string, unknown>) => query({ actorUserId: ACTOR, ...input });
+    const handler = (input: Record<string, unknown>) =>
+      query({ actorUserId: ACTOR, activeUserIds: [ACTOR, OTHER], ...input });
     expect(ids(await handler({ categoryId: "dining" }))).toEqual(["t-x2", "t-b"]);
     expect(ids(await handler({ search: "joint" }))).toEqual(["t-x1"]);
     expect(ids(await handler({ pendingOnly: true }))).toEqual(["t-x2", "t-b"]);
@@ -537,9 +539,22 @@ describe("finance transactions.query household merge (#1149)", () => {
     await seedFeed(kv);
     const result = await transactionsQueryHandler(fakePorts(kv, sharedMirror()))({
       actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER],
       accountId: "acc-x"
     });
     expect(ids(result)).toEqual(["t-x1", "t-x2"]);
+  });
+
+  it("drops rows and accounts of owners missing from the active list, and fails closed without it", async () => {
+    const kv = fakeKv();
+    await seedFeed(kv);
+    const query = transactionsQueryHandler(fakePorts(kv, sharedMirror()));
+    for (const extra of [{ activeUserIds: [ACTOR] }, {}]) {
+      const result = await query({ actorUserId: ACTOR, limit: 200, ...extra });
+      expect(ids(result)).toEqual(["t-a", "t-c", "t-b"]);
+      const accounts = result.accounts as { accountId: string }[];
+      expect(accounts.map((account) => account.accountId)).toEqual(["acc-1", "acc-2"]);
+    }
   });
 });
 

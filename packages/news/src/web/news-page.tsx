@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Newspaper } from "lucide-react";
 import type { NewsHeadline, NewsOverviewResponse } from "@moss/shared";
 
+import { topicOption } from "../source/catalog.js";
 import { getNewsOverview } from "./news-client.js";
 import { newsQueryKeys } from "./query-keys.js";
 import {
@@ -20,25 +21,18 @@ const SETTINGS_HREF = "/settings?section=modules&module=news";
 
 type TopicFilter = string | null;
 
+// Chips carry a topic key ("us") while headlines carry display labels ("U.S."), so a
+// filter matches the raw value or its display label, ignoring case.
 export function matchesTopic(headline: NewsHeadline, filter: TopicFilter): boolean {
-  return (
-    filter === null ||
-    headline.topicLabels?.includes(filter) === true ||
-    headline.topicKey === filter ||
-    headline.topicLabel === filter
-  );
+  if (filter === null) return true;
+  const wanted = new Set([filter, topicLabel(filter)].map((v) => v.toLowerCase()));
+  const candidates = [...(headline.topicLabels ?? []), headline.topicKey, headline.topicLabel];
+  return candidates.some((value) => value != null && wanted.has(value.toLowerCase()));
 }
 
-const TOPIC_LABELS: Readonly<Record<string, string>> = {
-  world: "World",
-  us: "U.S.",
-  politics: "Politics",
-  business: "Business",
-  technology: "Technology",
-  science: "Science",
-  health: "Health",
-  culture: "Culture"
-};
+function topicLabel(key: string): string {
+  return topicOption(key)?.label ?? key;
+}
 
 export function NewsPage() {
   const overviewQuery = useQuery({
@@ -150,7 +144,7 @@ function Masthead(props: {
               aria-pressed={props.filter === topicKey}
               onClick={() => props.onFilter(topicKey)}
             >
-              {TOPIC_LABELS[topicKey] ?? topicKey}
+              {topicLabel(topicKey)}
             </button>
           ))}
         </nav>

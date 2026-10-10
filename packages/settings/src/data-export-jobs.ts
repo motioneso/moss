@@ -100,8 +100,30 @@ export async function handleExportBuildJob(
         tasks: userExport.tables.tasks,
         memory: {
           chunks: userExport.tables.memoryChunks,
-          facts: userExport.tables.chatMemoryFacts
+          facts: userExport.tables.chatMemoryFacts,
+          entities: userExport.tables.memoryEntities,
+          graphFacts: userExport.tables.memoryFacts,
+          episodes: userExport.tables.memoryEpisodes,
+          factSources: userExport.tables.memoryFactSources,
+          aliases: userExport.tables.memoryAliases,
+          candidates: userExport.tables.memoryCandidates,
+          conflictGroups: userExport.tables.memoryConflictGroups
         },
+        goals: {
+          goals: userExport.tables.jarvisGoals,
+          evidence: userExport.tables.jarvisGoalEvidence
+        },
+        task_activity: userExport.tables.taskActivity,
+        notifications: {
+          notifications: userExport.tables.notifications,
+          reads: userExport.tables.notificationReads
+        },
+        module_kv: userExport.tables.moduleKv,
+        usefulness_feedback: {
+          signals: userExport.tables.usefulnessFeedbackSignals,
+          targets: userExport.tables.usefulnessFeedbackTargets
+        },
+        action_audit_log: userExport.tables.jarvisActionAuditLog,
         structured_state: {
           commitments: userExport.tables.commitments,
           entities: userExport.tables.entities,

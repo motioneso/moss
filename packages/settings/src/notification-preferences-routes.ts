@@ -5,6 +5,9 @@ import { HttpError, type MossModuleManifest } from "@moss/module-sdk";
 import {
   listNotificationPreferencesRouteSchema,
   getNotificationDigestPreferenceRouteSchema,
+  getNotificationSensitivityRouteSchema,
+  putNotificationSensitivityRouteSchema,
+  type PutNotificationSensitivityRequest,
   putNotificationPreferenceRouteSchema,
   putNotificationDigestPreferenceRouteSchema,
   type NotificationDigestPreferenceDto,
@@ -14,6 +17,9 @@ import {
 } from "@moss/shared";
 import {
   NOTIFICATION_DIGEST_PREFERENCE_KEY,
+  NOTIFICATION_SENSITIVITY_PREFERENCE_KEY,
+  sensitivityFromRaw,
+  sensitivityToRaw,
   digestPreferenceFromRaw,
   digestPreferenceToRaw,
   reconcileDigestSchedule,
@@ -96,6 +102,47 @@ export function registerNotificationPreferencesRoutes(
   );
 
   server.get(
+    "/api/me/notification-sensitivity",
+    { schema: getNotificationSensitivityRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => ({
+          sensitivity: sensitivityFromRaw(
+            await dependencies.preferencesRepository.get(
+              scopedDb,
+              NOTIFICATION_SENSITIVITY_PREFERENCE_KEY
+            )
+          )
+        }));
+      } catch (error) {
+        return handleSettingsRouteError(error, reply);
+      }
+    }
+  );
+
+  server.put(
+    "/api/me/notification-sensitivity",
+    { schema: putNotificationSensitivityRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { sensitivity } = request.body as PutNotificationSensitivityRequest;
+        await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+          await dependencies.preferencesRepository.upsert(
+            scopedDb,
+            NOTIFICATION_SENSITIVITY_PREFERENCE_KEY,
+            sensitivityToRaw(sensitivity)
+          );
+        });
+        return { sensitivity };
+      } catch (error) {
+        return handleSettingsRouteError(error, reply);
+      }
+    }
+  );
+
+  server.get(
     "/api/me/notification-digest-preference",
     { schema: getNotificationDigestPreferenceRouteSchema },
     async (request, reply) => {
@@ -122,16 +169,18 @@ export function registerNotificationPreferencesRoutes(
         const digest = await dependencies.dataContext.withDataContext(
           accessContext,
           async (scopedDb) => {
+            const existing = digestPreferenceFromRaw(
+              await dependencies.preferencesRepository.get(
+                scopedDb,
+                NOTIFICATION_DIGEST_PREFERENCE_KEY
+              )
+            );
             const next: NotificationDigestPreference = {
               enabled: body.digest.enabled,
               cadence: body.digest.cadence,
               scheduleMetadata: { ...body.digest.scheduleMetadata },
-              lastDigestSentAt: digestPreferenceFromRaw(
-                await dependencies.preferencesRepository.get(
-                  scopedDb,
-                  NOTIFICATION_DIGEST_PREFERENCE_KEY
-                )
-              ).lastDigestSentAt
+              lastDigestSentAt: existing.lastDigestSentAt,
+              lastDigestSentId: existing.lastDigestSentId
             };
             const availability = await digestAvailability(
               scopedDb,

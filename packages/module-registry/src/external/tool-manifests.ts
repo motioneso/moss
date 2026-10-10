@@ -1,3 +1,4 @@
+import type { DataContextDb } from "@moss/db";
 import type {
   ClassifierCandidate,
   ClassifierCandidateProvider,
@@ -66,7 +67,10 @@ export type ExternalToolInvoker = (
   module: ExternalModuleDiscovery,
   tool: ExternalModuleAssistantToolDeclaration,
   input: ToolInput,
-  context: ToolContext
+  context: ToolContext,
+  // The caller's already-open database handle. Lookups that need the database must use it,
+  // because the route holds the request's connection and a second one can deadlock a pool.
+  scopedDb?: DataContextDb
 ) => Promise<ToolResult>;
 
 /**
@@ -232,7 +236,9 @@ export function createExternalToolManifests(
             isExternal: true,
             outputSchema: tool.outputSchema,
             classifier: synthesizeClassifier(module, tool, invokeCandidates),
-            execute: (_scopedDb, input, context) => invoke(module, tool, input, context)
+            // The SDK types scopedDb as unknown; the gateway always passes a DataContextDb.
+            execute: (scopedDb, input, context) =>
+              invoke(module, tool, input, context, scopedDb as DataContextDb)
           };
         })
       };

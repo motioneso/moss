@@ -128,7 +128,7 @@ export function createExternalModuleTools(input: {
       }
     );
 
-  const invoke: ExternalToolInvoker = async (module, tool, toolInput, context) => {
+  const invoke: ExternalToolInvoker = async (module, tool, toolInput, context, scopedDb) => {
     const rpc = buildRpc(module, tool.risk, context);
     // #1768: resolved per invocation inside the ACTOR's data context, exactly as the
     // queued path does in apps/worker/src/external-module-invoke.ts. Without this the
@@ -146,11 +146,36 @@ export function createExternalModuleTools(input: {
     // validateToolInput deliberately does not enforce additionalProperties
     // (#133), so a caller CAN smuggle an `actorUserId` key through schema
     // validation — spread order, not schema rejection, is the spoof defense.
+    // A module that writes instance-scope storage itself (a shared household pool) must be able
+    // to drop entries left by deleted or deactivated members, so it alone receives the active
+    // member ids. Other modules reject unknown input keys and get nothing extra. Spread last for
+    // the same reason as actorUserId.
+    const sharesMemberState = (module.manifest.storage ?? []).some(
+      (entry) => entry.scopes.includes("instance") && entry.instanceWritePolicy === "module"
+    );
+    // Reuse the caller's open database handle when there is one. The invoke route holds the
+    // request's connection, so opening a second context here would wait on a pool of one.
+    const listActiveUserIds = async (db: DataContextDb) =>
+      (await input.settingsRepository.listUsers(db))
+        .filter((user) => user.status === "active")
+        .map((user) => user.id);
+    const activeUserIds = sharesMemberState
+      ? scopedDb
+        ? await listActiveUserIds(scopedDb)
+        : await input.appDataContext.withDataContext(
+            { actorUserId: context.actorUserId, requestId: context.requestId },
+            listActiveUserIds
+          )
+      : undefined;
     return externalToolResult(
       await runtime.invoke(
         module,
         tool.handler,
-        { ...toolInput, actorUserId: context.actorUserId },
+        {
+          ...toolInput,
+          actorUserId: context.actorUserId,
+          ...(activeUserIds ? { activeUserIds } : {})
+        },
         rpc,
         // #1286 Task 2e: an assistant tool call gets its own child process,
         // separate from this module's queue jobs and briefing invocations.

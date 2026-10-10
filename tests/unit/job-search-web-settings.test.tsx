@@ -130,6 +130,56 @@ describe("SettingsScreen", () => {
     );
   });
 
+  // #3228 JS-10: runQueue resolves when the job is accepted, before it runs, so the first reread
+  // can still show the old value. The switch must hold its new position until a reread agrees.
+  it("keeps the switch flipped while the queued change has not landed, then settles on the stored value", async () => {
+    vi.useFakeTimers();
+    try {
+      let stored = true;
+      vi.mocked(api.invokeTool).mockImplementation(async () => ({
+        portals: [portalRow({ sourceId: "linkedin", label: "LinkedIn", enabled: stored })]
+      }));
+      const renderer = await renderScreen(profile());
+      await flush();
+
+      await act(async () => {
+        renderer.root
+          .findByProps({ type: "checkbox" })
+          .props.onChange({ target: { checked: false } });
+      });
+      await flush();
+      expect(renderer.root.findByProps({ type: "checkbox" }).props.checked).toBe(false);
+
+      stored = false;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      await flush();
+      expect(renderer.root.findByProps({ type: "checkbox" }).props.checked).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("tells the user when the change was not accepted and shows the stored value", async () => {
+    vi.mocked(api.invokeTool).mockResolvedValue({
+      portals: [portalRow({ sourceId: "linkedin", label: "LinkedIn", enabled: true })]
+    });
+    vi.mocked(api.runQueue).mockResolvedValue({ kind: "error", message: "Request failed (500)" });
+    const renderer = await renderScreen(profile());
+    await flush();
+
+    await act(async () => {
+      renderer.root
+        .findByProps({ type: "checkbox" })
+        .props.onChange({ target: { checked: false } });
+    });
+    await flush();
+
+    expect(renderer.root.findByProps({ type: "checkbox" }).props.checked).toBe(true);
+    expect(text(renderer)).toMatch(/couldn.t change|could not change/i);
+  });
+
   it("labels monitoring and manual-run controls separately", async () => {
     vi.mocked(api.invokeTool).mockResolvedValue({
       portals: [portalRow({ sourceId: "linkedin", label: "LinkedIn", enabled: true })]

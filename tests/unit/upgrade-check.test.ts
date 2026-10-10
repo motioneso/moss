@@ -2,30 +2,26 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { handleUpgradeCheckJob, UPGRADE_NOTIFY_QUEUE } from "@moss/jobs";
 
-// #1721: the owner lookup now reads a list (ordered, limit 2) rather than a single row, so the
-// fake select chain has to answer `orderBy`, `limit` and `execute` too. `owners` is a list for the
-// same reason — the duplicate-owner case is the one this issue is about.
+// #1721, #3221: the handler calls two database functions through raw SQL, so the fake exposes the
+// executor Kysely resolves for raw queries. `owners` is a list because the duplicate-owner case is
+// the one #1721 is about.
 function dbWithOwner(...owners: readonly string[]) {
   const ownerIds = owners.length > 0 ? owners : ["00000000-0000-4000-8000-000000000001"];
-  const selectExecute = vi.fn(async () => ownerIds.map((id) => ({ id })));
-  const execute = vi.fn(async () => undefined);
-  const executeTakeFirstOrThrow = vi.fn(async () => ({ value: { version: "1.0.0" } }));
-  const db = {
-    selectFrom: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      orderBy: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      execute: selectExecute,
-      executeTakeFirstOrThrow
-    })),
-    insertInto: vi.fn(() => ({
-      values: vi.fn().mockReturnThis(),
-      onConflict: vi.fn().mockReturnThis(),
-      execute
-    }))
+  const statements: string[] = [];
+  const executor = {
+    transformQuery: (node: unknown) => node,
+    compileQuery: (node: unknown) => ({ statement: JSON.stringify(node) }),
+    executeQuery: async (query: { statement: string }) => {
+      statements.push(query.statement);
+      return {
+        rows: query.statement.includes("upgrade_notify_owner_ids")
+          ? ownerIds.map((id) => ({ id }))
+          : []
+      };
+    }
   };
-  return { db, selectExecute, execute };
+  const db = { getExecutor: () => executor };
+  return { db, statements };
 }
 
 describe("handleUpgradeCheckJob", () => {
@@ -93,10 +89,11 @@ describe("handleUpgradeCheckJob", () => {
       }))
     );
     const boss = { send: vi.fn(async () => "job-1") };
-    const { db } = dbWithOwner("11111111-1111-4111-8111-111111111111");
+    const { db, statements } = dbWithOwner("11111111-1111-4111-8111-111111111111");
 
     await handleUpgradeCheckJob(db as never, boss as never);
 
+    expect(statements.some((statement) => statement.includes("record_latest_release"))).toBe(true);
     expect(boss.send).toHaveBeenCalledWith(
       UPGRADE_NOTIFY_QUEUE,
       {
