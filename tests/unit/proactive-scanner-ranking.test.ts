@@ -92,7 +92,11 @@ describe("ProactiveScanner: priority band assignment after ranking", () => {
     ]);
 
     const mockPrefsRepo = {
-      get: vi.fn().mockResolvedValue(enabledCalendarPref)
+      getSaved: vi.fn().mockResolvedValue({
+        raw: enabledCalendarPref,
+        preference: enabledCalendarPref,
+        hasLegacyEmailChoice: true
+      })
     } as unknown as ProactiveMonitoringPreferencesRepository;
 
     const mockPriorityPrefsRepo = {
@@ -125,7 +129,8 @@ describe("ProactiveScanner: priority band assignment after ranking", () => {
       monitorStateRepository: mockStateRepo,
       cardRepository: mockCardRepo,
       antiSpamPolicy: mockAntiSpam,
-      getLocalePreference: vi.fn().mockResolvedValue({ timezone: "UTC" })
+      getLocalePreference: vi.fn().mockResolvedValue({ timezone: "UTC" }),
+      resolveQuietHours: async () => null
     });
 
     const result = await scanner.scan(
@@ -183,7 +188,11 @@ describe("ProactiveScanner: priority band assignment after ranking", () => {
 
     const scanner = new ProactiveScanner({
       preferencesRepository: {
-        get: vi.fn().mockResolvedValue(enabledCalendarPref)
+        getSaved: vi.fn().mockResolvedValue({
+          raw: enabledCalendarPref,
+          preference: enabledCalendarPref,
+          hasLegacyEmailChoice: true
+        })
       } as unknown as ProactiveMonitoringPreferencesRepository,
       priorityPreferencesRepository: {
         get: vi.fn().mockReturnValue({ anchors: [] })
@@ -197,7 +206,8 @@ describe("ProactiveScanner: priority band assignment after ranking", () => {
       antiSpamPolicy: {
         check: vi.fn().mockResolvedValue({ allow: true, deferredUntil: null })
       } as unknown as AntiSpamPolicy,
-      getLocalePreference: vi.fn().mockResolvedValue({ timezone: "UTC" })
+      getLocalePreference: vi.fn().mockResolvedValue({ timezone: "UTC" }),
+      resolveQuietHours: async () => null
     });
 
     const result = await scanner.scan(

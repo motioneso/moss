@@ -3,19 +3,22 @@ import type { PgBoss } from "pg-boss";
 
 import type { AccessContext, DataContextRunner } from "@moss/db";
 import { handleRouteError } from "@moss/module-sdk";
-import type { ProactiveSource } from "@moss/shared";
+import { defaultProactiveMonitoringPreference, type ProactiveSource } from "@moss/shared";
 
 import { CardRepository, serializeCard } from "./card-repository.js";
 import { enqueueProactiveScan } from "./jobs.js";
 import { MonitorStateRepository } from "./monitor-state-repository.js";
-import { ProactiveMonitoringPreferencesRepository } from "./preferences-repository.js";
+import {
+  isProactiveSourceEnabled,
+  ProactiveMonitoringPreferencesRepository
+} from "./preferences-repository.js";
 
 export interface ProactiveMonitoringRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
   readonly boss: PgBoss;
-  /** The set of sources that have a registered provider. Refresh only enqueues enabled+registered. */
-  readonly registeredSources: ReadonlySet<ProactiveSource>;
+  /** Resolve the actor’s available registered sources fresh for each refresh. */
+  readonly resolveRegisteredSources: (actorUserId: string) => Promise<ReadonlySet<ProactiveSource>>;
   readonly cardRepository?: CardRepository;
   readonly preferencesRepository?: ProactiveMonitoringPreferencesRepository;
   readonly monitorStateRepository?: MonitorStateRepository;
@@ -55,30 +58,28 @@ export function registerProactiveMonitoringRoutes(
       const ctx = await dependencies.resolveAccessContext(request);
       const sources: ProactiveSource[] = ["tasks", "calendar", "email", "notes"];
 
-      const { pref, monitorStates } = await dependencies.dataContext.withDataContext(
-        ctx,
-        async (scopedDb) => {
-          const pref = await prefsRepo.get(scopedDb);
+      const { pref, savedPreference, monitorStates } =
+        await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
+          const savedPreference = await prefsRepo.getSaved(scopedDb);
+          const pref = savedPreference?.preference ?? defaultProactiveMonitoringPreference();
           const stateEntries = await Promise.all(
             sources.map(
               async (s) => [s, await monitorStateRepo.get(scopedDb, ctx.actorUserId, s)] as const
             )
           );
-          return { pref, monitorStates: new Map(stateEntries) };
-        }
-      );
-
-      if (!pref.enabled) {
-        return reply.status(202).send({ enqueued: 0 });
-      }
+          return { pref, savedPreference, monitorStates: new Map(stateEntries) };
+        });
 
       // Time-window slot: stable for the duration of the cooldown window, so the idempotency
       // key does not rotate on each HTTP request (which would let rapid clicks flood the queue).
       const windowSlot = Math.floor(Date.now() / REFRESH_COOLDOWN_MS);
+      const registeredSources = await dependencies.resolveRegisteredSources(ctx.actorUserId);
       let enqueued = 0;
       for (const source of sources) {
-        if (!pref.sources[source]?.enabled) continue;
-        if (!dependencies.registeredSources.has(source)) continue;
+        if (!isProactiveSourceEnabled(pref, source, savedPreference)) {
+          continue;
+        }
+        if (!registeredSources.has(source)) continue;
 
         const state = monitorStates.get(source);
         if (

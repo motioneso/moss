@@ -611,11 +611,17 @@ describe("MVP foundation schema catalog", () => {
         { version: "0296", name: "0296_ai_action_origin_and_timeout.sql" },
         { version: "0297", name: "0297_chat_action_history_permissions.sql" },
         { version: "0298", name: "0298_ai_action_outcome_delivery.sql" },
+        { version: "0299", name: "0299_main_chat.sql" },
         { version: "0300", name: "0300_goals_id_defaults.sql" },
         { version: "0301", name: "0301_superseded_by_set_null_on_delete.sql" },
         { version: "0302", name: "0302_module_kv_worker_export_select.sql" },
         { version: "0303", name: "0303_upgrade_check_worker_functions.sql" },
-        { version: "0304", name: "0304_module_enablement_worker_user_select.sql" }
+        { version: "0304", name: "0304_module_enablement_worker_user_select.sql" },
+        { version: "0305", name: "0305_chat_summary_frontier.sql" },
+        { version: "0306", name: "0306_chat_relative_reminders.sql" },
+        { version: "0307", name: "0307_chat_summary_worker_publish.sql" },
+        { version: "0308", name: "0308_chat_reminder_cancel.sql" },
+        { version: "0309", name: "0309_chat_reminder_context_acknowledged.sql" }
       ]);
     } finally {
       await client.end();

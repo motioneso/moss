@@ -28,10 +28,13 @@ const BASE_THREAD: ChatThread = {
   title: "Conversation",
   surface: "chat",
   incognito: false,
+  is_main: false,
   created_at: new Date(),
   updated_at: new Date(),
   last_active_at: new Date(),
-  conversation_summary: null
+  conversation_summary: null,
+  summary_covered_through_message_id: null,
+  summary_revision: 0
 };
 
 describe("DataContextChatPersistence.getThreadContext", () => {

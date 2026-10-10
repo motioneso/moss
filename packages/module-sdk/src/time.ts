@@ -155,6 +155,61 @@ export function addLocalDays(localDate: string, days: number): string {
   return shifted.toISOString().slice(0, 10);
 }
 
+/**
+ * Returns the release instant for a daily local quiet window, or null outside the window.
+ *
+ * Windows include their start and exclude their end. Equal times retain the legacy all-day
+ * meaning. A gap releases at its first valid instant; a fold chooses its later occurrence.
+ */
+export function deferUntilQuietHoursEnd(
+  now: Date,
+  startLocalTime: string,
+  endLocalTime: string,
+  timeZone: string
+): Date | null {
+  const nowParts = localWallClockParts(now, timeZone);
+  const currentMinutes = nowParts.hour * 60 + nowParts.minute;
+  const startMinutes = localTimeMinutes(startLocalTime);
+  const endMinutes = localTimeMinutes(endLocalTime);
+  const inQuietHours =
+    startMinutes >= endMinutes
+      ? currentMinutes >= startMinutes || currentMinutes < endMinutes
+      : currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  if (!inQuietHours) return null;
+
+  const localDate = `${nowParts.year.toString().padStart(4, "0")}-${nowParts.month
+    .toString()
+    .padStart(2, "0")}-${nowParts.day.toString().padStart(2, "0")}`;
+  const endDate = addLocalDays(localDate, endMinutes <= currentMinutes ? 1 : 0);
+  return dailyWallTimeEnd(endDate, endLocalTime, timeZone);
+}
+
+function localTimeMinutes(localTime: string): number {
+  const [hour, minute] = localTime.split(":").map(Number);
+  return (hour ?? 0) * 60 + (minute ?? 0);
+}
+
+function dailyWallTimeEnd(localDate: string, localTime: string, timeZone: string): Date {
+  const [year, month, day] = localDate.split("-").map(Number) as [number, number, number];
+  const [hour, minute] = localTime.split(":").map(Number) as [number, number];
+  const wall: WallClockParts = { year, month, day, hour, minute, second: 0 };
+  const wallAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const { offsets, candidates } = wallClockInstantResolution(wallAsUtc, wall, timeZone);
+
+  if (candidates.length > 0) return new Date(Math.max(...candidates));
+
+  const [lower, upper] = offsets.map((offset) => wallAsUtc - offset * 60_000).sort((a, b) => a - b);
+  let before = lower as number;
+  let after = upper as number;
+  const beforeOffset = timeZoneOffsetMinutes(new Date(before), timeZone);
+  while (after - before > 1) {
+    const middle = Math.floor((before + after) / 2);
+    if (timeZoneOffsetMinutes(new Date(middle), timeZone) === beforeOffset) before = middle;
+    else after = middle;
+  }
+  return new Date(after);
+}
+
 /** #1869 slice 3A: why a wall clock cannot become a naive `.toISOString()` reinterpretation. */
 export type StrictLocalWallClockErrorReason =
   | "invalid-syntax"
@@ -217,6 +272,27 @@ function wallClockPartsEqual(a: WallClockParts, b: WallClockParts): boolean {
     a.minute === b.minute &&
     a.second === b.second
   );
+}
+
+/** Candidate instants and settled offsets for a local wall-clock value. */
+function wallClockInstantResolution(
+  wallAsUtc: number,
+  wall: WallClockParts,
+  timeZone: string
+): { readonly offsets: readonly number[]; readonly candidates: readonly number[] } {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const offsets = [
+    ...new Set([
+      timeZoneOffsetMinutes(new Date(wallAsUtc - DAY_MS), timeZone),
+      timeZoneOffsetMinutes(new Date(wallAsUtc + DAY_MS), timeZone)
+    ])
+  ];
+  const candidates = offsets
+    .map((offset) => wallAsUtc - offset * 60_000)
+    .filter((instant) =>
+      wallClockPartsEqual(localWallClockParts(new Date(instant), timeZone), wall)
+    );
+  return { offsets, candidates };
 }
 
 const LOCAL_WALL_CLOCK_PATTERN =
@@ -302,28 +378,16 @@ export function strictLocalWallClockToInstant(localDateTime: string, timeZone: s
     );
   }
 
-  const DAY_MS = 24 * 60 * 60 * 1000;
-  const settledOffsets = new Set([
-    timeZoneOffsetMinutes(new Date(wallAsUtc - DAY_MS), timeZone),
-    timeZoneOffsetMinutes(new Date(wallAsUtc + DAY_MS), timeZone)
-  ]);
+  const { candidates } = wallClockInstantResolution(wallAsUtc, wall, timeZone);
 
-  const candidates = new Set<number>();
-  for (const offsetMinutes of settledOffsets) {
-    const candidateInstantMs = wallAsUtc - offsetMinutes * 60_000;
-    if (wallClockPartsEqual(localWallClockParts(new Date(candidateInstantMs), timeZone), wall)) {
-      candidates.add(candidateInstantMs);
-    }
-  }
-
-  if (candidates.size === 0) {
+  if (candidates.length === 0) {
     throw new StrictLocalWallClockError(
       "dst-gap",
       `strictLocalWallClockToInstant: "${localDateTime}" does not exist in "${timeZone}" ` +
         `(it falls in a spring-forward gap); supply an explicit offset instead`
     );
   }
-  if (candidates.size > 1) {
+  if (candidates.length > 1) {
     throw new StrictLocalWallClockError(
       "dst-fold",
       `strictLocalWallClockToInstant: "${localDateTime}" is ambiguous in "${timeZone}" ` +
@@ -331,5 +395,5 @@ export function strictLocalWallClockToInstant(localDateTime: string, timeZone: s
     );
   }
 
-  return new Date([...candidates][0] as number);
+  return new Date(candidates[0] as number);
 }

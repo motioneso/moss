@@ -121,6 +121,14 @@ class BlockingEngine extends SeedEngine {
 }
 
 describe("surface-scoped ChatSessionManager state", () => {
+  it("reports a warm private session without a durable thread id as private", async () => {
+    const manager = new ChatSessionManager(makeDeps(() => new SeedEngine()));
+    const sessions = (manager as unknown as { sessions: Map<string, unknown> }).sessions;
+    sessions.set("u1:drawer", { threadId: null, incognito: true });
+
+    await expect(manager.getPrivacyState("u1")).resolves.toEqual({ incognito: true });
+  });
+
   it("keeps seed idempotency independent per surface", async () => {
     const engines = new Map<string, SeedEngine>();
     const manager = new ChatSessionManager(

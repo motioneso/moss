@@ -9,6 +9,20 @@ const SPEC_DIR = "tests/uat/specs";
 const LEVELS = new Set<UatSeedLevel>(["bare", "solo-admin", "admin+data", "multi-user"]);
 const CHUNKS = new Set<UatSeedChunk>(["news", "sports", "tasks", "calendar", "notes", "finance"]);
 const CHAT_SCRIPTS = new Set<UatChatScript>(UAT_CHAT_SCRIPTS);
+
+function readClaimedWebPort(): number | undefined {
+  const raw = process.env.JARVIS_UAT_CLAIMED_WEB_PORT;
+  if (raw === undefined || raw === "") return undefined;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error("JARVIS_UAT_CLAIMED_WEB_PORT must be a decimal TCP port");
+  }
+  const port = Number(raw);
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+    throw new Error("JARVIS_UAT_CLAIMED_WEB_PORT must be between 1 and 65535");
+  }
+  return port;
+}
+
 async function resolveSpecPaths(filters: readonly string[]): Promise<string[]> {
   const available = (await readdir(SPEC_DIR))
     .filter((file) => file.endsWith(".uat.spec.ts"))
@@ -121,7 +135,9 @@ async function readUatLevel(specPath: string): Promise<{
 
 async function runSpec(specPath: string): Promise<number> {
   const uatLevel = await readUatLevel(specPath);
+  const claimedWebPort = readClaimedWebPort();
   const { baseURL, projectName, teardown } = await provisionForUat(uatLevel.level, {
+    ...(claimedWebPort === undefined ? {} : { claimedWebPort }),
     excludeChunks: uatLevel.without,
     withoutNewsJsonBinding: uatLevel.withoutNewsJsonBinding,
     withJobSearchFixture: uatLevel.withJobSearchFixture,

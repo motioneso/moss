@@ -9,6 +9,7 @@ export const MEETING_FIXTURE_NEW = "SYNTHETIC_DECISION_MAPLE";
 export const MEETING_FIXTURE_UNRELATED = "SYNTHETIC_OTHER_MEETING_SECRET";
 export const MEETING_FIXTURE_NOTES = "SYNTHETIC_NOTES_DECISION_CEDAR";
 export const MEETING_FIXTURE_REPLY = "The synthetic decision is recorded in the transcript. [[S1]]";
+export const MEETING_FIXTURE_LATE_REPLY = "SYNTHETIC_LATE_ANSWER_WILLOW from the held turn.";
 export const MEETING_FIXTURE_PORT = 8084;
 
 export interface MeetingFixtureObservation {
@@ -46,8 +47,16 @@ export function observeMeetingFixtureRequest(
   };
 }
 
+type HeldOutcome = "success" | "failure";
+
+/**
+ * Starts the stand-in. POST /control/hold holds the next meeting turn; GET /control/held reports
+ * whether one is waiting; POST /control/release?outcome=success|failure answers it late.
+ */
 export async function startMeetingChatFixtureServer(port = MEETING_FIXTURE_PORT) {
   const observations: MeetingFixtureObservation[] = [];
+  let holdArmed = false;
+  let heldTurn: ((outcome: HeldOutcome) => void) | undefined;
   const server = createServer((request, response) => {
     const path = new URL(request.url ?? "/", "http://fixture.invalid").pathname;
     const send = (status: number, body: unknown) => {
@@ -56,6 +65,33 @@ export async function startMeetingChatFixtureServer(port = MEETING_FIXTURE_PORT)
     };
     if (request.method === "GET" && path === "/evidence") {
       send(200, { observations });
+      return;
+    }
+    if (request.method === "POST" && path === "/control/hold") {
+      holdArmed = true;
+      response.writeHead(204).end();
+      return;
+    }
+    if (request.method === "GET" && path === "/control/held") {
+      send(200, { held: heldTurn !== undefined });
+      return;
+    }
+    if (request.method === "POST" && path === "/control/release") {
+      const outcome = new URL(request.url ?? "/", "http://fixture.invalid").searchParams.get(
+        "outcome"
+      );
+      if (outcome !== "success" && outcome !== "failure") {
+        send(400, { error: "Unknown release outcome" });
+        return;
+      }
+      if (!heldTurn) {
+        send(409, { error: "No turn is held" });
+        return;
+      }
+      const answer = heldTurn;
+      heldTurn = undefined;
+      answer(outcome);
+      response.writeHead(204).end();
       return;
     }
     if (request.method === "GET" && path === "/v1/models") {
@@ -73,19 +109,30 @@ export async function startMeetingChatFixtureServer(port = MEETING_FIXTURE_PORT)
         const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
         const observation = observeMeetingFixtureRequest(path, body);
         if (observation) observations.push(observation);
-        send(200, {
-          choices: [
-            {
-              message: {
-                role: "assistant",
-                content: observation?.hasNotes
-                  ? "The synthetic decision is recorded in the personal notes."
-                  : MEETING_FIXTURE_REPLY
-              }
-            }
-          ],
-          usage: { prompt_tokens: 32, completion_tokens: 16 }
-        });
+        const answer = (content: string) =>
+          send(200, {
+            choices: [{ message: { role: "assistant", content } }],
+            usage: { prompt_tokens: 32, completion_tokens: 16 }
+          });
+        if (observation && holdArmed) {
+          holdArmed = false;
+          const held = (outcome: HeldOutcome) =>
+            outcome === "success"
+              ? answer(MEETING_FIXTURE_LATE_REPLY)
+              : send(500, { error: { message: "Synthetic held turn failure" } });
+          heldTurn = held;
+
+          // A caller that hung up is no longer waiting, so a release must not report delivery.
+          response.on("close", () => {
+            if (heldTurn === held) heldTurn = undefined;
+          });
+          return;
+        }
+        answer(
+          observation?.hasNotes
+            ? "The synthetic decision is recorded in the personal notes."
+            : MEETING_FIXTURE_REPLY
+        );
       } catch {
         send(400, { error: "Invalid fixture request" });
       }
@@ -95,10 +142,16 @@ export async function startMeetingChatFixtureServer(port = MEETING_FIXTURE_PORT)
     server.once("error", reject);
     server.listen(port, "0.0.0.0", resolve);
   });
+  const address = server.address();
   return {
-    stop: () =>
-      new Promise<void>((resolve, reject) =>
+    port: typeof address === "object" && address ? address.port : port,
+    stop: () => {
+      // A held turn keeps its connection open, which would stall close.
+      heldTurn?.("failure");
+      heldTurn = undefined;
+      return new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve()))
-      )
+      );
+    }
   };
 }

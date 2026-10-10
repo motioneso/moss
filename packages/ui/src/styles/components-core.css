@@ -543,6 +543,9 @@
   border-top-width: 3px;
   border-top-color: var(--ink);
 }
+.jds-divider--vertical.jds-divider--strong {
+  border-left-color: var(--border-strong);
+}
 
 /* Eyebrow / section label utility */
 .jds-eyebrow {

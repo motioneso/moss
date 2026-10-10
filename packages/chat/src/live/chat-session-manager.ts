@@ -1,60 +1,35 @@
-import { randomUUID } from "node:crypto";
-
-import { recordModelActivity, type ProviderKind } from "@moss/ai";
-import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
+import type { ProviderKind } from "@moss/ai";
+import type { SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
-import { answerDetailSteps } from "./activity-detail-steps.js";
-import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
-import { renderAttachmentsManifest } from "./attachments-manifest.js";
-import { admissionForActor, admitToContext, submitPreparedTurn } from "./context-admission.js";
-import { buildEngineText } from "./engine-text.js";
 import {
-  assertProviderIdentityForPendingTurn,
   discardChatSession,
   dropSessionsForProvider,
   ensureSessionForCurrentProvider,
   switchChatProviderSession,
   type ActiveChatProvider,
+  type EnsureSessionOpts,
+  type LaunchSessionOpts,
   type UserSession
 } from "./chat-session-provider-identity.js";
 import { launchChatSession, seedChatContext } from "./chat-session-launch.js";
-import {
-  ChatStreamLimitError,
-  ChatTurnInFlightError,
-  mapChatEngineReadError,
-  CliChatDeliveryUnknownError,
-  CliChatUnavailableError,
-  ApiKeyLiveChatUnavailableError,
-  UnsupportedLegacyCliProviderError
-} from "./errors.js";
-import { beginClassifierGateShadowTurn } from "./classifier-gate-shadow.js";
+import { ChatStreamLimitError, ChatTurnInFlightError } from "./errors.js";
 import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
 import {
   applyRemoteReap,
   clearChatSession,
   countSubscribersFor,
-  delay,
-  createPendingActionResultFlusher,
   clearPrivateDetachTimer,
   endPrivateChatSession,
-  healAndRelaunchSession,
   resumeChatThread,
   stopSessionTurn,
   type PendingActionResult,
   type SessionRecoveryHost,
   schedulePrivateDetachTimer,
-  reconcileChatSessions,
-  upsertActivityRecord,
-  assertNewToolsAttached
+  reconcileChatSessions
 } from "./session-runtime-helpers.js";
-import {
-  DEFAULT_CHAT_SURFACE,
-  normalizeChatSurface,
-  surfaceSessionKey,
-  type ChatSurface
-} from "./chat-surface.js";
+import { normalizeChatSurface, surfaceSessionKey, type ChatSurface } from "./chat-surface.js";
 
 export {
   combineHiddenContextBlocks,
@@ -70,14 +45,17 @@ import type {
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
-import { tryGatedTurn } from "./classifier-gate-lifecycle.js";
+import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 import {
   routeOriginRecord,
   routeLiveOriginRecord,
   withOriginThreadTransition,
+  waitForChatAdmission,
+  waitForOriginThreadTransition,
   type OriginRecordReceipt,
   type OriginThreadTransition
 } from "./origin-record-routing.js";
+import { runChatTurn, type ChatTurnHost } from "./chat-session-turn.js";
 export type {
   ChatPersistencePort,
   ChatSessionManagerDeps,
@@ -116,6 +94,7 @@ export class ChatSessionManager {
   /** #342: serializes reconciliation and idle reaping, which both mutate sessions/tokens. */
   private maintenanceMutex: Promise<void> = Promise.resolve();
   private readonly lifecycleHost: SessionRecoveryHost;
+  private readonly turnHost: ChatTurnHost;
 
   constructor(private readonly deps: ChatSessionManagerDeps) {
     this.pollMs = deps.pollMs ?? 25;
@@ -128,18 +107,36 @@ export class ChatSessionManager {
       emit: this.emit.bind(this),
       ensureSession: this.ensureSession.bind(this)
     };
+    this.turnHost = {
+      deps,
+      sessions: this.sessions,
+      originTransitions: this.originTransitions,
+      pendingForcedReplay: this.pendingForcedReplay,
+      turnControllers: this.turnControllers,
+      actionResultsBySession: this.actionResultsBySession,
+      turnActivityBySession: this.turnActivityBySession,
+      sequenceBySession: this.sequenceBySession,
+      pendingActionResultsBySession: this.pendingActionResultsBySession,
+      pollMs: this.pollMs,
+      idleWatchdogMs: this.idleWatchdogMs,
+      lifecycleHost: this.lifecycleHost,
+      emit: this.emit.bind(this),
+      ensureSession: this.ensureSession.bind(this)
+    };
   }
 
   /** Ensure one live engine per actor + surface; concurrent launches share a promise. */
   async ensureSession(
     actorUserId: string,
     userName: string,
-    opts?: { readonly forceReplay?: boolean },
+    opts?: EnsureSessionOpts & { readonly signal?: AbortSignal },
     surface?: string
   ): Promise<UserSession> {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    return ensureSessionForCurrentProvider({
+    opts?.signal?.throwIfAborted();
+    const transition = this.originTransitions.get(sessionKey);
+    const pending = ensureSessionForCurrentProvider({
       actorUserId,
       userName,
       opts,
@@ -149,17 +146,23 @@ export class ChatSessionManager {
       persistence: this.deps.persistence,
       sessions: this.sessions,
       pendingForcedReplay: this.pendingForcedReplay,
+      waitForSelection: () => waitForOriginThreadTransition(this.originTransitions, sessionKey),
       discardSession: (session) =>
         discardChatSession(sessionKey, session, this.sessions, this.deps.revokeMcpToken),
       launchSession: (launchOpts, providerIdentity) =>
         this.launchSession(actorUserId, userName, launchOpts, chatSurface, providerIdentity)
     });
+    const session = await waitForChatAdmission(pending, opts?.signal);
+    opts?.signal?.throwIfAborted();
+    return this.originTransitions.get(sessionKey) === transition
+      ? session
+      : this.ensureSession(actorUserId, userName, opts, surface);
   }
 
   private async launchSession(
     actorUserId: string,
     userName: string,
-    opts: { readonly forceReplay?: boolean } | undefined,
+    opts: Partial<LaunchSessionOpts> | undefined,
     surface: ChatSurface,
     providerIdentity: ActiveChatProvider
   ): Promise<UserSession> {
@@ -199,15 +202,13 @@ export class ChatSessionManager {
   }> {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
-    // Turn-at-a-time (spec §6.5): reject a concurrent turn for the same surface.
-    // The flag is set synchronously (before any await) so two turns started in
-    // the same tick can't both pass the check, and cleared in finally below.
+    // Turn-at-a-time (spec §6.5): set synchronously before await, then clear in finally.
     if (this.turnsInFlight.has(sessionKey)) {
       throw new ChatTurnInFlightError();
     }
     this.turnsInFlight.add(sessionKey);
     try {
-      return await this.runTurn(actorUserId, userName, text, opts, chatSurface);
+      return await runChatTurn(this.turnHost, actorUserId, userName, text, opts, chatSurface);
     } finally {
       this.turnsInFlight.delete(sessionKey);
     }
@@ -232,473 +233,6 @@ export class ChatSessionManager {
       ensureSession: this.ensureSession.bind(this),
       pollMs: this.pollMs
     });
-  }
-
-  private async runTurn(
-    actorUserId: string,
-    userName: string,
-    text: string,
-    opts?: {
-      readonly attachments?: readonly StoredAttachmentMeta[];
-      readonly moduleControl?: string;
-    },
-    surface: ChatSurface = DEFAULT_CHAT_SURFACE
-  ): Promise<{
-    reply: string;
-    userMessageId?: string;
-    assistantMessageId?: string;
-    sourceFreshness?: SourceFreshnessV1 | null;
-  }> {
-    const sessionKey = surfaceSessionKey(actorUserId, surface);
-    // #2956: one turn id files shadow, audit and answer rows across launch/replay retries.
-    const turnId = randomUUID();
-    // File this session's tool rows under the turn; cleared in the finally below.
-    this.deps.setCurrentTurnId?.(sessionKey, turnId);
-    const controller = new AbortController();
-    this.turnControllers.set(sessionKey, controller);
-    this.actionResultsBySession.set(sessionKey, []);
-    const turnActivityRecords: TranscriptRecord[] = [];
-    this.turnActivityBySession.set(sessionKey, turnActivityRecords);
-    let lastDeliveredSequence = 0;
-    const flushPendingInOrder = createPendingActionResultFlusher(
-      this.pendingActionResultsBySession,
-      actorUserId,
-      surface,
-      sessionKey,
-      this.sequenceBySession,
-      turnActivityRecords,
-      this.actionResultsBySession.get(sessionKey),
-      (userId, chatSurface, next) => this.emit(userId, chatSurface, next)
-    );
-    const flushPending = (beforeSequence?: number) => {
-      lastDeliveredSequence = flushPendingInOrder(lastDeliveredSequence, beforeSequence);
-    };
-    const flushActions = async () => {
-      await this.deps.flushActionRecords?.(sessionKey);
-      flushPending();
-      return {
-        activityRecords: turnActivityRecords,
-        actionResults: this.actionResultsBySession.get(sessionKey)
-      };
-    };
-    // #1157: a failed launch (dead tmux server, stale daemon state) gets one retry before surfacing.
-    let session: UserSession;
-    let turnElapsedMs: number | undefined;
-    let turnUsage: ChatTurnUsageDto | undefined;
-    // #2907 (plan 3.5) — the turn's shadow tracker; created once its own session is resolved.
-    let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
-    try {
-      // #2901: the gate may handle the turn before engine launch; decline keeps the model path.
-      // #2934 — the gate captures this turn's privacy before its mode wait and returns it.
-      const {
-        result: gated,
-        requestIncognito,
-        requestThreadId
-      } = await tryGatedTurn(
-        this.lifecycleHost,
-        actorUserId,
-        surface,
-        text,
-        { ...opts, turnId, parentId: turnId },
-        controller,
-        flushActions
-      );
-      if (gated) return gated;
-      // #2934 finding 1 — a stop during the gate attempt stops the turn pre-emit.
-      if (controller.signal.aborted)
-        return this.finishRefusedTurn(actorUserId, surface, sessionKey, undefined, undefined);
-      try {
-        session = await this.ensureSession(actorUserId, userName, undefined, surface);
-      } catch (err) {
-        if (
-          !(err instanceof CliChatUnavailableError) ||
-          err instanceof ApiKeyLiveChatUnavailableError ||
-          err instanceof UnsupportedLegacyCliProviderError
-        ) {
-          throw err;
-        }
-        this.pendingForcedReplay.add(sessionKey);
-        session = await this.ensureSession(actorUserId, userName, undefined, surface);
-      }
-      // Refuse another conversation's model, including a same-privacy resume during the mode wait.
-      if (
-        session.incognito !== requestIncognito ||
-        (requestThreadId !== null && session.threadId !== requestThreadId)
-      )
-        return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
-      const turnProviderIdentity = session.providerIdentity;
-      gateShadow = beginClassifierGateShadowTurn(
-        this.deps.classifierGateShadow,
-        actorUserId,
-        surface,
-        text,
-        // #2934 — the turn's own privacy, not the session resolved after the wait.
-        requestIncognito,
-        {
-          threadId: requestThreadId,
-          hasAttachment: (opts?.attachments?.length ?? 0) > 0,
-          signal: controller.signal,
-          // #2956: the shadow record shares the turn-start id.
-          turnId
-        }
-      );
-
-      const attachments = opts?.attachments ?? [];
-      const moduleControl = await admitToContext(
-        admissionForActor(this.deps.conversationProvenance, actorUserId),
-        session.threadId,
-        "module_control_context",
-        opts?.moduleControl ?? ""
-      );
-      const engineText = await buildEngineText(
-        {
-          persistence: this.deps.persistence,
-          conversationProvenance: this.deps.conversationProvenance,
-          passiveRetrieval: this.deps.passiveRetrieval,
-          notesRetrieval: this.deps.notesRetrieval,
-          crossToolRead: this.deps.crossToolRead,
-          priorityModel: this.deps.priorityModel,
-          now: this.deps.now
-        },
-        actorUserId,
-        text,
-        surface,
-        { threadId: session.threadId, chatSessionId: sessionKey },
-        { attachmentManifest: renderAttachmentsManifest(attachments), moduleControl }
-      );
-      const { pendingItems } = engineText;
-      const currentProvider = await this.deps.persistence.resolveActiveProvider(actorUserId);
-      await assertProviderIdentityForPendingTurn(turnProviderIdentity, currentProvider);
-      this.emit(actorUserId, surface, { kind: "user", text });
-      let toolsListBaseline = session.mcpToken
-        ? this.deps.getToolsListObservationCount?.(session.mcpToken)
-        : undefined;
-      // #2934 finding 1 — stop before the submit so flipped-thread text never reaches the model.
-      if (controller.signal.aborted)
-        return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
-      try {
-        await submitPreparedTurn(session.engine, engineText);
-      } catch (err) {
-        // #2934 finding 1 — a stop around a failed submit refuses instead of resubmitting.
-        if (controller.signal.aborted)
-          return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
-        if (err instanceof CliChatDeliveryUnknownError) {
-          // Delivery MAY have happened — never resubmit (duplicate-turn risk); evict so the
-          // next turn relaunches cleanly (pre-#1157 behavior, kept).
-          if (this.sessions.get(sessionKey) === session) this.sessions.delete(sessionKey);
-          this.deps.revokeMcpToken?.(sessionKey);
-          throw err;
-        }
-        if (err instanceof CliChatUnavailableError) {
-          // #1157: unavailable = the text verifiably never entered the engine (paste failed
-          // pre-entry, or the daemon has no live session). Safe to heal + resubmit ONCE.
-          await assertProviderIdentityForPendingTurn(
-            turnProviderIdentity,
-            this.deps.persistence.resolveActiveProvider(actorUserId)
-          );
-          session = await healAndRelaunchSession(
-            this.lifecycleHost,
-            actorUserId,
-            userName,
-            session
-          );
-          // A new chat inside the heal: re-check stop, identity and privacy before resubmit.
-          if (controller.signal.aborted)
-            return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
-          if (
-            session.incognito !== requestIncognito ||
-            (requestThreadId !== null && session.threadId !== requestThreadId)
-          )
-            return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
-          await assertProviderIdentityForPendingTurn(
-            turnProviderIdentity,
-            session.providerIdentity
-          );
-          toolsListBaseline = session.mcpToken // #2164 r21 — recapture against the fresh token
-            ? this.deps.getToolsListObservationCount?.(session.mcpToken)
-            : undefined;
-          await submitPreparedTurn(session.engine, engineText);
-        } else {
-          throw err;
-        }
-      }
-
-      let reply = "";
-      const invokedToolNames = new Set<string>();
-      // #2164 r21 correction — correlates mcp__ calls with rejections across readNew polls.
-      const mcpAttempts: { readonly name: string; readonly id?: string }[] = [];
-      const rejectedCallIds = new Set<string>();
-      let lastEmissionAt = this.deps.clock.now();
-      let watchdogTripped = false;
-      let stopped = false;
-      for (;;) {
-        let records: TranscriptRecord[];
-        let offset: number;
-        let complete: boolean;
-        try {
-          const result = await session.engine.readNew(session.transcriptOffset);
-          records = result.records;
-          offset = result.offset;
-          complete = result.complete;
-        } catch (error) {
-          // #456 — a killed engine rejects readNew; stop exits cleanly, other failures surface.
-          if (controller.signal.aborted) {
-            stopped = true;
-            break;
-          }
-          flushPending();
-          throw mapChatEngineReadError(session.provider, error);
-        }
-        if (controller.signal.aborted) {
-          stopped = true;
-          break;
-        }
-        session.transcriptOffset = offset;
-        if (records.length > 0) {
-          lastEmissionAt = this.deps.clock.now();
-          // #456 — signal activity so the in-flight RPC turn-verb deadline resets (a wedged
-          // cli-runner still trips it; an actively-producing turn never does).
-          session.engine.resetActivityDeadline?.();
-        }
-        for (const record of records) {
-          if (record.sequence !== undefined) flushPending(record.sequence);
-          const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
-          if (!rejectionOnly) {
-            this.emit(actorUserId, surface, record);
-            if (record.kind !== "reply" && record.kind !== "status") {
-              upsertActivityRecord(turnActivityRecords, record);
-            }
-          }
-          if (record.kind === "reply") {
-            reply = record.text;
-            if (record.elapsedMs !== undefined) turnElapsedMs = record.elapsedMs;
-            if (record.usage !== undefined) turnUsage = record.usage;
-          }
-          if (record.kind === "tool" && record.toolName) {
-            invokedToolNames.add(record.toolName);
-            if (record.toolName.startsWith("mcp__"))
-              mcpAttempts.push({ name: record.toolName, id: record.toolCallId });
-            if (!record.rejected) gateShadow?.noteTool(record.toolName);
-          }
-          if (record.kind === "tool" && record.rejected && record.toolCallId)
-            rejectedCallIds.add(record.toolCallId);
-          if (record.sequence !== undefined) {
-            lastDeliveredSequence = Math.max(lastDeliveredSequence, record.sequence);
-          }
-        }
-        if (complete) {
-          flushPending();
-          break;
-        }
-        flushPending(lastDeliveredSequence + 2);
-        // #456 — user-driven Stop exits cleanly so the turn lock releases; persist nothing.
-        if (controller.signal.aborted) {
-          stopped = true;
-          break;
-        }
-        // #456 — idle watchdog ends only after a full quiet window; active output resets it.
-        if (
-          this.idleWatchdogMs > 0 &&
-          this.deps.clock.now() - lastEmissionAt > this.idleWatchdogMs
-        ) {
-          watchdogTripped = true;
-          break;
-        }
-        if (this.pollMs > 0) await delay(this.pollMs);
-      }
-
-      if (stopped) {
-        // Coordinator ruling (a): emit a status record over SSE, persist NOTHING. The user message
-        // and any partial reply are discarded — the turn never completed.
-        this.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
-        gateShadow?.cancel();
-        session.lastActivity = this.deps.clock.now();
-        this.deps.touchMcpToken?.(sessionKey);
-        return { reply };
-      }
-
-      if (watchdogTripped) {
-        const seconds = Math.round(this.idleWatchdogMs / 1000);
-        this.emit(actorUserId, surface, {
-          kind: "status",
-          text: `No response from the model for ${seconds} seconds — ending turn.`
-        });
-        session.lastActivity = this.deps.clock.now();
-        this.deps.touchMcpToken?.(sessionKey);
-        return { reply };
-      }
-      // #2164: per-turn engines need a fresh attach; only successful identified calls satisfy the gate.
-      await assertNewToolsAttached({
-        startsToolClientPerTurn: session.startsToolClientPerTurn,
-        provider: session.provider,
-        mcpToken: session.mcpToken,
-        mcpToolInvoked: mcpAttempts.some((a) => a.id != null && !rejectedCallIds.has(a.id)),
-        reply,
-        toolsListBaseline,
-        getToolsListObservationCount: this.deps.getToolsListObservationCount,
-        now: () => this.deps.clock.now(),
-        engine: session.engine,
-        emitUnavailable: () =>
-          this.emit(actorUserId, surface, {
-            kind: "status",
-            text: "Chat tools were not available for this reply — please try again."
-          })
-      });
-
-      let answerProvenance: AnswerProvenanceMetadataV1 | undefined;
-      if (pendingItems.length > 0 && reply) {
-        try {
-          const citedIds = parseAnswerMarkers(reply);
-          answerProvenance = finalizeProvenance(pendingItems, citedIds);
-        } catch {
-          answerProvenance = undefined;
-        }
-      }
-
-      await flushActions();
-      // #2934: a stop during reads or notification lookup still prevents the turn save.
-      if (controller.signal.aborted)
-        return this.finishRefusedTurn(actorUserId, surface, sessionKey, session, gateShadow);
-
-      const stored = await this.deps.persistence.recordTurn(
-        actorUserId,
-        text,
-        reply,
-        {
-          provider: session.provider,
-          model: session.model
-        },
-        {
-          threadId: session.threadId,
-          invokedToolNames,
-          answerProvenance,
-          attachments:
-            attachments.length > 0
-              ? attachments.map((meta) => ({
-                  id: meta.id,
-                  fileName: meta.fileName,
-                  mimeType: meta.mimeType,
-                  sizeBytes: meta.sizeBytes
-                }))
-              : undefined,
-          actionResults: this.actionResultsBySession.get(sessionKey),
-          activityRecords: turnActivityRecords,
-          elapsedMs: turnElapsedMs,
-          usage: turnUsage
-        },
-        surface
-      );
-      session.lastActivity = this.deps.clock.now();
-      this.deps.touchMcpToken?.(sessionKey);
-
-      // #2956: only stored turns get an answer line; refused/stopped/private steps have no
-      // parent. The line holds tool counts; later Jev agreement joins its shadow detail row.
-      if (stored) {
-        this.recordAnswerLine(actorUserId, turnId, {
-          modelName: session.model,
-          durationMs: turnElapsedMs,
-          usage: turnUsage,
-          toolNames: invokedToolNames,
-          actionResults: this.actionResultsBySession.get(sessionKey),
-          quote: text,
-          records: turnActivityRecords,
-          reply
-        });
-      }
-
-      // Post-store: re-emit reply with messageId + sourceFreshness so live UI picks it up
-      if (stored?.assistantMessageId && stored.sourceFreshness !== undefined) {
-        this.emit(actorUserId, surface, {
-          kind: "reply",
-          text: reply,
-          messageId: stored.assistantMessageId,
-          sourceFreshness: stored.sourceFreshness,
-          ...(turnElapsedMs !== undefined ? { elapsedMs: turnElapsedMs } : {}),
-          ...(turnUsage !== undefined ? { usage: turnUsage } : {})
-        });
-      }
-
-      return {
-        reply,
-        userMessageId: stored?.userMessageId,
-        assistantMessageId: stored?.assistantMessageId,
-        sourceFreshness: stored?.sourceFreshness
-      };
-    } finally {
-      // #2907 — record a no-model-tool turn distinctly. A recorded cancel outranks this in the runner.
-      gateShadow?.finish();
-      // #2956: release the turn's filing slot in the same finally that drops
-      // every other per-turn state, so later tool calls cannot join this turn.
-      this.deps.clearCurrentTurnId?.(sessionKey);
-      flushPending();
-      this.turnActivityBySession.delete(sessionKey);
-      this.actionResultsBySession.delete(sessionKey);
-      this.pendingActionResultsBySession.delete(sessionKey);
-      this.sequenceBySession.delete(sessionKey);
-      this.turnControllers.delete(sessionKey);
-    }
-  }
-
-  /**
-   * #2956: one owned answer line per completed chat turn. Fire-and-forget like
-   * every other writer: the installed recorder routes the owned write through
-   * the owner's scope, and a failed write is logged and dropped, never thrown
-   * into the turn.
-   */
-  private recordAnswerLine(
-    actorUserId: string,
-    turnId: string,
-    turn: {
-      readonly modelName: string;
-      readonly durationMs?: number;
-      readonly usage?: ChatTurnUsageDto;
-      readonly toolNames: ReadonlySet<string>;
-      readonly actionResults?: readonly ActionResultMetadata[];
-      readonly quote: string;
-      readonly records: readonly TranscriptRecord[];
-      readonly reply: string;
-    }
-  ): void {
-    const failed = (turn.actionResults ?? []).filter((r) => r.outcome === "error").length;
-    recordModelActivity({
-      id: turnId,
-      kind: "chat",
-      action: "chat",
-      outcome: "ok",
-      modelName: turn.modelName,
-      result: "completed",
-      ownerUserId: actorUserId,
-      actionCode: "chat.answer",
-      turnId,
-      ...(turn.durationMs !== undefined ? { durationMs: turn.durationMs } : {}),
-      ...(turn.usage?.inputTokens !== undefined ? { inputTokens: turn.usage.inputTokens } : {}),
-      ...(turn.usage?.outputTokens !== undefined ? { outputTokens: turn.usage.outputTokens } : {}),
-      factCounts: { tools: turn.toolNames.size, tools_failed: failed },
-      detail: {
-        quote: turn.quote,
-        steps: answerDetailSteps(turn.records, turn.reply, {
-          modelName: turn.modelName,
-          durationMs: turn.durationMs
-        })
-      }
-    });
-  }
-
-  /** #2934 — fail a turn closed before it touches the model or the store. */
-  private finishRefusedTurn(
-    actorUserId: string,
-    surface: ChatSurface,
-    sessionKey: string,
-    session: UserSession | undefined,
-    gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined
-  ): { reply: string } {
-    this.emit(actorUserId, surface, { kind: "status", text: "Stopped by user." });
-    gateShadow?.cancel();
-    if (session) {
-      session.lastActivity = this.deps.clock.now();
-      this.deps.touchMcpToken?.(sessionKey);
-    }
-    return { reply: "" };
   }
 
   /** #456 — stop one in-flight turn for this actor + surface. */
@@ -729,7 +263,8 @@ export class ChatSessionManager {
           sessions: this.sessions,
           stopTurn: (userId, chatSurface) => this.stopTurn(userId, chatSurface),
           endPrivateSession: (userId, chatSurface) => this.endPrivateSession(userId, chatSurface),
-          revokeMcpToken: this.deps.revokeMcpToken
+          revokeMcpToken: this.deps.revokeMcpToken,
+          pendingForcedReplay: this.pendingForcedReplay
         })
     );
   }
@@ -754,14 +289,26 @@ export class ChatSessionManager {
   async getPrivacyState(
     actorUserId: string,
     surface?: string
-  ): Promise<{ readonly incognito: boolean }> {
-    const currentThread = await this.deps.persistence.getCurrentThreadState?.(
-      actorUserId,
-      normalizeChatSurface(surface)
-    );
-    return { incognito: currentThread?.incognito ?? false };
+  ): Promise<{ readonly incognito: boolean; readonly threadId?: string }> {
+    const chatSurface = normalizeChatSurface(surface);
+    const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
+    const session = this.sessions.get(sessionKey);
+    const currentThread = session
+      ? { id: session.threadId, incognito: session.incognito }
+      : await getSelectedThreadState({
+          actorUserId,
+          surface: chatSurface,
+          useMain: usesMainThreadSelection({
+            surface: chatSurface,
+            forceReplay: this.pendingForcedReplay.has(sessionKey)
+          }),
+          persistence: this.deps.persistence
+        });
+    return {
+      incognito: currentThread?.incognito ?? false,
+      ...(currentThread?.id ? { threadId: currentThread.id } : {})
+    };
   }
-
   /** Resume an owned thread for this actor + surface. */
   async resumeThread(actorUserId: string, threadId: string, surface?: string): Promise<void> {
     await withOriginThreadTransition(
@@ -780,7 +327,6 @@ export class ChatSessionManager {
         })
     );
   }
-
   /** Switch provider without resetting the surface's conversation. */
   async switchProvider(actorUserId: string, userName: string, surface?: string): Promise<void> {
     await switchChatProviderSession({

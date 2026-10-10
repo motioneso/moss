@@ -5,6 +5,7 @@ import {
   type ChangeEvent,
   type ClipboardEvent,
   type KeyboardEvent,
+  type SetStateAction,
   useEffect,
   useRef,
   useState
@@ -67,6 +68,9 @@ export function Composer(props: {
   readonly readOnly: boolean;
   readonly isFounder: boolean;
   readonly initialText?: string;
+  /** The drawer keeps one unsent draft per selected conversation. */
+  readonly draft?: string;
+  readonly onDraftChange?: (action: SetStateAction<string>) => void;
   readonly isSending: boolean;
   readonly sendError: string | null;
   readonly needsProvider: boolean;
@@ -92,13 +96,18 @@ export function Composer(props: {
   // value — typing/sending clears it and we never re-seed from the prop (no useEffect that would
   // clobber edits or re-fire the chip on re-render).
   const assistantName = useAssistantName("");
-  const [text, setText] = useState(() => props.initialText ?? "");
+  const [localText, setLocalText] = useState(() => props.draft ?? props.initialText ?? "");
+  const text = props.draft ?? localText;
+  const setText = (next: SetStateAction<string>) => {
+    if (props.draft === undefined) setLocalText(next);
+    props.onDraftChange?.(next);
+  };
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   // #916 — when the composer opens seeded with a starter (module draft #916 or onboarding #368),
   // move focus to the textarea and place the caret at the end so the editable draft is immediately
   // reviewable/editable. Mount-only (empty deps): it must not steal focus on later re-renders.
   useEffect(() => {
-    if (!props.initialText) return;
+    if (!props.initialText || props.draft !== undefined) return;
     const el = textareaRef.current;
     if (!el) return;
     el.focus();

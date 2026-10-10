@@ -45,6 +45,8 @@ export interface ChatThreadDto {
   readonly ownerUserId: string;
   readonly title: string;
   readonly incognito: boolean;
+  /** Durable drawer destination used when reconnecting after side-chat activity. */
+  readonly isMain: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
   /** When this conversation was last active (a new turn), for ordering and display age. */
@@ -121,6 +123,8 @@ export interface ListChatThreadsResponse {
 
 export interface GetChatPrivacyStateResponse {
   readonly incognito: boolean;
+  /** The owner-scoped conversation currently selected for this chat surface. */
+  readonly threadId?: string;
 }
 
 export interface ListChatThreadMessagesResponse {
@@ -260,7 +264,20 @@ export interface ChatClassifierGateOriginV1 {
   readonly outcome: "executed-success" | "executed-failure-or-unknown";
 }
 
-export type ChatTurnOriginV1 = ChatClassifierGateOriginV1;
+/**
+ * #3309 — a turn written by code for a relative reminder: the saved or refused request, or the
+ * delivered reminder itself. No model ran, so there is no executed provider or usage.
+ */
+export interface ChatReminderOriginV1 {
+  readonly version: 1;
+  readonly kind: "reminder";
+  readonly event: "saved" | "refused" | "delivered" | "listed" | "cancelled" | "cancel_refused";
+  readonly reminderId: string | null;
+  /** Set on delivery: true when the reminder arrived more than a minute after it was due. */
+  readonly late?: boolean;
+}
+
+export type ChatTurnOriginV1 = ChatClassifierGateOriginV1 | ChatReminderOriginV1;
 
 export type MemoryCorrectionReasonDto = "rejected" | "corrected";
 export type MemoryCorrectionSourceDto = "chat" | "pattern-reject";
@@ -461,6 +478,7 @@ const chatThreadSchema = {
     "ownerUserId",
     "title",
     "incognito",
+    "isMain",
     "createdAt",
     "updatedAt",
     "lastActiveAt",
@@ -471,6 +489,7 @@ const chatThreadSchema = {
     ownerUserId: { type: "string" },
     title: { type: "string" },
     incognito: { type: "boolean" },
+    isMain: { type: "boolean" },
     createdAt: { type: "string" },
     updatedAt: { type: "string" },
     lastActiveAt: { type: "string" },
@@ -676,7 +695,8 @@ export const getChatPrivacyStateResponseSchema = {
   additionalProperties: false,
   required: ["incognito"],
   properties: {
-    incognito: { type: "boolean" }
+    incognito: { type: "boolean" },
+    threadId: { type: "string" }
   }
 } as const;
 

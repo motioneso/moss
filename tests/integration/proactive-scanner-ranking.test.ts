@@ -91,7 +91,11 @@ describe("ProactiveScanner — signal/result pairing after ranking", () => {
     };
 
     const mockPrefsRepo = {
-      get: vi.fn().mockResolvedValue(enabledPref)
+      getSaved: vi.fn().mockResolvedValue({
+        raw: enabledPref,
+        preference: enabledPref,
+        hasLegacyEmailChoice: true
+      })
     } as unknown as ProactiveMonitoringPreferencesRepository;
 
     const mockStateRepo = {
@@ -115,7 +119,8 @@ describe("ProactiveScanner — signal/result pairing after ranking", () => {
       monitorStateRepository: mockStateRepo,
       cardRepository: mockCardRepo,
       antiSpamPolicy: mockAntiSpam,
-      getLocalePreference: async () => ({ timezone: "UTC" })
+      getLocalePreference: async () => ({ timezone: "UTC" }),
+      resolveQuietHours: async () => null
     });
 
     await scanner.scan(

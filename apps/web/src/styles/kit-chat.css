@@ -17,8 +17,11 @@
    would leave no room for the draft on a phone, so the drawer stays the app's normal pop-up
    there instead of copying the mockup's always-stacked layout. */
 @media (min-width: 721px) {
+  /* Relative, not static: the docked panel is the containing block for the Conversations
+     overlay, so the overlay covers the panel and never the page beside it. */
   .chatd.chatd--docked {
-    position: static;
+    position: relative;
+    z-index: auto;
     top: auto;
     right: auto;
     bottom: auto;
@@ -98,6 +101,44 @@
   gap: 11px;
   padding: 14px 14px 12px;
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.chatd-conversations {
+  display: contents;
+}
+
+.chatd-overlay-background {
+  display: contents;
+}
+
+.chatd-conversations__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+
+.chatd-conversations__head,
+.chatd-conversations__side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.chatd-conversations__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.chatd-conversations__empty {
+  margin: 0;
+  line-height: var(--leading-relaxed);
 }
 
 .chatd__mark {

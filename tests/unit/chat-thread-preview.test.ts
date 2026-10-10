@@ -8,8 +8,11 @@ function makeThread(overrides: Partial<ChatThread> = {}): ChatThread {
     owner_user_id: "user-1",
     title: "Old chat",
     incognito: false,
+    is_main: false,
     surface: "drawer",
     conversation_summary: null,
+    summary_covered_through_message_id: null,
+    summary_revision: 0,
     created_at: new Date("2026-06-06T12:00:00.000Z"),
     updated_at: new Date("2026-06-06T12:00:00.000Z"),
     last_active_at: new Date("2026-06-06T12:00:00.000Z"),
@@ -18,6 +21,10 @@ function makeThread(overrides: Partial<ChatThread> = {}): ChatThread {
 }
 
 describe("serializeThread lastMessagePreview", () => {
+  it("includes the durable Main designation", () => {
+    expect(serializeThread(makeThread({ is_main: true })).isMain).toBe(true);
+  });
+
   it("is null when there is no last message body", () => {
     const dto = serializeThread(makeThread());
     expect(dto.lastMessagePreview).toBeNull();

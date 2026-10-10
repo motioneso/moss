@@ -41,6 +41,16 @@ function visibleChatMessage(table: "app.chat_messages" | "m" = "app.chat_message
   )`;
 }
 
+export interface PublishConversationSummaryInput {
+  readonly threadId: string;
+  readonly expectedRevision: number;
+  readonly expectedCoveredThroughMessageId: string | null;
+  readonly throughMessageId: string;
+  readonly summary: string;
+}
+
+export type PublishConversationSummaryResult = "published" | "stale" | "missing";
+
 export interface CreateChatThreadInput {
   readonly title: string;
   readonly incognito?: boolean;
@@ -309,10 +319,38 @@ export class ChatRepository {
   }
 
   /**
-   * Returns the owner's most-recent thread by last_active_at (the conversation the
-   * live drawer should open to), or undefined when the owner has no threads. RLS
-   * scopes rows to the owner; we still bind to the actor's ownership explicitly.
+   * Writes a code-authored assistant message under an id reserved earlier, for example a
+   * reminder delivery. No RETURNING; the caller already holds the id it reserved.
    */
+  async insertReservedAssistantMessage(
+    scopedDb: DataContextDb,
+    input: {
+      readonly id: string;
+      readonly threadId: string;
+      readonly body: string;
+      readonly origin: ChatTurnOriginV1;
+      readonly now: Date;
+    }
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .insertInto("app.chat_messages")
+      .values({
+        id: input.id,
+        thread_id: input.threadId,
+        owner_user_id: sql<string>`app.current_actor_user_id()`,
+        role: "assistant",
+        status: "stored",
+        body: input.body,
+        model_metadata: { origin: input.origin },
+        tool_metadata: { selectedTools: [] },
+        created_at: input.now,
+        updated_at: input.now
+      })
+      .executeTakeFirstOrThrow();
+  }
+
+  /** Returns the owner's most-recent thread by last_active_at for an explicit side-chat resume. */
   async getCurrentThread(
     scopedDb: DataContextDb,
     actorUserId: string,
@@ -332,6 +370,21 @@ export class ChatRepository {
       .executeTakeFirst();
   }
 
+  /** Returns the owner's durable drawer Main chat, excluding shared and transient threads. */
+  async getMainThread(
+    scopedDb: DataContextDb,
+    actorUserId: string
+  ): Promise<ChatThread | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.chat_threads")
+      .selectAll()
+      .where("owner_user_id", "=", actorUserId)
+      .where("surface", "=", "drawer")
+      .where("is_main", "=", true)
+      .executeTakeFirst();
+  }
+
   /**
    * Creates a new chat thread stamped active now, making it the most-recent (and
    * therefore "current") conversation for the owner.
@@ -340,6 +393,16 @@ export class ChatRepository {
     assertDataContextDb(scopedDb);
     const surface = normalizeChatSurface(input.surface);
     await this.lockThreadSelection(scopedDb, surface);
+
+    const isMain =
+      surface === "drawer" &&
+      !input.incognito &&
+      !(await scopedDb.db
+        .selectFrom("app.chat_threads")
+        .select("id")
+        .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+        .where("is_main", "=", true)
+        .executeTakeFirst());
 
     const now = new Date();
 
@@ -351,6 +414,7 @@ export class ChatRepository {
         owner_user_id: sql<string>`app.current_actor_user_id()`,
         title: input.title,
         incognito: input.incognito ?? false,
+        is_main: isMain,
         surface,
         created_at: now,
         updated_at: now,
@@ -549,17 +613,79 @@ export class ChatRepository {
     return { userMessage, assistantMessage };
   }
 
-  async updateConversationSummary(
+  /**
+   * Publish a summary candidate with compare-and-swap on the covered frontier.
+   *
+   * Takes the actor/surface selection lock, then the thread row, matching every
+   * other writer. The candidate lands only when the thread is still the owner's,
+   * not private, at the expected revision and frontier, and the new frontier is a
+   * visible message of this thread that sorts after the current frontier in
+   * replay order. Activity time is never touched, so a publish cannot select the
+   * thread.
+   */
+  async publishConversationSummary(
     scopedDb: DataContextDb,
-    threadId: string,
-    summary: string
-  ): Promise<void> {
+    input: PublishConversationSummaryInput
+  ): Promise<PublishConversationSummaryResult> {
     assertDataContextDb(scopedDb);
+    const located = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .select("surface")
+      .where("id", "=", input.threadId)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .executeTakeFirst();
+    if (!located) return "missing";
+
+    await this.lockThreadSelection(scopedDb, normalizeChatSurface(located.surface));
+    const thread = await scopedDb.db
+      .selectFrom("app.chat_threads")
+      .select(["incognito", "summary_revision", "summary_covered_through_message_id"])
+      .where("id", "=", input.threadId)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!thread || thread.incognito) return "missing";
+    if (
+      thread.summary_revision !== input.expectedRevision ||
+      thread.summary_covered_through_message_id !== input.expectedCoveredThroughMessageId
+    ) {
+      return "stale";
+    }
+
+    const frontier = await scopedDb.db
+      .selectFrom("app.chat_messages")
+      .select("id")
+      .where(visibleChatMessage())
+      .where("id", "=", input.throughMessageId)
+      .where("thread_id", "=", input.threadId)
+      .where(
+        sql<boolean>`(
+          not exists (
+            select 1 from app.chat_messages prior
+            where prior.id = ${input.expectedCoveredThroughMessageId}
+              and prior.thread_id = ${input.threadId}
+          )
+          or (created_at, case when role = 'user' then 0 else 1 end, id) > (
+            select prior.created_at, case when prior.role = 'user' then 0 else 1 end, prior.id
+            from app.chat_messages prior
+            where prior.id = ${input.expectedCoveredThroughMessageId}
+              and prior.thread_id = ${input.threadId}
+          )
+        )`
+      )
+      .executeTakeFirst();
+    if (!frontier) return "stale";
+
     await scopedDb.db
       .updateTable("app.chat_threads")
-      .set({ conversation_summary: summary })
-      .where("id", "=", threadId)
+      .set({
+        conversation_summary: input.summary,
+        summary_covered_through_message_id: input.throughMessageId,
+        summary_revision: input.expectedRevision + 1
+      })
+      .where("id", "=", input.threadId)
       .execute();
+    return "published";
   }
 
   async updateThreadTitle(scopedDb: DataContextDb, threadId: string, title: string): Promise<void> {

@@ -15,10 +15,13 @@ const bound: ChatThread = {
   title: "Bound conversation",
   surface: DEFAULT_CHAT_SURFACE,
   incognito: false,
+  is_main: true,
   created_at: now,
   updated_at: now,
   last_active_at: now,
-  conversation_summary: null
+  conversation_summary: null,
+  summary_covered_through_message_id: null,
+  summary_revision: 0
 };
 
 function fixture(thread: ChatThread | undefined = bound) {

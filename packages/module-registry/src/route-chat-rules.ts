@@ -265,6 +265,12 @@ export const JULY_EXCLUDED_ROUTES: readonly JulyExcludedRoute[] = [
   },
 
   {
+    method: "GET",
+    path: "/api/me/proactive-monitoring-settings",
+    category: "external_effect",
+    julyPrefixes: ["settings.proactive."]
+  },
+  {
     method: "PATCH",
     path: "/api/tasks/:id",
     category: "external_effect",

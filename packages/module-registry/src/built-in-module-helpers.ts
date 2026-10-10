@@ -17,7 +17,12 @@ import { HttpError } from "@moss/module-sdk";
 import { PreferencesRepository } from "@moss/structured-state";
 import type { QuietHoursPort } from "@moss/notifications";
 import { renderPersonaText } from "@moss/shared";
-import { RuntimeConfigResolver, type PersonaPreviewInput } from "@moss/settings";
+import {
+  RuntimeConfigResolver,
+  notificationsQuietHoursValue,
+  readQuietHoursAuthority,
+  type PersonaPreviewInput
+} from "@moss/settings";
 import { UsefulnessFeedbackRepository } from "@moss/usefulness-feedback";
 
 export async function createRuntimeEmbeddingProvider(scopedDb: DataContextDb) {
@@ -53,7 +58,9 @@ export const runtimeMemoryRetriever = {
 
 const _quietHoursPreferencesRepo = new PreferencesRepository();
 export const quietHoursPortImpl: QuietHoursPort = {
-  getSettings: (scopedDb) => _quietHoursPreferencesRepo.get(scopedDb, "quiet-hours"),
+  // The one quiet-hours schedule: Profile, or the alert schedule it carries forward.
+  getSettings: async (scopedDb) =>
+    notificationsQuietHoursValue((await readQuietHoursAuthority(scopedDb)).authority),
   getLocaleTimezone: async (scopedDb) => {
     const locale = await _quietHoursPreferencesRepo.get(scopedDb, "locale");
     if (!locale || typeof locale !== "object" || Array.isArray(locale)) return null;

@@ -14,10 +14,16 @@ import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
 
 function render(
   route: LookupAiCapabilityRouteResponse,
-  options?: { readonly initialText?: string }
+  options?: { readonly initialText?: string; readonly privateMode?: boolean }
 ): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(queryKeys.ai.capability("chat"), route);
+  if (options?.privateMode) {
+    client.setQueryData(queryKeys.chat.privacy(DEFAULT_CHAT_SURFACE), {
+      incognito: true,
+      threadId: "private-thread"
+    });
+  }
   return renderToString(
     createElement(
       QueryClientProvider,
@@ -176,7 +182,17 @@ describe("ChatDrawer unavailable routes (rendered)", () => {
     );
 
     expect(html).toContain("<textarea");
+    expect(html).toContain("Say hello in three words.");
     expect(html).not.toContain("chatd-connect-cta");
+  });
+
+  it("does not expose an ordinary caller starter in a cached private chat's first render", () => {
+    const html = render(
+      { route: { capability: "chat", available: false, reason: "no-active-model", model: null } },
+      { initialText: "Ordinary caller starter", privateMode: true }
+    );
+
+    expect(html).not.toContain("Ordinary caller starter");
   });
 });
 

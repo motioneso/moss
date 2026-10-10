@@ -94,7 +94,7 @@ const EXPECTED: readonly string[] = [
   "settings PUT /api/me/source-behaviors/:id blocked prompt_shaping",
   "settings GET /api/me/priority-model read user_authored",
   "settings PATCH /api/me/priority-model blocked prompt_shaping",
-  "settings GET /api/me/proactive-monitoring-settings read user_authored",
+  "settings GET /api/me/proactive-monitoring-settings blocked external_effect",
   "settings PATCH /api/me/proactive-monitoring-settings blocked external_effect",
   "settings GET /api/admin/auth/providers blocked self_authority",
   "settings GET /api/admin/users blocked self_authority",

@@ -1,3 +1,4 @@
+import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
 import type {
   ActionRequestDetails,
   ChatActivityEventDto,
@@ -16,9 +17,11 @@ export type { ActionRequestPreview, ChatRecordKind, TranscriptRecord };
 
 import {
   chatStreamUrl,
+  getMe,
   listChatThreadMessages,
   listChatThreads,
-  listPendingActionRequests
+  listPendingActionRequests,
+  resumeChat
 } from "../api/client.js";
 import { listWorkflowApprovals } from "../api/workflows-client.js";
 
@@ -114,10 +117,12 @@ export function useChatStream(
   readonly records: readonly TranscriptRecord[];
   readonly clearRecords: () => void;
   readonly streamErrorCount: number;
+  readonly selectionPending: boolean;
 } {
   const [records, setRecords] = useState<readonly TranscriptRecord[]>([]);
   const [streamErrorCount, setStreamErrorCount] = useState(0);
   const [streamGeneration, setStreamGeneration] = useState(0);
+  const [hydratedSurface, setHydratedSurface] = useState<ChatSurface>();
   const hydrationGeneration = useRef(0);
   const streamScope = useRef({ surface, enabled });
   streamScope.current = { surface, enabled };
@@ -126,6 +131,7 @@ export function useChatStream(
     hydrationGeneration.current += 1;
     setRecords([]);
     setStreamGeneration(hydrationGeneration.current);
+    setHydratedSurface(streamScope.current.surface);
   }, []);
 
   useEffect(() => {
@@ -197,6 +203,7 @@ export function useChatStream(
   }, [enabled, surface, streamGeneration]);
 
   useEffect(() => {
+    setHydratedSurface(undefined);
     if (!surface || !enabled) return;
     let active = true;
     const generation = hydrationGeneration.current;
@@ -213,17 +220,31 @@ export function useChatStream(
 
     void (async () => {
       try {
-        const [threadsResult, workflowApprovals] = await Promise.all([
+        const isDrawer = surface === undefined || surface === DEFAULT_CHAT_SURFACE;
+        const [threadsResult, workflowApprovals, viewer] = await Promise.all([
           listChatThreads(surface),
-          listWorkflowApprovals().catch(() => [])
+          listWorkflowApprovals().catch(() => []),
+          isDrawer ? getMe() : undefined
         ]);
         if (!active || generation !== hydrationGeneration.current) return;
         const workflowRecords = workflowApprovals.map(workflowApprovalRecord);
         const { threads } = threadsResult;
-        const thread = threads[0];
+        const ownedThreads = isDrawer
+          ? threads.filter((candidate) => candidate.ownerUserId === viewer?.user.id)
+          : threads;
+        const thread = isDrawer
+          ? (ownedThreads.find((candidate) => candidate.isMain) ?? ownedThreads[0])
+          : threads[0];
         if (!thread) {
           setRecords((current) => (current.length === 0 ? workflowRecords : current));
           return;
+        }
+        // The browser's startup is a cold drawer selection even when another tab left a warm
+        // side-chat engine behind. Route it through the authenticated resume seam before reading
+        // history, so the displayed transcript and the next turn bind to the same Main thread.
+        if (isDrawer && thread.isMain) {
+          await resumeChat(thread.id, surface);
+          if (!active || generation !== hydrationGeneration.current) return;
         }
         // Recovery may persist overdue outcomes. Finish it before fetching history so the
         // first reload includes those outcomes instead of an empty, already-expired card.
@@ -266,6 +287,8 @@ export function useChatStream(
         );
       } catch {
         // The live stream remains authoritative; an unavailable history read must not block chat.
+      } finally {
+        if (active && generation === hydrationGeneration.current) setHydratedSurface(surface);
       }
     })();
     const timer = setInterval(() => void refreshWorkflowApprovals(), 5_000);
@@ -275,7 +298,12 @@ export function useChatStream(
     };
   }, [enabled, surface]);
 
-  return { records, clearRecords, streamErrorCount };
+  return {
+    records,
+    clearRecords,
+    streamErrorCount,
+    selectionPending: enabled && surface !== undefined && hydratedSurface !== surface
+  };
 }
 
 function mergeHydratedRecords(
@@ -531,4 +559,23 @@ function parseUsage(value: unknown): TranscriptRecord["usage"] {
     if (typeof usage[key] === "number") result[key] = usage[key];
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+export function reconcileFallbacks(
+  fallbacks: readonly TranscriptRecord[],
+  liveRecords: readonly TranscriptRecord[]
+): readonly TranscriptRecord[] {
+  const unmatched = [...liveRecords];
+  return fallbacks.filter((fallback) => {
+    const idx = unmatched.findIndex(
+      (record) =>
+        record.kind === fallback.kind &&
+        (record.messageId && fallback.messageId
+          ? record.messageId === fallback.messageId
+          : record.text === fallback.text)
+    );
+    if (idx === -1) return true;
+    unmatched.splice(idx, 1);
+    return false;
+  });
 }

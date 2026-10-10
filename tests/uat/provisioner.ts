@@ -606,6 +606,8 @@ async function waitForReady(url: string, timeoutMs = 120_000): Promise<void> {
 }
 
 export interface UatProvisionOptions {
+  /** A port reserved by devports for this isolated live run. */
+  readonly claimedWebPort?: number;
   readonly excludeChunks?: readonly string[];
   readonly withoutNewsJsonBinding?: boolean;
   // #1306 Task 22: opt-in, absent by default, same shape as the Codex credential copy's own
@@ -705,10 +707,10 @@ export async function provisionForUat(
   // #1024/#1000: bounded by the reserved range itself (100 candidates) — never an unbounded
   // retry. Each failed-on-bind attempt removes its port from the pool; exhausting the pool means
   // the whole reserved range is hostile, which should fail loudly, not spin forever.
-  let remainingCandidates = Array.from(
-    { length: UAT_PORT_RANGE_SIZE },
-    (_, i) => UAT_PORT_RANGE_START + i
-  );
+  let remainingCandidates =
+    opts?.claimedWebPort === undefined
+      ? Array.from({ length: UAT_PORT_RANGE_SIZE }, (_, i) => UAT_PORT_RANGE_START + i)
+      : [opts.claimedWebPort];
   let remainingSubnetCandidates = [...UAT_SUBNET_CANDIDATES];
   let imageBuilt = false; // build once; a port-bind retry shouldn't rebuild the image
 

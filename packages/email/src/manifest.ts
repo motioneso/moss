@@ -69,6 +69,27 @@ export const emailModuleManifest = {
   ],
   features: [
     {
+      id: "email.proactive_current_access",
+      description:
+        "Proactive checks use cached mail only from active accounts with Email access granted and the Email source available. A permitted account cannot admit revoked-account mail. Existing monitoring choices, cooldowns and limits still apply.",
+      errors: [
+        {
+          code: "provider_error",
+          class: "transient",
+          description:
+            "If current email access cannot be resolved, the source check is skipped without using cached mail."
+        }
+      ],
+      remediations: [
+        {
+          id: "email.proactive.restore_access",
+          description:
+            "Check Email access or reconnect the account in Connections, then allow a later check.",
+          path: "/settings?section=connections"
+        }
+      ]
+    },
+    {
       id: "email.chat_app_actions",
       description:
         "App actions read cached mail and its settings. Auto-send and automatic task-creation controls stay in Email settings; chat cannot grant itself those powers."

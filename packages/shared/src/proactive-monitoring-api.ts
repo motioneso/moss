@@ -9,6 +9,8 @@ export interface ProactiveSourcePreference {
 
 export interface ProactiveMonitoringPreferenceV1 {
   readonly version: 1;
+  /** An explicit unsolicited-email choice. Absent records retain legacy semantics. */
+  readonly automaticEmailAlerts?: boolean;
   readonly enabled: boolean;
   readonly sources: Record<ProactiveSource, ProactiveSourcePreference>;
   readonly dailyCardCap: number;

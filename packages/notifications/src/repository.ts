@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { sql, type SqlBool } from "kysely";
 
 import { assertDataContextDb, type DataContextDb, type Notification } from "@moss/db";
+import { deferUntilQuietHoursEnd } from "@moss/module-sdk";
 
 import { isSameOriginAppPath } from "./app-path.js";
 import { projectNotificationMetadata } from "./metadata.js";
@@ -149,37 +150,8 @@ export function computeDeferredUntil(
   settings: QuietHoursSettings,
   tz: string
 ): Date | null {
-  if (!isInQuietHours(now, settings, tz)) return null;
-  const [eh, em] = parseHHMM(settings.end);
-  const endTotalMin = eh * 60 + em;
-  const curLocal = getLocalMinutes(now, tz);
-
-  const dateFmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour12: false
-  });
-  const partsMap = Object.fromEntries(dateFmt.formatToParts(now).map((p) => [p.type, p.value]));
-  const year = parseInt(partsMap.year ?? "2000", 10);
-  const month = parseInt(partsMap.month ?? "1", 10) - 1;
-  const day = parseInt(partsMap.day ?? "1", 10);
-
-  // For overnight windows (start > end), pre-midnight leg means end is NEXT local day.
-  const dayOffset = endTotalMin <= curLocal ? 1 : 0;
-
-  // Naive approximation: treat tz offset as zero, place end-time at UTC midnight + end.
-  const naiveUTC = new Date(Date.UTC(year, month, day + dayOffset, eh, em, 0));
-
-  // Measure how far the naive approximation's local time is from the target local time.
-  // Use modular arithmetic (±720 window) so overnight wrap doesn't flip the sign.
-  const localMinAtNaive = getLocalMinutes(naiveUTC, tz);
-  let deltaMin = endTotalMin - localMinAtNaive;
-  if (deltaMin < -720) deltaMin += 1440;
-  if (deltaMin > 720) deltaMin -= 1440;
-
-  return new Date(naiveUTC.getTime() + deltaMin * 60 * 1000);
+  if (!settings.enabled) return null;
+  return deferUntilQuietHoursEnd(now, settings.start, settings.end, tz);
 }
 
 export async function resolveTimezone(

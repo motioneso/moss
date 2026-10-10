@@ -57,6 +57,7 @@ import {
 import {
   API_KEY_LIVE_CHAT_UNAVAILABLE_MESSAGE,
   ApiKeyLiveChatUnavailableError,
+  CHAT_CHANGED_WHILE_STARTING_MESSAGE,
   CHAT_PROVIDER_CHANGED_MESSAGE,
   ChatProviderChangedError,
   ChatEngineReadError,
@@ -66,6 +67,7 @@ import {
 } from "./live/errors.js";
 import { knownAuthFailureMessage } from "./live/auth-errors.js";
 import { CLI_VERSION_TOO_OLD_MESSAGE, notifyCliVersionTooOld } from "./live/cli-version-errors.js";
+import { CONVERSATION_RESUME_MESSAGES } from "./live/summary-coverage.js";
 import type { PageContextStore } from "./live/page-context-store.js";
 import { renderModuleControlContext, sanitizeExternalData } from "./live/prompt-safety.js";
 import type { ChatSessionRuntime } from "./live/runtime.js";
@@ -779,6 +781,12 @@ function handleLiveRouteError(error: unknown, reply: FastifyReply) {
     if (error.message === CLI_VERSION_TOO_OLD_MESSAGE) {
       notifyCliVersionTooOld();
       return reply.code(503).send({ error: CLI_VERSION_TOO_OLD_MESSAGE });
+    }
+    if (
+      CONVERSATION_RESUME_MESSAGES.has(error.message) ||
+      error.message === CHAT_CHANGED_WHILE_STARTING_MESSAGE
+    ) {
+      return reply.code(503).send({ error: error.message });
     }
     // Log the underlying cause server-side; send a fixed, sanitized message (the
     // error covers both "no multiplexer configured" and "launch failed").

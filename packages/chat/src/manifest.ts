@@ -66,7 +66,13 @@ export const chatModuleManifest = {
       "sql/0277_chat_surface_immutable.sql",
       "sql/0291_chat_conversation_provenance.sql",
       "sql/0293_chat_automatic_action_reservations.sql",
-      "sql/0297_chat_action_history_permissions.sql"
+      "sql/0297_chat_action_history_permissions.sql",
+      "sql/0299_main_chat.sql",
+      "sql/0305_chat_summary_frontier.sql",
+      "sql/0306_chat_relative_reminders.sql",
+      "sql/0307_chat_summary_worker_publish.sql",
+      "sql/0308_chat_reminder_cancel.sql",
+      "sql/0309_chat_reminder_context_acknowledged.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -115,6 +121,93 @@ export const chatModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "chat.main_conversation",
+      description:
+        "Reopening Moss returns to your stable Main chat and saved history. The composer waits while Main is restored, " +
+        "and the next turn waits for an active conversation resume to finish. Explicit new and private chats keep their selection.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.resume_keeps_decisions",
+      description:
+        "Returning to the same chat after Moss restarts keeps earlier decisions. Older turns are condensed into a summary " +
+        "in the background, and the summary plus every newer turn is restored. Private chats are never condensed.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "conversation_too_long_to_resume",
+          class: "transient",
+          description:
+            "The conversation is too long to restore in full, so Moss is condensing it. Your history is kept. Try again shortly or start a new chat."
+        },
+        {
+          code: "conversation_could_not_condense",
+          class: "transient",
+          description:
+            "The conversation is too long to restore in full and Moss could not start condensing it. Your history is kept. Try again later or start a new chat."
+        },
+        {
+          code: "conversation_needs_summary_model",
+          class: "prerequisite",
+          remediationRef: "chat.add_summary_model",
+          description:
+            "The conversation is too long to restore in full and no AI model that can summarize is set up. Add one in Settings or start a new chat."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.add_summary_model",
+          description:
+            "Set up a model in Settings, AI providers, or ask an admin, then reopen the chat. Starting a new chat also works.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
+    },
+    {
+      id: "chat.automatic_session_handoff",
+      description:
+        "Moss counts what a chat's model session holds. Before a turn passes the budget, Moss starts a fresh session " +
+        "for the same chat and model from its summary and newer turns, once a summary is ready. Not in private chats.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat_changed_during_handoff",
+          class: "transient",
+          description:
+            "You switched chats while Moss was starting the fresh session, so the message was not sent. Moss says your chat changed while it was starting. Send it again."
+        },
+        {
+          code: "chat_model_changed_during_handoff",
+          class: "transient",
+          description:
+            "The chat's AI provider or model changed while Moss was starting the fresh session, so the message was not sent. Send it again."
+        }
+      ]
+    },
+    {
+      id: "chat.relative_reminders",
+      description:
+        "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder Moss posts once in Main, " +
+        "noting if late; its next reply knows it and frees the slot. Up to 20 at once, 30 days ahead. " +
+        "No clock times, repeats or private chats.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.reminder_list",
+      description:
+        "In Main chat, 'list my reminders' shows reminders set in chat: waiting ones with time left, then " +
+        "up to 10 recent ones marked sent, cancelled or couldn't be sent. Task reminders are not included.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.reminder_cancel",
+      description:
+        "In Main chat, 'cancel the reminder to stretch' stops a waiting chat reminder so it never arrives. " +
+        "If already sent, Moss says so and frees its place under the limit of 20. " +
+        "If different reminders match, Moss names them and cancels none.",
+      featureFlagId: "chat.module"
+    },
     {
       id: "chat.pending_action_disclosure",
       description:
@@ -352,8 +445,8 @@ export const chatModuleManifest = {
     {
       id: "chat.thread_history",
       description:
-        "Keep previous conversations so you can go back to them: pick an older thread from the " +
-        "drawer history, start a new one anywhere, and see threads ordered by recent activity."
+        "Reopen your own Main chat and older side chats, or start a side chat, from Conversations, ordered by recent activity. " +
+        "A chat another person shared with you is listed as a side chat but does not open, and it never replaces your Main."
     }
   ],
   routes: [

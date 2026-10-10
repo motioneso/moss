@@ -4,6 +4,7 @@ import type {
   ChatMessageDto,
   ChatSelectedToolMetadataDto,
   ChatThreadDto,
+  ChatReminderOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   FreshnessKind,
@@ -77,6 +78,7 @@ export function serializeThread(
     ownerUserId: thread.owner_user_id,
     title: thread.title,
     incognito: thread.incognito,
+    isMain: thread.is_main,
     createdAt: toIsoString(thread.created_at),
     updatedAt: toIsoString(thread.updated_at),
     lastActiveAt: toIsoString(thread.last_active_at),
@@ -133,6 +135,7 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
  */
 export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
   const record = asRecord(value);
+  if (record.kind === "reminder" && record.version === 1) return readReminderOrigin(record);
   if (record.kind !== "classifier_gate" || record.version !== 1) return undefined;
   const outcome =
     record.outcome === "executed-success" || record.outcome === "executed-failure-or-unknown"
@@ -147,6 +150,27 @@ export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
     moduleId: typeof record.moduleId === "string" ? record.moduleId : null,
     toolName: typeof record.toolName === "string" ? record.toolName : null,
     outcome
+  };
+}
+
+const REMINDER_ORIGIN_EVENTS: ReadonlySet<string> = new Set<ChatReminderOriginV1["event"]>([
+  "saved",
+  "refused",
+  "delivered",
+  "listed",
+  "cancelled",
+  "cancel_refused"
+]);
+
+function readReminderOrigin(record: Record<string, unknown>): ChatTurnOriginV1 | undefined {
+  const event = record.event;
+  if (typeof event !== "string" || !REMINDER_ORIGIN_EVENTS.has(event)) return undefined;
+  return {
+    version: 1,
+    kind: "reminder",
+    event: event as ChatReminderOriginV1["event"],
+    reminderId: typeof record.reminderId === "string" ? record.reminderId : null,
+    ...(typeof record.late === "boolean" ? { late: record.late } : {})
   };
 }
 

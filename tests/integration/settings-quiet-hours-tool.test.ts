@@ -10,6 +10,7 @@ import { settingsUndoStack } from "../../packages/settings/src/undo-stack.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const QUIET_HOURS_PREFERENCE_KEY = "quiet-hours";
+const CANONICAL = { status: "canonical", alerts: null } as const;
 
 function toolCtx(actorUserId: string): ToolContext {
   return { actorUserId, requestId: "req:quiet-hours-tool-test", chatSessionId: "" };
@@ -44,7 +45,8 @@ describe("settings.quietHours.set tool", () => {
       enabled: true,
       start: "22:00",
       end: "07:00",
-      timezone: "America/Denver"
+      timezone: "America/Denver",
+      authority: CANONICAL
     });
 
     const stored = await dataContext.withDataContext(
@@ -55,7 +57,8 @@ describe("settings.quietHours.set tool", () => {
       enabled: true,
       start: "22:00",
       end: "07:00",
-      timezone: "America/Denver"
+      timezone: "America/Denver",
+      authority: "canonical"
     });
     expect(stored?.revision).toBe(1);
   });
@@ -70,7 +73,13 @@ describe("settings.quietHours.set tool", () => {
           toolCtx(ids.userB)
         )
     );
-    expect(result.data).toEqual({ enabled: false, start: "23:00", end: "06:30", timezone: null });
+    expect(result.data).toEqual({
+      enabled: false,
+      start: "23:00",
+      end: "06:30",
+      timezone: null,
+      authority: CANONICAL
+    });
   });
 
   it("rejects a malformed start time", async () => {
@@ -130,7 +139,8 @@ describe("settings.quietHours.set tool", () => {
       enabled: true,
       start: "22:00",
       end: "07:00",
-      timezone: "America/Denver"
+      timezone: "America/Denver",
+      authority: CANONICAL
     });
 
     const after = await dataContext.withDataContext(
@@ -140,4 +150,102 @@ describe("settings.quietHours.set tool", () => {
     expect(after?.revision).toBe(before?.revision);
     expect(settingsUndoStack.pop(ids.adminUser, "")).toBeUndefined();
   });
+  it("rejects an unknown timezone and an equal-time window without changing the stored value", async () => {
+    const before = await readAs(ids.userA);
+    for (const input of [
+      { enabled: true, start: "22:00", end: "07:00", timezone: "Mars/Olympus_Mons" },
+      { enabled: true, start: "05:00", end: "05:00", timezone: "America/Denver" }
+    ]) {
+      await expect(
+        dataContext.withDataContext(
+          { actorUserId: ids.userA, requestId: "req:quiet-hours-invalid" },
+          (scopedDb) => quietHoursSetExecute(scopedDb, input, toolCtx(ids.userA))
+        )
+      ).rejects.toMatchObject({ statusCode: 400 });
+    }
+    expect(await readAs(ids.userA)).toEqual(before);
+  });
+
+  it("keeps the saved timezone when the request omits it", async () => {
+    const result = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "req:quiet-hours-omit-tz" },
+      (scopedDb) =>
+        quietHoursSetExecute(
+          scopedDb,
+          { enabled: true, start: "23:30", end: "06:15" },
+          toolCtx(ids.userA)
+        )
+    );
+    expect(result.data).toEqual({
+      enabled: true,
+      start: "23:30",
+      end: "06:15",
+      timezone: "America/Denver",
+      authority: CANONICAL
+    });
+  });
+
+  it("keeps a saved legacy equal-time window when only the switch changes", async () => {
+    await dataContext.withDataContext(
+      { actorUserId: ids.userC, requestId: "req:quiet-hours-legacy-seed" },
+      (scopedDb) =>
+        preferences.upsert(scopedDb, QUIET_HOURS_PREFERENCE_KEY, {
+          enabled: false,
+          start: "22:00",
+          end: "22:00",
+          timezone: null
+        })
+    );
+    await dataContext.withDataContext(
+      { actorUserId: ids.userC, requestId: "req:quiet-hours-legacy" },
+      (scopedDb) =>
+        quietHoursSetExecute(
+          scopedDb,
+          { enabled: true, start: "22:00", end: "22:00", timezone: null },
+          toolCtx(ids.userC)
+        )
+    );
+    expect((await readAs(ids.userC))?.value).toEqual({
+      enabled: true,
+      start: "22:00",
+      end: "22:00",
+      timezone: null,
+      authority: "canonical"
+    });
+  });
+
+  it("retries a first save that races another first save and keeps both writes ordered", async () => {
+    // Separate pool so the two transactions really run at once against the absent row.
+    const raceDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
+    const raceContext = new DataContextRunner(raceDb);
+    const save = (start: string) =>
+      raceContext.withDataContext(
+        { actorUserId: ids.userD, requestId: `req:quiet-hours-race-${start}` },
+        (scopedDb) =>
+          quietHoursSetExecute(
+            scopedDb,
+            { enabled: true, start, end: "06:00", timezone: "UTC" },
+            toolCtx(ids.userD)
+          )
+      );
+    try {
+      expect(await readAs(ids.userD)).toBeNull();
+
+      const results = await Promise.allSettled([save("21:00"), save("23:00")]);
+
+      expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+      const stored = await readAs(ids.userD);
+      expect(stored?.revision).toBe(2);
+      expect(["21:00", "23:00"]).toContain((stored?.value as { start: string }).start);
+    } finally {
+      await raceDb.destroy();
+    }
+  });
+
+  function readAs(actorUserId: string) {
+    return dataContext.withDataContext(
+      { actorUserId, requestId: "req:quiet-hours-read" },
+      (scopedDb) => preferences.getWithRevision(scopedDb, QUIET_HOURS_PREFERENCE_KEY)
+    );
+  }
 });

@@ -5,6 +5,7 @@ import { seedSecondOwner, seedSoloAdmin } from "./admin.js";
 import { seedOnboardingChunk } from "./chunks/onboarding.js";
 import { seedActivityOutcomeFixture, seedAiProviderChunk } from "./chunks/ai.js";
 import { seedScriptedChatProviderChunk } from "./chunks/chat-script.js";
+import { seedSharedForeignMainChunk } from "./chunks/shared-main.js";
 import { seedJobSearchAiProviderChunk } from "./chunks/job-search-ai.js";
 import { seedBriefingWriterAiProviderChunk } from "./chunks/briefing-writer-ai.js";
 import { seedClassifierAiProviderChunk } from "./chunks/classifier-ai.js";
@@ -207,6 +208,9 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
           now: UAT_SEED_BASE_TIMESTAMP
         });
       });
+      if (options.chatScript === "3192-shared-main") {
+        await seedSharedForeignMainChunk(runner, secondOwnerUserId, adminUserId);
+      }
     }
   } finally {
     await runner.destroy();

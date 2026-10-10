@@ -1,3 +1,4 @@
+import type { GetQuietHoursSettingsResponse } from "@moss/shared";
 import { expect, test, type Page } from "@playwright/test";
 
 import { createMockUser, mockApi } from "./mock-api.js";
@@ -34,8 +35,10 @@ async function mockSettingsApi(
   await page.route("**/api/me/quiet-hours", (route) =>
     route.fulfill({
       json: {
-        quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: "UTC" }
-      }
+        quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: "UTC" },
+        authority: { status: "default", alerts: null },
+        version: null
+      } satisfies GetQuietHoursSettingsResponse
     })
   );
   if (isInstanceAdmin) {
@@ -146,7 +149,10 @@ test("desktop shell renders grouped IA, merged panes, and history-aware mode cha
   for (const group of ["Your account", "Moss", "Connections", "Extensions"]) {
     await expect(nav.locator(".set2__navgroup", { hasText: group })).toBeVisible();
   }
-  await expect(nav.getByRole("button")).toHaveCount(10);
+  await expect(nav.getByRole("button")).toHaveCount(11);
+  await expect(
+    nav.getByRole("button", { name: "Alerts & quiet hours", exact: true })
+  ).toBeVisible();
   await expect(nav.getByRole("button", { name: "What's new" })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Connections" })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Profile & account" })).toHaveCount(0);

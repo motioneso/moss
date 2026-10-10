@@ -11,7 +11,8 @@ import type {
 import {
   listChatThreadMessages,
   listChatThreads,
-  listPendingActionRequests
+  listPendingActionRequests,
+  resumeChat
 } from "../../apps/web/src/api/client.js";
 import { listWorkflowApprovals } from "../../apps/web/src/api/workflows-client.js";
 import {
@@ -22,11 +23,29 @@ import {
   useChatStream
 } from "../../apps/web/src/chat/use-chat-stream.js";
 
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 vi.mock("../../apps/web/src/api/client.js", () => ({
   chatStreamUrl: (surface?: string) => `/api/chat/stream${surface ? `?surface=${surface}` : ""}`,
+  getMe: vi.fn(async () => ({
+    user: {
+      id: "user-1",
+      email: "owner@example.test",
+      emailVerified: false,
+      name: "Owner",
+      isInstanceAdmin: false,
+      status: "active",
+      isBootstrapOwner: false,
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString()
+    },
+    profilePrefs: { addressed: null },
+    hasPasswordCredential: true
+  })),
   listChatThreadMessages: vi.fn(),
   listChatThreads: vi.fn(),
-  listPendingActionRequests: vi.fn(async () => ({ actions: [] }))
+  listPendingActionRequests: vi.fn(async () => ({ actions: [] })),
+  resumeChat: vi.fn()
 }));
 
 vi.mock("../../apps/web/src/api/workflows-client.js", () => ({
@@ -38,17 +57,19 @@ afterEach(() => {
   vi.mocked(listChatThreads).mockReset();
   vi.mocked(listPendingActionRequests).mockReset();
   vi.mocked(listPendingActionRequests).mockResolvedValue({ actions: [] });
+  vi.mocked(resumeChat).mockReset();
   vi.mocked(listWorkflowApprovals).mockReset();
   vi.mocked(listWorkflowApprovals).mockResolvedValue([]);
   vi.unstubAllGlobals();
 });
 
-function thread(id: string): ChatThreadDto {
+function thread(id: string, isMain = false): ChatThreadDto {
   return {
     id,
     ownerUserId: "user-1",
     title: id,
     incognito: false,
+    isMain,
     createdAt: new Date(0).toISOString(),
     updatedAt: new Date(0).toISOString(),
     lastActiveAt: new Date(0).toISOString(),
@@ -227,17 +248,51 @@ describe("useChatStream", () => {
 
     await act(async () => {
       renderer = create(createElement(StreamProbe, { surface: firstSurface }));
-      await Promise.resolve();
     });
-    expect(JSON.stringify(renderer!.toJSON())).toContain("First transcript");
+    await vi.waitFor(() =>
+      expect(JSON.stringify(renderer!.toJSON())).toContain("First transcript")
+    );
 
     await act(async () => {
       renderer!.update(createElement(StreamProbe, { surface: secondSurface }));
-      await Promise.resolve();
     });
+    await vi.waitFor(() =>
+      expect(JSON.stringify(renderer!.toJSON())).toContain("Second transcript")
+    );
     const switched = JSON.stringify(renderer!.toJSON());
     expect(switched).toContain("Second transcript");
     expect(switched).not.toContain("First transcript");
+  });
+
+  it("hydrates Main and rebinds the drawer before reading a warmer side transcript", async () => {
+    vi.stubGlobal(
+      "EventSource",
+      class {
+        onmessage = null;
+        onerror = null;
+        close() {}
+      }
+    );
+    vi.mocked(listChatThreads).mockResolvedValue({
+      threads: [thread("side-thread"), thread("main-thread", true)]
+    });
+    vi.mocked(listChatThreadMessages).mockImplementation(async (threadId) => ({
+      messages: [
+        message(threadId, threadId === "main-thread" ? "Main transcript" : "Side transcript")
+      ]
+    }));
+
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(StreamProbe, { surface: "drawer" as ChatSurface }));
+    });
+
+    await vi.waitFor(() => expect(resumeChat).toHaveBeenCalledWith("main-thread", "drawer"));
+    await vi.waitFor(() =>
+      expect(listChatThreadMessages).toHaveBeenCalledWith("main-thread", "drawer")
+    );
+    expect(JSON.stringify(renderer!.toJSON())).toContain("Main transcript");
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain("Side transcript");
   });
 
   it("#1449 — re-hydrates a pending action-request card from listPendingActionRequests on mount", async () => {
@@ -264,11 +319,9 @@ describe("useChatStream", () => {
     let renderer: ReactTestRenderer;
     await act(async () => {
       renderer = create(createElement(StreamProbe, { surface }));
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
-    expect(listPendingActionRequests).toHaveBeenCalledWith("thread-1");
+    await vi.waitFor(() => expect(listPendingActionRequests).toHaveBeenCalledWith("thread-1"));
     expect(JSON.stringify(renderer!.toJSON())).toContain("Approve this note?");
   });
 
