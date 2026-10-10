@@ -45,10 +45,10 @@ Failures should retain confirmed data where possible and offer appropriate retry
 
 ## Explicit design decisions and holds
 
-- Narrow Calendar treatment remains pending explicit confirmation. The conservative
-  proposal is a contained, keyboard-accessible scroll region for the existing time
-  grid. Keep event/time access, date navigation and semantics; do not implement a new
-  compact/day mode or change the narrow grid until that decision is confirmed.
+- Narrow Calendar is approved: retain Day, Week and Month; give Week and Month
+  readable minimum column widths with contained horizontal scrolling on phones; keep
+  Day compact. Preserve selected view and its persistence, date navigation, keyboard
+  access and event/time semantics. No new view or product flow.
 - Meals is not built here. Legacy Food remains held pending its separately approved
   complete desktop/narrow prototype. Job Search remains held for a separate decision.
 - Preserve Finance's documented red over-budget badge. Preserve its current Reports

@@ -626,6 +626,7 @@ tests/e2e/c3-park-press-design.spec.ts,C3,registered-new,,Exact path reservation
 tests/e2e/c4-park-press-design.spec.ts,C4,registered-new,,Exact path reservation
 tests/e2e/c5-park-press-design.spec.ts,C5,registered-new,,Exact path reservation
 tests/e2e/calendar-email.spec.ts,P2,reserved,,Exact planning report ownership
+tests/e2e/companion-link.spec.ts,L5,reserved,,Companion link existing fixture regression test assigned before edit
 tests/e2e/e1-park-press-design.spec.ts,E1,registered-new,,Exact path reservation
 tests/e2e/f0-park-press-design.spec.ts,F0,registered-new,,Exact path reservation
 tests/e2e/l1-park-press-design.spec.ts,L1,registered-new,,Exact path reservation

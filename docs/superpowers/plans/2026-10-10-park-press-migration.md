@@ -70,7 +70,7 @@ do not publish a behavior change while deferring its declarations to another PR.
 ## Stop conditions
 
 Pause dependent edits for active-owner overlap, an unfrozen shared contract, missing
-authorization, narrow Calendar/native branding/Reports decisions, or unavailable safe validation.
+authorization, native branding/Reports decisions, or unavailable safe validation.
 Continue unrelated authorized repairs. Do not create new feature tickets or send
 unrequested external messages. Report exact resolved, preserved, deferred,
 blocked, passed, failed and not-run outcomes rather than a blanket completion claim.
