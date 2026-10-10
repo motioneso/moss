@@ -255,11 +255,43 @@ No health data, live writes, native capture, or real export worker was exercised
 The notification receipt assertion now locates the semantic article containing its
 exact title, retaining visibility, mark-read PATCH, badge and cleanup assertions.
 
+## Meetings, companion and Finance batch
+
+The approved minimal Meetings workspace and recording pill are preserved. This
+batch repairs retained presentation and recovery behavior, with same-batch Finance
+and companion declarations; it does not change backend action authority.
+
+| Finding | Result |
+| --- | --- |
+| LN11, Finance portion | Unknown policy/limit reads disable writes; initial and retained-value failure states have read-only retry. Save failures retain last-confirmed values. |
+| LN14 | Finance R1 per-screen loading, skeleton and state-design precedence remains pending the recorded ruling. |
+| LN15 | The documented red over-budget badge is preserved as a deliberate Finance exception unless its product ruling changes. |
+| LN16 | Reports retirement remains decision-gated; no routes or capabilities are removed. |
+| LN19 | Native branding precedence remains a recorded design decision hold. |
+| LN20 | Meetings actions use shared controls and delete/unlink use shared modal lifecycle while keeping retention, mutation and duplicate-action guards. |
+| LN21 | Companion distinguishes closed/invalid requests from unavailable reads, exposes safe retry and announces progress/outcomes. Long device names wrap at phone widths without truncating identity. |
+| LN22 | Native semantic controls and the approved recording pill are preserved. The seventh expected Settings destination is added to the existing native UI assertion. Its execution and native pixel/keyboard/VoiceOver proof require macOS and remain unrun. |
+| LN25 | Finance disclosure uses an explicit child marker and visible spacing rather than a pseudo-element collision. |
+
+Independent consumer review and focused regression tests cover read/write guards,
+request identity, retries, status copy, transcript hooks and declaration integrity.
+Actual-source synthetic Chromium checked Meetings across five widths and its chat
+layer, safe dialog cancellation, and companion pending/approved states at 320/390 px
+with an unbroken 64-character name. Finance's canonical bundle was rebuilt after
+shared changes and remained byte-identical to the measured artifact: all fifteen
+width/theme combinations retained 6.343 px disclosure clearance, contained layout,
+phone hit targets and keyboard expansion. These fixtures do not exercise real
+capture, permission changes, account data or external financial writes.
+
+Native production code is unchanged. Local Linux checks do not replace the recorded
+macOS, real-data live-path or capture/accessibility gates. No release or merge
+acceptance is implied.
+
 ## Explicit outstanding gates
 
-- Later planning, lifestyle and Meetings/Finance batches must receive their own
-  source/test/browser review and same-PR metadata. The final bounded module-local
-  class guard remains a separate dependent followup.
+- The original foundation-stage requirement for consumer source/test/browser
+  review and same-PR metadata is satisfied for the included batches above. The
+  bounded module-local class guard remains a separate dependent followup.
 - Active PR-owned Conversations/Alerts changes are not imported or rewritten by
   this foundation batch. Relevant disjoint patch compatibility is recorded in the
   freshness handoff; overlapping future changes still need reconciliation.
