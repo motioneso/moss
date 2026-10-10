@@ -122,8 +122,13 @@ export function CheckinModal({
     <Dialog
       title="How are you feeling right now?"
       closeLabel="Close check-in"
+      closeDisabled={saving}
+      dismissOnEscape={!saving}
+      dismissOnBackdrop={!saving}
       description={initial ? "Edit check-in" : "Mental-health check-in"}
-      onClose={onClose}
+      onClose={() => {
+        if (!saving) onClose();
+      }}
       className="wl-dialog wl-dialog--checkin"
       footer={
         <>
@@ -132,7 +137,7 @@ export function CheckinModal({
               Couldn&apos;t save your check-in. Your note is still here, so try again.
             </span>
           ) : null}
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" disabled={saving} onClick={onClose}>
             Cancel
           </Button>
           <Button disabled={!canSave || saving} onClick={() => void save()}>

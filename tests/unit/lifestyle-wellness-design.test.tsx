@@ -292,6 +292,73 @@ describe("Wellness shared dialog consumers", () => {
   );
 });
 
+describe("Check-in pending save dismissal", () => {
+  it("retains the draft through Escape, backdrop and close controls until a failed save settles", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const onClose = vi.fn();
+    let rejectSave!: (reason: Error) => void;
+    const onSave = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSave = reject;
+        })
+    );
+    try {
+      await act(async () =>
+        root.render(
+          <CheckinModal
+            open
+            onClose={onClose}
+            onSave={onSave}
+            initial={{
+              emotion: "happy",
+              feeling: "Joyful",
+              sensations: [],
+              intensity: 3,
+              note: "Keep this draft"
+            }}
+          />
+        )
+      );
+      const save = Array.from(host.querySelectorAll("button")).find(
+        (button) => button.textContent === "Update check-in"
+      )!;
+      await act(async () => save.click());
+      expect(save.disabled).toBe(true);
+      expect(host.querySelector<HTMLButtonElement>('[aria-label="Close check-in"]')!.disabled).toBe(
+        true
+      );
+      expect(
+        Array.from(host.querySelectorAll("button")).find(
+          (button) => button.textContent === "Cancel"
+        )!.disabled
+      ).toBe(true);
+      await act(async () => {
+        document.activeElement!.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+        );
+        host.querySelector<HTMLElement>(".jds-dialog-scrim")!.click();
+      });
+      expect(onClose).not.toHaveBeenCalled();
+      await act(async () => rejectSave(new Error("Save unavailable")));
+      expect(host.querySelector("[role=alert]")!.textContent).toContain("Your note is still here");
+      expect(host.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("Keep this draft");
+      expect(host.querySelector<HTMLButtonElement>('[aria-label="Close check-in"]')!.disabled).toBe(
+        false
+      );
+      await act(async () =>
+        host.querySelector<HTMLButtonElement>('[aria-label="Close check-in"]')!.click()
+      );
+      expect(onClose).toHaveBeenCalledOnce();
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
+  });
+});
+
 describe("Medication read-state safety", () => {
   it("keeps stale doses readable but prevents writes while refresh is unavailable", async () => {
     const queryClient = client();
