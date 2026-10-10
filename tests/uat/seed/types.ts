@@ -54,7 +54,10 @@ export type UatChatScript =
   | "1883-vault-search-dependency-failure"
   | "2911-shadow-delete"
   | "3065-app-actions"
-  | "classifier-shadow";
+  | "classifier-shadow"
+  | "runtime-context"
+  | "moss-assistant-name"
+  | "app-map-grounding";
 
 export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "phase1-smoke",
@@ -66,7 +69,10 @@ export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "1883-vault-search-dependency-failure",
   "2911-shadow-delete",
   "3065-app-actions",
-  "classifier-shadow"
+  "classifier-shadow",
+  "runtime-context",
+  "moss-assistant-name",
+  "app-map-grounding"
 ];
 
 export interface SeedOptions {

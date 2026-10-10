@@ -9,12 +9,15 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 // Cross-account binding and late persona-response isolation are covered separately by
 // tests/unit/assistant-name-everywhere.test.tsx; this solo-admin live path uses one account.
 //
-// Deliberately NOT covered here (per the same brief): getting a chat model to actually reply.
-// Chat turns need a live, chat-capable AI provider, which sibling specs (runtime-context,
-// 1089-1090-chat-drawer-private, 1264-settings-self-operation) all document is not seeded at any
-// UAT level. Every assertion below is against rendered text: placeholders, aria-labels, headings,
-// and the brand wordmark — never a model turn.
-export const uatLevel = { level: "solo-admin", without: [] } as const;
+// Deliberately NOT covered here (per the same brief): a model turn. The drawer shows its composer
+// only while a chat model is available, so this spec loads the scripted chat model to get one.
+// Every assertion below is against rendered text: placeholders, aria-labels, headings, and the
+// brand wordmark. Nothing is sent.
+export const uatLevel = {
+  level: "solo-admin",
+  without: [],
+  chatScript: "moss-assistant-name"
+} as const;
 
 const ASSISTANT_NAME = "Alfred";
 
