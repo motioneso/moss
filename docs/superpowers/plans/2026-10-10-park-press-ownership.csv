@@ -670,6 +670,7 @@ tests/unit/check-ui-catalogue.test.ts,F0,reserved,,Shared component/token behavi
 tests/unit/check-ui-classes.test.ts,F0,reserved,,Shared component/token behavior tests
 tests/unit/core-onboarding-design.test.tsx,C1,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
 tests/unit/core-settings-design.test.tsx,C4,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
+tests/unit/core-source-tray-design.test.tsx,C5,reserved,,Approved disjoint SourceTray nonmodal keyboard/name/trigger regression; no active chat CSS edits
 tests/unit/design-tokens-contrast.test.ts,F0,reserved,,Shared component/token behavior tests
 tests/unit/design-tokens-parity.test.ts,F0,reserved,,Shared component/token behavior tests
 tests/unit/evening-planning-frame.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
