@@ -203,6 +203,11 @@ test("Moss chat changes and undoes quiet hours, and undo refuses to overwrite a 
   const undoReply = await sendReal(page, drawer, "Undo my last quiet hours change.");
   await page.waitForTimeout(2_000);
   expect((await quietHours(page)).quietHours).toEqual(competing);
+
+  // The turn response carries only the reply, so check its wording loosely for the refusal.
+  expect(undoReply).toMatch(
+    /changed|didn'?t|did not|couldn'?t|could not|can'?t|cannot|newer|not undo/i
+  );
   console.log(
     `[3164 chat proof] chat set 21:30-06:30, undo restored 22:00-07:00, chat set 23:15-05:45, ` +
       `competing save 20:00-08:00 kept after stale save 409 and chat undo (reply ${JSON.stringify(

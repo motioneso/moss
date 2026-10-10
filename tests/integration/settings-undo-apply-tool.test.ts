@@ -210,6 +210,7 @@ describe("settings.undoLast over quiet-hours writes", () => {
     const before = await readQuiet(actor);
     await setQuietHours(actor, { enabled: true, start: "23:00", end: "06:00", timezone: null });
 
+    // Undo pops its entry before applying it, so the same entry never runs twice.
     expect((await undo(actor)).status).toBe("undone");
     const restored = await readQuiet(actor);
     expect(restored?.value).toEqual(before?.value);
