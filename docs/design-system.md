@@ -352,9 +352,11 @@ returnFocusRef, dismissOnEscape, backdropRef})`; attach its returned onKeyDown t
 | `pnpm check:migrated-sections` | Raw `jds-*` classes in migrated screens where a `@moss/ui` component exists |
 
 The module-local class check currently enrolls News, Sports, Workshop, Backtrack, Meetings and
-Finance. It checks `className` literal/conditional/template/array expressions against that
+Finance. It checks direct JSX `className` attributes with literal/conditional/template/array expressions against that
 module's own styles plus shared UI/host styles; a sibling module cannot supply its definitions.
 Finance's static `MODULE_STYLES` contract is included. Unknown dynamic expressions fail;
 finite dynamic domains and intentionally nonvisual test hooks need exact source-path contracts
 with reasons, never blanket file/prefix exemptions. This is not a universal CSS reachability,
-rendered-style or third-party-module validator.
+rendered-style or third-party-module validator. JSX object spreads, other props and runtime
+`classList` updates are outside this bounded check. Finite dynamic contracts are reviewed
+declarations, not inferred runtime guarantees.
