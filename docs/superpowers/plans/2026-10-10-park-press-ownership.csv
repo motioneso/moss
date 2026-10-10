@@ -626,7 +626,7 @@ scripts/check-design-tokens.ts,F0,active-disjoint-only,3154,F0 guard coverage ed
 scripts/check-migrated-sections.ts,F0,reserved,,Normative docs and centralized guard configuration
 scripts/check-ui-catalogue.ts,F0,reserved,,Normative docs and centralized guard configuration
 scripts/check-ui-classes.ts,F0,reserved,,Normative docs and centralized guard configuration
-tests/e2e/app-shell.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
+tests/e2e/app-shell.spec.ts,L6,scoped-test-transfer,,Parent-approved Notifications empty-state CI assertion only; retain account menu readiness and all notification mutations/counts
 tests/e2e/c1-park-press-design.spec.ts,C1,registered-new,,Exact path reservation
 tests/e2e/c2-park-press-design.spec.ts,C2,registered-new,,Exact path reservation
 tests/e2e/c3-park-press-design.spec.ts,C3,registered-new,,Exact path reservation
@@ -648,7 +648,7 @@ tests/e2e/p3-park-press-design.spec.ts,P3,registered-new,,Exact path reservation
 tests/e2e/p4-park-press-design.spec.ts,P4,registered-new,,Exact path reservation
 tests/e2e/sports-standings-picker-layout.spec.ts,L2,registered-new,,Approved bounded picker viewport and item hit-test regression with retained hierarchical selection and focus return
 tests/e2e/tasks.spec.ts,P1,approved-disjoint-correction,3154,Only task detail loading and focus regression assertions; preserve active quick-add tests
-tests/e2e/wellness.spec.ts,I0,scoped-test-transfer,,Parent-approved real shared confirmation and Today medication dialog assertion migration; preserve cancellation and outcomes
+tests/e2e/wellness.spec.ts,L3,scoped-test-transfer,,Parent-approved feeling-selection accessibility assertion alignment; preserve shared Today dialog and all save payload checks
 tests/e2e/workshop-design.spec.ts,P3,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
 tests/live/classifier-2984-r26-helpers.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/1089-1090-chat-drawer-private.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
@@ -884,3 +884,5 @@ tests/unit/wellness-manage-meds-modal.test.tsx,L3,reserved,,Specific existing UI
 tests/unit/wellness-med-builder-form.test.ts,L3,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/workflow-approval-card.test.tsx,C5,reserved,,Existing approval-card regression test assigned before edit
 tests/unit/workshop-project-pages.test.tsx,P3,reserved,,Exact planning report ownership
+tests/e2e/news-overview.spec.ts,L1,scoped-test-transfer,,Parent-approved shared empty-state accessibility assertions; preserve source settings links and unavailable states
+tests/integration/wellness-export-job.test.ts,L3,scoped-test-transfer,,Parent-approved Moss export provenance assertion only; preserve content/security/job assertions and do not run without isolated DB gate
