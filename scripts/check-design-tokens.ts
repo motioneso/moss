@@ -61,9 +61,12 @@ const allowList = new Set([
   "--nav-brand"
 ]);
 
-// Cross-file CSS customization contracts are allowed only in their actual consuming sheet.
+// Cross-file CSS customization contracts are allowed only in their actual consuming file.
 // They are not promoted to global tokens merely because another surface declares them.
 const componentInputs: Readonly<Record<string, readonly string[]>> = {
+  "apps/web/src/calendar/calendar-time-grid.tsx": [
+    "--cal-gutter" // Time-grid columns inherit .cal-wrap's gutter from kit-calendar.css.
+  ],
   "packages/ui/src/styles/components-core.css": [
     "--btn-link-color", // Button link foreground set by reversed bands.
     "--iconbtn-border-w",

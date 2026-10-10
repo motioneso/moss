@@ -101,6 +101,25 @@ describe("token scan includes shared primitives", () => {
       (await checkTokens(second)).some((item) => item.text.includes("Undefined token --first"))
     ).toBe(true);
   });
+  it("allows Calendar's scoped gutter only in its declared time-grid consumer", async () => {
+    const root = await buildFixture(".unrelated-page { width: var(--cal-gutter, 60px); }");
+    await writeFile(join(root, "apps/web/src/styles/tokens.css"), ":root { --text: #282c25; }\n");
+    await writeFile(
+      join(root, "apps/web/src/styles/kit-calendar.css"),
+      ".cal-wrap { --cal-gutter: 60px; }\n"
+    );
+    await mkdir(join(root, "apps/web/src/calendar"), { recursive: true });
+    await writeFile(
+      join(root, "apps/web/src/calendar/calendar-time-grid.tsx"),
+      'export const gridStyle = { gridTemplateColumns: "var(--cal-gutter, 60px) 1fr" };\n'
+    );
+    expect(await checkTokens(root)).toEqual([
+      expect.objectContaining({
+        path: "apps/web/src/styles/kit-example.css",
+        text: expect.stringContaining("Undefined token --cal-gutter")
+      })
+    ]);
+  });
   it("does not promote another module's scoped custom properties to global tokens", async () => {
     const root = await buildFixture(".unrelated-page { color: var(--example-local-color); }");
     await writeFile(

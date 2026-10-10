@@ -152,7 +152,7 @@ const CLASS_FAMILY_TO_COMPONENT: Readonly<Record<string, string>> = {
   "jds-disclosure": "DisclosureToggle",
   "jds-index": "RowIndex",
   "jds-tabs": "Tabs",
-  "jds-nav-index": "NavIndex",
+  "jds-navindex": "NavIndex",
   "jds-agenda-row": "AgendaRow",
   "jds-avatar": "Avatar",
   "jds-badge": "Badge",
