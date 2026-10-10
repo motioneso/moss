@@ -45,7 +45,7 @@ async function signIn(page: Page): Promise<void> {
 // UAT DB: if a prior spec already dismissed onboarding, login lands straight on the shell.
 async function skipOnboarding(page: Page): Promise<void> {
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible();
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
@@ -59,8 +59,8 @@ async function skipOnboarding(page: Page): Promise<void> {
 // the SAME label, but settings-page.tsx only ever mounts one mode's nav group at a time, so the
 // button reference is unambiguous once Admin / Setup has been selected.
 async function openAssistantAndAiSettings(page: Page): Promise<void> {
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "AI providers" }).click();
 }

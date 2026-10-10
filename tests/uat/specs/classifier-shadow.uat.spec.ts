@@ -40,7 +40,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible({ timeout: 30_000 });
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
@@ -54,8 +54,8 @@ async function signIn(page: Page): Promise<void> {
 }
 
 async function openAssistantAndAiSettings(page: Page): Promise<void> {
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "AI providers" }).click();
 }

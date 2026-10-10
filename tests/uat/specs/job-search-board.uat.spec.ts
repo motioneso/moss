@@ -83,8 +83,8 @@ const ONBOARDING_STEP_LABELS = {
 const POLL_SETTLE_MS = 5_000;
 
 async function openInstanceModules(page: Page): Promise<void> {
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Instance modules" }).click();
 }
@@ -960,9 +960,9 @@ test("nav badge reflects unread matches and clears on mark-read (#1285)", async 
     await expect(badge).toHaveText("1");
     expect(await badge.textContent()).toBe(String(seeded.unreadByModule["job-search"]));
 
-    await page.locator(".jds-usermenu__trigger").click();
+    await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
     // The account trigger's label also mentions notifications, so target the menu item.
-    await page.locator(".jds-usermenu__item").getByText("Notifications").click();
+    await page.getByRole("menuitem", { name: /^Notifications/ }).click();
     const notice = page.locator("article.jds-task").filter({
       has: page.getByText(notificationTitle, { exact: true })
     });

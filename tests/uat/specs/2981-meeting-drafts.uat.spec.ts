@@ -215,8 +215,8 @@ test("Confirmed sign-out discards meeting notes without a second native warning 
     await expect(
       page.getByRole("status").filter({ hasText: "Couldn’t save. Your edits are kept here." })
     ).toBeVisible();
-    await page.locator(".jds-usermenu__trigger").click();
-    await page.getByRole("button", { name: "Log out", exact: true }).click();
+    await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+    await page.getByRole("menuitem", { name: "Log out", exact: true }).click();
     const confirmation = page.getByRole("dialog", { name: "Sign out with unsaved changes?" });
     await expect(confirmation).toBeVisible();
     await confirmation.getByRole("button", { name: "Keep editing", exact: true }).click();
@@ -237,8 +237,8 @@ test("Confirmed sign-out discards meeting notes without a second native warning 
     ).toBeVisible();
     // A failed save does not auto-retry on reconnect; the confirmation has no debounce race.
     await page.context().setOffline(false);
-    await page.locator(".jds-usermenu__trigger").click();
-    await page.getByRole("button", { name: "Log out", exact: true }).click();
+    await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+    await page.getByRole("menuitem", { name: "Log out", exact: true }).click();
     await expect(confirmation).toBeVisible();
     await confirmation
       .getByRole("button", { name: "Discard changes and sign out", exact: true })

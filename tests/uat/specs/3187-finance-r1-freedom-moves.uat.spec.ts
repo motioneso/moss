@@ -146,7 +146,7 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible();
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
@@ -157,7 +157,7 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
 
   // --- Enable Finance and enter the bank keys through the admin screen ---------------------
   await userMenu.click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Instance modules" }).click();
   const enableSwitch = page.getByRole("checkbox", { name: "Enable Finance", exact: true });

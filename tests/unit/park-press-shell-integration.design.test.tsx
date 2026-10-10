@@ -29,6 +29,7 @@ vi.mock("../../apps/web/src/shell/module-persistent-controls.js", () => ({
 }));
 
 import { AppShell } from "../../apps/web/src/shell/app-shell.js";
+import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 
 const me: MeResponse = {
   user: {
@@ -175,22 +176,38 @@ describe("Park Press shell and shared navigation integration", () => {
     expect(mediaListeners.size).toBe(persistentHostListeners);
   });
 
-  it("closes the mobile account menu on navigation and returns focus to the visible host trigger", async () => {
-    await mount();
-    const trigger = openButton();
-    trigger.focus();
-    await act(async () => trigger.click());
-    const account = container.querySelector<HTMLButtonElement>('[aria-label="Account menu"]');
-    expect(account).not.toBeNull();
-    await act(async () => account!.click());
-    const settings = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (item) => item.textContent?.includes("Settings")
-    );
-    expect(settings).toBeDefined();
-    await act(async () => settings!.click());
-    expect(container.querySelector("[data-location]")?.textContent).toBe("/settings");
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    expect(container.querySelector('[role="menu"]')).toBeNull();
-    expect(document.activeElement).toBe(trigger);
-  });
+  it.each([0, 11])(
+    "closes the account menu with %i unread notifications and returns visible focus",
+    async (unreadCount) => {
+      client.setQueryData(queryKeys.notifications.list, {
+        notifications: [],
+        unreadCount,
+        unreadByModule: {}
+      });
+      await mount();
+      const trigger = openButton();
+      trigger.focus();
+      await act(async () => trigger.click());
+      const account = [
+        ...container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="menu"]')
+      ].find((button) => /^Account menu(?:,|$)/.test(button.getAttribute("aria-label") ?? ""));
+      expect(account).toBeDefined();
+      expect(account!.getAttribute("aria-expanded")).toBe("false");
+      await act(async () => account!.click());
+      expect(account!.getAttribute("aria-expanded")).toBe("true");
+      const menuItems = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+      for (const label of ["Notifications", "Settings", "Log out"]) {
+        expect(menuItems.some((item) => item.textContent?.startsWith(label))).toBe(true);
+      }
+      const settings = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+        (item) => item.textContent?.includes("Settings")
+      );
+      expect(settings).toBeDefined();
+      await act(async () => settings!.click());
+      expect(container.querySelector("[data-location]")?.textContent).toBe("/settings");
+      expect(trigger.getAttribute("aria-expanded")).toBe("false");
+      expect(container.querySelector('[role="menu"]')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    }
+  );
 });

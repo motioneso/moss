@@ -30,7 +30,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skip = page.getByRole("button", { name: "Skip setup" });
-  const menu = page.locator(".jds-usermenu__trigger");
+  const menu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skip.or(menu).first()).toBeVisible({ timeout: 30_000 });
   if (await skip.isVisible()) {
     await skip.click();
@@ -40,8 +40,8 @@ async function signIn(page: Page): Promise<void> {
 }
 
 async function openActivity(page: Page): Promise<void> {
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Activity", exact: true }).click();
 }
 
@@ -159,7 +159,7 @@ test("a real model call appears as an Activity line with a working detail dialog
 
   await test.step("filter choices survive a reload", async () => {
     await page.reload();
-    const menu = page.locator(".jds-usermenu__trigger");
+    const menu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
     await expect(menu).toBeVisible({ timeout: 30_000 });
     await openActivity(page);
     await expect(page.locator(".act-line", { hasText: "Prepared a briefing" })).toHaveCount(0);
@@ -177,8 +177,8 @@ test("a real model call appears as an Activity line with a working detail dialog
   });
 
   await test.step("Settings no longer lists the retired Model activity page", async () => {
-    await page.locator(".jds-usermenu__trigger").click();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Admin / Setup" }).click();
     await expect(page.getByRole("button", { name: "Model activity" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "People & access" })).toBeVisible({

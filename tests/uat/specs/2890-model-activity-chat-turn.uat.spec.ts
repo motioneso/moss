@@ -27,8 +27,8 @@ const REQUIRE_REAL_CHAT = Boolean(process.env.JARVIS_UAT_REQUIRE_REAL_CHAT);
 const MESSAGE = "UAT 3.6b coverage check: reply with a short greeting.";
 
 async function openActivity(page: Page): Promise<void> {
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Activity", exact: true }).click();
 }
 

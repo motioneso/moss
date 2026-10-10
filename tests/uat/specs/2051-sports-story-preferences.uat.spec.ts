@@ -31,7 +31,7 @@ async function signIn(
   await page.getByLabel("Password").fill(credentials.password);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible();
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
@@ -187,8 +187,8 @@ test("edits and removes a Less like this preference in Sports Settings", async (
   await assertRemovedAndReplaced(page, todayBefore, todayAfter, todayStory!.title);
   console.log("[live proof] the same empty-reason and real-reason flow worked from Today");
 
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Log out" }).click();
   await expect(page.locator("form.auth-form")).toBeVisible();
   await signIn(page, { email: UAT_SECOND_OWNER_EMAIL, password: UAT_SECOND_OWNER_PASSWORD });
 
@@ -216,8 +216,8 @@ test("edits and removes a Less like this preference in Sports Settings", async (
   ).toBeVisible();
   console.log("[live proof] the second user made a separate choice on a visible Sports story");
 
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Log out" }).click();
   await expect(page.locator("form.auth-form")).toBeVisible();
   await signIn(page);
   await page.goto(`${requireBaseURL()}/settings?section=modules&module=sports`);

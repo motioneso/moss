@@ -27,11 +27,11 @@ test("installing Finance from Settings reaches installed-enabled after a real re
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
 
   // Proves login landed on the authenticated shell — RailUserMenu only renders once logged in.
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
 
   const openInstanceModules = async () => {
-    await page.locator(".jds-usermenu__trigger").click();
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Admin / Setup" }).click();
     await page.getByRole("button", { name: "Instance modules" }).click();
   };

@@ -36,7 +36,7 @@ test("a seeded admin+data actor can upload a chat attachment into their vault (#
   // the same accessible name as the submit button (apps/web/src/auth/auth-screen.tsx).
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
 
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(userMenu).toBeVisible();
 
   // Name-agnostic: the accessible name is `Chat with ${assistantName}` (persona-driven, not a
