@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from "react";
+import { act, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -46,7 +46,11 @@ async function mount(content: ReactNode = <SourceChips cards={[card]} />) {
   });
   root = createRoot(container);
   await act(async () =>
-    root!.render(<QueryClientProvider client={client!}>{content}</QueryClientProvider>)
+    root!.render(
+      <StrictMode>
+        <QueryClientProvider client={client!}>{content}</QueryClientProvider>
+      </StrictMode>
+    )
   );
   return container;
 }
@@ -92,18 +96,18 @@ describe("nonmodal source disclosure", () => {
     expect(trigger.getAttribute("aria-controls")).toBe(id);
   });
 
-  it("does not trap Tab or steal focus when an outside control dismisses it", async () => {
+  it("does not trap Tab or steal focus when the outside composer dismisses it", async () => {
     const container = await mount(
       <>
         <SourceChips cards={[card]} />
-        <button data-outside>Other action</button>
+        <textarea aria-label="Message Moss" data-outside />
       </>
     );
     await open(container);
     const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
     document.activeElement!.dispatchEvent(tab);
     expect(tab.defaultPrevented).toBe(false);
-    const outside = container.querySelector<HTMLButtonElement>("[data-outside]")!;
+    const outside = container.querySelector<HTMLTextAreaElement>("[data-outside]")!;
     outside.focus();
     await act(async () => outside.click());
     expect(container.querySelector('[role="dialog"]')).toBeNull();
