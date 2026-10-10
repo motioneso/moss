@@ -57,7 +57,8 @@ export type UatChatScript =
   | "classifier-shadow"
   | "runtime-context"
   | "moss-assistant-name"
-  | "app-map-grounding";
+  | "app-map-grounding"
+  | "1133-chat-attachments";
 
 export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "phase1-smoke",
@@ -72,7 +73,8 @@ export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "classifier-shadow",
   "runtime-context",
   "moss-assistant-name",
-  "app-map-grounding"
+  "app-map-grounding",
+  "1133-chat-attachments"
 ];
 
 export interface SeedOptions {
