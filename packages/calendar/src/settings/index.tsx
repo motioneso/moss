@@ -34,7 +34,10 @@ export const CALENDAR_MODE_OPTIONS: ReadonlyArray<{
 const CALENDAR_TIME_BLOCK_AUTO_DESC =
   "Create time blocks automatically, both when your assistant proposes them in chat and unattended in the background.";
 
-async function requestJson<T>(path: string, init?: RequestInit & { body?: unknown }): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  init?: Omit<RequestInit, "body"> & { body?: unknown }
+): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("accept", "application/json");
   if (init?.body !== undefined) headers.set("content-type", "application/json");
