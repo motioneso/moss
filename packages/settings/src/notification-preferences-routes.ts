@@ -122,16 +122,18 @@ export function registerNotificationPreferencesRoutes(
         const digest = await dependencies.dataContext.withDataContext(
           accessContext,
           async (scopedDb) => {
+            const existing = digestPreferenceFromRaw(
+              await dependencies.preferencesRepository.get(
+                scopedDb,
+                NOTIFICATION_DIGEST_PREFERENCE_KEY
+              )
+            );
             const next: NotificationDigestPreference = {
               enabled: body.digest.enabled,
               cadence: body.digest.cadence,
               scheduleMetadata: { ...body.digest.scheduleMetadata },
-              lastDigestSentAt: digestPreferenceFromRaw(
-                await dependencies.preferencesRepository.get(
-                  scopedDb,
-                  NOTIFICATION_DIGEST_PREFERENCE_KEY
-                )
-              ).lastDigestSentAt
+              lastDigestSentAt: existing.lastDigestSentAt,
+              lastDigestSentId: existing.lastDigestSentId
             };
             const availability = await digestAvailability(
               scopedDb,

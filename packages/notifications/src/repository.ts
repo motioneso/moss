@@ -7,6 +7,8 @@ import { assertDataContextDb, type DataContextDb, type Notification } from "@mos
 import { isSameOriginAppPath } from "./app-path.js";
 import { projectNotificationMetadata } from "./metadata.js";
 
+export const DIGEST_BATCH_SIZE = 50;
+
 export interface NotificationWithReadState extends Notification {
   readonly read_at: Date | null;
 }
@@ -496,18 +498,26 @@ export class NotificationsRepository {
 
   async listDigestEligible(
     scopedDb: DataContextDb,
-    input: { since: Date | null; limit?: number }
+    input: { since: Date | null; sinceId?: string | null; limit?: number }
   ): Promise<NotificationWithReadState[]> {
     assertDataContextDb(scopedDb);
 
+    // A row becomes digestible when it is created, re-fired (updated_at) or released from
+    // quiet hours (deferred_until), whichever is latest. Ordering and the watermark use that
+    // time so rows past the batch limit, deferred rows and re-fires are not skipped.
+    const visibleAt = sql<Date>`date_trunc('milliseconds', greatest(notifications.created_at, coalesce(notifications.updated_at, notifications.created_at), coalesce(notifications.deferred_until, notifications.created_at)))`;
     let query = this.visibleRowsQuery(scopedDb).where("reads.notification_id", "is", null);
     if (input.since) {
-      query = query.where("notifications.created_at", ">", input.since);
+      query = query.where(
+        input.sinceId
+          ? sql<SqlBool>`(${visibleAt} > ${input.since} or (${visibleAt} = ${input.since} and notifications.id > ${input.sinceId}))`
+          : sql<SqlBool>`${visibleAt} > ${input.since}`
+      );
     }
     return query
-      .orderBy("notifications.created_at", "asc")
+      .orderBy(visibleAt, "asc")
       .orderBy("notifications.id")
-      .limit(input.limit ?? 50)
+      .limit(input.limit ?? DIGEST_BATCH_SIZE)
       .execute();
   }
 
