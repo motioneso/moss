@@ -556,18 +556,6 @@ export class MemoryGraphRepository {
     return result.rows.length > 0;
   }
 
-  async forgetFact(scopedDb: DataContextDb, ownerUserId: string, factId: string): Promise<boolean> {
-    assertDataContextDb(scopedDb);
-    await this.deactivateSearchDocument(scopedDb, ownerUserId, "fact", factId);
-    const result = await sql<{ id: string }>`
-      DELETE FROM app.memory_facts
-      WHERE owner_user_id = ${ownerUserId}::uuid
-        AND id = ${factId}::uuid
-      RETURNING id
-    `.execute(scopedDb.db);
-    return result.rows.length > 0;
-  }
-
   async pinFact(
     scopedDb: DataContextDb,
     ownerUserId: string,

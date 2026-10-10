@@ -1,6 +1,7 @@
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 
 import type { EmbeddingProvider } from "./embedding-provider.js";
+import { MemoryGraphDashboardRepository } from "./graph-dashboard-repository.js";
 import { MemoryGraphRepository } from "./graph-repository.js";
 import type {
   MemoryFactProvenance,
@@ -116,7 +117,13 @@ export class GraphMemoryRecallService {
   ): Promise<MemoryForgetResult> {
     assertDataContextDb(scopedDb);
     return {
-      deleted: await this.repository.forgetFact(scopedDb, ownerUserId, target.factId)
+      deleted: (
+        await new MemoryGraphDashboardRepository(this.repository).forgetFactWithConflictCleanup(
+          scopedDb,
+          ownerUserId,
+          target.factId
+        )
+      ).deleted
     };
   }
 
