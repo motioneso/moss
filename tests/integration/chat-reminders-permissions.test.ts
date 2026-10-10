@@ -295,6 +295,7 @@ describe("chat reminder row security", () => {
   it("does not let the app change or delete a reminder, or the worker create one", async () => {
     const reminder = await createReminder(ids.userA);
 
+    // #3310: the app may write only state and context, so a text change is refused outright.
     await expect(
       runner.withDataContext({ actorUserId: ids.userA }, (db) =>
         db.db
@@ -303,7 +304,7 @@ describe("chat reminder row security", () => {
           .where("id", "=", reminder.id)
           .execute()
       )
-    ).rejects.toMatchObject({ code: "42501" });
+    ).rejects.toThrow(/permission denied/);
     await expect(
       runner.withDataContext({ actorUserId: ids.userA }, (db) =>
         db.db.deleteFrom("app.chat_reminders").where("id", "=", reminder.id).execute()

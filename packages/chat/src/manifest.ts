@@ -70,7 +70,8 @@ export const chatModuleManifest = {
       "sql/0299_main_chat.sql",
       "sql/0305_chat_summary_frontier.sql",
       "sql/0306_chat_relative_reminders.sql",
-      "sql/0307_chat_summary_worker_publish.sql"
+      "sql/0307_chat_summary_worker_publish.sql",
+      "sql/0308_chat_reminder_cancel.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -167,6 +168,21 @@ export const chatModuleManifest = {
       description:
         "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder that Moss posts once in Main, " +
         "noting if late. Up to 20 at once, 30 days ahead. No clock times, repeats or private chats.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.reminder_list",
+      description:
+        "In Main chat, 'list my reminders' shows reminders set in chat: waiting ones with time left, then " +
+        "up to 10 recent ones marked sent, cancelled or couldn't be sent. Task reminders are not included.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.reminder_cancel",
+      description:
+        "In Main chat, 'cancel the reminder to stretch' stops a waiting chat reminder so it never arrives. " +
+        "If already sent, Moss says so and frees its place under the limit of 20. " +
+        "If different reminders match, Moss names them and cancels none.",
       featureFlagId: "chat.module"
     },
     {
