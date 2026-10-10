@@ -614,7 +614,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0299", name: "0299_main_chat.sql" },
         { version: "0305", name: "0305_chat_summary_frontier.sql" },
         { version: "0306", name: "0306_chat_relative_reminders.sql" },
-        { version: "0307", name: "0307_chat_summary_worker_publish.sql" }
+        { version: "0307", name: "0307_chat_summary_worker_publish.sql" },
+        { version: "0308", name: "0308_chat_reminder_cancel.sql" }
       ]);
     } finally {
       await client.end();

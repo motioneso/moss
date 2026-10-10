@@ -1019,7 +1019,8 @@ export interface ChatMessagesTable {
   updated_at: TimestampColumn;
 }
 
-export type ChatReminderState = "queued" | "delivered" | "failed";
+export type ChatReminderState = "queued" | "delivered" | "failed" | "cancelled";
+export type ChatReminderContextState = "pending" | "dismissed";
 
 export interface ChatRemindersTable {
   id: string;
@@ -1031,7 +1032,11 @@ export interface ChatRemindersTable {
   delay_seconds: number;
   due_at: ColumnType<Date, Date | string | undefined, Date | string>;
   state: ColumnType<ChatReminderState, ChatReminderState | undefined, ChatReminderState>;
-  context_state: ColumnType<"pending", "pending" | undefined, "pending">;
+  context_state: ColumnType<
+    ChatReminderContextState,
+    ChatReminderContextState | undefined,
+    ChatReminderContextState
+  >;
   version: ColumnType<number, number | undefined, number>;
   delivered_at: NullableTimestampColumn;
   late: ColumnType<boolean | null, boolean | null | undefined, boolean | null>;

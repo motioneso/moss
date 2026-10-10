@@ -271,7 +271,7 @@ export interface ChatClassifierGateOriginV1 {
 export interface ChatReminderOriginV1 {
   readonly version: 1;
   readonly kind: "reminder";
-  readonly event: "saved" | "refused" | "delivered";
+  readonly event: "saved" | "refused" | "delivered" | "listed" | "cancelled" | "cancel_refused";
   readonly reminderId: string | null;
   /** Set on delivery: true when the reminder arrived more than a minute after it was due. */
   readonly late?: boolean;
