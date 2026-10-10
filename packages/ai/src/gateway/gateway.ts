@@ -68,7 +68,7 @@ import {
 export type { GatewayLogger };
 import { isSelfOperationExcluded } from "./self-operation.js";
 import { recordUnattendedRun } from "./unattended-run-record.js";
-import type { SessionTokenRegistry } from "./session-tokens.js";
+import { LAUNCH_REPLAY_REFUSAL, type SessionTokenRegistry } from "./session-tokens.js";
 import type {
   ActiveModulesResolver,
   AdmissionPath,
@@ -380,6 +380,9 @@ export class AssistantToolGateway {
   > {
     const { actorUserId, chatSessionId, threadId, allowedToolNames } =
       this.deps.tokens.verify(token);
+    if (this.deps.tokens.isInLaunchReplay(token)) {
+      return { failure: { ok: false, error: LAUNCH_REPLAY_REFUSAL }, reason: "refused" };
+    }
     const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
     let progressTool: ExecutableTool | undefined;
     let progressAdmission: Promise<void> | undefined;

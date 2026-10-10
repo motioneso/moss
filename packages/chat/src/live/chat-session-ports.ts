@@ -287,6 +287,12 @@ export interface ChatSessionManagerDeps {
   /** Refresh the session token's TTL on activity, so a live session's token never
    *  expires under the registry backstop (mirrors lastActivity / idle reaping). */
   readonly touchMcpToken?: (chatSessionId: string) => void;
+  /**
+   * #3335: mark a launch token as replaying until the replay has drained. The gateway refuses
+   * every tool and permission request on a marked token, because no user turn stands behind it.
+   */
+  readonly beginLaunchReplay?: (token: string) => void;
+  readonly endLaunchReplay?: (token: string) => void;
   /** Wait for origin-bound gateway notifications before completing their model/gate turn. */
   readonly flushActionRecords?: (chatSessionId: string) => Promise<void>;
   /**

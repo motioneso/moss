@@ -97,6 +97,9 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     persona
   });
   const mcpConfig = await deps.mintMcpToken?.(actorUserId, sessionKey, threadId);
+  // #3335: nothing the replay provokes may run. Engines that replay inside launch() do so before
+  // it returns; in-process engines replay in the submit and drain below.
+  if (mcpConfig) deps.beginLaunchReplay?.(mcpConfig.token);
   if (!sequenceBySession.has(sessionKey)) sequenceBySession.set(sessionKey, 0);
   const nextSequence = () => {
     const next = (sequenceBySession.get(sessionKey) ?? 0) + 1;
@@ -236,10 +239,20 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
 
   // #342 — only in-process engines need manager-owned replay submit + drain.
   if (replayBatch !== undefined && !serverOwnsDrain) {
-    await engine.submit(replayBatch);
-    // Drain (and discard) so real turn records start from a clean offset.
-    session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, pollMs);
+    try {
+      await engine.submit(replayBatch);
+      // Drain (and discard) so real turn records start from a clean offset.
+      session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, pollMs);
+    } catch (error) {
+      // #3335: an undrained replay leaves the token refusing every tool. Drop the session so the
+      // next turn relaunches it.
+      if (sessions.get(sessionKey) === session) sessions.delete(sessionKey);
+      deps.revokeMcpToken?.(sessionKey);
+      await engine.kill().catch(() => undefined);
+      throw error;
+    }
   }
+  if (mcpConfig) deps.endLaunchReplay?.(mcpConfig.token);
 
   return session;
 }
