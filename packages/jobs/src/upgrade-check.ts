@@ -5,7 +5,7 @@ import {
   assertMetadataOnlyPayload,
   sendJob
 } from "./pg-boss.js";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import { resolveMossEnv, type MossDatabase } from "@moss/db";
 import { compareMossVersions } from "@moss/module-sdk";
 
@@ -65,27 +65,9 @@ export async function handleUpgradeCheckJob(
   }
 
   if (compareMossVersions(release.tag_name, currentVersion) > 0) {
-    const value = {
-      version: release.tag_name,
-      notes: release.body || ""
-    };
-
-    await workerDb
-      .insertInto("app.instance_settings")
-      .values({
-        key: "latest_release",
-        value,
-        updated_by_user_id: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .onConflict((oc) =>
-        oc.column("key").doUpdateSet({
-          value,
-          updated_at: new Date().toISOString()
-        })
-      )
-      .execute();
+    await sql`select app.record_latest_release(${release.tag_name}, ${release.body || ""})`.execute(
+      workerDb
+    );
 
     if (!boss) return;
     // #1721: ordered and limited to two so the recipient is the same user on every run and a
@@ -93,14 +75,9 @@ export async function handleUpgradeCheckJob(
     // packages/db/src/target-identity-guard.ts, ambiguity here must not refuse: this only decides
     // who gets told an upgrade is available, and staying silent about upgrades is the worse
     // outcome. So it notifies the oldest owner and says plainly that it had to choose.
-    const owners = await workerDb
-      .selectFrom("app.users")
-      .select("id")
-      .where("is_bootstrap_owner", "=", true)
-      .orderBy("created_at", "asc")
-      .orderBy("id", "asc")
-      .limit(2)
-      .execute();
+    const { rows: owners } = await sql<{
+      id: string;
+    }>`select id from app.upgrade_notify_owner_ids()`.execute(workerDb);
     const owner = owners[0];
     if (owners.length > 1) {
       process.stderr.write(
