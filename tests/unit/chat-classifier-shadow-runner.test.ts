@@ -482,7 +482,9 @@ describe("failure and cooldown", () => {
       fakeDb,
       expect.objectContaining({ decision: "would_handle" })
     );
-    expect(record).toHaveBeenCalledWith(handle().model.id, 5_000);
+    // Area, tool and one argument question: three questions in five seconds.
+    expect(choose).toHaveBeenCalledTimes(3);
+    expect(record).toHaveBeenCalledWith(handle().model.id, 5_000 / 3);
   });
 
   it("never throws when the repository write fails", async () => {

@@ -24,9 +24,9 @@ import {
 } from "../../packages/chat/src/live/classifier-gate-speed.js";
 
 /**
- * #3365: the gate's time limit follows each routing model's measured speed. A fast model keeps a
- * tight limit, a slow one gets a stretched limit, an unmeasured one gets the ceiling, and timeouts
- * count as slow answers.
+ * #3365: the gate's time limit follows each routing model's measured time per question. A fast
+ * model keeps a tight limit, a slow one gets room for a full attempt, an unmeasured one gets the
+ * ceiling, and timeouts count as slow answers.
  */
 
 const MODEL_ID = "m1";
@@ -64,7 +64,7 @@ function slowChoose(answerMs: number) {
     .mockResolvedValueOnce(pick("calendar.today"));
 }
 
-function attemptPorts(answerMs: number) {
+function attemptPorts(answerMs: number, resolveMs = 0) {
   const gatewayCall = vi.fn(
     async (): Promise<GatewayGateOutcome> => ({
       kind: "executed",
@@ -76,15 +76,18 @@ function attemptPorts(answerMs: number) {
     gatewayCall,
     ports: {
       classifier: {
-        resolve: async () => ({
-          model: {
-            id: MODEL_ID,
-            provider_config_id: "p",
-            provider_kind: "x",
-            provider_model_id: "m"
-          },
-          capability: "choice_only"
-        }),
+        resolve: async () => {
+          if (resolveMs > 0) await new Promise((done) => setTimeout(done, resolveMs));
+          return {
+            model: {
+              id: MODEL_ID,
+              provider_config_id: "p",
+              provider_kind: "x",
+              provider_model_id: "m"
+            },
+            capability: "choice_only"
+          };
+        },
         choose: slowChoose(answerMs),
         extract: vi.fn()
       } as never as ClassifierGatePorts["classifier"],
@@ -108,7 +111,7 @@ function request(overrides: Partial<GateRequest> = {}): GateRequest {
   };
 }
 
-/** A record holding `count` attempts of `ms` each for the test model. */
+/** A record holding `count` attempts of `ms` per question each for the test model. */
 function measured(ms: number, count = 5): GateSpeedRecord {
   const speed = new GateSpeedRecord();
   for (let i = 0; i < count; i += 1) speed.record(MODEL_ID, ms);
@@ -134,8 +137,9 @@ describe("the speed record's limit", () => {
     expect(GATE_TIME_LIMIT.floorMs).toBe(GATE_LIMITS.deadlineMs);
   });
 
-  it("stretches a slow model to twice its slow answer time plus the margin", () => {
-    expect(measured(6_000).limitMs(MODEL_ID)).toBe(12_500);
+  it("stretches a slow model to twice a full attempt at its slow question time, plus the margin", () => {
+    expect(GATE_TIME_LIMIT.questionsPerAttempt).toBe(4);
+    expect(measured(1_500).limitMs(MODEL_ID)).toBe(12_500);
   });
 
   it("uses the 90th percentile, so one slow blip does not stretch a fast model", () => {
@@ -152,7 +156,7 @@ describe("the speed record's limit", () => {
     expect(measured(60_000).limitMs(MODEL_ID)).toBe(GATE_TIME_LIMIT.ceilingMs);
   });
 
-  it("keeps the ceiling at half the gate token's fixed life", () => {
+  it("keeps the ceiling at most half the gate token's fixed life", () => {
     expect(GATE_TIME_LIMIT.ceilingMs * 2).toBeLessThanOrEqual(GATE_TOKEN_TTL_MS);
   });
 
@@ -173,7 +177,7 @@ describe("the gate engine runs under the model's measured limit", () => {
   });
 
   it("runs a ten-second answer from a model measured as slow", async () => {
-    const { outcome, gatewayCall } = await attempt(10_000, measured(6_000));
+    const { outcome, gatewayCall } = await attempt(10_000, measured(1_500));
     expect(outcome.kind).toBe("handled");
     expect(gatewayCall).toHaveBeenCalled();
   });
@@ -188,11 +192,21 @@ describe("the gate engine runs under the model's measured limit", () => {
     expect(outcome).toMatchObject({ kind: "declined", reason: "timeout" });
   });
 
-  it("records each answered attempt's time against the model", async () => {
+  it("records each answered attempt's time per question against the model", async () => {
     const speed = new GateSpeedRecord();
     const record = vi.spyOn(speed, "record");
-    await attempt(4_000, speed);
-    expect(record).toHaveBeenCalledWith(MODEL_ID, 4_000);
+    const { outcome } = await attempt(4_000, speed);
+    expect(outcome.kind).toBe("handled");
+    expect(record).toHaveBeenCalledWith(MODEL_ID, 2_000);
+  });
+
+  it("counts the limit from the start of the attempt, not from when the model is found", async () => {
+    vi.useFakeTimers();
+    const { ports } = attemptPorts(1_500, 2_000);
+    const gate = new ClassifierGate({ ...ports, speed: measured(200), now: () => Date.now() });
+    const pending = gate.evaluate(request());
+    await vi.advanceTimersByTimeAsync(3_500);
+    expect(await pending).toMatchObject({ kind: "declined", reason: "timeout" });
   });
 
   it("records a timeout as the time allowed, so the limit grows", async () => {
@@ -200,7 +214,9 @@ describe("the gate engine runs under the model's measured limit", () => {
     const record = vi.spyOn(speed, "record");
     await attempt(5_000, speed);
     expect(record).toHaveBeenLastCalledWith(MODEL_ID, GATE_TIME_LIMIT.floorMs);
-    expect(speed.limitMs(MODEL_ID)).toBe(GATE_TIME_LIMIT.floorMs * 2 + GATE_TIME_LIMIT.marginMs);
+    expect(speed.limitMs(MODEL_ID)).toBe(
+      GATE_TIME_LIMIT.floorMs * GATE_TIME_LIMIT.questionsPerAttempt * 2 + GATE_TIME_LIMIT.marginMs
+    );
   });
 
   it("lets a model that keeps timing out climb to an answer", async () => {
@@ -258,7 +274,7 @@ describe("the live gate runner passes the speed record to every attempt", () => 
 
   it("runs a ten-second answer from a model measured as slow", async () => {
     vi.useFakeTimers();
-    const pending = runner(measured(6_000)).evaluate(request());
+    const pending = runner(measured(1_500)).evaluate(request());
     await vi.advanceTimersByTimeAsync(10_000);
     expect((await pending).kind).toBe("handled");
   });

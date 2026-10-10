@@ -170,7 +170,8 @@ export interface ClassifierGatePorts {
 /** #3365: per-model answer times and the time limit they imply. Keyed by the model's config id. */
 export interface GateSpeed {
   limitMs(modelId: string): number;
-  record(modelId: string, elapsedMs: number): void;
+  /** One attempt's time divided by the questions it put to the model. */
+  record(modelId: string, perQuestionMs: number): void;
 }
 
 /** What `classify` reports back to `evaluate` as the attempt moves on. */
@@ -179,8 +180,6 @@ interface ClassifyHooks {
   coolKey(key: string): void;
   /** The resolved model, before any question is asked. */
   model(model: ClassifierHandle["model"]): void;
-  /** The first question is about to go to the model, so the attempt's time measures it. */
-  asking(model: ClassifierHandle["model"]): void;
 }
 
 export interface GateRequest {
@@ -242,6 +241,8 @@ class Stop {
 
 export class ClassifierGate {
   private readonly coolingUntil = new Map<string, number>();
+  /** #3365: questions put to the model, per attempt, keyed by the attempt's deadline signal. */
+  private readonly questions = new WeakMap<AbortSignal, number>();
 
   constructor(private readonly ports: ClassifierGatePorts) {}
 
@@ -272,9 +273,10 @@ export class ClassifierGate {
     let timer = setTimeout(timeUp, GATE_LIMITS.deadlineMs);
     let coolKey: string | null = null;
     let checkModel: string | undefined;
-    let measuredModel: string | null = null;
+    let speedModel: string | null = null;
     const recordSpeed = () => {
-      if (measuredModel) this.ports.speed?.record(measuredModel, elapsed());
+      const asked = this.questions.get(deadline.signal) ?? 0;
+      if (speedModel && asked > 0) this.ports.speed?.record(speedModel, elapsed() / asked);
     };
 
     try {
@@ -286,11 +288,9 @@ export class ClassifierGate {
           checkModel = model.provider_model_id;
           if (!this.ports.speed) return;
           // #3365: the model's own limit, counted from the start of the attempt.
+          speedModel = model.id;
           clearTimeout(timer);
           timer = setTimeout(timeUp, Math.max(0, this.ports.speed.limitMs(model.id) - elapsed()));
-        },
-        asking: (model) => {
-          measuredModel = model.id;
         }
       });
       clearTimeout(timer);
@@ -301,7 +301,8 @@ export class ClassifierGate {
       if (error instanceof AbortedError) {
         if (request.signal?.aborted) return finish({ kind: "cancelled", trace });
         if (coolKey) this.startCooldown(coolKey);
-        // #3365: a timeout counts as an answer at least this slow, so the next limit grows.
+        // #3365: a timeout counts the question in flight as answered at the deadline, so the
+        // record reads the model as at least this slow and the next limit grows.
         recordSpeed();
         // #3064: one owner for the timeout line — the gate. It always files on a gate
         // deadline, because it alone knows the turn, the model and the elapsed time.
@@ -338,6 +339,10 @@ export class ClassifierGate {
     return null;
   }
 
+  private countQuestion(signal: AbortSignal): void {
+    this.questions.set(signal, (this.questions.get(signal) ?? 0) + 1);
+  }
+
   private startCooldown(key: string): void {
     this.coolingUntil.set(key, this.ports.now() + GATE_LIMITS.cooldownMs);
   }
@@ -368,7 +373,6 @@ export class ClassifierGate {
       (tool) => gateEligibilityProblem(tool, handle.capability) === null
     );
     if (menu.length === 0) return new Stop("no_eligible_tools");
-    hooks.asking(handle.model);
 
     // #2956: every check in this turn carries the turn and its answer line, so
     // the activity page groups the checks with the answer they informed.
@@ -425,6 +429,7 @@ export class ClassifierGate {
     trace: { -readonly [K in keyof GateTrace]: GateTrace[K] },
     activity: GenerateChoicesActivity
   ): Promise<Answer | Stop> {
+    this.countQuestion(signal);
     const result = await this.run(
       this.ports.classifier.choose(handle, { state, question, signal, activity }),
       signal
@@ -536,6 +541,7 @@ export class ClassifierGate {
 
     let input: Record<string, unknown>;
     if (plan.some((arg) => arg.kind === "extract")) {
+      this.countQuestion(signal);
       const extracted = await this.run(
         this.ports.classifier.extract(handle, {
           instructions: `Extract the argument values for the tool described as: ${tool.classifier!.description}`,

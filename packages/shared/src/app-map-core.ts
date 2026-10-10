@@ -335,11 +335,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "message is also classified so the record shows whether the gate would have handled it; no " +
       "tool runs, no approval card appears and the main model still answers, and private chats and " +
       "oversized messages are never sent to the classifier. How long the gate waits for the " +
-      "classifier follows that model's own measured speed: a fast model keeps a short wait, so " +
-      "a stuck one hands the message to the main model within a few seconds, while a slower " +
-      "model such as a signed-in command-line one is given up to about twice its usual time, " +
-      "never more than 30 seconds. The first message after Moss restarts waits up to 30 seconds " +
-      "while the model is measured again, and nothing about the wait can be set by hand. " +
+      "classifier follows that model's own measured speed per question. A fast model keeps a " +
+      "short wait, so a one-off stall hands the message to the main model within a few " +
+      "seconds; a model that keeps stalling is given longer each time. A slower model such as " +
+      "a signed-in command-line one is given about twice the time a full tool request takes " +
+      "it. The wait is never more than 30 seconds, the first message after Moss restarts " +
+      "waits up to 30 seconds while the model is measured again, and nothing about the wait " +
+      "can be set by hand. " +
       "The classifier " +
       "sorts each new email into junk, needs a reply, needs action, receipt or notice, " +
       "waiting on someone, time-sensitive, or for your information; receipts, order and booking " +
