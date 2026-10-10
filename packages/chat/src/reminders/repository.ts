@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 
 import { sql } from "kysely";
 
-import { assertDataContextDb, type DataContextDb } from "@moss/db";
+import { assertDataContextDb, type ChatReminderState, type DataContextDb } from "@moss/db";
 
 export interface SavedReminder {
   readonly id: string;
@@ -19,7 +19,7 @@ export interface DueReminder {
   readonly threadId: string;
   readonly reservedMessageId: string;
   readonly text: string;
-  readonly state: "queued" | "delivered";
+  readonly state: ChatReminderState;
   readonly version: number;
   readonly dueAt: Date;
 }
@@ -104,6 +104,18 @@ export class ReminderRepository {
       .where("state", "=", "queued")
       .executeTakeFirstOrThrow();
     if (result.numUpdatedRows !== 1n) throw new Error("chat reminder was not marked delivered");
+  }
+
+  /** Ends an undeliverable reminder so it frees its slot. Failed reminders carry no message. */
+  async markFailed(scopedDb: DataContextDb, reminderId: string): Promise<void> {
+    assertDataContextDb(scopedDb);
+    const result = await scopedDb.db
+      .updateTable("app.chat_reminders")
+      .set({ state: "failed" })
+      .where("id", "=", reminderId)
+      .where("state", "=", "queued")
+      .executeTakeFirstOrThrow();
+    if (result.numUpdatedRows !== 1n) throw new Error("chat reminder was not marked failed");
   }
 
   /** Reads a row the delivery lock cannot see, because the worker may lock only queued rows. */

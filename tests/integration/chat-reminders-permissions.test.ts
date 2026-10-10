@@ -124,6 +124,16 @@ function markDelivered(reminder: Reminder, actorUserId: string = reminder.owner)
   );
 }
 
+function markFailed(reminder: Reminder, actorUserId: string = reminder.owner) {
+  return workerRunner.withDataContext({ actorUserId }, (db) =>
+    db.db
+      .updateTable("app.chat_reminders")
+      .set({ state: "failed" })
+      .where("id", "=", reminder.id)
+      .executeTakeFirst()
+  );
+}
+
 async function deliver(reminder: Reminder) {
   await insertReserved(reminder);
   return markDelivered(reminder);
@@ -373,6 +383,47 @@ describe("chat reminder worker permissions", () => {
     ).rejects.toThrow();
   });
 
+  it("marks an undeliverable reminder failed once, with no message and no way back", async () => {
+    const reminder = await createReminder(ids.userA);
+
+    expect(Number((await markFailed(reminder, ids.userB)).numUpdatedRows)).toBe(0);
+    expect(Number((await markFailed(reminder)).numUpdatedRows)).toBe(1);
+    expect(Number((await markFailed(reminder)).numUpdatedRows)).toBe(0);
+    await expect(insertReserved(reminder)).rejects.toMatchObject({ code: "42501" });
+    expect(Number((await markDelivered(reminder)).numUpdatedRows)).toBe(0);
+
+    const row = (await readReminders(ids.userA)).find((item) => item.id === reminder.id);
+    expect(row).toMatchObject({ state: "failed", delivered_at: null, late: null });
+  });
+
+  it("refuses a failed reminder that carries delivery details", async () => {
+    const reminder = await createReminder(ids.userA);
+
+    await expect(
+      workerRunner.withDataContext({ actorUserId: ids.userA }, (db) =>
+        db.db
+          .updateTable("app.chat_reminders")
+          .set({ state: "failed", delivered_at: new Date(), late: false })
+          .where("id", "=", reminder.id)
+          .execute()
+      )
+    ).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("does not let the app mark a reminder failed", async () => {
+    const reminder = await createReminder(ids.userA);
+
+    await expect(
+      runner.withDataContext({ actorUserId: ids.userA }, (db) =>
+        db.db
+          .updateTable("app.chat_reminders")
+          .set({ state: "failed" })
+          .where("id", "=", reminder.id)
+          .execute()
+      )
+    ).rejects.toMatchObject({ code: "42501" });
+  });
+
   it("cannot delete reminders or chat messages", async () => {
     const reminder = await createReminder(ids.userA);
     await deliver(reminder);
@@ -394,7 +445,7 @@ describe("chat reminder worker permissions", () => {
 });
 
 describe("chat reminder capacity", () => {
-  it("holds 20 open reminders and keeps delivered ones counted until their context is used", async () => {
+  it("holds 20 open reminders, keeps delivered ones counted, and frees failed ones", async () => {
     const saved: Reminder[] = [];
     for (let index = 0; index < 20; index += 1) {
       saved.push(await createReminder(ids.userC));
@@ -402,6 +453,10 @@ describe("chat reminder capacity", () => {
 
     await expect(createReminder(ids.userC)).rejects.toThrow(/chat_reminder_capacity_reached/);
     await deliver(saved[0]!);
+    await expect(createReminder(ids.userC)).rejects.toThrow(/chat_reminder_capacity_reached/);
+
+    await markFailed(saved[1]!);
+    await expect(createReminder(ids.userC)).resolves.toMatchObject({ owner: ids.userC });
     await expect(createReminder(ids.userC)).rejects.toThrow(/chat_reminder_capacity_reached/);
   });
 

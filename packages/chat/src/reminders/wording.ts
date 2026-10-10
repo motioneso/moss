@@ -4,7 +4,10 @@ import type { ReminderUnsupportedReason } from "./recognizer.js";
 
 export const REMINDER_OPEN_LIMIT = 20;
 
-/** A delivery that runs this long after its due time says so. Workers poll every 2 seconds. */
+/**
+ * A delivery that runs this long after its due time says so. It stays above one worker poll
+ * (DATA_CONTEXT_WORKER_POLLING_INTERVAL_SECONDS) plus the first retry delay.
+ */
 export const REMINDER_LATE_AFTER_MS = 60_000;
 
 export function reminderSavedReply(delaySeconds: number, text: string): string {

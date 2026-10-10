@@ -3,8 +3,11 @@
 
 import type { PgBoss, WorkOptions } from "pg-boss";
 
+import { sql } from "kysely";
+
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 import {
+  DATA_CONTEXT_WORKER_POLLING_INTERVAL_SECONDS,
   registerDataContextWorker,
   scopedJobDatabase,
   sendJob,
@@ -41,7 +44,13 @@ export type ReminderDeliveryOutcome =
   | "missing"
   | "already_delivered"
   | "stale_version"
-  | "not_main";
+  | "not_main"
+  | "failed";
+
+type ReminderDeliveryDeps = {
+  readonly reminders: ReminderRepository;
+  readonly chat: ChatRepository;
+};
 
 /** Enqueues delivery inside the caller's transaction, so a rollback drops the job too. */
 export async function enqueueReminderDelivery(
@@ -61,7 +70,7 @@ export async function enqueueReminderDelivery(
 export async function deliverDueReminder(
   scopedDb: DataContextDb,
   payload: DeliverReminderJobPayload,
-  deps: { readonly reminders: ReminderRepository; readonly chat: ChatRepository }
+  deps: ReminderDeliveryDeps
 ): Promise<ReminderDeliveryOutcome> {
   const reminder = await deps.reminders.lockForDelivery(scopedDb, payload.resourceId);
 
@@ -82,7 +91,10 @@ export async function deliverDueReminder(
   }
 
   const main = await deps.chat.getMainThread(scopedDb, reminder.ownerUserId);
-  if (!main || main.id !== reminder.threadId) return "not_main";
+  if (!main || main.id !== reminder.threadId) {
+    await deps.reminders.markFailed(scopedDb, reminder.id);
+    return "not_main";
+  }
 
   const late = now.getTime() - reminder.dueAt.getTime() > REMINDER_LATE_AFTER_MS;
   await deps.chat.insertReservedAssistantMessage(scopedDb, {
@@ -96,6 +108,47 @@ export async function deliverDueReminder(
   return "delivered";
 }
 
+/**
+ * Runs one delivery attempt. Earlier attempts throw so pg-boss retries them. The last attempt
+ * undoes any partial delivery and marks the reminder failed, so it never holds a slot forever.
+ * Missing retry metadata counts as the last attempt.
+ */
+export async function runReminderDeliveryJob(
+  scopedDb: DataContextDb,
+  job: {
+    readonly data: DeliverReminderJobPayload;
+    readonly retryCount?: number;
+    readonly retryLimit?: number;
+  },
+  deps: ReminderDeliveryDeps
+): Promise<ReminderDeliveryOutcome> {
+  const final =
+    typeof job.retryCount !== "number" ||
+    typeof job.retryLimit !== "number" ||
+    job.retryCount >= job.retryLimit;
+  if (!final) return deliverDueReminder(scopedDb, job.data, deps);
+
+  await sql`savepoint reminder_delivery`.execute(scopedDb.db);
+  try {
+    return await deliverDueReminder(scopedDb, job.data, deps);
+  } catch {
+    await sql`rollback to savepoint reminder_delivery`.execute(scopedDb.db);
+    const reminder = await deps.reminders.lockForDelivery(scopedDb, job.data.resourceId);
+    if (!reminder || reminder.ownerUserId !== job.data.actorUserId) return "missing";
+    await deps.reminders.markFailed(scopedDb, reminder.id);
+    return "failed";
+  }
+}
+
+/** The delivery worker needs retry metadata to recognise its last attempt. */
+export function reminderDeliveryWorkOptions(overrides?: WorkOptions): WorkOptions {
+  return {
+    pollingIntervalSeconds: DATA_CONTEXT_WORKER_POLLING_INTERVAL_SECONDS,
+    ...overrides,
+    includeMetadata: true
+  };
+}
+
 export async function registerReminderDeliveryWorker(
   boss: PgBoss,
   dataContext: DataContextRunner,
@@ -106,7 +159,7 @@ export async function registerReminderDeliveryWorker(
     boss,
     CHAT_DELIVER_REMINDER_QUEUE,
     dataContext,
-    (job, scopedDb) => deliverDueReminder(scopedDb, job.data, deps),
-    workOptions
+    (job, scopedDb) => runReminderDeliveryJob(scopedDb, job, deps),
+    reminderDeliveryWorkOptions(workOptions)
   );
 }

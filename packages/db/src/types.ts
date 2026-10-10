@@ -1017,7 +1017,7 @@ export interface ChatMessagesTable {
   updated_at: TimestampColumn;
 }
 
-export type ChatReminderState = "queued" | "delivered";
+export type ChatReminderState = "queued" | "delivered" | "failed";
 
 export interface ChatRemindersTable {
   id: string;

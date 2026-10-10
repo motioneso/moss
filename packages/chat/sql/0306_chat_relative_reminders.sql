@@ -10,7 +10,7 @@ CREATE TABLE app.chat_reminders (
     AND length(btrim(reminder_text)) > 0),
   delay_seconds integer NOT NULL CHECK (delay_seconds BETWEEN 1 AND 2592000),
   due_at timestamptz NOT NULL,
-  state text NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'delivered')),
+  state text NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'delivered', 'failed')),
   context_state text NOT NULL DEFAULT 'pending' CHECK (context_state IN ('pending')),
   version integer NOT NULL DEFAULT 1 CHECK (version > 0),
   delivered_at timestamptz,
@@ -28,7 +28,8 @@ ALTER TABLE app.chat_reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.chat_reminders FORCE ROW LEVEL SECURITY;
 
 -- Serializes reminder creation per owner and counts the reminders that hold a slot.
--- Delivered reminders keep their slot while their context is still pending.
+-- Delivered reminders keep their slot while their context is still pending. Failed
+-- reminders never delivered, so they hold no slot.
 CREATE FUNCTION app.chat_reminder_open_count_locked(target_owner uuid)
 RETURNS integer
 LANGUAGE plpgsql
@@ -40,7 +41,7 @@ BEGIN
   SELECT count(*) INTO open_count
   FROM app.chat_reminders
   WHERE owner_user_id = target_owner
-    AND (state = 'queued' OR context_state = 'pending');
+    AND (state = 'queued' OR (state = 'delivered' AND context_state = 'pending'));
   RETURN open_count;
 END;
 $$;
@@ -70,7 +71,8 @@ CREATE TRIGGER chat_reminders_enforce_insert
 BEFORE INSERT ON app.chat_reminders
 FOR EACH ROW EXECUTE FUNCTION app.enforce_chat_reminder_insert();
 
--- Delivery is the only update: queued to delivered, once, with nothing else changing.
+-- The only update ends a queued reminder once, as delivered or failed, with nothing else
+-- changing. Delivery needs its reserved message.
 CREATE FUNCTION app.enforce_chat_reminder_update()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -89,10 +91,10 @@ BEGIN
     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
     RAISE EXCEPTION 'chat reminder identity cannot be changed';
   END IF;
-  IF OLD.state <> 'queued' OR NEW.state <> 'delivered' THEN
+  IF OLD.state <> 'queued' OR NEW.state NOT IN ('delivered', 'failed') THEN
     RAISE EXCEPTION 'chat reminder can only be delivered once';
   END IF;
-  IF NOT EXISTS (
+  IF NEW.state = 'delivered' AND NOT EXISTS (
     SELECT 1 FROM app.chat_messages message
     WHERE message.id = NEW.reserved_message_id
       AND message.thread_id = NEW.thread_id
@@ -140,7 +142,7 @@ CREATE POLICY chat_reminders_insert ON app.chat_reminders
 CREATE POLICY chat_reminders_deliver ON app.chat_reminders
   FOR UPDATE TO jarvis_worker_runtime
   USING (owner_user_id = app.current_actor_user_id() AND state = 'queued')
-  WITH CHECK (owner_user_id = app.current_actor_user_id() AND state = 'delivered');
+  WITH CHECK (owner_user_id = app.current_actor_user_id() AND state IN ('delivered', 'failed'));
 
 GRANT SELECT, INSERT ON app.chat_reminders TO jarvis_app_runtime;
 GRANT SELECT, UPDATE ON app.chat_reminders TO jarvis_worker_runtime;

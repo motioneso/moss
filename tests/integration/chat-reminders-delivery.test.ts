@@ -6,12 +6,17 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createDatabase, DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
 import { createPgBossClient } from "@moss/jobs";
+import {
+  defaultProactiveMonitoringPreference,
+  PROACTIVE_MONITORING_PREFERENCE_KEY
+} from "@moss/shared";
 
 import {
   CHAT_DELIVER_REMINDER_QUEUE,
   deliverDueReminder,
   enqueueReminderDelivery,
   registerReminderDeliveryWorker,
+  runReminderDeliveryJob,
   type DeliverReminderJobPayload
 } from "../../packages/chat/src/reminders/deliver.js";
 import {
@@ -287,6 +292,41 @@ describe("delivering a due reminder", () => {
     ]);
   });
 
+  it("delivers on time even when the owner's quiet hours cover the whole day", async () => {
+    const quietAllDay = { enabled: true, start: "00:00", end: "23:59", timezone: "UTC" };
+    const monitoring = {
+      ...defaultProactiveMonitoringPreference(),
+      quietHours: { enabled: true, startLocalTime: "00:00", endLocalTime: "23:59" }
+    };
+    await bootstrap.query(
+      `INSERT INTO app.preferences (owner_user_id, key, value_json)
+       VALUES ($1, 'quiet-hours', $2), ($1, $3, $4)
+       ON CONFLICT (owner_user_id, key) DO UPDATE SET value_json = EXCLUDED.value_json`,
+      [
+        ids.userA,
+        JSON.stringify(quietAllDay),
+        PROACTIVE_MONITORING_PREFERENCE_KEY,
+        JSON.stringify(monitoring)
+      ]
+    );
+
+    try {
+      const saved = await save(ids.userA, "feed the cat");
+      await makeDue(saved.id, 30);
+
+      await expect(deliver(saved)).resolves.toBe("delivered");
+      expect((await readRow(saved.id)).late).toBe(false);
+      expect((await deliveredMessages(saved.id)).map((message) => message.body)).toEqual([
+        reminderDeliveredMessage("feed the cat", false)
+      ]);
+    } finally {
+      await bootstrap.query(
+        `DELETE FROM app.preferences WHERE owner_user_id = $1 AND key IN ('quiet-hours', $2)`,
+        [ids.userA, PROACTIVE_MONITORING_PREFERENCE_KEY]
+      );
+    }
+  });
+
   it("ignores a job for an older version of the reminder", async () => {
     const saved = await save();
     await makeDue(saved.id, 30);
@@ -307,21 +347,21 @@ describe("delivering a due reminder", () => {
     expect(await deliveredMessages(saved.id)).toHaveLength(0);
   });
 
-  it("does not deliver into a chat that is no longer the owner's Main chat", async () => {
+  it("marks the reminder failed when its chat is no longer the owner's Main chat", async () => {
     const saved = await save(ids.userB);
     await makeDue(saved.id, 30);
     await setMain(ids.userB, saved.threadId, false);
 
     try {
       await expect(deliver(saved, payload(saved, ids.userB))).resolves.toBe("not_main");
-      expect((await readRow(saved.id)).state).toBe("queued");
+      expect((await readRow(saved.id)).state).toBe("failed");
       expect(await deliveredMessages(saved.id)).toHaveLength(0);
     } finally {
       await setMain(ids.userB, saved.threadId, true);
     }
   });
 
-  it("does not deliver into the old chat when another chat has become Main", async () => {
+  it("marks the reminder failed when another chat has become Main", async () => {
     const saved = await save(ids.userB);
     await makeDue(saved.id, 30);
     await setMain(ids.userB, saved.threadId, false);
@@ -330,7 +370,7 @@ describe("delivering a due reminder", () => {
 
     try {
       await expect(deliver(saved, payload(saved, ids.userB))).resolves.toBe("not_main");
-      expect((await readRow(saved.id)).state).toBe("queued");
+      expect((await readRow(saved.id)).state).toBe("failed");
       expect(await deliveredMessages(saved.id)).toHaveLength(0);
     } finally {
       await setMain(ids.userB, other.id, false);
@@ -364,6 +404,91 @@ describe("delivering a due reminder", () => {
 
     await expect(deliver(saved)).resolves.toBe("delivered");
     await expect(deliver(saved)).resolves.toBe("already_delivered");
+    expect(await deliveredMessages(saved.id)).toHaveLength(1);
+  });
+});
+
+describe("the last delivery attempt", () => {
+  const brokenChat = {
+    getMainThread: chat.getMainThread.bind(chat),
+    insertReservedAssistantMessage: async () => {
+      throw new Error("message store down");
+    }
+  } as unknown as ChatRepository;
+
+  it("marks the reminder failed, with no message, when the last retry cannot deliver", async () => {
+    const saved = await save(ids.userA, "feed the cat");
+    await makeDue(saved.id, 30);
+
+    await expect(
+      worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+        runReminderDeliveryJob(
+          db,
+          { data: payload(saved), retryCount: 8, retryLimit: 8 },
+          { reminders, chat: brokenChat }
+        )
+      )
+    ).resolves.toBe("failed");
+
+    expect((await readRow(saved.id)).state).toBe("failed");
+    expect(await deliveredMessages(saved.id)).toHaveLength(0);
+  });
+
+  it("treats a job without retry details as the last attempt", async () => {
+    const saved = await save(ids.userA, "feed the fish");
+    await makeDue(saved.id, 30);
+
+    await expect(
+      worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+        runReminderDeliveryJob(db, { data: payload(saved) }, { reminders, chat: brokenChat })
+      )
+    ).resolves.toBe("failed");
+    expect((await readRow(saved.id)).state).toBe("failed");
+  });
+
+  it("undoes a message already written when the last attempt fails after it", async () => {
+    class StuckReminders extends ReminderRepository {
+      override async markDelivered(): Promise<never> {
+        throw new Error("reminder store down");
+      }
+    }
+    const saved = await save(ids.userA, "feed the bird");
+    await makeDue(saved.id, 30);
+
+    await expect(
+      worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+        runReminderDeliveryJob(
+          db,
+          { data: payload(saved), retryCount: 8, retryLimit: 8 },
+          { reminders: new StuckReminders(), chat }
+        )
+      )
+    ).resolves.toBe("failed");
+
+    expect((await readRow(saved.id)).state).toBe("failed");
+    expect(await deliveredMessages(saved.id)).toHaveLength(0);
+  });
+
+  it("keeps the reminder waiting so an earlier attempt can retry", async () => {
+    const saved = await save(ids.userA, "feed the dog");
+    await makeDue(saved.id, 30);
+
+    await expect(
+      worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+        runReminderDeliveryJob(
+          db,
+          { data: payload(saved), retryCount: 3, retryLimit: 8 },
+          { reminders, chat: brokenChat }
+        )
+      )
+    ).rejects.toThrow("message store down");
+    expect((await readRow(saved.id)).state).toBe("queued");
+
+    await expect(
+      worker.withDataContext({ actorUserId: ids.userA }, (db) =>
+        runReminderDeliveryJob(db, { data: payload(saved), retryCount: 4, retryLimit: 8 }, deps)
+      )
+    ).resolves.toBe("delivered");
     expect(await deliveredMessages(saved.id)).toHaveLength(1);
   });
 });
