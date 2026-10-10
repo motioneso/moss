@@ -646,7 +646,7 @@ tests/e2e/p1-park-press-design.spec.ts,P1,registered-new,,Exact path reservation
 tests/e2e/p2-park-press-design.spec.ts,P2,registered-new,,Exact path reservation
 tests/e2e/p3-park-press-design.spec.ts,P3,registered-new,,Exact path reservation
 tests/e2e/p4-park-press-design.spec.ts,P4,registered-new,,Exact path reservation
-tests/e2e/tasks.spec.ts,P1,active-owner-hold,3154,Exact planning report ownership
+tests/e2e/tasks.spec.ts,P1,approved-disjoint-correction,3154,Only task detail loading and focus regression assertions; preserve active quick-add tests
 tests/e2e/wellness.spec.ts,I0,scoped-test-transfer,,Parent-approved real shared confirmation and Today medication dialog assertion migration; preserve cancellation and outcomes
 tests/e2e/workshop-design.spec.ts,P3,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
 tests/live/classifier-2984-r26-helpers.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
