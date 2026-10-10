@@ -318,6 +318,38 @@ export class ChatRepository {
       .executeTakeFirstOrThrow();
   }
 
+  /**
+   * Writes a code-authored assistant message under an id reserved earlier, for example a
+   * reminder delivery. No RETURNING; the caller already holds the id it reserved.
+   */
+  async insertReservedAssistantMessage(
+    scopedDb: DataContextDb,
+    input: {
+      readonly id: string;
+      readonly threadId: string;
+      readonly body: string;
+      readonly origin: ChatTurnOriginV1;
+      readonly now: Date;
+    }
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .insertInto("app.chat_messages")
+      .values({
+        id: input.id,
+        thread_id: input.threadId,
+        owner_user_id: sql<string>`app.current_actor_user_id()`,
+        role: "assistant",
+        status: "stored",
+        body: input.body,
+        model_metadata: { origin: input.origin },
+        tool_metadata: { selectedTools: [] },
+        created_at: input.now,
+        updated_at: input.now
+      })
+      .executeTakeFirstOrThrow();
+  }
+
   /** Returns the owner's most-recent thread by last_active_at for an explicit side-chat resume. */
   async getCurrentThread(
     scopedDb: DataContextDb,

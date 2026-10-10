@@ -396,12 +396,15 @@ export interface DataContextWorkerHooks<TPayload, TResult> {
   readonly afterCommit?: (result: TResult, job: DataContextJob<TPayload>) => void | Promise<void>;
 }
 
+/** How often a data-context worker registered without its own options polls its queue. */
+export const DATA_CONTEXT_WORKER_POLLING_INTERVAL_SECONDS = 2;
+
 export async function registerDataContextWorker<TPayload extends ActorScopedJobPayload, TResult>(
   boss: PgBoss,
   queueName: string,
   dataContext: DataContextRunner,
   handler: (job: DataContextJob<TPayload>, scopedDb: DataContextDb) => Promise<TResult>,
-  options: WorkOptions = { pollingIntervalSeconds: 2 },
+  options: WorkOptions = { pollingIntervalSeconds: DATA_CONTEXT_WORKER_POLLING_INTERVAL_SECONDS },
   hooks: DataContextWorkerHooks<TPayload, TResult> = {}
 ): Promise<string> {
   return boss.work<TPayload, TResult>(queueName, options, async ([job]) => {

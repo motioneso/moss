@@ -43,6 +43,7 @@ describe("registered queue definitions", () => {
       "chat.extract-facts",
       "chat.archive-day",
       "chat.summarize-conversation",
+      "chat.deliver-reminder",
       "briefings-run",
       "memory.vault-ingest-sweep",
       "memory.vault-ingest-nudge",

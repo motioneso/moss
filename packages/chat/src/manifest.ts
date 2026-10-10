@@ -69,6 +69,7 @@ export const chatModuleManifest = {
       "sql/0297_chat_action_history_permissions.sql",
       "sql/0299_main_chat.sql",
       "sql/0305_chat_summary_frontier.sql",
+      "sql/0306_chat_relative_reminders.sql",
       "sql/0307_chat_summary_worker_publish.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
@@ -160,6 +161,13 @@ export const chatModuleManifest = {
           path: "/settings?section=aiproviders"
         }
       ]
+    },
+    {
+      id: "chat.relative_reminders",
+      description:
+        "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder that Moss posts once in Main, " +
+        "noting if late. Up to 20 at once, 30 days ahead. No clock times, repeats or private chats.",
+      featureFlagId: "chat.module"
     },
     {
       id: "chat.pending_action_disclosure",

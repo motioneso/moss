@@ -50,6 +50,10 @@ import { extractTimezone } from "./locale-utils.js";
 import { ChatRepository } from "./repository.js";
 import { handleSummarizeConversationJob, type SummaryJobDeps } from "./summary-job.js";
 import {
+  CHAT_DELIVER_REMINDER_QUEUE_DEFINITION,
+  registerReminderDeliveryWorker
+} from "./reminders/deliver.js";
+import {
   buildDistillationPrompt,
   containsSensitiveMemoryText,
   decideCandidatePromotion,
@@ -77,7 +81,8 @@ export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   {
     name: CHAT_SUMMARIZE_CONVERSATION_QUEUE,
     options: { retryLimit: 0, deleteAfterSeconds: 600, policy: "exclusive" }
-  }
+  },
+  CHAT_DELIVER_REMINDER_QUEUE_DEFINITION
 ];
 
 /**
@@ -583,7 +588,13 @@ export async function registerChatJobWorkers(
     }
   );
 
-  const workIds = [embedWorkId, extractWorkId, archiveWorkId, summarizeWorkId];
+  const reminderWorkId = await registerReminderDeliveryWorker(
+    boss,
+    dataContext,
+    options.workOptions
+  );
+
+  const workIds = [embedWorkId, extractWorkId, archiveWorkId, summarizeWorkId, reminderWorkId];
   return workIds;
 }
 
