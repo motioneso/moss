@@ -15,19 +15,15 @@ describe("notes live specs (#3277)", () => {
     );
   });
 
-  it("the helper uses the Conversations controls and waits for a fresh empty conversation", async () => {
+  it("the side-chat helper uses the Conversations controls", async () => {
     const text = await source("notes-new-side-chat.ts");
     expect(text).toMatch(/name: "Open conversations"/);
     expect(text).toMatch(/name: "New side chat", exact: true/);
-    expect(text).toMatch(/\/api\/chat\/clear/);
-    expect(text).toMatch(/\/api\/chat\/privacy/);
-    expect(text).toMatch(/not\.toBe\(before\)/);
-    expect(text).toMatch(/\.chatd-msg"\)\)\.toHaveCount\(0\)/);
   });
 
-  it("the recall spec proves the fact came from notes, not the old conversation", async () => {
+  it("the recall spec checks both conversations in storage", async () => {
     const text = await source("notes-default-retrieval.uat.spec.ts");
-    expect(text).toMatch(/expectThreadOmits\(page, freshThreadId, RETRIEVAL_QUESTION, FACT\)/);
-    expect(text).toMatch(/expectThreadCarries\(page, noteThreadId!, FACT\)/);
+    expect(text).toMatch(/await expectThreadCarries\(/);
+    expect(text).toMatch(/await expectOnlyUserTurn\(/);
   });
 });

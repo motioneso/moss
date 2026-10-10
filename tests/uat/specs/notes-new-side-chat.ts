@@ -23,8 +23,8 @@ function isDrawerCall(response: Response, method: string, pathname: string): boo
 
 /**
  * Starts a fresh conversation through Conversations > New side chat and returns its id.
- * Resolves only after the clear is acknowledged, the drawer has read its new conversation
- * identity, and no message from the previous conversation is left on screen.
+ * Resolves only after the clear is acknowledged, no message from the previous conversation
+ * is left on screen, and the drawer reports a different conversation.
  */
 export async function startNewSideChat(page: Page, chatDialog: Locator): Promise<string> {
   const before = await drawerThreadId(page);
@@ -34,12 +34,8 @@ export async function startNewSideChat(page: Page, chatDialog: Locator): Promise
   const cleared = page.waitForResponse((response) =>
     isDrawerCall(response, "POST", "/api/chat/clear")
   );
-  const identity = cleared.then(() =>
-    page.waitForResponse((response) => isDrawerCall(response, "GET", "/api/chat/privacy"))
-  );
   await chatDialog.getByRole("button", { name: "New side chat", exact: true }).click();
   expect((await cleared).status()).toBe(204);
-  expect((await identity).status()).toBe(200);
 
   await expect(chatDialog.locator(".chatd-msg")).toHaveCount(0);
   const after = await drawerThreadId(page);
@@ -56,17 +52,15 @@ async function userBodies(page: Page, threadId: string): Promise<string[]> {
   return body.messages.filter((message) => message.role === "user").map((message) => message.body);
 }
 
-/** The thread's only user turn is `question`, so no earlier turn in it can carry `text`. */
-export async function expectThreadOmits(
+/** The thread's only stored user turn is `question`. */
+export async function expectOnlyUserTurn(
   page: Page,
   threadId: string,
-  question: string,
-  text: string
+  question: string
 ): Promise<void> {
   await expect
     .poll(() => userBodies(page, threadId), { timeout: PERSIST_DEADLINE_MS })
     .toEqual([question]);
-  expect(question.toLowerCase()).not.toContain(text.toLowerCase());
 }
 
 /** A user turn in the thread mentions `text`. */

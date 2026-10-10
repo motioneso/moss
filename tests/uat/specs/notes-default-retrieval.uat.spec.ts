@@ -8,8 +8,8 @@ import {
 } from "./notes-failure-evidence.js";
 import {
   drawerThreadId,
+  expectOnlyUserTurn,
   expectThreadCarries,
-  expectThreadOmits,
   startNewSideChat
 } from "./notes-new-side-chat.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
@@ -172,6 +172,7 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   // The recall must come from the indexed note. The note-writing conversation keeps the fact,
   // while the fresh side chat starts empty on screen and in storage.
   const noteThreadId = await drawerThreadId(page);
+  expect(noteThreadId, "the note-writing conversation has an id").toBeDefined();
   await expectThreadCarries(page, noteThreadId!, FACT);
   const freshThreadId = await startNewSideChat(page, chatDialog);
   await expect(chatDialog.getByText(new RegExp(FACT, "i"))).toHaveCount(0);
@@ -186,7 +187,9 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   await composer.press("Enter");
 
   await expect(chatDialog.getByText(new RegExp(FACT, "i"))).toBeVisible({ timeout: 60_000 });
-  await expectThreadOmits(page, freshThreadId, RETRIEVAL_QUESTION, FACT);
+  // The question never names the fact, so the only stored turn cannot carry it.
+  expect(RETRIEVAL_QUESTION).not.toMatch(new RegExp(FACT, "i"));
+  await expectOnlyUserTurn(page, freshThreadId, RETRIEVAL_QUESTION);
   expect(await drawerThreadId(page)).toBe(freshThreadId);
   const threadText = await chatDialog.innerText();
   expect(threadText).not.toMatch(
