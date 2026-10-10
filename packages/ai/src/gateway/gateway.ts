@@ -33,7 +33,7 @@ import {
 import { ActionRequestRecovery } from "./action-request-recovery.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
-import { isConversationTainted } from "./conversation-policy.js";
+import { isConversationMarked, isConversationTainted } from "./conversation-policy.js";
 import {
   admitToolOutcome,
   recordContextAdmission,
@@ -509,6 +509,10 @@ export class AssistantToolGateway {
     const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
     if (conversationTainted && (confirmWhenTainted || found.tool.risk === "outbound")) {
       return { kind: "confirm" };
+    }
+    // The user's trust runs past a durable outside-content mark only. Any other taint asks.
+    if (conversationTainted && !(await isConversationMarked(this.deps.provenance, ctx))) {
+      return { kind: yolo ? "yolo-confirm" : "confirm" };
     }
     const trusted = conversationTainted ? { userTrusted: true as const } : {};
     if (yolo) return yoloRuns ? { kind: "yolo-run", ...trusted } : { kind: "yolo-confirm" };

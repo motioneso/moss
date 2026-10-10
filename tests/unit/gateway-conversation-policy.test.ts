@@ -78,6 +78,7 @@ function build(
   const isTainted = vi.fn(async () => options.tainted ?? false);
   const provenance: ConversationProvenancePort = {
     isTainted,
+    isMarked: async () => options.tainted ?? false,
     recordAdmission: vi.fn(),
     runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
   };

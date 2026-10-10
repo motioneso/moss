@@ -52,6 +52,7 @@ function actionHarness(yoloMode = false, tainted = false, meetingAvailable = tru
       appActions: { catalog: () => buildRouteCatalog(getBuiltInModuleManifests(), []), call },
       provenance: {
         isTainted: async () => tainted,
+        isMarked: async () => tainted,
         recordAdmission: async () => undefined,
         runAutomatic: async (_actor, _thread, run) => ({ kind: "ran", value: await run() })
       },

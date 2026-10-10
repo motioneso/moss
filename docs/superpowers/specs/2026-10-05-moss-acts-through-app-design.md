@@ -268,22 +268,30 @@ implementation ruling below.
 ACP agents admit outside content at launch, so every ACP chat starts tainted and the strict rule
 put an approval card on every write, even under YOLO. In a tainted conversation:
 
-| Write runs because                                                                  | Tainted conversation |
-| ----------------------------------------------------------------------------------- | -------------------- |
-| YOLO is on                                                                          | runs                 |
-| The user promoted its action family (`trusted_auto`, including default tier)        | runs                 |
-| A per-call limit the user set (`confirmAbove`, e.g. Finance freedom limit) holds it | asks                 |
-| Moss's own rating: classifier `runsWithoutAsking` on a connected tool               | asks                 |
-| Moss's own rating: a per-call `app.callAction` write without YOLO                   | asks                 |
-| `outbound` risk, any trust                                                          | asks                 |
-| `destructive` risk, any trust                                                       | asks                 |
-| `confirmWhenTainted` call (e.g. an outbound GET through the app)                    | asks                 |
+| Write runs because                                                                 | Tainted conversation |
+| ---------------------------------------------------------------------------------- | -------------------- |
+| YOLO is on                                                                         | runs                 |
+| The user promoted its action family (`trusted_auto`, including default tier)       | runs                 |
+| A call over the user's per-call limit (`confirmAbove`, e.g. Finance freedom limit) | asks                 |
+| Moss's own rating: classifier `runsWithoutAsking` on a connected tool              | asks                 |
+| Moss's own rating: a per-call `app.callAction` write without YOLO                  | asks                 |
+| `outbound` risk, any trust                                                         | asks                 |
+| `destructive` risk, any trust                                                      | asks                 |
+| `confirmWhenTainted` call (e.g. an outbound GET through the app)                   | asks                 |
 
 A trusted write in a tainted conversation dispatches directly. It skips the clean-conversation
-claim that automatic runs use, because that claim exists to refuse tainted conversations.
-Outbound tools keep the floor because they can carry admitted text out of Moss. The launch taint
-itself is unchanged, so native and ACP built-in permissions (file edits, shell, web) still ask in
-a tainted conversation.
+claim that automatic runs use, because that claim exists to refuse tainted conversations. Trust
+runs past a durable outside-content mark only (`isMarked`). A missing or foreign binding, an
+unreadable provenance row, or another automatic run holding the conversation still asks.
+
+Outbound tools keep the floor because they send data to arbitrary destinations. Add-on module
+writes can also reach the hosts their manifest declares (Finance to Plaid, Job search to its job
+boards). Under user trust, injected text in a tainted conversation could steer such a write to
+send private data to one of those hosts without a card. This is an accepted exposure of the
+ruling. Host pinning limits it to hosts the user accepted at install.
+
+The launch taint itself is unchanged, so native and ACP built-in permissions (file edits, shell,
+web) still ask in a tainted conversation.
 
 **Content declarations.** The five originally identified tools were not the complete boundary.
 Every built-in read tool now declares `content: "user_authored" | "outside"`, enforced at API boot.

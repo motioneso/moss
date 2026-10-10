@@ -251,6 +251,23 @@ describe("the user's trust after outside content", () => {
     await expectWriteHeld(h);
   });
 
+  it.each([false, true])(
+    "another automatic run holding a clean chat is not a mark trust runs past (YOLO=%s)",
+    async (yolo) => {
+      const h = setup(move.module, move.tool, yolo);
+      h.state.held = true;
+      expect(await gateDryRun(h)).toEqual({ kind: "declined", reason: "would_confirm" });
+      expect(h.execute).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([false, true])("an unreadable mark gets no trust (YOLO=%s)", async (yolo) => {
+    const h = setup(move.module, move.tool, yolo);
+    await admitOutside(h);
+    vi.mocked(h.provenance.isMarked!).mockRejectedValue(new Error("storage down"));
+    await expectWriteHeld(h);
+  });
+
   it("outbound and destructive writes ask under YOLO", async () => {
     for (const risk of ["outbound", "destructive"] as const) {
       const tool = admissionTool(`fixture.${risk}`, { risk });
