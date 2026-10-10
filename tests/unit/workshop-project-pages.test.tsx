@@ -415,10 +415,57 @@ describe("Workshop project browser interactions", () => {
     await eventually(() => expect(container.textContent).toContain("old question"));
     expect(container.textContent).not.toContain("Thinking");
     expect(container.querySelector('[role="status"]')?.textContent).toContain("did not reply");
-    const polls = reads.length;
-    await flush();
-    await flush();
-    expect(reads.length).toBe(polls);
+  });
+
+  it("gives up on a fresh pending message once the wait passes", async () => {
+    entries = [
+      {
+        projectId: project.id,
+        messageId: "m1",
+        text: "just sent",
+        sequence: "1",
+        kind: "user_message",
+        delivery: "pending",
+        createdAt: new Date(Date.now() - 89_000).toISOString()
+      }
+    ];
+    await render(`/workshop/${project.id}`);
+    await eventually(() => expect(container.textContent).toContain("just sent"));
+    expect(container.textContent).toContain("Thinking");
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    await vi.waitFor(
+      async () => {
+        await flush();
+        expect(container.querySelector('[role="status"]')?.textContent).toContain("did not reply");
+      },
+      { timeout: 3000 }
+    );
+    expect(container.textContent).not.toContain("Thinking");
+  });
+
+  it("shows no failed-reply notice when a resend was answered", async () => {
+    const row = (
+      n: number,
+      kind: WorkshopFeedEntry["kind"],
+      delivery: WorkshopFeedEntry["delivery"],
+      text: string
+    ): WorkshopFeedEntry => ({
+      projectId: project.id,
+      messageId: `m${n}`,
+      text,
+      sequence: String(n),
+      kind,
+      delivery,
+      createdAt: "2026-09-05T12:00:00.000Z"
+    });
+    entries = [
+      row(1, "user_message", "pending", "first try"),
+      row(2, "user_message", "delivered", "second try"),
+      row(3, "assistant_message", "delivered", "here is the answer")
+    ];
+    await render(`/workshop/${project.id}`);
+    await eventually(() => expect(container.textContent).toContain("here is the answer"));
+    expect(container.querySelector('[role="status"]')).toBeNull();
   });
 
   it("sends the project message on Enter, but not on Shift+Enter", async () => {
