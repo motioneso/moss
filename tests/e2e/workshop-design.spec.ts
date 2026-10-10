@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createMockConnectorProviders, mockApi } from "./mock-api.js";
+import { myModulesResponse } from "./mock-modules.js";
+import type { ListMyModulesResponse } from "@moss/shared";
 
 const project = {
   id: "11111111-2222-4333-8444-555555555555",
@@ -27,6 +29,27 @@ for (const viewport of [
       notifications: [],
       tasks: []
     });
+    // Deep links require affirmative per-actor enablement, just like the installed module.
+    const myModules: ListMyModulesResponse = {
+      modules: [
+        ...myModulesResponse.modules,
+        {
+          id: "workshop",
+          name: "Workshop",
+          version: "0.1.0",
+          lifecycle: "required",
+          required: true,
+          supportsUserDisable: false,
+          instanceDisabled: false,
+          userDisabled: false,
+          active: true,
+          hasPreferences: false,
+          hasUserCredentials: false,
+          scope: "everyone"
+        }
+      ]
+    };
+    await page.route("**/api/me/modules", (route) => route.fulfill({ json: myModules }));
     await page.route("**/api/workshop/projects?*", (route) =>
       route.fulfill({ json: { projects: [project], nextCursor: null } })
     );
