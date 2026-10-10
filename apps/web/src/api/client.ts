@@ -85,6 +85,8 @@ import type {
   DeletePushSubscriptionResponse,
   PutQuietHoursSettingsRequest,
   PutQuietHoursSettingsResponse,
+  ResolveQuietHoursConflictRequest,
+  ResolveQuietHoursConflictResponse,
   PutPersonaSettingsRequest,
   PutPersonaSettingsResponse,
   PutSourceBehaviorRequest,
@@ -332,6 +334,15 @@ export async function putQuietHoursSettings(
 ): Promise<PutQuietHoursSettingsResponse> {
   return requestJson<PutQuietHoursSettingsResponse>("/api/me/quiet-hours", {
     method: "PUT",
+    body
+  });
+}
+
+export async function resolveQuietHoursConflict(
+  body: ResolveQuietHoursConflictRequest
+): Promise<ResolveQuietHoursConflictResponse> {
+  return requestJson<ResolveQuietHoursConflictResponse>("/api/me/quiet-hours/resolution", {
+    method: "POST",
     body
   });
 }

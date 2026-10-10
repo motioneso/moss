@@ -4,7 +4,12 @@ import { Button, Combobox, type ComboboxOption } from "@moss/ui";
 import { MoonStar } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { getLocaleSettings, getQuietHoursSettings, putQuietHoursSettings } from "../api/client.js";
+import {
+  getLocaleSettings,
+  getQuietHoursSettings,
+  putQuietHoursSettings,
+  resolveQuietHoursConflict
+} from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import {
   isStaleQuietHoursSave,
@@ -14,6 +19,13 @@ import {
   quietHoursSaveFailure,
   quietHoursSaveRequest
 } from "./settings-quiet-hours-draft.js";
+import {
+  quietHoursChoiceFailure,
+  quietHoursChoiceRequest,
+  quietHoursChoices,
+  quietHoursChosenLine,
+  type QuietHoursChoice
+} from "./settings-quiet-hours-conflict.js";
 import { TIME_ZONE_OPTIONS } from "./settings-time-zones.js";
 import { readError } from "./settings-types.js";
 import { Badge, Field, Group, Note, Row, Switch } from "./settings-ui.js";
@@ -33,12 +45,15 @@ type Draft = { readonly value: QuietHoursSettingsDto; readonly version: string |
 
 type Feedback =
   | { readonly kind: "saved" }
+  | { readonly kind: "chosen"; readonly text: string }
   | { readonly kind: "problem"; readonly text: string }
-  | { readonly kind: "failed"; readonly text: string };
+  | { readonly kind: "failed"; readonly text: string }
+  | { readonly kind: "choiceFailed"; readonly text: string; readonly retry: QuietHoursChoice };
 
 /**
  * The one quiet-hours editor. Edits stay in a local draft until Save; the saved line always names
- * the stored schedule, so an unsaved or failed edit never reads as the schedule in force.
+ * the stored schedule, so an unsaved or failed edit never reads as the schedule in force. While
+ * saved schedules differ, the form gives way to a choice between them.
  */
 export function QuietHoursEditor() {
   const queryClient = useQueryClient();
@@ -86,6 +101,27 @@ export function QuietHoursEditor() {
     }
   });
 
+  const resolve = useMutation({
+    networkMode: "always",
+    mutationFn: (chosen: QuietHoursChoice) =>
+      resolveQuietHoursConflict(quietHoursChoiceRequest(chosen, loaded?.version ?? null)),
+    onSuccess: (data, chosen) => {
+      queryClient.setQueryData(queryKeys.settings.quietHours, data);
+      setDraft(null);
+      setFeedback({ kind: "chosen", text: quietHoursChosenLine(chosen) });
+    },
+    onError: (error, chosen) => {
+      // Both schedules stay in force either way. A lost race shows the latest schedules; any
+      // other failure keeps the offer and retries the same choice.
+      if (isStaleQuietHoursSave(error)) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.settings.quietHours });
+        setFeedback({ kind: "problem", text: quietHoursChoiceFailure(error) });
+        return;
+      }
+      setFeedback({ kind: "choiceFailed", text: quietHoursChoiceFailure(error), retry: chosen });
+    }
+  });
+
   const held = quietHoursQuery.isLoading || quietHoursQuery.isError || save.isPending;
   const edit = (patch: Partial<QuietHoursSettingsDto>) => {
     setDraft({
@@ -119,7 +155,7 @@ export function QuietHoursEditor() {
     ];
   }, [profileTimeZone, saved.timezone]);
 
-  const olderAlerts = loaded?.authority.status === "conflict" ? loaded.authority.alerts : null;
+  const choices = loaded ? quietHoursChoices(loaded) : [];
   const unreadable = loaded?.authority.status === "malformed";
 
   return (
@@ -133,77 +169,102 @@ export function QuietHoursEditor() {
           </Button>
         </Note>
       ) : null}
-      {olderAlerts ? (
-        <Note icon={<MoonStar size={13} aria-hidden="true" />}>
-          Your saved quiet hours differ.{" "}
-          {olderAlerts.enabled
-            ? `Email alerts still follow an older schedule, ${olderAlerts.start} to ${olderAlerts.end}.`
-            : "Email alerts still follow an older schedule, which is switched off."}{" "}
-          Saving here changes only the notification schedule.
-        </Note>
-      ) : null}
       {unreadable ? (
         <Note icon={<MoonStar size={13} aria-hidden="true" />}>
           Part of your saved quiet hours could not be read. Notifications follow the schedule below.
         </Note>
       ) : null}
-      <Row
-        name="Enable quiet hours"
-        desc={loaded ? quietHoursSavedLine(loaded, profileTimeZone) : undefined}
-        control={
-          <Switch
-            ariaLabel="Enable quiet hours"
-            checked={editing.enabled}
-            disabled={held}
-            onChange={(enabled) => edit({ enabled })}
+      {choices.length > 0 ? (
+        <>
+          <Note icon={<MoonStar size={13} aria-hidden="true" />}>
+            Your saved quiet hours differ. Choose which schedule to use for future interruptions.
+            Nothing changes until you choose.
+          </Note>
+          <div className="quiet-hours__actions">
+            {choices.map((option) => (
+              <Button
+                key={option.choice}
+                variant="secondary"
+                size="sm"
+                disabled={resolve.isPending}
+                onClick={() => resolve.mutate(option)}
+              >
+                {option.label}
+              </Button>
+            ))}
+            {feedback?.kind === "choiceFailed" ? (
+              <Button
+                variant="link"
+                size="sm"
+                disabled={resolve.isPending}
+                onClick={() => resolve.mutate(feedback.retry)}
+              >
+                Try again
+              </Button>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <>
+          <Row
+            name="Enable quiet hours"
+            desc={loaded ? quietHoursSavedLine(loaded, profileTimeZone) : undefined}
+            control={
+              <Switch
+                ariaLabel="Enable quiet hours"
+                checked={editing.enabled}
+                disabled={held}
+                onChange={(enabled) => edit({ enabled })}
+              />
+            }
           />
-        }
-      />
-      <div className="quiet-hours__times">
-        <Field label="From">
-          <input
-            className="jds-input"
-            type="time"
-            required
-            value={editing.start}
-            aria-label="Quiet hours from"
-            disabled={held}
-            onChange={(event) => edit({ start: event.currentTarget.value })}
-          />
-        </Field>
-        <Field label="Until" className="fld--no-border">
-          <input
-            className="jds-input"
-            type="time"
-            required
-            value={editing.end}
-            aria-label="Quiet hours until"
-            disabled={held}
-            onChange={(event) => edit({ end: event.currentTarget.value })}
-          />
-        </Field>
-      </div>
-      <Field label="Time zone">
-        <Combobox
-          value={editing.timezone ?? PROFILE_ZONE}
-          aria-label="Quiet hours time zone"
-          options={zoneOptions}
-          disabled={held}
-          searchPlaceholder="Search time zones"
-          emptyText="No time zone matches."
-          onChange={(value) => edit({ timezone: value === PROFILE_ZONE ? null : value })}
-        />
-      </Field>
-      <div className="quiet-hours__actions">
-        <Button variant="secondary" size="sm" disabled={held || !dirty} onClick={submit}>
-          {save.isPending ? "Saving…" : "Save quiet hours"}
-        </Button>
-        {feedback?.kind === "failed" ? (
-          <Button variant="link" size="sm" disabled={save.isPending} onClick={submit}>
-            Try again
-          </Button>
-        ) : null}
-      </div>
+          <div className="quiet-hours__times">
+            <Field label="From">
+              <input
+                className="jds-input"
+                type="time"
+                required
+                value={editing.start}
+                aria-label="Quiet hours from"
+                disabled={held}
+                onChange={(event) => edit({ start: event.currentTarget.value })}
+              />
+            </Field>
+            <Field label="Until" className="fld--no-border">
+              <input
+                className="jds-input"
+                type="time"
+                required
+                value={editing.end}
+                aria-label="Quiet hours until"
+                disabled={held}
+                onChange={(event) => edit({ end: event.currentTarget.value })}
+              />
+            </Field>
+          </div>
+          <Field label="Time zone">
+            <Combobox
+              value={editing.timezone ?? PROFILE_ZONE}
+              aria-label="Quiet hours time zone"
+              options={zoneOptions}
+              disabled={held}
+              searchPlaceholder="Search time zones"
+              emptyText="No time zone matches."
+              onChange={(value) => edit({ timezone: value === PROFILE_ZONE ? null : value })}
+            />
+          </Field>
+          <div className="quiet-hours__actions">
+            <Button variant="secondary" size="sm" disabled={held || !dirty} onClick={submit}>
+              {save.isPending ? "Saving…" : "Save quiet hours"}
+            </Button>
+            {feedback?.kind === "failed" ? (
+              <Button variant="link" size="sm" disabled={save.isPending} onClick={submit}>
+                Try again
+              </Button>
+            ) : null}
+          </div>
+        </>
+      )}
       {feedback ? (
         <p role="status" className="quiet-hours__status">
           {feedback.kind === "saved" ? "Quiet hours saved." : feedback.text}

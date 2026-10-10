@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // #3130 - the Alerts & quiet hours editor keeps the saved schedule, the unsaved draft and save
 // errors apart, and never presents a conflicting schedule as the one saved setting.
+// #3131 - while saved schedules differ, the owner chooses one and nothing changes until it saves.
 import { createElement } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -25,12 +26,17 @@ function loaded(
   return { quietHours, authority, version };
 }
 
-type Handler = (body: unknown) => Response;
+type Handler = (body: unknown) => Response | Promise<Response>;
 
-/** Routes the editor's real API calls; each PUT is answered by the next queued handler. */
-function serve(initial: GetQuietHoursSettingsResponse, puts: Handler[] = []) {
+/** Routes the editor's real API calls; each PUT or choice is answered by its next queued handler. */
+function serve(
+  initial: GetQuietHoursSettingsResponse,
+  puts: Handler[] = [],
+  choices: Handler[] = []
+) {
   let current = initial;
   const sent: unknown[] = [];
+  const chosen: unknown[] = [];
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     const url = String(input);
     const json = (value: unknown, status = 200) =>
@@ -45,12 +51,20 @@ function serve(initial: GetQuietHoursSettingsResponse, puts: Handler[] = []) {
       if (!handler) throw new Error("unexpected PUT");
       return Promise.resolve(handler(body));
     }
+    if (url === "/api/me/quiet-hours/resolution" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body)) as unknown;
+      chosen.push(body);
+      const handler = choices.shift();
+      if (!handler) throw new Error("unexpected choice");
+      return Promise.resolve(handler(body));
+    }
     if (url === "/api/me/quiet-hours") return json(current);
     throw new Error(`unexpected request ${url}`);
   });
   return {
     fetchMock,
     sent,
+    chosen,
     setStored(next: GetQuietHoursSettingsResponse) {
       current = next;
     }
@@ -309,21 +323,123 @@ describe("QuietHoursEditor", () => {
     expect(out(tree)).toContain("your profile time zone (Europe/Paris)");
   });
 
-  it("names both schedules in a conflict without choosing one", async () => {
-    serve(
-      loaded(overnight, "1:100", {
-        status: "conflict",
-        alerts: { enabled: true, start: "23:00", end: "08:00" }
-      })
-    );
+  const differing = loaded(overnight, "1:100:abc", {
+    status: "conflict",
+    alerts: { enabled: true, start: "23:00", end: "08:00" }
+  });
+  const fromAlerts = { enabled: true, start: "23:00", end: "08:00", timezone: null };
+
+  async function choose(tree: ReactTestRenderer, label: string) {
+    await act(async () => {
+      button(tree, label)[0]!.props.onClick();
+    });
+    await flush();
+  }
+
+  it("offers both saved schedules and hides the form until the owner chooses", async () => {
+    serve(differing);
     const tree = await mount();
 
     expect(out(tree)).toContain("Your saved quiet hours differ.");
-    expect(out(tree)).toContain("Email alerts still follow an older schedule, 23:00 to 08:00.");
-    expect(out(tree)).toContain("Notifications follow: every day, 22:00 to 07:00");
+    expect(out(tree)).toContain("Nothing changes until you choose.");
+    expect(button(tree, "Use 22:00 to 07:00 (America/Chicago)")).toHaveLength(1);
+    expect(button(tree, "Use 23:00 to 08:00")).toHaveLength(1);
+    expect(button(tree, "Save quiet hours")).toHaveLength(0);
+    expect(tree.root.findAll((n) => n.props["aria-label"] === "Enable quiet hours")).toHaveLength(
+      0
+    );
     expect(out(tree)).not.toContain("Saved schedule");
-    expect(button(tree, "Keep quiet hours off")).toHaveLength(0);
-    expect(button(tree, "Use 23:00 to 08:00")).toHaveLength(0);
+  });
+
+  it("sends the chosen schedule with the loaded version, then shows it as saved", async () => {
+    const api = serve(
+      differing,
+      [],
+      [() => new Response(JSON.stringify(loaded(fromAlerts, "2:200")), { status: 200 })]
+    );
+    const tree = await mount();
+
+    await choose(tree, "Use 23:00 to 08:00");
+
+    expect(api.chosen).toEqual([
+      { choice: "alerts", quietHours: fromAlerts, expectedVersion: "1:100:abc" }
+    ]);
+    expect(out(tree)).toContain("Using your saved email alert schedule: 23:00 to 08:00.");
+    expect(out(tree)).toContain(
+      "Saved schedule: every day, 23:00 to 08:00, your profile time zone (Europe/Paris)."
+    );
+    expect(out(tree)).not.toContain("Your saved quiet hours differ.");
+    expect(button(tree, "Save quiet hours")).toHaveLength(1);
+  });
+
+  it("keeps both schedules on offer when the choice fails, and retries the same choice", async () => {
+    const api = serve(
+      differing,
+      [],
+      [
+        () => new Response(JSON.stringify({ error: "Settings are unavailable" }), { status: 503 }),
+        () => new Response(JSON.stringify(loaded(overnight, "2:200")), { status: 200 })
+      ]
+    );
+    const tree = await mount();
+
+    await choose(tree, "Use 22:00 to 07:00 (America/Chicago)");
+
+    expect(out(tree)).toContain(
+      "Your choice could not save: Settings are unavailable. Your previous schedules still apply."
+    );
+    expect(out(tree)).toContain("Your saved quiet hours differ.");
+    expect(button(tree, "Use 23:00 to 08:00")).toHaveLength(1);
+    expect(button(tree, "Save quiet hours")).toHaveLength(0);
+
+    await choose(tree, "Try again");
+
+    expect(api.chosen).toHaveLength(2);
+    expect(api.chosen[1]).toEqual(api.chosen[0]);
+    expect(api.chosen[1]).toMatchObject({ choice: "profile", quietHours: overnight });
+    expect(out(tree)).toContain(
+      "Kept your saved quiet hours: 22:00 to 07:00, America/Chicago time."
+    );
+    expect(out(tree)).not.toContain("Try again");
+  });
+
+  it("shows the latest schedules when the choice lost to another change", async () => {
+    const elsewhere = { ...overnight, start: "21:00" };
+    const api = serve(
+      differing,
+      [],
+      [
+        () => {
+          api.setStored(loaded(elsewhere, "2:200"));
+          return new Response(JSON.stringify({ error: "conflict" }), { status: 409 });
+        }
+      ]
+    );
+    const tree = await mount();
+
+    await choose(tree, "Use 23:00 to 08:00");
+
+    expect(out(tree)).toContain(
+      "Quiet hours changed somewhere else, so your choice was not saved."
+    );
+    expect(out(tree)).toContain("Saved schedule: every day, 21:00 to 07:00");
+    expect(out(tree)).not.toContain("Your saved quiet hours differ.");
+  });
+
+  it("holds both choices while one is saving", async () => {
+    let answer!: (response: Response) => void;
+    serve(differing, [], [() => new Promise<Response>((resolve) => (answer = resolve))]);
+    const tree = await mount();
+
+    await choose(tree, "Use 23:00 to 08:00");
+
+    expect(button(tree, "Use 23:00 to 08:00")[0]!.props.disabled).toBe(true);
+    expect(button(tree, "Use 22:00 to 07:00 (America/Chicago)")[0]!.props.disabled).toBe(true);
+    await act(async () => {
+      answer(new Response(JSON.stringify(loaded(fromAlerts, "2:200")), { status: 200 }));
+    });
+    await flush();
+    expect(out(tree)).toContain("Using your saved email alert schedule");
   });
 
   it("says when the saved schedule cannot be read in full, without calling it saved", async () => {
