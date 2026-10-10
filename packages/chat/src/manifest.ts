@@ -187,6 +187,22 @@ export const chatModuleManifest = {
       ]
     },
     {
+      id: "chat.interrupted_reply_recovery",
+      description:
+        "If Moss restarts or its model stops mid-reply, reopening the chat keeps every finished message once and " +
+        "shows the unfinished question with a note that the reply was interrupted. Moss never redoes it on its own. " +
+        "Not in private chats.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat_reply_interrupted",
+          class: "transient",
+          description:
+            "Moss was interrupted before finishing a reply. Anything it started may not have completed, so check first, then ask again."
+        }
+      ]
+    },
+    {
       id: "chat.relative_reminders",
       description:
         "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder Moss posts once in Main, " +
