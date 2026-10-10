@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import { assertDataContextDb } from "@moss/db";
 import { normalizeIdentity } from "./matching.js";
 import type { PeopleRepository } from "./repository.js";
@@ -23,17 +24,30 @@ export class PersonContextService {
 
   async resolve(scopedDb: unknown, ownerUserId: string, query: string): Promise<Person | null> {
     assertDataContextDb(scopedDb);
-    const normalized = normalizeIdentity("email_address", query);
+    const lowered = normalizeIdentity("email_address", query);
 
+    // Identity values keep their stored case (aliases are title-cased), so compare lowercased.
     const identity = await scopedDb.db
       .selectFrom("app.person_context_identities as i")
       .select(["i.person_id"])
       .where("i.owner_user_id", "=", ownerUserId)
-      .where("i.normalized_value", "=", normalized)
+      .where(sql<boolean>`lower(i.normalized_value) = ${lowered}`)
       .executeTakeFirst();
 
-    if (!identity || !identity.person_id) return null;
-    return this.repo.getPerson(scopedDb, ownerUserId, identity.person_id);
+    if (identity?.person_id) {
+      return this.repo.getPerson(scopedDb, ownerUserId, identity.person_id);
+    }
+
+    const byName = await scopedDb.db
+      .selectFrom("app.person_context_people as p")
+      .select(["p.id"])
+      .where("p.owner_user_id", "=", ownerUserId)
+      .where(sql<boolean>`lower(p.display_name) = ${lowered}`)
+      .orderBy("p.created_at")
+      .executeTakeFirst();
+
+    if (!byName) return null;
+    return this.repo.getPerson(scopedDb, ownerUserId, byName.id);
   }
 
   async getPerson(scopedDb: unknown, ownerUserId: string, personId: string): Promise<PersonDetail> {

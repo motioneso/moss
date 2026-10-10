@@ -311,6 +311,38 @@ describe("SettingsRepository deny-list methods", () => {
     expect(bRows.some((r) => r.scope === "user" && r.module_id === "weather")).toBe(false);
   });
 
+  it("worker role sees the actor's own user deny rows and no one else's", async () => {
+    await runner.withDataContext({ actorUserId: ids.userA, requestId: "req-a-w1" }, (db) =>
+      repo.setUserModuleDisabled(db, {
+        moduleId: "worker-visible",
+        disabled: true,
+        actorUserId: ids.userA,
+        requestId: "req-a-w1"
+      })
+    );
+
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      const workerRunner = new DataContextRunner(workerDb);
+      const aRows = await workerRunner.withDataContext(
+        { actorUserId: ids.userA, requestId: "req-a-w2" },
+        (db) => repo.listModuleDenyRowsForActor(db)
+      );
+      expect(aRows.some((r) => r.scope === "user" && r.module_id === "worker-visible")).toBe(true);
+
+      const bRows = await workerRunner.withDataContext(
+        { actorUserId: ids.userB, requestId: "req-b-w1" },
+        (db) => repo.listModuleDenyRowsForActor(db)
+      );
+      expect(bRows.some((r) => r.module_id === "worker-visible")).toBe(false);
+    } finally {
+      await workerDb.destroy();
+    }
+  });
+
   it("listInstanceModuleDenyRows returns instance rows only", async () => {
     await runner.withDataContext({ actorUserId: ids.adminUser, requestId: "req-admin-5" }, (db) =>
       repo.setInstanceModuleDisabled(db, {

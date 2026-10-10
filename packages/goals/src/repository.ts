@@ -86,10 +86,10 @@ export class GoalsRepository {
         status = COALESCE(${data.status ?? null}, status),
         priority = COALESCE(${data.priority ?? null}, priority),
         review_cadence = COALESCE(${data.reviewCadence ?? null}, review_cadence),
-        target_at = COALESCE(${data.targetAt ?? null}, target_at),
-        last_progress_summary = COALESCE(${data.lastProgressSummary ?? null}, last_progress_summary),
-        blocker_summary = COALESCE(${data.blockerSummary ?? null}, blocker_summary),
-        next_suggested_action = COALESCE(${data.nextSuggestedAction ?? null}, next_suggested_action),
+        target_at = CASE WHEN ${data.targetAt !== undefined}::boolean THEN ${data.targetAt ?? null} ELSE target_at END,
+        last_progress_summary = CASE WHEN ${data.lastProgressSummary !== undefined}::boolean THEN ${data.lastProgressSummary ?? null} ELSE last_progress_summary END,
+        blocker_summary = CASE WHEN ${data.blockerSummary !== undefined}::boolean THEN ${data.blockerSummary ?? null} ELSE blocker_summary END,
+        next_suggested_action = CASE WHEN ${data.nextSuggestedAction !== undefined}::boolean THEN ${data.nextSuggestedAction ?? null} ELSE next_suggested_action END,
         updated_at = NOW()
       WHERE id = ${id}::uuid
       RETURNING *
