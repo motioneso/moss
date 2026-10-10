@@ -1,14 +1,9 @@
-import { join } from "node:path";
+import { captureVisualArtifact } from "./visual-artifacts.js";
 import { readFile } from "node:fs/promises";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { buildExternalModule } from "../../scripts/build-external-module.js";
 import { mockApi } from "./mock-api.js";
 import { modulesResponse, myModulesResponse } from "./mock-modules.js";
-
-function visualPath(testInfo: TestInfo, filename: string): string {
-  const directory = process.env.MOSS_VISUAL_ARTIFACT_DIR;
-  return directory ? join(directory, filename) : testInfo.outputPath(filename);
-}
 
 // Actual Finance and host source with synthetic API responses. These are presentation and
 // interaction regressions, not live-path acceptance or evidence of financial writes.
@@ -100,7 +95,7 @@ for (const width of [1440, 1080, 768, 390, 320]) {
   for (const theme of ["light", "dark", "sage"] as const) {
     test(`Finance disclosure stays separate from its phone hit target: ${width}/${theme}`, async ({
       page
-    }, testInfo) => {
+    }) => {
       await page.setViewportSize({ width, height: 1000 });
       await financeSettings(page);
       await expect(page.getByLabel("Moss can move up to, per move")).toHaveValue("$250");
@@ -139,19 +134,14 @@ for (const width of [1440, 1080, 768, 390, 320]) {
       await expect(
         page.getByRole("checkbox", { name: "Move money between categories" })
       ).toBeEnabled();
-      await page.screenshot({
-        path: visualPath(testInfo, `finance-settings-${width}-${theme}.png`),
-        fullPage: true
-      });
+      await captureVisualArtifact(page, `finance-settings-${width}-${theme}.png`);
       await page.keyboard.press("Space");
       await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     });
   }
 }
 
-test("Finance failed limit read is visible, disabled and recoverable", async ({
-  page
-}, testInfo) => {
+test("Finance failed limit read is visible, disabled and recoverable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
   await financeSettings(page, true);
   await expect(page.getByRole("alert")).toContainText("Couldn't load your dollar limit.");
@@ -161,10 +151,7 @@ test("Finance failed limit read is visible, disabled and recoverable", async ({
   await expect(page.getByRole("radio").first()).toBeDisabled();
   await page.getByRole("button", { name: "Customize", exact: true }).click();
   await expect(page.getByRole("checkbox").first()).toBeDisabled();
-  await page.screenshot({
-    path: visualPath(testInfo, "finance-settings-read-failure.png"),
-    fullPage: true
-  });
+  await captureVisualArtifact(page, "finance-settings-read-failure.png");
   await page.route("**/api/modules/finance/preferences", (route) =>
     route.fulfill({
       json: { preferences: [{ key: "freedomLimitDollars", value: 250 }] }

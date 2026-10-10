@@ -335,6 +335,28 @@ Native production code is unchanged. Local Linux checks do not replace the recor
 macOS, real-data live-path or capture/accessibility gates. No release or merge
 acceptance is implied.
 
+### Optional visual review output
+
+The native and final-guard web runs reached the unchanged ten-minute phase cap
+before completing all 277 cases, including on their one diagnostic retry. No
+named assertion failure appeared in those bounded logs. The added 28 cases wrote
+25 full-page PNGs unconditionally; those images were not assertion baselines.
+The CI logs do not isolate their timing cost, so no measured speedup is claimed.
+
+These review captures are now opt-in. All cases, navigation, fixture setup,
+geometry/keyboard/state assertions, individual timeouts and retained failure
+traces remain unchanged. To save the same named PNGs during an explicit local
+review run, use:
+
+```sh
+MOSS_VISUAL_ARTIFACT_DIR=./test-results/park-press pnpm test:e2e tests/e2e/e1-park-press-design.spec.ts tests/e2e/l4-park-press-design.spec.ts tests/e2e/companion-link.spec.ts
+```
+
+Without that variable, only the non-asserting capture calls are skipped. Opted-in
+capture errors still fail rather than falsely claiming saved evidence. This
+bounded workload reduction is not a claim that the phase cap is resolved; the
+next exact-head CI result must establish that.
+
 ## Explicit outstanding gates
 
 - The original foundation-stage requirement for consumer source/test/browser
