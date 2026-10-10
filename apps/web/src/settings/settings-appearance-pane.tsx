@@ -396,7 +396,9 @@ export function AppearancePane() {
                 busy={activateMutation.isPending}
                 preview={{ kind: "builtIn", id: theme.id, mode: activeMode }}
                 onApply={() => activateMutation.mutate({ id: theme.id })}
-                onDuplicate={() => makeDraft(`${theme.name} copy`, readBuiltInTokens(theme.id))}
+                onDuplicate={() =>
+                  makeDraft(`${theme.name} copy`, readBuiltInTokens(theme.id, activeMode))
+                }
               />
             ))}
           </div>
@@ -413,7 +415,7 @@ export function AppearancePane() {
                   active={activeId === theme.id}
                   busy={activateMutation.isPending}
                   editing={draft?.id === theme.id && !draftIsNew}
-                  preview={{ kind: "custom", tokens: theme.tokens }}
+                  preview={{ kind: "custom", id: theme.id, tokens: theme.tokens }}
                   onApply={() => activateMutation.mutate({ id: theme.id })}
                   onEdit={() => openEditor(theme, false)}
                   onDuplicate={() => makeDraft(`${theme.name} copy`, theme.tokens)}
@@ -668,7 +670,7 @@ export async function saveThemeDraft(
 
 type ThemePreviewSource =
   | { readonly kind: "builtIn"; readonly id: string; readonly mode: "light" | "dark" }
-  | { readonly kind: "custom"; readonly tokens: AestheticThemeTokens };
+  | { readonly kind: "custom"; readonly id: string; readonly tokens: AestheticThemeTokens };
 
 function ThemeCard(props: {
   readonly name: string;
@@ -741,9 +743,13 @@ function ThemeThumb(props: { readonly source: ThemePreviewSource }) {
   const attrs =
     props.source.kind === "builtIn"
       ? { "data-theme": props.source.id, "data-color-mode": props.source.mode }
-      : { style: tokensToCssVars(props.source.tokens) };
+      : {
+          "data-theme": props.source.id,
+          "data-color-mode": "light",
+          style: tokensToCssVars(props.source.tokens)
+        };
   return (
-    <div className="theme-thumb" aria-hidden="true" {...attrs}>
+    <div className="theme-thumb jds-theme-scope" aria-hidden="true" {...attrs}>
       <span className="theme-thumb__nav">
         <i />
         <i className="is-active" />
@@ -782,9 +788,11 @@ export function contrastRatio(a: string, b: string): number {
   return readabilityContrastRatio(a, b) ?? 1;
 }
 
-function readBuiltInTokens(id: string): AestheticThemeTokens {
+export function readBuiltInTokens(id: string, mode: "light" | "dark"): AestheticThemeTokens {
   const probe = document.createElement("div");
+  probe.className = "jds-theme-scope";
   probe.setAttribute("data-theme", id);
+  probe.setAttribute("data-color-mode", mode);
   document.body.appendChild(probe);
   try {
     return readCurrentAestheticTokens(getComputedStyle(probe));

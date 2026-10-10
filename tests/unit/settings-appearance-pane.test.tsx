@@ -13,7 +13,8 @@ import {
   saveThemeDraft,
   slugifyThemeId,
   themeColorError,
-  tokensToCssVars
+  tokensToCssVars,
+  readBuiltInTokens
 } from "../../apps/web/src/settings/settings-appearance-pane.js";
 import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
 import {
@@ -313,5 +314,25 @@ describe("semantic theme readability", () => {
     );
     expect(put).toHaveBeenCalledWith("low-contrast", { name: "My palette", tokens: low });
     expect(activate).toHaveBeenCalledWith({ id: "low-contrast" });
+  });
+});
+
+describe("built-in palette probe isolation", () => {
+  it.each(["light", "dark"] as const)("uses an explicit %s scope and removes the probe", (mode) => {
+    const original = window.getComputedStyle.bind(window);
+    const measure = vi.spyOn(window, "getComputedStyle").mockImplementation((node) => {
+      expect(node.classList.contains("jds-theme-scope")).toBe(true);
+      expect(node.getAttribute("data-theme")).toBe("teal");
+      expect(node.getAttribute("data-color-mode")).toBe(mode);
+      expect(node.isConnected).toBe(true);
+      return original(node);
+    });
+    try {
+      readBuiltInTokens("teal", mode);
+      expect(measure).toHaveBeenCalledOnce();
+      expect(document.querySelector(".jds-theme-scope")).toBeNull();
+    } finally {
+      measure.mockRestore();
+    }
   });
 });
