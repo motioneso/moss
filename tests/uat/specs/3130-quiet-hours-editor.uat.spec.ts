@@ -1,11 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { execUatSql } from "./job-search-board-sql.js";
 
 // Live proof for the one quiet-hours editor in Settings > Alerts & quiet hours (#3130). It drives
 // the real screen and the installed scheduling worker. The save failure is a real one: the browser
-// goes offline, so no response is faked or rewritten. The briefing writer is the scripted fixture,
+// goes offline, so no response is faked or rewritten. The notification proof uses a window that
+// wraps past midnight and restarts the stack while the notification is held. The briefing writer is the scripted fixture,
 // so this does not prove a real model reply or a push device.
 export const uatLevel = {
   level: "admin+data",
@@ -195,13 +197,13 @@ test("the Alerts & quiet hours editor saves, survives a failed save, and governs
   console.log(`[3130 equal times] refused on screen, stored version unchanged`);
 
   // 3. A real failed save keeps the stored schedule in force and keeps the draft.
-  const now = new Date();
-  const scheduledAt = new Date(now.getTime());
-  scheduledAt.setUTCSeconds(0, 0);
-  scheduledAt.setUTCMinutes(scheduledAt.getUTCMinutes() + 2);
-  const releaseAt = new Date(scheduledAt.getTime() + 3 * 60_000);
-  const start = hhmm(now);
+  // The window starts a minute after it ends, so it wraps past midnight and covers now.
+  const releaseAt = new Date();
+  releaseAt.setUTCSeconds(0, 0);
+  releaseAt.setUTCMinutes(releaseAt.getUTCMinutes() + 8);
+  const start = hhmm(new Date(releaseAt.getTime() + 60_000));
   const end = hhmm(releaseAt);
+  expect(start > end, `window ${start}-${end} must wrap past midnight`).toBe(true);
   await from.fill(start);
   await until.fill(end);
   await context.setOffline(true);
@@ -234,7 +236,11 @@ test("the Alerts & quiet hours editor saves, survives a failed save, and governs
     .poll(async () => (await quietHours(page)).quietHours)
     .toEqual({ enabled: true, start, end, timezone: null });
 
-  // 5. An existing notification follows the saved boundary.
+  // 5. An existing notification follows the saved overnight boundary through worker downtime.
+  const scheduledAt = new Date();
+  scheduledAt.setUTCSeconds(0, 0);
+  scheduledAt.setUTCMinutes(scheduledAt.getUTCMinutes() + 2);
+  expect(releaseAt.getTime() - scheduledAt.getTime()).toBeGreaterThanOrEqual(3 * 60_000);
   const definition = await page.request.post("/api/briefings/definitions", {
     data: {
       title: "3130 scheduled quiet-hours proof",
@@ -267,6 +273,11 @@ test("the Alerts & quiet hours editor saves, survives a failed save, and governs
   expect(Date.now()).toBeLessThan(releaseAt.getTime());
   expect(await briefingNotifications(page)).toHaveLength(0);
   await expect.poll(() => summaryJob(releaseAt)).toEqual({ state: "created", output: null });
+  await restartUatStack(projectName(), baseUrl());
+  expect(Date.now()).toBeLessThan(releaseAt.getTime());
+  expect(await briefingNotifications(page)).toHaveLength(0);
+  expect(summaryJob(releaseAt)).toEqual({ state: "created", output: null });
+  console.log(`[3130 downtime] stack restarted while the notification was held`);
   const waitMs = Math.max(0, releaseAt.getTime() - Date.now() + 2_000);
   if (waitMs > 0) await page.waitForTimeout(waitMs);
   await expect
@@ -285,7 +296,7 @@ test("the Alerts & quiet hours editor saves, survives a failed save, and governs
       output: { delivered: 0, alreadyDelivered: 0, temporaryFailures: 0, reasons: [] }
     });
   console.log(
-    `[3130 live proof] Try again saved ${start}-${end}; scheduled fixture briefing completed before ` +
-      `its notification released once at ${releaseAt.toISOString()}`
+    `[3130 live proof] Try again saved overnight ${start}-${end}; scheduled fixture briefing ` +
+      `completed, survived a restart held, and released once at ${releaseAt.toISOString()}`
   );
 });

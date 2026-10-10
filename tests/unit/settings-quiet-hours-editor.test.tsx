@@ -260,6 +260,37 @@ describe("QuietHoursEditor", () => {
     expect(out(tree)).toContain("Saved schedule: every day, 22:00 to 07:00, Europe/Paris time.");
   });
 
+  it("starts a fresh draft once a refetch makes the stored schedule match it", async () => {
+    const matched = { ...overnight, end: "06:00" };
+    const api = serve(loaded(overnight), [
+      (body) => {
+        const { expectedVersion } = body as { expectedVersion: string | null };
+        if (expectedVersion !== "2:200") {
+          return new Response(JSON.stringify({ error: "conflict" }), { status: 409 });
+        }
+        return new Response(JSON.stringify(loaded({ ...matched, start: "23:00" }, "3:300")), {
+          status: 200
+        });
+      }
+    ]);
+    const tree = await mount();
+
+    setTime(tree, "Quiet hours until", "06:00");
+    api.setStored(loaded(matched, "2:200"));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["settings"] });
+    });
+    await flush();
+    expect(out(tree)).not.toContain("Unsaved changes");
+    setTime(tree, "Quiet hours from", "23:00");
+    await save(tree);
+
+    expect(api.sent).toEqual([
+      { quietHours: { ...matched, start: "23:00" }, expectedVersion: "2:200" }
+    ]);
+    expect(out(tree)).toContain("Quiet hours saved.");
+  });
+
   it("can follow the profile time zone and names it", async () => {
     const next = { ...overnight, timezone: null };
     const api = serve(loaded(overnight), [

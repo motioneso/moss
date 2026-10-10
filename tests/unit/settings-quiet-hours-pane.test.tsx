@@ -196,6 +196,47 @@ describe("ProfilePane quiet-hours summary", () => {
     act(() => tree.unmount());
   });
 
+  it("reloads quiet hours after the profile time zone is saved", async () => {
+    const paris = { timezone: "Europe/Paris", region: "en-US", dateFormat: "24" };
+    let quietHoursCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const respond = (value: unknown, status = 200) =>
+        Promise.resolve(new Response(JSON.stringify(value), { status }));
+      if (String(input) === "/api/me/locale" && init?.method === "PUT") {
+        return respond({ locale: paris });
+      }
+      if (String(input) !== "/api/me/quiet-hours") return respond({ error: "unused" }, 503);
+      quietHoursCalls += 1;
+      return respond(
+        quietHoursCalls === 1
+          ? quietHours
+          : {
+              ...quietHours,
+              authority: {
+                status: "conflict",
+                alerts: { enabled: true, start: "22:00", end: "07:00" }
+              }
+            }
+      );
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    locale(client);
+    const tree = await profileTree(client, () => {});
+    await settle();
+    expect(textOf(tree.toJSON())).toContain("Saved schedule: every day, 22:00 to 07:00");
+
+    const zone = tree.root.find((node) => node.props["aria-label"] === "Time zone");
+    await act(async () => {
+      zone.props.onChange("Europe/Paris");
+    });
+    await settle();
+
+    expect(quietHoursCalls).toBe(2);
+    expect(textOf(tree.toJSON())).toContain("Notifications follow: every day, 22:00 to 07:00");
+    expect(textOf(tree.toJSON())).not.toContain("Saved schedule");
+    act(() => tree.unmount());
+  });
+
   it("never calls a conflicting schedule the saved setting", async () => {
     const html = await renderPane((client) => {
       locale(client);

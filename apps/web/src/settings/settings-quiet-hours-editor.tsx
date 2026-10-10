@@ -60,6 +60,9 @@ export function QuietHoursEditor() {
   const editing = draft?.value ?? saved;
   const dirty = draft !== null && quietHoursDraftDirty(saved, draft.value);
 
+  // A draft that matches the stored schedule is spent; the next edit builds on the latest version.
+  const draftVersion = dirty ? draft.version : (loaded?.version ?? null);
+
   const save = useMutation({
     // An offline save fails at once and keeps the draft, rather than waiting paused as "Saving".
     networkMode: "always",
@@ -87,7 +90,7 @@ export function QuietHoursEditor() {
   const edit = (patch: Partial<QuietHoursSettingsDto>) => {
     setDraft({
       value: { ...editing, ...patch },
-      version: draft ? draft.version : (loaded?.version ?? null)
+      version: draftVersion
     });
     setFeedback(null);
   };
@@ -97,7 +100,7 @@ export function QuietHoursEditor() {
       setFeedback({ kind: "problem", text: problem });
       return;
     }
-    save.mutate({ value: editing, version: draft ? draft.version : (loaded?.version ?? null) });
+    save.mutate({ value: editing, version: draftVersion });
   };
 
   const zoneOptions = useMemo<readonly ComboboxOption[]>(() => {

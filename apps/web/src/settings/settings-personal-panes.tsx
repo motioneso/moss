@@ -163,6 +163,9 @@ export function ProfilePane({ me, onSelectSection }: PaneProps) {
     mutationFn: (next: LocaleSettingsDto) => putLocaleSettings({ locale: next }),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.settings.locale, data);
+      // The server compares schedules against the profile zone, so a zone change can open or
+      // close a quiet-hours conflict.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.quietHours });
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
