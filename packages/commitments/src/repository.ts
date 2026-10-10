@@ -190,17 +190,16 @@ export class CommitmentsRepository {
       .where("thread_ref", "is not", null)
       .where("status", "in", ["pending_review", "accepted", "snoozed"])
       .where((eb) =>
-        eb.or([
-          eb("status", "!=", "snoozed"),
-          eb("snoozed_until", "is", null),
-          eb("snoozed_until", "<=", sql<Date>`now()`)
-        ])
+        eb.or([eb("status", "!=", "snoozed"), eb("snoozed_until", "<=", sql<Date>`now()`)])
       )
       .where("resolution_ref", "is", null)
       .orderBy(sql`due_local_date nulls last`)
       .orderBy("last_seen_at", "desc")
       .execute();
-    return rows.map(rowToCandidate);
+    // A snooze that survives the filter has elapsed; the item is back, so drop the old date.
+    return rows
+      .map(rowToCandidate)
+      .map((c) => (c.status === "snoozed" ? { ...c, snoozedUntil: null } : c));
   }
 
   async addEvidenceRow(scopedDb: unknown, input: AddEvidenceInput): Promise<boolean> {
@@ -267,7 +266,9 @@ export class CommitmentsRepository {
     const rows = await q.execute();
     const candidates = rows.map(rowToCandidate);
     return status === "pending_review"
-      ? candidates.map((c) => (c.status === "snoozed" ? { ...c, status: "pending_review" } : c))
+      ? candidates.map((c) =>
+          c.status === "snoozed" ? { ...c, status: "pending_review", snoozedUntil: null } : c
+        )
       : candidates;
   }
 

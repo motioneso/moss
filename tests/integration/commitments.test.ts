@@ -339,6 +339,54 @@ describe("CommitmentsRepository", () => {
       expect(snoozed.map((c) => c.id)).not.toContain(elapsed.id);
     });
 
+    it("open email candidates hide future and undated snoozes and clear an elapsed one", async () => {
+      const seedEmail = async (title: string) => {
+        const threadRef = `thread-${randomUUID()}`;
+        const row = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+          repo.upsertEmailCandidate(scopedDb, {
+            ownerUserId: userA,
+            candidateSignature: `test-sig-email-snooze-${randomUUID()}`,
+            kind: "promise",
+            title,
+            dueLocalDate: null,
+            counterpartyLabel: null,
+            confidence: "high",
+            suggestedHandling: null,
+            counterpartyPersonId: null,
+            counterpartyAddress: null,
+            proposedActions: [],
+            whyLines: [],
+            threadRef,
+            lastJudgedExternalId: `ext-${randomUUID()}`
+          })
+        );
+        return row.id as string;
+      };
+      const elapsed = await seedEmail("email elapsed snooze");
+      const future = await seedEmail("email future snooze");
+      const undated = await seedEmail("email undated snooze");
+      await snooze(elapsed, new Date(Date.now() - 60_000));
+      await snooze(future, new Date(Date.now() + 3_600_000));
+      await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.updateStatus(scopedDb, userA, undated, "snoozed")
+      );
+
+      const open = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.listOpenEmailCandidates(scopedDb, userA)
+      );
+      const ids = open.map((c) => c.id);
+
+      expect(ids).toContain(elapsed);
+      expect(ids).not.toContain(future);
+      expect(ids).not.toContain(undated);
+      expect(open.find((c) => c.id === elapsed)?.snoozedUntil ?? null).toBeNull();
+
+      const pending = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.listCandidates(scopedDb, userA, "pending_review")
+      );
+      expect(pending.find((c) => c.id === elapsed)?.snoozedUntil ?? null).toBeNull();
+    });
+
     it("commitments.list honours the status argument", async () => {
       const tool = commitmentsModuleManifest.assistantTools!.find(
         (t) => t.name === "commitments.list"
