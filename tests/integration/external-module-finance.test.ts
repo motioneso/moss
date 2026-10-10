@@ -54,7 +54,9 @@ beforeAll(async () => {
   cpSync(join(sourceDir, "jarvis.module.json"), join(installedDir, "jarvis.module.json"));
   cpSync(join(sourceDir, "dist"), join(installedDir, "dist"), { recursive: true });
 
-  appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+  // Two connections: a tool call on a module that declares preferences reads them in a
+  // second data context while the invoke route still holds the first.
+  appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
   workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 1 });
   server = createApiServer({
     appDb,
