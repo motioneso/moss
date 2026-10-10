@@ -437,7 +437,8 @@ describe("Proactive Monitoring — integration", () => {
         monitorStateRepository: new MonitorStateRepository(),
         cardRepository: cardRepo,
         antiSpamPolicy: new AntiSpamPolicy(cardRepo),
-        getLocalePreference: async () => ({ timezone: "UTC" })
+        getLocalePreference: async () => ({ timezone: "UTC" }),
+        resolveQuietHours: async () => null
       });
 
       const { provider: providerA, seen: seenA } = capturingProvider([

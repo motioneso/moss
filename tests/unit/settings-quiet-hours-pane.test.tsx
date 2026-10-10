@@ -20,6 +20,7 @@ vi.mock("virtual:moss-module-settings", () => ({
 
 const quietHours: GetQuietHoursSettingsResponse = {
   quietHours: { enabled: true, start: "22:00", end: "07:00", timezone: "America/Chicago" },
+  authority: { status: "canonical", alerts: null },
   version: "3:1700000000000"
 };
 
@@ -123,6 +124,70 @@ describe("ProfilePane quiet-hours controls", () => {
     expect(html).not.toContain(["Saving quiet hours", " is coming soon"].join(""));
     expect(html).not.toContain("BACKEND-TODO");
   });
+
+  it("says the schedule is loading and holds the controls until it arrives", async () => {
+    const html = await renderPane(() => {});
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Loading quiet hours");
+    expect(html).toMatch(/aria-label="Enable quiet hours"[^>]*disabled=""/);
+  });
+
+  it("shows a failed load with a way to try again, and keeps the controls held", async () => {
+    const html = await renderPane(
+      (client) => {
+        client
+          .getQueryCache()
+          .build(client, { queryKey: queryKeys.settings.quietHours })
+          .setState({
+            status: "error",
+            fetchStatus: "idle",
+            error: new ApiError(503, "Quiet hours are unavailable right now"),
+            errorUpdatedAt: Date.now()
+          });
+      },
+      { retryOnMount: false }
+    );
+
+    expect(html).toContain("Quiet hours are unavailable right now");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("Loading quiet hours");
+    expect(html).toMatch(/aria-label="Quiet hours from"[^>]*disabled=""/);
+  });
+
+  it("notes a differing alert schedule without offering a choice", async () => {
+    const html = await renderPane((client) => {
+      client.setQueryData(queryKeys.settings.quietHours, {
+        ...quietHours,
+        authority: { status: "conflict", alerts: { enabled: true, start: "23:00", end: "08:00" } }
+      } satisfies GetQuietHoursSettingsResponse);
+    });
+
+    expect(html).toContain("Alerts still follow an older schedule");
+    expect(html).toContain("23:00");
+    expect(html).toContain("08:00");
+    expect(html).not.toContain("Loading quiet hours");
+  });
+
+  it("names an older schedule that is switched off", async () => {
+    const html = await renderPane((client) => {
+      client.setQueryData(queryKeys.settings.quietHours, {
+        ...quietHours,
+        authority: { status: "conflict", alerts: { enabled: false, start: "22:00", end: "07:00" } }
+      } satisfies GetQuietHoursSettingsResponse);
+    });
+
+    expect(html).toContain("Alerts still follow an older schedule");
+    expect(html).toContain("switched off");
+  });
+
+  it("shows no conflict note once one schedule governs", async () => {
+    const html = await renderPane((client) => {
+      client.setQueryData(queryKeys.settings.quietHours, quietHours);
+    });
+
+    expect(html).not.toContain("Alerts still follow an older schedule");
+  });
 });
 
 const me: MeResponse = {
@@ -141,8 +206,11 @@ const me: MeResponse = {
   hasPasswordCredential: true
 };
 
-async function renderPane(seed: (client: QueryClient) => void): Promise<string> {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+async function renderPane(
+  seed: (client: QueryClient) => void,
+  queries: { retryOnMount?: boolean } = {}
+): Promise<string> {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, ...queries } } });
   seed(client);
   const { FeedbackProvider } = await import("../../apps/web/src/settings/settings-feedback.js");
   const { ProfilePane } = await import("../../apps/web/src/settings/settings-personal-panes.js");

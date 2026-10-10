@@ -336,7 +336,9 @@ import {
   getModuleBuild,
   updateModuleBuildStatus,
   INTEGRATIONS_FAMILY,
-  loadFamilyKeyring
+  loadFamilyKeyring,
+  alertsQuietPolicy,
+  readQuietHoursAuthority
 } from "@moss/settings";
 import {
   TASKS_QUEUE_DEFINITIONS,
@@ -3043,6 +3045,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           if (!val || typeof val !== "object" || Array.isArray(val)) return null;
           return val as { timezone?: string };
         },
+        resolveQuietHours: async (scopedDb) =>
+          alertsQuietPolicy((await readQuietHoursAuthority(scopedDb)).authority),
         providers
       });
     }

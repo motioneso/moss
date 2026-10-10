@@ -79,3 +79,10 @@ export {
   setNotificationPreferenceEnabled
 } from "./notification-preference-application.js";
 export { appCallActionExecute } from "./app-action-tools.js";
+export {
+  type AlertsQuietPolicy,
+  type QuietHoursAuthority,
+  alertsQuietPolicy,
+  notificationsQuietHoursValue,
+  readQuietHoursAuthority
+} from "./quiet-hours-authority.js";

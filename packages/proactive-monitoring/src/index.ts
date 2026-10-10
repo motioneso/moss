@@ -1,6 +1,7 @@
 export type {
   ProactiveMonitorStateRow,
   ProactiveCardRow,
+  ProactiveQuietPolicy,
   ResolvedMonitoringConfig
 } from "./types.js";
 export {
@@ -11,6 +12,7 @@ export {
   ProactiveMonitoringPreferencesRepository,
   ProactivePreferenceRevisionConflictError,
   isProactiveSourceEnabled,
+  parseProactiveMonitoringPreference,
   resolveAutomaticEmailAlertsEnabled,
   type SavedProactiveMonitoringPreference,
   validateProactiveMonitoringPreference,

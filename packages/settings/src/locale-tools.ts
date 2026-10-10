@@ -10,6 +10,7 @@ import {
   type LocaleSettingsDto
 } from "@moss/shared";
 
+import { freezeQuietHoursBeforeLocaleWrite } from "./quiet-hours-writer.js";
 import { settingsUndoStack } from "./undo-stack.js";
 
 // Matches locale-routes.ts's LOCALE_PREFERENCE_KEY exactly — both read/write the same preference row.
@@ -73,6 +74,7 @@ export const localeSetTimezoneExecute: ToolExecute = async (
     return { data: { ...normalizedCurrent } };
   }
   const next: LocaleSettingsDto = { ...normalizedCurrent, timezone };
+  await freezeQuietHoursBeforeLocaleWrite(scopedDb, preferences);
   const written = await preferences.upsertWithRevision(
     scopedDb,
     LOCALE_PREFERENCE_KEY,
@@ -124,6 +126,7 @@ export const localeSetRegionAndDateFormatExecute: ToolExecute = async (
     return { data: { ...normalizedCurrent } };
   }
   const next: LocaleSettingsDto = { ...normalizedCurrent, region, dateFormat };
+  await freezeQuietHoursBeforeLocaleWrite(scopedDb, preferences);
   const written = await preferences.upsertWithRevision(
     scopedDb,
     LOCALE_PREFERENCE_KEY,

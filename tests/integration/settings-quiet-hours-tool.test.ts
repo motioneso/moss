@@ -55,7 +55,8 @@ describe("settings.quietHours.set tool", () => {
       enabled: true,
       start: "22:00",
       end: "07:00",
-      timezone: "America/Denver"
+      timezone: "America/Denver",
+      authority: "canonical"
     });
     expect(stored?.revision).toBe(1);
   });
@@ -198,7 +199,8 @@ describe("settings.quietHours.set tool", () => {
       enabled: true,
       start: "22:00",
       end: "22:00",
-      timezone: null
+      timezone: null,
+      authority: "canonical"
     });
   });
 

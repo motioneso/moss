@@ -222,7 +222,8 @@ it("scheduled and manual scans collect only currently permitted mail through the
     monitorStateRepository: new MonitorStateRepository(),
     cardRepository: cards,
     antiSpamPolicy: new AntiSpamPolicy(cards),
-    getLocalePreference: async () => null
+    getLocalePreference: async () => null,
+    resolveQuietHours: async () => null
   });
   await appContext.withDataContext({ actorUserId: ids.userA }, async (scopedDb) => {
     const pref = defaultProactiveMonitoringPreference();

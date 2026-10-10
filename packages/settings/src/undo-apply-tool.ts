@@ -2,6 +2,8 @@ import { assertDataContextDb } from "@moss/db";
 import type { ToolExecute, ToolResult } from "@moss/module-sdk";
 import { PreferenceRevisionConflictError, PreferencesRepository } from "@moss/structured-state";
 
+import { QUIET_HOURS_PREFERENCE_KEY } from "./quiet-hours-application.js";
+import { lockQuietHoursAuthority } from "./quiet-hours-authority.js";
 import { settingsUndoStack } from "./undo-stack.js";
 
 const preferences = new PreferencesRepository();
@@ -38,6 +40,7 @@ export const settingsUndoLastExecute: ToolExecute = async (
     };
   }
   try {
+    if (entry.key === QUIET_HOURS_PREFERENCE_KEY) await lockQuietHoursAuthority(scopedDb);
     if (entry.previousValue === null && entry.previousRevision === null) {
       // The tracked write created this row from nothing — undo removes it rather than pinning
       // the old default back in (spec: undo over an absent row deletes the override).

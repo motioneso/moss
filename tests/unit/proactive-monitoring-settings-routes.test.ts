@@ -48,7 +48,13 @@ function routeHarness(saved: unknown, revision = 4) {
       withDataContext: async (_ctx: unknown, fn: (db: never) => unknown) => fn({} as never)
     } as never,
     resolveAccessContext: async () => ({ actorUserId: "00000000-0000-4000-8000-0000000000a1" }),
-    repository: repository as never
+    repository: repository as never,
+
+    // A malformed quiet-hours authority keeps the legacy nested behaviour these tests cover.
+    quietHours: {
+      read: async () => ({ authority: { status: "malformed", effective: null } }) as never,
+      applyLegacyPatch: async () => ({ target: "nested" })
+    }
   });
   return { app, repository };
 }

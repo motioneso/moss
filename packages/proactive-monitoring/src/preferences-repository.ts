@@ -228,6 +228,17 @@ export function validateProactiveMonitoringPreference(
   }
 }
 
+/** Parses a stored record the way the repository reads it. Null means the record is malformed. */
+export function parseProactiveMonitoringPreference(
+  raw: unknown
+): SavedProactiveMonitoringPreference | null {
+  try {
+    return parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 function parse(raw: unknown): SavedProactiveMonitoringPreference {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("malformed preference");

@@ -105,6 +105,7 @@ describe("proactive monitoring settings PATCH", () => {
     });
     expect(loose.statusCode).toBe(400);
     expect(await rawRow(ownerId, PROACTIVE_MONITORING_PREFERENCE_KEY)).toEqual(before);
+    expect(await rawRow(ownerId, PROFILE_QUIET_HOURS_KEY)).toBeNull();
   });
 
   it("applies both of two concurrent saves without losing either", async () => {
@@ -129,26 +130,56 @@ describe("proactive monitoring settings PATCH", () => {
     });
   });
 
-  it("keeps Profile quiet hours and alert quiet hours as separate records", async () => {
-    await patch(ownerCookie, {
+  it("lands a legacy quiet-hours save on the one Profile record once the schedule is clear", async () => {
+    // The alert record now holds a valid 22:30-06:15 window and Profile has none, so that window
+    // is the owner's carried schedule and the next quiet-hours save belongs on Profile.
+    const alertsBefore = await rawRow(ownerId, PROACTIVE_MONITORING_PREFERENCE_KEY);
+
+    const legacy = await patch(ownerCookie, {
       quietHours: { enabled: true, startLocalTime: "21:00", endLocalTime: "05:00" }
     });
-    expect(await rawRow(ownerId, PROFILE_QUIET_HOURS_KEY)).toBeNull();
 
+    expect(legacy.statusCode).toBe(200);
+    expect(legacy.json().settings.quietHours).toEqual({
+      enabled: true,
+      startLocalTime: "21:00",
+      endLocalTime: "05:00"
+    });
+    expect((await rawRow(ownerId, PROFILE_QUIET_HOURS_KEY))?.value).toEqual({
+      enabled: true,
+      start: "21:00",
+      end: "05:00",
+      timezone: null,
+      authority: "canonical"
+    });
+    expect(await rawRow(ownerId, PROACTIVE_MONITORING_PREFERENCE_KEY)).toEqual(alertsBefore);
+
+    const read = await server.inject({
+      method: "GET",
+      url: "/api/me/quiet-hours",
+      headers: { cookie: ownerCookie }
+    });
     const profile = await server.inject({
       method: "PUT",
       url: "/api/me/quiet-hours",
       headers: { cookie: ownerCookie },
       payload: {
         quietHours: { enabled: true, start: "23:00", end: "07:00", timezone: "Europe/London" },
-        expectedVersion: null
+        expectedVersion: read.json().version
       }
     });
 
     expect(profile.statusCode).toBe(200);
-    const alerts = await rawRow(ownerId, PROACTIVE_MONITORING_PREFERENCE_KEY);
-    expect(alerts?.value).toMatchObject({
-      quietHours: { enabled: true, startLocalTime: "21:00", endLocalTime: "05:00" }
+    expect(await rawRow(ownerId, PROACTIVE_MONITORING_PREFERENCE_KEY)).toEqual(alertsBefore);
+    const alerts = await server.inject({
+      method: "GET",
+      url: SETTINGS_URL,
+      headers: { cookie: ownerCookie }
+    });
+    expect(alerts.json().settings.quietHours).toEqual({
+      enabled: true,
+      startLocalTime: "23:00",
+      endLocalTime: "07:00"
     });
   });
 

@@ -80,6 +80,7 @@ describe("settings quiet-hours preferences", () => {
         end: "07:00",
         timezone: null
       },
+      authority: { status: "default", alerts: null },
       version: null
     });
   });
@@ -286,6 +287,7 @@ describe("settings quiet-hours preferences", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json<GetQuietHoursSettingsResponse>()).toEqual({
       quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: null },
+      authority: { status: "default", alerts: null },
       version: null
     });
 

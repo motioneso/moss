@@ -7,8 +7,23 @@ export interface QuietHoursSettingsDto {
   readonly timezone: string | null;
 }
 
+/**
+ * Which record governs quiet hours. "conflict" means Profile and the older alert schedule
+ * disagree; each consumer keeps its own schedule until the owner chooses, and `alerts` shows the
+ * alert one. "malformed" means a saved record cannot be read and is left untouched.
+ */
+export interface QuietHoursAuthorityDto {
+  readonly status: "default" | "carried" | "canonical" | "conflict" | "malformed";
+  readonly alerts: {
+    readonly enabled: boolean;
+    readonly start: string;
+    readonly end: string;
+  } | null;
+}
+
 export interface GetQuietHoursSettingsResponse {
   readonly quietHours: QuietHoursSettingsDto;
+  readonly authority: QuietHoursAuthorityDto;
   /** Opaque write expectation for the saved row; null when nothing is saved yet. */
   readonly version: string | null;
 }
@@ -86,11 +101,32 @@ const quietHoursSchema = {
 
 const quietHoursVersionSchema = { type: ["string", "null"], maxLength: 64 } as const;
 
+const localTimeSchema = { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" } as const;
+
+const quietHoursAuthoritySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["status", "alerts"],
+  properties: {
+    status: { type: "string", enum: ["default", "carried", "canonical", "conflict", "malformed"] },
+    alerts: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      required: ["enabled", "start", "end"],
+      properties: { enabled: { type: "boolean" }, start: localTimeSchema, end: localTimeSchema }
+    }
+  }
+} as const;
+
 const quietHoursResponseSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["quietHours", "version"],
-  properties: { quietHours: quietHoursSchema, version: quietHoursVersionSchema }
+  required: ["quietHours", "authority", "version"],
+  properties: {
+    quietHours: quietHoursSchema,
+    authority: quietHoursAuthoritySchema,
+    version: quietHoursVersionSchema
+  }
 } as const;
 
 export const getQuietHoursSettingsRouteSchema = {
