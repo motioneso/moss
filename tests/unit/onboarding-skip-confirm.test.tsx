@@ -39,6 +39,16 @@ describe("needsSkipConfirm", () => {
   it("does NOT require confirmation once a provider is connected (chat will work)", () => {
     expect(needsSkipConfirm(founderReady)).toBe(false);
   });
+
+  it("does NOT require confirmation for a member whose chat route is usable", () => {
+    const member: OnboardingStatusResponse = {
+      role: "member",
+      completed: false,
+      steps: { apiKeyOptOut: { done: false }, connectors: { done: false } }
+    };
+    expect(needsSkipConfirm(member, true)).toBe(false);
+    expect(needsSkipConfirm(member, false)).toBe(true);
+  });
 });
 
 describe("SkipConfirmDialog (rendered)", () => {

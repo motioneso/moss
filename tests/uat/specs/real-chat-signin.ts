@@ -53,7 +53,10 @@ export async function signInUatAdmin(page: Page): Promise<void> {
   await expect(skipSetup.or(userMenu).first()).toBeVisible({ timeout: 30_000 });
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
+    // The confirm dialog only shows when chat is unusable.
+    const skipAnyway = page.getByRole("button", { name: "Skip anyway" });
+    await expect(skipAnyway.or(userMenu).first()).toBeVisible();
+    if (await skipAnyway.isVisible()) await skipAnyway.click();
   }
   await expect(userMenu).toBeVisible();
 }
