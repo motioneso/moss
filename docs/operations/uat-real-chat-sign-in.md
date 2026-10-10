@@ -33,6 +33,19 @@ The link lasts 10 minutes, so the run waits 10 minutes for the code by default
 (`JARVIS_UAT_CLAUDE_SIGNIN_WAIT_MS` changes it). The wait is added to the spec's own time limit.
 If nobody answers in time the run cancels the sign-in and fails; rerun for a fresh link.
 
+Nothing announces the link beyond that log line. An agent running the spec must watch for the link
+file and send the link to the person approving it, then write the code they return into the code
+file. On the shared build box that message goes through `needs-ben`, and the link appears only in
+that message.
+
+## Codex-only specs
+
+These real-chat specs check Codex internals and skip when Claude is selected:
+
+- `tools-volume-adapter.uat.spec.ts` looks for the Codex chat adapter's processes.
+- `3065-app-actions-real.uat.spec.ts` expects the approval card to carry Codex's name for a file
+  read. With `MOSS_APP_ACTIONS_REQUIRE_REAL_PROOF=1` it fails instead of skipping.
+
 ## Rules
 
 - Never copy the box's own Claude login, or the moss-proof instance's, into a stack. The box's

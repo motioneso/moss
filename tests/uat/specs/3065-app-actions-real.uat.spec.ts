@@ -20,6 +20,7 @@ import {
   requireUatProjectName,
   signInUatAdmin
 } from "./real-chat-signin.js";
+import { uatRealChatProvider } from "../real-chat-env.js";
 
 // Owner-only real-provider proof. Run through test:uat:3065-real, whose preflight must run
 // BEFORE provisioning: the existing provisioner otherwise auto-copies a host Codex login.
@@ -30,6 +31,14 @@ import {
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 const REAL_CHAT_CONFIGURED = process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED === "1";
+// The native-read card below carries codex-acp's Bash identity; a Claude run proves nothing here.
+const CODEX_SELECTED = uatRealChatProvider() === "codex";
+if (process.env.MOSS_APP_ACTIONS_REQUIRE_REAL_PROOF === "1" && !CODEX_SELECTED) {
+  throw new Error(
+    "Real app-actions proof was explicitly requested under the Claude sign-in. This proof is " +
+      "Codex-only; rerun with the Codex setting. No browser proof ran."
+  );
+}
 if (process.env.MOSS_APP_ACTIONS_REQUIRE_REAL_PROOF === "1" && !REAL_CHAT_CONFIGURED) {
   throw new Error(
     "Real app-actions proof was explicitly requested, but the UAT provisioner did not configure " +
@@ -232,8 +241,8 @@ test.use({ trace: "off", screenshot: "off", video: "off" });
 
 test.describe("#3065 real-model app approval paths (owner opt-in)", () => {
   test.skip(
-    !REAL_CHAT_CONFIGURED,
-    "NOT LIVE PROOF: JARVIS_UAT_REAL_CHAT_CONFIGURED must be exactly 1; use the owner-only wrapper"
+    !REAL_CHAT_CONFIGURED || !CODEX_SELECTED,
+    "NOT LIVE PROOF: needs the Codex login and JARVIS_UAT_REAL_CHAT_CONFIGURED exactly 1; use the owner-only wrapper"
   );
 
   test("native read, automatic note recall, generic/dedicated approval, named deletes and blocked authority", async ({
