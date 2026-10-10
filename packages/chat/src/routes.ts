@@ -82,6 +82,7 @@ import { VaultContextRunner, getVaultBaseDir } from "@moss/vault";
 import { registerChatAttachmentRoutes } from "./attachments-routes.js";
 import { ChatAttachmentsService } from "./attachments-service.js";
 import { ChatRepository } from "./repository.js";
+import { registerReminderArrivalLifecycle } from "./reminders/live-arrival.js";
 import { ConversationProvenanceStore } from "./conversation-provenance.js";
 import {
   registerMeetingChatBoundary,
@@ -229,6 +230,8 @@ export interface ChatRoutesDependencies {
   /** #3065: the built-in route catalog; null until the server's onReady fills it. */
   readonly routeCatalog?: RouteCatalogHolder;
   readonly actAsGrants?: ActAsGrantRegistry;
+  /** #3195: where the API listens for delivered reminders; unset means none are pushed live. */
+  readonly reminderArrivalConnectionString?: string;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string
@@ -581,6 +584,12 @@ export function registerChatRoutes(
     dependencies.dataContext,
     wiring?.aiRepository
   );
+
+  registerReminderArrivalLifecycle(server, {
+    connectionString: dependencies.reminderArrivalConnectionString,
+    dataContext: dependencies.dataContext,
+    manager: runtime.manager
+  });
 
   registerActionNotificationLifecycle(server, {
     gateway: wiring?.gateway,

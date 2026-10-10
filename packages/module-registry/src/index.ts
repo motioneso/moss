@@ -763,6 +763,8 @@ export interface BuiltInRouteDependencies {
    */
   readonly hasPasswordCredential?: HasPasswordCredentialPort;
   readonly bootstrapConnectionString?: string;
+  /** The API's own app-role database address; unset when the caller injects its database. */
+  readonly appConnectionString?: string;
   readonly googleConnectionService?: GoogleConnectionService;
   readonly googleApiClient?: GoogleApiClient;
   readonly connectorsRepository?: ConnectorsRepository;
@@ -2385,7 +2387,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           : undefined,
         appMapService: deps.appMapService,
         platformDiagnostics: deps.platformDiagnostics,
-        listModuleManifests: deps.listModuleManifests
+        listModuleManifests: deps.listModuleManifests,
+        reminderArrivalConnectionString: deps.appConnectionString
       }),
     registerWorkers: (boss, deps) =>
       registerChatJobWorkers(boss, deps.dataContext, {

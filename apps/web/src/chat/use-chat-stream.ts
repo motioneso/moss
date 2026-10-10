@@ -24,6 +24,12 @@ import {
   resumeChat
 } from "../api/client.js";
 import { listWorkflowApprovals } from "../api/workflows-client.js";
+import {
+  applyStreamRecord,
+  isBackgroundRecord,
+  mergeBackgroundRecords,
+  mergeHydratedRecords
+} from "./stream-record-identity.js";
 
 function parsePreview(value: unknown): ActionRequestPreview | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -115,7 +121,7 @@ export function useChatStream(
   enabled = true
 ): {
   readonly records: readonly TranscriptRecord[];
-  readonly clearRecords: () => void;
+  readonly clearRecords: (mainThreadId?: string) => void;
   readonly streamErrorCount: number;
   readonly selectionPending: boolean;
 } {
@@ -124,10 +130,26 @@ export function useChatStream(
   const [streamGeneration, setStreamGeneration] = useState(0);
   const [hydratedSurface, setHydratedSurface] = useState<ChatSurface>();
   const hydrationGeneration = useRef(0);
+  // The owned Main thread this drawer hydrated, so a reconnect can catch up its reminders.
+  const hydratedMainThread = useRef<string | undefined>(undefined);
+  // A side or module chat never shows a background message, even one sent before a switch.
+  const hydratedSideThread = useRef(false);
+  // Reminders Main already held when a switch landed there, so a reconnect never re-adds them.
+  const knownMainReminders = useRef<Promise<ReadonlySet<string>>>(Promise.resolve(new Set()));
   const streamScope = useRef({ surface, enabled });
   streamScope.current = { surface, enabled };
 
-  const clearRecords = useCallback(() => {
+  // A switch clears the log without re-hydrating, so the caller names Main when it lands there.
+  // Any other chat drops background messages and never catches up Main's reminders.
+  const clearRecords = useCallback((mainThreadId?: string) => {
+    const onMain =
+      mainThreadId !== undefined &&
+      (streamScope.current.surface ?? DEFAULT_CHAT_SURFACE) === DEFAULT_CHAT_SURFACE;
+    hydratedMainThread.current = onMain ? mainThreadId : undefined;
+    hydratedSideThread.current = !onMain;
+    knownMainReminders.current = onMain
+      ? readBackgroundMessageIds(mainThreadId, streamScope.current.surface)
+      : Promise.resolve(new Set());
     hydrationGeneration.current += 1;
     setRecords([]);
     setStreamGeneration(hydrationGeneration.current);
@@ -148,6 +170,25 @@ export function useChatStream(
       streamScope.current.enabled &&
       streamScope.current.surface === surface;
 
+    // A reconnect has no backlog, so a reminder delivered while disconnected is read back from
+    // Main's history. Only background messages are merged; the live stream owns the rest.
+    let connectedBefore = false;
+    const catchUpMain = () => {
+      const threadId = hydratedMainThread.current;
+      if (!threadId) return;
+      void Promise.all([knownMainReminders.current, listChatThreadMessages(threadId, surface)])
+        .then(([known, { messages }]) => {
+          if (!isCurrent() || hydratedMainThread.current !== threadId) return;
+          const missed = recordsFromMessages(messages).filter(
+            (record) => !record.messageId || !known.has(record.messageId)
+          );
+          setRecords((current) =>
+            isCurrent() ? mergeBackgroundRecords(current, missed) : current
+          );
+        })
+        .catch(() => undefined);
+    };
+
     const open = () => {
       if (!isCurrent()) return;
       const stream = new EventSource(chatStreamUrl(surface), { withCredentials: true });
@@ -158,27 +199,16 @@ export function useChatStream(
         if (!isCurrent()) return;
         retries = 0;
         setStreamErrorCount(0);
+        if (connectedBefore) catchUpMain();
+        connectedBefore = true;
       };
       stream.onmessage = (event) => {
         if (!isCurrent()) return;
         // #1135 — reset error count on successful message so transient errors don't lock private chat
         setStreamErrorCount(0);
         const record = parseRecord(event.data);
-        if (record) {
-          setRecords((current) => {
-            if (!isCurrent()) return current;
-            if (record.kind === "reply" && record.messageId) {
-              // Replace the last streaming reply (no messageId) with the stored version (has messageId + sourceFreshness)
-              const lastUnstored = [...current]
-                .reverse()
-                .findIndex((r) => r.kind === "reply" && !r.messageId);
-              if (lastUnstored !== -1) {
-                const realIdx = current.length - 1 - lastUnstored;
-                return current.map((r, i) => (i === realIdx ? record : r));
-              }
-            }
-            return upsertTranscriptRecord(current, record);
-          });
+        if (record && !(record.background && hydratedSideThread.current)) {
+          setRecords((current) => (isCurrent() ? applyStreamRecord(current, record) : current));
         }
       };
 
@@ -204,6 +234,9 @@ export function useChatStream(
 
   useEffect(() => {
     setHydratedSurface(undefined);
+    hydratedMainThread.current = undefined;
+    hydratedSideThread.current = false;
+    knownMainReminders.current = Promise.resolve(new Set());
     if (!surface || !enabled) return;
     let active = true;
     const generation = hydrationGeneration.current;
@@ -255,6 +288,8 @@ export function useChatStream(
         const { messages } = await listChatThreadMessages(thread.id, surface);
         if (!active || generation !== hydrationGeneration.current) return;
         const history = recordsFromMessages(messages);
+        if (isDrawer && thread.isMain) hydratedMainThread.current = thread.id;
+        hydratedSideThread.current = !(isDrawer && thread.isMain);
         // #1253 — re-hydrate pending action request cards (only "pending" status; others already resolved)
         const pendingActions = actionsResult.actions.filter((a) => a.status === "pending");
         const actionRecords: TranscriptRecord[] = pendingActions.map((action) => {
@@ -283,7 +318,10 @@ export function useChatStream(
           };
         });
         setRecords((current) =>
-          mergeHydratedRecords(current, [...history, ...actionRecords, ...workflowRecords])
+          mergeHydratedRecords(
+            hydratedSideThread.current ? current.filter((r) => !isBackgroundRecord(r)) : current,
+            [...history, ...actionRecords, ...workflowRecords]
+          )
         );
       } catch {
         // The live stream remains authoritative; an unavailable history read must not block chat.
@@ -304,31 +342,6 @@ export function useChatStream(
     streamErrorCount,
     selectionPending: enabled && surface !== undefined && hydratedSurface !== surface
   };
-}
-
-function mergeHydratedRecords(
-  current: readonly TranscriptRecord[],
-  history: readonly TranscriptRecord[]
-): readonly TranscriptRecord[] {
-  // Recovery or a concurrent expiry timer can notify before the history read settles. These
-  // correlated outcomes alone are not a new turn; ordinary live activity still wins outright.
-  const onlyActionOutcomes = current.every(
-    (record) =>
-      record.actionRequestId &&
-      ["action_result", "approved", "not_approved", "refusal", "refused"].includes(record.kind)
-  );
-  if (!onlyActionOutcomes) return current;
-  const merged = [...history];
-  for (const record of current) {
-    if (
-      !merged.some(
-        (item) => item.kind === record.kind && item.actionRequestId === record.actionRequestId
-      )
-    ) {
-      merged.push(record);
-    }
-  }
-  return merged;
 }
 
 function workflowApprovalRecord(approval: WorkflowApprovalDto): TranscriptRecord {
@@ -366,45 +379,21 @@ export function mergeWorkflowApprovalRecords(
   ];
 }
 
-export function upsertTranscriptRecord(
-  records: readonly TranscriptRecord[],
-  record: TranscriptRecord
-): TranscriptRecord[] {
-  // Approval notifications may be replayed after reconnect. Their server request identity
-  // outlives the engine's per-turn sequence numbers, so do not append another card/outcome.
-  if (record.actionRequestId) {
-    const existing = records.findIndex(
-      (item) => item.kind === record.kind && item.actionRequestId === record.actionRequestId
+/** Ids of the stored background messages in a thread; empty when the read fails. */
+async function readBackgroundMessageIds(
+  threadId: string,
+  surface: ChatSurface | undefined
+): Promise<ReadonlySet<string>> {
+  try {
+    const { messages } = await listChatThreadMessages(threadId, surface);
+    return new Set(
+      recordsFromMessages(messages).flatMap((record) =>
+        isBackgroundRecord(record) && record.messageId ? [record.messageId] : []
+      )
     );
-    if (existing >= 0) return records.map((item, index) => (index === existing ? record : item));
+  } catch {
+    return new Set();
   }
-  // ACP sequence numbers restart for each user turn. Stable ids and ordering therefore
-  // only apply inside the current turn; scanning older turns lets a later `sequence: 1`
-  // activity record jump in front of the first turn's `sequence: 2` record.
-  let turnStart = 0;
-  for (let index = records.length - 1; index >= 0; index -= 1) {
-    if (records[index]?.kind === "user") {
-      turnStart = index + 1;
-      break;
-    }
-  }
-  const currentTurn = records.slice(turnStart);
-  if (record.id) {
-    const existingInTurn = currentTurn.findIndex((item) => item.id === record.id);
-    const existing = existingInTurn === -1 ? -1 : turnStart + existingInTurn;
-    if (existing >= 0) return records.map((item, index) => (index === existing ? record : item));
-  }
-  const insertionInTurn = currentTurn.findIndex(
-    (item) =>
-      record.sequence !== undefined &&
-      item.sequence !== undefined &&
-      item.sequence > record.sequence
-  );
-  const insertion = insertionInTurn === -1 ? -1 : turnStart + insertionInTurn;
-  if (insertion >= 0) {
-    return [...records.slice(0, insertion), record, ...records.slice(insertion)];
-  }
-  return [...records, record];
 }
 
 export function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRecord[] {
@@ -436,6 +425,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
               kind: message.status === "error" ? ("error" as const) : ("reply" as const),
               text: message.body,
               messageId: message.id,
+              ...(isDeliveredReminder(message) ? { background: true as const } : {}),
               sourceFreshness: message.sourceFreshness,
               meetingContext: message.meetingContext,
               answerProvenance: message.answerProvenance,
@@ -447,6 +437,10 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
         : [])
     ];
   });
+}
+
+function isDeliveredReminder(message: ChatMessageDto): boolean {
+  return message.origin?.kind === "reminder" && message.origin.event === "delivered";
 }
 
 function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
@@ -488,6 +482,8 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       id: typeof parsed.id === "string" ? parsed.id : undefined,
       sequence: typeof parsed.sequence === "number" ? parsed.sequence : undefined,
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,
+      turnId: typeof parsed.turnId === "string" ? parsed.turnId : undefined,
+      background: parsed.background === true ? true : undefined,
       actionRequestId:
         typeof parsed.actionRequestId === "string" ? parsed.actionRequestId : undefined,
       workflowApprovalId:
