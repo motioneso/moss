@@ -1,3 +1,4 @@
+import type { GetQuietHoursSettingsResponse } from "@moss/shared";
 import { expect, test, type Page } from "@playwright/test";
 
 import { createMockUser, mockApi } from "./mock-api.js";
@@ -34,8 +35,10 @@ async function mockSettingsApi(
   await page.route("**/api/me/quiet-hours", (route) =>
     route.fulfill({
       json: {
-        quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: "UTC" }
-      }
+        quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: "UTC" },
+        authority: { status: "default", alerts: null },
+        version: null
+      } satisfies GetQuietHoursSettingsResponse
     })
   );
   if (isInstanceAdmin) {
