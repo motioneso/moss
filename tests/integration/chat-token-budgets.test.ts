@@ -8,7 +8,7 @@
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { AiRepository } from "@moss/ai";
@@ -216,6 +216,69 @@ describe("ChatRepository.publishConversationSummary", () => {
     const after = await readThread(thread.id);
     expect(after?.conversation_summary).toBeNull();
     expect(after?.summary_revision).toBe(0);
+  });
+
+  it("lets the worker see a shared thread but never write its summary for the grantee", async () => {
+    const { thread } = await seededThread("worker shared grantee");
+    await dataContext.withDataContext(userAContext(), (db) =>
+      sql`INSERT INTO app.shares (resource_type, resource_id, owner_user_id, grantee_user_id, level)
+      VALUES ('chat_thread', ${thread.id}::uuid, ${ids.userA}::uuid, ${ids.userB}::uuid, 'manage')`.execute(
+        db.db
+      )
+    );
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      const { visible, updated } = await new DataContextRunner(workerDb).withDataContext(
+        { actorUserId: ids.userB, requestId: "test" },
+        async (db) => {
+          const visible = await db.db
+            .selectFrom("app.chat_threads")
+            .select("id")
+            .where("id", "=", thread.id)
+            .execute();
+          const updated = await db.db
+            .updateTable("app.chat_threads")
+            .set({ conversation_summary: "stolen", summary_revision: 9 })
+            .where("id", "=", thread.id)
+            .returning("id")
+            .execute();
+          return { visible, updated };
+        }
+      );
+      expect(visible).toHaveLength(1);
+      expect(updated).toHaveLength(0);
+    } finally {
+      await workerDb.destroy();
+    }
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBeNull();
+    expect(after?.summary_revision).toBe(0);
+  });
+
+  it("never lets the worker change any thread column outside the summary", async () => {
+    const { thread } = await seededThread("worker column limit");
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      await expect(
+        new DataContextRunner(workerDb).withDataContext(userAContext(), (db) =>
+          db.db
+            .updateTable("app.chat_threads")
+            .set({ title: "renamed by worker" })
+            .where("id", "=", thread.id)
+            .execute()
+        )
+      ).rejects.toThrow(/permission denied/);
+    } finally {
+      await workerDb.destroy();
+    }
+    const after = await readThread(thread.id);
+    expect(after?.title).toBe("worker column limit");
   });
 
   it("refuses a candidate prepared against an older revision", async () => {
