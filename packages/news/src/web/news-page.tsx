@@ -188,7 +188,7 @@ function EmptyState({ data }: { readonly data: NewsOverviewResponse }) {
   return (
     <SharedEmptyState
       icon={<Newspaper size={28} aria-hidden="true" />}
-      title={noSources ? "Choose your sources" : "Nothing on the wire"}
+      title={<h2>{noSources ? "Choose your sources" : "Nothing on the wire"}</h2>}
       description={
         noSources
           ? "Pick the publications and topics you care about. This page becomes their combined front page."
