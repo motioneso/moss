@@ -889,3 +889,5 @@ tests/e2e/news-overview.spec.ts,L1,scoped-test-transfer,,Parent-approved shared 
 tests/integration/wellness-export-job.test.ts,L3,scoped-test-transfer,,Parent-approved Moss export provenance assertion only; preserve content/security/job assertions and do not run without isolated DB gate
 tests/e2e/visual-artifacts.ts,I0,registered-new,,Parent-approved opt-in visual artifact helper and focused tests before creation
 tests/unit/park-press-visual-artifacts.design.test.ts,I0,registered-new,,Parent-approved opt-in visual artifact helper and focused tests before creation
+.github/workflows/ci.yml,I0,scoped-ci-transfer,,Parent-approved two complete browser shards only; retain deadlines workers SW coverage and fail-closed aggregate
+tests/unit/ci-phase-deadlines.test.ts,I0,scoped-test-transfer,,Parent-approved regression for complete browser sharding and unchanged phase/aggregate protections
