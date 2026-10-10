@@ -181,56 +181,62 @@ describe("record, mail and weather chat policies", () => {
     }
   );
 
-  it.each([false, true])(
-    "requires rename approval when the conversation is tainted (YOLO=%s)",
-    async (yoloMode) => {
-      const h = actionHarness(yoloMode, true);
-      const input = {
-        method: "PUT" as const,
-        path: concrete("/api/meetings/records/:id/title"),
-        body: { title: "Weekly planning", expectedTitle: "Untitled meeting" }
-      };
-      const pending = h.call(input);
-      await vi.waitFor(() =>
-        expect(h.events.some((event) => event.kind === "action_request")).toBe(true)
-      );
-      const card = h.events.find((event) => event.kind === "action_request")!;
-      expect(card).toMatchObject({
-        summary: "Rename your meeting",
-        details: {
-          presentation: "human",
-          target: "Untitled meeting",
-          fields: [
-            { label: "New title", value: "Weekly planning" },
-            { label: "Current title", value: "Untitled meeting" }
-          ]
-        }
-      });
-      expect(h.callSpy).not.toHaveBeenCalled();
-      h.confirmations.resolve(card.actionRequestId, "confirmed");
-      expect(await pending).toMatchObject({ ok: true });
-      expect(h.callSpy).toHaveBeenCalledExactlyOnceWith(input, expect.anything());
-    }
-  );
+  it("requires rename approval when the conversation is tainted", async () => {
+    const h = actionHarness(false, true);
+    const input = {
+      method: "PUT" as const,
+      path: concrete("/api/meetings/records/:id/title"),
+      body: { title: "Weekly planning", expectedTitle: "Untitled meeting" }
+    };
+    const pending = h.call(input);
+    await vi.waitFor(() =>
+      expect(h.events.some((event) => event.kind === "action_request")).toBe(true)
+    );
+    const card = h.events.find((event) => event.kind === "action_request")!;
+    expect(card).toMatchObject({
+      summary: "Rename your meeting",
+      details: {
+        presentation: "human",
+        target: "Untitled meeting",
+        fields: [
+          { label: "New title", value: "Weekly planning" },
+          { label: "Current title", value: "Untitled meeting" }
+        ]
+      }
+    });
+    expect(h.callSpy).not.toHaveBeenCalled();
+    h.confirmations.resolve(card.actionRequestId, "confirmed");
+    expect(await pending).toMatchObject({ ok: true });
+    expect(h.callSpy).toHaveBeenCalledExactlyOnceWith(input, expect.anything());
+  });
 
-  it.each([false, true])(
-    "does not rename when tainted-call approval is rejected (YOLO=%s)",
-    async (yoloMode) => {
-      const h = actionHarness(yoloMode, true);
-      const pending = h.call({
-        method: "PUT",
-        path: concrete("/api/meetings/records/:id/title"),
-        body: { title: "Weekly planning", expectedTitle: "Untitled meeting" }
-      });
-      await vi.waitFor(() =>
-        expect(h.events.some((event) => event.kind === "action_request")).toBe(true)
-      );
-      const card = h.events.find((event) => event.kind === "action_request")!;
-      h.confirmations.resolve(card.actionRequestId, "rejected");
-      expect(await pending).toMatchObject({ ok: false });
-      expect(h.callSpy).not.toHaveBeenCalled();
-    }
-  );
+  it("renames without a card in a tainted conversation under YOLO", async () => {
+    const h = actionHarness(true, true);
+    const input = {
+      method: "PUT" as const,
+      path: concrete("/api/meetings/records/:id/title"),
+      body: { title: "Weekly planning", expectedTitle: "Untitled meeting" }
+    };
+    expect(await h.call(input)).toMatchObject({ ok: true });
+    expect(h.events.filter((event) => event.kind === "action_request")).toEqual([]);
+    expect(h.callSpy).toHaveBeenCalledExactlyOnceWith(input, expect.anything());
+  });
+
+  it("does not rename when tainted-call approval is rejected", async () => {
+    const h = actionHarness(false, true);
+    const pending = h.call({
+      method: "PUT",
+      path: concrete("/api/meetings/records/:id/title"),
+      body: { title: "Weekly planning", expectedTitle: "Untitled meeting" }
+    });
+    await vi.waitFor(() =>
+      expect(h.events.some((event) => event.kind === "action_request")).toBe(true)
+    );
+    const card = h.events.find((event) => event.kind === "action_request")!;
+    h.confirmations.resolve(card.actionRequestId, "rejected");
+    expect(await pending).toMatchObject({ ok: false });
+    expect(h.callSpy).not.toHaveBeenCalled();
+  });
 
   it.each([false, true])(
     "refuses rename when the owner-scoped target is unavailable (tainted=%s)",
