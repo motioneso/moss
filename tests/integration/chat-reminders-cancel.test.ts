@@ -403,7 +403,7 @@ describe("what the database refuses", () => {
           .where("id", "=", saved.id)
           .execute()
       )
-    ).rejects.toThrow();
+    ).rejects.toThrow(/row-level security/);
     expect((await readRow(saved.id)).state).toBe("queued");
   });
 
@@ -417,7 +417,21 @@ describe("what the database refuses", () => {
           .where("id", "=", saved.id)
           .execute()
       )
-    ).rejects.toThrow();
+    ).rejects.toThrow(/delivery needs its reserved message/);
+    expect((await readRow(saved.id)).state).toBe("queued");
+  });
+
+  it("does not let the app mark a reminder failed", async () => {
+    const saved = await save(ids.userA, "app may not fail it");
+    await expect(
+      asOwner(ids.userA, (db) =>
+        db.db
+          .updateTable("app.chat_reminders")
+          .set({ state: "failed" })
+          .where("id", "=", saved.id)
+          .execute()
+      )
+    ).rejects.toThrow(/row-level security/);
     expect((await readRow(saved.id)).state).toBe("queued");
   });
 
@@ -432,7 +446,7 @@ describe("what the database refuses", () => {
           .where("id", "=", saved.id)
           .execute()
       )
-    ).rejects.toThrow();
+    ).rejects.toThrow(/can only be delivered once/);
     expect((await readRow(saved.id)).state).toBe("cancelled");
   });
 
@@ -446,7 +460,7 @@ describe("what the database refuses", () => {
           .where("id", "=", waiting.id)
           .execute()
       )
-    ).rejects.toThrow();
+    ).rejects.toThrow(/identity cannot be changed/);
     expect((await readRow(waiting.id)).context_state).toBe("pending");
 
     const delivered = await save(ids.userA, "already here");
@@ -460,7 +474,7 @@ describe("what the database refuses", () => {
           .where("id", "=", delivered.id)
           .execute()
       )
-    ).rejects.toThrow();
+    ).rejects.toThrow(/can only be delivered once/);
     expect((await readRow(delivered.id)).state).toBe("delivered");
   });
 
@@ -474,7 +488,7 @@ describe("what the database refuses", () => {
           .where("id", "=", saved.id)
           .execute()
       )
-    ).rejects.toThrow();
+    ).rejects.toThrow(/identity cannot be changed/);
     expect(await readRow(saved.id)).toMatchObject({
       state: "queued",
       reminder_text: "keep my words"
