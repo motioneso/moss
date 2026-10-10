@@ -43,6 +43,9 @@ import "./news-settings.css";
    result of something done much later. */
 const KEY_NOTICE_VISIBLE_MS = 8000;
 
+// The re-check runs as a background job, so the lists are refetched a few times after Retry.
+const REVALIDATION_REFETCH_DELAYS_MS = [2000, 6000, 15000] as const;
+
 /* ----- Pure toggle planners (unit-tested). These must mirror the server's
    resolveEffectivePrefs semantics exactly: base = explicit `source` includes when any exist,
    otherwise the catalog defaults; `source_exclude` always subtracts from the base. ----- */
@@ -278,9 +281,16 @@ export default function NewsSettings() {
     mutationFn: deleteNewsCustomSource,
     onSuccess: invalidateAfterPersonalizationChange
   });
-  // Owner-wide re-check; no cache invalidation on success — the job runs async and statuses
-  // only change after the worker finishes, so an immediate refetch would show nothing new.
-  const revalidateMutation = useMutation({ mutationFn: triggerNewsRevalidation });
+  // Owner-wide re-check. The job runs async, so the lists are refetched a few times after the
+  // request is queued; the unavailable marks clear as soon as the worker has written them.
+  const revalidateMutation = useMutation({
+    mutationFn: triggerNewsRevalidation,
+    onSuccess: () => {
+      for (const delayMs of REVALIDATION_REFETCH_DELAYS_MS) {
+        window.setTimeout(invalidateAfterPersonalizationChange, delayMs);
+      }
+    }
+  });
 
   // --- #2008: publisher keys. Status only; this route never returns key material. ---
   const credentialsQuery = useQuery({
