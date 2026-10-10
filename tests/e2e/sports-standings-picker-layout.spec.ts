@@ -120,9 +120,21 @@ for (const width of [320, 390, 1440]) {
       // Stress both header edges while retaining the actual long view selector and short trigger.
       // The popup must stay bounded regardless of which side the trigger occupies after wrapping.
       await page.addStyleTag({
-        content: `.sp-standings__nav { flex-basis: 100%; width: 100%; justify-content: ${edge === "start" ? "flex-start" : "flex-end"}; flex-direction: ${edge === "start" ? "row" : "row-reverse"}; }`
+        content: `
+          .sp-standings__nav { flex-basis: 100%; width: 100%; justify-content: ${edge === "start" ? "flex-start" : "flex-end"}; flex-direction: ${edge === "start" ? "row" : "row-reverse"}; }
+          .sp-standings-picker { margin-left: ${edge === "start" ? "0" : "auto"}; margin-right: ${edge === "start" ? "auto" : "0"}; }
+        `
       });
       await trigger.evaluate((element) => element.scrollIntoView({ block: "center" }));
+      const navBox = (await page.locator(".sp-standings__nav").boundingBox())!;
+      const triggerBox = (await trigger.boundingBox())!;
+      const startGap = triggerBox.x - navBox.x;
+      const endGap = navBox.x + navBox.width - triggerBox.x - triggerBox.width;
+      // Prove the fixture actually moves the trigger: direction + justification alone
+      // can cancel each other out and leave both cases at the same physical edge.
+      expect(navBox.width - triggerBox.width).toBeGreaterThan(64);
+      expect(Math.abs(edge === "start" ? startGap : endGap)).toBeLessThanOrEqual(1);
+      expect(edge === "start" ? endGap : startGap).toBeGreaterThan(64);
       await trigger.press("Enter");
       const menu = page.getByRole("menu", { name: "Standings leagues" });
       await expectUsableMenu(page, menu, width);
