@@ -61,6 +61,15 @@ describe("chat reminder turn (#3309)", () => {
     expect(result.reply).toBe("model answer");
   });
 
+  it("sends a question that starts with 'remind me' to the gate and the model", async () => {
+    const { manager, engine, gate, recordReminderTurn } = setup({});
+    const result = await manager.submitTurn("u1", "Ben", "remind me the name of that restaurant");
+    expect(recordReminderTurn).not.toHaveBeenCalled();
+    expect(gate.evaluate).toHaveBeenCalledTimes(1);
+    expect(engine.launchCount).toBe(1);
+    expect(result.reply).toBe("model answer");
+  });
+
   it("saves a reminder request from the raw words without the gate or the model", async () => {
     const { manager, engine, gate, recordReminderTurn, records } = setup({});
     const result = await manager.submitTurn("u1", "Ben", "remind me in 10 minutes to stretch");

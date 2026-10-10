@@ -48,7 +48,6 @@ const LEADING_FILLER =
 const TRAILING_FILLER = /(?:[, ]+(?:please|thanks|thank you))+$/;
 
 const TRIGGER = /^(?:remind me|set (?:a|me a) reminder)\b/;
-const RECALL_QUESTION = /^remind me (?:what|how|who|where|when|why|which|of|about)\b/;
 
 const FORMS: readonly RegExp[] = [
   new RegExp(`^remind me in ${DURATION}${JOINER} (.+)$`),
@@ -60,6 +59,30 @@ const FORMS: readonly RegExp[] = [
 const DURATION_FIRST = new Set([0, 2]);
 
 const SECOND_DURATION = new RegExp(`\\b(?:in|after|within) ${DURATION}\\b`);
+
+// Hedges inside the reminder text, after a duration matched: "or so", "-ish", "or maybe 10".
+// "order 2 or 3 pizzas" stays plain text because the alternative is not a time.
+const OR_HEDGE = "or (?:maybe |perhaps |possibly |probably |even )?(?:in |after )?";
+const TEXT_HEDGES: readonly RegExp[] = [
+  /\bor so\b/,
+  /\bish\b/,
+  new RegExp(`\\b${OR_HEDGE}\\d+(?: ?${UNIT})?$`),
+  new RegExp(`\\b${OR_HEDGE}\\d+ ?${UNIT}\\b`),
+  new RegExp(`\\b${OR_HEDGE}(?:an? |half an? )?(?:second|minute|hour|day)s?\\b`),
+  new RegExp(`\\b${OR_HEDGE}(?:later|sooner|earlier)\\b`)
+];
+
+// Hedges anywhere in a request that names a duration but fits no form: "in 5 or 10 minutes".
+const ANY_DURATION = new RegExp(`\\b\\d{1,8}(?: ?-?ish)? ?${UNIT}\\b`);
+const ANY_HEDGE =
+  /\bor\b|\bmaybe\b|\bperhaps\b|\bish\b|\b(?:about|around|roughly|approximately|like) \d|\d ?(?:-|to) ?\d/;
+
+// A request with no form match is still a reminder request when it says what to do or when.
+// Anything else ("remind me the name of that restaurant") is ordinary chat for the model.
+const TASK_LEAD = /^(?:to|that)\b/;
+const RECALL_LEAD = /^(?:what|how|who|whom|whose|where|when|why|which|whether|if|again)\b/;
+const TIME_CUE =
+  /\b(?:in|after|within|for) (?:\d|an?\b|half\b|a few\b|a couple\b|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty|forty|fifty)|\b(?:later|soon|tomorrow|tonight|next|every|each|daily|weekly|monthly|hourly)\b|\b(?:at|by|before|until) \d|\b\d{1,2}(?::\d{2}) ?(?:am|pm)?\b|\b\d{1,2} ?(?:am|pm)\b/;
 const CLOCK_OR_RECURRENCE =
   /\b(?:every|each|daily|weekly|monthly|hourly|tomorrow|tonight)\b|\b(?:at|by|before|until) \d{1,2}(?::\d{2})? ?(?:am|pm)?\b|\b\d{1,2}(?::\d{2}) ?(?:am|pm)?\b|\b\d{1,2} ?(?:am|pm)\b/;
 
@@ -84,9 +107,21 @@ export function recognizeRelativeReminder(raw: string): ReminderRecognition {
     return buildRequest(Number(amount), unit, text, raw);
   }
 
-  // "Remind me what I said" asks Moss to recall something, not to schedule anything.
-  if (RECALL_QUESTION.test(request)) return { kind: "none" };
-  return { kind: "unsupported", reason: "needs_relative_duration" };
+  return fallback(request);
+}
+
+function fallback(request: string): ReminderRecognition {
+  if (ANY_DURATION.test(request) && ANY_HEDGE.test(request)) {
+    return { kind: "unsupported", reason: "ambiguous" };
+  }
+  if (request.startsWith("set ")) return { kind: "unsupported", reason: "needs_relative_duration" };
+
+  const rest = request.replace(/^remind me\b[ ,:;]*/, "");
+  if (TASK_LEAD.test(rest)) return { kind: "unsupported", reason: "needs_relative_duration" };
+  if (RECALL_LEAD.test(rest)) return { kind: "none" };
+  return TIME_CUE.test(rest)
+    ? { kind: "unsupported", reason: "needs_relative_duration" }
+    : { kind: "none" };
 }
 
 function buildRequest(
@@ -106,7 +141,10 @@ function buildRequest(
   if (normalizedText.includes("?") || CLOCK_OR_RECURRENCE.test(normalizedText)) {
     return { kind: "unsupported", reason: "clock_or_recurrence" };
   }
-  if (SECOND_DURATION.test(normalizedText)) {
+  if (
+    SECOND_DURATION.test(normalizedText) ||
+    TEXT_HEDGES.some((hedge) => hedge.test(normalizedText))
+  ) {
     return { kind: "unsupported", reason: "ambiguous" };
   }
 
