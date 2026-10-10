@@ -26,6 +26,16 @@ describe("pool-hang-3027 live spec (#3280)", () => {
     expect(startedAt, "side chat starts before the message").toBeLessThan(
       text.indexOf('await composer.press("Enter")')
     );
+    const clearWait = text.indexOf("const cleared = page.waitForResponse(");
+    expect(clearWait, "clear wait exists").toBeGreaterThan(-1);
+    expect(clearWait, "clear wait is armed before the click").toBeLessThan(
+      text.indexOf('name: "New side chat"')
+    );
+  });
+
+  it("reads tool steps without the reply source labels", async () => {
+    const text = await source();
+    expect(text).toMatch(/const ACTIVITY = "\.chatd-peek__line:not\(\.chatd-freshness__item\)";/);
   });
 
   it("keeps the concurrent load running across the side chat start", async () => {

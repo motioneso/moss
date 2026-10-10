@@ -15,7 +15,8 @@ if (!OWNER_PASSWORD || !API_URL) {
 }
 const OWNER = { email: process.env.LIVE_OWNER_EMAIL ?? "ben@ben.com", password: OWNER_PASSWORD };
 const REPLIES = ".chatd-msg:not(.chatd-msg--me) .chatd-bubble";
-const ACTIVITY = ".chatd-peek__line";
+// Reply source labels share the step line class, so they are excluded from the step check.
+const ACTIVITY = ".chatd-peek__line:not(.chatd-freshness__item)";
 
 // About 2,800 characters, so each recall embeds a document-sized query.
 const LONG_QUERY = Array.from(
@@ -37,8 +38,7 @@ async function signInThroughUi(page: Page) {
 // The drawer reopens its last conversation, so a fresh chat comes from Conversations.
 // Sending waits for the drawer clear and for the old replies and steps to leave, so the
 // activity read after the turn belongs to this turn only.
-async function startSideChat(page: Page, drawer: Locator): Promise<number> {
-  const staleReplies = await drawer.locator(REPLIES).count();
+async function startSideChat(page: Page, drawer: Locator): Promise<void> {
   const cleared = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -52,7 +52,6 @@ async function startSideChat(page: Page, drawer: Locator): Promise<number> {
   expect((await cleared).status()).toBe(204);
   await expect(drawer.locator(REPLIES)).toHaveCount(0);
   await expect(drawer.locator(ACTIVITY)).toHaveCount(0);
-  return staleReplies;
 }
 
 test("an email question finishes in normal time while the API embeds and stays responsive", async ({
@@ -87,7 +86,7 @@ test("an email question finishes in normal time while the API embeds and stays r
 
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
-  const staleReplies = await startSideChat(page, drawer);
+  await startSideChat(page, drawer);
   const composer = drawer.getByLabel("Message Moss");
   await composer.fill(
     "List the five most recent emails in my inbox with sender and subject. Use the email listing tool."
@@ -109,7 +108,6 @@ test("an email question finishes in normal time while the API embeds and stays r
   busy = false;
   await Promise.all([healthProbe, embedding]);
   const latencies = health.map((sample) => sample.ms).sort((a, b) => a - b);
-  console.log(`[3027] new side chat cleared ${staleReplies} earlier replies before sending`);
   console.log(
     `[3027] turn ${turn.status()} in ${turnMs} ms; reply ${String(turnBody.reply ?? "").length} chars`
   );
