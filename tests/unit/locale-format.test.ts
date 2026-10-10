@@ -86,4 +86,8 @@ describe("formatClockTime", () => {
     expect(formatClockTime("", utc12)).toBe("");
     expect(formatClockTime("soon", utc12)).toBe("soon");
   });
+
+  it("keeps the raw clock when the saved region is not a valid language tag", () => {
+    expect(formatClockTime("21:00", { ...utc12, region: "bad_region!!" })).toBe("21:00");
+  });
 });
