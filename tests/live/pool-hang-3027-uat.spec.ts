@@ -126,7 +126,8 @@ test("an email question finishes in normal time while the API embeds and stays r
 
   expect(turn.status()).toBe(200);
   expect(String(turnBody.reply ?? "").length).toBeGreaterThan(0);
-  expect(activity.some((line) => /email/i.test(line))).toBe(true);
+  // A step line reads its kind label then its text, so a tool step starts with "Tool".
+  expect(activity.some((line) => /^Tool/.test(line) && /email/i.test(line))).toBe(true);
   expect(turnMs).toBeLessThan(120_000);
   expect(recalls.length).toBeGreaterThan(0);
   expect(recalls.every((status) => status === 200)).toBe(true);

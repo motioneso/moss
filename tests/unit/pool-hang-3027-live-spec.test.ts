@@ -38,6 +38,13 @@ describe("pool-hang-3027 live spec (#3280)", () => {
     expect(text).toMatch(/const ACTIVITY = "\.chatd-peek__line:not\(\.chatd-freshness__item\)";/);
   });
 
+  it("counts only a tool step as email activity", async () => {
+    const text = await source();
+    expect(text).toMatch(
+      /activity\.some\(\(line\) => \/\^Tool\/\.test\(line\) && \/email\/i\.test\(line\)\)/
+    );
+  });
+
   it("keeps the concurrent load running across the side chat start", async () => {
     const text = await source();
     const startedAt = text.indexOf("await startSideChat(page, drawer)");
