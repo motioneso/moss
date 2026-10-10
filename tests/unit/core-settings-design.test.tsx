@@ -16,6 +16,9 @@ import { AppearancePane } from "../../apps/web/src/settings/settings-appearance-
 import { EncryptionKeysPane } from "../../apps/web/src/settings/settings-encryption-keys-pane.js";
 import type * as ClientModule from "../../apps/web/src/api/client.js";
 import { rotateFamilyKey, deleteCustomTheme } from "../../apps/web/src/api/client.js";
+import { ProfilePane } from "../../apps/web/src/settings/settings-personal-panes.js";
+import { OpenCodeAcpCard } from "../../apps/web/src/settings/settings-ai-opencode-card.js";
+import { SettingsSkillsPane } from "../../apps/web/src/settings/settings-skills-pane.js";
 import { AuditPane } from "../../apps/web/src/settings/settings-audit-pane.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
@@ -330,5 +333,78 @@ describe("core settings recovery and confirmation actions", () => {
     expect(onNavigate).toHaveBeenCalledExactlyOnceWith("/finance/settings");
     expect(onBack).not.toHaveBeenCalled();
     act(() => renderer.unmount());
+  });
+});
+
+describe("settings Field consumer semantics", () => {
+  it("names the mixed Location actions without replacing the search input label", () => {
+    const me: MeResponse = {
+      user: {
+        id: "location-test",
+        email: "member@example.test",
+        emailVerified: true,
+        name: "Member",
+        status: "active",
+        isInstanceAdmin: false,
+        isBootstrapOwner: false,
+        createdAt: "2026-10-01T00:00:00Z",
+        updatedAt: "2026-10-01T00:00:00Z"
+      },
+      profilePrefs: { addressed: null },
+      hasPasswordCredential: true
+    };
+    const html = render(<ProfilePane me={me} onNavigate={() => undefined} />, client());
+    const labelId = /id="([^"]+)">Location<\/div>/.exec(html)?.[1];
+    expect(labelId).toBeTruthy();
+    expect(html).toContain(`role="group" aria-labelledby="${labelId}"`);
+    expect(html.match(/aria-label="Search for a weather location"/g)).toHaveLength(1);
+    expect(html).toContain("Use my location");
+  });
+
+  it("connects the OpenCode model label and hint directly to the select", () => {
+    const queryClient = client();
+    queryClient.setQueryData(queryKeys.chat.settings, {
+      chat: { responseStyle: "balanced", openCodeModel: "default" }
+    });
+    const html = render(<OpenCodeAcpCard cli={undefined} />, queryClient);
+    const controlId = /<label[^>]*for="([^"]+)"[^>]*>Chat model<\/label>/.exec(html)?.[1];
+    expect(controlId).toBeTruthy();
+    expect(html).toContain(`id="${controlId}"`);
+    expect(html).toContain(`aria-describedby="${controlId}-hint"`);
+    expect(html).toContain(`id="${controlId}-hint"`);
+    expect(html.match(/>Chat model<\/label>/g)).toHaveLength(1);
+    expect(html).not.toContain('role="group"');
+  });
+
+  it("explicitly names the Skills action group without relabeling its buttons", () => {
+    const queryClient = client();
+    queryClient.setQueryData(queryKeys.chat.skills, { skills: [] });
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(
+        <QueryClientProvider client={queryClient}>
+          <FeedbackProvider>
+            <SettingsSkillsPane />
+          </FeedbackProvider>
+        </QueryClientProvider>
+      );
+    });
+    const createButton = renderer.root
+      .findAllByType("button")
+      .find((button) =>
+        button.children.some((child) => typeof child === "string" && child.includes("Create skill"))
+      );
+    expect(createButton).toBeDefined();
+    act(() => createButton!.props.onClick());
+    const group = renderer.root.findByProps({ role: "group" });
+    const groupLabel = renderer.root.findByProps({ id: group.props["aria-labelledby"] });
+    expect(groupLabel.children).toContain("Save");
+    const buttons = group.findAllByType("button");
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]!.children).toContain("Create skill");
+    expect(buttons[0]!.props.disabled).toBe(true);
+    expect(buttons[1]!.children).toContain("Cancel");
+    act(() => renderer.unmount());
+    queryClient.clear();
   });
 });

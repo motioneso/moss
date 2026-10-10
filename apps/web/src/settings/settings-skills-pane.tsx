@@ -221,7 +221,7 @@ export function SettingsSkillsPane() {
             />
           </Field>
           <Note>Command: /{skillCommandName(name) || "…"}</Note>
-          <Field label="Save">
+          <Field label="Save" group>
             <span style={{ display: "flex", gap: 8 }}>
               <Button
                 variant="accentSoft"
