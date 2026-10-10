@@ -2,8 +2,9 @@
 //
 // #3180: the first-budget draft on Getting started. The numbers all come from the stored
 // draft (finance.budget.draft.get); this screen only lays them out. Matches mockup
-// 05-first-budget. Plan amounts are read-only here; typing a plan in place and chat
-// changes arrive with the adjust ticket (#3181).
+// 05-first-budget. A plan amount is typed in place and saved through finance.draft-set; chat
+// changes land in the same record, so the screen re-reads it every few seconds while open.
+// The header total is summed from the lines shown, typed-but-unconfirmed amounts included.
 //
 // After the first sync the screen asks the worker to build the draft (finance.draft-build),
 // then re-reads until it appears. "Start this budget" is the only way to start a budget: it
@@ -23,7 +24,8 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { runWrite } from "../api";
-import { formatCents, monthLabel } from "../format";
+import { confirmedPlans, PENDING_GIVE_UP_MS, showPending, type PendingPlans } from "../draft-edit";
+import { centsToAmountInput, formatCents, monthLabel, parseAmountToCents } from "../format";
 import { navigate } from "../router";
 import { announce, LoadingState, outcomeGate } from "../states";
 import { invalidateQueries, useToolQuery } from "../store";
@@ -80,11 +82,48 @@ function unplannedLede(draft: DraftBody): string {
   return `${span} ${money(draft.unplannedCents)} of your ${income} monthly income is still unplanned.`;
 }
 
-function PlanCell(props: { line: DraftLineView }): ReactNodeLike {
-  return props.line.dropped ? (
-    <span className="jds-hint">Not in budget</span>
-  ) : (
-    <span>{money(props.line.planCents)}</span>
+interface EditProps {
+  errors: Record<string, string>;
+  onSave: (line: DraftLineView, cents: number) => void;
+  onBadAmount: (line: DraftLineView) => void;
+}
+
+/** The typing box for a line's plan amount. Saves on Enter or blur. */
+function PlanCell(props: { line: DraftLineView } & EditProps): ReactNodeLike {
+  const { line, errors } = props;
+  const [typed, setTyped] = useState<string | null>(null);
+  const finish = (): void => {
+    if (typed === null) return;
+    const cents = parseAmountToCents(typed);
+    setTyped(null);
+    if (cents === null || cents < 0) props.onBadAmount(line);
+    else if (cents !== line.planCents || line.dropped) props.onSave(line, cents);
+  };
+  const error = errors[line.categoryKey];
+  return (
+    <div className="fnm-assign">
+      <input
+        className="jds-input jds-input--sm fnm-assign__input"
+        aria-label={`Plan for ${line.categoryName}`}
+        aria-invalid={error ? "true" : undefined}
+        inputMode="decimal"
+        value={typed ?? (line.dropped ? "" : money(line.planCents))}
+        placeholder={line.dropped ? "Not in budget" : undefined}
+        onFocus={(event: { currentTarget: { select: () => void } }) => {
+          setTyped(line.dropped ? "" : centsToAmountInput(line.planCents));
+          event.currentTarget.select();
+        }}
+        onChange={(event: { currentTarget: { value: string } }) =>
+          setTyped(event.currentTarget.value)
+        }
+        onBlur={finish}
+        onKeyDown={(event: { key: string; currentTarget: { blur: () => void } }) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if (event.key === "Escape") setTyped(null);
+        }}
+      />
+      {error ? <Indicator status="error" label={error} /> : null}
+    </div>
   );
 }
 
@@ -101,7 +140,9 @@ function ChatChange(props: { line: DraftLineView }): ReactNodeLike {
   );
 }
 
-function DraftTable(props: { group: DraftBody["groups"][number]; head: boolean }): ReactNodeLike {
+function DraftTable(
+  props: { group: DraftBody["groups"][number]; head: boolean } & EditProps
+): ReactNodeLike {
   return (
     <section className="fnm-block fnm-block--tight">
       <SectionHead title={props.group.name} rule />
@@ -131,7 +172,12 @@ function DraftTable(props: { group: DraftBody["groups"][number]; head: boolean }
               </td>
               <td className="jds-table__num jds-hint">{money(line.basisMonthlyCents)}</td>
               <td className="jds-table__num">
-                <PlanCell line={line} />
+                <PlanCell
+                  line={line}
+                  errors={props.errors}
+                  onSave={props.onSave}
+                  onBadAmount={props.onBadAmount}
+                />
               </td>
             </tr>
           ))}
@@ -141,7 +187,7 @@ function DraftTable(props: { group: DraftBody["groups"][number]; head: boolean }
   );
 }
 
-function DraftRows(props: { group: DraftBody["groups"][number] }): ReactNodeLike {
+function DraftRows(props: { group: DraftBody["groups"][number] } & EditProps): ReactNodeLike {
   return (
     <section className="fnm-block fnm-block--tight">
       <SectionHead title={props.group.name} rule />
@@ -156,7 +202,14 @@ function DraftRows(props: { group: DraftBody["groups"][number] }): ReactNodeLike
                 <span>Average {money(line.basisMonthlyCents)}</span>
               </div>
             }
-            meta={line.dropped ? "Not in budget" : <strong>Plan {money(line.planCents)}</strong>}
+            meta={
+              <PlanCell
+                line={line}
+                errors={props.errors}
+                onSave={props.onSave}
+                onBadAmount={props.onBadAmount}
+              />
+            }
           />
         ))}
       </RowIndex>
@@ -170,6 +223,9 @@ export interface FirstBudgetViewProps {
   starting: boolean;
   startError: string | null;
   onStart: () => void;
+  errors: Record<string, string>;
+  onSave: (line: DraftLineView, cents: number) => void;
+  onBadAmount: (line: DraftLineView) => void;
 }
 
 export function FirstBudgetView(props: FirstBudgetViewProps): ReactNodeLike {
@@ -211,10 +267,21 @@ export function FirstBudgetView(props: FirstBudgetViewProps): ReactNodeLike {
       {draft.groups.map((group, index) => (
         <div key={group.name}>
           <div className="fnm-desktop-only">
-            <DraftTable group={group} head={index === 0} />
+            <DraftTable
+              group={group}
+              head={index === 0}
+              errors={props.errors}
+              onSave={props.onSave}
+              onBadAmount={props.onBadAmount}
+            />
           </div>
           <div className="fnm-phone-only">
-            <DraftRows group={group} />
+            <DraftRows
+              group={group}
+              errors={props.errors}
+              onSave={props.onSave}
+              onBadAmount={props.onBadAmount}
+            />
           </div>
         </div>
       ))}
@@ -223,6 +290,7 @@ export function FirstBudgetView(props: FirstBudgetViewProps): ReactNodeLike {
 }
 
 const POLL_MS = 3000;
+/** While a draft is open the screen re-reads it this often, which also shows chat changes. */
 const MAX_POLLS = 10;
 
 /**
@@ -241,6 +309,10 @@ export function FirstBudget(props: {
   const needsBuild = result !== null && result.hasSynced === true && !result.hasBudget && !draft;
 
   const [polls, setPolls] = useState(0);
+  const [tick, setTick] = useState(0);
+  const [pending, setPending] = useState<PendingPlans>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const sentAt = useRef<Record<string, number>>({});
   const [startSent, setStartSent] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const buildSent = useRef(false);
@@ -259,14 +331,78 @@ export function FirstBudget(props: {
 
   // Re-read while waiting on the build or on a start that was sent.
   const waiting = (needsBuild && polls < MAX_POLLS) || (startSent && draft?.status === "open");
+  const watching = draft?.status === "open";
   useEffect(() => {
-    if (!waiting) return;
+    if (!waiting && !watching) return;
     const timer = setTimeout(() => {
-      setPolls((count) => count + 1);
+      if (waiting) setPolls((count) => count + 1);
+      setTick((count) => count + 1);
       invalidateQueries();
     }, POLL_MS);
     return () => clearTimeout(timer);
-  }, [waiting, polls]);
+  }, [waiting, watching, polls, tick]);
+
+  // After each re-read: drop typed amounts the record now shows, and put back any the
+  // worker never confirmed.
+  useEffect(() => {
+    if (!draft || Object.keys(pending).length === 0) return;
+    const confirmed = new Set(confirmedPlans(pending, draft));
+    const now = Date.now();
+    const expired = Object.keys(pending).filter(
+      (key) => !confirmed.has(key) && now - (sentAt.current[key] ?? now) > PENDING_GIVE_UP_MS
+    );
+    if (confirmed.size === 0 && expired.length === 0) return;
+    setPending((previous) => {
+      const next = { ...previous };
+      for (const key of [...confirmed, ...expired]) delete next[key];
+      return next;
+    });
+    if (expired.length > 0) {
+      setErrors((previous) => {
+        const next = { ...previous };
+        for (const key of expired)
+          next[key] = "Couldn't confirm the save. Put back to the old amount.";
+        return next;
+      });
+      announce("Couldn't confirm the save.");
+    }
+  }, [query]);
+
+  const onSave = (line: DraftLineView, cents: number): void => {
+    if (!draft) return;
+    setErrors((previous) => {
+      const next = { ...previous };
+      delete next[line.categoryKey];
+      return next;
+    });
+    setPending((previous) => ({ ...previous, [line.categoryKey]: cents }));
+    sentAt.current[line.categoryKey] = Date.now();
+    // Metadata-only params: ids and cents.
+    void runWrite("finance.draft-set", "finance.draft-set", {
+      draftId: draft.id,
+      categoryKey: line.categoryKey,
+      amountCents: cents
+    }).then((outcome) => {
+      if (outcome.kind === "queued") return;
+      setPending((previous) => {
+        const next = { ...previous };
+        delete next[line.categoryKey];
+        return next;
+      });
+      setErrors((previous) => ({
+        ...previous,
+        [line.categoryKey]: "Couldn't save. Put back to the old amount."
+      }));
+      announce("Couldn't save.");
+    });
+  };
+
+  const onBadAmount = (line: DraftLineView): void => {
+    setErrors((previous) => ({
+      ...previous,
+      [line.categoryKey]: "Enter an amount like 250 or 250.50."
+    }));
+  };
 
   // A started draft, or any budget, means Getting started is done.
   const done = result !== null && (result.hasBudget === true || draft?.status === "started");
@@ -303,7 +439,10 @@ export function FirstBudget(props: {
       if (body.draft?.status === "open") {
         return (
           <FirstBudgetView
-            draft={body.draft}
+            draft={showPending<DraftLineView, DraftBody>(body.draft, pending)}
+            errors={errors}
+            onSave={onSave}
+            onBadAmount={onBadAmount}
             hostActions={props.hostActions}
             starting={startSent}
             startError={startError}

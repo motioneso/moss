@@ -82,4 +82,34 @@ describe("sqlStore draft methods (#3180)", () => {
     expect(await sqlStore(db).getLatestDraft()).toBeNull();
     expect(db.calls[0]!.text).toContain("WHERE status IN ('open', 'started')");
   });
+
+  it("saveDraftLine upserts one line of an open draft only, with the owner written in SQL", async () => {
+    const db = fakeDb();
+    await sqlStore(db).saveDraftLine("d1", {
+      categoryKey: "groceries",
+      groupName: "Everyday",
+      categoryName: "Groceries",
+      basisMonthlyCents: 30433,
+      proposedCents: 30500,
+      adjustedCents: 60000,
+      adjustedBy: "moss",
+      dropped: false
+    });
+    expect(db.calls).toHaveLength(1);
+    const call = db.calls[0]!;
+    expect(call.text).toContain("SELECT app.current_actor_user_id(), $1");
+    expect(call.text).toContain("status = 'open'");
+    expect(call.text).toContain("ON CONFLICT (owner_user_id, draft_id, category_key) DO UPDATE");
+    expect(call.params).toEqual([
+      "d1",
+      "groceries",
+      "Everyday",
+      "Groceries",
+      30433,
+      30500,
+      60000,
+      "moss",
+      false
+    ]);
+  });
 });

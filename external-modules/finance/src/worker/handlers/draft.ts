@@ -10,6 +10,10 @@ import {
   CATEGORY_GROUP_NAMES,
   DEFAULT_CATEGORIES,
   NS,
+  DRAFT_AMOUNT_MAX_CENTS,
+  DRAFT_CATEGORY_KEY_RE,
+  DRAFT_LINE_GROUPS,
+  applyLineEdit,
   buildDraft,
   draftTotalCents,
   draftUnplannedCents,
@@ -22,11 +26,12 @@ import {
 } from "../../domain/index.js";
 import type { ToolFactory } from "../registry.js";
 import type { WorkerPorts } from "../ports.js";
-import { InputError, readString } from "../validate.js";
+import { InputError, readBool, readInt, readString } from "../validate.js";
 import { loadCategories } from "./feed.js";
 
 const QUEUE_BUILD = "finance.draft-build";
 const QUEUE_START = "finance.draft-start";
+const QUEUE_SET = "finance.draft-set";
 
 export interface DraftViewLine {
   categoryKey: string;
@@ -94,6 +99,129 @@ export const draftGetHandler: ToolFactory = (ports) => async () => {
     hasBudget,
     draft: latest ? draftView(latest) : null
   };
+};
+
+export interface DraftEditResult extends Record<string, unknown> {
+  status: "ok";
+  draftId: string;
+  categoryKey: string;
+  categoryName: string;
+  /** The line before the edit; null when the edit added the line. */
+  before: { planCents: number; dropped: boolean } | null;
+  after: { planCents: number; dropped: boolean };
+  totalBeforeCents: number;
+  totalAfterCents: number;
+  unplannedAfterCents: number;
+  monthlyIncomeCents: number;
+}
+
+/**
+ * Change one line of the open draft and report the line and the draft total before and
+ * after. Both the assistant tool and the screen's typed save come through here, so the
+ * total they report is always the sum of the stored lines.
+ */
+async function editDraftLine(
+  ports: WorkerPorts,
+  args: {
+    draftId: string;
+    categoryKey: string;
+    edit: Parameters<typeof applyLineEdit>[2];
+    by: "user" | "moss";
+  }
+): Promise<DraftEditResult> {
+  const store = await ports.store();
+  const draft = await store.getLatestDraft();
+  if (draft === null || draft.id !== args.draftId) {
+    throw new InputError("draft_not_found", "draftId does not name the current draft");
+  }
+  if (draft.status !== "open") {
+    throw new InputError("draft_not_open", "the draft has already been started");
+  }
+  const existing = draft.lines.find((line) => line.categoryKey === args.categoryKey);
+  if (existing === undefined) {
+    if (!DRAFT_CATEGORY_KEY_RE.test(args.categoryKey)) {
+      throw new InputError("categoryKey must be a short lowercase slug");
+    }
+    const { categoryName, groupName, amountCents } = args.edit;
+    if (!categoryName || !groupName || amountCents === undefined) {
+      throw new InputError(
+        "category_not_in_draft",
+        "categoryKey is not in the draft; to add a line give categoryName, groupName and amountCents"
+      );
+    }
+  }
+  if (
+    args.edit.groupName !== undefined &&
+    !(DRAFT_LINE_GROUPS as readonly string[]).includes(args.edit.groupName)
+  ) {
+    throw new InputError("groupName must be Bills, Everyday, Fun or Savings");
+  }
+  if (args.edit.categoryName !== undefined && args.edit.categoryName.trim() === "") {
+    throw new InputError("categoryName must not be empty");
+  }
+
+  const line = applyLineEdit(args.categoryKey, existing, args.edit, args.by);
+  const totalBeforeCents = draftTotalCents(draft.lines);
+  await store.saveDraftLine(draft.id, line);
+
+  const after = await store.getLatestDraft();
+  if (after === null || after.id !== draft.id || after.status !== "open") {
+    throw new InputError("draft_not_open", "the draft has already been started");
+  }
+  return {
+    status: "ok",
+    draftId: draft.id,
+    categoryKey: line.categoryKey,
+    categoryName: line.categoryName,
+    before: existing ? { planCents: linePlanCents(existing), dropped: existing.dropped } : null,
+    after: { planCents: linePlanCents(line), dropped: line.dropped },
+    totalBeforeCents,
+    totalAfterCents: draftTotalCents(after.lines),
+    unplannedAfterCents: draftUnplannedCents(after),
+    monthlyIncomeCents: after.monthlyIncomeCents
+  };
+}
+
+/** Assistant tool: change one draft line. It cannot start a budget. */
+export const draftUpdateHandler: ToolFactory = (ports) => async (input) => {
+  const draftId = readString(input, "draftId", { required: true });
+  const categoryKey = readString(input, "categoryKey", { required: true });
+  const amountCents = readInt(input, "amountCents", { min: 0, max: DRAFT_AMOUNT_MAX_CENTS });
+  const categoryName = readString(input, "categoryName", { maxBytes: 80 });
+  const groupName = readString(input, "groupName", { maxBytes: 20 });
+  const dropped = readBool(input, "dropped");
+  if (
+    amountCents === undefined &&
+    categoryName === undefined &&
+    groupName === undefined &&
+    dropped === undefined
+  ) {
+    throw new InputError("give at least one of amountCents, categoryName, groupName or dropped");
+  }
+  return editDraftLine(ports, {
+    draftId,
+    categoryKey,
+    edit: {
+      ...(amountCents !== undefined ? { amountCents } : {}),
+      ...(categoryName !== undefined ? { categoryName } : {}),
+      ...(groupName !== undefined ? { groupName } : {}),
+      ...(dropped !== undefined ? { dropped } : {})
+    },
+    by: "moss"
+  });
+};
+
+/** Queue handler behind a plan amount typed on the draft screen. */
+export const draftSetHandler: ToolFactory = (ports) => async (input) => {
+  const params = readEnvelopeParams(input, QUEUE_SET);
+  const draftId = readString(params, "draftId", { required: true });
+  const categoryKey = readString(params, "categoryKey", { required: true });
+  const amountCents = readInt(params, "amountCents", {
+    required: true,
+    min: 0,
+    max: DRAFT_AMOUNT_MAX_CENTS
+  });
+  return editDraftLine(ports, { draftId, categoryKey, edit: { amountCents }, by: "user" });
 };
 
 function readEnvelopeParams(
