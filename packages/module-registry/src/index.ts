@@ -1335,7 +1335,17 @@ export function buildNewsBriefingSource(deps: {
   });
   // Briefing tool is constructed at import time; it adopts the client late-bound
   // (mirrors LOADER-SEAM(sports) 3).
-  configureNewsBriefingService(datasetClient);
+  // The briefing only reads dismissed refs; the AI port is never called on that path.
+  configureNewsBriefingService(
+    datasetClient,
+    buildNewsStoryFeedbackPort(
+      {
+        generateJson: async () => ({ ok: false, error: "needs_config" }),
+        fingerprint: async () => null
+      },
+      deps.logger
+    )
+  );
   return datasetClient;
 }
 

@@ -302,7 +302,7 @@ export async function collectCandidates(
   fetchFailures: number;
   sourcesMarkedUnavailable: string[];
   sourceFailures: readonly { sourceId: string; reason: NewsSourceFailureReason }[];
-  credentialedRecovered: readonly string[];
+  recovered: readonly string[];
 }> {
   const [sources, topics, exclusionRows, prefs] = await Promise.all([
     deps.repo.listCustomSources(scopedDb),
@@ -321,21 +321,19 @@ export async function collectCandidates(
     )
   );
 
-  const credentialedRecovered: string[] = [];
+  const recovered: string[] = [];
   for (const source of sources) {
     const credentialed = credentialedSourceIds.has(source.id);
-    // A credentialed source stuck on a failure is re-attempted rather than skipped:
-    // the key may have been generated since the last run, and only a real attempt
-    // can clear the flag (#2322 slice 2). Every other unhealthy source keeps the
-    // existing skip behavior.
-    const failingCredentialed =
-      credentialed &&
-      (source.healthStatus === "authentication_failed" ||
-        source.healthStatus === "temporarily_unavailable");
+    // A source stuck on a failure is re-attempted rather than skipped, so a transient
+    // outage clears on the next run. Authentication failures retry only for credentialed
+    // sources, where a newly generated key may now work (#2322 slice 2, #3227).
+    const failingRetryable =
+      source.healthStatus === "temporarily_unavailable" ||
+      (credentialed && source.healthStatus === "authentication_failed");
     if (
       source.retrievalMethod === "reddit" ||
       source.validationStatus !== "approved" ||
-      (!failingCredentialed && source.healthStatus !== "healthy") ||
+      (!failingRetryable && source.healthStatus !== "healthy") ||
       excluded(source.canonicalDomain, exclusions)
     ) {
       continue;
@@ -351,8 +349,8 @@ export async function collectCandidates(
       fetchFailures += 1;
       sourceFailures.push({ sourceId: source.id, reason: result.failure });
       if (result.failure === "temporarily_unavailable") sourcesMarkedUnavailable.push(source.id);
-    } else if (credentialed) {
-      credentialedRecovered.push(source.id);
+    } else if (credentialed || source.healthStatus !== "healthy") {
+      recovered.push(source.id);
     }
   }
 
@@ -360,7 +358,7 @@ export async function collectCandidates(
     (source) =>
       source.retrievalMethod === "reddit" &&
       source.validationStatus === "approved" &&
-      source.healthStatus === "healthy" &&
+      (source.healthStatus === "healthy" || source.healthStatus === "temporarily_unavailable") &&
       !excluded(source.canonicalDomain, exclusions)
   );
   if (redditSources.length > 0 && deps.fetchWithOptions) {
@@ -385,6 +383,7 @@ export async function collectCandidates(
         if (failure === "temporarily_unavailable") sourcesMarkedUnavailable.push(source.id);
         continue;
       }
+      if (source.healthStatus !== "healthy") recovered.push(source.id);
       for (const headline of result.headlines.slice(0, REDDIT_PER_SOURCE_CAP)) {
         const publishedAt = publicationTime(headline.publishedAt, opts.now);
         if (!publishedAt) continue;
@@ -513,6 +512,6 @@ export async function collectCandidates(
     fetchFailures,
     sourcesMarkedUnavailable: [...new Set(sourcesMarkedUnavailable)],
     sourceFailures,
-    credentialedRecovered
+    recovered
   };
 }

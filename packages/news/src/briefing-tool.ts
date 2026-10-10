@@ -5,6 +5,7 @@ import type { ToolExecute, ToolResult } from "@moss/module-sdk";
 import { NewsPrefsRepository } from "./repository.js";
 import { NewsService } from "./news-service.js";
 import { NewsPersonalizationRepository } from "./personalization-repository.js";
+import type { NewsStoryFeedbackPort } from "./story-feedback-port.js";
 
 /**
  * Sole intended consumer is the daily briefing (mirrors sports' followedFactsToday). It is
@@ -24,7 +25,10 @@ import { NewsPersonalizationRepository } from "./personalization-repository.js";
  */
 let service: NewsService | undefined;
 
-export function configureNewsBriefingService(datasetClient: DatasetClient): void {
+export function configureNewsBriefingService(
+  datasetClient: DatasetClient,
+  storyFeedback?: NewsStoryFeedbackPort
+): void {
   service = new NewsService({
     datasetClient,
     dataContext: {
@@ -34,7 +38,9 @@ export function configureNewsBriefingService(datasetClient: DatasetClient): void
     },
     repository: new NewsPrefsRepository(),
     // #953: briefing headlines honor the actor's publisher-domain exclusions too.
-    personalization: new NewsPersonalizationRepository()
+    personalization: new NewsPersonalizationRepository(),
+    // #3227: dismissed stories stay out of the briefing.
+    storyFeedback
   });
 }
 
