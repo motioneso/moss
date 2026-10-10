@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { EMOTIONS, localDay, moodIndex, moodBand, type CheckinDto } from "@moss/shared";
+import {
+  EMOTIONS,
+  localDay,
+  moodIndex,
+  moodBand,
+  type CheckinDto,
+  type ScheduleSlotDto
+} from "@moss/shared";
 import { getMedicationSchedule, logMedicationDose } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { emoColor, coreLabel, type WellnessEmotionCore, type Theme } from "./emotion-taxonomy.js";
@@ -190,6 +197,11 @@ interface MedTodayProps {
   timeZone?: string;
 }
 
+/** The dose's clock time ("HH:MM") in the medication's own zone; older payloads fall back to the UTC clock. */
+export function slotClock(slot: Pick<ScheduleSlotDto, "scheduledFor" | "localTime">): string {
+  return slot.localTime ?? (slot.scheduledFor ? slot.scheduledFor.slice(11, 16) : "");
+}
+
 function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
   const date = localDay(new Date(), timeZone);
   const queryClient = useQueryClient();
@@ -243,16 +255,14 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
   const pct = totalSched > 0 ? Math.round((takenCount / totalSched) * 100) : 0;
 
   const morningSlots = slots.filter((s) => {
-    const t = s.scheduledFor;
+    const t = slotClock(s);
     if (!t) return false;
-    const hour = parseInt(t.slice(11, 13), 10);
-    return hour < 12;
+    return parseInt(t.slice(0, 2), 10) < 12;
   });
   const eveningSlots = slots.filter((s) => {
-    const t = s.scheduledFor;
+    const t = slotClock(s);
     if (!t) return s.asNeeded;
-    const hour = parseInt(t.slice(11, 13), 10);
-    return hour >= 12;
+    return parseInt(t.slice(0, 2), 10) >= 12;
   });
 
   const groups = [
@@ -411,9 +421,7 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                           Taken
                         </span>
                       ) : (
-                        <span className="wl-medrow__time">
-                          {slot.scheduledFor ? slot.scheduledFor.slice(11, 16) : ""}
-                        </span>
+                        <span className="wl-medrow__time">{slotClock(slot)}</span>
                       )}
                     </div>
                   );
