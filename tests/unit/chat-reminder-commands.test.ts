@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { chatModuleManifest } from "../../packages/chat/src/manifest.js";
 import { matchTarget, type ReminderList } from "../../packages/chat/src/reminders/cancel.js";
 import {
   recognizeReminderCommand,
@@ -138,5 +139,16 @@ describe("list and cancel wording", () => {
     expect(reminderCancelReply({ kind: "not_found" })).toBe(
       "I couldn't find a reminder like that, so nothing changed."
     );
+  });
+});
+
+describe("no other way in", () => {
+  it("declares no route, action or tool for reminders", () => {
+    const surfaces = JSON.stringify({
+      routes: chatModuleManifest.routes.map((route) => route.path),
+      actions: chatModuleManifest.assistantActionFamilies,
+      tools: chatModuleManifest.assistantTools
+    });
+    expect(surfaces).not.toMatch(/remind/i);
   });
 });
