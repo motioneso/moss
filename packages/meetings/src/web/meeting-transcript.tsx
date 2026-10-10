@@ -196,7 +196,7 @@ export function MeetingTranscript({
     isMeetingAccessDenied(transcript.error) &&
     !(transcript.error instanceof ApiError && transcript.error.status === 404);
   return (
-    <section className="meetings-section meetings-transcript-pane" aria-label="Transcript">
+    <section className="meetings-section" aria-label="Transcript">
       <SectionHead title="Transcript" rule />
       {search !== null ? (
         <Field>
