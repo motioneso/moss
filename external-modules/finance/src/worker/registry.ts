@@ -6,6 +6,7 @@
 // keys) without triggering that side effect. index.ts stays a thin dispatch
 // shell over this table. All four FIN-01 manifest handler keys are real as
 // of Task 7 (#1146); notImplemented stays exported for FIN-02's Task 8 keys.
+import { activityListHandler, activityUndoHandler } from "./handlers/activity.js";
 import { accountsListHandler } from "./handlers/accounts.js";
 import {
   budgetApplyHandler,
@@ -80,6 +81,9 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   // FIN-05 (#1150) Task 4: the read-only reports surface of manifest v0.4.0.
   "reports.spending": reportsSpendingHandler,
   "reports.net-worth": reportsNetWorthHandler,
+  // #3186: Finance Settings activity list and its undo.
+  "activity.list": activityListHandler,
+  "activity.undo": activityUndoHandler,
   // FIN-06b (#1166) Task 6: the one-shot per-owner KV -> SQL backfill.
   // Queue-only — no assistant-tool twin (F6-D4).
   "storage.migrate": storageMigrateHandler

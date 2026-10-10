@@ -49,6 +49,26 @@ describe("finance manifest app map (#3177)", () => {
     expect(countTopLevelKeys(readFileSync(manifestPath, "utf8"), "appMap")).toBe(1);
   });
 
+  it("declares its own settings page and the settings features (#3186)", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      settingsPath: string;
+      appMap: { screens: { id: string; path: string }[]; features: { id: string }[] };
+    };
+    expect(manifest.settingsPath).toBe("/settings");
+    expect(manifest.appMap.screens).toContainEqual(
+      expect.objectContaining({ id: "finance.settings", path: "/settings" })
+    );
+    expect(manifest.appMap.features.map((f) => f.id)).toEqual(
+      expect.arrayContaining([
+        "finance.settings-freedom",
+        "finance.settings-limit",
+        "finance.settings-actions",
+        "finance.settings-bank-keys",
+        "finance.settings-activity"
+      ])
+    );
+  });
+
   it("declares the history-built first budget and no assistant tool that starts one (#3180)", () => {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
       appMap: { features: { id: string }[] };
@@ -122,7 +142,9 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.account.set-shared", "account.set-shared"],
         // FIN-05 (#1150): read-only report tools.
         ["finance.reports.spending", "reports.spending"],
-        ["finance.reports.net-worth", "reports.net-worth"]
+        ["finance.reports.net-worth", "reports.net-worth"],
+        // #3186: the Settings activity list.
+        ["finance.activity.list", "activity.list"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {
@@ -386,6 +408,14 @@ describe("finance manifest contract (#1146)", () => {
             createRule: { type: "boolean" }
           }
         }
+      },
+      {
+        // #3186: reverse one activity row; the handler refuses when the data moved on.
+        name: "finance.activity-undo",
+        handler: "activity.undo",
+        retryLimit: 1,
+        allowManualRun: true,
+        paramsSchema: { type: "object", fields: { activityId: { type: "uuid" } } }
       }
     ]);
     expect(result.manifest.worker?.schedules).toEqual([

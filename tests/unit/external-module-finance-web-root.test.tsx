@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 //
-// #1759: a module page has to lead to its own settings page. Finance's own settings live on the
-// host at /settings?section=modules&module=finance (external modules can never contribute a
-// settings surface — packages/settings-ui/src/scanner.ts only scans packages/ and node_modules),
-// so without this link the page a user is standing on has no way to reach them.
+// #1759: a module page has to lead to its own settings page, which Finance now owns (#3186).
 //
 // The three screens are mocked: each one fetches on mount, and none of them is what this test is
 // about. The header, the tabs and the router run for real.
@@ -34,7 +31,7 @@ describe("Finance module root (#1759)", () => {
     const hrefs = renderer.root
       .findAllByType("a")
       .map((node) => node.props.href as string | undefined);
-    expect(hrefs).toContain("/settings?section=modules&module=finance");
+    expect(hrefs).toContain("/m/finance/settings");
   });
 
   it("shows Budget, Transactions and Accounts tabs, with Budget at the module home (#3173)", async () => {
