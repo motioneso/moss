@@ -127,7 +127,7 @@ export const newsModuleManifest = {
       id: "news",
       label: "News",
       description:
-        "Read personalized headlines from enabled sources. Marking a story less like this removes it at once and refills its spot from loaded stories. Today's list shows each publisher's icon on a light tile, readable in both themes, name on hover.",
+        "Read personalized headlines. Less like this removes a story and refills its spot. Today shows publisher icons on light tiles with names on hover. Loading is distinct from empty headlines; failed reads offer Retry.",
       path: "/news",
       icon: "newspaper",
       order: 34,

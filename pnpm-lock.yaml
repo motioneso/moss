@@ -738,6 +738,9 @@ importers:
       '@moss/structured-state':
         specifier: workspace:*
         version: link:../structured-state
+      '@moss/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)
@@ -1593,6 +1596,9 @@ importers:
       '@moss/structured-state':
         specifier: workspace:*
         version: link:../structured-state
+      '@moss/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@moss/vault':
         specifier: workspace:*
         version: link:../vault

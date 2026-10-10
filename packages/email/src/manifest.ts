@@ -58,8 +58,7 @@ export const emailModuleManifest = {
       id: "email.module-settings",
       label: "Email",
       description:
-        "Choose which email signals show up in briefings, how email turns into tasks, and " +
-        "whether your assistant drafts or auto-sends replies.",
+        "Choose briefing signals, task extraction and draft/send preferences. Unknown choices stay unavailable until read successfully; read failures offer Retry separately from save failures. Failed refreshes preserve confirmed choices.",
       path: "/settings?section=modules&module=email",
       scope: "user",
       order: 40,
