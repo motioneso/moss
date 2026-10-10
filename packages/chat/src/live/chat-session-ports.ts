@@ -10,7 +10,7 @@ import type {
   AnswerProvenanceMetadataV1,
   ChatAttachmentDto,
   ChatSurface,
-  ChatTurnOriginV1,
+  ChatClassifierGateOriginV1,
   ChatTurnUsageDto,
   SourceFreshnessV1
 } from "@moss/shared";
@@ -92,7 +92,7 @@ export interface ChatPersistencePort {
     actorUserId: string,
     userText: string,
     assistantReply: string,
-    origin: ChatTurnOriginV1,
+    origin: ChatClassifierGateOriginV1,
     opts?: HandledTurnOptions,
     surface?: ChatSurface
   ): Promise<

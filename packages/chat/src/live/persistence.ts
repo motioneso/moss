@@ -25,6 +25,7 @@ import type {
   AiAuthMethod,
   ChatAttachmentDto,
   ChatSurface,
+  ChatClassifierGateOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   SourceFreshnessEntry,
@@ -311,7 +312,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     actorUserId: string,
     userText: string,
     assistantReply: string,
-    origin: ChatTurnOriginV1,
+    origin: ChatClassifierGateOriginV1,
     opts?: HandledTurnOptions,
     surface?: ChatSurface
   ): Promise<

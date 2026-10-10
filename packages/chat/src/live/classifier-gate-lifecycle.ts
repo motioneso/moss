@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { ChatTurnOriginV1, SourceFreshnessV1 } from "@moss/shared";
+import type { ChatClassifierGateOriginV1, SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
 import type { ChatSurface } from "./chat-surface.js";
@@ -189,7 +189,7 @@ async function persistGateOutcome(
   const reply = handled ? outcome.reply : outcome.message;
   const trace = outcome.trace;
   const attachments = opts?.attachments ?? [];
-  const origin: ChatTurnOriginV1 = {
+  const origin: ChatClassifierGateOriginV1 = {
     version: 1,
     kind: "classifier_gate",
     decisionId: randomUUID(),
