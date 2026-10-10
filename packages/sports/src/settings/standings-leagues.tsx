@@ -1,3 +1,4 @@
+import { Badge, Button, DisclosureToggle, SectionHead } from "@moss/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Note } from "@moss/settings-ui";
@@ -71,37 +72,34 @@ export function StandingsLeaguesSection(props: {
   return (
     <section className="sp-standings-settings" aria-labelledby="sp-standings-settings-title">
       <div className="sp-standings-settings__head">
-        <h2 className="jds-section-title" id="sp-standings-settings-title">
-          <button
-            type="button"
-            className="sp-standings-settings__toggle"
-            aria-expanded={open}
-            aria-controls="sp-standings-settings-panel"
-            onClick={() => setOpen((cur) => !cur)}
-          >
-            {open ? (
-              <ChevronDown size={16} aria-hidden="true" />
-            ) : (
-              <ChevronRight size={16} aria-hidden="true" />
-            )}
-            <span>Configure standings</span>
-            <span className="jds-badge jds-badge--steel">
-              {selectedCompetitions.length} of {props.competitions.length}
-            </span>
-          </button>
-        </h2>
-        <p className="jds-section-sub">
-          Choose the leagues available in the Sports standings picker.
-        </p>
+        <SectionHead
+          titleId="sp-standings-settings-title"
+          title={
+            <DisclosureToggle
+              className="sp-standings-settings__toggle"
+              expanded={open}
+              controls="sp-standings-settings-panel"
+              onClick={() => setOpen((cur) => !cur)}
+            >
+              {open ? (
+                <ChevronDown size={16} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={16} aria-hidden="true" />
+              )}
+              <span>Configure standings</span>
+              <Badge tone="steel">
+                {selectedCompetitions.length} of {props.competitions.length}
+              </Badge>
+            </DisclosureToggle>
+          }
+        />
+        <Note>Choose the leagues available in the Sports standings picker.</Note>
         {!open && selectedCompetitions.length > 0 ? (
           <p className="sp-standings-settings__preview" aria-hidden="true">
             {selectedCompetitions.slice(0, 6).map((competition) => (
-              <span
-                className="jds-badge jds-badge--neutral jds-badge--pill"
-                key={competition.competitionKey}
-              >
+              <Badge tone="neutral" pill key={competition.competitionKey}>
                 {competition.label}
-              </span>
+              </Badge>
             ))}
             {selectedCompetitions.length > 6 ? (
               <span className="jds-hint">+{selectedCompetitions.length - 6} more</span>
@@ -119,31 +117,31 @@ export function StandingsLeaguesSection(props: {
           </p>
         ) : null}
         <div
-          className="sp-standings-tree jds-card jds-card--sunken jds-card--pad-lg"
+          className="sp-standings-tree"
           role="group"
           aria-labelledby="sp-standings-settings-title"
           aria-disabled={disabled}
           aria-busy={mutation.isPending}
         >
           <div className="sp-standings-tree__toolbar">
-            <button
-              type="button"
-              className="jds-btn jds-btn--secondary jds-btn--sm"
+            <Button
+              variant="secondary"
+              size="sm"
               disabled={disabled || selected.size === props.competitions.length}
               onClick={() =>
                 save(new Set(props.competitions.map((competition) => competition.competitionKey)))
               }
             >
               Select all
-            </button>
-            <button
-              type="button"
-              className="jds-btn jds-btn--secondary jds-btn--sm"
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               disabled={disabled || selected.size === 0}
               onClick={() => save(new Set())}
             >
               Clear all
-            </button>
+            </Button>
           </div>
           {groupCompetitions(props.competitions).map((sport) => {
             const sportCompetitions = [
@@ -176,11 +174,10 @@ export function StandingsLeaguesSection(props: {
                       <Check size={13} aria-hidden="true" />
                     </span>
                   </label>
-                  <button
-                    type="button"
+                  <DisclosureToggle
                     className="sp-standings-tree__toggle"
-                    aria-expanded={sportExpanded}
-                    aria-controls={sportId}
+                    expanded={sportExpanded}
+                    controls={sportId}
                     onClick={() => toggleExpanded(sportId)}
                   >
                     {sportExpanded ? (
@@ -189,10 +186,10 @@ export function StandingsLeaguesSection(props: {
                       <ChevronRight size={16} aria-hidden="true" />
                     )}
                     <span className="sp-standings-tree__sport-label">{sport.label}</span>
-                    <span className="jds-badge jds-badge--steel">
+                    <Badge tone="steel">
                       {sportChosen.length} of {sportCompetitions.length}
-                    </span>
-                  </button>
+                    </Badge>
+                  </DisclosureToggle>
                 </div>
                 <div id={sportId} className="sp-standings-tree__leagues" hidden={!sportExpanded}>
                   {sport.leagues.map((competition) => (
@@ -229,11 +226,10 @@ export function StandingsLeaguesSection(props: {
                               <Check size={13} aria-hidden="true" />
                             </span>
                           </label>
-                          <button
-                            type="button"
+                          <DisclosureToggle
                             className="sp-standings-tree__toggle"
-                            aria-expanded={expanded}
-                            aria-controls={regionId}
+                            expanded={expanded}
+                            controls={regionId}
                             onClick={() => toggleExpanded(regionId)}
                           >
                             {expanded ? (
@@ -242,10 +238,10 @@ export function StandingsLeaguesSection(props: {
                               <ChevronRight size={16} aria-hidden="true" />
                             )}
                             <span>{region.label}</span>
-                            <span className="jds-badge jds-badge--steel">
+                            <Badge tone="steel">
                               {chosen.length} of {region.competitions.length}
-                            </span>
-                          </button>
+                            </Badge>
+                          </DisclosureToggle>
                         </div>
                         <div
                           id={regionId}

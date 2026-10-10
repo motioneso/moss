@@ -88,6 +88,7 @@ describe("Sports settings follow/unfollow refreshes the standings overview (#209
     });
 
     const unfollowBtn = findButton(renderer, "Unfollow All NFL");
+    expect(unfollowBtn.props.className).toContain("jds-iconbtn");
     await act(async () => {
       unfollowBtn.props.onClick();
       await Promise.resolve();
@@ -119,11 +120,16 @@ describe("Sports settings follow/unfollow refreshes the standings overview (#209
 
     const browseToggle = renderer.root
       .findAllByType("button")
-      .find((item) => item.props.className === "sp-browse-toggle")!;
+      .find((item) => item.props["aria-controls"] === "sp-browse-panel")!;
+    expect(browseToggle.props.className).toContain("jds-disclosure");
+    expect(browseToggle.props["aria-expanded"]).toBe(false);
     await act(async () => {
       browseToggle.props.onClick();
     });
+    expect(browseToggle.props["aria-expanded"]).toBe(true);
     const followBtn = findButton(renderer, "Follow all of NFL");
+    expect(followBtn.props.className).toContain("jds-btn--chip");
+    expect(followBtn.props["aria-pressed"]).toBe(false);
     await act(async () => {
       followBtn.props.onClick();
       await Promise.resolve();

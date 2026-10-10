@@ -359,6 +359,7 @@
 }
 .sp-standings__hd {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
@@ -373,18 +374,21 @@
   align-items: center;
 }
 .sp-standings__title {
+  margin: 0;
   gap: var(--space-2);
 }
 .sp-standings__nav {
+  min-width: 0;
+  flex-wrap: wrap;
   gap: var(--space-1);
 }
-.sp-standings-picker__trigger {
+.sp-standings-picker > .jds-btn {
   width: auto;
   max-width: 180px;
   padding: 0 var(--space-2);
   gap: var(--space-1);
 }
-.sp-standings-picker__trigger > span {
+.sp-standings-picker > .jds-btn > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -414,11 +418,11 @@
 .sp-standings-picker__heading {
   padding: var(--space-2);
 }
-.sp-standings-picker__row {
+.sp-standings-picker__popup .jds-btn {
   width: 100%;
   justify-content: flex-start;
 }
-.sp-standings-picker__row > span {
+.sp-standings-picker__popup .jds-btn > span {
   flex: 1;
   min-width: 0;
   overflow: hidden;

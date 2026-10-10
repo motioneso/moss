@@ -1,3 +1,4 @@
+import { ButtonLink, Eyebrow, Select } from "@moss/ui";
 import { buildViews, type StandingsView } from "../standings-views.js";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -318,10 +319,10 @@ export function StandingsRail(props: {
       aria-label="Standings"
     >
       <div className="sp-standings__hd">
-        <span className="sp-standings__title">
+        <Eyebrow as="h2" tone="muted" className="sp-standings__title">
           <TrophyIcon />
           Standings
-        </span>
+        </Eyebrow>
         <span className="sp-standings__nav">
           {activeKey ? (
             <StandingsPicker
@@ -349,7 +350,9 @@ export function StandingsRail(props: {
         {!activeKey ? (
           <p className="sp-standings__empty">
             No standings leagues selected.{" "}
-            <a href="/settings?section=modules&module=sports">Choose leagues in Settings.</a>
+            <ButtonLink variant="link" href="/settings?section=modules&module=sports">
+              Choose leagues in Settings.
+            </ButtonLink>
           </p>
         ) : knockout ? (
           <KnockoutFixtures fixtures={fixtures} />
@@ -431,14 +434,13 @@ function ViewSelect(props: {
   }
   flushRun();
   return (
-    <select
-      className="sp-standings__select"
+    <Select
       aria-label="Select standings view"
       value={props.value}
       onChange={(event) => props.onChange(event.currentTarget.value)}
     >
       {nodes}
-    </select>
+    </Select>
   );
 }
 

@@ -5,17 +5,6 @@
    sports-1.css purely for the 1000-line file-size gate (sports-1.css has no headroom); imported
    directly by index.tsx as a colocated side-effect import (module web registry, #799). */
 
-.sp-whole {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 9px 12px;
-  margin-bottom: 10px;
-  cursor: pointer;
-  transition: var(--transition-control);
-}
 .sp-teamgrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -31,25 +20,8 @@
   width: 100%;
   margin-bottom: 10px;
 }
-.sp-action-target--wide .sp-whole {
-  margin-bottom: 0;
-}
-.sp-teamgrid > .sp-action-target > .sp-team {
-  width: 100%;
-  flex: 1;
-}
 .sp-action-error {
   line-height: 1.35;
-  text-align: left;
-}
-.sp-team {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 7px 10px;
-  cursor: pointer;
-  transition: var(--transition-control);
   text-align: left;
 }
 .sp-team__top {
@@ -60,11 +32,6 @@
 }
 .sp-team__state {
   letter-spacing: 0.03em;
-}
-.sp-team:disabled,
-.sp-whole:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 .sp-team__name {
   flex: 1;
@@ -107,11 +74,6 @@
 .sp-search {
   margin-bottom: 14px;
 }
-.sp-search__input {
-  width: 100%;
-  padding: 9px 12px;
-  transition: var(--transition-control);
-}
 
 .sp-summary {
   display: flex;
@@ -120,6 +82,7 @@
   margin-bottom: 14px;
 }
 .sp-chip {
+  max-width: 100%;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -130,21 +93,9 @@
   flex-basis: 100%;
 }
 .sp-chip__lbl {
-  white-space: nowrap;
-}
-.sp-chip__remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  line-height: 1;
-  transition: var(--transition-control);
-}
-.sp-chip__remove:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Browse leagues disclosure (#989): collapsed by default so the empty-query view leads with
@@ -199,11 +150,6 @@
   flex: 0 0 9.5rem;
   width: 9.5rem;
 }
-.sp-browse__row .sp-whole {
-  width: 100%;
-  justify-content: center;
-  margin-bottom: 0;
-}
 
 .sp-browse__league {
   flex: 1;
@@ -225,7 +171,7 @@
   .sp-browse__row {
     flex-wrap: wrap;
   }
-  .sp-browse__row .sp-whole {
+  .sp-browse__row .jds-btn {
     width: 100%;
   }
 }
@@ -367,5 +313,41 @@
   .sp-feedback-settings__editor textarea {
     min-width: 0;
     width: 100%;
+  }
+}
+
+/* Shared controls own their skins; these selectors only arrange Sports content. */
+.sp-teamgrid > .sp-action-target > .jds-btn {
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  white-space: normal;
+}
+.sp-action-target > .jds-btn {
+  width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.sp-search .jds-field {
+  width: 100%;
+}
+.sp-standings-tree {
+  padding-top: var(--space-4);
+}
+.sp-standings-settings__toggle {
+  flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  .sp-browse__row {
+    flex-wrap: wrap;
+  }
+  .sp-browse__row > .sp-action-target {
+    flex-basis: 100%;
+    width: 100%;
+  }
+  .sp-standings-tree__leagues {
+    padding-left: var(--space-4);
   }
 }

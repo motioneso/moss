@@ -7,7 +7,7 @@ import "./styles/sports-8-clippings.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@moss/ui";
+import { Button, ButtonLink, IconButton } from "@moss/ui";
 import type {
   AmbiguousFollowedTeamRef,
   GamedayGame,
@@ -471,22 +471,12 @@ function GamedayHero(props: {
             />
           ))}
         </div>
-        <button
-          type="button"
-          className="sp-gameday__nav"
-          aria-label="Previous game"
-          onClick={() => step(-1)}
-        >
+        <IconButton size="sm" aria-label="Previous game" onClick={() => step(-1)}>
           <ChevronLeft size={16} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="sp-gameday__nav"
-          aria-label="Next game"
-          onClick={() => step(1)}
-        >
+        </IconButton>
+        <IconButton size="sm" aria-label="Next game" onClick={() => step(1)}>
           <ChevronRight size={16} aria-hidden="true" />
-        </button>
+        </IconButton>
       </div>
     </section>
   );
@@ -714,9 +704,8 @@ function AmbiguousFollowChoice(props: { follow: AmbiguousFollowedTeamRef }) {
         {`We saved a team called ${savedName} before teams were pinned to a permanent number. Pick the right one and it comes straight back; until then its scores and standings are on hold.`}
       </p>
       {follow.candidates.map((candidate) => (
-        <button
-          className="sp-nofollow__btn"
-          type="button"
+        <Button
+          variant="secondary"
           key={candidate.sourceTeamId}
           disabled={saving !== null}
           onClick={() => {
@@ -724,7 +713,7 @@ function AmbiguousFollowChoice(props: { follow: AmbiguousFollowedTeamRef }) {
           }}
         >
           {saving === candidate.sourceTeamId ? `Saving ${candidate.name}...` : candidate.name}
-        </button>
+        </Button>
       ))}
       {error === null ? null : <p className="sp-empty__lede">{error}</p>}
     </div>
@@ -755,9 +744,9 @@ function EmptyState(props: {
             Pick the teams and competitions you care about — this page fills with their scores,
             results, and headlines.
           </p>
-          <a className="sp-nofollow__btn" href={SETTINGS_HREF}>
+          <ButtonLink variant="secondary" href={SETTINGS_HREF}>
             Choose teams to follow
-          </a>
+          </ButtonLink>
         </div>
       </section>
       {hasSlate ? (

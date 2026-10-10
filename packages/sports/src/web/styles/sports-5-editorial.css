@@ -395,17 +395,10 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
-.sp-gameday__nav {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: var(--space-1);
-}
 @media (max-width: 720px) {
   /* Narrow: the arrows are redundant once the tabs wrap to their own rows, and they were the
      first thing to collide with the wrap. Tabs alone still reach every game. */
-  .sp-gameday__nav {
+  .sp-gameday__ctl > .jds-iconbtn {
     display: none;
   }
 }
