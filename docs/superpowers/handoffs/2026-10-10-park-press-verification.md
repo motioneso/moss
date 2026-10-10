@@ -162,6 +162,11 @@ the original ready outcome. Today medication tests retain Escape, Done, backdrop
 and opener-return checks using the intended initial focus and shared backdrop.
 These are repaired assertion contracts, not successful first-run CI claims.
 
+The ten approval focus-ring contrast cases also now parse exact selector membership
+in comma-separated CSS rule headers, preserving every token pair and the 3:1
+threshold. The final corrected core slice passes 177 tests across 18 unit files.
+This assertion-only follow-through does not alter production behavior.
+
 The active scheduled work's three affected sign-in specs and the attachment
 fixture patch remain apply-compatible. Its assistant-name patch already conflicts
 with current main's newer model fixture before this migration; the locator-only
