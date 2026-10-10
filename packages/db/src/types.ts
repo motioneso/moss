@@ -946,7 +946,7 @@ export interface ChatThreadsTable {
   last_active_at: TimestampColumn;
   conversation_summary: string | null;
   summary_covered_through_message_id: string | null;
-  summary_revision: number;
+  summary_revision: ColumnType<number, number | undefined, number>;
 }
 
 export interface ChatConversationProvenanceTable {

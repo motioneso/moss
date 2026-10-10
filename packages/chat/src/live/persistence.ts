@@ -53,7 +53,9 @@ import { normalizeChatSurface } from "./chat-surface.js";
 import { terminalActionRecord } from "../action-record-history.js";
 import { estimateTokens } from "./recall-seed.js";
 import { UnsupportedLegacyCliProviderError } from "./errors.js";
-import { DEFAULT_REPLAY_MESSAGES, REPLAY_TOKEN_CAP, type ReplayMessage } from "./replay-window.js";
+import { DEFAULT_REPLAY_MESSAGES, type ReplayMessage } from "./replay-window.js";
+
+export { getReplayK, getReplayTokenCap } from "./replay-window.js";
 import { splitAtSummaryFrontier, type CoverageTurn } from "./summary-coverage.js";
 
 /** Provider-kinds the live CLI runtime can drive (the narrow ProviderKind set). */
@@ -667,38 +669,6 @@ function toLiveProvider(model: AiConfiguredModelSafeRow): ProviderKind {
   throw new Error(
     `Active chat model uses provider kind "${kind}", which has no live CLI engine in Phase 1.`
   );
-}
-
-/**
- * D1: unset/empty -> DEFAULT_REPLAY_MESSAGES (40); explicit "0" -> 0 (valid
- * opt-out); non-numeric or negative -> 40 plus one console.warn. Exported so
- * tests/unit/chat-replay-window.test.ts can unit-test the parsing directly.
- */
-export function getReplayK(): number {
-  const val = resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_K");
-  if (val === undefined || val === "") return DEFAULT_REPLAY_MESSAGES;
-  const parsed = parseInt(val, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    console.warn(
-      `Invalid JARVIS_CHAT_REPLAY_K value "${val}"; defaulting to ${DEFAULT_REPLAY_MESSAGES}.`
-    );
-    return DEFAULT_REPLAY_MESSAGES;
-  }
-  return parsed;
-}
-
-/** D1: sibling override for REPLAY_TOKEN_CAP. Same resolver, same parse rules. */
-export function getReplayTokenCap(): number {
-  const val = resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_TOKENS");
-  if (val === undefined || val === "") return REPLAY_TOKEN_CAP;
-  const parsed = parseInt(val, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    console.warn(
-      `Invalid JARVIS_CHAT_REPLAY_TOKENS value "${val}"; defaulting to ${REPLAY_TOKEN_CAP}.`
-    );
-    return REPLAY_TOKEN_CAP;
-  }
-  return parsed;
 }
 
 function storedCoverageTurns(

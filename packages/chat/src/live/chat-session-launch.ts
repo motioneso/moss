@@ -23,7 +23,9 @@ import {
 import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
 import { CliChatUnavailableError } from "./errors.js";
 import { renderPersona } from "./persona.js";
-import { renderMemorySeedBlock } from "./recall-seed.js";
+import { estimateTokens, renderMemorySeedBlock } from "./recall-seed.js";
+import { getReplayTokenCap, SUMMARY_TOKEN_CAP } from "./replay-window.js";
+import { coverageTurnTokens, launchContextFits } from "./summary-coverage.js";
 import { drainEngine } from "./session-runtime-helpers.js";
 import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 
@@ -114,6 +116,8 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     revokeMcpToken: deps.revokeMcpToken
   });
   let memorySeed: AdmittedContext | null;
+  const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
+  const seedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : 1500;
   try {
     if (engine.admitsOutsideContentWithoutPermission) {
       await admitOutsideAgentLaunch(
@@ -123,8 +127,6 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     }
     // Rebuild replay from live state for every launch; recall precedes conversation replay.
     const recallResult = deps.recall ? await deps.recall.recall(actorUserId) : null;
-    const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
-    const seedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : 1500;
     memorySeed = await admitToContext(
       admissionForActor(deps.conversationProvenance, actorUserId),
       threadId,
@@ -148,6 +150,26 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   }
   if (threadState?.incognito && !engine.purgeTranscripts && !engine.handlesOwnPrivatePurge) {
     throw new CliChatUnavailableError("private session unavailable");
+  }
+  // The replay is never truncated. Retained context that cannot fit refuses the launch and asks
+  // for the older turns to be condensed, so a later resume fits.
+  const fits = launchContextFits(
+    {
+      seedTokens: estimateTokens(memorySeed?.text ?? ""),
+      summaryTokens: estimateTokens(oldSummary ?? ""),
+      replayTokens: recentTurns.reduce((sum, turn) => sum + coverageTurnTokens(turn), 0)
+    },
+    seedBudget + SUMMARY_TOKEN_CAP + getReplayTokenCap()
+  );
+  if (!fits) {
+    await deps.persistence
+      .requestConversationSummary?.(actorUserId, { threadId }, surface)
+      .catch(() => undefined);
+    await engine.kill().catch(() => undefined);
+    deps.revokeMcpToken?.(sessionKey);
+    throw new CliChatUnavailableError(
+      "This conversation is too long to resume right now. It is being condensed, so try again shortly or start a new chat."
+    );
   }
   const replayParts: string[] = [];
   if (memorySeed) replayParts.push(memorySeed.text);

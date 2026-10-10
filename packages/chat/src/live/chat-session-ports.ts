@@ -47,7 +47,7 @@ export interface ChatPersistencePort {
     acpAgentId?: string | null;
     acpModel?: string;
   }>;
-  /** Prior stored turns split into recent verbatim turns + older rolling summary. */
+  /** The accepted summary plus every stored turn after its covered frontier. */
   listPriorTurns(
     actorUserId: string,
     opts?: { readonly forceReplay?: boolean; readonly threadId?: string | null },
@@ -56,6 +56,15 @@ export interface ChatPersistencePort {
     recent: readonly { role: "user" | "assistant"; content: string }[];
     oldSummary: string | null;
   }>;
+  /**
+   * Ask for the bound conversation's older turns to be condensed into its summary.
+   * Best-effort; the caller never waits on the summary itself.
+   */
+  requestConversationSummary?(
+    actorUserId: string,
+    binding: { readonly threadId?: string | null },
+    surface?: ChatSurface
+  ): Promise<void>;
   /** Persist a completed turn (user text + assistant reply + executing provider/model). */
   recordTurn(
     actorUserId: string,
