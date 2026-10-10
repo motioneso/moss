@@ -261,6 +261,29 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
             />
           }
         />
+        {(definitionsQuery.data?.externalSources ?? []).map((source) => (
+          <Row
+            key={source.toolName}
+            name={source.label}
+            desc={`Include ${source.label} in the morning briefing.`}
+            control={
+              <Switch
+                ariaLabel={source.label}
+                checked={morning?.selectedToolNames.includes(source.toolName) ?? false}
+                disabled={busy || !morning}
+                onChange={() =>
+                  mutation.mutate({
+                    type: "morning",
+                    selectedToolNames: toggleToolName(
+                      morning?.selectedToolNames ?? [],
+                      source.toolName
+                    )
+                  })
+                }
+              />
+            }
+          />
+        ))}
         {BRIEFING_SOURCE_BEHAVIORS.map((behavior) => (
           <Row
             key={behavior.id}
