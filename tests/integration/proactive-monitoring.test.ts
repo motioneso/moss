@@ -169,6 +169,41 @@ describe("Proactive Monitoring — integration", () => {
       expect(afterReactivate.some((c) => c.id === card.id)).toBe(true);
     });
 
+    it("hides expired cards and does not revive them on undo", async () => {
+      const ctx = { actorUserId: ids.userA, requestId: "test:expiry" };
+
+      const card = await dataContext.withDataContext(ctx, (scopedDb) =>
+        cardRepo.upsertCard(scopedDb, {
+          ...PROBE_CARD_BASE,
+          ownerUserId: ids.userA,
+          stableKey: "expiry:test",
+          expiresAt: new Date(Date.now() + 1500).toISOString()
+        })
+      );
+      const visibleBefore = await dataContext.withDataContext(ctx, (scopedDb) =>
+        cardRepo.listActive(scopedDb, ids.userA)
+      );
+      expect(visibleBefore.some((c) => c.id === card.id)).toBe(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 1700));
+
+      const visibleAfter = await dataContext.withDataContext(ctx, (scopedDb) =>
+        cardRepo.listActive(scopedDb, ids.userA)
+      );
+      expect(visibleAfter.some((c) => c.id === card.id)).toBe(false);
+
+      await dataContext.withDataContext(ctx, (scopedDb) =>
+        cardRepo.markDismissed(scopedDb, ids.userA, card.id)
+      );
+      await dataContext.withDataContext(ctx, (scopedDb) =>
+        cardRepo.reactivate(scopedDb, ids.userA, card.id)
+      );
+      const afterUndo = await dataContext.withDataContext(ctx, (scopedDb) =>
+        cardRepo.listActive(scopedDb, ids.userA)
+      );
+      expect(afterUndo.some((c) => c.id === card.id)).toBe(false);
+    });
+
     it("idempotent upsert updates title and summary", async () => {
       const ctx = { actorUserId: ids.userA, requestId: "test:upsert-idempotent" };
       const stableKey = "upsert-idempotent:test";
