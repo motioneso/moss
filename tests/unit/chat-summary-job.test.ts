@@ -265,6 +265,25 @@ describe("handleSummarizeConversationJob (#3156)", () => {
     expect(Buffer.byteLength(prompts[0]!, "utf8")).toBeLessThanOrEqual(STRUCTURED_PROMPT_MAX_BYTES);
   });
 
+  it("shrinks the batch when many short turns cannot fit, and continues from there", async () => {
+    const messages = Array.from({ length: 1500 }, (_, i) => message(i + 1, "日".repeat(60)));
+    const { deps, chatRepository, prompts, enqueueNext } = setup({ messages });
+    await expect(
+      handleSummarizeConversationJob(access, { ...payload, throughMessageId: "m1500" }, deps)
+    ).resolves.toBe("published");
+    expect(Buffer.byteLength(prompts[0]!, "utf8")).toBeLessThanOrEqual(STRUCTURED_PROMPT_MAX_BYTES);
+    const published = chatRepository.publishConversationSummary.mock.calls[0]![1] as {
+      throughMessageId: string;
+    };
+    expect(published.throughMessageId).not.toBe("m1500");
+    expect(enqueueNext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedRevision: 1,
+        expectedCoveredThroughMessageId: published.throughMessageId
+      })
+    );
+  });
+
   it("does not queue more work when the publish lost the race", async () => {
     vi.stubEnv("JARVIS_CHAT_REPLAY_K", "1");
     const messages = Array.from({ length: 12 }, (_, i) => message(i + 1));

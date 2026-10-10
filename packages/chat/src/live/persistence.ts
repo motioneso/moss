@@ -57,8 +57,6 @@ import { terminalActionRecord } from "../action-record-history.js";
 import { estimateTokens } from "./recall-seed.js";
 import { UnsupportedLegacyCliProviderError } from "./errors.js";
 import { getReplayK, getReplayTokenCap, type ReplayMessage } from "./replay-window.js";
-
-export { getReplayK, getReplayTokenCap } from "./replay-window.js";
 import {
   SUMMARY_RUN_INPUT_TOKENS,
   planSummaryCoverage,
@@ -66,6 +64,8 @@ import {
   storedCoverageTurns,
   type CoverageTurn
 } from "./summary-coverage.js";
+
+export { getReplayK, getReplayTokenCap } from "./replay-window.js";
 
 /** Provider-kinds the live CLI runtime can drive (the narrow ProviderKind set). */
 const LIVE_PROVIDER_KINDS: readonly ProviderKind[] = ["anthropic", "openai-compatible", "google"];

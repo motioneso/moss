@@ -6,7 +6,7 @@ export const DEFAULT_REPLAY_MESSAGES = 40;
 /** Token budget for the replayed message window (excludes the summary). */
 export const REPLAY_TOKEN_CAP = 8000;
 
-/** Token budget for the stored rolling summary once capped for injection. */
+/** Token cap for a conversation summary, enforced when a summary publishes. */
 export const SUMMARY_TOKEN_CAP = 1000;
 
 export interface ReplayMessage {
@@ -15,7 +15,8 @@ export interface ReplayMessage {
 }
 
 /**
- * Messages replayed after the accepted summary. Unset or empty falls back to
+ * Newest turns kept raw instead of summarized; every turn after the accepted
+ * summary still replays. Unset or empty falls back to
  * DEFAULT_REPLAY_MESSAGES; "0" disables replay; a non-numeric or negative value
  * falls back with one console.warn.
  */

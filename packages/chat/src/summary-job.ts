@@ -286,8 +286,15 @@ export async function handleSummarizeConversationJob(
       content: summarizableTurnText(byId.get(turn.id)!)
     }));
 
-    const prompt = buildBoundedSummaryPrompt(split.summary, turns);
+    // Shrink the batch until the prompt fits; the job requeues the remainder after a publish.
+    let count = turns.length;
+    let prompt = buildBoundedSummaryPrompt(split.summary, turns);
+    while (!prompt && count > 1) {
+      count = Math.ceil(count / 2);
+      prompt = buildBoundedSummaryPrompt(split.summary, turns.slice(0, count));
+    }
     if (!prompt) return log("rejected");
+    const throughMessageId = split.uncovered[count - 1]!.id;
 
     const selected = await deps.dataContext.withDataContext(access, resolve);
     if (selected.model.provider_auth_method === "cli") {
@@ -347,13 +354,13 @@ export async function handleSummarizeConversationJob(
         threadId: thread.id,
         expectedRevision: payload.expectedRevision,
         expectedCoveredThroughMessageId: payload.expectedCoveredThroughMessageId,
-        throughMessageId: payload.throughMessageId,
+        throughMessageId,
         summary
       })
     );
     if (published !== "published") return log("stale");
 
-    const coveredIndex = split.uncovered.findIndex((turn) => turn.id === payload.throughMessageId);
+    const coveredIndex = count - 1;
     const next = planSummaryCoverage(split.uncovered.slice(coveredIndex + 1), {
       keep: getReplayK(),
       replayTokens: getReplayTokenCap(),
@@ -364,7 +371,7 @@ export async function handleSummarizeConversationJob(
         actorUserId,
         threadId: thread.id,
         expectedRevision: payload.expectedRevision + 1,
-        expectedCoveredThroughMessageId: payload.throughMessageId,
+        expectedCoveredThroughMessageId: throughMessageId,
         throughMessageId: next.throughMessageId
       });
     }
