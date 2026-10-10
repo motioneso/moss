@@ -325,7 +325,6 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   const fuelBefore = await readAssigned("Fuel");
 
   // --- Chat: a $50 move is under the limit, so it runs on its own ---------------------------
-  const composer = page.getByRole("textbox", { name: /^Message/ });
   const card = page.locator('[role="region"][aria-label="Action request"]');
   const ask = async (text: string) => {
     await composer.fill(text);
@@ -360,8 +359,8 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   await ask(
     "Move $250 from Groceries to Fuel for this month's budget. Use the budget move tool now."
   );
-  const approve = card.getByRole("button", { name: "Approve" }).last();
-  await expect(approve).toBeVisible({ timeout: 240_000 });
+  const approveMove = card.getByRole("button", { name: "Approve" }).last();
+  await expect(approveMove).toBeVisible({ timeout: 240_000 });
   await crop(card.last(), "approval-card-250");
   await card
     .getByRole("button", { name: /Deny|Decline/ })
