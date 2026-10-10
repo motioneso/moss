@@ -337,11 +337,11 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "oversized messages are never sent to the classifier. How long the gate waits for the " +
       "classifier follows that model's own measured speed per question. A fast model keeps a " +
       "short wait, so a one-off stall hands the message to the main model within a few " +
-      "seconds; a model that keeps stalling is given longer each time. A slower model such as " +
-      "a signed-in command-line one is given about twice the time a full tool request takes " +
-      "it. The wait is never more than 30 seconds, the first message after Moss restarts " +
-      "waits up to 30 seconds while the model is measured again, and nothing about the wait " +
-      "can be set by hand. " +
+      "seconds; if stalls become frequent, the wait grows. A slower model is given about " +
+      "twice the time a full tool request takes it, up to 30 seconds, and a signed-in " +
+      "command-line model simply gets the full 30 seconds. After Moss restarts or a new " +
+      "classifier model is chosen, the wait starts at 30 seconds while the model is measured, " +
+      "and nothing about the wait can be set by hand. " +
       "The classifier " +
       "sorts each new email into junk, needs a reply, needs action, receipt or notice, " +
       "waiting on someone, time-sensitive, or for your information; receipts, order and booking " +

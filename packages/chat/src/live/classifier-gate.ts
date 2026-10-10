@@ -302,7 +302,8 @@ export class ClassifierGate {
         if (request.signal?.aborted) return finish({ kind: "cancelled", trace });
         if (coolKey) this.startCooldown(coolKey);
         // #3365: a timeout counts the question in flight as answered at the deadline, so the
-        // record reads the model as at least this slow and the next limit grows.
+        // record reads the model as at least this slow and the next limit grows. Time spent
+        // loading candidate values is charged to the model too, which errs toward a longer wait.
         recordSpeed();
         // #3064: one owner for the timeout line — the gate. It always files on a gate
         // deadline, because it alone knows the turn, the model and the elapsed time.

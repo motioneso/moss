@@ -200,6 +200,65 @@ describe("the gate engine runs under the model's measured limit", () => {
     expect(record).toHaveBeenCalledWith(MODEL_ID, 2_000);
   });
 
+  it("counts the argument extract call as a question", async () => {
+    vi.useFakeTimers();
+    const addTask: GateTool = {
+      moduleId: "tasks",
+      moduleDescription: "The user's tasks",
+      name: "tasks.create",
+      risk: "read",
+      inputSchema: {
+        type: "object",
+        properties: { title: { type: "string", maxLength: 100 } },
+        required: ["title"],
+        additionalProperties: false
+      },
+      outputSchema: { type: "object", properties: { summary: { type: "string" } } },
+      classifier: {
+        description: "Add a task",
+        arguments: { title: { kind: "extract" } },
+        replyTemplate: "Added {summary}."
+      }
+    };
+    const { ports } = attemptPorts(0);
+    const extract = vi.fn(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ ok: true, values: { title: "call mum" }, usage }), 3_000)
+        )
+    );
+    const speed = new GateSpeedRecord();
+    const record = vi.spyOn(speed, "record");
+    const gate = new ClassifierGate({
+      ...ports,
+      classifier: {
+        ...ports.classifier,
+        resolve: async () => ({
+          model: {
+            id: MODEL_ID,
+            provider_config_id: "p",
+            provider_kind: "x",
+            provider_model_id: "m"
+          },
+          capability: "typed_extraction"
+        }),
+        choose: vi
+          .fn()
+          .mockResolvedValueOnce(pick("tasks"))
+          .mockResolvedValueOnce(pick("tasks.create")),
+        extract
+      } as never as ClassifierGatePorts["classifier"],
+      listTools: async () => [addTask],
+      speed,
+      now: () => Date.now()
+    });
+    const pending = gate.evaluate(request());
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect((await pending).kind).toBe("handled");
+    expect(extract).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith(MODEL_ID, 1_000);
+  });
+
   it("counts the limit from the start of the attempt, not from when the model is found", async () => {
     vi.useFakeTimers();
     const { ports } = attemptPorts(1_500, 2_000);
