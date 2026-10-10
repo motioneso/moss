@@ -106,8 +106,10 @@ function setup(
     };
   });
   const enqueueNext = vi.fn().mockResolvedValue(undefined);
-  const deps: SummaryJobDeps = {
-    dataContext: { withDataContext: (_access, work) => work({} as never) } as never,
+  const deps: { -readonly [K in keyof SummaryJobDeps]: SummaryJobDeps[K] } = {
+    dataContext: {
+      withDataContext: (_access: unknown, work: (db: never) => unknown) => work({} as never)
+    } as never,
     chatRepository: chatRepository as never,
     aiRepository: aiRepository as never,
     cipher: {} as never,
