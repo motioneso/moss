@@ -2,9 +2,11 @@ import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 // Chat turns here run on the harness's scripted chat model (fixture: chat-scripts/runtime-context.json).
-// Its reply is fixed text, so the checks below cover only what a turn sends: no page snapshot, and no
-// page-context push. withoutNewsJsonBinding keeps the scripted provider the only assistant provider,
-// so it becomes the default model (see 1533-chat-surface-live-path.uat.spec.ts for why).
+// Its reply is fixed text, so the check below covers only what a turn sends: the turn body carries no
+// page snapshot. Page-context pushes are not counted here. The debounced sync
+// (apps/web/src/chat/use-page-context-sync.ts) also runs on DOM changes, and a sent message changes the
+// DOM, so a push can follow a send. withoutNewsJsonBinding keeps the scripted provider the only
+// assistant provider, so it becomes the default model (see 1533-chat-surface-live-path.uat.spec.ts).
 //
 // Two behaviours need a real model to judge, so they stay test.fixme (#1121): the screenshot refusal,
 // and the News error being pulled from the map and explained. Their logic is proven at unit level by
@@ -54,21 +56,15 @@ async function openChat(page: Page) {
   await page.getByRole("button", { name: "Chat with Moss" }).click();
 }
 
-test("ordinary chat turn sends no snapshot and performs no current-view pull", async ({ page }) => {
+test("ordinary chat turn sends no page snapshot", async ({ page }) => {
   await signIn(page);
 
   let turnBody: unknown;
-  let pageContextPushCount = 0;
   page.on("request", (request) => {
-    if (request.method() !== "POST" && request.method() !== "PUT") return;
-    const url = request.url();
+    if (request.method() !== "POST") return;
     // apps/web/src/api/client.ts:835-840 sendChatTurn posts only `{ text }` — proves Task 5's
     // push-deletion holds: the client no longer bundles a page-context snapshot onto the turn.
-    if (url.endsWith("/api/chat/turn")) turnBody = request.postDataJSON();
-    // apps/web/src/api/client.ts:847-849 updatePageContext is the SEPARATE, debounced push path
-    // (apps/web/src/chat/use-page-context-sync.ts) triggered by route/DOM/focus/selection changes
-    // — not by sending a turn. Counting it proves clicking Send doesn't also trigger a push.
-    if (url.endsWith("/api/chat/page-context")) pageContextPushCount += 1;
+    if (request.url().endsWith("/api/chat/turn")) turnBody = request.postDataJSON();
   });
 
   await openChat(page);
@@ -79,7 +75,6 @@ test("ordinary chat turn sends no snapshot and performs no current-view pull", a
   await expect(page.getByText("Hello there, friend.").first()).toBeVisible();
 
   expect(turnBody).toEqual({ text: "Say hello in three words.", surface: "drawer" });
-  expect(pageContextPushCount).toBe(0);
 });
 
 test("assistant tools never expose a screenshot capability", async ({ page }) => {
