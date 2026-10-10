@@ -4,6 +4,7 @@ import { renderToolResult } from "@moss/module-sdk";
 import type { GatewayToolResponse } from "./types.js";
 
 const MAX_RENDERED_TOOL_RESULT_CHARS = 16_000;
+export const MAX_SCREEN_TOOL_RESULT_CHARS = 2_000_000;
 
 // Strip injection-vector sentinel tokens before wrapping external content.
 // These patterns mirror the set used in @moss/briefings sanitizeExternal.
@@ -89,13 +90,13 @@ export function renderAndCap(
   return { text: toolName ? wrapWithTrustBoundary(toolName, text) : text };
 }
 
-/** @deprecated Use {@link renderAndCap} instead. */
-export function boundedAssistantToolResultData(result: ToolResult): Record<string, unknown> {
-  const rendered = renderToolResult(result);
-  if (rendered.length <= MAX_RENDERED_TOOL_RESULT_CHARS) {
-    return result.data;
-  }
-  return { text: capRenderedToolResult(rendered) };
+/**
+ * A module screen renders the structured result, so it gets the data whole. The chat-sized
+ * render cap would swap it for a text summary the screen cannot read. Null means the data is
+ * over the hard screen limit.
+ */
+export function screenToolResultData(result: ToolResult): Record<string, unknown> | null {
+  return JSON.stringify(result.data).length <= MAX_SCREEN_TOOL_RESULT_CHARS ? result.data : null;
 }
 
 export function capRenderedToolResult(text: string): string {

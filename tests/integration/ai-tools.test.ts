@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import pg from "pg";
 
 import { createApiServer } from "../../apps/api/src/server.js";
-import { AiRepository, registerAiRoutes } from "@moss/ai";
+import { AiRepository, MAX_SCREEN_TOOL_RESULT_CHARS, registerAiRoutes } from "@moss/ai";
 import { CalendarRepository } from "@moss/calendar";
 import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
 import { EmailRepository } from "@moss/email";
@@ -594,7 +594,7 @@ describe("AI read-only assistant tool execution foundation", () => {
     }
   });
 
-  it("caps oversized REST assistant tool output after sanitizing it", async () => {
+  it("rejects REST assistant tool output over the screen limit after sanitizing it", async () => {
     const module: MossModuleManifest = {
       id: "security-cap-probe",
       name: "Security Cap Probe",
@@ -614,7 +614,7 @@ describe("AI read-only assistant tool execution foundation", () => {
             required: ["visible"]
           },
           execute: async () => ({
-            data: { visible: `${"x".repeat(20_000)}REST_OVERSIZED_TAIL` }
+            data: { visible: `${"x".repeat(MAX_SCREEN_TOOL_RESULT_CHARS)}REST_OVERSIZED_TAIL` }
           })
         }
       ]
@@ -637,13 +637,9 @@ describe("AI read-only assistant tool execution foundation", () => {
         payload: { input: {} }
       });
 
-      expect(response.statusCode).toBe(200);
-      expect(response.body.length).toBeLessThan(18_000);
-      expect(response.body).toContain("[truncated tool result]");
+      expect(response.statusCode).toBe(413);
+      expect(response.body.length).toBeLessThan(1_000);
       expect(response.body).not.toContain("REST_OVERSIZED_TAIL");
-
-      const result = response.json<InvocationResponse>().invocation.result;
-      expect(JSON.stringify(result).length).toBeLessThanOrEqual(16_500);
     } finally {
       await app.close();
     }
