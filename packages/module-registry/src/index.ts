@@ -625,6 +625,11 @@ export interface BuiltInRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly listConfiguredAuthProviders: () => readonly AuthProviderStatusDto[];
   readonly listModuleManifests: () => readonly MossModuleManifest[];
+  /** Briefing tool names declared by external modules; lets briefings select them. */
+  readonly listExternalBriefingToolNames?: () => readonly string[];
+  readonly listExternalBriefingSources?: (
+    access: AccessContext
+  ) => Promise<readonly { readonly toolName: string; readonly label: string }[]>;
   /** #3065: filled by the server's onReady once every route is registered; forwarded to chat. */
   readonly routeCatalog?: RouteCatalogHolder;
   readonly actAsGrants?: ActAsGrantRegistry;
@@ -2400,6 +2405,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         listModuleManifests: deps.listModuleManifests,
+        ...(deps.listExternalBriefingToolNames
+          ? { listExternalBriefingToolNames: deps.listExternalBriefingToolNames }
+          : {}),
+        ...(deps.listExternalBriefingSources
+          ? { listExternalBriefingSources: deps.listExternalBriefingSources }
+          : {}),
         boss: deps.boss,
         dayPlanRead: briefingsAutoDayPlanRepository,
         feedbackRepository: usefulnessFeedbackRepository
