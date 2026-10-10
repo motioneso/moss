@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "finance",
   "name": "Finance",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
@@ -93,10 +93,28 @@
       {
         "id": "finance.needs-a-look",
         "description": "Moss sorts each new transaction into a category and marks the ones it is unsure about as Needs a look. Whether Moss confirms its own guesses for merchants you have confirmed before, and for new merchants, follows the Sort purchases settings. A guessed category still counts toward the budget while it waits for review."
+      },
+      {
+        "id": "finance.chat-money-actions",
+        "description": "In chat, Moss can move money between categories, set a category's assigned total, make a merchant rule, and add, rename or archive categories. Each reports what it changed, before and after, and is logged. A move or change larger than the Moss can move up to setting in Finance settings (default $100) asks for approval first; smaller ones follow the freedom setting."
       }
     ]
   },
   "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },
+  "assistantOnboarding": {
+    "guidance": "Finance holds the user's budget. Read before you write: call finance.budget.status or finance.transactions.query first. Amounts are integer cents. To move money, call finance.budget.move with both category ids; use \"ready_to_assign\" as the source when the money is unassigned. To set a category's total, call finance.budget.assign with previousCents, the total it has now. Example: \"move 50 to groceries\" with 80 ready to assign becomes finance.budget.move { fromCategoryId: \"ready_to_assign\", toCategoryId: \"groceries\", amountCents: 5000 }. Moves above the user's dollar limit ask for approval first. Report the before and after the tool returns. Never guess a category id; list categories first."
+  },
+  "preferences": [
+    {
+      "key": "freedomLimitDollars",
+      "label": "Moss can move up to",
+      "description": "Moves above this amount ask first, at every freedom step.",
+      "type": "integer",
+      "default": 100,
+      "min": 0,
+      "max": 100000
+    }
+  ],
   "assistantTools": [
     {
       "name": "finance.accounts.list",
@@ -252,19 +270,153 @@
     {
       "name": "finance.budget.assign",
       "permissionId": "finance.budget.assign",
-      "description": "Set a category's assigned amount for a month (envelope budgeting).",
+      "description": "Set a category's assigned total for a month. Pass the total it has now as previousCents (read it from finance.budget.status); a wrong value is rejected. Returns the before and after totals.",
       "risk": "write",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "month": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}$" },
-          "categoryId": { "type": "string" },
-          "amountCents": { "type": "integer", "minimum": -100000000, "maximum": 100000000 }
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$",
+            "description": "Budget month, YYYY-MM."
+          },
+          "categoryId": {
+            "type": "string",
+            "description": "Id of an existing category. Never guess one; list categories first."
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": -100000000,
+            "maximum": 100000000,
+            "description": "The new assigned total in integer cents (50 dollars is 5000)."
+          },
+          "previousCents": {
+            "type": "integer",
+            "minimum": -100000000,
+            "maximum": 100000000,
+            "description": "The category's assigned total right now, in integer cents."
+          }
         },
-        "required": ["month", "categoryId", "amountCents"]
+        "required": ["month", "categoryId", "amountCents", "previousCents"]
       },
-      "handler": "budget.assign"
+      "handler": "budget.assign",
+      "actionFamilyId": "moving_money",
+      "executionPolicy": "auto",
+      "confirmAbove": {
+        "inputKey": "amountCents",
+        "baseKey": "previousCents",
+        "preferenceKey": "freedomLimitDollars",
+        "scale": 100
+      }
+    },
+    {
+      "name": "finance.budget.move",
+      "permissionId": "finance.budget.move",
+      "description": "Move money between two categories for a month. Use fromCategoryId ready_to_assign to take unassigned money. Returns the before and after assigned totals.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}$",
+            "description": "Budget month, YYYY-MM."
+          },
+          "fromCategoryId": {
+            "type": "string",
+            "description": "Category to take from, or ready_to_assign for unassigned money."
+          },
+          "toCategoryId": {
+            "type": "string",
+            "description": "Category to give to. Must be a real category id."
+          },
+          "amountCents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000,
+            "description": "Amount to move, positive integer cents (50 dollars is 5000)."
+          }
+        },
+        "required": ["month", "fromCategoryId", "toCategoryId", "amountCents"]
+      },
+      "handler": "budget.move",
+      "actionFamilyId": "moving_money",
+      "executionPolicy": "auto",
+      "confirmAbove": {
+        "inputKey": "amountCents",
+        "preferenceKey": "freedomLimitDollars",
+        "scale": 100
+      }
+    },
+    {
+      "name": "finance.rule.set",
+      "permissionId": "finance.rule.set",
+      "description": "Always put one merchant in one category from now on. Replaces an earlier rule for that merchant and returns the before and after category.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The merchant name as it appears on transactions."
+          },
+          "categoryId": {
+            "type": "string",
+            "description": "Id of an existing category."
+          }
+        },
+        "required": ["merchant", "categoryId"]
+      },
+      "handler": "rule.set",
+      "actionFamilyId": "rules",
+      "executionPolicy": "auto"
+    },
+    {
+      "name": "finance.category.upsert",
+      "permissionId": "finance.category.upsert",
+      "description": "Add a category (leave id out) or rename or regroup one (pass its id). Returns the before and after name and group.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Id of the category to change. Omit to add one."
+          },
+          "name": { "type": "string", "maxLength": 60, "description": "The category's name." },
+          "groupName": {
+            "type": "string",
+            "enum": ["Bills", "Everyday", "Fun", "Savings", "Income"],
+            "description": "The budget group the category sits in."
+          }
+        },
+        "required": ["name", "groupName"]
+      },
+      "handler": "category.upsert",
+      "actionFamilyId": "categories",
+      "executionPolicy": "auto"
+    },
+    {
+      "name": "finance.category.archive",
+      "permissionId": "finance.category.archive",
+      "description": "Archive a category. Refused while this month still has money assigned to it; move that money first.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "description": "Id of the category to archive." }
+        },
+        "required": ["id"]
+      },
+      "handler": "category.archive",
+      "actionFamilyId": "categories",
+      "executionPolicy": "auto"
     },
     {
       "name": "finance.account.set-shared",
@@ -325,6 +477,30 @@
       "id": "sorting_new",
       "label": "Sort purchases from new merchants",
       "description": "Decide the category the first time a merchant appears.",
+      "freedom": "new",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto"]
+    },
+    {
+      "id": "rules",
+      "label": "Make merchant rules",
+      "description": "Always put a merchant in the same category.",
+      "freedom": "new",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto"]
+    },
+    {
+      "id": "moving_money",
+      "label": "Move money between categories",
+      "description": "Assign or move budget amounts, up to your limit.",
+      "freedom": "routine",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto"]
+    },
+    {
+      "id": "categories",
+      "label": "Add, rename or archive categories",
+      "description": "Change the shape of your budget.",
       "freedom": "new",
       "defaultTier": "ask_each_time",
       "allowedTiers": ["ask_each_time", "trusted_auto"]

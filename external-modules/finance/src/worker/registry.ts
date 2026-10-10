@@ -7,7 +7,17 @@
 // shell over this table. All four FIN-01 manifest handler keys are real as
 // of Task 7 (#1146); notImplemented stays exported for FIN-02's Task 8 keys.
 import { accountsListHandler } from "./handlers/accounts.js";
-import { budgetApplyHandler, budgetAssignHandler, budgetStatusHandler } from "./handlers/budget.js";
+import {
+  budgetApplyHandler,
+  budgetAssignHandler,
+  budgetMoveHandler,
+  budgetStatusHandler
+} from "./handlers/budget.js";
+import {
+  categoryArchiveHandler,
+  categoryUpsertHandler,
+  ruleSetHandler
+} from "./handlers/organize.js";
 import { connectPollHandler, connectStartHandler } from "./handlers/connect.js";
 import {
   categorizeApplyHandler,
@@ -46,6 +56,11 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "budget.status": budgetStatusHandler,
   "budget.assign": budgetAssignHandler,
   "budget.apply": budgetApplyHandler,
+  // #3185: chat money and category actions.
+  "budget.move": budgetMoveHandler,
+  "rule.set": ruleSetHandler,
+  "category.upsert": categoryUpsertHandler,
+  "category.archive": categoryArchiveHandler,
   // FIN-04 (#1149) Task 4: the household-sharing surface of manifest v0.3.0.
   "account.set-shared": accountSetSharedHandler,
   "share.apply": shareApplyHandler,

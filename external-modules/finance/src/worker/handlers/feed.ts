@@ -259,7 +259,12 @@ function categorizeTool(mode: "seen" | "new"): ToolFactory {
     if (notes !== undefined) record.notes = notes;
     await store.putTransaction(record);
     await logCategorize(store, "moss", ids, previousCategoryId);
-    return { status: "ok", transaction: record };
+    return {
+      status: "ok",
+      transaction: record,
+      before: { categoryId: previousCategoryId },
+      after: { categoryId: ids.categoryId }
+    };
   };
 }
 
