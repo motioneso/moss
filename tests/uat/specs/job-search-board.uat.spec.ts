@@ -963,7 +963,7 @@ test("nav badge reflects unread matches and clears on mark-read (#1285)", async 
     await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
     // The account trigger's label also mentions notifications, so target the menu item.
     await page.getByRole("menuitem", { name: /^Notifications/ }).click();
-    const notice = page.locator("article.jds-task").filter({
+    const notice = page.getByRole("article").filter({
       has: page.getByText(notificationTitle, { exact: true })
     });
     await expect(notice).toBeVisible();
