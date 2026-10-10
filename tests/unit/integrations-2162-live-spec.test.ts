@@ -25,6 +25,6 @@ describe("integrations live spec (#3279)", () => {
 
   it("fails rather than skips when a service or credential is missing", async () => {
     const text = await source();
-    expect(text, "a missing prerequisite must not skip green").not.toMatch(/test\.skip\(/);
+    expect(text, "a missing prerequisite must not skip green").not.toMatch(/\.(skip|fixme)\(/);
   });
 });

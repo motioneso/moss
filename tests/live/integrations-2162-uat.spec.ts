@@ -9,9 +9,10 @@
 //   LIVE_RADARR_URL=... LIVE_RADARR_KEY=... LIVE_RADARR_SPEC_FILE=... \
 //     pnpm test:uat:2162-live [playwright args, e.g. --grep OpenAPI]
 //
-// Against an already running instance with a configured chat model:
+// Against an already running instance with a configured chat model (traces record typed
+// credentials, so keep them off):
 //   LIVE_BASE_URL=... LIVE_OWNER_EMAIL=... LIVE_OWNER_PASSWORD=... <service vars as above> \
-//     npx playwright test --config playwright.live.config.ts integrations-2162
+//     npx playwright test --config playwright.live.config.ts --trace=off integrations-2162
 //
 // A missing service or credential fails the test: an unconfigured run is unverified, not green.
 import { readFileSync } from "node:fs";
@@ -21,15 +22,16 @@ import { expect, test, type Page } from "@playwright/test";
 import { REAL_CHAT_CONFIGURED_ENV } from "../uat/real-chat-env.js";
 import { bringUpRealChatModel } from "../uat/specs/real-chat-signin.js";
 
+const OWNER_EMAIL = process.env.LIVE_OWNER_EMAIL;
 const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
-if (!OWNER_PASSWORD) {
+if (!OWNER_EMAIL || !OWNER_PASSWORD) {
   throw new Error(
-    "Set LIVE_OWNER_PASSWORD to the development instance sign-in password before running this " +
-      "test. The current password is not in this repository; it is kept in the memory note " +
-      "named dev-instance-lan-spinup-trusted-origins."
+    "Set LIVE_OWNER_EMAIL and LIVE_OWNER_PASSWORD to the instance owner's sign-in before running " +
+      "this test. The development password is not in this repository; it is kept in the memory " +
+      "note named dev-instance-lan-spinup-trusted-origins."
   );
 }
-const OWNER = { email: process.env.LIVE_OWNER_EMAIL ?? "ben@ben.com", password: OWNER_PASSWORD };
+const OWNER = { email: OWNER_EMAIL, password: OWNER_PASSWORD };
 
 const HA_MCP_URL = process.env.LIVE_HA_MCP_URL ?? "";
 const HA_TOKEN = process.env.LIVE_HA_TOKEN ?? "";
@@ -64,10 +66,10 @@ async function signInThroughUi(page: Page) {
   await expect(nav).toBeVisible();
 }
 
-// A disposable install has no chat model until the provisioned Codex login is bound to the
-// account's cheapest model. A long-lived instance already has one configured.
+// LIVE_BIND_CHEAPEST_MODEL=1 (set by run-live-2162.ts) binds the disposable stack's copied Codex
+// login to the account's cheapest model. A long-lived instance already has a model configured.
 async function ensureChatModel(page: Page) {
-  if (!process.env.JARVIS_UAT_BASE_URL) return;
+  if (process.env.LIVE_BIND_CHEAPEST_MODEL !== "1") return;
   if (!process.env[REAL_CHAT_CONFIGURED_ENV]) {
     throw new Error("no Codex sign-in was copied into this stack; refusing to fake the model");
   }
