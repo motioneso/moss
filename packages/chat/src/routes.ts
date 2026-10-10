@@ -111,6 +111,7 @@ import type { ClassifierGateRunner } from "./live/classifier-gate-runner.js";
 import { createCliStructuredAdapterFactory } from "./live/cli-structured-adapter.js";
 import { createClassifierGatePortsFactory } from "./live/classifier-gate-wiring.js";
 import { createClassifierGateShadowRunner } from "./live/classifier-gate-shadow.js";
+import { GateSpeedRecord } from "./live/classifier-gate-speed.js";
 import { THRESHOLD_VERSION, type GateMode } from "./live/classifier-gate.js";
 import { resolveEffectiveGateMode } from "./classifier-shadow-review-repository.js";
 import { buildChatGatewayDependencies } from "./gateway-services.js";
@@ -405,12 +406,15 @@ export function registerChatRoutes(
   /**
    * Task 4.1 (#2901) — the classifier gate seam, wired with the real access token and admin setting.
    * `buildClassifierGateRunner` owns the session-id shape, the token lifetime and the admin mode
-   * read. `on` runs only while the current classifier selection has a shadow review.
+   * read. `on` runs only while the current classifier selection has a shadow review. #3365: both
+   * runners share one speed record, so each routing model's time limit survives a mode change.
    */
+  const classifierGateSpeed = new GateSpeedRecord();
   const classifierGate =
     wiring && readGateMode
       ? buildClassifierGateRunner({
           readMode: readGateMode,
+          speed: classifierGateSpeed,
           tokens: wiring.tokens,
           createPorts: classifierGatePorts
         })
@@ -427,6 +431,7 @@ export function registerChatRoutes(
     wiring && classifierGatePorts && readGateMode
       ? createClassifierGateShadowRunner({
           readMode: readGateMode,
+          speed: classifierGateSpeed,
           createPorts: classifierGatePorts,
           repository: classifierShadowRepository,
           dataContext: dependencies.dataContext,
@@ -506,6 +511,8 @@ export function registerChatRoutes(
           },
           revoke: (chatSessionId: string) => wiring.tokens.revokeBySessionId(chatSessionId),
           touch: (chatSessionId: string) => wiring.tokens.touchBySessionId(chatSessionId),
+          beginLaunchReplay: (token: string) => wiring.tokens.beginLaunchReplay(token),
+          endLaunchReplay: (token: string) => wiring.tokens.endLaunchReplay(token),
           // #2956: the chat manager files a session's tool rows under its
           // running turn; the gateway reads the same map at tool time.
           setCurrentTurn: (chatSessionId: string, turnId: string) =>
