@@ -138,6 +138,12 @@ export const chatModuleManifest = {
             "The conversation is too long to restore in full, so Moss is condensing it. Your history is kept. Try again shortly or start a new chat."
         },
         {
+          code: "conversation_could_not_condense",
+          class: "transient",
+          description:
+            "The conversation is too long to restore in full and Moss could not start condensing it. Your history is kept. Try again later or start a new chat."
+        },
+        {
           code: "conversation_needs_summary_model",
           class: "prerequisite",
           remediationRef: "chat.add_summary_model",

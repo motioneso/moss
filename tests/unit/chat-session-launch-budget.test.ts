@@ -64,9 +64,11 @@ describe("fresh launch replay budget (#3156)", () => {
     vi.stubEnv("JARVIS_CHAT_REPLAY_TOKENS", "2000");
     vi.stubEnv("JARVIS_CHAT_SEED_BUDGET_TOKENS", "100");
     const { manager, engine, requestConversationSummary, revokeMcpToken } = setup(turns(40, 400));
+    requestConversationSummary.mockResolvedValue("queued");
     const launch = manager.ensureSession("u1", "Ben");
     await expect(launch).rejects.toBeInstanceOf(CliChatUnavailableError);
     await expect(launch).rejects.toThrow(/too long to resume/);
+    await expect(launch).rejects.toThrow(/Moss is condensing it/);
     await expect(launch).rejects.toThrow(/history is kept/);
     expect(engine.launchOpts).toBeNull();
     expect(engine.killed).toBe(true);
@@ -78,10 +80,20 @@ describe("fresh launch replay budget (#3156)", () => {
     vi.stubEnv("JARVIS_CHAT_REPLAY_TOKENS", "2000");
     const { manager, engine, requestConversationSummary } = setup(turns(40, 400));
     requestConversationSummary.mockRejectedValue(new Error("queue down"));
-    await expect(manager.ensureSession("u1", "Ben")).rejects.toBeInstanceOf(
-      CliChatUnavailableError
-    );
+    const launch = manager.ensureSession("u1", "Ben");
+    await expect(launch).rejects.toBeInstanceOf(CliChatUnavailableError);
+    await expect(launch).rejects.toThrow(/could not start condensing/);
     expect(engine.killed).toBe(true);
+    expect(engine.launchOpts).toBeNull();
+  });
+
+  it("never promises condensing when no summary run was queued", async () => {
+    vi.stubEnv("JARVIS_CHAT_REPLAY_TOKENS", "2000");
+    const { manager, engine, requestConversationSummary } = setup(turns(40, 400));
+    requestConversationSummary.mockResolvedValue("skipped");
+    const launch = manager.ensureSession("u1", "Ben");
+    await expect(launch).rejects.toThrow(/could not start condensing/);
+    await expect(launch).rejects.not.toThrow(/Moss is condensing it/);
     expect(engine.launchOpts).toBeNull();
   });
 

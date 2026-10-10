@@ -15,10 +15,11 @@ export interface ReplayMessage {
 }
 
 /**
- * Newest turns kept raw instead of summarized; every turn after the accepted
- * summary still replays. Unset or empty falls back to
- * DEFAULT_REPLAY_MESSAGES; "0" disables replay; a non-numeric or negative value
- * falls back with one console.warn.
+ * Newest uncovered turns kept raw when a summary run is planned. Every turn
+ * after the accepted summary still replays, so this never drops history. Unset
+ * or empty falls back to DEFAULT_REPLAY_MESSAGES; "0" keeps no turns raw, so the
+ * next summary run covers them all; a non-numeric or negative value falls back
+ * with one console.warn.
  */
 export function getReplayK(): number {
   const val = resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_K");

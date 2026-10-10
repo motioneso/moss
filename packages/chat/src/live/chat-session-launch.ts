@@ -26,6 +26,7 @@ import { renderPersona } from "./persona.js";
 import { estimateTokens, renderMemorySeedBlock } from "./recall-seed.js";
 import { getReplayTokenCap, SUMMARY_TOKEN_CAP } from "./replay-window.js";
 import {
+  CONVERSATION_COULD_NOT_CONDENSE_MESSAGE,
   CONVERSATION_NEEDS_SUMMARY_MODEL_MESSAGE,
   CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE,
   coverageTurnTokens,
@@ -175,9 +176,11 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     await engine.kill().catch(() => undefined);
     deps.revokeMcpToken?.(sessionKey);
     throw new CliChatUnavailableError(
-      status === "no_route"
-        ? CONVERSATION_NEEDS_SUMMARY_MODEL_MESSAGE
-        : CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE
+      status === "queued"
+        ? CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE
+        : status === "no_route"
+          ? CONVERSATION_NEEDS_SUMMARY_MODEL_MESSAGE
+          : CONVERSATION_COULD_NOT_CONDENSE_MESSAGE
     );
   }
   const replayParts: string[] = [];

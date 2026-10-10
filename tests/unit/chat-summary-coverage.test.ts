@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   PROMPT_ALLOWANCE_TOKENS,
+  coverageTurnTokens,
   launchContextFits,
   planSummaryCoverage,
   splitAtSummaryFrontier
@@ -78,6 +79,16 @@ describe("planSummaryCoverage", () => {
       maxInputTokens: 10_000
     });
     expect(plan?.cover.map((m) => m.id)).toEqual(["m1", "m2"]);
+  });
+
+  it("keeps no more raw turns than a full seed and summary leave room for", () => {
+    const small = Array.from({ length: 4 }, (_, i) => turn(`m${i + 1}`, "z".repeat(340)));
+    const replayTokens = 800;
+    const plan = planSummaryCoverage(small, { keep: 40, replayTokens, maxInputTokens: 10_000 });
+    expect(plan).not.toBeNull();
+    const kept = small.slice(plan!.cover.length);
+    const keptTokens = kept.reduce((sum, m) => sum + coverageTurnTokens(m), 0);
+    expect(keptTokens + PROMPT_ALLOWANCE_TOKENS).toBeLessThanOrEqual(replayTokens);
   });
 
   it("caps one run's input and leaves the rest for the next run", () => {

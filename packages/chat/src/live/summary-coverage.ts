@@ -7,6 +7,10 @@ export const PROMPT_ALLOWANCE_TOKENS = 500;
 export const CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE =
   "This conversation is too long to resume right now. Moss is condensing it, and your history is kept. Try again in a minute, or start a new chat.";
 
+/** Shown when a fresh launch cannot fit and no summary run could be queued. */
+export const CONVERSATION_COULD_NOT_CONDENSE_MESSAGE =
+  "This conversation is too long to resume right now, and Moss could not start condensing it. Your history is kept. Try again later, or start a new chat.";
+
 /** Shown when a fresh launch cannot fit and no configured model can condense the conversation. */
 export const CONVERSATION_NEEDS_SUMMARY_MODEL_MESSAGE =
   "This conversation is too long to restore in full, and no AI model that can summarize is set up. Add one in Settings, or start a new chat.";
@@ -75,23 +79,28 @@ export function splitAtSummaryFrontier<T extends CoverageTurn>(
  * Decide which uncovered turns the next summarization run should fold in.
  *
  * Runs when the uncovered suffix holds more than twice `keep` turns or more
- * than half the replay budget. The newest turns stay raw, bounded by both
- * `keep` and half the replay budget. One run reads at most `maxInputTokens`
- * of raw turns (always at least one) and leaves the rest for a later run.
+ * tokens than the raw allowance. The newest turns stay raw, bounded by `keep`
+ * and the raw allowance: half the replay budget, and never more than a launch
+ * with a full seed and summary can still fit. One run reads at most
+ * `maxInputTokens` of raw turns (always at least one) and leaves the rest for
+ * a later run.
  */
 export function planSummaryCoverage<T extends CoverageTurn>(
   uncovered: readonly T[],
   opts: { readonly keep: number; readonly replayTokens: number; readonly maxInputTokens: number }
 ): SummaryCoveragePlan<T> | null {
-  const halfReplay = Math.floor(opts.replayTokens / 2);
+  const rawAllowance = Math.max(
+    0,
+    Math.min(Math.floor(opts.replayTokens / 2), opts.replayTokens - PROMPT_ALLOWANCE_TOKENS)
+  );
   const total = uncovered.reduce((sum, turn) => sum + coverageTurnTokens(turn), 0);
-  if (uncovered.length <= Math.max(2 * opts.keep, 4) && total <= halfReplay) return null;
+  if (uncovered.length <= Math.max(2 * opts.keep, 4) && total <= rawAllowance) return null;
 
   let kept = 0;
   let keptTokens = 0;
   for (let i = uncovered.length - 1; i >= 0 && kept < opts.keep; i -= 1) {
     const tokens = coverageTurnTokens(uncovered[i]!);
-    if (keptTokens + tokens > halfReplay) break;
+    if (keptTokens + tokens > rawAllowance) break;
     kept += 1;
     keptTokens += tokens;
   }
@@ -124,3 +133,10 @@ export function launchContextFits(
     budgetTokens
   );
 }
+
+/** Refusal messages that reach the owner as-is instead of the generic unavailable message. */
+export const CONVERSATION_RESUME_MESSAGES: ReadonlySet<string> = new Set([
+  CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE,
+  CONVERSATION_COULD_NOT_CONDENSE_MESSAGE,
+  CONVERSATION_NEEDS_SUMMARY_MODEL_MESSAGE
+]);
