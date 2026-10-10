@@ -1,5 +1,5 @@
 import { Button, Dialog, RadioCardGroup } from "@moss/ui";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EMOTIONS } from "@moss/shared";
 import { emVars, coreLabel, type WellnessEmotionCore, type Theme } from "./emotion-taxonomy";
 import { CheckinDetailFields } from "./checkin-detail-fields";
@@ -40,6 +40,20 @@ export function CheckinModal({
   const [searchFocused, setSearchFocused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
+  const feelingChoicesRef = useRef<HTMLDivElement>(null);
+  const searchResultsRef = useRef<HTMLDivElement>(null);
+  const revealedHeadingRef = useRef<HTMLHeadingElement>(null);
+  const removedSelectionFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const previous = removedSelectionFocusRef.current;
+    removedSelectionFocusRef.current = null;
+    // A radio/search result can disappear after selection without firing focusin.
+    // Restore focus only if that exact focused control was removed and no new control owns it.
+    if (open && previous && !previous.isConnected && document.activeElement === document.body) {
+      revealedHeadingRef.current?.focus();
+    }
+  }, [open, emotion, feeling, search]);
 
   useEffect(() => {
     if (!open) return;
@@ -93,7 +107,23 @@ export function CheckinModal({
     setSensations([]);
   };
 
+  const rememberSelectionFocus = (control: HTMLElement | null) => {
+    removedSelectionFocusRef.current =
+      control && control === document.activeElement ? control : null;
+  };
+
+  const pickFeeling = (value: string) => {
+    rememberSelectionFocus(
+      feelingChoicesRef.current?.querySelector<HTMLInputElement>('input[type="radio"]:focus') ??
+        null
+    );
+    setFeeling(value);
+  };
+
   const pickFromSearch = (hit: { core: WellnessEmotionCore; label: string; isCore: boolean }) => {
+    rememberSelectionFocus(
+      searchResultsRef.current?.querySelector<HTMLButtonElement>("button:focus") ?? null
+    );
     setEmotion(hit.core);
     setFeeling(hit.isCore ? null : hit.label);
     setSensations([]);
@@ -166,7 +196,7 @@ export function CheckinModal({
             onChange={(ev) => setSearch(ev.target.value)}
           />
           {searchFocused && searchResults.length > 0 && (
-            <div className="wl-search__results">
+            <div ref={searchResultsRef} className="wl-search__results">
               {searchResults.map((hit, i) => (
                 <button
                   key={i}
@@ -197,6 +227,7 @@ export function CheckinModal({
             }}
           >
             <CheckinDetailFields
+              headingRef={revealedHeadingRef}
               emotion={emotion}
               feeling={feeling}
               sensations={sensations}
@@ -209,8 +240,10 @@ export function CheckinModal({
             />
           </div>
         ) : emotion ? (
-          <div style={{ marginTop: 18 }}>
-            <div className="wl-q wl-q--sub">Which shade of {coreLabel(emotion)}?</div>
+          <div ref={feelingChoicesRef} style={{ marginTop: 18 }}>
+            <h3 ref={revealedHeadingRef} tabIndex={-1} className="wl-q wl-q--sub">
+              Which shade of {coreLabel(emotion)}?
+            </h3>
             <RadioCardGroup
               name="checkin-feeling"
               ariaLabel={`Shade of ${coreLabel(emotion)}`}
@@ -218,7 +251,7 @@ export function CheckinModal({
               options={(EMOTIONS.find((entry) => entry.core === emotion)?.feelings ?? []).map(
                 (entry) => ({ value: entry.label, label: entry.label })
               )}
-              onChange={setFeeling}
+              onChange={pickFeeling}
             />
           </div>
         ) : null}
