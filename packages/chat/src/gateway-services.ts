@@ -87,12 +87,20 @@ export function buildChatToolServices(deps: {
             sendCalendarCacheEvictJob(deps.boss!, { targetItemId: eventId, actorUserId })
         : undefined
     });
+  }
+  // The IMAP reply provider decrypts account secrets, so the service needs the cipher.
+  if (
+    deps.googleConnectionService &&
+    deps.googleApiClient &&
+    deps.connectorsRepository &&
+    deps.cipher
+  ) {
     services.emailWrite = buildEmailWriteService({
       emailRepository: new EmailRepository(),
       connectorsRepository: deps.connectorsRepository,
       googleService: deps.googleConnectionService,
       googleApiClient: deps.googleApiClient,
-      cipher: deps.cipher!,
+      cipher: deps.cipher,
       preferencesRepository: new PreferencesRepository()
     });
   }
@@ -155,6 +163,7 @@ export function buildChatGatewayDependencies(args: {
     googleConnectionService?: GoogleConnectionService;
     googleApiClient?: GoogleApiClient;
     connectorsRepository?: ConnectorsRepository;
+    cipher?: ConnectorSecretCipher;
     boss?: PgBoss;
     featureGrantService?: FeatureGrantService;
     sourceContextService?: SourceContextService;

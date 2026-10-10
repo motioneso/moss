@@ -27,11 +27,17 @@ export function buildModuleSettingsSearchItems(
   modules: readonly MyModuleDto[],
   surfaces: readonly GeneratedSettingsSurface[],
   assistantName: string,
-  settingKeywordsById: Readonly<Record<string, readonly string[]>> = {}
+  settingKeywordsById: Readonly<Record<string, readonly string[]>> = {},
+  // #3184: ids of modules that declare their own settings page. They stay searchable even
+  // with no host-rendered settings, and the result opens that page.
+  ownSettingsPageIds: ReadonlySet<string> = new Set()
 ): SettingsSearchItem[] {
   return modules
     .filter((module) => module.active || module.required)
-    .filter((module) => hasImplementedModuleSettings(module, surfaces))
+    .filter(
+      (module) =>
+        ownSettingsPageIds.has(module.id) || hasImplementedModuleSettings(module, surfaces)
+    )
     .map((module) => {
       const moduleSurfaces = surfaces.filter((surface) => surface.moduleId === module.id);
       const entrySurface = findModuleSettingsEntrySurface(module.id, surfaces);

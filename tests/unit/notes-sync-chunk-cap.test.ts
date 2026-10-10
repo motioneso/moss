@@ -44,6 +44,10 @@ vi.mock("@moss/memory", () => ({
       upsertCalls.push({ count: chunks.length, replaceExisting: replaceExisting ?? false });
     }
 
+    async listIndexedPaths() {
+      return [];
+    }
+
     async replaceFileLinks() {}
     async upsertFileIndex() {}
   },

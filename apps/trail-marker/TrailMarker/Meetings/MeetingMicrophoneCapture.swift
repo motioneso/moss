@@ -7,6 +7,7 @@ import Foundation
 protocol MeetingMicrophoneUnit: AnyObject {
     func enableInput() throws
     func configureOutput() throws
+    func selectReferenceDevice(_ deviceID: AudioDeviceID) throws
     func selectDevice(_ deviceID: AudioDeviceID) throws
     func inputFormat() throws -> AudioStreamBasicDescription
     func outputFormat() throws -> AudioStreamBasicDescription
@@ -31,6 +32,7 @@ protocol MeetingMicrophoneUnit: AnyObject {
 }
 
 extension MeetingMicrophoneUnit {
+    func selectReferenceDevice(_ deviceID: AudioDeviceID) throws { throw MeetingAudioFailure.invalidSelection }
     func startupMeasurements() throws -> MeetingMicrophoneStartupMeasurements { MeetingMicrophoneStartupMeasurements() }
 }
 
@@ -41,6 +43,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
 
     let voiceProcessing: Bool
     private let selectedDeviceID: AudioDeviceID
+    private let expectedReferenceDeviceID: AudioDeviceID?
     private let makeUnit: (Bool) throws -> MeetingMicrophoneUnit
     private let hostTimeToNanoseconds: (UInt64) -> UInt64
     private let diagnosticSink: (MeetingMicrophoneStartupDiagnostic) -> Void
@@ -54,12 +57,14 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
     init(
         selectedDeviceID: AudioDeviceID,
         voiceProcessing: Bool = false,
+        expectedReferenceDeviceID: AudioDeviceID? = nil,
         makeUnit: @escaping (Bool) throws -> MeetingMicrophoneUnit = MeetingMicrophoneIOUnit.init(voiceProcessing:),
         hostTimeToNanoseconds: @escaping (UInt64) -> UInt64 = AudioConvertHostTimeToNanos,
         diagnosticSink: @escaping (MeetingMicrophoneStartupDiagnostic) -> Void = MeetingAudioFailureDiagnostic.logStartup
     ) {
         self.voiceProcessing = voiceProcessing
         self.selectedDeviceID = selectedDeviceID
+        self.expectedReferenceDeviceID = expectedReferenceDeviceID
         self.makeUnit = makeUnit
         self.hostTimeToNanoseconds = hostTimeToNanoseconds
         self.diagnosticSink = diagnosticSink
@@ -102,6 +107,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
         defer { diagnostics.completeStartup() }
         let acquired = try makeUnit(processing)
         unit = acquired
+        if let expectedReferenceDeviceID { try acquired.selectReferenceDevice(expectedReferenceDeviceID) }
         try acquired.enableInput()
         try acquired.configureOutput()
         try acquired.selectDevice(selectedDeviceID)
@@ -126,7 +132,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
         let renderContext = MeetingMicrophoneRenderContext(
             unit: acquired, receiver: receiver, format: format,
             capacity: allocationCapacity, hostTimeToNanoseconds: hostTimeToNanoseconds,
-            hasVoiceReference: processing, sizingDiagnostics: diagnostics
+            hasVoiceReference: processing, pinsReferenceRoute: expectedReferenceDeviceID != nil, sizingDiagnostics: diagnostics
         )
         context = renderContext
         try acquired.installInputCallback(renderContext)
@@ -162,6 +168,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
         else { try renderContext.open() }
         startAttempted = true
         try acquired.start()
+        if let expectedReferenceDeviceID { try acquired.selectReferenceDevice(expectedReferenceDeviceID) }
         if processing {
             renderContext.verifyFormatIfNeeded()
             try renderContext.open()
@@ -169,7 +176,7 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
     }
 
     func stop() throws {
-        context?.close()
+        context?.close(preservingFailures: true)
         guard let unit else {
             sizingDiagnostics?.poll(callbacksFinished: true)
             sizingDiagnostics = nil
@@ -183,11 +190,15 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
             startAttempted = false
         }
         context?.waitForRenderToFinish()
+        // Pending notices belong to the old unit. Classify them before uninitializing
+        // its readable properties, even when its peer triggered the recoverable stop.
+        context?.verifyFormatIfNeeded()
         if initialized {
             try unit.uninitialize()
             initialized = false
         }
         try unit.dispose()
+        context?.finishFaultMonitoring()
         sizingDiagnostics?.poll(callbacksFinished: true)
         sizingDiagnostics = nil
         context = nil
@@ -198,6 +209,26 @@ final class MeetingMicrophoneCapture: MeetingAudioCapturing {
         format.mFormatID == kAudioFormatLinearPCM && format.mSampleRate.isFinite &&
             (8000...192000).contains(format.mSampleRate) && format.mSampleRate.rounded() == format.mSampleRate &&
             format.mChannelsPerFrame > 0
+    }
+
+    /// Recovery requires a completely supported PCM description, not just a notice
+    /// or a plausible sample rate. Client buffers remain mono native Float32.
+    static func isSupportedPCM(_ format: AudioStreamBasicDescription) -> Bool {
+        guard isUsable(format), (1...32).contains(format.mChannelsPerFrame),
+              format.mFramesPerPacket == 1, [16, 24, 32, 64].contains(format.mBitsPerChannel),
+              format.mFormatFlags & kAudioFormatFlagIsBigEndian == 0,
+              format.mFormatFlags & kAudioFormatFlagIsFloat == 0 ||
+                ([32, 64].contains(format.mBitsPerChannel) && format.mFormatFlags & kAudioFormatFlagIsSignedInteger == 0) else { return false }
+        let channels: UInt32 = format.mFormatFlags & kAudioFormatFlagIsNonInterleaved == 0 ? format.mChannelsPerFrame : 1
+        let minimumBytes = channels * (format.mBitsPerChannel / 8)
+        return format.mBytesPerFrame >= minimumBytes && format.mBytesPerFrame <= channels * 8 &&
+            format.mBytesPerPacket == format.mBytesPerFrame
+    }
+
+    static func isSupportedClientFormat(_ format: AudioStreamBasicDescription) -> Bool {
+        isUsable(format) && format.mFormatFlags == kAudioFormatFlagsNativeFloatPacked &&
+            format.mChannelsPerFrame == 1 && format.mBitsPerChannel == 32 &&
+            format.mBytesPerFrame == 4 && format.mBytesPerPacket == 4 && format.mFramesPerPacket == 1
     }
 
     static func matches(_ lhs: AudioStreamBasicDescription, _ rhs: AudioStreamBasicDescription) -> Bool {
@@ -220,6 +251,7 @@ final class MeetingMicrophoneRenderContext {
     private let unit: MeetingMicrophoneUnit
     private let receiver: MeetingAudioReceiving
     private let hasVoiceReference: Bool
+    private let pinsReferenceRoute: Bool
     private let sampleRate: Double
     private let format: AudioStreamBasicDescription
     private let formatNotice = MeetingAudioAtomicState()
@@ -229,7 +261,8 @@ final class MeetingMicrophoneRenderContext {
     private let samples: UnsafeMutablePointer<Float>
     private let buffers: UnsafeMutablePointer<AudioBufferList>
     private let renderLock = NSLock()
-    // Bits: 1 = opened, 2 = invalidated, 4 = closed permanently. Only value 1 admits audio.
+    // Bits: 1 = opened, 2 = invalidated, 4 = closed, 8 = drain faults, 16 = disposed.
+    // Only value 1 admits audio; teardown retains hard evidence until listeners drain.
     private let admission = MeetingAudioAtomicState()
     // Startup-only failure kinds: 1 = format, 2 = default speaker changed, 4 = other.
     // Published by callbacks and read only after complete teardown before fallback.
@@ -240,11 +273,13 @@ final class MeetingMicrophoneRenderContext {
     init(
         unit: MeetingMicrophoneUnit, receiver: MeetingAudioReceiving, format: AudioStreamBasicDescription,
         capacity: UInt32, hostTimeToNanoseconds: @escaping (UInt64) -> UInt64, hasVoiceReference: Bool = false,
+        pinsReferenceRoute: Bool = false,
         sizingDiagnostics: MeetingMicrophoneStartupDiagnostics? = nil
     ) {
         self.unit = unit
         self.receiver = receiver
         self.hasVoiceReference = hasVoiceReference
+        self.pinsReferenceRoute = pinsReferenceRoute
         self.sampleRate = format.mSampleRate
         self.format = format
         self.capacity = capacity
@@ -283,7 +318,12 @@ final class MeetingMicrophoneRenderContext {
         guard admission.replace(0, with: 1) else { throw MeetingAudioFailure.invalidFormat }
     }
 
-    func close() { admission.insert(4) }
+    func close(preservingFailures: Bool = false) { admission.insert(preservingFailures ? 12 : 4) }
+    func finishFaultMonitoring() { admission.insert(16) }
+    private var acceptsFaults: Bool {
+        let state = admission.value
+        return state & 16 == 0 && (state & 4 == 0 || state & 8 != 0)
+    }
 
     func waitForRenderToFinish() {
         renderLock.lock()
@@ -301,7 +341,7 @@ final class MeetingMicrophoneRenderContext {
         sizingDiagnostics?.poll()
         verifyReferenceFormatIfNeeded()
         let notice = formatNotice.value
-        guard admission.value & 4 == 0, notice == 1,
+        guard acceptsFaults, notice == 1,
               formatNotice.replace(1, with: 2) else { return }
         // Keep callbacks quarantined while reading. A new notice changes 2 to 3 and
         // survives this verification, requiring another read before audio can resume.
@@ -311,14 +351,16 @@ final class MeetingMicrophoneRenderContext {
         do {
             let current = try unit.inputFormat()
             let output = try unit.outputFormat()
-            guard MeetingMicrophoneCapture.matches(current, format),
-                  output.mSampleRate == sampleRate, output.mFormatID == kAudioFormatLinearPCM,
-                  output.mFormatFlags == kAudioFormatFlagsNativeFloatPacked,
-                  output.mChannelsPerFrame == 1, output.mBitsPerChannel == 32,
-                  output.mBytesPerFrame == 4, output.mBytesPerPacket == 4,
-                  output.mFramesPerPacket == 1 else { failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatVerification), startupCompatibility: 1); return }
             let currentCapacity = try unit.maximumFramesPerSlice()
             guard currentCapacity > 0, currentCapacity <= capacity else { failFromRender(.bufferFull, diagnostic: .init(.microphoneCapacityVerification)); return }
+            let inputChanged = !MeetingMicrophoneCapture.matches(current, format)
+            guard !inputChanged || MeetingMicrophoneCapture.isSupportedPCM(current),
+                  MeetingMicrophoneCapture.isSupportedClientFormat(output) else {
+                failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatVerification), startupCompatibility: 1); return
+            }
+            if inputChanged || output.mSampleRate != sampleRate {
+                failFromRender(.sourceReconfigured, diagnostic: .init(.microphoneFormatVerification), startupCompatibility: 1)
+            }
         } catch {
             failFromRender(.invalidFormat, diagnostic: .init(.microphoneFormatRead, status: MeetingAudioFailureDiagnostic.status(error)),
                            startupCompatibility: error is MeetingVoiceProcessingUnavailable ? 1 : 0)
@@ -326,19 +368,22 @@ final class MeetingMicrophoneRenderContext {
     }
 
     private func verifyReferenceFormatIfNeeded() {
-        guard hasVoiceReference, admission.value & 4 == 0,
+        guard hasVoiceReference, acceptsFaults,
               referenceNotice.replace(1, with: 2) else { return }
         defer {
             if !referenceNotice.replace(2, with: 0) { _ = referenceNotice.replace(3, with: 1) }
         }
         do {
             guard let current = try unit.referenceFormat(),
-                  current.mSampleRate == sampleRate, current.mFormatID == kAudioFormatLinearPCM,
-                  current.mFormatFlags == kAudioFormatFlagsNativeFloatPacked,
-                  current.mChannelsPerFrame == 1, current.mBitsPerChannel == 32,
-                  current.mBytesPerFrame == 4, current.mBytesPerPacket == 4,
-                  current.mFramesPerPacket == 1 else {
+                  MeetingMicrophoneCapture.isSupportedClientFormat(current) else {
                 failFromRender(.invalidFormat, diagnostic: .init(.voiceReferenceFormatVerification), startupCompatibility: 1); return
+            }
+            if current.mSampleRate != sampleRate {
+                let currentCapacity = try unit.maximumFramesPerSlice()
+                guard currentCapacity > 0, currentCapacity <= capacity else {
+                    failFromRender(.bufferFull, diagnostic: .init(.microphoneCapacityVerification)); return
+                }
+                failFromRender(.sourceReconfigured, diagnostic: .init(.voiceReferenceFormatVerification), startupCompatibility: 1)
             }
         } catch {
             failFromRender(.invalidFormat, diagnostic: .init(.voiceReferenceFormatRead, status: MeetingAudioFailureDiagnostic.status(error)),
@@ -358,13 +403,19 @@ final class MeetingMicrophoneRenderContext {
     }
 
     func defaultOutputDidChange() {
-        guard admission.value & 4 == 0 else { return }
-        failFromRender(.invalidSelection, diagnostic: .init(.voiceDefaultOutputChanged), startupCompatibility: 2)
+        guard acceptsFaults else { return }
+        failFromRender(.invalidSelection, diagnostic: .init(.voiceDefaultOutputChanged), startupCompatibility: pinsReferenceRoute ? 0 : 2)
     }
 
-    func referenceDidDisappear() { failFromRender(.invalidSelection, diagnostic: .init(.voiceReferenceRoute)) }
+    func referenceDidDisappear() {
+        guard acceptsFaults else { return }
+        failFromRender(.invalidSelection, diagnostic: .init(.voiceReferenceRoute))
+    }
 
-    func deviceDidDisappear() { failFromRender(.invalidSelection, diagnostic: .init(.microphoneDeviceGone)) }
+    func deviceDidDisappear() {
+        guard acceptsFaults else { return }
+        failFromRender(.invalidSelection, diagnostic: .init(.microphoneDeviceGone))
+    }
 
     func render(
         flags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
@@ -435,8 +486,12 @@ final class MeetingMicrophoneRenderContext {
     private func failFromRender(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic,
                                 startupCompatibility: UInt32 = 0) {
         let previous = admission.insert(2)
-        if previous == 1 { receiver.fail(failure, diagnostic: diagnostic) }
-        else if previous == 0 || previous == 2 {
+        // A hard fault observed after a recoverable notice (including an in-flight
+        // verification finishing during teardown) must still reach the retained ring.
+        if acceptsFaults, previous & 1 != 0, previous & 2 == 0 || failure != .sourceReconfigured {
+            receiver.fail(failure, diagnostic: diagnostic)
+        }
+        else if acceptsFaults, previous & 1 == 0 {
             if hasVoiceReference, startupCompatibility == 1 { startupFormatDiagnostic.store(diagnostic) }
             startupFailureKinds.insert(hasVoiceReference && startupCompatibility != 0 ? startupCompatibility : 4)
         }
@@ -463,6 +518,7 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
     private var unit: AudioUnit?
     private let voiceProcessing: Bool
     private var referenceDevice: AudioDeviceID?
+    private var expectedReferenceDevice: AudioDeviceID?
     private var referenceListener: AudioObjectPropertyListenerBlock?
     private var callbackContext: Unmanaged<MeetingMicrophoneRenderContext>?
     private var selectedDevice: AudioDeviceID?
@@ -529,10 +585,19 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
             kAudioUnitScope_Output, 0, &value, UInt32(MemoryLayout<UInt32>.size)), "disable AUHAL output")
     }
 
+    func selectReferenceDevice(_ deviceID: AudioDeviceID) throws {
+        guard deviceID != kAudioObjectUnknown, try Self.defaultOutputDevice() == deviceID,
+              Self.deviceIsAlive(deviceID) else { throw MeetingAudioFailure.invalidSelection }
+        expectedReferenceDevice = deviceID
+    }
+
     func selectDevice(_ deviceID: AudioDeviceID) throws {
         let output: AudioDeviceID?
         if voiceProcessing {
-            output = try startupDefaultOutputDevice()
+            if let expectedReferenceDevice {
+                try selectReferenceDevice(expectedReferenceDevice)
+                output = expectedReferenceDevice
+            } else { output = try startupDefaultOutputDevice() }
         } else { output = nil }
         try MeetingVoiceProcessing.configureDevices(microphone: deviceID, output: output) { property, scope, bus, value, size in
             try self.check(self.setProperty(property, scope, bus, value, size),
@@ -670,6 +735,7 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
             guard let referenceDevice else { throw MeetingAudioFailure.invalidSelection }
             guard try Self.referenceIsAliveForStartup(referenceDevice) else { throw MeetingAudioFailure.invalidSelection }
             if try startupDefaultOutputDevice() != referenceDevice {
+                if expectedReferenceDevice != nil { throw MeetingAudioFailure.invalidSelection }
                 throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceDefaultOutputChanged, status: nil)
             }
             // VPIO may construct its own private aggregate. Verify the selected physical
@@ -707,6 +773,7 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
             referenceListener = routeListener
             guard try Self.referenceIsAliveForStartup(reference) else { throw MeetingAudioFailure.invalidSelection }
             if try startupDefaultOutputDevice() != reference {
+                if expectedReferenceDevice != nil { throw MeetingAudioFailure.invalidSelection }
                 throw MeetingVoiceProcessingUnavailable(diagnostic: .voiceDefaultOutputChanged, status: nil)
             }
         }
@@ -818,6 +885,7 @@ final class MeetingMicrophoneIOUnit: MeetingMicrophoneUnit {
                 &address, deviceQueue, referenceListener), "remove voice reference listener")
             self.referenceListener = nil
         }
+        deviceQueue.sync {}
         try check(AudioComponentInstanceDispose(unit), "AudioComponentInstanceDispose")
         self.unit = nil
         // The render and property callbacks share this retain. Keep it on EVERY failed

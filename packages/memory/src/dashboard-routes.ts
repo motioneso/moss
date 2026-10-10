@@ -267,7 +267,8 @@ function handleDashboardRouteError(error: unknown, reply: FastifyReply) {
   }
   if (
     error instanceof Error &&
-    (error as NodeJS.ErrnoException).code === "ENTITY_HAS_ACTIVE_FACTS"
+    ((error as NodeJS.ErrnoException).code === "ENTITY_HAS_ACTIVE_FACTS" ||
+      (error as NodeJS.ErrnoException).code === "AMBIGUOUS_SUBJECT")
   ) {
     return reply.code(409).send({ error: error.message });
   }

@@ -4,6 +4,7 @@
 // chunks (spec delta §"Net worth"). Snapshots are never mirrored, so this is
 // own-accounts-only by design. Pure over its inputs; the handler loads ALL
 // snapshot chunks (pre-window months feed carry-forward) and the window.
+import { balanceSign } from "./account-sign.js";
 import type { AccountRecord, SnapshotChunk } from "./records.js";
 
 export type NetWorthPoint = { date: string; totalCents: number };
@@ -22,9 +23,7 @@ export function deriveNetWorth(
 ): NetWorthSeries {
   const windowSet = new Set(window);
   // Liabilities count against net worth; everything else counts toward it.
-  const sign = new Map(
-    accounts.map((acc) => [acc.accountId, acc.type === "credit" || acc.type === "loan" ? -1 : 1])
-  );
+  const sign = new Map(accounts.map((acc) => [acc.accountId, balanceSign(acc.type)]));
 
   // Per-account date-ascending (date, balance) lists across ALL chunks, plus
   // the union of in-window days that will become series points.

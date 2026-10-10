@@ -476,7 +476,7 @@ export class MeetingCaptureService {
     requestId: string,
     input: MeetingCaptureNativeControlInput
   ) {
-    if (input.command === "change-sources") {
+    if (input.command === "change-sources" || input.command === "recover-sources") {
       if (!input.selection || !Number.isSafeInteger(input.expectedEpoch) || input.expectedEpoch < 1)
         throw new MeetingCaptureError("meeting_capture_invalid_input", 400);
       const proof = await this.authenticate(headers, requestId, input.meetingId, input.grantId);

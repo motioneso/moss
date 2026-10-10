@@ -12,8 +12,14 @@ import {
   assertLiveCliProvider,
   assertProviderIdentityBeforeReplay,
   type ActiveChatProvider,
+  type LaunchSessionOpts,
   type UserSession
 } from "./chat-session-provider-identity.js";
+import {
+  createSessionUsage,
+  noteSessionOutput,
+  noteSessionSubmission
+} from "./chat-session-usage.js";
 import {
   DEFAULT_CHAT_SURFACE,
   normalizeChatSurface,
@@ -21,7 +27,7 @@ import {
   type ChatSurface
 } from "./chat-surface.js";
 import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
-import { CliChatUnavailableError } from "./errors.js";
+import { CHAT_CHANGED_WHILE_STARTING_MESSAGE, CliChatUnavailableError } from "./errors.js";
 import { renderPersona } from "./persona.js";
 import { estimateTokens, renderMemorySeedBlock } from "./recall-seed.js";
 import { getReplayTokenCap, SUMMARY_TOKEN_CAP } from "./replay-window.js";
@@ -33,12 +39,16 @@ import {
   launchContextFits
 } from "./summary-coverage.js";
 import { drainEngine } from "./session-runtime-helpers.js";
-import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
+import {
+  getPinnedThreadState,
+  getSelectedThreadState,
+  usesMainThreadSelection
+} from "./chat-thread-selection.js";
 
 export interface LaunchChatSessionArgs {
   readonly actorUserId: string;
   readonly userName: string;
-  readonly opts: { readonly forceReplay?: boolean } | undefined;
+  readonly opts: Partial<LaunchSessionOpts> | undefined;
   readonly surface: ChatSurface;
   readonly providerIdentity: ActiveChatProvider;
   readonly deps: ChatSessionManagerDeps;
@@ -46,6 +56,33 @@ export interface LaunchChatSessionArgs {
   readonly sequenceBySession: Map<string, number>;
   readonly serverOwnsDrain: boolean;
   readonly pollMs: number;
+}
+
+const DEFAULT_SEED_BUDGET_TOKENS = 1500;
+
+export function getSeedBudgetTokens(): number {
+  const raw = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SEED_BUDGET_TOKENS;
+}
+
+/** True when a fresh launch can replay this summary and these uncovered turns untruncated. */
+export function retainedContextFits(
+  seedTokens: number,
+  retained: {
+    readonly oldSummary: string | null;
+    readonly recent: readonly { role: "user" | "assistant"; content: string }[];
+  },
+  seedBudget: number = getSeedBudgetTokens()
+): boolean {
+  return launchContextFits(
+    {
+      seedTokens,
+      summaryTokens: estimateTokens(retained.oldSummary ?? ""),
+      replayTokens: retained.recent.reduce((sum, turn) => sum + coverageTurnTokens(turn), 0)
+    },
+    seedBudget + SUMMARY_TOKEN_CAP + getReplayTokenCap()
+  );
 }
 
 export async function launchChatSession(args: LaunchChatSessionArgs): Promise<UserSession> {
@@ -68,12 +105,23 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     surface,
     forceReplay: opts?.forceReplay ?? false
   });
-  let threadState = await getSelectedThreadState({
-    actorUserId,
-    surface,
-    useMain,
-    persistence: deps.persistence
-  });
+  const pinThreadId = opts?.pinThreadId;
+  let threadState = pinThreadId
+    ? await getPinnedThreadState({
+        actorUserId,
+        surface,
+        threadId: pinThreadId,
+        persistence: deps.persistence
+      })
+    : await getSelectedThreadState({
+        actorUserId,
+        surface,
+        useMain,
+        persistence: deps.persistence
+      });
+  if (pinThreadId && !threadState) {
+    throw new CliChatUnavailableError(CHAT_CHANGED_WHILE_STARTING_MESSAGE);
+  }
   if (!threadState && deps.persistence.getCurrentThreadState) {
     await deps.persistence.openNewConversation(actorUserId, undefined, surface);
     threadState = await getSelectedThreadState({
@@ -126,10 +174,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     revokeMcpToken: deps.revokeMcpToken
   });
   let memorySeed: AdmittedContext | null;
-  const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
-  const parsedSeedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : NaN;
-  const seedBudget =
-    Number.isFinite(parsedSeedBudget) && parsedSeedBudget > 0 ? parsedSeedBudget : 1500;
+  const seedBudget = getSeedBudgetTokens();
   try {
     if (engine.admitsOutsideContentWithoutPermission) {
       await admitOutsideAgentLaunch(
@@ -165,13 +210,10 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   }
   // The replay is never truncated. Retained context that cannot fit refuses the launch and asks
   // for the older turns to be condensed, so a later resume fits.
-  const fits = launchContextFits(
-    {
-      seedTokens: estimateTokens(memorySeed?.text ?? ""),
-      summaryTokens: estimateTokens(oldSummary ?? ""),
-      replayTokens: recentTurns.reduce((sum, turn) => sum + coverageTurnTokens(turn), 0)
-    },
-    seedBudget + SUMMARY_TOKEN_CAP + getReplayTokenCap()
+  const fits = retainedContextFits(
+    estimateTokens(memorySeed?.text ?? ""),
+    { oldSummary, recent: recentTurns },
+    seedBudget
   );
   if (!fits) {
     const status = await deps.persistence
@@ -234,7 +276,8 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     incognito: threadState?.incognito ?? false,
     seededContextKeys: new Set(),
     mcpToken: mcpConfig?.token,
-    startsToolClientPerTurn
+    startsToolClientPerTurn,
+    usage: createSessionUsage([persona, replayBatch ?? ""])
   };
   sessions.set(sessionKey, session);
 
@@ -242,8 +285,10 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   if (replayBatch !== undefined && !serverOwnsDrain) {
     try {
       await engine.submit(replayBatch);
-      // Drain (and discard) so real turn records start from a clean offset.
-      session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, pollMs);
+      // Drain so real turn records start from a clean offset. The replies still count.
+      session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, pollMs, (r) =>
+        noteSessionOutput(session.usage, r)
+      );
     } catch (error) {
       // #3335: an undrained replay leaves the token refusing every tool. Drop the session so the
       // next turn relaunches it.
@@ -297,7 +342,13 @@ export async function seedChatContext(args: SeedChatContextArgs): Promise<void> 
   );
   if (!admitted) return;
   await submitAdmittedContext(session.engine, admitted);
-  session.transcriptOffset = await drainEngine(session.engine, session.transcriptOffset, pollMs);
+  noteSessionSubmission(session.usage, admitted.text, "context");
+  session.transcriptOffset = await drainEngine(
+    session.engine,
+    session.transcriptOffset,
+    pollMs,
+    (r) => noteSessionOutput(session.usage, r)
+  );
   if (idempotencyKey) session.seededContextKeys.add(idempotencyKey);
   session.lastActivity = deps.clock.now();
   deps.touchMcpToken?.(sessionKey);

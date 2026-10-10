@@ -3,6 +3,7 @@ import type { Job, PgBoss, WorkOptions } from "pg-boss";
 import type { EmailThreadJudgementRequester } from "@moss/module-sdk";
 
 import type { ActorScopedJobPayload, QueueDefinition } from "@moss/jobs";
+import { replyThreadingMetadata } from "./reply-threading.js";
 import { registerDataContextWorker } from "@moss/jobs";
 import type { ConnectorSyncStatus, DataContextDb, DataContextRunner } from "@moss/db";
 import { AiRepository, createAiSecretCipher } from "@moss/ai";
@@ -200,7 +201,7 @@ export async function runImapSync(
             subject: parsed.subject,
             snippet: looksLikeOneTimeCodeEmail(parsed) ? null : parsed.snippet,
             receivedAt: parsed.receivedAt,
-            externalMetadata: {},
+            externalMetadata: replyThreadingMetadata(parsed),
             summary: extracted.summary,
             signals: extracted.signals as Record<string, unknown>
           })

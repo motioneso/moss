@@ -10,6 +10,7 @@ protocol MeetingOutputIO: AnyObject {
 }
 
 protocol MeetingOutputHardware {
+    func verifyOutputRoutes(defaultOutput: AudioObjectID?, systemOutput: AudioObjectID?) throws
     func createTap(scope: MeetingOutputScope) throws -> AudioObjectID
     func tapFormat(_ tap: AudioObjectID) throws -> AudioStreamBasicDescription
     func createAggregate(tap: AudioObjectID) throws -> AudioObjectID
@@ -19,19 +20,32 @@ protocol MeetingOutputHardware {
     func destroyTap(_ tap: AudioObjectID) throws
 }
 
+extension MeetingOutputHardware {
+    func verifyOutputRoutes(defaultOutput: AudioObjectID?, systemOutput: AudioObjectID?) throws {
+        // Synthetic hardware must explicitly implement pinned-route verification.
+        guard defaultOutput == nil, systemOutput == nil else { throw MeetingAudioFailure.invalidSelection }
+    }
+}
+
 /// Inert until explicit start. Resolved process membership is a precondition, not inferred here.
 @available(macOS 14.2, *)
 final class CoreAudioMeetingOutput: MeetingAudioCapturing {
     private let scope: MeetingOutputScope
     private let hardware: MeetingOutputHardware
+    private let expectedDefaultOutputDeviceID: AudioObjectID?
+    private let expectedSystemOutputDeviceID: AudioObjectID?
     private var tap: AudioObjectID?
     private var aggregate: AudioObjectID?
     private var io: MeetingOutputIO?
     private var receiver: MeetingAudioReceiving?
 
-    init(scope: MeetingOutputScope, hardware: MeetingOutputHardware = SystemMeetingOutputHardware()) {
+    init(scope: MeetingOutputScope, expectedDefaultOutputDeviceID: AudioObjectID? = nil,
+         expectedSystemOutputDeviceID: AudioObjectID? = nil,
+         hardware: MeetingOutputHardware = SystemMeetingOutputHardware()) {
         self.scope = scope
         self.hardware = hardware
+        self.expectedDefaultOutputDeviceID = expectedDefaultOutputDeviceID
+        self.expectedSystemOutputDeviceID = expectedSystemOutputDeviceID
     }
 
     func start(into receiver: MeetingAudioReceiving) throws {
@@ -39,6 +53,7 @@ final class CoreAudioMeetingOutput: MeetingAudioCapturing {
         try scope.validate()
         self.receiver = receiver
         do {
+            try hardware.verifyOutputRoutes(defaultOutput: expectedDefaultOutputDeviceID, systemOutput: expectedSystemOutputDeviceID)
             let newTap = try hardware.createTap(scope: scope)
             tap = newTap
             let format = try hardware.tapFormat(newTap)
@@ -54,6 +69,7 @@ final class CoreAudioMeetingOutput: MeetingAudioCapturing {
             let installed = try hardware.createIO(device: device, tap: newTap, scope: scope, format: format, receiver: receiver)
             io = installed
             try installed.start()
+            try hardware.verifyOutputRoutes(defaultOutput: expectedDefaultOutputDeviceID, systemOutput: expectedSystemOutputDeviceID)
         } catch {
             receiver.fail(.deviceFailure(operation: "output-start", status: -1),
                 diagnostic: .init(.outputStart, status: MeetingAudioFailureDiagnostic.status(error)))
@@ -85,6 +101,24 @@ final class CoreAudioMeetingOutput: MeetingAudioCapturing {
 
 @available(macOS 14.2, *)
 struct SystemMeetingOutputHardware: MeetingOutputHardware {
+    func verifyOutputRoutes(defaultOutput: AudioObjectID?, systemOutput: AudioObjectID?) throws {
+        for (selector, expected) in [(kAudioHardwarePropertyDefaultOutputDevice, defaultOutput),
+                                     (kAudioHardwarePropertyDefaultSystemOutputDevice, systemOutput)] {
+            guard let expected else { continue }
+            var current: AudioObjectID = kAudioObjectUnknown
+            var size = UInt32(MemoryLayout<AudioObjectID>.size)
+            var address = property(selector)
+            try check(AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &current), "verify-output-route")
+            guard size == UInt32(MemoryLayout<AudioObjectID>.size), expected != kAudioObjectUnknown,
+                  current == expected else { throw MeetingAudioFailure.invalidSelection }
+            var alive: UInt32 = 0
+            size = UInt32(MemoryLayout<UInt32>.size)
+            address = property(kAudioDevicePropertyDeviceIsAlive)
+            try check(AudioObjectGetPropertyData(expected, &address, 0, nil, &size, &alive), "verify-output-route-alive")
+            guard size == UInt32(MemoryLayout<UInt32>.size), alive == 1 else { throw MeetingAudioFailure.invalidSelection }
+        }
+    }
+
     func createTap(scope: MeetingOutputScope) throws -> AudioObjectID {
         try scope.validate()
         let description: CATapDescription
@@ -342,7 +376,7 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
     }
 
     func stop() throws {
-        receiver.close()
+        receiver.close(preservingFailures: true)
         guard started, let token else { return }
         try check(AudioDeviceStop(device, token), "stop-output-io")
         started = false
@@ -358,10 +392,14 @@ private final class SystemMeetingOutputIO: MeetingOutputIO {
             if status != kAudioHardwareBadObjectError { try check(status, "remove-output-listener") }
             listeners.removeLast()
         }
+        // Property blocks queued before listener removal still carry hard evidence.
+        // Drain them while the tap/aggregate exist and before sealing this old epoch.
+        queue.sync {}
         if let token {
             try check(AudioDeviceDestroyIOProcID(device, token), "destroy-output-io")
             self.token = nil
         }
+        receiver.finishFaultMonitoring()
     }
 
     private func check(_ status: OSStatus, _ operation: String) throws {
@@ -471,17 +509,19 @@ final class MeetingOutputReceiverGate: MeetingAudioReceiving {
     private let copyLock = NSLock()
     private let formatReadLock = NSLock()
     private let formatVerification = MeetingAudioAtomicState()
-    // Bits: 1 = opened, 2 = invalidated, 4 = closed permanently. Only value 1 admits audio.
+    // Bits: 1 = opened, 2 = invalidated, 4 = closed, 8 = drain faults, 16 = disposed.
+    // Only value 1 admits audio; teardown retains hard evidence until listeners drain.
     private let admission = MeetingAudioAtomicState()
     init(_ downstream: MeetingAudioReceiving) { self.downstream = downstream }
     func open() throws {
         guard admission.replace(0, with: 1) else { throw MeetingAudioFailure.invalidSelection }
     }
-    func close() {
-        admission.insert(4)
+    func close(preservingFailures: Bool = false) {
+        admission.insert(preservingFailures ? 12 : 4)
         copyLock.lock()
         copyLock.unlock()
     }
+    func finishFaultMonitoring() { admission.insert(16) }
     func receive(hostTimeNanoseconds: UInt64, sampleRate: Double, frameCount: Int, sampleAt: (Int) -> Float) {
         receive(sampleTime: (Double(hostTimeNanoseconds) * sampleRate / 1_000_000_000).rounded(),
                 hostTimeNanoseconds: hostTimeNanoseconds, sampleRate: sampleRate, frameCount: frameCount, sampleAt: sampleAt)
@@ -511,12 +551,19 @@ final class MeetingOutputReceiverGate: MeetingAudioReceiving {
                       readCurrent: () throws -> AudioStreamBasicDescription) {
         formatReadLock.lock()
         defer { formatReadLock.unlock() }
-        guard admission.value & 4 == 0 else { return }
+        guard acceptsFaults else { return }
         formatVerification.exchange(1)
         defer { formatVerification.exchange(0) }
-        guard let current = try? readCurrent(), MeetingMicrophoneCapture.matches(current, expected) else {
+        guard let current = try? readCurrent() else {
             fail(.invalidFormat, diagnostic: .init(.outputFormatVerification)); return
         }
+        guard !MeetingMicrophoneCapture.matches(current, expected) else { return }
+        guard MeetingMicrophoneCapture.isSupportedPCM(current), current.mChannelsPerFrame == 1,
+              current.mFormatFlags & kAudioFormatFlagIsFloat != 0, current.mBitsPerChannel == 32,
+              current.mBytesPerFrame == 4 else {
+            fail(.invalidFormat, diagnostic: .init(.outputFormatVerification)); return
+        }
+        fail(.sourceReconfigured, diagnostic: .init(.outputFormatVerification))
     }
     /// Source verification holds both callback and queued-send admission while checking.
     /// A successful unrelated notice creates only an explicit short callback gap. Uncertainty
@@ -524,7 +571,7 @@ final class MeetingOutputReceiverGate: MeetingAudioReceiving {
     func verifyScope(_ unchanged: () -> Bool) {
         formatReadLock.lock()
         defer { formatReadLock.unlock() }
-        guard admission.value & 4 == 0 else { return }
+        guard acceptsFaults else { return }
         formatVerification.exchange(1)
         downstream.setScopeVerificationPending(true)
         defer {
@@ -536,15 +583,20 @@ final class MeetingOutputReceiverGate: MeetingAudioReceiving {
 
     func setScopeVerificationPending(_ pending: Bool) { downstream.setScopeVerificationPending(pending) }
 
+    private var acceptsFaults: Bool {
+        let state = admission.value
+        return state & 16 == 0 && (state & 4 == 0 || state & 8 != 0)
+    }
+
     func fail(_ failure: MeetingAudioFailure, diagnostic: MeetingAudioFailureDiagnostic) {
         let previous = admission.insert(2)
-        if previous == 1 || (previous == 3 && failure == .invalidSelection) {
+        if acceptsFaults, previous & 1 != 0, previous & 2 == 0 || failure != .sourceReconfigured {
             downstream.fail(failure, diagnostic: diagnostic)
         }
     }
 
     func fail(_ failure: MeetingAudioFailure) {
         let previous = admission.insert(2)
-        if previous == 1 || (previous == 3 && failure == .invalidSelection) { downstream.fail(failure) }
+        if acceptsFaults, previous & 1 != 0, previous & 2 == 0 || failure != .sourceReconfigured { downstream.fail(failure) }
     }
 }

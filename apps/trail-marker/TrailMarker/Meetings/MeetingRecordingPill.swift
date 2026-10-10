@@ -4,13 +4,63 @@ import SwiftUI
 
 struct MeetingRecordingPill: View {
     @ObservedObject var host: MeetingCaptureHost
+    let presentation: MeetingRecordingPresentation
 
     var body: some View {
+        Group {
+            if presentation.showsAttention { attentionControls }
+            else { compactControls }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Meeting recording controls")
+        .accessibilityValue(presentation.state.rawValue)
+    }
+
+    private var attentionControls: some View {
+        VStack(alignment: .leading, spacing: TrailMarkerTokens.Spacing.row) {
+            Label(presentation.state.rawValue,
+                  systemImage: presentation.interruptionWarning == nil ? "arrow.triangle.2.circlepath" : "exclamationmark.triangle.fill")
+                .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
+            if let warning = presentation.interruptionWarning {
+                Text(warning)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            } else {
+                Text("Capture is interrupted while the same audio sources restart.")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: TrailMarkerTokens.Spacing.related) {
+                if presentation.state == .recovering {
+                    Button("Pause", action: host.pauseFromUserClick)
+                        .disabled(!presentation.canPause)
+                } else {
+                    Button("Resume", action: host.resumeFromUserClick)
+                        .disabled(!host.canResumeFromUserClick)
+                }
+                Button("Stop", role: .destructive, action: host.stopFromUserClick)
+                    .disabled(!host.canStop)
+            }
+            .buttonStyle(.bordered)
+        }
+        .foregroundStyle(TrailMarkerTokens.Color.charcoal)
+        .padding(TrailMarkerTokens.Spacing.group)
+        .frame(width: TrailMarkerTokens.Layout.menuPopoverWidth, alignment: .leading)
+        .background(TrailMarkerTokens.Color.recordingSurface,
+                    in: RoundedRectangle(cornerRadius: TrailMarkerTokens.Layout.brandPanelRadius))
+        .overlay(RoundedRectangle(cornerRadius: TrailMarkerTokens.Layout.brandPanelRadius)
+            .strokeBorder(TrailMarkerTokens.Color.recordingBorder,
+                          lineWidth: TrailMarkerTokens.Layout.recordingPillBorderWidth))
+    }
+
+    private var compactControls: some View {
         HStack(spacing: 0) {
-            CapturedAudioLevelMeter(levels: host.recordingPresentation.meterLevels)
+            CapturedAudioLevelMeter(levels: presentation.meterLevels)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Captured audio level")
-                .accessibilityValue(host.recordingPresentation.meterLevels.allSatisfy { $0 == 0 } ? "Silent" : "Audio arriving")
+                .accessibilityValue(presentation.meterLevels.allSatisfy { $0 == 0 } ? "Silent" : "Audio arriving")
             Spacer(minLength: TrailMarkerTokens.Layout.recordingControlMinimumGap)
             MeetingRecordingSourceMenu(host: host)
             Spacer(minLength: TrailMarkerTokens.Layout.recordingControlMinimumGap)
@@ -28,7 +78,7 @@ struct MeetingRecordingPill: View {
                                                   lineWidth: TrailMarkerTokens.Layout.recordingControlBorderWidth))
                     .contentShape(Circle())
             }
-            .disabled(host.phase != .recording && !host.canResumeFromUserClick)
+            .disabled(!presentation.canPause && !host.canResumeFromUserClick)
             .help(host.phase == .paused ? "Resume recording" : "Pause recording")
             .accessibilityLabel(host.phase == .paused ? "Resume recording" : "Pause recording")
             Spacer(minLength: TrailMarkerTokens.Layout.recordingControlMinimumGap)
@@ -56,6 +106,7 @@ struct MeetingRecordingPill: View {
                         .foregroundStyle(TrailMarkerTokens.Color.recordingForeground)
                         .contentShape(Rectangle())
                 }
+                .disabled(!presentation.canHide)
                 .help("Hide recording pill; recording continues")
                 .accessibilityLabel("Hide recording pill")
                 .accessibilityHint("Recording continues. Show it again from the Meeting menu.")
@@ -69,9 +120,6 @@ struct MeetingRecordingPill: View {
         .background(TrailMarkerTokens.Color.recordingSurface, in: Capsule())
         .overlay(Capsule().strokeBorder(TrailMarkerTokens.Color.recordingBorder,
                                        lineWidth: TrailMarkerTokens.Layout.recordingPillBorderWidth))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Meeting recording controls")
-        .accessibilityValue(host.recordingPresentation.state.rawValue)
     }
 }
 
@@ -111,8 +159,12 @@ private final class RecordingPillHostingView: NSHostingView<MeetingRecordingPill
 final class MeetingRecordingPillController {
     let panel: NSPanel
     private var subscription: AnyCancellable?
+    private let host: MeetingCaptureHost
+    private let hostingView: RecordingPillHostingView
 
     init(host: MeetingCaptureHost) {
+        self.host = host
+        hostingView = RecordingPillHostingView(rootView: MeetingRecordingPill(host: host, presentation: host.recordingPresentation))
         let recordingPanel = RecordingPanel(contentRect: NSRect(x: 0, y: 0,
                         width: TrailMarkerTokens.Layout.recordingPillWidth, height: TrailMarkerTokens.Layout.recordingPillHeight),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -130,14 +182,34 @@ final class MeetingRecordingPillController {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.appearance = NSAppearance(named: .aqua)
-        panel.contentView = RecordingPillHostingView(rootView: MeetingRecordingPill(host: host))
+        panel.contentView = hostingView
         if let screen = NSScreen.main ?? NSScreen.screens.first {
             panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - TrailMarkerTokens.Layout.recordingPillWidth / 2,
                 y: screen.visibleFrame.maxY - TrailMarkerTokens.Layout.recordingPillHeight - TrailMarkerTokens.Spacing.group))
         }
-        subscription = host.$recordingPresentation.map(\.showsPill).removeDuplicates().sink { [weak self] visible in
-            if visible { self?.panel.orderFrontRegardless() }
-            else { self?.panel.orderOut(nil) }
+        subscription = host.$recordingPresentation.removeDuplicates().sink { [weak self] presentation in
+            self?.present(presentation)
         }
+    }
+
+    func present(_ presentation: MeetingRecordingPresentation) {
+        hostingView.rootView = MeetingRecordingPill(host: host, presentation: presentation)
+        hostingView.layoutSubtreeIfNeeded()
+        let size = presentation.showsAttention ? hostingView.fittingSize : NSSize(
+            width: TrailMarkerTokens.Layout.recordingPillWidth, height: TrailMarkerTokens.Layout.recordingPillHeight)
+        if panel.frame.size != size {
+            // Keep the top edge steady and the entire warning readable after expanding a
+            // compact pill, including one dragged to a display edge before interruption.
+            var frame = NSRect(x: panel.frame.midX - size.width / 2,
+                               y: panel.frame.maxY - size.height, width: size.width, height: size.height)
+            if let visible = panel.screen?.visibleFrame {
+                frame.origin.x = max(visible.minX, min(frame.minX, visible.maxX - frame.width))
+                frame.origin.y = max(visible.minY, min(frame.minY, visible.maxY - frame.height))
+            }
+            panel.setFrame(frame, display: true)
+        }
+        if presentation.showsPill {
+            if !panel.isVisible { panel.orderFrontRegardless() }
+        } else { panel.orderOut(nil) }
     }
 }

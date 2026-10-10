@@ -24,7 +24,11 @@ const ownedTables = [
   "app.finance_accounts",
   "app.finance_transactions",
   "app.finance_balance_snapshots",
-  "app.finance_budget_assignments"
+  "app.finance_budget_assignments",
+  "app.finance_categories",
+  "app.finance_activity",
+  "app.finance_budget_drafts",
+  "app.finance_budget_draft_lines"
 ];
 
 beforeAll(async () => {
@@ -53,7 +57,7 @@ afterEach(async () => {
 });
 
 describe("finance module table install (FIN-06a #1166)", () => {
-  it("installs all eight migrations, FORCE RLS on every table, and re-runs idempotently", async () => {
+  it("installs all eighteen migrations, FORCE RLS on every table, and re-runs idempotently", async () => {
     const result = await installModule({
       moduleId,
       manifest: { database: { ownedTables } },
@@ -61,7 +65,7 @@ describe("finance module table install (FIN-06a #1166)", () => {
       migrationConnectionString: urls.migration,
       migrationsDirectory: "external-modules/finance/sql"
     });
-    expect(result.installed).toHaveLength(8);
+    expect(result.installed).toHaveLength(18);
 
     const client = new Client({ connectionString: urls.bootstrap });
     await client.connect();
@@ -86,7 +90,25 @@ describe("finance module table install (FIN-06a #1166)", () => {
       "SELECT version FROM app.module_schema_migrations WHERE module_id = $1",
       [moduleId]
     );
-    expect(ledger.rows).toHaveLength(8);
+    expect(ledger.rows).toHaveLength(18);
+
+    // #3175: existing rows default to confirmed (no review backlog), and the
+    // partial index serves the Needs a look filter.
+    const reviewColumn = await client.query(
+      "SELECT column_default, is_nullable FROM information_schema.columns " +
+        "WHERE table_schema = 'app' AND table_name = 'finance_transactions' AND column_name = 'review_state'"
+    );
+    expect(reviewColumn.rows).toEqual([{ column_default: "'confirmed'::text", is_nullable: "NO" }]);
+    const reviewIndex = await client.query(
+      "SELECT indexdef FROM pg_indexes WHERE indexname = 'finance_transactions_needs_look'"
+    );
+    expect(reviewIndex.rows[0]?.indexdef).toContain("WHERE (review_state = 'needs_look'::text)");
+
+    const nameColumn = await client.query(
+      "SELECT is_nullable FROM information_schema.columns " +
+        "WHERE table_schema = 'app' AND table_name = 'finance_items' AND column_name = 'institution_name'"
+    );
+    expect(nameColumn.rows).toEqual([{ is_nullable: "YES" }]);
 
     await client.end();
 

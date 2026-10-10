@@ -102,6 +102,10 @@ jobs:
             script: check-meeting-voice-negative-controls.py
           - group: recovery
             script: check-meeting-single-link-controls.py
+          - group: source-reconfiguration
+            script: check-meeting-reconfiguration-negative-controls.py
+          - group: staged-acquisition
+            script: check-meeting-acquisition-negative-controls.py
 
     steps:
       # Every matrix job gets a fresh checkout and its own Xcode build products.
@@ -146,6 +150,8 @@ jobs:
             ${{ runner.temp }}/meeting-single-link-negative-*/
             ${{ runner.temp }}/meeting-resume-negative-*/
             ${{ runner.temp }}/meeting-source-negative-*/
+            ${{ runner.temp }}/meeting-reconfiguration-negative-*/
+            ${{ runner.temp }}/meeting-acquisition-negative-*/
           if-no-files-found: ignore
           retention-days: 7
 

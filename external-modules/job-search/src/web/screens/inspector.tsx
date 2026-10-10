@@ -297,33 +297,38 @@ export function Inspector(props: InspectorProps): ReactNodeLike {
             </div>
           ) : null}
           <div className="jsm-detail-decision__actions">
-            <button
-              type="button"
-              className="jds-btn jds-btn--primary jds-btn--sm"
-              onClick={() => props.onSave(match.id)}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            {/* Unscored rows are synthetic (no match row), so Save/Pass would change nothing. */}
+            {match.state === "unscored" ? null : (
+              <button
+                type="button"
+                className="jds-btn jds-btn--primary jds-btn--sm"
+                onClick={() => props.onSave(match.id)}
               >
-                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-              </svg>
-              Save
-            </button>
-            <button
-              type="button"
-              className="jds-btn jds-btn--secondary jds-btn--sm"
-              onClick={() => props.onDismiss(match.id)}
-            >
-              Pass
-            </button>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                </svg>
+                Save
+              </button>
+            )}
+            {match.state === "unscored" ? null : (
+              <button
+                type="button"
+                className="jds-btn jds-btn--secondary jds-btn--sm"
+                onClick={() => props.onDismiss(match.id)}
+              >
+                Pass
+              </button>
+            )}
             {props.onDiscuss ? (
               <button
                 type="button"

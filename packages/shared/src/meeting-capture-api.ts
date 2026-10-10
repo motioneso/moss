@@ -22,7 +22,7 @@ export interface MeetingCaptureInventory {
 }
 export interface MeetingCaptureObserved {
   readonly generation: number;
-  readonly phase: "idle" | "recording" | "paused" | "stopped" | "error";
+  readonly phase: "idle" | "recording" | "recovering" | "paused" | "stopped" | "error";
   readonly errorCode?: string;
 }
 export interface MeetingCaptureGap {
@@ -119,7 +119,7 @@ export interface MeetingCaptureControlInput {
   readonly command: "record" | "pause" | "stop" | "revoke";
   readonly selection?: MeetingCaptureSelection;
 }
-/** Only the claimed native recorder may explicitly change this recording's sources. */
+/** Only the claimed native recorder may change sources or recover its identical live selection. */
 export type MeetingCaptureNativeControlInput = {
   readonly meetingId: string;
   readonly grantId: string;
@@ -132,7 +132,7 @@ export type MeetingCaptureNativeControlInput = {
       readonly expectedEpoch?: never;
     }
   | {
-      readonly command: "change-sources";
+      readonly command: "change-sources" | "recover-sources";
       readonly expectedEpoch: number;
       readonly selection: MeetingCaptureSelection;
     }

@@ -50,6 +50,8 @@ function notUsed(name: string) {
 }
 
 function createFakeStore(input: {
+  // What the store reports for a state write; false models an id with no match row.
+  setMatchStateResult?: boolean;
   matches?: Match[];
   postings?: Posting[];
   // Defaults to a lookup against `matches` by id — enough for the common "found" case. Tests
@@ -118,6 +120,7 @@ function createFakeStore(input: {
     upsertMatch: vi.fn(notUsed("upsertMatch")),
     setMatchState: vi.fn(async (matchId: string, state: Match["state"]) => {
       setMatchStateCalls.push({ matchId, state });
+      return input.setMatchStateResult ?? true;
     }),
     getMatch: vi.fn(async (matchId: string) => {
       getMatchCalls.push(matchId);
@@ -953,6 +956,22 @@ describe("createMatchSetStateHandler", () => {
       statusText: "Role passed"
     });
     expect(store.__setMatchStateCalls).toEqual([{ matchId: "match-9", state: "dismissed" }]);
+  });
+
+  it("throws instead of reporting success when no match row was updated (unscored role)", async () => {
+    const store = createFakeStore({ setMatchStateResult: false });
+    const handler = createMatchSetStateHandler(store);
+
+    await expect(handler(queueCtx({ matchId: "posting-1", state: "seen" }))).rejects.toThrow(
+      /not scored yet/
+    );
+  });
+
+  it("the assistant's dismiss tool cannot pass a role that was never scored", async () => {
+    const store = createFakeStore({ setMatchStateResult: false });
+    const handler = createMatchSetStateHandler(store);
+
+    await expect(handler(toolCtx({ matchId: "posting-1" }))).rejects.toThrow(/not scored yet/);
   });
 
   it("the dismiss tool shape rejects an unexpected key rather than accepting a caller-supplied state", async () => {

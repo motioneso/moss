@@ -4,8 +4,15 @@
 // silently changes what RLS sees. Owner is always written in the SQL text
 // via app.current_actor_user_id(), never a param, and no statement filters
 // by owner (RLS + that GUC own that, per the #1167 classifier's read).
-import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
-import type { FinanceStore } from "./store-port.js";
+import type {
+  AccountRecord,
+  ItemErrorDetail,
+  ItemRecord,
+  ReviewState,
+  TransactionRecord
+} from "./records.js";
+import type { BudgetDraft, DraftLine } from "./draft.js";
+import type { ActivityRecord, FinanceStore } from "./store-port.js";
 
 // Structural twin of #1167 ctx.db — domain files never import @moss/*, so
 // this is redeclared rather than imported (bundler independence, see
@@ -26,7 +33,7 @@ function monthWindow(month: string): { from: string; to: string } {
 
 const TXN_COLUMNS =
   "id, account_id, date::text AS date, amount_cents, iso_currency, name, merchant, " +
-  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes";
+  "plaid_category, category_id, pending, pending_transaction_id, categorized_by, notes, review_state, ai_confidence";
 
 type TransactionRow = {
   id: string;
@@ -42,6 +49,8 @@ type TransactionRow = {
   pending_transaction_id: string | null;
   categorized_by: TransactionRecord["categorizedBy"];
   notes: string | null;
+  review_state: ReviewState;
+  ai_confidence: number | null;
 };
 
 function rowToTransaction(row: TransactionRow): TransactionRecord {
@@ -58,7 +67,9 @@ function rowToTransaction(row: TransactionRow): TransactionRecord {
     pending: row.pending,
     pendingTransactionId: row.pending_transaction_id,
     categorizedBy: row.categorized_by,
-    notes: row.notes ?? undefined
+    notes: row.notes ?? undefined,
+    reviewState: row.review_state,
+    aiConfidence: row.ai_confidence
   };
 }
 
@@ -66,14 +77,15 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
   await db.query(
     "INSERT INTO app.finance_transactions (owner_user_id, id, account_id, date, amount_cents, " +
       "iso_currency, name, merchant, plaid_category, category_id, pending, " +
-      "pending_transaction_id, categorized_by, notes) " +
-      "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) " +
+      "pending_transaction_id, categorized_by, notes, review_state, ai_confidence) " +
+      "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) " +
       "ON CONFLICT (owner_user_id, id) DO UPDATE SET account_id = EXCLUDED.account_id, " +
       "date = EXCLUDED.date, amount_cents = EXCLUDED.amount_cents, iso_currency = EXCLUDED.iso_currency, " +
       "name = EXCLUDED.name, merchant = EXCLUDED.merchant, plaid_category = EXCLUDED.plaid_category, " +
       "category_id = EXCLUDED.category_id, pending = EXCLUDED.pending, " +
       "pending_transaction_id = EXCLUDED.pending_transaction_id, " +
-      "categorized_by = EXCLUDED.categorized_by, notes = EXCLUDED.notes",
+      "categorized_by = EXCLUDED.categorized_by, notes = EXCLUDED.notes, " +
+      "review_state = EXCLUDED.review_state, ai_confidence = EXCLUDED.ai_confidence",
     [
       record.id,
       record.accountId,
@@ -87,30 +99,47 @@ async function upsertTransaction(db: FinanceDb, record: TransactionRecord): Prom
       record.pending,
       record.pendingTransactionId ?? null,
       record.categorizedBy ?? null,
-      record.notes ?? null
+      record.notes ?? null,
+      record.reviewState ?? (record.categoryId == null ? "needs_look" : "confirmed"),
+      record.aiConfidence ?? null
     ]
   );
 }
 
-const ITEM_COLUMNS = "item_id, institution_id, connected_at, status, last_sync_at, last_error";
+const ITEM_COLUMNS =
+  "item_id, institution_id, institution_name, connected_at, status, last_sync_at, last_error, " +
+  "last_error_detail";
 
 type ItemRow = {
   item_id: string;
   institution_id: string | null;
+  institution_name?: string | null;
   connected_at: string;
   status: ItemRecord["status"];
   last_sync_at: string | null;
   last_error: string | null;
+  last_error_detail?: string | null;
 };
+
+function parseErrorDetail(raw: string | null | undefined): ItemErrorDetail | undefined {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw) as ItemErrorDetail;
+  } catch {
+    return undefined;
+  }
+}
 
 function rowToItem(row: ItemRow): ItemRecord {
   return {
     itemId: row.item_id,
     institutionId: row.institution_id,
+    institutionName: row.institution_name ?? undefined,
     connectedAt: row.connected_at,
     status: row.status,
     lastSyncAt: row.last_sync_at ?? undefined,
-    lastError: row.last_error ?? undefined
+    lastError: row.last_error ?? undefined,
+    lastErrorDetail: parseErrorDetail(row.last_error_detail)
   };
 }
 
@@ -148,6 +177,78 @@ function rowToAccount(row: AccountRow): AccountRecord {
   };
 }
 
+type DraftRow = {
+  id: string;
+  status: BudgetDraft["status"];
+  basis_from: string;
+  basis_to: string;
+  monthly_income_cents: string | number;
+  created_at: string | Date;
+  started_at: string | Date | null;
+};
+
+type DraftLineRow = {
+  category_key: string;
+  group_name: string;
+  category_name: string;
+  basis_monthly_cents: string | number;
+  proposed_cents: string | number;
+  adjusted_cents: string | number | null;
+  adjusted_by: DraftLine["adjustedBy"];
+  dropped: boolean;
+};
+
+const isoText = (value: string | Date): string =>
+  value instanceof Date ? value.toISOString() : value;
+
+interface ActivityRow {
+  id: string;
+  at: string | Date;
+  actor: "user" | "moss";
+  kind: string;
+  params: Record<string, string | number | null>;
+  undo: Record<string, string | number | null> | null;
+  undone_at: string | Date | null;
+}
+
+function rowToActivity(row: ActivityRow): ActivityRecord {
+  return {
+    id: row.id,
+    at: isoText(row.at),
+    actor: row.actor,
+    kind: row.kind,
+    params: row.params,
+    undo: row.undo,
+    undoneAt: row.undone_at === null ? null : isoText(row.undone_at)
+  };
+}
+
+function rowToDraftLine(row: DraftLineRow): DraftLine {
+  return {
+    categoryKey: row.category_key,
+    groupName: row.group_name,
+    categoryName: row.category_name,
+    basisMonthlyCents: Number(row.basis_monthly_cents),
+    proposedCents: Number(row.proposed_cents),
+    adjustedCents: row.adjusted_cents === null ? null : Number(row.adjusted_cents),
+    adjustedBy: row.adjusted_by,
+    dropped: row.dropped
+  };
+}
+
+function rowToDraft(row: DraftRow, lines: DraftLine[]): BudgetDraft {
+  return {
+    id: row.id,
+    status: row.status,
+    basisFrom: row.basis_from,
+    basisTo: row.basis_to,
+    monthlyIncomeCents: Number(row.monthly_income_cents),
+    createdAt: isoText(row.created_at),
+    startedAt: row.started_at === null ? null : isoText(row.started_at),
+    lines
+  };
+}
+
 export function sqlStore(db: FinanceDb): FinanceStore {
   return {
     async listItems() {
@@ -165,19 +266,23 @@ export function sqlStore(db: FinanceDb): FinanceStore {
 
     async putItem(record) {
       await db.query(
-        "INSERT INTO app.finance_items (owner_user_id, item_id, institution_id, connected_at, status, " +
-          "last_sync_at, last_error) " +
-          "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6) " +
+        "INSERT INTO app.finance_items (owner_user_id, item_id, institution_id, institution_name, " +
+          "connected_at, status, last_sync_at, last_error, last_error_detail) " +
+          "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8) " +
           "ON CONFLICT (owner_user_id, item_id) DO UPDATE SET institution_id = EXCLUDED.institution_id, " +
+          "institution_name = EXCLUDED.institution_name, " +
           "connected_at = EXCLUDED.connected_at, status = EXCLUDED.status, " +
-          "last_sync_at = EXCLUDED.last_sync_at, last_error = EXCLUDED.last_error",
+          "last_sync_at = EXCLUDED.last_sync_at, last_error = EXCLUDED.last_error, " +
+          "last_error_detail = EXCLUDED.last_error_detail",
         [
           record.itemId,
           record.institutionId ?? null,
+          record.institutionName ?? null,
           record.connectedAt,
           record.status,
           record.lastSyncAt ?? null,
-          record.lastError ?? null
+          record.lastError ?? null,
+          record.lastErrorDetail ? JSON.stringify(record.lastErrorDetail) : null
         ]
       );
     },
@@ -238,6 +343,14 @@ export function sqlStore(db: FinanceDb): FinanceStore {
         [from, to]
       );
       return result.rows.map(rowToTransaction);
+    },
+
+    async listConfirmedPayeeNames() {
+      const result = await db.query<{ name: string }>(
+        "SELECT DISTINCT name FROM app.finance_transactions " +
+          "WHERE review_state = 'confirmed' AND category_id IS NOT NULL"
+      );
+      return result.rows.map((row) => row.name);
     },
 
     async getTransactionChunk(accountId, month) {
@@ -322,6 +435,207 @@ export function sqlStore(db: FinanceDb): FinanceStore {
           "VALUES (app.current_actor_user_id(), $1, $2, $3) " +
           "ON CONFLICT (owner_user_id, month, category_id) DO UPDATE SET assigned_cents = EXCLUDED.assigned_cents",
         [month, categoryId, amountCents]
+      );
+    },
+
+    async commitBudgetChange(change) {
+      const params: unknown[] = [
+        change.month,
+        JSON.stringify(
+          change.assignments.map((a) => ({
+            category_id: a.categoryId,
+            assigned_cents: a.amountCents
+          }))
+        ),
+        JSON.stringify(
+          change.activity.map((a) => ({
+            actor: a.actor,
+            kind: a.kind,
+            params: a.params,
+            undo: a.undo ?? null
+          }))
+        )
+      ];
+      const guards: string[] = [];
+      let draftIndex = 0;
+      let undoneIndex = 0;
+      if (change.startDraft) {
+        params.push(change.startDraft.draftId, change.startDraft.at);
+        draftIndex = params.length - 1;
+        guards.push(
+          `EXISTS (SELECT 1 FROM app.finance_budget_drafts WHERE id = $${draftIndex} AND status = 'open')`
+        );
+      }
+      if (change.markUndone) {
+        params.push(change.markUndone.activityId, change.markUndone.at);
+        undoneIndex = params.length - 1;
+        guards.push(
+          `EXISTS (SELECT 1 FROM app.finance_activity WHERE id = $${undoneIndex} AND undone_at IS NULL)`
+        );
+      }
+      const guard = guards.length > 0 ? guards.join(" AND ") : "true";
+      const draftCte =
+        draftIndex > 0
+          ? `, d AS (UPDATE app.finance_budget_drafts SET status = 'started', started_at = $${draftIndex + 1} ` +
+            `WHERE id = $${draftIndex} AND status = 'open' RETURNING 1)`
+          : ", d AS (SELECT 1 WHERE false)";
+      const undoneCte =
+        undoneIndex > 0
+          ? `, u AS (UPDATE app.finance_activity SET undone_at = $${undoneIndex + 1} ` +
+            `WHERE id = $${undoneIndex} AND undone_at IS NULL RETURNING 1)`
+          : ", u AS (SELECT 1 WHERE false)";
+      // One statement, so the host runs it as a single implicit transaction.
+      const result = await db.query<{ applied: boolean }>(
+        "WITH a AS (INSERT INTO app.finance_budget_assignments (owner_user_id, month, category_id, assigned_cents) " +
+          "SELECT app.current_actor_user_id(), $1, x.category_id, x.assigned_cents " +
+          "FROM jsonb_to_recordset($2::jsonb) AS x(category_id text, assigned_cents bigint) " +
+          `WHERE ${guard} ` +
+          "ON CONFLICT (owner_user_id, month, category_id) DO UPDATE SET assigned_cents = EXCLUDED.assigned_cents " +
+          "RETURNING 1), " +
+          "l AS (INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params, undo) " +
+          "SELECT app.current_actor_user_id(), gen_random_uuid(), now(), x.actor, x.kind, x.params, x.undo " +
+          "FROM jsonb_to_recordset($3::jsonb) AS x(actor text, kind text, params jsonb, undo jsonb) " +
+          `WHERE ${guard} RETURNING 1)` +
+          draftCte +
+          undoneCte +
+          " SELECT ((SELECT count(*) FROM a) + (SELECT count(*) FROM l) + (SELECT count(*) FROM d) + " +
+          "(SELECT count(*) FROM u)) > 0 AS applied",
+        params
+      );
+      return result.rows[0]?.applied === true;
+    },
+
+    async appendActivity(entry) {
+      await db.query(
+        "INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params, undo) " +
+          "VALUES (app.current_actor_user_id(), gen_random_uuid(), now(), $1, $2, $3::jsonb, $4::jsonb)",
+        [
+          entry.actor,
+          entry.kind,
+          JSON.stringify(entry.params),
+          entry.undo ? JSON.stringify(entry.undo) : null
+        ]
+      );
+    },
+
+    async listActivity(from, to, limit) {
+      const result = await db.query<ActivityRow>(
+        "SELECT id, at, actor, kind, params, undo, undone_at FROM app.finance_activity " +
+          "WHERE at >= $1 AND at < $2 ORDER BY at DESC, id LIMIT $3",
+        [from, to, limit]
+      );
+      return result.rows.map(rowToActivity);
+    },
+
+    async getActivity(id) {
+      const result = await db.query<ActivityRow>(
+        "SELECT id, at, actor, kind, params, undo, undone_at FROM app.finance_activity WHERE id = $1",
+        [id]
+      );
+      const row = result.rows[0];
+      return row === undefined ? null : rowToActivity(row);
+    },
+
+    async markActivityUndone(id, at) {
+      const result = await db.query(
+        "UPDATE app.finance_activity SET undone_at = $2 WHERE id = $1 AND undone_at IS NULL RETURNING id",
+        [id, at]
+      );
+      return result.rows.length > 0;
+    },
+
+    async lastLoggedAssignment(month, categoryId) {
+      const result = await db.query<{ amount: string | number }>(
+        "SELECT params->>'amountCents' AS amount FROM app.finance_activity " +
+          "WHERE kind = 'budget.assign' AND params->>'month' = $1 AND params->>'categoryId' = $2 " +
+          "ORDER BY at DESC LIMIT 1",
+        [month, categoryId]
+      );
+      const row = result.rows[0];
+      return row === undefined ? null : Number(row.amount);
+    },
+
+    async getLatestDraft() {
+      const head = await db.query<DraftRow>(
+        "SELECT id, status, basis_from::text AS basis_from, basis_to::text AS basis_to, " +
+          "monthly_income_cents, created_at, started_at FROM app.finance_budget_drafts " +
+          "WHERE status IN ('open', 'started') ORDER BY created_at DESC LIMIT 1"
+      );
+      const row = head.rows[0];
+      if (row === undefined) return null;
+      const lines = await db.query<DraftLineRow>(
+        "SELECT category_key, group_name, category_name, basis_monthly_cents, proposed_cents, " +
+          "adjusted_cents, adjusted_by, dropped FROM app.finance_budget_draft_lines " +
+          "WHERE draft_id = $1 ORDER BY category_key",
+        [row.id]
+      );
+      return rowToDraft(row, lines.rows.map(rowToDraftLine));
+    },
+
+    // The draft goes in as 'discarded' and flips to 'open' last, so a worker that dies
+    // part-way leaves no half-written draft for the screen to read.
+    async createDraft(build, createdAt) {
+      await db.query(
+        "UPDATE app.finance_budget_drafts SET status = 'discarded' WHERE status = 'open'"
+      );
+      const created = await db.query<{ id: string }>(
+        "INSERT INTO app.finance_budget_drafts (owner_user_id, id, status, basis_from, basis_to, " +
+          "monthly_income_cents, created_at) " +
+          "VALUES (app.current_actor_user_id(), gen_random_uuid(), 'discarded', $1, $2, $3, $4) RETURNING id",
+        [build.basisFrom, build.basisTo, build.monthlyIncomeCents, createdAt]
+      );
+      const draftId = created.rows[0]!.id;
+      for (const line of build.lines) {
+        await db.query(
+          "INSERT INTO app.finance_budget_draft_lines (owner_user_id, draft_id, category_key, " +
+            "group_name, category_name, basis_monthly_cents, proposed_cents) " +
+            "VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6)",
+          [
+            draftId,
+            line.categoryKey,
+            line.groupName,
+            line.categoryName,
+            line.basisMonthlyCents,
+            line.proposedCents
+          ]
+        );
+      }
+      await db.query("UPDATE app.finance_budget_drafts SET status = 'open' WHERE id = $1", [
+        draftId
+      ]);
+      return draftId;
+    },
+
+    async markDraftStarted(draftId, startedAt) {
+      await db.query(
+        "UPDATE app.finance_budget_drafts SET status = 'started', started_at = $2 " +
+          "WHERE id = $1 AND status = 'open'",
+        [draftId, startedAt]
+      );
+    },
+
+    async saveDraftLine(draftId, line) {
+      await db.query(
+        "INSERT INTO app.finance_budget_draft_lines (owner_user_id, draft_id, category_key, " +
+          "group_name, category_name, basis_monthly_cents, proposed_cents, adjusted_cents, " +
+          "adjusted_by, dropped) " +
+          "SELECT app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9 " +
+          "WHERE EXISTS (SELECT 1 FROM app.finance_budget_drafts WHERE id = $1 AND status = 'open') " +
+          "ON CONFLICT (owner_user_id, draft_id, category_key) DO UPDATE SET " +
+          "group_name = EXCLUDED.group_name, category_name = EXCLUDED.category_name, " +
+          "adjusted_cents = EXCLUDED.adjusted_cents, adjusted_by = EXCLUDED.adjusted_by, " +
+          "dropped = EXCLUDED.dropped",
+        [
+          draftId,
+          line.categoryKey,
+          line.groupName,
+          line.categoryName,
+          line.basisMonthlyCents,
+          line.proposedCents,
+          line.adjustedCents,
+          line.adjustedBy,
+          line.dropped
+        ]
       );
     }
   } satisfies FinanceStore;

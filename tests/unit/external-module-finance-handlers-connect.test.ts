@@ -88,6 +88,10 @@ function fakePlaid(overrides: PlaidOverrides = {}) {
       overrides.accountsGet ??
         (async () => ({ institutionId: "ins_9", accounts: [ACCOUNT_FIXTURE] }))
     ) as PlaidClient["accountsGet"],
+    institutionGet: record(
+      "institutionGet",
+      overrides.institutionGet ?? (async () => ({ name: null }))
+    ) as PlaidClient["institutionGet"],
     accountsBalanceGet: record(
       "accountsBalanceGet",
       overrides.accountsBalanceGet ?? (async () => ({ accounts: [] }))
@@ -333,6 +337,69 @@ describe("finance.connect.poll (#1146, D2 single-shot)", () => {
     });
     const session = await kv.get(NS.connections, linkKey("link-sandbox-1"));
     expect(session?.status).toBe("completed");
+  });
+
+  it("runs a first sync right after a successful connect (#3161)", async () => {
+    const plaid = fakePlaid({
+      linkTokenGet: async () => ({ status: "success", publicTokens: ["public-1"] }),
+      transactionsSync: async () => ({
+        added: [
+          {
+            transaction_id: "t1",
+            account_id: "acc-9",
+            date: "2026-07-10",
+            amount: 5,
+            iso_currency_code: "USD",
+            name: "X",
+            merchant_name: null,
+            personal_finance_category: null,
+            pending: false,
+            pending_transaction_id: null
+          }
+        ],
+        modified: [],
+        removed: [],
+        nextCursor: "c1",
+        hasMore: false
+      })
+    });
+    const kv = fakeKv();
+    await seedSession(kv, "link-sandbox-1", new Date(NOW.getTime() - 5 * 60_000).toISOString());
+    const { ports } = fakePorts({ kv, plaid: plaid.client });
+    const mirror = new Map<string, Record<string, unknown>>();
+    const withMirror: WorkerPorts = {
+      ...ports,
+      mirror: {
+        get: async (k) => mirror.get(k) ?? null,
+        set: async (k, v) => void mirror.set(k, v),
+        delete: async (k) => mirror.delete(k),
+        list: async () => [...mirror.keys()]
+      }
+    };
+    const result = await connectPollHandler(withMirror)({
+      actorUserId: "00000000-0000-4000-8000-0000000000aa"
+    });
+    expect(result).toMatchObject({ completed: 1 });
+    const chunk = await kv.get(NS.transactions, "acc-9:2026-07");
+    expect((chunk as { transactions: { id: string }[] }).transactions.map((r) => r.id)).toEqual([
+      "t1"
+    ]);
+  });
+
+  it("a failing first sync never fails the connect", async () => {
+    const plaid = fakePlaid({
+      linkTokenGet: async () => ({ status: "success", publicTokens: ["public-1"] }),
+      transactionsSync: async () => {
+        throw new Error("boom");
+      }
+    });
+    const kv = fakeKv();
+    await seedSession(kv, "link-sandbox-1", new Date(NOW.getTime() - 5 * 60_000).toISOString());
+    const { ports } = fakePorts({ kv, plaid: plaid.client });
+    const result = await connectPollHandler(ports)({
+      actorUserId: "00000000-0000-4000-8000-0000000000aa"
+    });
+    expect(result).toMatchObject({ status: "ok", completed: 1 });
   });
 
   it("D5: aborts when the token read fails while items are on record", async () => {

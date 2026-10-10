@@ -563,11 +563,14 @@ mount/unmount; do not inject a global style tag. Follow the host design tokens a
 including accessible inputs, keyboard/focus behavior, user timezone, and useful empty/loading/error
 states. Keep module CSS for supported layout; do not redefine Moss's global visual identity.
 
-Keep navigation labels/paths, tool descriptions, and preferences truthful. App-map truthfulness
-also requires feature/error/remediation metadata. **Current gap:** the custom JSON type has no
-`features` field, and the app-map reader queries a built artifact. Merely inventing that field in
-`jarvis.module.json` will not register a generated module's features. The Workshop design needs a
-supported host declaration/refresh path for that metadata; record this as a prerequisite.
+Keep navigation labels/paths, tool descriptions, and preferences truthful. An installed module
+tells Moss about its screens, settings and features with an optional `appMap` block in
+`jarvis.module.json`: `{ "screens": [{ id, label, description, path }], "settings": [{ id, label,
+description, path, scope }], "features": [{ id, description }] }`. Ids must start with
+`<moduleId>.`, paths are module-relative (the host rewrites them under `/m/<moduleId>`), and
+`scope` is `user` or `admin`. The host validates the block at install and serves it from the
+app-map query only to users who have the module active. Feature errors and remediations are not
+supported for installed modules.
 
 ### 13.5 Build, install, draft, and shipping are distinct operations
 

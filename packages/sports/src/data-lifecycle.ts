@@ -10,6 +10,7 @@ type ExportRow = Record<string, JsonValue>;
 export interface SportsSourcesExportSectionData {
   readonly assignments: readonly ExportRow[];
   readonly espnAssignments: readonly ExportRow[];
+  readonly follows: readonly ExportRow[];
   readonly headlinePreferences: readonly ExportRow[];
   readonly sources: readonly ExportRow[];
 }
@@ -83,6 +84,18 @@ export async function collectSportsSourcesExportSection(
     ORDER BY created_at DESC, id
   `.execute(db);
 
+  const follows = await sql<Record<string, unknown>>`
+    SELECT
+      id::text AS id,
+      owner_user_id::text AS "ownerUserId",
+      competition_key AS "competitionKey",
+      team_key AS "teamKey",
+      created_at AS "createdAt"
+    FROM app.sports_follows
+    WHERE owner_user_id = ${userId}::uuid
+    ORDER BY created_at DESC, id
+  `.execute(db);
+
   const headlinePreferences = await sql<Record<string, unknown>>`
     SELECT
       owner_user_id::text AS "ownerUserId",
@@ -95,6 +108,7 @@ export async function collectSportsSourcesExportSection(
   return {
     assignments: assignments.rows.map(normalizeRow),
     espnAssignments: espnAssignments.rows.map(normalizeRow),
+    follows: follows.rows.map(normalizeRow),
     headlinePreferences: headlinePreferences.rows.map(normalizeRow),
     sources: sources.rows.map(normalizeRow)
   };

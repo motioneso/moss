@@ -8,6 +8,8 @@ import type {
 } from "@moss/shared";
 import type { TaskSuggestionMetadataV1 } from "@moss/shared";
 
+import { parseRecurrenceSpec } from "./recurrence.js";
+
 export function serializeDate(value: Date | string | null): string | null {
   if (value === null) {
     return null;
@@ -56,7 +58,8 @@ export function serializeTask(task: Task, tags: readonly TaskTag[] = []): TaskDt
     createdAt: serializeDate(task.created_at),
     updatedAt: serializeDate(task.updated_at),
     tags: tags.map(serializeTaskTag),
-    suggestionMetadata: task.suggestion_metadata as TaskSuggestionMetadataV1 | null
+    suggestionMetadata: task.suggestion_metadata as TaskSuggestionMetadataV1 | null,
+    recurrence: parseRecurrenceSpec(task.recurrence)
   };
 }
 

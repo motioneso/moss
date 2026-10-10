@@ -72,7 +72,7 @@ export async function closeLinkDatabase() {
   await maintenancePool?.close();
   await Promise.all([bootstrap?.end(), app?.destroy(), worker?.destroy()]);
 }
-export async function linkFixture() {
+export async function linkFixture(initialNow?: Date) {
   const email = `link-${randomUUID()}@example.test`;
   const password = "Synthetic meeting link fixture password";
   const signup = await runtime.auth.handler(
@@ -121,7 +121,7 @@ export async function linkFixture() {
     deviceId = linked.device.id,
     connectionId = randomUUID();
   const native = { authorization: `Bearer ${linked.credential}`, "x-moss-recording-proof": proof };
-  let clock = new Date();
+  let clock = initialNow ?? new Date();
   const deps: MeetingCaptureDependencies = {
     dataContext: context,
     resolveBrowser: runtime.sessionBindings.resolveBrowser,

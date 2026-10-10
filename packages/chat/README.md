@@ -48,6 +48,19 @@ launch refuses with an actionable message and queues a summary run.
 - `JARVIS_CHAT_REPLAY_TOKENS` (default 8000): replay budget. Raw turns kept beside a summary stay under half of it,
   and never more than a launch with a full seed and summary can still fit.
 
+A live provider session also hands off on its own. The app estimates everything one session was
+sent and returned: launch input, seeded context, prepared turns and every transcript record,
+tool output and the replies to launch replay and seeded context included. Reported output usage can raise that count but never lower it. Before a
+turn would pass the budget, the next admitted turn relaunches that exact session for the same
+owner, conversation and provider, replaying the accepted summary plus every uncovered turn. With no
+accepted summary, or a replay that would not fit, the healthy session keeps serving and a summary
+run is requested. Private chats never hand off. This is the app's own handoff; it does not detect
+or handle a vendor's context limit.
+
+- `JARVIS_CHAT_SESSION_BUDGET_TOKENS` (default 64000): app-counted tokens one provider session may
+  hold. It sits well under the smallest supported economy model window because vendor system
+  prompts and tool definitions use context the app cannot see.
+
 ## Deferred — agent-path PreToolUse policy
 
 A Claude Code `PreToolUse` hook (deny any tool call that is not an allowlisted `mcp__jarvis__*` call),

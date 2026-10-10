@@ -1,6 +1,7 @@
 import {
   buildNewMessageMime,
   buildReplyMime,
+  replyThreadHeaders,
   type EmailWriteProvider,
   type EmailWriteResult,
   type NewEmailInput
@@ -42,7 +43,7 @@ export class ImapEmailWriteProvider implements EmailWriteProvider {
       return { ok: false, mode: "draft", message: MSG_UPSTREAM_FAILED };
     }
 
-    const raw = buildReplyMime({ to, subject, body });
+    const raw = buildReplyMime({ to, subject, body, ...replyThreadHeaders(message) });
     const buffer = Buffer.from(raw, "base64url");
 
     try {
@@ -66,16 +67,16 @@ export class ImapEmailWriteProvider implements EmailWriteProvider {
       return { ok: false, mode: "send", message: MSG_UPSTREAM_FAILED };
     }
 
-    const raw = buildReplyMime({ to, subject, body });
+    const raw = buildReplyMime({ to, subject, body, ...replyThreadHeaders(message) });
     const buffer = Buffer.from(raw, "base64url");
 
     try {
       await this.sendViaSmtp(secret, to, buffer);
-      await this.appendToImapFolder(secret, SENT_FOLDER, buffer);
-      return { ok: true, mode: "send" };
     } catch {
       return { ok: false, mode: "send", message: MSG_UPSTREAM_FAILED };
     }
+    await this.keepSentCopy(secret, buffer);
+    return { ok: true, mode: "send" };
   }
 
   async sendNew(scopedDb: DataContextDb, input: NewEmailInput): Promise<EmailWriteResult> {
@@ -92,10 +93,19 @@ export class ImapEmailWriteProvider implements EmailWriteProvider {
 
     try {
       await this.sendViaSmtp(secret, input.to, buffer);
-      await this.appendToImapFolder(secret, SENT_FOLDER, buffer);
-      return { ok: true, mode: "send" };
     } catch {
       return { ok: false, mode: "send", message: MSG_UPSTREAM_FAILED };
+    }
+    await this.keepSentCopy(secret, buffer);
+    return { ok: true, mode: "send" };
+  }
+
+  /** The message is already submitted; a failed Sent copy must not report it as unsent. */
+  private async keepSentCopy(secret: ImapConnectionSecret, message: Buffer): Promise<void> {
+    try {
+      await this.appendToImapFolder(secret, SENT_FOLDER, message);
+    } catch {
+      // Submission succeeded; losing the Sent copy is not a send failure.
     }
   }
 
