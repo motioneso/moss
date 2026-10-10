@@ -37,7 +37,8 @@ import { AESTHETIC_THEME_TOKEN_KEYS } from "@moss/shared";
 import { useFeedback } from "./settings-feedback";
 import {
   PREVIEW_PARTS,
-  ReadabilityList,
+  ThemeReadability,
+  readabilityContrastRatio,
   ThemePreview,
   type EditorTokenKey,
   type PreviewPart
@@ -89,12 +90,20 @@ const FIELD_GROUPS: readonly {
   },
   {
     title: "Text",
-    hint: "Headline text first, then quieter body, hint and placeholder text.",
+    hint: "Main and secondary text, followed by decorative ink. The checks use rendered semantic text roles.",
     fields: [
       { key: "ink", name: "Text", desc: "Headlines and body" },
       { key: "ink2", name: "Soft text", desc: "Descriptions and secondary lines" },
-      { key: "ink3", name: "Faint text", desc: "Times, counts and meta" },
-      { key: "ink4", name: "Quiet text", desc: "Placeholders and disabled labels" }
+      {
+        key: "ink3",
+        name: "Faint ink",
+        desc: "Decorative marks; faint text uses a separate semantic color"
+      },
+      {
+        key: "ink4",
+        name: "Quiet ink",
+        desc: "Decorative marks and legacy surfaces; not every quiet-text role"
+      }
     ]
   },
   {
@@ -301,34 +310,6 @@ export function AppearancePane() {
       top: box.bottom - side.top + 8
     });
   };
-
-  const readability = useMemo(() => {
-    if (!draft) return [];
-    const { tokens } = draft;
-    return [
-      { label: "Text on the page", ratio: contrastRatio(tokens.ink, tokens.paper), floor: 4.5 },
-      {
-        label: "Faint text on the page",
-        ratio: contrastRatio(tokens.ink3, tokens.paper),
-        floor: 4.5
-      },
-      {
-        label: "Accent links on the page",
-        ratio: contrastRatio(tokens.accent, tokens.paper),
-        floor: 4.5
-      },
-      {
-        label: "Labels on the accent",
-        ratio: contrastRatio(tokens.paper, tokens.accent),
-        floor: 4.5
-      },
-      {
-        label: "Highlight rules on the page",
-        ratio: contrastRatio(tokens.highlight ?? DEFAULT_HIGHLIGHT, tokens.paper),
-        floor: 3
-      }
-    ];
-  }, [draft]);
 
   const builtIn = themesQuery.data?.builtIn ?? [];
   const custom = themesQuery.data?.custom ?? [];
@@ -622,6 +603,7 @@ export function AppearancePane() {
 
             <aside className="theme-editor__side" ref={sideRef}>
               <ThemePreview
+                themeId={draft.id}
                 style={tokensToCssVars(draft.tokens)}
                 openPart={picker?.from === "preview" ? picker.part : null}
                 onPick={openFromPreview}
@@ -641,7 +623,7 @@ export function AppearancePane() {
                   onInput={(color) => updateToken(picker.key, color)}
                 />
               ) : null}
-              <ReadabilityList checks={readability} />
+              <ThemeReadability themeId={draft.id} style={tokensToCssVars(draft.tokens)} />
             </aside>
           </div>
 
@@ -797,12 +779,7 @@ export function tokensToCssVars(tokens: AestheticThemeTokens): Record<string, st
 }
 
 export function contrastRatio(a: string, b: string): number {
-  const left = parseRgb(a);
-  const right = parseRgb(b);
-  if (!left || !right) return 1;
-  const l1 = relativeLuminance(left);
-  const l2 = relativeLuminance(right);
-  return Number(((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)).toFixed(2));
+  return readabilityContrastRatio(a, b) ?? 1;
 }
 
 function readBuiltInTokens(id: string): AestheticThemeTokens {
@@ -859,14 +836,6 @@ function parseRgb(value: string): Rgb | null {
   const channels = rgb.slice(1).map(Number);
   if (channels.some((channel) => channel < 0 || channel > 255)) return null;
   return { r: channels[0]!, g: channels[1]!, b: channels[2]! };
-}
-
-function relativeLuminance(rgb: Rgb): number {
-  const [r, g, b] = [rgb.r, rgb.g, rgb.b].map((channel) => {
-    const c = channel / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
 }
 
 function rgbToHex(rgb: Rgb): string {
