@@ -171,7 +171,7 @@ export function QuietHoursEditor() {
             onChange={(event) => edit({ start: event.currentTarget.value })}
           />
         </Field>
-        <Field label="Until">
+        <Field label="Until" className="fld--no-border">
           <input
             className="jds-input"
             type="time"
