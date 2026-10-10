@@ -67,7 +67,8 @@ export const chatModuleManifest = {
       "sql/0291_chat_conversation_provenance.sql",
       "sql/0293_chat_automatic_action_reservations.sql",
       "sql/0297_chat_action_history_permissions.sql",
-      "sql/0299_main_chat.sql"
+      "sql/0299_main_chat.sql",
+      "sql/0302_chat_summary_frontier.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [

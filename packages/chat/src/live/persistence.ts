@@ -53,14 +53,8 @@ import { normalizeChatSurface } from "./chat-surface.js";
 import { terminalActionRecord } from "../action-record-history.js";
 import { estimateTokens } from "./recall-seed.js";
 import { UnsupportedLegacyCliProviderError } from "./errors.js";
-import {
-  capSummary,
-  DEFAULT_REPLAY_MESSAGES,
-  REPLAY_TOKEN_CAP,
-  SUMMARY_TOKEN_CAP,
-  selectReplayWindow,
-  type ReplayMessage
-} from "./replay-window.js";
+import { DEFAULT_REPLAY_MESSAGES, REPLAY_TOKEN_CAP, type ReplayMessage } from "./replay-window.js";
+import { splitAtSummaryFrontier, type CoverageTurn } from "./summary-coverage.js";
 
 /** Provider-kinds the live CLI runtime can drive (the narrow ProviderKind set). */
 const LIVE_PROVIDER_KINDS: readonly ProviderKind[] = ["anthropic", "openai-compatible", "google"];
@@ -241,17 +235,20 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       }
 
       const messages = await this.chat.listMessages(scopedDb, thread.id);
-      const turns: ReplayMessage[] = messages
-        .filter((m) => m.status === "stored" && (m.role === "user" || m.role === "assistant"))
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.body }));
+      const turns = storedCoverageTurns(messages);
 
-      const recent = selectReplayWindow(turns, {
-        maxMessages: getReplayK(),
-        maxTokens: getReplayTokenCap()
+      // Replay is the accepted summary plus every turn after its frontier, untruncated.
+      // The launch refuses a replay that overflows its budget instead of dropping turns.
+      const split = splitAtSummaryFrontier(turns, {
+        summary: thread.conversation_summary,
+        coveredThroughMessageId: thread.summary_covered_through_message_id,
+        revision: thread.summary_revision
       });
-      const oldSummary = thread.conversation_summary
-        ? capSummary(thread.conversation_summary, SUMMARY_TOKEN_CAP)
-        : null;
+      const recent: ReplayMessage[] = split.uncovered.map((m) => ({
+        role: m.role,
+        content: m.content
+      }));
+      const oldSummary = split.summary;
 
       // D8: visibility only — counts and trigger, never message/summary content.
       // "switch" is a valid trigger value but unreachable in Phase 1: switchProvider
@@ -691,7 +688,7 @@ export function getReplayK(): number {
 }
 
 /** D1: sibling override for REPLAY_TOKEN_CAP. Same resolver, same parse rules. */
-function getReplayTokenCap(): number {
+export function getReplayTokenCap(): number {
   const val = resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_TOKENS");
   if (val === undefined || val === "") return REPLAY_TOKEN_CAP;
   const parsed = parseInt(val, 10);
@@ -702,6 +699,14 @@ function getReplayTokenCap(): number {
     return REPLAY_TOKEN_CAP;
   }
   return parsed;
+}
+
+function storedCoverageTurns(
+  messages: readonly { id: string; role: string; status: string; body: string }[]
+): CoverageTurn[] {
+  return messages
+    .filter((m) => m.status === "stored" && (m.role === "user" || m.role === "assistant"))
+    .map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.body }));
 }
 
 function deriveChatTitle(userText: string): string {
