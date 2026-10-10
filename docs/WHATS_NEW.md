@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Medication times and failed saves.** Medication doses now appear at the right time and day for your time zone, every-few-hours schedules count correctly, and a wellness note you type is kept with an error message if saving fails. [PR #3283](https://github.com/motioneso/moss/pull/3283)
 - **Workshop replies no longer get stuck.** Workshop no longer shows an endless "Thinking" after a failed reply, and it now shows new replies in long projects. [PR #3296](https://github.com/motioneso/moss/pull/3296)
 - **Deleted household members no longer appear in assistant answers.** When someone is removed from your household, the assistant no longer reports their shared accounts, transactions or spending. [PR #3269](https://github.com/motioneso/moss/pull/3269)
 - **Memory and note search accuracy.** Corrected memories can now be forgotten, deleted notes no longer show up in search, facts about other people are no longer saved as facts about you, and chat now recalls relevant memories automatically. [PR #3271](https://github.com/motioneso/moss/pull/3271)
