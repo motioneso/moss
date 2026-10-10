@@ -165,6 +165,71 @@ describe("interrupted live replies (#3128)", () => {
     expect(await history(threadId)).toHaveLength(2);
   });
 
+  it("keeps a reply that finishes after another server process marked it interrupted", async () => {
+    const threadId = await newThread(ids.userA);
+    const turnId = await begin(BOOT_A, threadId, "water the plants");
+    await boot(BOOT_B).listPriorTurns(ids.userA, { threadId });
+
+    const save = () =>
+      boot(BOOT_A).recordTurn(ids.userA, "water the plants", "Done.", EXECUTED, {
+        threadId,
+        turnId
+      });
+    const first = await save();
+    const second = await save();
+
+    expect(second).toEqual(first);
+    expect((await history(threadId)).map((row) => [row.role, row.status, row.body])).toEqual([
+      ["user", "stored", "water the plants"],
+      ["assistant", "error", INTERRUPTED_REPLY_TEXT],
+      ["assistant", "stored", "Done."]
+    ]);
+  });
+
+  it("keeps an interrupted question in the place it was asked", async () => {
+    const threadId = await newThread(ids.userA);
+    await begin(BOOT_A, threadId, "earlier question");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await boot(BOOT_A).recordTurn(ids.userA, "later question", "Later answer.", EXECUTED, {
+      threadId
+    });
+
+    await boot(BOOT_B).listPriorTurns(ids.userA, { threadId });
+
+    expect((await history(threadId)).map((row) => row.body)).toEqual([
+      "earlier question",
+      INTERRUPTED_REPLY_TEXT,
+      "later question",
+      "Later answer."
+    ]);
+  });
+
+  it("places an interrupted question after the summary's cutoff when the summary already passed it", async () => {
+    const threadId = await newThread(ids.userA);
+    await begin(BOOT_A, threadId, "earlier question");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const later = await boot(BOOT_A).recordTurn(
+      ids.userA,
+      "later question",
+      "Later answer.",
+      EXECUTED,
+      { threadId }
+    );
+    await bootstrap.query(
+      "UPDATE app.chat_threads SET summary_covered_through_message_id = $1 WHERE id = $2",
+      [later!.assistantMessageId, threadId]
+    );
+
+    await boot(BOOT_B).listPriorTurns(ids.userA, { threadId });
+
+    expect((await history(threadId)).map((row) => row.body)).toEqual([
+      "later question",
+      "Later answer.",
+      "earlier question",
+      INTERRUPTED_REPLY_TEXT
+    ]);
+  });
+
   it("titles a chat from its first answered question when the first reply was interrupted", async () => {
     const threadId = await app.withDataContext({ actorUserId: ids.userA }, async (db) => {
       const thread = await chat.openNewThread(db, { title: "Conversation" });

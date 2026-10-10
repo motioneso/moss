@@ -317,8 +317,11 @@ export class ChatRepository {
 
     await this.lockActionHistory(scopedDb, threadId);
     const claimed = await claim(scopedDb);
+    const frontierAt = await this.summaryFrontierCreatedAt(scopedDb, thread);
     for (const turn of claimed) {
-      const now = new Date();
+      // The pair keeps the question's place in history unless the summary already covers it.
+      const startedAt = new Date(turn.started_at);
+      const now = frontierAt && startedAt <= frontierAt ? new Date() : startedAt;
       await this.insertMessage(scopedDb, {
         thread,
         role: "user",
@@ -345,7 +348,21 @@ export class ChatRepository {
     return claimed.length;
   }
 
-  // The stored user and assistant rows of a turn id that already landed.
+  private async summaryFrontierCreatedAt(
+    scopedDb: DataContextDb,
+    thread: ChatThread
+  ): Promise<Date | undefined> {
+    if (!thread.summary_covered_through_message_id) return undefined;
+    const frontier = await scopedDb.db
+      .selectFrom("app.chat_messages")
+      .select("created_at")
+      .where("id", "=", thread.summary_covered_through_message_id)
+      .executeTakeFirst();
+    return frontier ? new Date(frontier.created_at) : undefined;
+  }
+
+  // The stored user and assistant rows of a turn id that already landed. A real reply outranks
+  // the interrupted note of the same turn.
   private async findStoredTurn(
     scopedDb: DataContextDb,
     threadId: string,
@@ -358,7 +375,9 @@ export class ChatRepository {
       .where(sql<boolean>`tool_metadata @> ${JSON.stringify({ turnId })}::jsonb`)
       .execute();
     const userMessage = rows.find((row) => row.role === "user");
-    const assistantMessage = rows.find((row) => row.role === "assistant");
+    const assistants = rows.filter((row) => row.role === "assistant");
+    const assistantMessage =
+      assistants.find((row) => row.tool_metadata.interruptedTurn !== true) ?? assistants[0];
     return userMessage && assistantMessage ? { userMessage, assistantMessage } : undefined;
   }
 
@@ -612,11 +631,14 @@ export class ChatRepository {
 
     await this.lockActionHistory(scopedDb, threadId);
     // #3128: the turn lands once, and its in-flight record goes in the same transaction so a
-    // later restart can never also store it as interrupted.
+    // later restart can never also store it as interrupted. A turn another process already
+    // stored as interrupted keeps its question, and the real reply follows the note.
+    let landedQuestion: ChatMessage | undefined;
     if (opts?.turnId) {
       const landed = await this.findStoredTurn(scopedDb, threadId, opts.turnId);
       await deleteLiveTurn(scopedDb, opts.turnId);
-      if (landed) return landed;
+      if (landed && landed.assistantMessage.tool_metadata.interruptedTurn !== true) return landed;
+      landedQuestion = landed?.userMessage;
     }
     const turnIdentity = opts?.turnId ? { turnId: opts.turnId } : {};
     let activity = [...(opts?.activityRecords ?? opts?.actionResults ?? [])];
@@ -685,21 +707,23 @@ export class ChatRepository {
       }
     }
     const now = new Date();
-    const userMessage = await this.insertMessage(scopedDb, {
-      thread,
-      role: "user",
-      status: "stored",
-      body: userText,
-      modelMetadata: {},
-      toolMetadata: {
-        selectedTools: [],
-        ...turnIdentity,
-        ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
-        // #1133 — chip rendering in history; JSONB metadata only, bytes stay in the vault.
-        ...(opts?.attachments?.length ? { attachments: opts.attachments } : {})
-      },
-      now
-    });
+    const userMessage =
+      landedQuestion ??
+      (await this.insertMessage(scopedDb, {
+        thread,
+        role: "user",
+        status: "stored",
+        body: userText,
+        modelMetadata: {},
+        toolMetadata: {
+          selectedTools: [],
+          ...turnIdentity,
+          ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
+          // #1133 — chip rendering in history; JSONB metadata only, bytes stay in the vault.
+          ...(opts?.attachments?.length ? { attachments: opts.attachments } : {})
+        },
+        now
+      }));
     const assistantMessage = await this.insertMessage(scopedDb, {
       thread,
       role: "assistant",

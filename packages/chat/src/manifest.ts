@@ -192,7 +192,7 @@ export const chatModuleManifest = {
       description:
         "If Moss restarts or its model stops mid-reply, reopening the chat keeps every finished message once and " +
         "shows the unfinished question with a note that the reply was interrupted. Moss never redoes it on its own. " +
-        "Not in private chats.",
+        "Not in private chats, and not for a message sent with only attachments and no words.",
       featureFlagId: "chat.module",
       errors: [
         {

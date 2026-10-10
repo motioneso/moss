@@ -6,8 +6,10 @@ import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import type { ChatAttachmentDto } from "@moss/shared";
 
 /**
- * #3128: identifies this API process. Engines never outlive the process that launched them,
- * so a live-turn row from any other boot belongs to a reply that can no longer finish.
+ * #3128: identifies this API process. Only the process that wrote a live-turn row can save its
+ * reply, so a row from any other boot is treated as interrupted. This assumes one API process
+ * per database; a second process can mark a reply still running elsewhere, and that reply's save
+ * then lands after the note.
  */
 export const CHAT_PROCESS_BOOT_ID = randomUUID();
 
@@ -52,9 +54,10 @@ export interface ClaimedLiveTurn {
   readonly thread_id: string;
   readonly user_text: string;
   readonly attachments: ChatAttachmentDto[];
+  readonly started_at: Date;
 }
 
-const CLAIMED_COLUMNS = ["turn_id", "thread_id", "user_text", "attachments"] as const;
+const CLAIMED_COLUMNS = ["turn_id", "thread_id", "user_text", "attachments", "started_at"] as const;
 
 /** Whether this thread holds a live-turn row from another boot. Lets readers skip the locks. */
 export async function hasStaleLiveTurns(
