@@ -30,6 +30,9 @@ import type {
   TranscriptRecord
 } from "./types.js";
 
+/** `no_route`: no configured model can summarize, so the conversation cannot be condensed. */
+export type ConversationSummaryRequestStatus = "queued" | "skipped" | "no_route";
+
 export interface PrivateThreadState {
   readonly actorUserId: string;
   readonly threadId: string;
@@ -64,7 +67,7 @@ export interface ChatPersistencePort {
     actorUserId: string,
     binding: { readonly threadId?: string | null },
     surface?: ChatSurface
-  ): Promise<void>;
+  ): Promise<ConversationSummaryRequestStatus | void>;
   /** Persist a completed turn (user text + assistant reply + executing provider/model). */
   recordTurn(
     actorUserId: string,

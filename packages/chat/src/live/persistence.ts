@@ -49,7 +49,8 @@ import {
 } from "../jobs.js";
 import { containsSensitiveMemoryText } from "../memory-distillation.js";
 import type { ChatPersistencePort } from "./chat-session-manager.js";
-import type { HandledTurnOptions } from "./chat-session-ports.js";
+import type { ConversationSummaryRequestStatus, HandledTurnOptions } from "./chat-session-ports.js";
+import { selectSummaryRoute } from "../summary-job.js";
 import type { ChatRepository } from "../repository.js";
 import { normalizeChatSurface } from "./chat-surface.js";
 import { terminalActionRecord } from "../action-record-history.js";
@@ -509,34 +510,40 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   /**
    * Ask for the conversation's uncovered history to be condensed. Used when a fresh
    * launch refuses an over-budget replay. Private, foreign and other-surface threads
-   * are ignored.
+   * are ignored. `no_route` means no configured model can summarize, so waiting cannot help.
+   * The API cannot see the worker's CLI adapter, so a CLI sign-in route is assumed runnable.
    */
   async requestConversationSummary(
     actorUserId: string,
     binding: { readonly threadId?: string | null },
     surface?: ChatSurface
-  ): Promise<void> {
+  ): Promise<ConversationSummaryRequestStatus> {
     const threadId = binding.threadId;
-    if (!this.boss || threadId === null) return;
+    if (!this.boss || threadId === null) return "skipped";
     const chatSurface = normalizeChatSurface(surface);
-    await this.run(actorUserId, "request-conversation-summary", async (scopedDb) => {
+    return this.run(actorUserId, "request-conversation-summary", async (scopedDb) => {
       const thread =
         threadId === undefined
           ? await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)
           : await this.chat.getThreadById(scopedDb, threadId, chatSurface);
-      if (!thread || thread.owner_user_id !== actorUserId || thread.surface !== chatSurface) return;
+      if (!thread || thread.owner_user_id !== actorUserId || thread.surface !== chatSurface)
+        return "skipped";
       const messages = await this.chat.listMessages(scopedDb, thread.id);
-      await this.sendSummaryJobIfDue(actorUserId, thread, storedCoverageTurns(messages));
+      return this.sendSummaryJobIfDue(actorUserId, thread, storedCoverageTurns(messages), scopedDb);
     });
   }
 
-  /** Queue one summarization run when the uncovered suffix outgrows the replay window. */
+  /**
+   * Queue one summarization run when the uncovered suffix outgrows the replay window.
+   * With `routeDb`, a due run first checks that a summarization route exists.
+   */
   private async sendSummaryJobIfDue(
     actorUserId: string,
     thread: ChatThread,
-    turns: readonly CoverageTurn[]
-  ): Promise<void> {
-    if (!this.boss || thread.incognito) return;
+    turns: readonly CoverageTurn[],
+    routeDb?: DataContextDb
+  ): Promise<ConversationSummaryRequestStatus> {
+    if (!this.boss || thread.incognito) return "skipped";
     const split = splitAtSummaryFrontier(turns, {
       summary: thread.conversation_summary,
       coveredThroughMessageId: thread.summary_covered_through_message_id,
@@ -547,7 +554,9 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       replayTokens: getReplayTokenCap(),
       maxInputTokens: SUMMARY_RUN_INPUT_TOKENS
     });
-    if (!plan) return;
+    if (!plan) return "skipped";
+    if (routeDb && !(await selectSummaryRoute(routeDb, this.ai, { cliAvailable: true })))
+      return "no_route";
     const payload: SummarizeConversationJobPayload = {
       actorUserId,
       threadId: thread.id,
@@ -558,6 +567,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     await sendJob(this.boss, CHAT_SUMMARIZE_CONVERSATION_QUEUE, payload, {
       singletonKey: `${thread.id}:${thread.summary_revision}`
     });
+    return "queued";
   }
 
   async getCurrentThreadState(

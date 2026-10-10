@@ -5,7 +5,11 @@ export const PROMPT_ALLOWANCE_TOKENS = 500;
 
 /** Shown when a fresh launch cannot fit the retained context; the summary job is condensing it. */
 export const CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE =
-  "This conversation is too long to resume right now. It is being condensed, so try again shortly or start a new chat.";
+  "This conversation is too long to resume right now. Moss is condensing it, and your history is kept. Try again in a minute, or start a new chat.";
+
+/** Shown when a fresh launch cannot fit and no configured model can condense the conversation. */
+export const CONVERSATION_NEEDS_SUMMARY_MODEL_MESSAGE =
+  "This conversation is too long to restore in full, and no AI model that can summarize is set up. Add one in Settings, or start a new chat.";
 
 /** Upper bound on raw turn tokens one summarization run reads. */
 export const SUMMARY_RUN_INPUT_TOKENS = 12_000;

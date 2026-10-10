@@ -7,6 +7,7 @@ import {
   STRUCTURED_PROMPT_MAX_BYTES,
   type AiConfiguredModelSafeRow,
   type AiProviderConfigSafeRow,
+  type AiProviderWithSealedCredential,
   type AiSecretCipher,
   type GenerateStructuredDeps,
   type GenerateStructuredResult
@@ -114,6 +115,73 @@ function isMeetingTurn(message: ChatMessage): boolean {
   );
 }
 
+export interface SummaryRoute {
+  readonly model: AiConfiguredModelSafeRow;
+  readonly provider: AiProviderWithSealedCredential;
+}
+
+/**
+ * The economy summarization route the summary job would use, or null when none is usable.
+ * `cliAvailable` says whether the caller can run a constrained CLI for a subscription sign-in.
+ */
+export async function selectSummaryRoute(
+  db: DataContextDb,
+  ai: Pick<AiRepository, "selectModelForCapability" | "selectProviderWithCredential">,
+  options: { readonly cliAvailable: boolean }
+): Promise<SummaryRoute | null> {
+  const model = await ai.selectModelForCapability(db, "summarization", "economy");
+  if (
+    !model ||
+    model.status !== "active" ||
+    model.provider_status !== "active" ||
+    (model.provider_auth_method !== "api_key" && model.provider_auth_method !== "cli") ||
+    (model.provider_auth_method === "cli" &&
+      (model.provider_kind !== "anthropic" || !options.cliAvailable)) ||
+    model.provider_purpose !== "assistant" ||
+    !model.capabilities.includes("summarization") ||
+    !model.capabilities.includes("json")
+  )
+    return null;
+  const provider = await ai.selectProviderWithCredential(db, model.provider_config_id);
+  if (!provider || !usableProvider(model, provider) || !provider.encrypted_credential) return null;
+  return { model, provider };
+}
+
+/** Smallest per-turn excerpt before an over-long prompt is rejected outright. */
+const MIN_TURN_EXCERPT_CHARS = 64;
+
+/** Keep the start and end of a turn longer than `cap` characters. */
+export function excerptTurn(content: string, cap: number): string {
+  if (content.length <= cap) return content;
+  const head = Math.ceil(cap / 2);
+  const tail = cap - head;
+  const omitted = content.length - cap;
+  return `${content.slice(0, head)} [... ${omitted} characters omitted ...] ${content.slice(content.length - tail)}`;
+}
+
+/**
+ * Build the summary prompt within the structured prompt byte cap. Oversized turns are cut to
+ * a shrinking per-turn excerpt; null when even the smallest excerpt cannot fit.
+ */
+export function buildBoundedSummaryPrompt(
+  previousSummary: string | null,
+  turns: readonly { role: string; content: string }[]
+): string | null {
+  const fits = (prompt: string) => Buffer.byteLength(prompt, "utf8") <= STRUCTURED_PROMPT_MAX_BYTES;
+  const full = buildSummaryPrompt(previousSummary, turns);
+  if (fits(full)) return full;
+  let cap = Math.max(...turns.map((turn) => turn.content.length));
+  while (cap > MIN_TURN_EXCERPT_CHARS) {
+    cap = Math.max(MIN_TURN_EXCERPT_CHARS, Math.floor(cap / 2));
+    const prompt = buildSummaryPrompt(
+      previousSummary,
+      turns.map((turn) => ({ role: turn.role, content: excerptTurn(turn.content, cap) }))
+    );
+    if (fits(prompt)) return prompt;
+  }
+  return null;
+}
+
 /** Text a summarization prompt may carry for one stored turn. */
 export function summarizableTurnText(message: ChatMessage): string {
   if (isMeetingTurn(message) || containsSensitiveMemoryText(message.body)) return WITHHELD_TURN;
@@ -167,22 +235,11 @@ export async function handleSummarizeConversationJob(
   };
 
   const resolve = async (db: DataContextDb) => {
-    const model = await ai.selectModelForCapability(db, "summarization", "economy");
-    if (
-      !model ||
-      model.status !== "active" ||
-      model.provider_status !== "active" ||
-      (model.provider_auth_method !== "api_key" && model.provider_auth_method !== "cli") ||
-      (model.provider_auth_method === "cli" &&
-        (model.provider_kind !== "anthropic" || !deps.createConstrainedCliStructuredAdapter)) ||
-      model.provider_purpose !== "assistant" ||
-      !model.capabilities.includes("summarization") ||
-      !model.capabilities.includes("json")
-    )
-      throw new RouteUnavailable();
-    const provider = await ai.selectProviderWithCredential(db, model.provider_config_id);
-    if (!provider || !usableProvider(model, provider) || !provider.encrypted_credential)
-      throw new RouteUnavailable();
+    const route = await selectSummaryRoute(db, ai, {
+      cliAvailable: !!deps.createConstrainedCliStructuredAdapter
+    });
+    if (!route) throw new RouteUnavailable();
+    const { model, provider } = route;
     // Sealed credential bytes are hashed so a key rotation invalidates the prepared call.
     const fingerprint = hash([
       model.id,
@@ -229,8 +286,8 @@ export async function handleSummarizeConversationJob(
       content: summarizableTurnText(byId.get(turn.id)!)
     }));
 
-    const prompt = buildSummaryPrompt(split.summary, turns);
-    if (Buffer.byteLength(prompt, "utf8") > STRUCTURED_PROMPT_MAX_BYTES) return log("rejected");
+    const prompt = buildBoundedSummaryPrompt(split.summary, turns);
+    if (!prompt) return log("rejected");
 
     const selected = await deps.dataContext.withDataContext(access, resolve);
     if (selected.model.provider_auth_method === "cli") {

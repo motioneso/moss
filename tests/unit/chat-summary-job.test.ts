@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { STRUCTURED_PROMPT_MAX_BYTES } from "@moss/ai";
+
 import {
   handleSummarizeConversationJob,
+  selectSummaryRoute,
   WITHHELD_TURN,
   type SummaryJobDeps,
   type SummaryJobPayload
@@ -235,6 +238,31 @@ describe("handleSummarizeConversationJob (#3156)", () => {
     expect(prompts[0]).not.toContain("meeting notes body");
     expect(prompts[0]).toContain(WITHHELD_TURN);
     expect(prompts[0]).toContain("We decided on blue.");
+    // Withheld turns still count as covered; the summary never sees their text.
+    expect(deps.chatRepository!.publishConversationSummary).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ throughMessageId: "m4" })
+    );
+  });
+
+  it("excerpts an oversized turn so the prompt fits, keeping its start and end", async () => {
+    const huge = `DECISION-START ${"é".repeat(120_000)} DECISION-END`;
+    const messages = [message(1, huge), ...[2, 3, 4, 5, 6].map((i) => message(i))];
+    const { deps, chatRepository, prompts } = setup({ messages });
+    await expect(handleSummarizeConversationJob(access, payload, deps)).resolves.toBe("published");
+    expect(Buffer.byteLength(prompts[0]!, "utf8")).toBeLessThanOrEqual(STRUCTURED_PROMPT_MAX_BYTES);
+    expect(prompts[0]).toContain("DECISION-START");
+    expect(prompts[0]).toContain("DECISION-END");
+    expect(prompts[0]).toMatch(/\[\.\.\. \d+ characters omitted \.\.\.\]/);
+    expect(prompts[0]).toContain("turn 4");
+    expect(chatRepository.publishConversationSummary).toHaveBeenCalled();
+  });
+
+  it("excerpts many large turns together when none is oversized alone", async () => {
+    const messages = Array.from({ length: 6 }, (_, i) => message(i + 1, "z".repeat(30_000)));
+    const { deps, prompts } = setup({ messages });
+    await expect(handleSummarizeConversationJob(access, payload, deps)).resolves.toBe("published");
+    expect(Buffer.byteLength(prompts[0]!, "utf8")).toBeLessThanOrEqual(STRUCTURED_PROMPT_MAX_BYTES);
   });
 
   it("does not queue more work when the publish lost the race", async () => {
@@ -295,5 +323,51 @@ describe("handleSummarizeConversationJob (#3156)", () => {
     deps.prepare = vi.fn().mockRejectedValue(new Error("boom")) as never;
     await expect(handleSummarizeConversationJob(access, payload, deps)).resolves.toBe("failed");
     expect(chatRepository.publishConversationSummary).not.toHaveBeenCalled();
+  });
+});
+
+describe("selectSummaryRoute (#3156)", () => {
+  function ai(overrides: { model?: unknown; provider?: unknown } = {}) {
+    return {
+      selectModelForCapability: vi
+        .fn()
+        .mockResolvedValue("model" in overrides ? overrides.model : model),
+      selectProviderWithCredential: vi
+        .fn()
+        .mockResolvedValue("provider" in overrides ? overrides.provider : provider)
+    } as never;
+  }
+
+  it("returns the usable economy summarization route", async () => {
+    const route = await selectSummaryRoute({} as never, ai(), { cliAvailable: false });
+    expect(route?.model.id).toBe("model-1");
+    expect(route?.provider.id).toBe("provider-1");
+  });
+
+  it.each([
+    ["no summarization model is set up", { model: null }],
+    ["the model cannot return JSON", { model: { ...model, capabilities: ["summarization"] } }],
+    ["the provider is missing", { provider: null }],
+    ["the provider has no credential", { provider: { ...provider, has_credential: false } }],
+    ["the provider was revoked", { provider: { ...provider, revoked_at: "2026-10-01" } }]
+  ])("returns null when %s", async (_label, overrides) => {
+    await expect(
+      selectSummaryRoute({} as never, ai(overrides), { cliAvailable: true })
+    ).resolves.toBeNull();
+  });
+
+  it("needs a constrained CLI for a subscription sign-in", async () => {
+    const cli = ai({
+      model: { ...model, provider_auth_method: "cli", provider_kind: "anthropic" },
+      provider: { ...provider, auth_method: "cli", provider_kind: "anthropic" }
+    });
+    await expect(selectSummaryRoute({} as never, cli, { cliAvailable: false })).resolves.toBeNull();
+    const cliAgain = ai({
+      model: { ...model, provider_auth_method: "cli", provider_kind: "anthropic" },
+      provider: { ...provider, auth_method: "cli", provider_kind: "anthropic" }
+    });
+    await expect(
+      selectSummaryRoute({} as never, cliAgain, { cliAvailable: true })
+    ).resolves.not.toBeNull();
   });
 });

@@ -67,6 +67,7 @@ describe("fresh launch replay budget (#3156)", () => {
     const launch = manager.ensureSession("u1", "Ben");
     await expect(launch).rejects.toBeInstanceOf(CliChatUnavailableError);
     await expect(launch).rejects.toThrow(/too long to resume/);
+    await expect(launch).rejects.toThrow(/history is kept/);
     expect(engine.launchOpts).toBeNull();
     expect(engine.killed).toBe(true);
     expect(revokeMcpToken).toHaveBeenCalled();
@@ -82,5 +83,25 @@ describe("fresh launch replay budget (#3156)", () => {
     );
     expect(engine.killed).toBe(true);
     expect(engine.launchOpts).toBeNull();
+  });
+
+  it("tells the owner to add a summary model when nothing can condense the chat", async () => {
+    vi.stubEnv("JARVIS_CHAT_REPLAY_TOKENS", "2000");
+    const { manager, engine, requestConversationSummary, revokeMcpToken } = setup(turns(40, 400));
+    requestConversationSummary.mockResolvedValue("no_route");
+    const launch = manager.ensureSession("u1", "Ben");
+    await expect(launch).rejects.toBeInstanceOf(CliChatUnavailableError);
+    await expect(launch).rejects.toThrow(/no AI model that can summarize/);
+    expect(engine.killed).toBe(true);
+    expect(engine.launchOpts).toBeNull();
+    expect(revokeMcpToken).toHaveBeenCalled();
+  });
+
+  it("falls back to the default seed budget when the setting is not a number", async () => {
+    vi.stubEnv("JARVIS_CHAT_REPLAY_TOKENS", "2000");
+    vi.stubEnv("JARVIS_CHAT_SEED_BUDGET_TOKENS", "lots");
+    const { manager, engine } = setup(turns(4, 400), "Decided: blue");
+    await manager.ensureSession("u1", "Ben");
+    expect(engine.launchOpts?.replayBatch).toContain("Decided: blue");
   });
 });

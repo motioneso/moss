@@ -26,6 +26,7 @@ import { renderPersona } from "./persona.js";
 import { estimateTokens, renderMemorySeedBlock } from "./recall-seed.js";
 import { getReplayTokenCap, SUMMARY_TOKEN_CAP } from "./replay-window.js";
 import {
+  CONVERSATION_NEEDS_SUMMARY_MODEL_MESSAGE,
   CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE,
   coverageTurnTokens,
   launchContextFits
@@ -121,7 +122,9 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   });
   let memorySeed: AdmittedContext | null;
   const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
-  const seedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : 1500;
+  const parsedSeedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : NaN;
+  const seedBudget =
+    Number.isFinite(parsedSeedBudget) && parsedSeedBudget > 0 ? parsedSeedBudget : 1500;
   try {
     if (engine.admitsOutsideContentWithoutPermission) {
       await admitOutsideAgentLaunch(
@@ -166,12 +169,16 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     seedBudget + SUMMARY_TOKEN_CAP + getReplayTokenCap()
   );
   if (!fits) {
-    await deps.persistence
+    const status = await deps.persistence
       .requestConversationSummary?.(actorUserId, { threadId }, surface)
       .catch(() => undefined);
     await engine.kill().catch(() => undefined);
     deps.revokeMcpToken?.(sessionKey);
-    throw new CliChatUnavailableError(CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE);
+    throw new CliChatUnavailableError(
+      status === "no_route"
+        ? CONVERSATION_NEEDS_SUMMARY_MODEL_MESSAGE
+        : CONVERSATION_TOO_LONG_TO_RESUME_MESSAGE
+    );
   }
   const replayParts: string[] = [];
   if (memorySeed) replayParts.push(memorySeed.text);

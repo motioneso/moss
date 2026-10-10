@@ -72,9 +72,11 @@ export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   { name: CHAT_EXTRACT_FACTS_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
   { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
   // Exclusive: the singleton key (thread + expected revision) keeps one candidate per checkpoint.
+  // No retries: the handler reports every outcome instead of throwing, and the next launch or
+  // turn re-requests a summary from the current checkpoint.
   {
     name: CHAT_SUMMARIZE_CONVERSATION_QUEUE,
-    options: { retryLimit: 2, deleteAfterSeconds: 600, policy: "exclusive" }
+    options: { retryLimit: 0, deleteAfterSeconds: 600, policy: "exclusive" }
   }
 ];
 
