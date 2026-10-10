@@ -731,6 +731,7 @@ tests/uat/specs/workflow-approval-card.uat.spec.ts,I0,scoped-test-transfer,,Pare
 tests/uat/specs/workshop-project-entry.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/workshop-storage.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/unit/app-shell-user-menu.test.tsx,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
+tests/unit/approval-focus-ring.test.ts,C4,reserved,,Parent-approved parser-only alignment preserving all contrast assertions
 tests/unit/briefing-dialog.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/briefing-freshness-ui.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/chat-action-hydration.test.tsx,C5,active-owner-hold,3154,Reserved existing surface UI test; not backend/integration test scope
