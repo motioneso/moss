@@ -295,7 +295,10 @@ describe("finance.accounts.list household merge (#1149)", () => {
       // Month chunks under the mirror are not accounts — meta suffix only.
       [sharedMonthKey(OTHER, "acc-x", "2026-07")]: { transactions: [] }
     });
-    const result = (await accountsListHandler(ports(kv, mirror))({ actorUserId: ACTOR })) as {
+    const result = (await accountsListHandler(ports(kv, mirror))({
+      actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER]
+    })) as {
       accounts: Record<string, unknown>[];
     };
     expect(result.accounts.map((a) => a.accountId)).toEqual(["acc-1", "acc-2", "acc-x"]);
@@ -320,7 +323,8 @@ describe("finance.accounts.list household merge (#1149)", () => {
   it("shows shared accounts to a member with no own accounts, keeping nextStep", async () => {
     const mirror = readOnlyMirror({ [sharedMetaKey(OTHER, "acc-x")]: otherMeta });
     const result = (await accountsListHandler(ports(fakeKv(), mirror))({
-      actorUserId: ACTOR
+      actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER]
     })) as Record<string, unknown>;
     expect((result.accounts as Record<string, unknown>[]).map((a) => a.accountId)).toEqual([
       "acc-x"
@@ -337,9 +341,25 @@ describe("finance.accounts.list household merge (#1149)", () => {
       [`${OTHER}:acc-y:meta`]: null as unknown as Record<string, unknown>,
       [sharedMetaKey(OTHER, "acc-x")]: otherMeta
     });
-    const result = (await accountsListHandler(ports(kv, mirror))({ actorUserId: ACTOR })) as {
+    const result = (await accountsListHandler(ports(kv, mirror))({
+      actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER]
+    })) as {
       accounts: Record<string, unknown>[];
     };
     expect(result.accounts.map((a) => a.accountId)).toEqual(["acc-1", "acc-2", "acc-x"]);
+  });
+
+  it("drops shared accounts of owners missing from the active list, and fails closed without it", async () => {
+    const mirror = readOnlyMirror({ [sharedMetaKey(OTHER, "acc-x")]: otherMeta });
+    const run = async (extra: Record<string, unknown>) =>
+      (
+        (await accountsListHandler(ports(fakeKv(), mirror))({
+          actorUserId: ACTOR,
+          ...extra
+        })) as { accounts: unknown[] }
+      ).accounts;
+    expect(await run({ activeUserIds: [ACTOR] })).toEqual([]);
+    expect(await run({})).toEqual([]);
   });
 });
