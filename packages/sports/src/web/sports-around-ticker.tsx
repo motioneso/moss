@@ -31,7 +31,7 @@ function TeamMark(props: { side: GameSide }) {
   const [broken, setBroken] = useState(false);
   const { side } = props;
   if (!side.crestUrl || broken) {
-    return <span className="sp-around__team">{side.shortName}</span>;
+    return <span>{side.shortName}</span>;
   }
   return (
     <img
@@ -140,7 +140,7 @@ export function AroundLeaguesTicker({ groups }: { readonly groups: readonly Scor
     <section className="sp-around" aria-label="Scores around the leagues">
       <button
         type="button"
-        className="sp-around__nav sp-around__nav--left"
+        className="sp-around__nav"
         aria-label="Scroll left"
         hidden={atStart}
         onClick={() => nudge(-1)}
@@ -181,7 +181,7 @@ export function AroundLeaguesTicker({ groups }: { readonly groups: readonly Scor
       </div>
       <button
         type="button"
-        className="sp-around__nav sp-around__nav--right"
+        className="sp-around__nav"
         aria-label="Scroll right"
         hidden={atEnd}
         onClick={() => nudge(1)}

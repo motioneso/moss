@@ -362,7 +362,7 @@ function FeaturedStoryBand(props: { story: Headline; onStoryChanged: StoryFeedba
   const { story } = props;
   const [broken, setBroken] = useState(false);
   return (
-    <div className="sp-scorebar__storywrap sp-fbhost">
+    <div className="sp-fbhost">
       <a className="sp-scorebar__story" href={story.url} target="_blank" rel="noreferrer">
         {story.imageUrl && !broken ? (
           <img
@@ -428,12 +428,7 @@ function GamedayHero(props: {
   }
 
   return (
-    <section
-      className="sp-gameday"
-      aria-label="Today's games"
-      aria-roledescription="carousel"
-      {...pauseHandlers}
-    >
+    <section aria-label="Today's games" aria-roledescription="carousel" {...pauseHandlers}>
       <div className="sp-gameday__stage">
         {games.map((entry) => (
           <div
@@ -519,9 +514,7 @@ function GamedayTab(props: {
       {game.state === "live" ? <LiveDot /> : null}
       {/* Built as one string rather than interpolated children: JSX would split this into
           separate text nodes, which reads as "WAS at PHI" but isn't one selectable label. */}
-      <span className="sp-gameday__tabteams">
-        {`${left.shortName} ${soccer ? "v" : "at"} ${right.shortName}`}
-      </span>
+      <span>{`${left.shortName} ${soccer ? "v" : "at"} ${right.shortName}`}</span>
       {scored ? (
         <span className="sp-gameday__tabscore">{`${left.score ?? 0}–${right.score ?? 0}`}</span>
       ) : null}
@@ -572,7 +565,7 @@ function ScoreBarSide(props: { side: GameSide; competitionKey: string; edge: "l"
     <div
       role="group"
       aria-label={side.name}
-      className={`sp-scorebar__side sp-scorebar__side--${edge}`}
+      className={`sp-scorebar__side${edge === "r" ? " sp-scorebar__side--r" : ""}`}
       style={color ? { background: color.bg, color: color.fg } : undefined}
     >
       {side.crestUrl ? (

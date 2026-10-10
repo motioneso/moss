@@ -310,7 +310,7 @@ const RAIL_ITEMS_CAP = 12;
 export function SourceRail({ groups }: { readonly groups: readonly NewsSourceGroup[] }) {
   if (groups.length === 0) return null;
   return (
-    <section className="nw-rail" aria-label="From your sources">
+    <section aria-label="From your sources">
       {/*
        * #1759: every module page links to its own settings page. News only offered that link
        * from its empty state, so a user who already had sources had no way back to change

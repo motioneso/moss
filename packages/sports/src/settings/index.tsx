@@ -476,7 +476,7 @@ export function SearchResults(props: {
                     props.onToggle(competition.competitionKey, null, competition.label, "picker")
                   }
                 >
-                  <span className="sp-whole__lbl">{state.visible}</span>
+                  <span>{state.visible}</span>
                 </Button>
                 <ActionError
                   actionState={props.actionState}
@@ -612,7 +612,7 @@ export function BrowseGroups(props: {
                         )
                       }
                     >
-                      <span className="sp-whole__lbl">
+                      <span>
                         {/* The league name already heads the row, so the button reads
                             "Follow all" and every row's button lines up at one width
                             (Ben, 2026-09-03). The aria-label keeps the full name. */}

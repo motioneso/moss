@@ -348,7 +348,7 @@ export function StandingsRail(props: {
           </p>
         ) : null}
         {!activeKey ? (
-          <p className="sp-standings__empty">
+          <p>
             No standings leagues selected.{" "}
             <ButtonLink variant="link" href="/settings?section=modules&module=sports">
               Choose leagues in Settings.
@@ -370,9 +370,7 @@ export function StandingsRail(props: {
             ))}
           </>
         ) : (
-          <p className="sp-standings__empty">
-            {lazy.isLoading ? "Loading standings…" : "No standings available."}
-          </p>
+          <p>{lazy.isLoading ? "Loading standings…" : "No standings available."}</p>
         )}
         {legendNotes.length > 0 ? (
           <ul className="sp-legend" aria-label="Qualification key">
@@ -451,7 +449,7 @@ function ViewSelect(props: {
 function KnockoutFixtures(props: { fixtures: readonly GameSummary[] }) {
   const locale = useUserLocale();
   return (
-    <div className="sp-knock">
+    <div>
       <p className="sp-knock__kicker">Knockout stage</p>
       <ul className="sp-knock__list" aria-label="Current round fixtures">
         {props.fixtures.map((game) => {
