@@ -72,6 +72,7 @@
 
   .cal-toolbar__right {
     flex: 1 0 100%;
+    flex-wrap: wrap;
     justify-content: flex-start;
   }
 
