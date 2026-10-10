@@ -11,6 +11,7 @@ import { PreferencesRepository } from "@moss/structured-state";
 import { quietHoursPortImpl } from "../../packages/module-registry/src/built-in-module-helpers.js";
 import { quietHoursSetExecute } from "../../packages/settings/src/quiet-hours-tool.js";
 import { settingsUndoLastExecute } from "../../packages/settings/src/undo-apply-tool.js";
+import { settingsUndoStack } from "../../packages/settings/src/undo-stack.js";
 import {
   connectionStrings,
   resetEmptyFoundationDatabase,
@@ -534,6 +535,32 @@ describe("quiet hours carry forward into Profile", () => {
       expect((await rawRow(user.id, PROFILE_KEY))?.value).toEqual(before?.value);
       const body = (await getQuietHours(user.cookie)).json<GetQuietHoursSettingsResponse>();
       expect(body.authority.status).toBe("conflict");
+    });
+    it("undoing a time-zone change settles the classification under the old zone first", async () => {
+      const user = await newUser();
+      await seed(user.id, {
+        profile: { enabled: true, start: "22:00", end: "07:00", timezone: "Europe/London" },
+        alerts: alertsRecord({ enabled: true, startLocalTime: "22:00", endLocalTime: "07:00" }),
+        locale: LONDON_LOCALE
+      });
+      const locale = await rawRow(user.id, LOCALE_KEY);
+      if (!locale) throw new Error("locale row missing");
+      const ctx = { actorUserId: user.id, requestId: "req:locale-undo", chatSessionId: "tz-undo" };
+      settingsUndoStack.push(user.id, ctx.chatSessionId, {
+        mutationId: `locale-undo-${user.id}`,
+        key: LOCALE_KEY,
+        previousValue: { timezone: "Europe/Paris", region: "en-GB", dateFormat: "24" },
+        previousRevision: null,
+        resultingRevision: locale.revision,
+        appliedAt: Date.now()
+      });
+
+      const undo = await asUser(user.id, (scopedDb) => settingsUndoLastExecute(scopedDb, {}, ctx));
+      expect(undo.data).toMatchObject({ status: "undone", key: LOCALE_KEY });
+
+      const body = (await getQuietHours(user.cookie)).json<GetQuietHoursSettingsResponse>();
+      expect(body.authority.status).toBe("canonical");
+      expect((await rawRow(user.id, PROFILE_KEY))?.value).toMatchObject({ authority: "canonical" });
     });
   });
 
