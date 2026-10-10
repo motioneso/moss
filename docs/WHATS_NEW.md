@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **News refresh, topic filters and dismissed stories.** News sources that had a temporary outage now come back on their own, topic filters show the matching headlines again, and stories you dismissed no longer reappear in your briefings. [PR #3298](https://github.com/motioneso/moss/pull/3298)
 - **Sports briefing and ticker fixes.** The morning briefing now shows a followed team's current game instead of yesterday's result, and the sports ticker no longer breaks when you follow your first team. [PR #3300](https://github.com/motioneso/moss/pull/3300)
 - **Medication times and failed saves.** Medication doses now appear at the right time and day for your time zone, every-few-hours schedules count correctly, and a wellness note you type is kept with an error message if saving fails. [PR #3283](https://github.com/motioneso/moss/pull/3283)
 - **Workshop replies no longer get stuck.** Workshop no longer shows an endless "Thinking" after a failed reply, and it now shows new replies in long projects. [PR #3296](https://github.com/motioneso/moss/pull/3296)
