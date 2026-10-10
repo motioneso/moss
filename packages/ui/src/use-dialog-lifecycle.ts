@@ -134,9 +134,11 @@ export function useDialogLifecycle(options: DialogLifecycleOptions) {
     typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null)
   );
 
+  const generationRef = useRef(0);
   useEffect(() => {
     const panel = ref.current;
     if (!enabled || !panel) return;
+    const generation = ++generationRef.current;
     const state = modalState();
     const { modals } = state;
     // Refresh on every closed -> open transition, including an opener in an outer modal.
@@ -192,6 +194,9 @@ export function useDialogLifecycle(options: DialogLifecycleOptions) {
       // Let a replacement dialog establish focus before considering restoration. Never steal
       // focus from a newly opened surface or a control deliberately clicked outside a popover.
       queueMicrotask(() => {
+        // StrictMode replays effects on the same mounted surface. Only the final active
+        // generation may restore focus; a superseded cleanup must not undo replay setup.
+        if (generationRef.current !== generation) return;
         const active = document.activeElement;
         if (
           target?.isConnected &&

@@ -107,6 +107,56 @@ describe("shared modal lifecycle", () => {
     }
   });
 
+  it.each([true, false])("keeps modal=%s focus through StrictMode effect replay", async (modal) => {
+    function Surface({ onClose }: { onClose: () => void }) {
+      const ref = useRef<HTMLDivElement>(null);
+      const close = useRef<HTMLButtonElement>(null);
+      const onKeyDown = useDialogLifecycle({ ref, modal, initialFocusRef: close, onClose });
+      return (
+        <div
+          ref={ref}
+          role="dialog"
+          aria-label="Strict surface"
+          tabIndex={-1}
+          onKeyDown={onKeyDown}
+        >
+          <button ref={close} onClick={onClose}>
+            Close surface
+          </button>
+        </div>
+      );
+    }
+    function Example() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Open surface</button>
+          {open ? <Surface onClose={() => setOpen(false)} /> : null}
+        </>
+      );
+    }
+    mount(
+      <StrictMode>
+        <Example />
+      </StrictMode>
+    );
+    const opener = host!.querySelector<HTMLButtonElement>("button")!;
+    for (let i = 0; i < 3; i++) {
+      opener.focus();
+      const restored = vi.spyOn(opener, "focus");
+      try {
+        await act(async () => opener.click()); // Flush the synthetic cleanup microtask before asserting.
+        expect(document.activeElement?.textContent).toBe("Close surface");
+        expect(restored).not.toHaveBeenCalled(); // A modal trap must not merely hide an invalid restore.
+        await act(async () => key(document.activeElement!, "Escape"));
+        expect(document.activeElement).toBe(opener);
+        expect(restored).toHaveBeenCalledOnce();
+      } finally {
+        restored.mockRestore();
+      }
+    }
+  });
+
   it("dismisses only a nested menu on the first Escape", () => {
     const close = vi.fn();
     mount(
