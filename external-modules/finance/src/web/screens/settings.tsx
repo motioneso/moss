@@ -224,7 +224,7 @@ function ActivityBlock(): ReactNodeLike {
         key={k}
         from={new Date(now - (k + 1) * WEEK_MS).toISOString()}
         to={new Date(now - k * WEEK_MS).toISOString()}
-        emptyText={k === 0 ? "Moss hasn't done anything on its own yet." : "Nothing in this week."}
+        emptyText={k === 0 ? "Nothing yet." : "Nothing in this week."}
       />
     );
   }
@@ -341,7 +341,7 @@ function BankKeys(): ReactNodeLike {
 // ---- Screen ----
 
 export function SettingsScreen(): ReactNodeLike {
-  const [tiers, setTiers] = useState<Tiers>(tiersForStep("ask"));
+  const [tiers, setTiers] = useState<Tiers>(tiersForStep("routine"));
   const [loaded, setLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [forceCustom, setForceCustom] = useState(false);
@@ -452,24 +452,26 @@ export function SettingsScreen(): ReactNodeLike {
           <div className="fnm-phone-only">
             <ActivityBlock />
           </div>
-          <section className="fnm-block fnm-block--tight">
-            <SectionHead title="Dollar limit" rule />
-            <Field>
-              <FormLabel htmlFor="fnm-limit">Moss can move up to, per move</FormLabel>
-              <input
-                id="fnm-limit"
-                className="jds-input fnm-limit"
-                inputMode="numeric"
-                value={limit}
-                onChange={(event) => setLimit(event.target.value)}
-                onBlur={commitLimit}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") commitLimit();
-                }}
-              />
-            </Field>
-            <InlineError message={limitError} />
-          </section>
+          {value === "ask" ? null : (
+            <section className="fnm-block fnm-block--tight">
+              <SectionHead title="Dollar limit" rule />
+              <Field>
+                <FormLabel htmlFor="fnm-limit">Moss can move up to, per move</FormLabel>
+                <input
+                  id="fnm-limit"
+                  className="jds-input fnm-limit"
+                  inputMode="numeric"
+                  value={limit}
+                  onChange={(event) => setLimit(event.target.value)}
+                  onBlur={commitLimit}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitLimit();
+                  }}
+                />
+              </Field>
+              <InlineError message={limitError} />
+            </section>
+          )}
           <section className="fnm-block fnm-block--tight">
             <SectionHead
               title={

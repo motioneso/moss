@@ -319,19 +319,9 @@ test("Finance first budget: adjust in chat and by typing, then start", async ({ 
   const draftApprove = page
     .locator('[role="region"][aria-label="Action request"]')
     .getByRole("button", { name: "Approve" });
-  // The drafting family asks each time by default, so approve each card until the screen shows it.
-  await expect(async () => {
-    while (
-      await draftApprove
-        .last()
-        .isVisible()
-        .catch(() => false)
-    ) {
-      await draftApprove.last().click();
-      await page.waitForTimeout(1_500);
-    }
-    await expect(planBox("Groceries")).toHaveValue("$600.00", { timeout: 8_000 });
-  }).toPass({ timeout: 240_000, intervals: [3_000] });
+  // Draft edits always run on their own, so no approval card appears and the screen updates.
+  await expect(planBox("Groceries")).toHaveValue("$600.00", { timeout: 240_000 });
+  await expect(draftApprove, "draft edits never ask").toHaveCount(0);
   await expect(
     page
       .getByText(/Changed in chat, was/)

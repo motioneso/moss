@@ -99,7 +99,40 @@ describe("Finance settings (#3186)", () => {
     expect(out).toContain("Custom");
     expect(radio(renderer, "routine").props.checked).toBe(true);
     expect(out).not.toContain("Bank connection");
-    expect(out).toContain("Moss hasn't done anything on its own yet.");
+    expect(out).toContain("Nothing yet.");
+  });
+
+  it("shows the middle step on a fresh install with no stored choices", async () => {
+    install(
+      defaults({
+        "GET /api/ai/action-policy": { status: 200, body: { policies: [] } }
+      })
+    );
+    const renderer = await render();
+    expect(radio(renderer, "routine").props.checked).toBe(true);
+    expect(text(renderer)).toContain("Dollar limit");
+  });
+
+  it("shows the first step and hides the dollar limit when every choice is stored as ask", async () => {
+    install(
+      defaults({
+        "GET /api/ai/action-policy": {
+          status: 200,
+          body: {
+            policies: ["sorting", "moving_money", "sorting_new", "rules", "categories"].map(
+              (f) => ({
+                moduleId: "finance",
+                actionFamilyId: f,
+                tier: "ask_each_time"
+              })
+            )
+          }
+        }
+      })
+    );
+    const renderer = await render();
+    expect(radio(renderer, "ask").props.checked).toBe(true);
+    expect(text(renderer)).not.toContain("Dollar limit");
   });
 
   it("saves a preset through the freedom route", async () => {

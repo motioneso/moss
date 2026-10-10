@@ -136,12 +136,29 @@ function validateActionFamilies(
       errors.push(`action family ${family.id} has invalid allowedTiers`);
       continue;
     }
-    if (family.defaultTier !== "ask_each_time" && family.defaultTier !== "always_confirm") {
+    if (
+      family.defaultTier !== "ask_each_time" &&
+      family.defaultTier !== "always_confirm" &&
+      family.defaultTier !== "trusted_auto"
+    ) {
       errors.push(`action family ${family.id} has an invalid defaultTier`);
       continue;
     }
     if (!family.allowedTiers.includes(family.defaultTier)) {
       errors.push(`action family ${family.id} defaultTier must appear in allowedTiers`);
+      continue;
+    }
+    // A module may default a family to trusted_auto only for routine work: a family tagged
+    // "routine", or one whose only allowed tier is trusted_auto. Tools in such a family may not be
+    // destructive or outbound (checked per tool).
+    if (
+      family.defaultTier === "trusted_auto" &&
+      family.freedom !== "routine" &&
+      !(family.allowedTiers.length === 1 && family.allowedTiers[0] === "trusted_auto")
+    ) {
+      errors.push(
+        `action family ${family.id} may default to trusted_auto only when tagged routine or when trusted_auto is its only allowed tier`
+      );
       continue;
     }
     if (family.freedom !== undefined && family.freedom !== "routine" && family.freedom !== "new") {
@@ -183,6 +200,14 @@ function validateAssistantToolPolicy(
     tool.executionPolicy !== "confirm"
   ) {
     errors.push('assistant tool executionPolicy must be "auto" or "confirm"');
+  }
+  if (
+    family?.defaultTier === "trusted_auto" &&
+    (tool.risk === "destructive" || tool.risk === "outbound")
+  ) {
+    errors.push(
+      `assistant tool in family ${family.id} cannot be ${String(tool.risk)} because the family defaults to trusted_auto`
+    );
   }
   if (tool.executionPolicy === "auto") {
     if (!family) {

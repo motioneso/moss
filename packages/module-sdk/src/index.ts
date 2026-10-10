@@ -96,7 +96,7 @@ export interface ModuleAssistantActionFamilyManifest {
   readonly label: string;
   readonly description: string;
   readonly freedom?: ModuleActionFamilyFreedom;
-  readonly defaultTier: "ask_each_time" | "always_confirm";
+  readonly defaultTier: MossActionPermissionTier;
   readonly allowedTiers: readonly MossActionPermissionTier[];
 }
 

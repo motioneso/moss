@@ -210,15 +210,21 @@ describe("finance manifest contract (#1146)", () => {
         family.defaultTier
       ])
     ).toEqual([
-      ["sorting", "ask_each_time"],
+      ["sorting", "trusted_auto"],
       ["sorting_new", "ask_each_time"],
       ["rules", "ask_each_time"],
-      ["moving_money", "ask_each_time"],
+      ["moving_money", "trusted_auto"],
       ["categories", "ask_each_time"],
       ["bank_connections", "always_confirm"],
-      ["drafting", "ask_each_time"],
+      ["drafting", "trusted_auto"],
+      ["upkeep", "trusted_auto"],
       ["sharing", "always_confirm"]
     ]);
+    // Draft edits and bank refreshes always run (spec step table); money moves still ask above
+    // the dollar limit through confirmAbove.
+    expect(toolByName("finance.budget.draft.update").actionFamilyId).toBe("drafting");
+    expect(toolByName("finance.sync.run-now").actionFamilyId).toBe("upkeep");
+    expect(toolByName("finance.sync.run-now").executionPolicy).toBe("auto");
     // Sharing balances with the household must always ask, even unattended (review A1).
     expect(toolByName("finance.account.set-shared").actionFamilyId).toBe("sharing");
     expect(

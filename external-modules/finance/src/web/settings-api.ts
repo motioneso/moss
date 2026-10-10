@@ -90,7 +90,10 @@ async function readJson(response: { json: () => Promise<unknown> }): Promise<unk
   }
 }
 
-/** Stored tier per tagged family. A family with no stored row keeps the default (ask). */
+/**
+ * Stored tier per tagged family. A family with no stored row keeps its manifest default, which
+ * is the middle step: routine families run on their own and new-thing families ask.
+ */
 export async function fetchTiers(): Promise<Tiers | null> {
   let response;
   try {
@@ -103,13 +106,13 @@ export async function fetchTiers(): Promise<Tiers | null> {
     policies?: Array<{ moduleId: string; actionFamilyId: string; tier: string }>;
   } | null;
   if (!body || !Array.isArray(body.policies)) return null;
-  const tiers = tiersForStep("ask");
+  const tiers = tiersForStep("routine");
   for (const policy of body.policies) {
     if (policy.moduleId !== "finance") continue;
     const family = policy.actionFamilyId as TaggedFamily;
-    if (TAGGED_FAMILIES.includes(family) && policy.tier === "trusted_auto") {
-      tiers[family] = "trusted_auto";
-    }
+    if (!TAGGED_FAMILIES.includes(family)) continue;
+    if (policy.tier === "trusted_auto") tiers[family] = "trusted_auto";
+    else if (policy.tier === "ask_each_time") tiers[family] = "ask_each_time";
   }
   return tiers;
 }

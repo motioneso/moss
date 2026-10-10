@@ -192,6 +192,8 @@
       "permissionId": "finance.sync.run-now",
       "description": "Sync accounts and transactions from Plaid now.",
       "risk": "write",
+      "executionPolicy": "auto",
+      "actionFamilyId": "upkeep",
       "inputSchema": { "type": "object", "additionalProperties": false },
       "handler": "sync.run"
     },
@@ -561,7 +563,7 @@
       "label": "Sort purchases from merchants you've seen",
       "description": "Put transactions into categories.",
       "freedom": "routine",
-      "defaultTier": "ask_each_time",
+      "defaultTier": "trusted_auto",
       "allowedTiers": ["ask_each_time", "trusted_auto"]
     },
     {
@@ -585,7 +587,7 @@
       "label": "Move money between categories",
       "description": "Assign or move budget amounts, up to your limit.",
       "freedom": "routine",
-      "defaultTier": "ask_each_time",
+      "defaultTier": "trusted_auto",
       "allowedTiers": ["ask_each_time", "trusted_auto"]
     },
     {
@@ -607,8 +609,15 @@
       "id": "drafting",
       "label": "Adjust a draft budget",
       "description": "Change a budget that hasn't started yet.",
-      "defaultTier": "ask_each_time",
-      "allowedTiers": ["ask_each_time", "trusted_auto"]
+      "defaultTier": "trusted_auto",
+      "allowedTiers": ["trusted_auto"]
+    },
+    {
+      "id": "upkeep",
+      "label": "Refresh accounts from the bank",
+      "description": "Pull in the latest accounts and transactions.",
+      "defaultTier": "trusted_auto",
+      "allowedTiers": ["trusted_auto"]
     },
     {
       "id": "sharing",
