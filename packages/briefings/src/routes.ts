@@ -63,10 +63,9 @@ export interface BriefingsRoutesDependencies {
   /** Briefing tool names declared by external (JSON-manifest) modules. */
   readonly listExternalBriefingToolNames?: () => readonly string[];
   /** Same modules, with a display name, for the settings switches. */
-  readonly listExternalBriefingSources?: () => readonly {
-    readonly toolName: string;
-    readonly label: string;
-  }[];
+  readonly listExternalBriefingSources?: (
+    access: AccessContext
+  ) => Promise<readonly { readonly toolName: string; readonly label: string }[]>;
   readonly boss: PgBoss;
   readonly dayPlanRead?: DayPlanReadPort;
   readonly repository?: BriefingsRepository;
@@ -139,7 +138,9 @@ export function registerBriefingsRoutes(
 
         return {
           definitions: definitions.map(serializeDefinition),
-          externalSources: [...(dependencies.listExternalBriefingSources?.() ?? [])]
+          externalSources: [
+            ...((await dependencies.listExternalBriefingSources?.(accessContext)) ?? [])
+          ]
         };
       } catch (error) {
         return handleRouteError(error, reply);

@@ -41,7 +41,8 @@ const PLAN = {
 /** Calendar tool that honours startsAfter and otherwise starts its window at now. */
 function windowedCalendar(
   inputs: Record<string, unknown>[],
-  seed?: readonly Record<string, unknown>[]
+  seed?: readonly Record<string, unknown>[],
+  disconnected = false
 ): ToolExecute {
   return async (_db, input) => {
     inputs.push(input as Record<string, unknown>);
@@ -51,11 +52,18 @@ function windowedCalendar(
     const events = (data.events as { startsAt: string }[]).filter(
       (e) => new Date(e.startsAt).getTime() >= from
     );
-    return { data: { ...data, events } };
+    // A disconnected calendar answers with no events, no accounts and a gap.
+    return disconnected
+      ? { data: { events: [], accounts: [], gaps: [{ reason: "not_connected" }] } }
+      : { data: { ...data, events } };
   };
 }
 
-async function eveningPrompt(options: FakeOptions, calendarInputs: Record<string, unknown>[] = []) {
+async function eveningPrompt(
+  options: FakeOptions,
+  calendarInputs: Record<string, unknown>[] = [],
+  variant: { readonly timezone?: string; readonly disconnected?: boolean } = {}
+) {
   const seen: string[] = [];
   const base = makeFakeDeps({
     ...options,
@@ -71,7 +79,14 @@ async function eveningPrompt(options: FakeOptions, calendarInputs: Record<string
       ...m,
       assistantTools: (m.assistantTools ?? []).map((t) =>
         t.name === "calendar.listVisibleEvents" && options.failTool !== t.name
-          ? { ...t, execute: windowedCalendar(calendarInputs, options.calendarEvents) }
+          ? {
+              ...t,
+              execute: windowedCalendar(
+                calendarInputs,
+                options.calendarEvents,
+                variant.disconnected
+              )
+            }
           : t
       )
     }))
@@ -81,7 +96,7 @@ async function eveningPrompt(options: FakeOptions, calendarInputs: Record<string
     definition({
       title: "Evening",
       briefing_type: "evening",
-      schedule_metadata: { targetTime: "18:00", timezone: "UTC" },
+      schedule_metadata: { targetTime: "18:00", timezone: variant.timezone ?? "UTC" },
       selected_tool_names: ["tasks.list", "calendar.listVisibleEvents"]
     }),
     runInput,
@@ -105,6 +120,20 @@ describe("evening plan check", () => {
 
   it("says nothing about lost events when the calendar is switched off for briefings", async () => {
     const prompt = await eveningPrompt({ disabledBehaviors: new Set(["calendar.briefings"]) });
+    expect(prompt).not.toContain("lost its calendar event");
+  });
+
+  it("says nothing about lost events when no calendar account is connected", async () => {
+    const prompt = await eveningPrompt({}, [], { disconnected: true });
+    expect(prompt).not.toContain("lost its calendar event");
+  });
+
+  it("says nothing about lost events when the timezone is unknown", async () => {
+    const inputs: Record<string, unknown>[] = [];
+    const prompt = await eveningPrompt({}, inputs, { timezone: "Not/AZone" });
+    // An unknown zone falls back to UTC, so the read still starts at that day's start and the
+    // 09:00Z block is found rather than reported lost.
+    expect(inputs[0]?.startsAfter).toBe("2026-06-13T00:00:00.000Z");
     expect(prompt).not.toContain("lost its calendar event");
   });
 

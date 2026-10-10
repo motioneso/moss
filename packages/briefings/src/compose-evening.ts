@@ -502,10 +502,14 @@ export async function composeEveningBriefing(
     sections.push(morningPlan);
   }
   // Calendar items go to the plan check only when the read succeeded. A switched-off,
-  // unselected or failed read stays undefined so it never reads as "event gone".
+  // unselected, failed, disconnected or unknown-timezone read stays undefined so it never
+  // reads as "event gone".
   const calendarLoaded =
     includeCalendar &&
     definition.selected_tool_names.includes("calendar.listVisibleEvents") &&
+    calendarStart !== null &&
+    calendarSourceContext.accounts.length > 0 &&
+    calendarSourceContext.gaps.length === 0 &&
     !calScratch.some((g) => g.reason === "tool_failed" || g.reason === "module_disabled");
   sections.push(
     planSection(

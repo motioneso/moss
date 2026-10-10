@@ -631,14 +631,17 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         externalModuleHolder
           .getDiscoveries()
           .flatMap((d) => (d.manifest.briefing ? [d.manifest.briefing.toolName] : [])),
-      listExternalBriefingSources: () =>
-        externalModuleHolder
+      // Only modules the user has turned on get a switch.
+      listExternalBriefingSources: async (access) => {
+        const active = new Set((await getActiveExternalModules(access)).map((m) => m.id));
+        return externalModuleHolder
           .getDiscoveries()
           .flatMap((d) =>
-            d.manifest.briefing
+            d.manifest.briefing && active.has(d.manifest.id)
               ? [{ toolName: d.manifest.briefing.toolName, label: d.manifest.name }]
               : []
-          ),
+          );
+      },
       routeCatalog,
       actAsGrants,
       resolveActiveModules: resolveActiveModulesWithIntegrations,

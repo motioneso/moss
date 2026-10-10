@@ -17,7 +17,8 @@ const actor: AccessContext = {
 
 function buildApp(
   externalNames: readonly string[] | undefined,
-  externalSources?: readonly { toolName: string; label: string }[]
+  externalSources?: readonly { toolName: string; label: string }[],
+  onSourcesAsked?: (access: unknown) => void
 ) {
   const created: string[][] = [];
   const app = Fastify();
@@ -29,7 +30,14 @@ function buildApp(
     } as unknown as DataContextRunner,
     listModuleManifests: () => [],
     ...(externalNames ? { listExternalBriefingToolNames: () => externalNames } : {}),
-    ...(externalSources ? { listExternalBriefingSources: () => externalSources } : {}),
+    ...(externalSources
+      ? {
+          listExternalBriefingSources: async (access: unknown) => {
+            onSourcesAsked?.(access);
+            return externalSources;
+          }
+        }
+      : {}),
     boss: {} as PgBoss,
     repository: {
       listDefinitions: async () => [],
@@ -85,6 +93,14 @@ describe("briefing definitions and external module briefing tools", () => {
       definitions: [],
       externalSources: [{ toolName: "job-search.briefing", label: "Job Search" }]
     });
+  });
+
+  it("asks for sources on behalf of the signed-in user so switched-off modules can be hidden", async () => {
+    const seen: unknown[] = [];
+    const { app } = buildApp(undefined, [], (access) => seen.push(access));
+    await app.inject({ method: "GET", url: "/api/briefings/definitions" });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ actorUserId: expect.any(String) });
   });
 
   it("returns no external sources when no module offers one", async () => {
