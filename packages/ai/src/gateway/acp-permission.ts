@@ -32,7 +32,7 @@ import type { ActionAuditAgentSummary, ActionAuditInputSummary } from "@moss/sha
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository } from "../repository.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
-import { isConversationTainted } from "./conversation-policy.js";
+import { isConversationMarked, isConversationTainted } from "./conversation-policy.js";
 import {
   CONTEXT_ADMISSION_UNAVAILABLE,
   recordContextAdmission,
@@ -305,16 +305,21 @@ export async function requestAcpBuiltInPermission(
       family === "shell" ||
       family === "web" ||
       classification.verdict === "ask");
+  let yoloAnswer: Promise<boolean> | undefined;
+  const yoloOn = () =>
+    (yoloAnswer ??= Promise.resolve(
+      deps.yoloMode?.({ actorUserId, requestId, chatSessionId, ...(threadId ? { threadId } : {}) })
+    ).then((on) => on === true));
+  // The card names outside content only when a clean conversation would allow with no card.
+  const outsideContentCaused = async () =>
+    (classification.verdict === "allow" ||
+      (classification.verdict === "ask" && (await yoloOn().catch(() => false)))) &&
+    (await isConversationMarked(deps.provenance, ctx));
   // Reuse the effective actor setting on every eligible ask; never override hard denials.
   if (
     !taintRequiresApproval &&
     classification.verdict === "ask" &&
-    (await deps.yoloMode?.({
-      actorUserId,
-      requestId,
-      chatSessionId,
-      ...(threadId ? { threadId } : {})
-    })) === true &&
+    (await yoloOn()) &&
     !(await isConversationTainted(deps.provenance, {
       actorUserId,
       ...(threadId ? { threadId } : {})
@@ -404,7 +409,7 @@ export async function requestAcpBuiltInPermission(
       actionRequestId: action.id,
       ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
       toolName,
-      outsideContentNotice: await isConversationTainted(deps.provenance, ctx),
+      outsideContentNotice: await outsideContentCaused(),
       summary: acpCardText(builtIn)
     });
     const holdStartedAt = Date.now();

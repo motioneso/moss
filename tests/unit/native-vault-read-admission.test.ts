@@ -35,7 +35,7 @@ const validReport = {
 };
 const failure = { error: "Vault read admission failed closed." };
 
-async function harness(modules: readonly MossModuleManifest[] = []) {
+async function harness(modules: readonly MossModuleManifest[] = [], yolo = true) {
   let now = 0;
   const tokens = new SessionTokenRegistry({ clock: { now: () => now }, ttlMs: 1000 });
   const token = tokens.mint({
@@ -58,6 +58,7 @@ async function harness(modules: readonly MossModuleManifest[] = []) {
   const provenance: ConversationProvenancePort = {
     recordAdmission,
     isTainted: async (actor, thread) => tainted(actor, thread),
+    isMarked: async (actor, thread) => owned(actor, thread) && tainted(actor, thread) && !reserved,
     async runAutomatic(actor, thread, execute) {
       if (reserved || tainted(actor, thread)) return { kind: "confirm" };
       reserved = true;
@@ -84,7 +85,7 @@ async function harness(modules: readonly MossModuleManifest[] = []) {
     } as never,
     notifier: { emit: (_session, record) => records.push(record) },
     confirmTimeoutMs: 1000,
-    yoloMode: async () => true,
+    yoloMode: async () => yolo,
     provenance
   });
   const app = Fastify({ logger: false });
@@ -260,6 +261,31 @@ describe.each(hooks)("%s native hook admission", (_name, source) => {
       }
     }
   );
+
+  it("a YOLO-off write after Read asks without naming outside content", async () => {
+    const h = await harness([], false);
+    try {
+      await runClaudeNativeHook(
+        source,
+        { tool_name: "Read", tool_input: { file_path: join(h.root, "fixture.md") }, cwd: h.root },
+        h
+      );
+      const write = runClaudeNativeHook(
+        source,
+        { tool_name: "Write", tool_input: { file_path: join(h.root, "output.md") }, cwd: h.root },
+        h
+      );
+      await vi.waitFor(() =>
+        expect(h.records).toContainEqual(
+          expect.objectContaining({ kind: "action_request", outsideContentNotice: false })
+        )
+      );
+      h.confirmations.resolve("pending-a", "rejected");
+      expect((await write).permissionDecision).toBe("deny");
+    } finally {
+      await h.close();
+    }
+  });
 
   it("does not allow while report persistence is pending", async () => {
     const h = await harness();

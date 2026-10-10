@@ -373,6 +373,8 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   );
   const approveMove = card.getByRole("button", { name: "Approve" }).last();
   await expect(approveMove).toBeVisible({ timeout: 240_000 });
+  // The limit asks in a clean chat too, so the card does not blame outside content (#3338).
+  await expect(card.last()).not.toContainText("Moss read something from outside your account");
   await crop(card.last(), "approval-card-250");
   await card.getByRole("button", { name: "Reject" }).last().click();
   expect(await readAssigned("Groceries"), "nothing moved without approval").toBe(50_000);

@@ -562,6 +562,7 @@ describe("app actions through the real gateway and app routes", () => {
     expect(JSON.stringify(result)).toContain("OTHER_THREAD_CONTENT_3071");
     const provenance = new ConversationProvenanceStore(runner);
     expect(await provenance.isTainted(ids.userA, threadId)).toBe(true);
+    expect(await provenance.isMarked(ids.userA, threadId)).toBe(true);
     callSpy.mockClear();
     mintSpy.mockClear();
     for (const start of [
@@ -581,7 +582,6 @@ describe("app actions through the real gateway and app routes", () => {
         { timeout: 5_000 }
       );
       const card = h.events.find((event) => event.kind === "action_request")!;
-      expect(card.outsideContentNotice).toBe(true);
       expect(
         await h.gateway.resolveActionRequest(ids.userA, card.actionRequestId, "rejected")
       ).toBe("resolved");
