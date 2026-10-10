@@ -3,9 +3,16 @@ import { createMockConnectorProviders, mockApi } from "./mock-api.js";
 import { createMockCalendarEvent } from "./mock-calendar-email-api.js";
 
 // Synthetic browser fixtures verify UI layout; they are not live-path UAT.
-for (const view of ["week", "month"] as const) {
-  test(`${view} stays selected and scrolls within its narrow calendar region`, async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+for (const [view, width] of [
+  ["week", 390],
+  ["week", 320],
+  ["month", 390],
+  ["month", 320]
+] as const) {
+  test(`${view} at ${width}px stays selected and scrolls within its calendar region`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
     await page.addInitScript((selected) => {
       localStorage.setItem("moss.cal.view", selected);
       localStorage.setItem("moss.cal.cursor", "2026-09-10T00:00:00Z");
