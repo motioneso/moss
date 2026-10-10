@@ -31,3 +31,23 @@ export async function isConversationMarked(
     return false;
   }
 }
+
+/** How the gateway routes one call once its approval decision is made. */
+export type PlannedCall = {
+  readonly kind: "yolo-confirm" | "yolo-run" | "auto-run" | "confirm";
+  readonly userTrusted?: true;
+  /** A clean conversation would run this call. Only the outside-content mark makes it ask. */
+  readonly outsideContentReason?: true;
+};
+
+/**
+ * An asking plan carries the outside-content reason only when the durable mark is the whole
+ * cause: the chat is marked and a clean conversation would run the same call (#3338).
+ */
+export async function plannedConfirm(
+  kind: "confirm" | "yolo-confirm",
+  marked: boolean,
+  cleanRuns: () => Promise<boolean> = async () => true
+): Promise<PlannedCall> {
+  return marked && (await cleanRuns()) ? { kind, outsideContentReason: true } : { kind };
+}

@@ -268,7 +268,8 @@ function expectRenderedTarget(record: ActionRequest, expected: string) {
   expect(html).not.toContain(FACT_ID);
   expect(html).not.toContain("memory-thread");
   expect(html).not.toContain("<script>");
-  expect(html).toContain("Moss read something from outside your account before asking this.");
+  // Deleting a memory always asks, so outside content is never the card's reason.
+  expect(html).not.toContain("Moss read something from outside your account");
   expect(html).toContain("Approve");
   expect(html).toContain("Reject");
   client.clear();
@@ -292,7 +293,7 @@ describe("legacy memory.forget approval binding", () => {
       summary: "Delete memory",
       outcomeTitle: "Delete memory",
       details: { presentation: "human", approvalKind: "memory_delete", target: label, fields: [] },
-      outsideContentNotice: true
+      outsideContentNotice: false
     });
     expectRenderedTarget(request, label);
     expect(request).not.toHaveProperty("targetVersion");
@@ -618,7 +619,7 @@ describe("legacy memory.forget approval binding", () => {
       "pending",
       "action_request"
     ]);
-    expect(request.outsideContentNotice).toBe(true);
+    expect(request.outsideContentNotice).toBe(false);
     await resolve(h, "rejected");
     await pending;
   });

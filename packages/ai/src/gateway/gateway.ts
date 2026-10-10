@@ -33,7 +33,12 @@ import {
 import { ActionRequestRecovery } from "./action-request-recovery.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
-import { isConversationMarked, isConversationTainted } from "./conversation-policy.js";
+import {
+  isConversationMarked,
+  isConversationTainted,
+  plannedConfirm,
+  type PlannedCall
+} from "./conversation-policy.js";
 import {
   admitToolOutcome,
   recordContextAdmission,
@@ -67,7 +72,7 @@ import {
 } from "./run-tool-handler.js";
 export type { GatewayLogger };
 import { isSelfOperationExcluded } from "./self-operation.js";
-import { recordUnattendedRun } from "./unattended-run-record.js";
+import { denyRateLimited, recordUnattendedRun } from "./unattended-run-record.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type {
   ActiveModulesResolver,
@@ -148,11 +153,6 @@ export interface AssistantToolGatewayDependencies {
 }
 
 const denyPrefs: AgencyPrefLookup = { get: async () => false };
-
-type PlannedCall = {
-  readonly kind: "yolo-confirm" | "yolo-run" | "auto-run" | "confirm";
-  readonly userTrusted?: true;
-};
 
 const defaultPolicyLookup: ActionPolicyLookup = {
   getFamilyTier: async () => null,
@@ -241,15 +241,17 @@ export class AssistantToolGateway {
         found,
         input,
         ctx,
-        await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs)
+        await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs),
+        route
       );
     }
     if (route.kind === "yolo-run") {
       if (!this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
-        return this.denyRateLimited(found, input, ctx, "yolo");
+        return denyRateLimited(this.deps, found, input, ctx, "yolo");
       }
       const dispatched = await this.runAutomatically(found, input, ctx, route);
-      if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
+      if (dispatched.kind === "confirm")
+        return this.confirmAndRun(found, input, ctx, undefined, dispatched);
       const { response: result } = dispatched.value;
       recordUnattendedRun(this.deps, found, ctx, "yolo", dispatched.value, dispatched.outcomeTitle);
       return result;
@@ -279,7 +281,8 @@ export class AssistantToolGateway {
         );
       }
       const dispatched = await this.runAutomatically(found, input, ctx, route);
-      if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
+      if (dispatched.kind === "confirm")
+        return this.confirmAndRun(found, input, ctx, undefined, dispatched);
       const { response: result } = dispatched.value;
       if (found.tool.risk !== "read") {
         recordUnattendedRun(
@@ -297,7 +300,8 @@ export class AssistantToolGateway {
       found,
       input,
       ctx,
-      await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs)
+      await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs),
+      route
     );
   }
 
@@ -333,7 +337,7 @@ export class AssistantToolGateway {
     }
     if (limited && !this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
       if (route.kind === "yolo-run") {
-        this.denyRateLimited(found, input, ctx, "yolo");
+        denyRateLimited(this.deps, found, input, ctx, "yolo");
       } else {
         void recordGatewayAudit(
           this.deps,
@@ -505,65 +509,33 @@ export class AssistantToolGateway {
       (await familyAllowsAutoRun(found.tool, found.dto.moduleId, effectiveLookup, perCallResolved));
     const sortedSafe = yolo ? false : await this.computeSortedSafe(found, ctx);
 
+    const policy = (tainted: boolean) =>
+      resolvePolicy(
+        found.tool,
+        found.dto.moduleId,
+        confirmOverride,
+        effectiveLookup,
+        sortedSafe,
+        perCallResolved,
+        tainted,
+        confirmWhenTainted
+      );
+
     // Read taint after every policy hook so content admitted meanwhile still counts.
     const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
+    const marked = conversationTainted && (await isConversationMarked(this.deps.provenance, ctx));
+    const ask = (kind: "confirm" | "yolo-confirm") =>
+      plannedConfirm(kind, marked, async () => (yolo ? yoloRuns : (await policy(false)) === "run"));
     if (conversationTainted && (confirmWhenTainted || found.tool.risk === "outbound")) {
-      return { kind: "confirm" };
+      return ask("confirm");
     }
     // The user's trust runs past a durable outside-content mark only. Any other taint asks.
-    if (conversationTainted && !(await isConversationMarked(this.deps.provenance, ctx))) {
-      return { kind: yolo ? "yolo-confirm" : "confirm" };
-    }
+    if (conversationTainted && !marked) return { kind: yolo ? "yolo-confirm" : "confirm" };
     const trusted = conversationTainted ? { userTrusted: true as const } : {};
     if (yolo) return yoloRuns ? { kind: "yolo-run", ...trusted } : { kind: "yolo-confirm" };
-    return (await resolvePolicy(
-      found.tool,
-      found.dto.moduleId,
-      confirmOverride,
-      effectiveLookup,
-      sortedSafe,
-      perCallResolved,
-      conversationTainted,
-      confirmWhenTainted
-    )) === "run"
+    return (await policy(conversationTainted)) === "run"
       ? { kind: "auto-run", ...trusted }
-      : { kind: "confirm" };
-  }
-
-  private denyRateLimited(
-    found: ExecutableTool,
-    input: Record<string, unknown>,
-    ctx: ToolContext,
-    approvalMode: "yolo"
-  ): GatewayToolResponse {
-    const summary = captureActionOutcomeTitle(found.tool, input, ctx) ?? "Perform action";
-    emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
-      actionRequestId: ctx.requestId,
-      ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
-      toolName: found.dto.name,
-      outcome: "denied",
-      decidedBy: "policy",
-      summary,
-      holdDurationMs: null,
-      reason: "Rate limit exceeded for unattended runs of this tool."
-    });
-    void recordGatewayAudit(
-      this.deps,
-      { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
-      found,
-      {
-        approvalMode,
-        outcome: "denied",
-        durationMs: null,
-        errorClass: "rate_limited",
-        chatSessionId: ctx.chatSessionId
-      }
-    );
-    return {
-      ok: false,
-      denied: true,
-      reason: "Rate limit exceeded for unattended runs of this tool. Try again shortly."
-    };
+      : ask("confirm");
   }
 
   async requestNativeToolPermission(
@@ -750,7 +722,10 @@ export class AssistantToolGateway {
         : await runAutomaticAction(this.deps.provenance, ctx, () =>
             this.dispatchHandler(found, input, ctx)
           );
-    if (result.kind === "confirm") return result;
+    if (result.kind === "confirm")
+      return (await isConversationMarked(this.deps.provenance, ctx))
+        ? { kind: "confirm" as const, outsideContentReason: true as const }
+        : { kind: "confirm" as const };
     if (result.kind === "failed")
       return {
         kind: "ran" as const,
@@ -808,7 +783,8 @@ export class AssistantToolGateway {
     found: ExecutableTool,
     input: Record<string, unknown>,
     ctx: ToolContext,
-    notice?: string
+    notice?: string,
+    route: Pick<PlannedCall, "outsideContentReason"> = {}
   ): Promise<GatewayToolResponse> {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
     // #2956: the approval hold below can outlive the turn, so the turn is
@@ -833,8 +809,7 @@ export class AssistantToolGateway {
         );
       return prepared.failure;
     }
-    const { summary, outcomeTitle, presentation, readPresentation, outsideContentNotice } =
-      prepared;
+    const { summary, outcomeTitle, presentation, readPresentation } = prepared;
     input = prepared.input;
 
     const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
@@ -863,7 +838,7 @@ export class AssistantToolGateway {
         toolName: found.dto.name,
         summary,
         ...(outcomeTitle ? { outcomeTitle } : {}),
-        outsideContentNotice,
+        outsideContentNotice: route.outsideContentReason === true,
         ...(presentation.externalTool
           ? { externalTool: true, exactArguments: presentation.exactArguments }
           : {}),

@@ -138,6 +138,7 @@ describe("named theme approval through real HTTP, gateway and act-as routes", ()
       confirmTimeoutMs: 10_000,
       provenance: {
         isTainted: async () => true,
+        isMarked: async () => true,
         recordAdmission: async () => {},
         runAutomatic: async () => ({ kind: "confirm" })
       }

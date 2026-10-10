@@ -368,7 +368,7 @@ describe("bound conversation policy at every gateway entry", () => {
           reason: "would_confirm"
         });
       expect(h.handler).not.toHaveBeenCalled();
-      expect(checked).toHaveBeenCalledTimes(entry === "ordinary" ? 2 : 1);
+      expect(checked).toHaveBeenCalledOnce();
     }
   });
 
@@ -410,7 +410,7 @@ describe("bound conversation policy at every gateway entry", () => {
     await rejectPending(h, pending);
     expect(lookup).toHaveBeenNthCalledWith(1, "actor-a", "thread-a");
     expect(await h.gateway.callTool(resumed, h.tool.name, {})).toMatchObject({ ok: true });
-    expect(lookup).toHaveBeenNthCalledWith(3, "actor-a", "thread-b");
+    expect(lookup).toHaveBeenNthCalledWith(2, "actor-a", "thread-b");
     expect(h.handler).toHaveBeenCalledOnce();
   });
 });

@@ -1,11 +1,12 @@
 import type { ToolContext } from "@moss/module-sdk";
 
 import { emitActionResultRecord } from "./action-result-record.js";
+import { captureActionOutcomeTitle } from "./approval-outcome-title.js";
 import { recordGatewayAudit, type GatewayAuditDeps } from "./gateway-audit.js";
 import { gatewayFailureReason } from "./native-tool-guard.js";
 import { liveStreamResult } from "./output-validation.js";
 import type { ExecutableTool, RunHandlerOutcome } from "./run-tool-handler.js";
-import type { SessionNotifier } from "./types.js";
+import type { GatewayToolResponse, SessionNotifier } from "./types.js";
 
 /** Report the completed run separately from permission, retaining its pre-dispatch title. */
 export function recordUnattendedRun(
@@ -40,4 +41,37 @@ export function recordUnattendedRun(
     ...audit,
     chatSessionId: ctx.chatSessionId
   });
+}
+
+/** Deny an unattended run that hit the auto-run rate limit, with its record and audit row. */
+export function denyRateLimited(
+  deps: GatewayAuditDeps & { readonly notifier: SessionNotifier },
+  found: ExecutableTool,
+  input: Record<string, unknown>,
+  ctx: ToolContext,
+  approvalMode: "yolo"
+): GatewayToolResponse {
+  const summary = captureActionOutcomeTitle(found.tool, input, ctx) ?? "Perform action";
+  emitActionResultRecord(deps.notifier, ctx.chatSessionId, {
+    actionRequestId: ctx.requestId,
+    ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
+    toolName: found.dto.name,
+    outcome: "denied",
+    decidedBy: "policy",
+    summary,
+    holdDurationMs: null,
+    reason: "Rate limit exceeded for unattended runs of this tool."
+  });
+  void recordGatewayAudit(deps, { actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
+    approvalMode,
+    outcome: "denied",
+    durationMs: null,
+    errorClass: "rate_limited",
+    chatSessionId: ctx.chatSessionId
+  });
+  return {
+    ok: false,
+    denied: true,
+    reason: "Rate limit exceeded for unattended runs of this tool. Try again shortly."
+  };
 }
