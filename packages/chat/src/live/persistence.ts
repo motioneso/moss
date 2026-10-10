@@ -14,7 +14,6 @@ import { sql, type Kysely } from "kysely";
 import {
   assertDataContextDb,
   type ChatThread,
-  resolveMossEnv,
   type DataContextDb,
   type DataContextRunner,
   type MossDatabase,
