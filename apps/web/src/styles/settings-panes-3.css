@@ -962,7 +962,7 @@
 }
 .alerts-pane__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.7fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: var(--space-6);
 }
 
