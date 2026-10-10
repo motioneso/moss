@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { chatAvailableFromRoute } from "../../apps/web/src/chat/chat-drawer.js";
+import { chatAvailableFromRoute } from "../../apps/web/src/chat/use-chat-route.js";
 
 describe("chatAvailableFromRoute", () => {
   it("returns true when the route resolves to an available model", () => {

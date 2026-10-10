@@ -15,12 +15,16 @@ import {
 // the News add-source prerequisite/transient error codes (rendered without any live upstream or
 // LLM call). The original spec also asserted the app-map-grounded CHAT answers ("I don't know
 // from the current app map", the "JSON-capable economy model" remediation, the getMapSlice trace).
-// Those require a real, instruction-following chat model, which the UAT harness deliberately does
-// NOT provide (fake provider by design, no CLI engine in the image, no assistant binding seeded).
-// The persona/grounding strings are proven at the unit level in Task 7's chat-runtime-persona
-// test; a scriptable chat engine that would let us re-add the real-LLM e2e assertions is tracked
-// in issue #1121.
-export const uatLevel = { level: "multi-user", without: [], withoutNewsJsonBinding: true } as const;
+// Those require a real, instruction-following chat model. The scripted chat model used here
+// (chat-scripts/app-map-grounding.json) returns fixed text, so it cannot check grounding. The
+// persona/grounding strings are proven at the unit level in Task 7's chat-runtime-persona test;
+// the real-LLM e2e assertions wait on issue #1121.
+export const uatLevel = {
+  level: "multi-user",
+  without: [],
+  withoutNewsJsonBinding: true,
+  chatScript: "app-map-grounding"
+} as const;
 
 function requireBaseURL(): string {
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
@@ -43,11 +47,15 @@ async function signIn(page: Page, email: string, password: string) {
   // (Skip setup → "Skip anyway" confirmation). Conditional so it's correct for both users and stays
   // idempotent across the shared, non-reset UAT DB.
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
+  const skipAnyway = page.getByRole("button", { name: "Skip anyway" });
   const userMenu = page.locator(".jds-usermenu__trigger");
   await expect(skipSetup.or(userMenu).first()).toBeVisible();
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
+    // The "Skip anyway" confirmation opens only while no chat model is available. The scripted
+    // model is loaded here, so Skip setup can finish without it.
+    await expect(skipAnyway.or(userMenu).first()).toBeVisible();
+    if (await skipAnyway.isVisible()) await skipAnyway.click();
   }
   await expect(userMenu).toBeVisible();
 }
@@ -133,13 +141,14 @@ test("transient discovery error is surfaced deterministically via previewOverrid
 });
 
 // Non-admin containment: a second owner asking the map for "every settings screen" must never be
-// shown admin-only settings surfaces. NOTE (#1121): this is a NEGATIVE assertion — with no real
-// chat model in UAT the map produces no answer, so it holds trivially today; it only truly bites
-// once the scriptable chat engine (#1121) lets the map actually respond. Kept as a guard so the
-// case is wired and ready to become load-bearing when #1121 lands.
+// shown admin-only settings surfaces. NOTE (#1121): this is a NEGATIVE assertion. The scripted
+// model answers with fixed text and never calls the map, so it holds trivially today. It only
+// bites once a real model lets the map answer (#1121).
 test("non-admin map query never reveals admin settings", async ({ page }) => {
   await signIn(page, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_PASSWORD);
   await ask(page, "List every settings screen I can use");
+  // Wait for the scripted reply first, so the negative check runs after the turn has finished.
+  await expect(page.getByText("Scripted reply for the settings question.").first()).toBeVisible();
   await expect(page.getByText(/Advanced host setup|People & access|Instance modules/i)).toHaveCount(
     0
   );
