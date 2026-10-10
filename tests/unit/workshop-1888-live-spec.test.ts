@@ -34,10 +34,34 @@ describe("workshop-1888 live spec (#3281)", () => {
     expect(text, "exactly one fresh plan").toMatch(/await expect\(planCards\)\.toHaveCount\(1, /);
   });
 
+  it("keeps every check after the plan appears", async () => {
+    const text = await source();
+    const kept = [
+      "await expect(page).toHaveURL(/\\/workshop$/, { timeout: 15_000 })",
+      "expect(current).not.toBe(firstStatus)",
+      "await expect(statusIndicator).toHaveCount(0, { timeout: 1_650_000 })",
+      'getByRole("button", { name: "Look at the draft" }).first()',
+      "await expect(page).toHaveURL(/\\/m\\/[a-z0-9-]+$/, { timeout: 30_000 })",
+      "await expect(moduleRoot.getByText(/word of the day/i).first()).toBeVisible()",
+      "await expect(moduleRoot.getByText(/noun|verb|adjective|adverb/i).first()).toBeVisible()",
+      'await page.getByRole("button", { name: "Ask for a change" }).click()',
+      'await page.getByRole("button", { name: "Ship it" }).click()',
+      "await page.reload()",
+      'await expect(page.getByRole("button", { name: "Look at the draft" })).toHaveCount(0)'
+    ];
+    for (const line of kept) expect(text, line).toContain(line);
+    const shipAbsent = 'await expect(page.getByRole("button", { name: "Ship it" })).toHaveCount(0)';
+    const reload = text.indexOf("await page.reload()");
+    expect(text.indexOf(shipAbsent, reload), "Ship it stays gone after reload").toBeGreaterThan(
+      reload
+    );
+  });
+
   it("signs in as the disposable install's owner", async () => {
     const text = await source();
     expect(text).toMatch(/email: OWNER_EMAIL/);
     expect(text, "no fallback to the dev account").not.toMatch(/LIVE_OWNER_EMAIL \?\?/);
+    expect(text, "no dev account email").not.toMatch(/ben@ben\.com/);
     expect(text).toMatch(/if \(!OWNER_EMAIL \|\| !OWNER_PASSWORD\)/);
   });
 });

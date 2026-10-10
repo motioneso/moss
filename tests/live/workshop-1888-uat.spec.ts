@@ -80,13 +80,21 @@ test("Moss builds and installs a working Word of the Day module through the UI",
   // again; and the words "Build it" are already on the page, in the old card and in Moss's own
   // prose, so waiting for them to appear passed in under two seconds against a branch where
   // nothing had happened - no new build record, no new entry in the tool audit log.
-  const staleCards = await page.getByRole("button", { name: /^Build it$/ }).count();
-  await startSideChat(page, drawer);
-  console.log(`[1888] ${staleCards} earlier plan cards on screen before the new side chat`);
-
   // Exactly one card, and only after the ask, so neither a leftover card nor a polite refusal
   // nor a follow-up question can pass this.
   const planCards = page.getByRole("button", { name: /^Build it$/ });
+
+  // The reopened conversation replays asynchronously, so give an earlier plan time to appear
+  // before counting it. The count is logged only; the zero-card check below is the guarantee.
+  const staleCards = await planCards
+    .first()
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => planCards.count(),
+      () => 0
+    );
+  await startSideChat(page, drawer);
+  console.log(`[1888] ${staleCards} earlier plan cards on screen before the new side chat`);
   await expect(planCards).toHaveCount(0);
 
   await composer.fill(ask);
