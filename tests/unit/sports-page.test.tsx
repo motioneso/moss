@@ -40,13 +40,13 @@ describe("SportsPage", () => {
     expect(render(makeOverview())).not.toContain("could not be updated");
   });
 
-  it("renders the broadsheet masthead", () => {
+  it("keeps the game masthead without inert preview navigation", () => {
     const html = render(makeOverview());
     // Masthead pared to a section-nav + live-event line — the nameplate/brand strip was cut
     // (Ben 2026-07-07: drop the YOLO nameplate + palette chrome from the sports header).
     expect(html).toContain("sp-mast");
-    expect(html).toContain("sp-mast__nav");
-    expect(html).toContain("sp-mast__navlink");
+    expect(html).not.toContain("sp-mast__nav");
+    expect(html).not.toContain("Sports sections (preview)");
   });
 
   it("renders the gameday hero without rationale text, with both teams and scores", () => {
@@ -690,25 +690,25 @@ describe("SportsPage", () => {
     expect(html).toContain("sp-newsband__filter");
   });
 
-  it("renders a ticker-shaped skeleton row while loading", () => {
+  it("renders quiet loading feedback while the overview is pending", () => {
     const client = new QueryClient(); // nothing primed → loading branch
     const html = renderToString(
       createElement(QueryClientProvider, { client }, createElement(SportsPage))
     );
-    expect(html).toContain("sp-skel--ticker");
-    expect(html).toContain("sp-skel--hero");
+    expect(html).toContain("Loading your teams");
+    expect(html).not.toContain("sp-skel--hero");
   });
 
-  it("renders a skeleton matching the composition (ticker + hero + grid, no around strip)", () => {
+  it("does not invent teams or scores while the overview is pending", () => {
     const client = new QueryClient(); // nothing primed → loading branch
     const html = renderToString(
       createElement(QueryClientProvider, { client }, createElement(SportsPage))
     );
-    expect(html).toContain("sp-skel--ticker");
+    expect(html).toContain("Loading your teams");
     // sp-skel--around dropped with the strip (hidden behind SHOW_AROUND_STRIP, mrb4w77y)
     expect(html).not.toContain("sp-skel--around");
-    expect(html).toContain("sp-skel--hero");
-    expect(html).toContain("sp-skel--grid");
+    expect(html).not.toContain("sp-skel--hero");
+    expect(html).not.toContain("sp-skel--grid");
   });
 });
 
@@ -835,5 +835,17 @@ describe("the lead story prefers a wide photo (#2237)", () => {
       hero: gamedayHero(game)
     });
     expect(findFeaturedStory(game, noWide)?.id).toBe("dek");
+  });
+});
+
+describe("Sports cold load", () => {
+  it("shows an honest loading sentence without placeholder slabs", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const html = renderToString(
+      createElement(QueryClientProvider, { client }, createElement(SportsPage))
+    );
+    expect(html).toContain("Loading your teams");
+    expect(html).not.toContain("sp-skel");
+    expect(html).not.toContain("Sports sections (preview)");
   });
 });

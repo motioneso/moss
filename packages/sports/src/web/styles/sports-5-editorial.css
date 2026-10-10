@@ -9,26 +9,6 @@
   padding-bottom: var(--space-3);
 }
 
-/* PREVIEW (mrbafoxu): sport-section nav strip — a centered mono-caps row, the classic newspaper
-   section bar, now the masthead's leading element. Muted + inert until the sport pages exist
-   (future story); becomes real anchors then. */
-.sp-mast__nav {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-5);
-  /* No own vertical padding: the nav is the mast's only line now (the folio above it was
-     removed), so .sp-mast's symmetric space-3 top/bottom padding alone frames it — equal
-     margin from the top rule and the bottom rule (Ben 2026-07-08 /sports annotation:
-     "centered vertically so we have equal margin between lines"). The old `space-3 0 0` top
-     pad double-counted with the mast's own top pad and pushed the row below dead center. */
-  padding: 0;
-}
-.sp-mast__navlink {
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-caps);
-}
-
 .sp-mast__event {
   margin: var(--space-5) 0 var(--space-2);
   text-align: center;
@@ -682,5 +662,31 @@
 
   .sp-latest__list {
     columns: 1;
+  }
+}
+
+/* At phone widths the game clock owns a second row so team identities and scores fit. */
+@media (max-width: 480px) {
+  .sp-scorebar__bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sp-scorebar__mid {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: center;
+    padding: var(--space-3);
+    white-space: normal;
+  }
+  .sp-scorebar__side {
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-2);
+  }
+  .sp-scorebar__side > .sp-crest {
+    display: none;
+  }
+  .sp-scorebar__team {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }

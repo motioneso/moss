@@ -438,15 +438,15 @@ describe("editing a saved medication (#1971)", () => {
   });
 
   const closePaths: Array<{ name: string; close: (r: ReactTestRenderer) => Promise<void> }> = [
-    { name: "the X button", close: (r) => clickByAriaLabel(r, "Close") },
+    { name: "the X button", close: (r) => clickByAriaLabel(r, "Close medications") },
     { name: "the Done button", close: (r) => clickButton(r, "Done") },
     {
       name: "clicking outside the window",
       close: async (r) => {
-        const scrim = r.root.findByProps({ className: "wl-modal-scrim" });
+        const scrim = r.root.findByProps({ className: "jds-dialog-scrim" });
         const sameNode = {};
         await act(async () => {
-          scrim.props.onMouseDown({ target: sameNode, currentTarget: sameNode });
+          scrim.props.onClick({ target: sameNode, currentTarget: sameNode });
         });
       }
     }

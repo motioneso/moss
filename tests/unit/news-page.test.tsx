@@ -115,3 +115,17 @@ describe("personalized News page", () => {
     expect(matchesTopic(candidate, "AI")).toBe(false);
   });
 });
+
+describe("News cold load", () => {
+  it("keeps page identity and a status sentence without placeholder stories", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const html = renderToString(
+      <QueryClientProvider client={client}>
+        <NewsPage />
+      </QueryClientProvider>
+    );
+    expect(html).toContain("Your front page");
+    expect(html).toContain("Loading news");
+    expect(html).not.toContain("nw-skel");
+  });
+});

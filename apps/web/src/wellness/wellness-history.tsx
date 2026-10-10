@@ -1,3 +1,4 @@
+import { Button, DisclosureToggle, IconButton, SectionHead } from "@moss/ui";
 import { useState } from "react";
 import { localDay, moodIndex, moodBand, type CheckinDto } from "@moss/shared";
 import { emoColor, MOOD_BAND_LABELS, coreLabel, type Theme } from "./emotion-taxonomy";
@@ -114,28 +115,30 @@ export function WellnessHistory({
 
   return (
     <section className="wl-sec">
-      <div className="wl-sec__head">
-        <div className="wl-sec__title">Check-in history</div>
-        <div className="wl-sec__aside">
-          {filter === "notes" ? (
-            <span className="wl-filter-pill">
-              Noted sad / angry check-ins
-              <button
-                type="button"
-                className="wl-filter-pill__x"
-                aria-label="Clear filter"
-                onClick={onClearFilter}
-              >
-                <SmallXIcon />
-              </button>
-            </span>
-          ) : (
-            <span className="wl-sec__note">Tap a row to read &amp; edit</span>
-          )}
-        </div>
-      </div>
+      <SectionHead
+        number="04"
+        title="Check-in history"
+        meta={
+          <>
+            {filter === "notes" ? (
+              <span className="wl-filter-pill">
+                Noted sad / angry check-ins
+                <IconButton aria-label="Clear filter" onClick={onClearFilter}>
+                  <SmallXIcon />
+                </IconButton>
+              </span>
+            ) : (
+              <span className="wl-sec__note">Tap a row to read &amp; edit</span>
+            )}
+          </>
+        }
+      />
       <div className="wl-history">
-        {shown.length === 0 ? <div className="wl-history__empty">No check-ins match.</div> : null}
+        {shown.length === 0 ? (
+          <div className="wl-history__empty">
+            {filter ? "No check-ins match." : "Your check-ins will appear here."}
+          </div>
+        ) : null}
         {shown.map((ck) => {
           const fullIso = ck.checkedInAt ?? ck.createdAt ?? "";
           const iso = fullIso ? localDay(fullIso, timezone) : "";
@@ -158,8 +161,9 @@ export function WellnessHistory({
 
           return (
             <div key={ck.id} className={`wl-hrow${isOpen ? " is-open" : ""}`}>
-              <button
-                type="button"
+              <DisclosureToggle
+                expanded={isOpen}
+                controls={`checkin-${ck.id}`}
                 className="wl-hrow__head"
                 onClick={() => setOpenId(isOpen ? null : ck.id)}
               >
@@ -198,7 +202,7 @@ export function WellnessHistory({
                     <ChevRightIcon />
                   </span>
                 </span>
-              </button>
+              </DisclosureToggle>
               {isOpen ? (
                 <div className="wl-hdetail" style={{ "--em-tint": c.tint } as React.CSSProperties}>
                   {ck.sensations && (ck.sensations as string[]).length > 0 ? (
@@ -222,15 +226,10 @@ export function WellnessHistory({
                       {v} &middot; {MOOD_BAND_LABELS[band] ?? band}
                     </span>
                     <span style={{ flex: 1 }} />
-                    <button
-                      type="button"
-                      className="secondary-button wl-fs12"
-                      style={{ padding: "4px 10px", minHeight: "unset", gap: 5 }}
-                      onClick={() => onEdit(ck.id)}
-                    >
+                    <Button variant="secondary" size="sm" onClick={() => onEdit(ck.id)}>
                       <PencilIcon />
                       Edit
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : null}
@@ -240,14 +239,9 @@ export function WellnessHistory({
       </div>
       {rows.length > limit ? (
         <div className="wl-history__more">
-          <button
-            type="button"
-            className="ghost-button wl-fs12"
-            style={{ padding: "5px 14px", minHeight: "unset" }}
-            onClick={() => setLimit((l) => l + 10)}
-          >
+          <Button variant="secondary" size="sm" onClick={() => setLimit((l) => l + 10)}>
             Show {Math.min(10, rows.length - limit)} more
-          </button>
+          </Button>
         </div>
       ) : null}
     </section>

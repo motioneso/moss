@@ -125,14 +125,9 @@
   font-size: var(--text-md);
   color: var(--text-muted);
 }
-/* editorial photo placeholders (striped swatch — a real image can drop in here) */
+/* Quiet no-photo surface; real imagery can replace it when available. */
 .sp-photo {
   background-color: var(--surface-2);
-  background-image: repeating-linear-gradient(
-    135deg,
-    transparent 0 9px,
-    var(--border-subtle) 9px 10px
-  );
   border: 1px solid var(--border-subtle);
   border-radius: 0;
 }
@@ -399,7 +394,7 @@
 }
 .sp-team__state {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }
@@ -418,7 +413,7 @@
 .sp-pickcrest {
   border-radius: 6px;
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 800;
   background: var(--surface-2);
   color: var(--text-subtle);
@@ -488,7 +483,7 @@
      2026-07-08 ("kill mono anywhere in the app"); --font-sans is the current eyebrow face
      everywhere else in this file. */
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }

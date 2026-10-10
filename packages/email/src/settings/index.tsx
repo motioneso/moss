@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Group, Note, PaneHead, Row, Select, Switch } from "@moss/settings-ui";
@@ -157,25 +158,48 @@ export default function EmailSettings() {
     sourceBehaviors.data?.sources
       .flatMap((source) => source.behaviors)
       .find((behavior) => behavior.id === EMAIL_BEHAVIOR_ID)?.enabled ?? true;
-  const settings = (settingsMutation.data ?? settingsQuery.data)?.settings;
-  const taskMode = (taskModeMutation.data ?? taskModeQuery.data)?.mode ?? DEFAULT_EMAIL_TASK_MODE;
+  const settings = settingsQuery.data?.settings;
+  const taskMode = taskModeQuery.data?.mode ?? DEFAULT_EMAIL_TASK_MODE;
   const taskModeOption = EMAIL_TASK_MODE_OPTIONS.find((option) => option.value === taskMode);
   const draftAutoTier = draftAutoTierFromPolicies(policiesQuery.data?.policies ?? []);
+  const hasReadError =
+    sourceBehaviors.isError ||
+    settingsQuery.isError ||
+    taskModeQuery.isError ||
+    policiesQuery.isError;
+  const retryReads = () => {
+    void sourceBehaviors.refetch();
+    void settingsQuery.refetch();
+    void taskModeQuery.refetch();
+    void policiesQuery.refetch();
+  };
+  const head = (
+    <PaneHead
+      title="Email"
+      desc="How important email appears in briefings and becomes tasks and replies."
+    />
+  );
+  if (!sourceBehaviors.data || !settings || !taskModeQuery.data || !policiesQuery.data)
+    return (
+      <>
+        {head}
+        <p role="status">
+          {hasReadError ? "Could not load email settings." : "Loading email settings…"}
+        </p>
+        {hasReadError ? (
+          <Button variant="secondary" size="sm" onClick={retryReads}>
+            Try again
+          </Button>
+        ) : null}
+      </>
+    );
   const disabled =
-    sourceBehaviors.isLoading ||
-    settingsQuery.isLoading ||
-    taskModeQuery.isLoading ||
-    behaviorMutation.isPending ||
-    settingsMutation.isPending ||
-    taskModeMutation.isPending;
-  const draftPolicyDisabled = policiesQuery.isLoading || draftPolicyMutation.isPending;
+    behaviorMutation.isPending || settingsMutation.isPending || taskModeMutation.isPending;
+  const draftPolicyDisabled = draftPolicyMutation.isPending;
 
   return (
     <>
-      <PaneHead
-        title="Email"
-        desc="How briefing-worthy email turns into signal, suggestions, and governed follow-through."
-      />
+      {head}
       <Group title="Briefing signal">
         <Row
           name="Include email signal in briefings"
@@ -249,7 +273,7 @@ export default function EmailSettings() {
         />
         <Row
           name="Auto-send replies"
-          desc="High-governance option. Still requires the normal send policy and never creates a briefing-only bypass."
+          desc="Sending still follows your email approval rules. Turning this on does not change those rules."
           control={
             <Switch
               ariaLabel="Auto-send replies"
@@ -274,15 +298,21 @@ export default function EmailSettings() {
           }
         />
       </Group>
-      {sourceBehaviors.isError ||
-      settingsQuery.isError ||
-      taskModeQuery.isError ||
-      behaviorMutation.isError ||
+      {hasReadError ? (
+        <div role="status">
+          <Note>Could not refresh email settings. Showing the last saved choices.</Note>
+          <Button variant="secondary" size="sm" onClick={retryReads}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
+      {behaviorMutation.isError ||
       settingsMutation.isError ||
       taskModeMutation.isError ||
-      policiesQuery.isError ||
       draftPolicyMutation.isError ? (
-        <Note>Could not save email settings. Try again.</Note>
+        <div role="alert">
+          <Note>Could not save email settings. Try again.</Note>
+        </div>
       ) : null}
     </>
   );

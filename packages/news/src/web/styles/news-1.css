@@ -43,7 +43,7 @@
 .nw-mast__nav {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-3);
   padding: 0;
 }
@@ -63,7 +63,7 @@
    sitting empty between its two rules. */
 .nw-mast__plate {
   margin: 0;
-  text-align: center;
+  text-align: left;
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
 }
@@ -232,4 +232,8 @@
 }
 .nw-empty__btn:hover {
   opacity: 0.9;
+}
+
+.nw-mast > .jds-section-head {
+  margin-bottom: var(--space-4);
 }

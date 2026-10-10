@@ -7,7 +7,7 @@
 // reaches the output and that the escape helper is applied at every interpolation point.
 //
 // Output is a self-contained, printable HTML document: a header (owner, range,
-// generated-at, Jarv1s provenance), one section per selected category (selected-but-empty
+// generated-at, Moss provenance), one section per selected category (selected-but-empty
 // categories render an explicit "No <category> in this range" note — never silently
 // omitted, so the recipient sees the category was considered), and a footer with a
 // sensitive-data warning. Print CSS is inline in a <style> tag so the file is standalone.
@@ -149,13 +149,13 @@ function renderMedicationsSection(
           const state = m.active ? "active" : "inactive";
           const notes = m.notes ? `\n      <p class="note">${escapeHtml(m.notes)}</p>` : "";
           return `    <tr>
-      <td>${escapeHtml(m.name)}${dosage}</td>
+      <td>${escapeHtml(m.name)}${dosage}${notes}</td>
       <td>${escapeHtml(m.frequencyType)} — ${escapeHtml(schedule)}</td>
       <td>${escapeHtml(state)}</td>
-    </tr>${notes}`;
+    </tr>`;
         })
         .join("\n")
-    : emptySectionNote("Medications (schedule)");
+    : '    <tr><td colspan="3">' + emptySectionNote("Medications (schedule)") + "</td></tr>";
 
   const hasLogs = logs.length > 0;
   const logRows = hasLogs
@@ -171,7 +171,7 @@ function renderMedicationsSection(
     </tr>`;
         })
         .join("\n")
-    : emptySectionNote("Medication logs");
+    : '    <tr><td colspan="3">' + emptySectionNote("Medication logs") + "</td></tr>";
 
   return `  <h3>Medication schedule</h3>
   <table>
@@ -225,26 +225,32 @@ ${action}  </div>`;
 
 // ── Document renderer ───────────────────────────────────────────────────────
 
+// Frozen print palette: offline exports do not fetch app styles or remote fonts.
 const PRINT_STYLE = `
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #1a1a1a; margin: 2em; }
-  h1 { font-size: 1.5em; border-bottom: 2px solid #333; padding-bottom: .3em; }
-  h2 { font-size: 1.2em; margin-top: 2em; border-bottom: 1px solid #ccc; padding-bottom: .2em; page-break-after: avoid; }
-  h3 { font-size: 1em; margin-top: 1.5em; }
-  .header-meta { color: #555; font-size: .9em; margin-bottom: 2em; }
+  :root { --print-ink: #1a1a1a; --print-muted: #444; --print-rule: #ccc; --print-paper: #fff; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--print-ink); background: var(--print-paper); margin: 2em; font-size: 12pt; line-height: 1.5; }
+  h1 { font-size: 24pt; font-weight: 900; border-bottom: 2px solid var(--print-ink); padding-bottom: .4em; line-height: 1.15; }
+  h2 { font-size: 18pt; font-weight: 900; margin-top: 1.8em; border-top: 1px solid var(--print-rule); padding-top: .6em; break-after: avoid; }
+  h3 { font-size: 13pt; margin-top: 1.5em; break-after: avoid; }
+  .section-number { margin-right: .7em; font-size: 11pt; font-weight: 700; }
+  .header-meta { color: var(--print-muted); font-size: 11pt; margin-bottom: 2em; }
   .timeline { list-style: none; padding-left: 0; }
-  .timeline li { border-left: 3px solid #6b8e9e; padding: .5em 0 .5em 1em; margin-bottom: .5em; page-break-inside: avoid; }
-  .timestamp { font-weight: 600; margin: 0 0 .2em 0; font-size: .9em; }
-  .feeling { margin: 0 0 .2em 0; }
-  .note, .sensations { margin: .2em 0; color: #444; font-size: .9em; }
-  table { border-collapse: collapse; width: 100%; margin-bottom: 1em; page-break-inside: avoid; }
-  th, td { border: 1px solid #ddd; padding: .4em .6em; text-align: left; font-size: .9em; }
-  th { background: #f4f4f4; }
-  .therapy-note, .insight { margin-bottom: 1em; page-break-inside: avoid; }
-  .body { margin: .2em 0; }
-  .empty { color: #777; font-style: italic; }
-  section { page-break-before: always; }
-  section:first-of-type { page-break-before: avoid; }
-  footer { margin-top: 3em; padding-top: 1em; border-top: 1px solid #ccc; color: #666; font-size: .85em; }
+  .timeline li { border-top: 1px solid var(--print-rule); padding: .7em 0; break-inside: avoid; }
+  .timestamp { font-weight: 600; margin: 0 0 .2em; font-size: 11pt; }
+  .feeling { margin: 0 0 .2em; }
+  .note, .sensations { margin: .2em 0; color: var(--print-muted); font-size: 11pt; white-space: pre-wrap; overflow-wrap: anywhere; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  th, td { border-bottom: 1px solid var(--print-rule); padding: .5em .6em; text-align: left; vertical-align: top; font-size: 11pt; overflow-wrap: anywhere; }
+  th { border-bottom-color: var(--print-ink); }
+  .therapy-note, .insight { margin-bottom: 1em; }
+  .body { margin: .2em 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .empty { color: var(--print-muted); font-style: italic; }
+  footer { margin-top: 3em; padding-top: 1em; border-top: 1px solid var(--print-rule); color: var(--print-muted); font-size: 11pt; }
+  @page { margin: 18mm; }
+  @media print { body { margin: 0; } }
+
 `;
 
 /**
@@ -265,14 +271,15 @@ export function renderWellnessExportHtml(doc: WellnessExportDocument): string {
 
   const sections = sectionOrder
     .filter((s) => s.present)
-    .map((s) => {
+    .map((s, index) => {
+      const sectionNumber = String(index + 1).padStart(2, "0");
       const label = escapeHtml(CATEGORY_LABELS[s.key]);
       let body: string;
       if (s.key === "checkins") body = renderCheckinsSection(cat.checkins);
       else if (s.key === "medications") body = renderMedicationsSection(cat.medications);
       else if (s.key === "therapyNotes") body = renderTherapyNotesSection(cat.therapyNotes);
       else body = renderInsightsSection(cat.insights);
-      return `  <section id="${escapeHtml(s.key)}">\n    <h2>${label}</h2>\n${body}  </section>`;
+      return `  <section id="${escapeHtml(s.key)}">\n    <h2><span class="section-number">${sectionNumber}</span>${label}</h2>\n${body}  </section>`;
     })
     .join("\n\n");
 
@@ -289,13 +296,13 @@ export function renderWellnessExportHtml(doc: WellnessExportDocument): string {
   <div class="header-meta">
     <p>Date range: ${escapeHtml(doc.from)} to ${escapeHtml(doc.to)}</p>
     <p>Generated: ${escapeHtml(doc.generatedAt)}</p>
-    <p>Generated by Jarv1s.</p>
+    <p>Generated by Moss.</p>
   </div>
 
 ${sections}
 
   <footer>
-    <p>Generated by Jarv1s on ${escapeHtml(doc.generatedAt)}.</p>
+    <p>Generated by Moss on ${escapeHtml(doc.generatedAt)}.</p>
     <p><strong>This document contains sensitive health information.</strong> Share it only with people you trust, such as your doctor or therapist.</p>
   </footer>
 </body>

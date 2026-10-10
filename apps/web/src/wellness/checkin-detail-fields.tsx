@@ -1,3 +1,4 @@
+import { Button, RadioCardGroup } from "@moss/ui";
 import { EMOTIONS, moodIndex, moodBand } from "@moss/shared";
 import { emVars, MOOD_BAND_LABELS, type WellnessEmotionCore, type Theme } from "./emotion-taxonomy";
 
@@ -52,30 +53,16 @@ export function CheckinDetailFields({
         {ordered.map((s) => {
           const on = sensations.includes(s);
           return (
-            <button
+            <Button
               key={s}
-              type="button"
-              className={`wl-schip${on ? " is-on" : ""}`}
+              variant="chip"
+              size="sm"
+              active={on}
+              aria-pressed={on}
               onClick={() => onSensation(s)}
             >
-              <span className="wl-schip__c">
-                {on ? (
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="10"
-                    height="10"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                ) : null}
-              </span>
               {s}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -84,19 +71,13 @@ export function CheckinDetailFields({
         How strong is it?
       </div>
       <div className="wl-qsub">This sets where the day lands on your mood trend.</div>
-      <div className="wl-intscale">
-        {([1, 2, 3, 4, 5] as const).map((n) => (
-          <button
-            key={n}
-            type="button"
-            className={`wl-intbtn${intensity === n ? " is-on" : ""}${n <= intensity ? " is-fill" : ""}`}
-            onClick={() => onIntensity(n)}
-          >
-            <span className="wl-intbtn__bar" />
-            <span className="wl-intbtn__n">{n}</span>
-          </button>
-        ))}
-      </div>
+      <RadioCardGroup
+        name="checkin-intensity"
+        ariaLabel="Intensity"
+        value={String(intensity)}
+        options={[1, 2, 3, 4, 5].map((value) => ({ value: String(value), label: String(value) }))}
+        onChange={(value) => onIntensity(Number(value))}
+      />
       <div className="wl-intends">
         <span>Barely there</span>
         <span>Overwhelming</span>
@@ -114,6 +95,7 @@ export function CheckinDetailFields({
       </div>
 
       <textarea
+        aria-label="Check-in note (optional)"
         className="wl-note-field"
         placeholder="Anything you want to remember about this — a trigger, a thought? Optional."
         value={note}
