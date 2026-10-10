@@ -897,7 +897,7 @@ export const settingsModuleManifest: MossModuleManifest = {
       approvalPresentation: quietHoursPresentation,
       approvalContent: "user_authored",
       description:
-        "Set the user's quiet hours (enabled, start/end time, and time zone). Leave out the time zone to keep the saved one; send null to clear it.",
+        "Set the user's quiet hours (enabled, start/end time, and time zone). Leave out the time zone to keep the saved one; send null to clear it. When the result's authority is a conflict, tell the user alert cards still follow the older alerts schedule.",
       permissionId: "settings.write",
       risk: "write",
       content: "user_authored",

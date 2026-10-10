@@ -501,7 +501,13 @@ describe("quiet hours carry forward into Profile", () => {
       const result = await asUser(user.id, (scopedDb) =>
         quietHoursSetExecute(scopedDb, { enabled: true, start: "22:00", end: "06:00" }, ctx)
       );
-      expect(result.data).toEqual({ enabled: true, start: "22:00", end: "06:00", timezone: null });
+      expect(result.data).toEqual({
+        enabled: true,
+        start: "22:00",
+        end: "06:00",
+        timezone: null,
+        authority: { status: "canonical", alerts: null }
+      });
       expect((await rawRow(user.id, PROFILE_KEY))?.value).toMatchObject({ authority: "canonical" });
 
       const undo = await asUser(user.id, (scopedDb) => settingsUndoLastExecute(scopedDb, {}, ctx));
@@ -527,12 +533,75 @@ describe("quiet hours carry forward into Profile", () => {
       const before = await rawRow(user.id, PROFILE_KEY);
       const ctx = { actorUserId: user.id, requestId: "req:carry-undo", chatSessionId: "undo" };
 
-      await asUser(user.id, (scopedDb) =>
+      const result = await asUser(user.id, (scopedDb) =>
         quietHoursSetExecute(scopedDb, { enabled: true, start: "20:00", end: "08:00" }, ctx)
       );
+      expect(result.data).toMatchObject({
+        authority: { status: "conflict", alerts: { enabled: true, start: "20:00", end: "08:00" } }
+      });
       await asUser(user.id, (scopedDb) => settingsUndoLastExecute(scopedDb, {}, ctx));
 
       expect((await rawRow(user.id, PROFILE_KEY))?.value).toEqual(before?.value);
+      const body = (await getQuietHours(user.cookie)).json<GetQuietHoursSettingsResponse>();
+      expect(body.authority.status).toBe("conflict");
+    });
+
+    it("undo after a time-zone change keeps the restored schedule settled", async () => {
+      const user = await newUser();
+      await seed(user.id, {
+        profile: { enabled: true, start: "22:00", end: "07:00", timezone: "Europe/London" },
+        alerts: alertsRecord({ enabled: true, startLocalTime: "22:00", endLocalTime: "07:00" }),
+        locale: LONDON_LOCALE
+      });
+      const ctx = { actorUserId: user.id, requestId: "req:undo-tz", chatSessionId: "undo-tz" };
+
+      await asUser(user.id, (scopedDb) =>
+        quietHoursSetExecute(scopedDb, { enabled: true, start: "23:00", end: "07:00" }, ctx)
+      );
+      const moved = await putLocale(user.cookie, {
+        timezone: "Europe/Paris",
+        region: "en-GB",
+        dateFormat: "24"
+      });
+      expect(moved.statusCode).toBe(200);
+      const undo = await asUser(user.id, (scopedDb) => settingsUndoLastExecute(scopedDb, {}, ctx));
+      expect(undo.data).toMatchObject({ status: "undone", key: PROFILE_KEY });
+
+      const body = (await getQuietHours(user.cookie)).json<GetQuietHoursSettingsResponse>();
+      expect(body.authority).toEqual({ status: "canonical", alerts: null });
+      expect(body.quietHours).toEqual({
+        enabled: true,
+        start: "22:00",
+        end: "07:00",
+        timezone: "Europe/London"
+      });
+    });
+
+    it("undo after an alert save cannot settle a frozen conflict", async () => {
+      const user = await newUser();
+      await seed(user.id, {
+        profile: { enabled: true, start: "22:00", end: "07:00", timezone: null },
+        alerts: alertsRecord({ enabled: true, startLocalTime: "20:00", endLocalTime: "08:00" })
+      });
+      const ctx = { actorUserId: user.id, requestId: "req:undo-alerts", chatSessionId: "undo-a" };
+
+      await asUser(user.id, (scopedDb) =>
+        quietHoursSetExecute(scopedDb, { enabled: true, start: "23:00", end: "08:00" }, ctx)
+      );
+      const saved = await patchAlerts(user.cookie, {
+        quietHours: { enabled: true, startLocalTime: "22:00", endLocalTime: "07:00" }
+      });
+      expect(saved.statusCode).toBe(200);
+      const undo = await asUser(user.id, (scopedDb) => settingsUndoLastExecute(scopedDb, {}, ctx));
+      expect(undo.data).toMatchObject({ status: "undone", key: PROFILE_KEY });
+
+      expect((await rawRow(user.id, PROFILE_KEY))?.value).toEqual({
+        enabled: true,
+        start: "22:00",
+        end: "07:00",
+        timezone: null,
+        authority: "unresolved"
+      });
       const body = (await getQuietHours(user.cookie)).json<GetQuietHoursSettingsResponse>();
       expect(body.authority.status).toBe("conflict");
     });

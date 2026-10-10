@@ -157,6 +157,23 @@ export function localeFreezeMarker(before: QuietHoursAuthorityInput): QuietHours
   return undefined;
 }
 
+/**
+ * Value an undo writes back. An unmarked prior row is judged afresh against today's alert schedule
+ * and owner zone, and either may have moved while the edit's marker held. So the restored row keeps
+ * the verdict the current marker records, unless it reaches that verdict unmarked.
+ */
+export function undoQuietHoursValue(current: QuietHoursAuthorityInput, previous: unknown): unknown {
+  if (!isRecord(previous) || readMarker(previous) !== undefined) return previous;
+  const marker = readMarker(current.profile);
+  if (marker !== "canonical" && marker !== "unresolved") return previous;
+  const restored = classifyQuietHours({ ...current, profile: previous }).status;
+  if (restored === "malformed") return previous;
+  if (marker === "unresolved") {
+    return restored === "conflict" ? previous : withQuietHoursMarker(previous, "unresolved");
+  }
+  return restored === "conflict" ? withQuietHoursMarker(previous, "canonical") : previous;
+}
+
 export function withQuietHoursMarker(
   value: Record<string, unknown>,
   marker: QuietHoursMarker | undefined
@@ -210,6 +227,13 @@ export async function readQuietHoursAuthority(
         }
       : null
   };
+}
+
+/** The alert workers' quiet policy for the scoped owner. */
+export async function resolveAlertsQuietPolicy(
+  scopedDb: DataContextDb
+): Promise<AlertsQuietPolicy | null> {
+  return alertsQuietPolicy((await readQuietHoursAuthority(scopedDb)).authority);
 }
 
 /** Serialises every writer of the owner's quiet-hours inputs for the rest of the transaction. */

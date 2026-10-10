@@ -84,5 +84,6 @@ export {
   type QuietHoursAuthority,
   alertsQuietPolicy,
   notificationsQuietHoursValue,
-  readQuietHoursAuthority
+  readQuietHoursAuthority,
+  resolveAlertsQuietPolicy
 } from "./quiet-hours-authority.js";

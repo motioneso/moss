@@ -6,8 +6,10 @@ import type { ToolExecute, ToolResult } from "@moss/module-sdk";
 import { PreferenceRevisionConflictError, PreferencesRepository } from "@moss/structured-state";
 
 import { QUIET_HOURS_PREFERENCE_KEY } from "./quiet-hours-application.js";
+import { readQuietHoursAuthority } from "./quiet-hours-authority.js";
 import {
   displayedQuietHours,
+  quietHoursAuthorityDto,
   readQuietHoursForWrite,
   saveQuietHours
 } from "./quiet-hours-writer.js";
@@ -38,9 +40,32 @@ export const quietHoursOutputSchema = {
     enabled: { type: "boolean" },
     start: { type: "string" },
     end: { type: "string" },
-    timezone: { type: ["string", "null"] }
+    timezone: { type: ["string", "null"] },
+    authority: {
+      type: "object",
+      description:
+        "A conflict means alert cards still follow the older alerts schedule until the owner settles it.",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["default", "carried", "canonical", "conflict", "malformed"]
+        },
+        alerts: {
+          type: ["object", "null"],
+          properties: {
+            enabled: { type: "boolean" },
+            start: { type: "string" },
+            end: { type: "string" }
+          },
+          required: ["enabled", "start", "end"],
+          additionalProperties: false
+        }
+      },
+      required: ["status", "alerts"],
+      additionalProperties: false
+    }
   },
-  required: ["enabled", "start", "end", "timezone"],
+  required: ["enabled", "start", "end", "timezone", "authority"],
   additionalProperties: false
 } as const;
 
@@ -95,7 +120,8 @@ export const quietHoursSetExecute: ToolExecute = async (
         appliedAt: Date.now()
       });
     }
-    return { data: { ...saved.effective } };
+    const after = await readQuietHoursAuthority(scopedDb);
+    return { data: { ...saved.effective, authority: quietHoursAuthorityDto(after) } };
   }
   throw new HttpError(409, "Quiet hours changed while saving. Ask again to retry.");
 };
