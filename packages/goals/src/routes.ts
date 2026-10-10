@@ -165,10 +165,7 @@ export function registerGoalsRoutes(app: FastifyInstance, deps: GoalsRouteDepend
       const data = request.body as UpdateGoalRequest;
 
       const goal = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
-        return repository.update(scopedDb, id, {
-          ...data,
-          targetAt: data.targetAt === undefined ? undefined : data.targetAt
-        });
+        return repository.update(scopedDb, id, data);
       });
 
       // Enqueue sync

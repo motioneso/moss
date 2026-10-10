@@ -32,7 +32,15 @@ import {
 } from "../domain/occasion.js";
 import { todayLocalDayKey } from "@moss/module-sdk/time";
 
-import { Fragment, h, useCallback, useEffect, useState, type ReactNodeLike } from "./runtime";
+import {
+  Fragment,
+  h,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNodeLike
+} from "./runtime";
 
 // ── local "today" (no ambient ISO-slice) ────────────────────────────────
 
@@ -74,7 +82,8 @@ type QueryState<T> = { status: "loading" } | { status: "settled"; outcome: ToolO
 function useToolQuery<T extends Record<string, unknown>>(
   name: string,
   input: Record<string, unknown>,
-  refreshMs: number | null = null
+  refreshMs: number | null = null,
+  refreshKey = 0
 ): QueryState<T> {
   const [state, setState] = useState<QueryState<T>>({ status: "loading" });
   const inputKey = JSON.stringify(input);
@@ -103,6 +112,20 @@ function useToolQuery<T extends Record<string, unknown>>(
     // refreshMs — the interval below owns that, and re-running this effect on
     // it would drop the page back to "Loading…" every time an estimate landed.
   }, [name, inputKey]);
+
+  // The host bumps refreshKey after a chat write; reload in place, no loading flash.
+  const lastRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (lastRefreshKey.current === refreshKey) return;
+    lastRefreshKey.current = refreshKey;
+    let cancelled = false;
+    void invokeTool<T>(name, input).then((outcome) => {
+      if (!cancelled) setState({ status: "settled", outcome });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
 
   useEffect(() => {
     if (refreshMs === null) return;
@@ -471,14 +494,19 @@ function LogMealButton(props: {
   );
 }
 
-export function Root(props: { hostActions: HostActions }): ReactNodeLike {
+export function Root(props: { hostActions: HostActions; refreshKey?: number }): ReactNodeLike {
   const [localDate, setLocalDate] = useState<string>(todayLocalDate());
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   // Set only while something on this day is still being estimated, so a
   // finished day is entirely silent on the network.
   const [pendingPollMs, setPendingPollMs] = useState<number | null>(null);
-  const mealsQuery = useToolQuery<MealsListResult>("food.meals.list", { localDate }, pendingPollMs);
+  const mealsQuery = useToolQuery<MealsListResult>(
+    "food.meals.list",
+    { localDate },
+    pendingPollMs,
+    props.refreshKey ?? 0
+  );
 
   // #1770: with estimates off nothing is queued, so a meal stays "pending" permanently. Polling
   // on that would ask the server forever for a result that is never coming — the `aiEstimates`

@@ -295,7 +295,7 @@ export function ChatDrawer(props: {
    * try/finally guarantees isSending is ALWAYS cleared — this is the core wedge fix.
    */
   const sendMessage = useCallback(
-    (text: string, attachments?: readonly ChatAttachmentDto[]): void => {
+    (text: string, attachments?: readonly ChatAttachmentDto[]): boolean => {
       const trimmed = text.trim();
       // #1133: attachment-only turns (chips, no text) are legal — block only when BOTH are empty.
       if (
@@ -307,7 +307,7 @@ export function ChatDrawer(props: {
         historyActivationPending ||
         (Boolean(props.meetingContext) && reviewThreadId !== null)
       ) {
-        return;
+        return false;
       }
       if (reviewThreadId !== null) {
         setFallbackRecords(recordsFromMessages(messagesQuery.data?.messages ?? []));
@@ -404,6 +404,7 @@ export function ChatDrawer(props: {
           }
         }
       })();
+      return true;
     },
     [
       activatingPrivate,
