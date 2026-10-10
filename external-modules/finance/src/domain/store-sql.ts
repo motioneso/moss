@@ -438,6 +438,73 @@ export function sqlStore(db: FinanceDb): FinanceStore {
       );
     },
 
+    async commitBudgetChange(change) {
+      const params: unknown[] = [
+        change.month,
+        JSON.stringify(
+          change.assignments.map((a) => ({
+            category_id: a.categoryId,
+            assigned_cents: a.amountCents
+          }))
+        ),
+        JSON.stringify(
+          change.activity.map((a) => ({
+            actor: a.actor,
+            kind: a.kind,
+            params: a.params,
+            undo: a.undo ?? null
+          }))
+        )
+      ];
+      const guards: string[] = [];
+      let draftIndex = 0;
+      let undoneIndex = 0;
+      if (change.startDraft) {
+        params.push(change.startDraft.draftId, change.startDraft.at);
+        draftIndex = params.length - 1;
+        guards.push(
+          `EXISTS (SELECT 1 FROM app.finance_budget_drafts WHERE id = $${draftIndex} AND status = 'open')`
+        );
+      }
+      if (change.markUndone) {
+        params.push(change.markUndone.activityId, change.markUndone.at);
+        undoneIndex = params.length - 1;
+        guards.push(
+          `EXISTS (SELECT 1 FROM app.finance_activity WHERE id = $${undoneIndex} AND undone_at IS NULL)`
+        );
+      }
+      const guard = guards.length > 0 ? guards.join(" AND ") : "true";
+      const draftCte =
+        draftIndex > 0
+          ? `, d AS (UPDATE app.finance_budget_drafts SET status = 'started', started_at = $${draftIndex + 1} ` +
+            `WHERE id = $${draftIndex} AND status = 'open' RETURNING 1)`
+          : ", d AS (SELECT 1 WHERE false)";
+      const undoneCte =
+        undoneIndex > 0
+          ? `, u AS (UPDATE app.finance_activity SET undone_at = $${undoneIndex + 1} ` +
+            `WHERE id = $${undoneIndex} AND undone_at IS NULL RETURNING 1)`
+          : ", u AS (SELECT 1 WHERE false)";
+      // One statement, so the host runs it as a single implicit transaction.
+      const result = await db.query<{ applied: boolean }>(
+        "WITH a AS (INSERT INTO app.finance_budget_assignments (owner_user_id, month, category_id, assigned_cents) " +
+          "SELECT app.current_actor_user_id(), $1, x.category_id, x.assigned_cents " +
+          "FROM jsonb_to_recordset($2::jsonb) AS x(category_id text, assigned_cents bigint) " +
+          `WHERE ${guard} ` +
+          "ON CONFLICT (owner_user_id, month, category_id) DO UPDATE SET assigned_cents = EXCLUDED.assigned_cents " +
+          "RETURNING 1), " +
+          "l AS (INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params, undo) " +
+          "SELECT app.current_actor_user_id(), gen_random_uuid(), now(), x.actor, x.kind, x.params, x.undo " +
+          "FROM jsonb_to_recordset($3::jsonb) AS x(actor text, kind text, params jsonb, undo jsonb) " +
+          `WHERE ${guard} RETURNING 1)` +
+          draftCte +
+          undoneCte +
+          " SELECT ((SELECT count(*) FROM a) + (SELECT count(*) FROM l) + (SELECT count(*) FROM d) + " +
+          "(SELECT count(*) FROM u)) > 0 AS applied",
+        params
+      );
+      return result.rows[0]?.applied === true;
+    },
+
     async appendActivity(entry) {
       await db.query(
         "INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params, undo) " +

@@ -172,6 +172,31 @@ export function kvStore(kv: FinanceKv): FinanceStore {
       await kv.set(NS.budgets, key, ledger as unknown as Record<string, unknown>);
     },
 
+    // The KV store applies the parts in order; only the SQL store is atomic.
+    async commitBudgetChange(change) {
+      if (change.startDraft) {
+        const draft = await this.getLatestDraft();
+        if (!draft || draft.id !== change.startDraft.draftId || draft.status !== "open") {
+          return false;
+        }
+      }
+      if (change.markUndone) {
+        const existing = await this.getActivity(change.markUndone.activityId);
+        if (existing?.undoneAt) return false;
+      }
+      for (const a of change.assignments) {
+        await this.setAssignment(change.month, a.categoryId, a.amountCents);
+      }
+      for (const entry of change.activity) await this.appendActivity(entry);
+      if (change.startDraft) {
+        await this.markDraftStarted(change.startDraft.draftId, change.startDraft.at);
+      }
+      if (change.markUndone) {
+        await this.markActivityUndone(change.markUndone.activityId, change.markUndone.at);
+      }
+      return true;
+    },
+
     // The activity trail lives in SQL only; the KV store (migration source
     // and unit-test fake) keeps no trail.
     async appendActivity() {},

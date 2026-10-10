@@ -8,6 +8,7 @@
 
 import {
   NS,
+  type ActivityInput,
   type ActivityRecord,
   type Category,
   type FinanceStore,
@@ -196,7 +197,13 @@ async function currentAssignment(
   return (await store.getLedger(month))?.assignments[categoryId] ?? 0;
 }
 
-async function undoAssign(store: FinanceStore, row: ActivityRecord): Promise<void> {
+interface BudgetUndo {
+  month: string;
+  assignments: { categoryId: string; amountCents: number }[];
+  reversal: ActivityInput;
+}
+
+async function planUndoAssign(store: FinanceStore, row: ActivityRecord): Promise<BudgetUndo> {
   const month = str(row.params.month);
   const categoryId = str(row.params.categoryId);
   const after = num(row.params.amountCents);
@@ -205,15 +212,18 @@ async function undoAssign(store: FinanceStore, row: ActivityRecord): Promise<voi
     throw new InputError("not_undoable", "this row has no usable undo data");
   }
   if ((await currentAssignment(store, month, categoryId)) !== after) throw CHANGED();
-  await store.setAssignment(month, categoryId, restore);
-  await store.appendActivity({
-    actor: "user",
-    kind: "budget.assign",
-    params: { month, categoryId, amountCents: restore, previousCents: after }
-  });
+  return {
+    month,
+    assignments: [{ categoryId, amountCents: restore }],
+    reversal: {
+      actor: "user",
+      kind: "budget.assign",
+      params: { month, categoryId, amountCents: restore, previousCents: after }
+    }
+  };
 }
 
-async function undoMove(store: FinanceStore, row: ActivityRecord): Promise<void> {
+async function planUndoMove(store: FinanceStore, row: ActivityRecord): Promise<BudgetUndo> {
   const month = str(row.params.month);
   const from = str(row.params.fromCategoryId);
   const to = str(row.params.toCategoryId);
@@ -230,15 +240,25 @@ async function undoMove(store: FinanceStore, row: ActivityRecord): Promise<void>
   ) {
     throw CHANGED();
   }
-  await store.setAssignment(month, to, toPrevious);
-  if (fromPrevious !== null) await store.setAssignment(month, from, fromPrevious);
+  return {
+    month,
+    assignments: [
+      { categoryId: to, amountCents: toPrevious },
+      ...(fromPrevious === null ? [] : [{ categoryId: from, amountCents: fromPrevious }])
+    ],
+    reversal: {
+      actor: "user",
+      kind: "budget.move",
+      params: { month, fromCategoryId: to, toCategoryId: from, amountCents: amount }
+    }
+  };
 }
 
 async function undoCategorize(
   ports: WorkerPorts,
   store: FinanceStore,
   row: ActivityRecord
-): Promise<void> {
+): Promise<ActivityInput> {
   const accountId = str(row.params.accountId);
   const month = str(row.params.month);
   const transactionId = str(row.params.transactionId);
@@ -261,9 +281,14 @@ async function undoCategorize(
     record.reviewState = "needs_look";
   }
   await store.putTransaction(record);
+  return {
+    actor: "user",
+    kind: "transaction.categorize",
+    params: { ...row.params, categoryId: restore, previousCategoryId: after }
+  };
 }
 
-async function undoRule(ports: WorkerPorts, row: ActivityRecord): Promise<void> {
+async function undoRule(ports: WorkerPorts, row: ActivityRecord): Promise<ActivityInput> {
   const ruleId = str(row.params.ruleId);
   const after = str(row.params.categoryId);
   if (ruleId === null || after === null) {
@@ -272,13 +297,19 @@ async function undoRule(ports: WorkerPorts, row: ActivityRecord): Promise<void> 
   const rule = await readRule(ports, ruleId);
   if (rule === null || rule.value.categoryId !== after) throw CHANGED();
   const restore = str(row.undo?.categoryId);
+  const reversal: ActivityInput = {
+    actor: "user",
+    kind: "merchant-rule.set",
+    params: { ruleId, categoryId: restore }
+  };
   if (restore === null) {
     await ports.kv.delete(NS.rules, rule.key);
-    return;
+    return reversal;
   }
   const live = (await loadCategories(ports)).some((c) => c.id === restore && !c.archived);
   if (!live) throw new InputError("invalid_category", "the earlier category is no longer live");
   await ports.kv.set(NS.rules, rule.key, { ...rule.value, categoryId: restore });
+  return reversal;
 }
 
 async function saveCategories(ports: WorkerPorts, categories: Category[]): Promise<void> {
@@ -289,7 +320,7 @@ async function undoCategory(
   ports: WorkerPorts,
   store: FinanceStore,
   row: ActivityRecord
-): Promise<void> {
+): Promise<ActivityInput> {
   const categoryId = str(row.params.categoryId);
   if (categoryId === null) throw new InputError("not_undoable", "this row has no usable undo data");
   const all = await loadCategories(ports);
@@ -303,13 +334,14 @@ async function undoCategory(
       ports,
       all.map((entry) => (entry.id === categoryId ? { ...entry, archived: true } : entry))
     );
-    return;
+    return { actor: "user", kind: "category.archive", params: { categoryId } };
   }
   if (!current.archived) throw CHANGED();
   await saveCategories(
     ports,
     all.map((entry) => (entry.id === categoryId ? { ...entry, archived: false } : entry))
   );
+  return { actor: "user", kind: "category.add", params: { categoryId } };
 }
 
 /** Queue handler. Reverses one activity row, or throws when the data moved on since. */
@@ -324,22 +356,36 @@ export const activityUndoHandler: ToolFactory = (ports) => async (input) => {
     throw new InputError("not_undoable", "this row cannot be undone");
   }
 
+  const at = ports.now().toISOString();
+  if (row.kind === "budget.assign" || row.kind === "budget.move") {
+    // Totals, the reversal row and the undone mark land together, and a second undo of the
+    // same row writes nothing.
+    const plan =
+      row.kind === "budget.assign"
+        ? await planUndoAssign(store, row)
+        : await planUndoMove(store, row);
+    const applied = await store.commitBudgetChange({
+      month: plan.month,
+      assignments: plan.assignments,
+      activity: [plan.reversal],
+      markUndone: { activityId, at }
+    });
+    if (!applied) return { status: "ok", undone: true, alreadyUndone: true };
+    return { status: "ok", undone: true };
+  }
+
+  let reversal: ActivityInput;
   switch (row.kind) {
-    case "budget.assign":
-      await undoAssign(store, row);
-      break;
-    case "budget.move":
-      await undoMove(store, row);
-      break;
     case "transaction.categorize":
-      await undoCategorize(ports, store, row);
+      reversal = await undoCategorize(ports, store, row);
       break;
     case "merchant-rule.set":
-      await undoRule(ports, row);
+      reversal = await undoRule(ports, row);
       break;
     default:
-      await undoCategory(ports, store, row);
+      reversal = await undoCategory(ports, store, row);
   }
-  await store.markActivityUndone(activityId, ports.now().toISOString());
+  await store.appendActivity(reversal);
+  await store.markActivityUndone(activityId, at);
   return { status: "ok", undone: true };
 };
