@@ -1,3 +1,4 @@
+import { useDialogLifecycle } from "./use-dialog-lifecycle.js";
 import { useCallback, useEffect, useRef, type CSSProperties, type RefObject } from "react";
 
 export interface ColorPopoverProps {
@@ -28,6 +29,12 @@ export function ColorPopover(props: ColorPopoverProps) {
   const closeRef = useRef(props.onClose);
   const { anchorRef } = props;
   const value = props.value.toLowerCase();
+  const onKeyDown = useDialogLifecycle({
+    ref,
+    modal: false,
+    onClose: props.onClose,
+    returnFocusRef: anchorRef
+  });
 
   useEffect(() => {
     closeRef.current = props.onClose;
@@ -58,14 +65,9 @@ export function ColorPopover(props: ColorPopoverProps) {
       if (ref.current?.contains(target) || anchorRef?.current?.contains(target)) return;
       onClose();
     }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
     document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
     };
   }, [anchorRef]);
 
@@ -75,6 +77,8 @@ export function ColorPopover(props: ColorPopoverProps) {
       className={["jds-colorpop", props.className].filter(Boolean).join(" ")}
       style={props.style}
       role="dialog"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
       aria-label={`${props.title} color`}
     >
       <div className="jds-colorpop__head">

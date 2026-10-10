@@ -145,6 +145,14 @@ const INLINE_STYLE_EXEMPT_PATHS: ReadonlySet<string> = new Set([
 // never flag a hand-typed jds-iconbtn string. Every entry here was confirmed against the class
 // each component's own source actually renders (packages/ui/src/*.tsx).
 const CLASS_FAMILY_TO_COMPONENT: Readonly<Record<string, string>> = {
+  "jds-section-head": "SectionHead",
+  "jds-eyebrow": "Eyebrow",
+  "jds-note": "Note",
+  "jds-rowbtn": "RowButton",
+  "jds-disclosure": "DisclosureToggle",
+  "jds-index": "RowIndex",
+  "jds-tabs": "Tabs",
+  "jds-nav-index": "NavIndex",
   "jds-agenda-row": "AgendaRow",
   "jds-avatar": "Avatar",
   "jds-badge": "Badge",

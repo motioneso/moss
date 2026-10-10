@@ -53,7 +53,7 @@
 .jds-masthead__lede {
   margin: var(--space-2) 0 0;
   font-size: var(--text-md);
-  color: var(--ink-4);
+  color: var(--text-faint);
 }
 .jds-masthead__aside {
   display: flex;
@@ -68,7 +68,7 @@
   font-weight: var(--weight-bold);
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--ink-4);
+  color: var(--text-faint);
 }
 .jds-masthead__clock {
   font-family: var(--font-sans);
@@ -81,12 +81,13 @@
 .jds-masthead__clock-pm {
   font-size: var(--text-lg);
   font-weight: var(--weight-medium);
-  color: var(--ink-4);
+  color: var(--text-faint);
   margin-left: var(--space-1);
 }
 
 /* Masthead, field tone: a reversed, full-bleed band for a section home page. */
 .jds-masthead--field {
+  --focus-ring: var(--masthead-fg);
   background: var(--masthead-bg);
   color: var(--masthead-fg);
   margin: 0 0 var(--space-8);
@@ -106,6 +107,7 @@
 }
 @media (max-width: 720px) {
   .jds-masthead--field {
+    --focus-ring: var(--masthead-fg);
     padding-left: var(--space-4);
     padding-right: var(--space-4);
   }
@@ -138,7 +140,7 @@
   cursor: pointer;
 }
 .jds-stat-tile--warn {
-  border-color: var(--warning-border, var(--warning));
+  border-color: var(--warn);
 }
 .jds-stat-tile__label {
   display: flex;
@@ -150,9 +152,9 @@
 }
 .jds-stat-tile__go {
   margin-left: auto;
-  color: var(--ink-4);
+  color: var(--text-faint);
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 .jds-stat-tile:hover .jds-stat-tile__go {
   opacity: 1;
@@ -163,7 +165,7 @@
   color: var(--ink);
 }
 .jds-stat-tile--warn .jds-stat-tile__value {
-  color: var(--warning-fg, var(--warning));
+  color: var(--warn-fg);
 }
 
 /* AgendaRow */
@@ -178,7 +180,7 @@
   width: 4.5em;
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  color: var(--ink-4);
+  color: var(--text-faint);
   padding-top: 2px;
 }
 .jds-agenda-row__body {
@@ -192,7 +194,7 @@
 }
 .jds-agenda-row__sub {
   font-size: var(--text-xs);
-  color: var(--ink-4);
+  color: var(--text-faint);
   margin-top: 2px;
 }
 .jds-agenda-row__now {
@@ -217,7 +219,7 @@
 }
 .jds-agenda-row--done .jds-agenda-row__title,
 .jds-agenda-row--done .jds-agenda-row__time {
-  color: var(--ink-4);
+  color: var(--text-faint);
   text-decoration: line-through;
   text-decoration-color: var(--border);
 }
@@ -237,7 +239,7 @@
 }
 .jds-card__meta {
   font-size: var(--text-xs);
-  color: var(--ink-4);
+  color: var(--text-faint);
 }
 
 /* Menu */
@@ -254,7 +256,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--surface);
-  color: var(--ink-4);
+  color: var(--text-faint);
   cursor: pointer;
 }
 .jds-menu__trigger:hover,
@@ -281,6 +283,24 @@
   background: var(--surface-raised);
   box-shadow: var(--shadow-md);
 }
+.jds-menu--content {
+  width: 100%;
+}
+.jds-menu__trigger--content {
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+}
+.jds-menu__list--top {
+  top: auto;
+  bottom: calc(100% + var(--space-2));
+}
 .jds-menu__list button {
   display: flex;
   align-items: center;
@@ -295,7 +315,7 @@
   cursor: pointer;
 }
 .jds-menu__list button:hover:not(:disabled) {
-  background: var(--surface-sunken);
+  background: var(--bg-sunken);
 }
 .jds-menu__list button:active:not(:disabled) {
   background: var(--surface-3);
@@ -315,7 +335,7 @@
   color: var(--text-muted);
 }
 .jds-menu__list button:disabled {
-  color: var(--ink-4);
+  color: var(--text-faint);
   cursor: not-allowed;
 }
 
@@ -381,12 +401,12 @@
 }
 .jds-weather-chip__day:hover,
 .jds-weather-chip__day:focus-visible {
-  background: var(--surface-sunken);
+  background: var(--bg-sunken);
 }
 .jds-weather-chip__label {
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  color: var(--ink-4);
+  color: var(--text-faint);
 }
 .jds-weather-chip__temp {
   font-size: var(--text-sm);
@@ -671,7 +691,7 @@
   border-bottom: 1px solid var(--border);
   padding: var(--space-5) var(--space-2);
   box-shadow: inset 3px 0 0 transparent;
-  transition: box-shadow 0.12s ease;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
 }
 .jds-index__row:hover {
   box-shadow: inset 3px 0 0 var(--gold);

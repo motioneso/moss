@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { checkBannedProperties } from "../../scripts/check-design-tokens.ts";
+import { checkBannedProperties, checkTokens } from "../../scripts/check-design-tokens.ts";
 
 /**
  * Guard 4 regression test (#1388 Foundation, D2). The guard's own module-load self-test proves
@@ -62,5 +62,43 @@ describe("check-design-tokens banned-property guard (#1388 Foundation guard 4)",
     const violations = await checkBannedProperties(repoRoot);
 
     expect(violations).toEqual([]);
+  });
+});
+
+describe("token scan includes shared primitives", () => {
+  it("rejects shared literals and misspelled variables, while allowing declared local contracts", async () => {
+    const root = await buildFixture("");
+    await writeFile(join(root, "apps/web/src/styles/tokens.css"), ":root { --text: #282c25; }\n");
+    await mkdir(join(root, "packages/ui/src/styles"), { recursive: true });
+    await writeFile(
+      join(root, "packages/ui/src/styles/example.css"),
+      ".example { --local: var(--text); color: var(--local); border-color: var(--typo); background: #fff; }\n"
+    );
+    const violations = await checkTokens(root);
+    expect(
+      violations.some(
+        (item) =>
+          item.path === "packages/ui/src/styles/example.css" &&
+          item.text.includes("Forbidden literal")
+      )
+    ).toBe(true);
+    expect(violations.some((item) => item.text.includes("--typo"))).toBe(true);
+    expect(violations.some((item) => item.text.startsWith("Undefined token --local:"))).toBe(false);
+  });
+  it("does not leak tokens between independent roots", async () => {
+    const first = await buildFixture(".ok { color: var(--first); }");
+    await writeFile(
+      join(first, "apps/web/src/styles/tokens.css"),
+      ":root {\n --first: #282c25;\n}\n"
+    );
+    expect(await checkTokens(first)).toEqual([]);
+    const second = await buildFixture(".wrong { color: var(--first); }");
+    await writeFile(
+      join(second, "apps/web/src/styles/tokens.css"),
+      ":root {\n --second: #282c25;\n}\n"
+    );
+    expect(
+      (await checkTokens(second)).some((item) => item.text.includes("Undefined token --first"))
+    ).toBe(true);
   });
 });

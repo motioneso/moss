@@ -35,7 +35,7 @@
 .jds-input:hover,
 .jds-textarea:hover,
 .jds-select:hover {
-  border-color: var(--ink-3);
+  border-color: var(--text-faint);
 }
 .jds-input:focus,
 .jds-textarea:focus,
@@ -191,7 +191,7 @@
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .jds-combobox__trigger:disabled {
-  color: var(--ink-4);
+  color: var(--text-faint);
   cursor: not-allowed;
 }
 .jds-combobox__value {
@@ -202,12 +202,12 @@
   white-space: nowrap;
 }
 .jds-combobox__value--empty {
-  color: var(--ink-4);
+  color: var(--text-faint);
 }
 .jds-combobox__chev {
   display: inline-flex;
   flex: none;
-  color: var(--ink-4);
+  color: var(--text-faint);
 }
 .jds-combobox__pop {
   position: absolute;
@@ -261,7 +261,7 @@
 }
 .jds-combobox__empty {
   padding: var(--space-2);
-  color: var(--ink-3);
+  color: var(--text-faint);
   font-size: var(--text-sm);
 }
 

@@ -8,7 +8,8 @@ description: The authored Moss design system (Park Press) — tokens, @moss/ui p
 The design system is **authored, not generated**. The reference is `docs/design-system.md`. Read
 it before UI work. The shipped CSS wins over any doc: `apps/web/src/styles/tokens.css` for tokens,
 `packages/ui/src/styles/` for shared primitives. Today is the standard: when the doc and Today
-disagree, Today wins, except for the known Today defects listed in the doc.
+disagree, Today wins, except for current verified defects. The reference was reconciled on 2026-10-10; closed
+issue text and historical mockups never override shipped contracts.
 
 ## Rules that get broken most
 
@@ -30,8 +31,11 @@ disagree, Today wins, except for the known Today defects listed in the doc.
 - Nothing crowds its neighbour. Use the minimum gaps in the doc's spacing section: 8px
   (`--space-2`) between buttons, links, labels and controls, 12px (`--space-3`) between a control
   and the text above or below it. Check desktop and phone width.
+- Dialog/Peek/Menu behavior belongs in the shared components, including modal isolation and
+  focus restoration. Use the documented lifecycle rather than adding a competing document handler.
 - No text below 11px. Every text colour clears 4.5:1 on every surface it sits on; accent text is
-  `--accent-fg`, never raw `--forest`, and gold text is `--gold-strong` or `--gold-ink`.
+  `--accent-fg`, never raw `--forest`; small gold text is `--gold-ink`. Raw ink-3/4 are decorative,
+  not muted-text roles. Verify actual grounds, especially custom palettes and reversed bands.
 - Empty and loading states follow the patterns in `docs/design-system.md`. Don't render a section
   with nothing useful to say.
 

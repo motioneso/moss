@@ -1,5 +1,8 @@
 import { Info, TriangleAlert } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
+import { Badge as SharedBadge } from "@moss/ui";
+export { Switch, Segmented, Avatar, Indicator } from "@moss/ui";
+import { Segmented } from "@moss/ui";
 export type { GeneratedSettingsSurface } from "./scanner.js";
 export * from "./router.js";
 export { Select } from "@moss/ui";
@@ -47,57 +50,6 @@ export function formatTimestamp(iso: string, fallback: string): string {
 
 /* ---------------------------------------------------------------- Primitives */
 
-export function Switch(props: {
-  readonly ariaLabel: string;
-  readonly checked: boolean;
-  readonly disabled?: boolean;
-  readonly onChange?: (checked: boolean) => void;
-}) {
-  return (
-    <label className="jds-switch">
-      <input
-        type="checkbox"
-        aria-label={props.ariaLabel}
-        disabled={props.disabled}
-        checked={props.checked}
-        onChange={(event) => props.onChange?.(event.target.checked)}
-      />
-      <span className="jds-switch__track">
-        <span className="jds-switch__thumb" />
-      </span>
-    </label>
-  );
-}
-
-type SegmentedOption<T extends string> = T | { readonly value: T; readonly label: string };
-
-export function Segmented<T extends string>(props: {
-  readonly value: T;
-  readonly options: readonly SegmentedOption<T>[];
-  readonly onChange: (value: T) => void;
-  readonly ariaLabel?: string;
-}) {
-  return (
-    <div className="jds-segmented" role="group" aria-label={props.ariaLabel}>
-      {props.options.map((option) => {
-        const value = (typeof option === "string" ? option : option.value) as T;
-        const label = typeof option === "string" ? option : option.label;
-        return (
-          <button
-            key={value}
-            type="button"
-            className="jds-segmented__opt"
-            aria-pressed={props.value === value}
-            onClick={() => props.onChange(value)}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 export type BadgeTone = "neutral" | "pine" | "amber" | "red" | "steel";
 
 export function Badge(props: {
@@ -106,10 +58,9 @@ export function Badge(props: {
   readonly children: ReactNode;
 }) {
   return (
-    <span className={`jds-badge jds-badge--${props.tone ?? "neutral"}`}>
-      {props.dot ? <span className="jds-badge__dot" /> : null}
+    <SharedBadge tone={props.tone === "pine" ? "forest" : props.tone} dot={props.dot}>
       {props.children}
-    </span>
+    </SharedBadge>
   );
 }
 
@@ -118,34 +69,6 @@ export function ComingSoon(props: { readonly issue: number }) {
     <Badge tone="steel" dot>
       Coming soon · #{props.issue}
     </Badge>
-  );
-}
-
-export function Avatar(props: { readonly name: string; readonly size?: "sm" | "md" | "lg" }) {
-  const initials = props.name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-  const sizeClass =
-    props.size === "sm" ? " jds-avatar--sm" : props.size === "lg" ? " jds-avatar--lg" : "";
-  return (
-    <span className={`jds-avatar${sizeClass}`} aria-hidden="true">
-      {initials || "?"}
-    </span>
-  );
-}
-
-export function Indicator(props: {
-  readonly status: "ready" | "drift" | "error" | "idle";
-  readonly label?: string;
-}) {
-  return (
-    <span className={`jds-indicator jds-indicator--${props.status}`}>
-      <span className="jds-indicator__dot" />
-      {props.label ? <span>{props.label}</span> : null}
-    </span>
   );
 }
 
@@ -186,9 +109,10 @@ export function Row(props: {
   readonly desc?: ReactNode;
   readonly control?: ReactNode;
   readonly comingIssue?: number;
+  readonly className?: string;
 }) {
   return (
-    <div className="set-row">
+    <div className={["set-row", props.className].filter(Boolean).join(" ")}>
       <div className="set-row__main">
         <div className="set-row__name">{props.name}</div>
         {props.desc ? <div className="set-row__desc">{props.desc}</div> : null}
@@ -203,14 +127,44 @@ export function Row(props: {
 export function Field(props: {
   readonly label: string;
   readonly hint?: ReactNode;
+  readonly error?: ReactNode;
+  /** Match this to the nested control's id; wrapper children are never cloned. */
+  readonly controlId?: string;
+  /** Match these to the control's aria-describedby when providing a hint or error. */
+  readonly hintId?: string;
+  readonly errorId?: string;
   readonly children: ReactNode;
   readonly className?: string;
 }) {
+  const labelId = useId();
   return (
     <div className={`fld${props.className ? ` ${props.className}` : ""}`}>
-      <div className="fld__lbl">{props.label}</div>
-      <div className="fld__row">{props.children}</div>
-      {props.hint ? <div className="fld__hint">{props.hint}</div> : null}
+      {props.controlId ? (
+        <label className="fld__lbl" htmlFor={props.controlId} id={labelId}>
+          {props.label}
+        </label>
+      ) : (
+        <div className="fld__lbl" id={labelId}>
+          {props.label}
+        </div>
+      )}
+      <div
+        className="fld__row"
+        role={props.controlId ? undefined : "group"}
+        aria-labelledby={props.controlId ? undefined : labelId}
+      >
+        {props.children}
+      </div>
+      {props.hint ? (
+        <div className="fld__hint" id={props.hintId}>
+          {props.hint}
+        </div>
+      ) : null}
+      {props.error ? (
+        <div className="fld__hint jds-hint--error" id={props.errorId} role="alert">
+          {props.error}
+        </div>
+      ) : null}
     </div>
   );
 }

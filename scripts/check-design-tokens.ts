@@ -32,6 +32,12 @@ const allowList = new Set([
   // runtime value, not a design token. Want still renders through the jds-score bar everywhere Fit
   // doesn't (K-D1 covers Fit only), so this survives the Matches board rebuild.
   "--jds-score",
+  "--team-accent", // Sports ticker brand rule; supplied by sports-ticker.tsx.
+  // ColorBox/ColorPopover expose caller-owned swatch colors and line geometry.
+  "--jds-colorbox",
+  "--jds-swatch",
+  "--colorbox-rule-weight",
+  "--colorbox-rule-color",
   // #1393 Tasks: avatar background color, hashed per-name in Ava (task-details-sections.tsx).
   // Consuming var() lives in packages/ui/src/styles/components-tasks.css, outside this guard's
   // apps/web/src scan root, so this entry documents intent rather than unblocking a violation.
@@ -140,10 +146,7 @@ export const MIGRATED_SECTION_CSS_FILES: readonly string[] = [
   "apps/web/src/styles/kit-today-misc.css"
 ];
 
-let validTokensCache: Set<string> | undefined;
-
 async function loadValidTokens(root: string): Promise<Set<string>> {
-  if (validTokensCache) return validTokensCache;
   const tokensFile = await readFile(join(root, allowedColorLiteralFile), "utf8");
   const validTokens = new Set<string>();
   const tokenDefPattern = /^\s*(--[a-zA-Z0-9-]+)\s*:/gm;
@@ -151,7 +154,6 @@ async function loadValidTokens(root: string): Promise<Set<string>> {
   while ((match = tokenDefPattern.exec(tokensFile)) !== null) {
     if (match[1]) validTokens.add(match[1]);
   }
-  validTokensCache = validTokens;
   return validTokens;
 }
 
@@ -159,7 +161,38 @@ export async function checkTokens(root: string): Promise<TokenViolation[]> {
   const validTokens = await loadValidTokens(root);
   const violations: TokenViolation[] = [];
 
-  for await (const filePath of walk(join(root, "apps/web/src"))) {
+  const scanRoots = ["apps/web/src", "packages/ui/src"];
+  // First-party module styles share the same token boundary. Their TypeScript may carry
+  // data colors, so this extension scans CSS; existing app/shared sources retain var checks.
+  const moduleCss: string[] = [];
+  for (const directory of ["packages", "external-modules"]) {
+    let packages;
+    try {
+      packages = await readdir(join(root, directory), { withFileTypes: true });
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") continue;
+      throw error;
+    }
+    for (const entry of packages) {
+      if (!entry.isDirectory() || (directory === "packages" && entry.name === "ui")) continue;
+      for await (const file of walk(join(root, directory, entry.name, "src"))) {
+        if (extname(file) === ".css") moduleCss.push(file);
+      }
+    }
+  }
+  const files: string[] = [...moduleCss];
+  for (const scanRoot of scanRoots) {
+    for await (const filePath of walk(join(root, scanRoot))) files.push(filePath);
+  }
+  // Component-local custom properties are contracts too. Read their declarations so only
+  // truly undefined references fail; runtime-only inputs remain explicitly enumerated.
+  for (const filePath of files.filter((path) => extname(path) === ".css")) {
+    const css = stripCssComments(await readFile(filePath, "utf8"));
+    for (const match of css.matchAll(/(?:^|[;{])\s*(--[a-zA-Z0-9-]+)\s*:/gm)) {
+      if (match[1]) validTokens.add(match[1]);
+    }
+  }
+  for (const filePath of files) {
     const ext = extname(filePath);
     if (ext !== ".css" && ext !== ".ts" && ext !== ".tsx") continue;
 
@@ -244,7 +277,13 @@ export async function checkBannedProperties(
 }
 
 async function* walk(directory: string): AsyncGenerator<string> {
-  const entries = await readdir(directory, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+    throw error;
+  }
 
   for (const entry of entries) {
     const entryPath = join(directory, entry.name);
@@ -302,7 +341,9 @@ async function main(): Promise<void> {
     console.error("Design-token violations:");
     console.error(`- CSS color literals must live in ${allowedColorLiteralFile}.`);
     console.error("- Stock-indigo literals are not part of the Jarv1s palette.");
-    console.error("- All var(--...) tokens must be defined in tokens.css.");
+    console.error(
+      "- var(--...) references need a token, component-local definition or documented runtime input."
+    );
     for (const violation of tokenViolations) {
       console.error(`- ${violation.path}:${violation.line} ${violation.text}`);
     }
