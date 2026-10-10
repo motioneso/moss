@@ -14,6 +14,7 @@ import { MemberWelcomeStep } from "./member-welcome-step";
 import { SectionTourStep } from "./section-tour-step";
 import { WelcomeStep } from "./welcome-step";
 import { firstIncompleteStepIndex } from "./resume";
+import { useChatAvailable } from "./chat-availability";
 import { SkipConfirmDialog, needsSkipConfirm } from "./skip-confirm";
 import { personalize, assistantName } from "../api/use-assistant-name.js";
 
@@ -77,6 +78,7 @@ export function OnboardingWizard(props: {
   const [skippedSteps, setSkippedSteps] = useState<ReadonlySet<string>>(() => new Set());
   // #369: when no provider is connected, "Skip setup" must confirm the consequence first.
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false);
+  const chatAvailable = useChatAvailable();
 
   useEffect(() => {
     document.body.classList.add("onboarding-active");
@@ -116,7 +118,7 @@ export function OnboardingWizard(props: {
   // skip mutation is NEVER fired from inside a setState updater (StrictMode double-fire trap) —
   // requestSkip is an event handler and the dialog's confirm calls confirmSkip directly.
   const requestSkip = () => {
-    if (needsSkipConfirm(statusQuery.data)) {
+    if (needsSkipConfirm(statusQuery.data, chatAvailable)) {
       setSkipConfirmOpen(true);
     } else {
       skip.mutate();

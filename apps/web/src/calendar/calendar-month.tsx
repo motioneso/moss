@@ -61,7 +61,11 @@ export function CalendarMonth({ cursor, eventsByDay, onPickDay, onPick }: Calend
                   key={e.id}
                   block={e.kind === "block"}
                   color={e.kind === "block" ? "var(--accent-fg)" : "var(--steel)"}
-                  time={!e.allDay ? fmtTime(e.startMin).replace(":00", "") : undefined}
+                  time={
+                    !e.allDay && dayKey(e.startsAt) === dayKey(e.date)
+                      ? fmtTime(e.startMin).replace(":00", "")
+                      : undefined
+                  }
                   title={e.title}
                   onClick={() => onPick(e)}
                 />

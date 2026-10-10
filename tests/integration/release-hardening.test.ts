@@ -454,8 +454,8 @@ describe("M7 release hardening lifecycle scripts", () => {
     // Assert the command vectors that main() actually executes (docker exec), not a
     // legacy field, so a regression that leaked the password into argv would be caught.
     expect(backupPlan.dockerArgs).toContain("pg_dump");
-    expect(backupPlan.dockerArgs).toContain("--no-owner");
-    expect(backupPlan.dockerArgs).toContain("--no-privileges");
+    // Owners and ACLs must stay in the dump (#3199).
+    expect(backupPlan.dockerArgs).not.toContain("--no-owner");
     expect(backupPlan.outputFile).toBe("backups/jarv1s-test.dump");
     expect(backupPlan.env.PGPASSWORD).toBe("super-secret");
     // The password travels only via env (docker --env PGPASSWORD), never the argv.
@@ -464,8 +464,8 @@ describe("M7 release hardening lifecycle scripts", () => {
     expect(restorePlan.restoreArgs).toContain("pg_restore");
     expect(restorePlan.restoreArgs).toContain("--clean");
     expect(restorePlan.restoreArgs).toContain("--if-exists");
-    expect(restorePlan.restoreArgs).toContain("--no-owner");
-    expect(restorePlan.restoreArgs).toContain("--no-privileges");
+    expect(restorePlan.restoreArgs).not.toContain("--no-owner");
+    expect(restorePlan.restoreArgs).toContain("--single-transaction");
     // Dump is streamed over stdin — never staged as a plaintext file inside the container.
     expect(restorePlan.restoreArgs.join(" ")).not.toContain("/tmp/restore.dump");
     expect(restorePlan.backupFile).toBe("backups/jarv1s-test.dump");

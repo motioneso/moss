@@ -1,5 +1,7 @@
 /**
- * Operator script: re-encrypt all connector and AI secrets with the current key.
+ * Operator script: re-encrypt every secret sealed with the connector or AI keyring (connector
+ * and AI credentials, family keys, Brave key, push records) with the current key, then verify
+ * that every row opens with the current keys alone.
  *
  * IMPORTANT: Stop the API and worker processes before running this script.
  * A concurrent token-refresh or credential-update can overwrite a rewrapped row
@@ -35,6 +37,8 @@ import {
 } from "@moss/db";
 import type { Kysely } from "kysely";
 import { createAiSecretCipher } from "@moss/ai";
+
+import { rewrapAiKeyringStores, verifyCurrentKeyOnly } from "./rewrap-ai-keyring-stores.js";
 
 export async function assertRewrapTargetIdentity(
   db: Kysely<MossDatabase>,
@@ -199,7 +203,31 @@ async function main(): Promise<void> {
       `${connectorPendingRewrapped} connector_oauth_pending, ` +
       `${aiRewrapped} ai_provider_configs${skippedSuffix}.`
   );
+
+  // Instance-wide stores sealed with the AI keyring (family keys, Brave key, push records).
+  for (const result of await rewrapAiKeyringStores(db, aiCipher)) {
+    console.log(`  ${result.store}: ${result.rewrapped} rewrapped`);
+    for (const failure of result.failures) {
+      skipped++;
+      console.error(`  SKIPPED ${failure}`);
+    }
+  }
   if (skipped > 0) process.exit(1);
+
+  // A rewrapped count is not proof. Require every sealed row to open with the current keys alone.
+  const verification = await verifyCurrentKeyOnly(db);
+  if (verification.failures.length > 0) {
+    for (const failure of verification.failures) console.error(`  NOT READABLE ${failure}`);
+    console.error(
+      `${verification.failures.length} of ${verification.checked} row(s) do not open with the ` +
+        `current keys alone. DO NOT retire the old keys.`
+    );
+    process.exit(1);
+  }
+  console.log(
+    `Verified: all ${verification.checked} sealed row(s) open with the current keys alone. ` +
+      `The old keys can be retired.`
+  );
 
   await db.destroy();
 }

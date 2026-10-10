@@ -643,9 +643,8 @@ export const calendarModuleManifest = {
     {
       id: "calendar.saved_day_plan_apply",
       description:
-        "Apply reserved blocks: reserves the reviewed selection and writes additions at " +
-        "once. A batch with moves or removals answers 202 for confirmation first, unless " +
-        "automatic calendar changes are turned on.",
+        "Apply reserved blocks: reviewed additions write at once; moves and removals ask first " +
+        "unless automatic changes are on. Scheduled planning books only its own blocks.",
       errors: [
         {
           code: "day_plan_invalid",

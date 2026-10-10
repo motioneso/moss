@@ -1,6 +1,7 @@
 import {
   buildNewMessageMime,
   buildReplyMime,
+  replyThreadHeaders,
   type EmailWriteProvider,
   type EmailWriteResult,
   type NewEmailInput
@@ -36,7 +37,7 @@ export class GoogleEmailWriteProvider implements EmailWriteProvider {
     threadId: string | null,
     body: string
   ): Promise<EmailWriteResult> {
-    return this.run(scopedDb, "draft", to, subject, threadId, body);
+    return this.run(scopedDb, "draft", message, to, subject, threadId, body);
   }
 
   async send(
@@ -47,7 +48,7 @@ export class GoogleEmailWriteProvider implements EmailWriteProvider {
     threadId: string | null,
     body: string
   ): Promise<EmailWriteResult> {
-    return this.run(scopedDb, "send", to, subject, threadId, body);
+    return this.run(scopedDb, "send", message, to, subject, threadId, body);
   }
 
   async sendNew(scopedDb: DataContextDb, input: NewEmailInput): Promise<EmailWriteResult> {
@@ -75,6 +76,7 @@ export class GoogleEmailWriteProvider implements EmailWriteProvider {
   private async run(
     scopedDb: DataContextDb,
     mode: "draft" | "send",
+    message: EmailMessage,
     to: string,
     subject: string,
     threadId: string | null,
@@ -84,7 +86,7 @@ export class GoogleEmailWriteProvider implements EmailWriteProvider {
       return { ok: false, mode, message: MSG_UPSTREAM_FAILED };
     }
 
-    const raw = buildReplyMime({ to, subject, body });
+    const raw = buildReplyMime({ to, subject, body, ...replyThreadHeaders(message) });
 
     let accessToken: string;
     try {

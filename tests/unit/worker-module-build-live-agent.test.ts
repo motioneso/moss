@@ -2,7 +2,10 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { createModuleBuildLiveAgent } from "../../apps/worker/src/module-build-live-agent.js";
+import {
+  createModuleBuildLiveAgent,
+  resolveWorkspaceRoot
+} from "../../apps/worker/src/module-build-live-agent.js";
 
 describe("module build live-agent composition", () => {
   it("does not press Enter twice when the multiplexer submit already sends it", async () => {
@@ -308,5 +311,26 @@ describe("module build live-agent composition", () => {
       failLaunch({ workingDir: "/build/b1", step: "writing_spec", plan: null })
     ).rejects.toThrow();
     expect(outcomes).toEqual(["ok", "error"]);
+  });
+});
+
+describe("module build workspace root", () => {
+  const marker = join("scripts", "build-external-module.ts");
+
+  it("finds the repo root from the bundled dist directory", () => {
+    const root = resolveWorkspaceRoot("/app/dist", (path) => path === join("/app", marker));
+    expect(root).toBe("/app");
+  });
+
+  it("finds the repo root from the source directory", () => {
+    const root = resolveWorkspaceRoot(
+      "/repo/apps/worker/src",
+      (path) => path === join("/repo", marker)
+    );
+    expect(root).toBe("/repo");
+  });
+
+  it("throws instead of falling back to the filesystem root", () => {
+    expect(() => resolveWorkspaceRoot("/app/dist", () => false)).toThrow(/workspace root/);
   });
 });

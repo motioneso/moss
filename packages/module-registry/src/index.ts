@@ -288,6 +288,8 @@ import {
   type PushSummaryJobPayload,
   type NotificationPreferencePort,
   runNotificationDigestCompose,
+  NOTIFICATION_SENSITIVITY_PREFERENCE_KEY,
+  sensitivityFromRaw,
   notificationsModuleManifest,
   notificationsModuleSqlMigrationDirectory,
   registerNotificationsRoutes,
@@ -553,6 +555,8 @@ export * from "./external/validate.js";
 export * from "./external/types.js";
 export * from "./external/reconcile.js";
 export * from "./external/preferences.js";
+export * from "./external/app-map.js";
+import type { ExternalAppMapItems } from "./external/app-map.js";
 
 import { createActiveModulesResolver } from "./active-modules-resolver.js";
 
@@ -624,6 +628,11 @@ export interface BuiltInRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly listConfiguredAuthProviders: () => readonly AuthProviderStatusDto[];
   readonly listModuleManifests: () => readonly MossModuleManifest[];
+  /** Briefing tool names declared by external modules; lets briefings select them. */
+  readonly listExternalBriefingToolNames?: () => readonly string[];
+  readonly listExternalBriefingSources?: (
+    access: AccessContext
+  ) => Promise<readonly { readonly toolName: string; readonly label: string }[]>;
   /** #3065: filled by the server's onReady once every route is registered; forwarded to chat. */
   readonly routeCatalog?: RouteCatalogHolder;
   readonly actAsGrants?: ActAsGrantRegistry;
@@ -633,6 +642,8 @@ export interface BuiltInRouteDependencies {
    * listModuleManifests (the full registered set used by briefings + /api/modules).
    */
   readonly resolveActiveModules: ActiveModulesResolver;
+  /** #3168: installed modules' app-map entries for one actor; see createAppMapReadService. */
+  readonly resolveExternalAppMap?: (actorUserId: string) => Promise<ExternalAppMapItems>;
   readonly dataContext: DataContextRunner;
   readonly boss: PgBoss;
   /**
@@ -1334,7 +1345,17 @@ export function buildNewsBriefingSource(deps: {
   });
   // Briefing tool is constructed at import time; it adopts the client late-bound
   // (mirrors LOADER-SEAM(sports) 3).
-  configureNewsBriefingService(datasetClient);
+  // The briefing only reads dismissed refs; the AI port is never called on that path.
+  configureNewsBriefingService(
+    datasetClient,
+    buildNewsStoryFeedbackPort(
+      {
+        generateJson: async () => ({ ok: false, error: "needs_config" }),
+        fingerprint: async () => null
+      },
+      deps.logger
+    )
+  );
   return datasetClient;
 }
 
@@ -1605,6 +1626,11 @@ export function createNotificationPreferencePort(
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) return true;
       const enabled = (raw as { enabled?: unknown }).enabled;
       return typeof enabled === "boolean" ? enabled : true;
+    },
+    async getSensitivity(scopedDb) {
+      return sensitivityFromRaw(
+        await preferencesRepository.get(scopedDb, NOTIFICATION_SENSITIVITY_PREFERENCE_KEY)
+      );
     }
   };
 }
@@ -2341,6 +2367,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             { actorUserId, requestId: "gateway:web-search-engine" },
             async (scopedDb) => (await resolveNewsWebSearch(scopedDb)).engine
           ),
+        passiveMemoryRecall: deps.passiveMemoryRecall,
         notesRecall: deps.notesRecall,
         googleConnectionService: deps.googleConnectionService,
         googleApiClient: deps.googleApiClient,
@@ -2383,6 +2410,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         listModuleManifests: deps.listModuleManifests,
+        ...(deps.listExternalBriefingToolNames
+          ? { listExternalBriefingToolNames: deps.listExternalBriefingToolNames }
+          : {}),
+        ...(deps.listExternalBriefingSources
+          ? { listExternalBriefingSources: deps.listExternalBriefingSources }
+          : {}),
         boss: deps.boss,
         dayPlanRead: briefingsAutoDayPlanRepository,
         feedbackRepository: usefulnessFeedbackRepository
@@ -3739,6 +3772,8 @@ export function registerBuiltInApiRoutes(
   const appMapService = createAppMapReadService({
     artifact: loadAppMap(APP_MAP_ARTIFACT_PATH),
     resolveActiveModules: dependencies.resolveActiveModules,
+    // #3168: installed modules' app-map entries, only for modules active for this actor.
+    resolveExternalAppMap: dependencies.resolveExternalAppMap,
     resolveFeatureFlagState: (featureFlagId) =>
       dependencies
         .listModuleManifests()

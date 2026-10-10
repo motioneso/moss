@@ -147,14 +147,18 @@ export class MemoryDashboardService {
         factPayload.recordKind ??
         "preference") as MemoryRecordKind;
 
-      const selfEntity = await this.graphRepo.ensureSelfEntity(scopedDb, ownerUserId);
+      const subjectEntityId = await this.resolveCandidateSubject(
+        scopedDb,
+        ownerUserId,
+        factPayload.subject
+      );
 
       // #561: always create via remember(); multiple active facts with the same predicate
       // are valid in the memory model (e.g. "prefers dark mode" and "prefers early mornings"
       // are independent). Predicate-only conflict detection would silently supersede unrelated
       // memories. Conflict routing is delegated to the recall layer's own deduplication.
       const result = await this.recallSvc.remember(scopedDb, ownerUserId, {
-        subjectEntityId: selfEntity.id,
+        subjectEntityId,
         predicate: predicate as MemoryFactPredicate,
         objectText,
         recordKind,
@@ -187,6 +191,23 @@ export class MemoryDashboardService {
     }
 
     return { accepted: true };
+  }
+
+  private async resolveCandidateSubject(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    subject: unknown
+  ): Promise<string> {
+    const name = typeof subject === "string" ? subject.trim() : "";
+    // Suggestions saved before subjects were tracked have none, and describe the owner.
+    if (!name) return (await this.graphRepo.ensureSelfEntity(scopedDb, ownerUserId)).id;
+    const resolved = await this.graphRepo.resolveSubjectEntityId(scopedDb, ownerUserId, name);
+    if (resolved) return resolved;
+    const err = new Error(
+      `More than one memory entity is named "${name}". Merge or rename them, then approve again.`
+    ) as NodeJS.ErrnoException;
+    err.code = "AMBIGUOUS_SUBJECT";
+    throw err;
   }
 
   async rejectCandidate(

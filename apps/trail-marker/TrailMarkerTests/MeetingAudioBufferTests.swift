@@ -84,7 +84,7 @@ final class MeetingAudioBufferTests: XCTestCase {
         XCTAssertNil(ring.peek())
         put(ring, at: 60_000_000_001)
         XCTAssertNil(ring.peek())
-        XCTAssertEqual(ring.failure, .invalidTimestamp)
+        XCTAssertEqual(ring.failure, .sourceReconfigured)
     }
     func testUnacknowledgedDurationDoesNotGrowPastSixtySeconds() throws {
         let ring = try buffer(samples: 488_000, blocks: 64)
@@ -116,7 +116,7 @@ final class MeetingAudioBufferTests: XCTestCase {
         let ring = try buffer()
         put(ring)
         ring.receive(hostTimeNanoseconds: 2_000_000, sampleRate: 16000, frameCount: 1, sampleAt: { _ in 0 })
-        XCTAssertEqual(ring.failure, .invalidFormat)
+        XCTAssertEqual(ring.failure, .sourceReconfigured)
         let bad = try buffer()
         put(bad, value: .nan)
         XCTAssertEqual(bad.failure, .invalidFormat)
@@ -141,7 +141,7 @@ final class MeetingAudioBufferTests: XCTestCase {
             let ring = try buffer()
             put(ring)
             put(ring, at: next)
-            XCTAssertEqual(ring.failure, .invalidTimestamp)
+            XCTAssertEqual(ring.failure, next < 1_000_000 ? .invalidTimestamp : .sourceReconfigured)
         }
         let tolerant = try buffer()
         put(tolerant)
@@ -328,7 +328,7 @@ final class MeetingAudioBufferTests: XCTestCase {
             let ring = try buffer()
             ring.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 8, sampleAt: { _ in 1 })
             ring.receive(sampleTime: next, hostTimeNanoseconds: 1_000_000, sampleRate: 8000, frameCount: 8, sampleAt: { _ in 2 })
-            XCTAssertEqual(ring.failure, .invalidTimestamp)
+            XCTAssertEqual(ring.failure, .sourceReconfigured)
             XCTAssertEqual(ring.diagnostics.sampleDiscontinuities, 1)
             XCTAssertEqual(ring.peek()?.samples, Array(repeating: Float(1), count: 8))
             XCTAssertTrue(ring.acknowledge(sequence: 0))
@@ -429,7 +429,7 @@ final class MeetingAudioBufferTests: XCTestCase {
             var copied = false
             ring.receive(sampleTime: 0, hostTimeNanoseconds: 1_000_000, sampleRate: 8000,
                          frameCount: 8, sampleAt: { _ in copied = true; return 2 })
-            XCTAssertEqual(ring.failure, .invalidTimestamp)
+            XCTAssertEqual(ring.failure, .sourceReconfigured)
             XCTAssertFalse(copied)
             XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
             XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
@@ -449,7 +449,7 @@ final class MeetingAudioBufferTests: XCTestCase {
                 putHardware(ring, sampleTime: 8, at: 2_000_000, value: 2)
                 XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 2)
             } else {
-                XCTAssertEqual(ring.failure, .invalidTimestamp)
+                XCTAssertEqual(ring.failure, elapsed < 0 ? .invalidTimestamp : .sourceReconfigured)
                 XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
                 XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
             }
@@ -469,7 +469,7 @@ final class MeetingAudioBufferTests: XCTestCase {
                 XCTAssertNil(ring.failure, "The discarded interval must end within the startup window")
                 XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 2)
             } else {
-                XCTAssertEqual(ring.failure, .invalidTimestamp)
+                XCTAssertEqual(ring.failure, .sourceReconfigured)
                 XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
                 XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
             }
@@ -477,13 +477,13 @@ final class MeetingAudioBufferTests: XCTestCase {
         let late = try recoveringBuffer(StartupTestClock(), origin: origin)
         putHardware(late, sampleTime: 0, at: origin + 600_000_000)
         putHardware(late, sampleTime: 0, at: origin + 601_000_000)
-        XCTAssertEqual(late.failure, .invalidTimestamp, "A late first callback must not extend the epoch's window")
+        XCTAssertEqual(late.failure, .sourceReconfigured, "A late first callback must not extend the epoch's window")
 
         let longCallback = try recoveringBuffer(StartupTestClock())
         putHardware(longCallback, sampleTime: 0, at: 0)
         longCallback.receive(sampleTime: 0, hostTimeNanoseconds: 1_000_000, sampleRate: 8000,
             frameCount: 4096, sampleAt: { _ in XCTFail("An over-window reset callback must not read PCM"); return 99 })
-        XCTAssertEqual(longCallback.failure, .invalidTimestamp)
+        XCTAssertEqual(longCallback.failure, .sourceReconfigured)
         XCTAssertTrue(longCallback.drainCaptureGaps().isEmpty)
     }
 
@@ -495,7 +495,7 @@ final class MeetingAudioBufferTests: XCTestCase {
         putHardware(ring, sampleTime: 0, at: 0)
         XCTAssertNil(ring.failure, "A delayed first valid callback must still preserve its PCM")
         putHardware(ring, sampleTime: 0, at: 1_000_000, value: 99)
-        XCTAssertEqual(ring.failure, .invalidTimestamp)
+        XCTAssertEqual(ring.failure, .sourceReconfigured)
         XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
         XCTAssertEqual(ring.peek()?.samples, [Float](repeating: 1, count: 8))
         XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
@@ -534,7 +534,7 @@ final class MeetingAudioBufferTests: XCTestCase {
         var copied = false
         ring.receive(sampleTime: 8, hostTimeNanoseconds: 3_000_000, sampleRate: 8000,
                      frameCount: 8, sampleAt: { _ in copied = true; return 99 })
-        XCTAssertEqual(ring.failure, .invalidTimestamp)
+        XCTAssertEqual(ring.failure, .sourceReconfigured)
         XCTAssertFalse(copied)
         XCTAssertEqual(ring.peek(), accepted)
         XCTAssertEqual(ring.diagnostics.sampleDiscontinuities, 2)
@@ -616,7 +616,7 @@ final class MeetingAudioBufferTests: XCTestCase {
             var copied = false
             ring.receive(sampleTime: 0, hostTimeNanoseconds: 1_000_000, sampleRate: rate,
                          frameCount: 8, sampleAt: { _ in copied = true; return 2 })
-            XCTAssertEqual(ring.failure, .invalidFormat)
+            XCTAssertEqual(ring.failure, rate == 16000 ? .sourceReconfigured : .invalidFormat)
             XCTAssertFalse(copied)
             XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
         }
@@ -769,7 +769,7 @@ final class MeetingAudioBufferTests: XCTestCase {
         XCTAssertEqual(after.samples, [Float](repeating: 2, count: 8))
         ring.drop(sampleTime: 16, hostTimeNanoseconds: 6_000_000, sampleRate: 8000, frameCount: 8)
         _ = ring.drainCaptureGaps()
-        XCTAssertEqual(ring.failure, .invalidTimestamp, "The drop path cannot obtain a second startup recovery")
+        XCTAssertEqual(ring.failure, .sourceReconfigured, "A second reset requires a fresh epoch rather than another in-place startup recovery")
         XCTAssertEqual(ring.peek(), after)
     }
 
@@ -790,7 +790,7 @@ final class MeetingAudioBufferTests: XCTestCase {
         startup.drop(sampleTime: 0, hostTimeNanoseconds: 498_000_000, sampleRate: 8000, frameCount: 8)
         startup.drop(sampleTime: 8, hostTimeNanoseconds: 499_500_000, sampleRate: 8000, frameCount: 8)
         XCTAssertTrue(startup.drainCaptureGaps().isEmpty)
-        XCTAssertEqual(startup.failure, .invalidTimestamp,
+        XCTAssertEqual(startup.failure, .sourceReconfigured,
             "A nominal 500 ms coalesced reset must not hide its measured 500.5 ms end")
         XCTAssertFalse(startup.hasRecoveredStartupClock)
         XCTAssertEqual(startup.diagnostics.acceptedCallbacks, 1)
@@ -862,7 +862,7 @@ final class MeetingAudioBufferTests: XCTestCase {
         XCTAssertEqual(packet.samples, [Float](repeating: 2, count: 8))
         ring.drop(sampleTime: 24, hostTimeNanoseconds: 4_999_999, sampleRate: 8000, frameCount: 8)
         _ = ring.drainCaptureGaps()
-        XCTAssertEqual(ring.failure, .invalidTimestamp, "The inverted reset frontier still consumes the one recovery")
+        XCTAssertEqual(ring.failure, .sourceReconfigured, "The inverted reset frontier still consumes the one in-place recovery")
     }
 
     func testCoalescedDropsCannotInflateStartupSlackBeyondOnePhysicalCallback() throws {
@@ -895,7 +895,7 @@ final class MeetingAudioBufferTests: XCTestCase {
             XCTAssertTrue(ring.drainCaptureGaps().isEmpty)
             XCTAssertNotNil(ring.failure, "Dropped resets remain subject to the same startup admission bounds")
             XCTAssertEqual(ring.diagnostics.acceptedCallbacks, 1)
-            XCTAssertEqual(ring.diagnostics.sampleDiscontinuities, 1)
+            XCTAssertEqual(ring.diagnostics.sampleDiscontinuities, scenario == 3 || scenario == 5 ? 0 : 1)
             XCTAssertEqual(ring.peek()?.samples, [Float](repeating: 1, count: 8))
         }
     }

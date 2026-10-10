@@ -107,7 +107,7 @@ const inventory = object(
 const observed = object(
   {
     generation: counter,
-    phase: { enum: ["idle", "recording", "paused", "stopped", "error"] },
+    phase: { enum: ["idle", "recording", "recovering", "paused", "stopped", "error"] },
     errorCode: { type: "string", minLength: 1, maxLength: 80, pattern: "^[a-z0-9_]+$" }
   },
   ["generation", "phase"]
@@ -155,7 +155,7 @@ const nativeControlBody = {
       grantId: uuid,
       requestKey: uuid,
       expectedGeneration: counter,
-      command: { const: "change-sources" },
+      command: { enum: ["change-sources", "recover-sources"] },
       expectedEpoch: { ...counter, minimum: 1, maximum: 64 },
       selection
     })

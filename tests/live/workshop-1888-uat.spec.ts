@@ -3,20 +3,21 @@
 // engine and a real AI provider. Nothing is mocked. See docs/DEVELOPMENT_STANDARDS.md.
 //
 // Run with:
-//   LIVE_BASE_URL=http://127.0.0.1:5184 LIVE_API_URL=http://127.0.0.1:3033 \
-//   LIVE_OWNER_PASSWORD=... \
+//   LIVE_BASE_URL=http://127.0.0.1:<web-port> LIVE_API_URL=http://127.0.0.1:<api-port> \
+//   LIVE_OWNER_EMAIL=... LIVE_OWNER_PASSWORD=... \
 //     npx playwright test --config playwright.live.config.ts workshop-1888
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
+const OWNER_EMAIL = process.env.LIVE_OWNER_EMAIL;
 const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
-if (!OWNER_PASSWORD) {
+if (!OWNER_EMAIL || !OWNER_PASSWORD) {
   throw new Error(
-    "Set LIVE_OWNER_PASSWORD to the development instance sign-in password before running this " +
-      "test. The current password is not in this repository; it is kept in the memory note " +
-      "named dev-instance-lan-spinup-trusted-origins."
+    "Set LIVE_OWNER_EMAIL and LIVE_OWNER_PASSWORD to the owner of the disposable instance under " +
+      "test. Neither is kept in this repository."
   );
 }
-const OWNER = { email: "ben@ben.com", password: OWNER_PASSWORD };
+const OWNER = { email: OWNER_EMAIL, password: OWNER_PASSWORD };
+const REPLIES = ".chatd-msg:not(.chatd-msg--me) .chatd-bubble";
 
 // One message that supplies everything workshop.buildModule's description tells the model to
 // gather first (what it does, what it reaches, when it runs), so the turn reaches the tool
@@ -32,6 +33,23 @@ async function signInThroughUi(page: Page) {
     .getByRole("button", { name: /sign in/i })
     .click();
   await expect(page.getByRole("navigation").first()).toBeVisible();
+}
+
+// The drawer reopens its last conversation, so a fresh chat comes from Conversations.
+// Asking waits for the drawer clear and for the old replies to leave.
+async function startSideChat(page: Page, drawer: Locator): Promise<void> {
+  const cleared = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname === "/api/chat/clear" &&
+      url.searchParams.get("surface") === "drawer"
+    );
+  });
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  await drawer.getByRole("button", { name: "New side chat", exact: true }).click();
+  expect((await cleared).status()).toBe(204);
+  await expect(drawer.locator(REPLIES)).toHaveCount(0);
 }
 
 test("Moss builds and installs a working Word of the Day module through the UI", async ({
@@ -52,7 +70,8 @@ test("Moss builds and installs a working Word of the Day module through the UI",
   await signInThroughUi(page);
 
   await page.getByRole("button", { name: /^(Chat with .+|Open chat)$/ }).click();
-  const composer = page.getByRole("textbox", { name: /^Message/ });
+  const drawer = page.getByRole("dialog", { name: /^Chat with .+|^Chat$/ });
+  const composer = drawer.getByRole("textbox", { name: /^Message/ });
   await expect(composer).toBeVisible();
 
   // #1943: start a fresh conversation before asking. The drawer reopens the previous one, and
@@ -61,11 +80,21 @@ test("Moss builds and installs a working Word of the Day module through the UI",
   // again; and the words "Build it" are already on the page, in the old card and in Moss's own
   // prose, so waiting for them to appear passed in under two seconds against a branch where
   // nothing had happened - no new build record, no new entry in the tool audit log.
-  await page.getByRole("button", { name: /^New chat$/ }).click();
-
   // Exactly one card, and only after the ask, so neither a leftover card nor a polite refusal
   // nor a follow-up question can pass this.
   const planCards = page.getByRole("button", { name: /^Build it$/ });
+
+  // The reopened conversation replays asynchronously, so give an earlier plan time to appear
+  // before counting it. The count is logged only; the zero-card check below is the guarantee.
+  const staleCards = await planCards
+    .first()
+    .waitFor({ timeout: 10_000 })
+    .then(
+      () => planCards.count(),
+      () => 0
+    );
+  await startSideChat(page, drawer);
+  console.log(`[1888] ${staleCards} earlier plan cards on screen before the new side chat`);
   await expect(planCards).toHaveCount(0);
 
   await composer.fill(ask);

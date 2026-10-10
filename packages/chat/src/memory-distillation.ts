@@ -107,6 +107,7 @@ export function buildDistillationPrompt(input: BuildDistillationPromptInput): st
     "Do not create commitments, reminders, tasks, or follow-up jobs.",
     "Use volunteered only for direct user statements; otherwise inferred.",
     "supersedesIds may reference only ids from ACTIVE MEMORY.",
+    'Fact subject is "self" when the fact is about the user, otherwise the name of the person or thing it describes.',
     "",
     `THREAD: ${input.threadTitle}`,
     `ACTIVE MEMORY:\n${active || "(none)"}`,

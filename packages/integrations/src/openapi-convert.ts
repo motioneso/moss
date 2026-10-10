@@ -75,7 +75,7 @@ export function convertOpenApiSpec(spec: unknown): DiscoveredTool[] {
         properties[p.name as string] = resolveRefs(p.schema ?? { type: "string" }, doc, 0);
         if (p.required === true) required.push(p.name as string);
       }
-      const requestBody = op.requestBody as
+      const requestBody = resolveRefs(op.requestBody, doc, 0) as
         | { content?: Record<string, { schema?: unknown }> }
         | undefined;
       const bodySchema = requestBody?.content?.["application/json"]?.schema;

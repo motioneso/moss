@@ -12,6 +12,10 @@ export interface SessionIdentity {
   readonly allowedToolNames: Set<string> | null;
 }
 
+/** Sent back to the model when it asks for a tool during a launch replay (#3335). */
+export const LAUNCH_REPLAY_REFUSAL =
+  "Tools are off while earlier messages are restored. Do not act on earlier requests; act only on what the person asks next.";
+
 export class InvalidSessionTokenError extends Error {
   constructor() {
     super("Invalid or revoked session token");
@@ -49,6 +53,8 @@ interface TokenEntry {
    */
   observationCount: number;
   readonly toolsListWaiters: Array<() => void>;
+  /** #3335 — set while the launch that minted this token replays history; see beginLaunchReplay. */
+  launchReplay: boolean;
 }
 
 /** Bounded wait for {@link SessionTokenRegistry.waitForToolsListObserved}; mirrors the
@@ -105,7 +111,8 @@ export class SessionTokenRegistry {
       fixedExpiry: options.fixedExpiry ?? false,
       toolsListObserved: false,
       observationCount: 0,
-      toolsListWaiters: []
+      toolsListWaiters: [],
+      launchReplay: false
     });
     return token;
   }
@@ -167,6 +174,25 @@ export class SessionTokenRegistry {
   readCurrentTurnId(chatSessionId: string | undefined): string | undefined {
     if (!chatSessionId) return undefined;
     return this.currentTurnBySession.get(chatSessionId);
+  }
+
+  /**
+   * #3335: a launch replay has no user turn behind it. The chat launch marks its token from mint
+   * until the replay has drained, and the gateway refuses every tool and permission request on a
+   * marked token without raising a card or writing a record. Unknown tokens are ignored.
+   */
+  beginLaunchReplay(token: string): void {
+    const entry = this.tokens.get(token);
+    if (entry) entry.launchReplay = true;
+  }
+
+  endLaunchReplay(token: string): void {
+    const entry = this.tokens.get(token);
+    if (entry) entry.launchReplay = false;
+  }
+
+  isInLaunchReplay(token: string): boolean {
+    return this.tokens.get(token)?.launchReplay ?? false;
   }
 
   /**

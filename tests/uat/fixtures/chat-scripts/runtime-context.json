@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["Say hello in three words."],
+      "calls": [],
+      "reply": "Hello there, friend."
+    }
+  ]
+}

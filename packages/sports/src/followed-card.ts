@@ -60,8 +60,7 @@ export function findTeamGame(
 // whose start is nearest to now, and only if that start is within NEAR_GAME_WINDOW_MS: a 7 PM
 // final at 10 PM qualifies (2h), tomorrow's 4 PM matchup at 10 PM does not (18h) — the card then
 // falls back to news status and the Next row (from the schedule dataset) still carries the
-// upcoming game. findTeamGame stays for the single-day briefing path, where "any game on
-// today's board" is the right question.
+// upcoming game. The briefing evidence falls back to it when nothing is live or still to play today.
 const NEAR_GAME_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 export function currentTeamGame(

@@ -284,12 +284,48 @@ function candidateKindFor(el: Element): PageContextCandidateKind | null {
   return null;
 }
 
+const FORM_CONTROL_TAGS = new Set(["input", "textarea", "select", "option"]);
+
+function isExcludedElement(el: Element): boolean {
+  const signals = elementPrivacySignals(el);
+  return isSensitiveElementSignals(signals) || isHiddenElementSignals(signals);
+}
+
+/** True when the element or any ancestor is excluded; a hidden container hides its children. */
+function isExcludedInContext(el: Element): boolean {
+  for (let node: Element | null = el; node; node = node.parentElement) {
+    if (isExcludedElement(node)) return true;
+  }
+  return false;
+}
+
+function isFormValueElement(el: Element): boolean {
+  if (FORM_CONTROL_TAGS.has(el.tagName.toLowerCase())) return true;
+  const editable = el.getAttribute("contenteditable");
+  return editable !== null && editable.toLowerCase() !== "false";
+}
+
+/**
+ * Text of `node` with excluded subtrees (opted-out, hidden, sensitive) and form
+ * controls left out, so an ancestor never aggregates what a descendant withholds.
+ */
+function capturableText(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+  const el = node as Element;
+  if (isExcludedElement(el) || isFormValueElement(el)) return "";
+  let text = "";
+  for (const child of el.childNodes) text += capturableText(child);
+  return text;
+}
+
 function focusInfo(el: Element): PageContextFocusInfo | null {
   const signals = elementPrivacySignals(el);
-  if (isSensitiveElementSignals(signals) || isHiddenElementSignals(signals)) return null;
+  if (isExcludedInContext(el)) return null;
   const role = el.getAttribute("role");
   const ariaLabel = el.getAttribute("aria-label");
-  const label = ariaLabel ?? (el.textContent ? el.textContent.trim() : null);
+  // A form control's own text is a value, so only its aria-label can name it.
+  const label = ariaLabel ?? (isFormValueElement(el) ? null : capturableText(el).trim() || null);
   return { tag: signals.tag, role, label: label && label.length > 0 ? label : null };
 }
 
@@ -307,12 +343,11 @@ function collectPageContextCandidates(root: ParentNode): {
   const candidates: PageContextCandidate[] = [];
   const elements = root.querySelectorAll(CAPTURE_SELECTOR);
   for (const el of elements) {
-    const signals = elementPrivacySignals(el);
-    if (isSensitiveElementSignals(signals) || isHiddenElementSignals(signals)) continue;
+    if (isExcludedInContext(el)) continue;
     const kind = candidateKindFor(el);
     if (!kind) continue;
     const declared = kind === "declared" ? el.getAttribute(DECLARED_TEXT_ATTRIBUTE)?.trim() : null;
-    const text = declared || el.textContent?.trim();
+    const text = declared || capturableText(el).trim();
     if (!text) continue;
     candidates.push({ kind, text });
   }
@@ -329,9 +364,33 @@ function collectPageContextCandidates(root: ParentNode): {
   };
 }
 
+/** True when the selection starts in, ends in, or spans any excluded element or form control. */
+function selectionTouchesExcluded(selection: Selection): boolean {
+  for (let i = 0; i < selection.rangeCount; i += 1) {
+    const range = selection.getRangeAt(i);
+    const container = range.commonAncestorContainer;
+    const start: Element | null =
+      container instanceof Element ? container : container.parentElement;
+    for (let el = start; el; el = el.parentElement) {
+      if (isExcludedElement(el) || isFormValueElement(el)) return true;
+    }
+    const scope = container instanceof Element ? container : container.parentElement;
+    if (!scope) continue;
+    for (const el of scope.querySelectorAll("*")) {
+      if (!range.intersectsNode(el)) continue;
+      // Textless decorations (icons, separators) carry nothing to leak.
+      if (!el.textContent?.trim()) continue;
+      if (isExcludedElement(el) || isFormValueElement(el)) return true;
+    }
+  }
+  return false;
+}
+
 function readSelectedText(): string | null {
   try {
-    const raw = window.getSelection?.()?.toString();
+    const selection = window.getSelection?.();
+    if (!selection || selectionTouchesExcluded(selection)) return null;
+    const raw = selection.toString();
     return raw && raw.trim().length > 0 ? raw : null;
   } catch {
     return null;

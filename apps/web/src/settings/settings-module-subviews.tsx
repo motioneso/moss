@@ -4,17 +4,14 @@ import { useState, type ReactNode } from "react";
 import type { NotificationDigestCadenceDto, PushDeviceDto } from "@moss/shared";
 import { Button } from "@moss/ui";
 
-import {
-  DEFAULT_NOTIFICATIONS,
-  notificationSensitivityHint,
-  type NotificationSensitivity,
-  type NotificationsSettings
-} from "./settings-sample-data";
+import { notificationSensitivityHint, type NotificationSensitivity } from "./settings-sample-data";
 import {
   ApiError,
   createBriefingDefinition,
   deletePushSubscription,
   getNotificationDigestPreference,
+  getNotificationSensitivity,
+  putNotificationSensitivity,
   getNotificationPreferences,
   getLocaleSettings,
   getPushConfig,
@@ -53,8 +50,6 @@ import {
   removePushDevice,
   type PendingRemovalStore
 } from "./push-browser-subscription";
-
-// BACKEND-TODO: persist + apply Notifications sensitivity.
 
 const DIGEST_WEEKDAYS = [
   "Sunday",
@@ -266,6 +261,29 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
             />
           }
         />
+        {(definitionsQuery.data?.externalSources ?? []).map((source) => (
+          <Row
+            key={source.toolName}
+            name={source.label}
+            desc={`Include ${source.label} in the morning briefing.`}
+            control={
+              <Switch
+                ariaLabel={source.label}
+                checked={morning?.selectedToolNames.includes(source.toolName) ?? false}
+                disabled={busy || !morning}
+                onChange={() =>
+                  mutation.mutate({
+                    type: "morning",
+                    selectedToolNames: toggleToolName(
+                      morning?.selectedToolNames ?? [],
+                      source.toolName
+                    )
+                  })
+                }
+              />
+            }
+          />
+        ))}
         {BRIEFING_SOURCE_BEHAVIORS.map((behavior) => (
           <Row
             key={behavior.id}
@@ -296,9 +314,25 @@ export function NotificationSettings(props: {
 }) {
   const queryClient = useQueryClient();
   const assistantName = useAssistantName();
-  const [state, setState] = useState<NotificationsSettings>(DEFAULT_NOTIFICATIONS);
   const [error, setError] = useState<string | null>(null);
-  const set = (patch: Partial<NotificationsSettings>) => setState((s) => ({ ...s, ...patch }));
+  const sensitivityQuery = useQuery({
+    queryKey: queryKeys.settings.notificationSensitivity,
+    queryFn: getNotificationSensitivity,
+    retry: false
+  });
+  const sensitivityMutation = useMutation({
+    mutationFn: (sensitivity: NotificationSensitivity) =>
+      putNotificationSensitivity({ sensitivity }),
+    onSuccess: (data) => {
+      setError(null);
+      queryClient.setQueryData(queryKeys.settings.notificationSensitivity, data);
+    },
+    onError: (err) => setError(readError(err))
+  });
+  const sensitivity: NotificationSensitivity =
+    (sensitivityMutation.isPending ? sensitivityMutation.variables : undefined) ??
+    sensitivityQuery.data?.sensitivity ??
+    "balanced";
   const preferencesQuery = useQuery({
     queryKey: queryKeys.settings.notificationPreferences,
     queryFn: getNotificationPreferences,
@@ -411,17 +445,17 @@ export function NotificationSettings(props: {
       <Group title="Sensitivity" desc={`How readily ${assistantName} interrupts you.`}>
         <div className="nsens">
           <Segmented<NotificationSensitivity>
-            value={state.sensitivity}
+            value={sensitivity}
             options={[
               { value: "quiet", label: "Quiet" },
               { value: "balanced", label: "Balanced" },
               { value: "proactive", label: "Proactive" }
             ]}
             ariaLabel="Sensitivity"
-            onChange={(v) => set({ sensitivity: v })}
+            onChange={(v) => sensitivityMutation.mutate(v)}
           />
           <div className="nsens__hint">
-            {notificationSensitivityHint(assistantName)[state.sensitivity]}
+            {notificationSensitivityHint(assistantName)[sensitivity]}
           </div>
         </div>
       </Group>

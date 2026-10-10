@@ -5,6 +5,8 @@ enum MeetingAudioFailure: Error, Equatable {
     case invalidSelection
     case invalidFormat
     case invalidTimestamp
+    /// Verified supported format change or numerically valid clock discontinuity only.
+    case sourceReconfigured
     case bufferFull
     case leaseExpired
     case deviceFailure(operation: String, status: Int32)
@@ -74,6 +76,15 @@ struct MeetingNativeSelection: Equatable {
     let microphoneDeviceID: UInt32?
     /// Nil means microphone-only. Output route failure never changes this selection.
     let output: MeetingOutputScope?
+    /// Physical routes captured with the approved inventory. Nil remains valid for
+    /// synthetic/startup callers, but cannot authorize automatic output recovery.
+    var defaultOutputDeviceID: UInt32? = nil
+    var defaultSystemOutputDeviceID: UInt32? = nil
+
+    var hasPinnedOutputRoutes: Bool {
+        output == nil || (defaultOutputDeviceID != nil && defaultOutputDeviceID != 0 &&
+            defaultSystemOutputDeviceID != nil && defaultSystemOutputDeviceID != 0)
+    }
 
     var sources: Set<MeetingAudioSource> {
         var result = Set<MeetingAudioSource>()
@@ -87,6 +98,9 @@ struct MeetingNativeSelection: Equatable {
             throw MeetingAudioFailure.invalidSelection
         }
         if microphoneDeviceID == nil, case .selectedProcesses? = output { throw MeetingAudioFailure.invalidSelection }
+        guard defaultOutputDeviceID != 0, defaultSystemOutputDeviceID != 0 else {
+            throw MeetingAudioFailure.invalidSelection
+        }
         try output?.validate()
     }
 }

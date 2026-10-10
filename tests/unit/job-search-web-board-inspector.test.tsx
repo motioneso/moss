@@ -268,6 +268,29 @@ describe("job-search web BoardScreen — inspector", () => {
     expect(openPostingLink).toBeTruthy();
   });
 
+  // #3228 JS-05: an unscored row is synthetic (no match row to update), so Save/Pass would queue
+  // a write that changes nothing.
+  it("hides Save and Pass for an unscored role", async () => {
+    fixtures.matchesItems = [
+      match({ id: "m1", title: "Role A", state: "unscored", fit: null, want: null })
+    ];
+    fixtures.matchGetResult = { match: matchDetail({ id: "m1", state: "unscored" }) };
+    const renderer = await renderBoard("p1", fakeAssistantSurface());
+    await flush(renderer);
+
+    await act(async () => {
+      findRowButton(renderer, /Role A/)!.props.onClick();
+    });
+    await flush(renderer);
+
+    const labels = renderer.root
+      .findAllByType("button")
+      .map((item) => flatten(item.children).trim());
+    expect(labels).toContain("Discuss");
+    expect(labels).not.toContain("Pass");
+    expect(labels).not.toContain("Save");
+  });
+
   // Without assistantSurface, Discuss must not render at all (a hidden control, not a disabled
   // one — discuss.tsx's own "an action that silently does nothing is worse than an action that is
   // not there") while Open posting and Pass are unaffected, since neither depends on it.
