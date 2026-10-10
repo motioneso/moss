@@ -172,9 +172,12 @@ test("tool rows have one switch and repeated identical calls reach the service (
           "arguments and without any other tool in between. Do both calls now, no questions."
       );
       await composer.press("Enter");
-      // A fresh chat counts as untrusted, so each outside tool call raises an approval card even
-      // with YOLO on. Approve each one as it appears; approval never merges or drops a repeat.
+      // YOLO skips no approval while the gateway counts the conversation as tainted
+      // (isConversationTainted in packages/ai/src/gateway/conversation-policy.ts), and live runs
+      // raised a card for each outside call. Approve each one as it appears; approval never
+      // merges or drops a repeat.
       let approvals = 0;
+      let missedClicks = 0;
       const deadline = Date.now() + 120_000;
       while (listCalls().length - before < 2 && Date.now() < deadline) {
         const card = page
@@ -185,12 +188,15 @@ test("tool rows have one switch and repeated identical calls reach the service (
           await card
             .click({ timeout: 5_000 })
             .then(() => approvals++)
-            .catch(() => undefined);
+            .catch(() => missedClicks++);
         }
         await page.waitForTimeout(1_000);
       }
       proven = listCalls().slice(before);
-      console.log(`attempt ${attempt}: ${proven.length} list calls, ${approvals} approvals`);
+      console.log(
+        `attempt ${attempt}: ${proven.length} list calls, ${approvals} approvals, ` +
+          `${missedClicks} missed approve clicks`
+      );
     }
     expect(
       proven.length,
