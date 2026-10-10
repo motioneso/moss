@@ -283,6 +283,11 @@ width/theme combinations retained 6.343 px disclosure clearance, contained layou
 phone hit targets and keyboard expansion. These fixtures do not exercise real
 capture, permission changes, account data or external financial writes.
 
+The first registry check correctly rejected changing the already published Finance
+0.6.8 artifact. The repaired UI/metadata now declares a new 0.6.9 patch version,
+absent from the current release assets; the immutable-artifact rule is preserved.
+This version correction changes no capability, approval policy or money limit.
+
 Native production code is unchanged. Local Linux checks do not replace the recorded
 macOS, real-data live-path or capture/accessibility gates. No release or merge
 acceptance is implied.
