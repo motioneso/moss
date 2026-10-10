@@ -266,6 +266,66 @@ describe("sports evidence composition", () => {
     expect(evidence.games.map((g) => g.id)).toEqual(["tonight"]);
   });
 
+  describe("morning briefing", () => {
+    const MORNING = new Date("2026-07-01T07:00:00.000Z");
+    const gameIdsAt = (now: Date, games: GameSummary[]): string[] =>
+      composeSportsBriefingEvidence({
+        follows: [
+          {
+            id: "f1",
+            competitionKey: "nfl",
+            teamKey: "dal",
+            sourceTeamId: "6",
+            createdAt: "2026-06-01T00:00:00.000Z"
+          }
+        ],
+        teamsByComp: new Map([
+          [
+            "nfl",
+            [
+              {
+                teamKey: "dal",
+                competitionKey: "nfl",
+                name: "Dallas Cowboys",
+                shortName: "DAL",
+                crestUrl: null,
+                sourceTeamId: "6",
+                abbreviation: "DAL"
+              }
+            ]
+          ]
+        ]),
+        scoreboardByComp: new Map([["nfl", games]]),
+        headlinesByComp: new Map(),
+        now,
+        timeZone: "UTC",
+        degraded: false,
+        capturedAt: now.toISOString()
+      }).evidence.games.map((g) => g.id);
+    const lastNight = game({
+      id: "last-night",
+      startsAt: "2026-06-30T22:00:00.000Z",
+      state: "final",
+      statusDetail: "Final"
+    });
+
+    it("reports tonight's game over last night's nearer final", () => {
+      const tonight = game({ id: "tonight", startsAt: "2026-07-01T19:00:00.000Z" });
+      expect(gameIdsAt(MORNING, [lastNight, tonight])).toEqual(["tonight"]);
+    });
+
+    it("keeps a game later today even when it is over 12 hours away", () => {
+      const late = game({ id: "late", startsAt: "2026-07-01T22:30:00.000Z" });
+      expect(gameIdsAt(MORNING, [lastNight, late])).toEqual(["late"]);
+    });
+
+    it("still reports a live game over a later game today", () => {
+      const live = game({ id: "live", startsAt: "2026-07-01T06:00:00.000Z", state: "live" });
+      const tonight = game({ id: "tonight", startsAt: "2026-07-01T19:00:00.000Z" });
+      expect(gameIdsAt(MORNING, [tonight, live])).toEqual(["live"]);
+    });
+  });
+
   it("caps games at 8 and stories at 6 total", () => {
     const boards = new Map([["nfl", Array.from({ length: 12 }, (_, i) => game({ id: `g${i}` }))]]);
     const { evidence } = composeSportsBriefingEvidence({

@@ -16,6 +16,7 @@ import {
   filterTeamHeadlines,
   currentTeamGame,
   matchupLine,
+  sideFor,
   scoreLine,
   teamFact,
   toTeamStories
@@ -58,6 +59,23 @@ export interface SportsEvidenceInput {
   readonly degraded: boolean;
   readonly capturedAt: string;
   readonly refFor?: StoryRefFor;
+}
+
+// A live game wins, then the earliest game still to play today, so a morning briefing reports
+// tonight's game rather than last night's nearer final. Otherwise the nearest game applies.
+function briefingTeamGame(
+  board: readonly GameSummary[],
+  target: Parameters<typeof sideFor>[1],
+  now: Date,
+  timeZone: string
+): GameSummary | undefined {
+  const mine = board.filter((g) => sideFor(g, target) !== undefined);
+  const live = mine.find((g) => g.state === "live");
+  if (live) return live;
+  const today = mine
+    .filter((g) => deriveGamePhase(g, now, timeZone) === "tonight")
+    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+  return today[0] ?? currentTeamGame(board, target, now);
 }
 
 function toEvidenceGame(
@@ -198,7 +216,7 @@ export function composeSportsBriefingEvidence(input: SportsEvidenceInput): {
         continue;
       }
       const board = input.scoreboardByComp.get(follow.competitionKey) ?? [];
-      const game = currentTeamGame(board, target, input.now);
+      const game = briefingTeamGame(board, target, input.now, input.timeZone);
       if (game) {
         pushGame(game);
         facts.push({ competitionKey: follow.competitionKey, text: teamFact(game, target) });
