@@ -1,5 +1,6 @@
 // #3309: decides the code-written reply for a recognised reminder request and, when it is
 // accepted, saves the reminder and its delivery job in the same transaction as the turn.
+// #3310: list and cancel run here too, so a stopped turn rolls a cancel back.
 
 import { randomUUID } from "node:crypto";
 
@@ -8,13 +9,17 @@ import type { PgBoss } from "pg-boss";
 import type { DataContextDb } from "@moss/db";
 import type { ChatReminderOriginV1 } from "@moss/shared";
 
+import { cancelReminder, listReminders } from "./cancel.js";
 import { enqueueReminderDelivery } from "./deliver.js";
 import type { ReminderUnsupportedReason } from "./recognizer.js";
 import type { ReminderRepository } from "./repository.js";
 import {
   REMINDER_CAPACITY_REPLY,
   REMINDER_MAIN_ONLY_REPLY,
+  REMINDER_MANAGE_MAIN_ONLY_REPLY,
   REMINDER_OPEN_LIMIT,
+  reminderCancelReply,
+  reminderListReply,
   reminderRefusedReply,
   reminderSavedReply
 } from "./wording.js";
@@ -23,7 +28,11 @@ import {
 export type ReminderTurnPlan =
   | { readonly kind: "request"; readonly delaySeconds: number; readonly text: string }
   | { readonly kind: "unsupported"; readonly reason: ReminderUnsupportedReason }
-  | { readonly kind: "main_only" };
+  | { readonly kind: "list" }
+  | { readonly kind: "cancel"; readonly target: string | null }
+
+  /** A save, list or cancel refused before it reaches storage. `manage` marks list or cancel. */
+  | { readonly kind: "main_only"; readonly manage?: boolean };
 
 export interface ReminderTurnDecision {
   readonly reply: string;
@@ -46,7 +55,30 @@ export async function decideReminderTurn(
 ): Promise<ReminderTurnDecision> {
   if (plan.kind === "unsupported") return refused(reminderRefusedReply(plan.reason));
   if (plan.kind === "main_only" || !thread.is_main || thread.incognito) {
-    return refused(REMINDER_MAIN_ONLY_REPLY);
+    const manage =
+      plan.kind === "list" || plan.kind === "cancel" || (plan.kind === "main_only" && plan.manage);
+    return refused(manage ? REMINDER_MANAGE_MAIN_ONLY_REPLY : REMINDER_MAIN_ONLY_REPLY);
+  }
+
+  if (plan.kind === "list") {
+    const list = await listReminders(scopedDb, deps.reminders);
+    return {
+      reply: reminderListReply(list),
+      origin: { version: 1, kind: "reminder", event: "listed", reminderId: null }
+    };
+  }
+
+  if (plan.kind === "cancel") {
+    const result = await cancelReminder(scopedDb, deps.reminders, plan.target);
+    return {
+      reply: reminderCancelReply(result),
+      origin: {
+        version: 1,
+        kind: "reminder",
+        event: result.kind === "cancelled" ? "cancelled" : "cancel_refused",
+        reminderId: "reminder" in result ? result.reminder.id : null
+      }
+    };
   }
 
   const boss = deps.boss;

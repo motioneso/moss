@@ -43,6 +43,7 @@ export type ReminderDeliveryOutcome =
   | "delivered"
   | "missing"
   | "already_delivered"
+  | "cancelled"
   | "stale_version"
   | "not_main"
   | "failed";
@@ -74,11 +75,7 @@ export async function deliverDueReminder(
 ): Promise<ReminderDeliveryOutcome> {
   const reminder = await deps.reminders.lockForDelivery(scopedDb, payload.resourceId);
 
-  // The worker can lock only queued rows, so a delivered row reads back unlocked.
-  if (!reminder) {
-    const current = await deps.reminders.readState(scopedDb, payload.resourceId);
-    return current?.ownerUserId === payload.actorUserId ? "already_delivered" : "missing";
-  }
+  if (!reminder) return unlockedOutcome(scopedDb, payload, deps);
   if (reminder.ownerUserId !== payload.actorUserId) return "missing";
   if (reminder.state !== "queued") return "already_delivered";
   if (reminder.version !== payload.version) return "stale_version";
@@ -109,6 +106,20 @@ export async function deliverDueReminder(
 }
 
 /**
+ * The worker can lock only queued rows, so a delivered or cancelled row reads back unlocked.
+ * A cancelled reminder ends the job with nothing posted.
+ */
+async function unlockedOutcome(
+  scopedDb: DataContextDb,
+  payload: DeliverReminderJobPayload,
+  deps: ReminderDeliveryDeps
+): Promise<ReminderDeliveryOutcome> {
+  const current = await deps.reminders.readState(scopedDb, payload.resourceId);
+  if (current?.ownerUserId !== payload.actorUserId) return "missing";
+  return current.state === "cancelled" ? "cancelled" : "already_delivered";
+}
+
+/**
  * Runs one delivery attempt. Earlier attempts throw so pg-boss retries them. The last attempt
  * undoes any partial delivery and marks the reminder failed, so it never holds a slot forever.
  * Missing retry metadata counts as the last attempt.
@@ -134,7 +145,8 @@ export async function runReminderDeliveryJob(
   } catch {
     await sql`rollback to savepoint reminder_delivery`.execute(scopedDb.db);
     const reminder = await deps.reminders.lockForDelivery(scopedDb, job.data.resourceId);
-    if (!reminder || reminder.ownerUserId !== job.data.actorUserId) return "missing";
+    if (!reminder) return unlockedOutcome(scopedDb, job.data, deps);
+    if (reminder.ownerUserId !== job.data.actorUserId) return "missing";
     await deps.reminders.markFailed(scopedDb, reminder.id);
     return "failed";
   }

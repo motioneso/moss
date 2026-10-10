@@ -4,6 +4,7 @@ import type {
   ChatMessageDto,
   ChatSelectedToolMetadataDto,
   ChatThreadDto,
+  ChatReminderOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   FreshnessKind,
@@ -152,13 +153,22 @@ export function readOrigin(value: unknown): ChatTurnOriginV1 | undefined {
   };
 }
 
+const REMINDER_ORIGIN_EVENTS: ReadonlySet<string> = new Set<ChatReminderOriginV1["event"]>([
+  "saved",
+  "refused",
+  "delivered",
+  "listed",
+  "cancelled",
+  "cancel_refused"
+]);
+
 function readReminderOrigin(record: Record<string, unknown>): ChatTurnOriginV1 | undefined {
   const event = record.event;
-  if (event !== "saved" && event !== "refused" && event !== "delivered") return undefined;
+  if (typeof event !== "string" || !REMINDER_ORIGIN_EVENTS.has(event)) return undefined;
   return {
     version: 1,
     kind: "reminder",
-    event,
+    event: event as ChatReminderOriginV1["event"],
     reminderId: typeof record.reminderId === "string" ? record.reminderId : null,
     ...(typeof record.late === "boolean" ? { late: record.late } : {})
   };

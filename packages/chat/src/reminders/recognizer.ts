@@ -88,12 +88,12 @@ const CLOCK_OR_RECURRENCE =
 
 export function recognizeRelativeReminder(raw: string): ReminderRecognition {
   if (raw.length > MAX_REQUEST_LENGTH) {
-    return TRIGGER.test(normalize(raw.slice(0, 120)))
+    return TRIGGER.test(normalizeReminderRequest(raw.slice(0, 120)))
       ? { kind: "unsupported", reason: "text_length" }
       : { kind: "none" };
   }
 
-  const request = normalize(raw);
+  const request = normalizeReminderRequest(raw);
   if (!TRIGGER.test(request)) return { kind: "none" };
 
   for (const [index, form] of FORMS.entries()) {
@@ -155,7 +155,8 @@ function buildRequest(
   return { kind: "request", delaySeconds, text };
 }
 
-function normalize(raw: string): string {
+/** Lowercases, collapses whitespace, and strips polite filler and end punctuation. */
+export function normalizeReminderRequest(raw: string): string {
   let text = raw.toLowerCase().replace(/\s+/g, " ").trim();
   text = text.replace(/[.!?]+$/, "").trim();
   text = text.replace(LEADING_FILLER, "");
