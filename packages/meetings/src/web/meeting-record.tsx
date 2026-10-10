@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, useMeetingChat } from "@moss/module-web-sdk";
-import { Button, EmptyState, Menu, Tabs } from "@moss/ui";
+import { buttonLinkClassName, Button, EmptyState, Menu, Tabs } from "@moss/ui";
 import type {
   MeetingRecord as MeetingRecordDto,
   MeetingCaptureBrowserStatus,
@@ -167,7 +167,12 @@ export function MeetingNotes({
           ) : null}
         </div>
         <div className="meetings-actions meetings-record-tools">
-          <Link to="/settings?section=modules&module=meetings">Settings</Link>
+          <Link
+            className={buttonLinkClassName("link")}
+            to="/settings?section=modules&module=meetings"
+          >
+            Settings
+          </Link>
           <Menu
             triggerIcon={<span aria-hidden="true">•••</span>}
             triggerLabel="Meeting actions"

@@ -66,6 +66,8 @@ describe("Meetings screen", () => {
   it("opens on a minimal list with one New meeting action", () => {
     const html = render("/meetings");
     expect(html).toContain("New meeting");
+    expect(html).toContain('class="jds-btn jds-btn--link"');
+    expect(html).toContain('href="/settings?section=modules&amp;module=meetings"');
     expect(html).not.toContain("Meeting title (optional)");
     expect(html).not.toContain("Prepare this meeting");
     expect(html).not.toContain("Start meeting");

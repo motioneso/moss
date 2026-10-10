@@ -671,7 +671,9 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
       await act(async () => {
         if (close === "button") button("Cancel").click();
         else if (close === "escape")
-          document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+          document.activeElement!.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+          );
         else host.querySelector<HTMLElement>(".jds-dialog-scrim")!.click();
       });
       await settle();
@@ -702,6 +704,12 @@ describe("minimal Meetings settings (synthetic transport, not live Mac proof)", 
     await settle();
     expect(calls.filter((call) => call.method === "DELETE")).toHaveLength(1);
     expect(button("Cancel").disabled).toBe(true);
+    await act(async () => {
+      const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!;
+      dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      host.querySelector<HTMLElement>(".jds-dialog-scrim")!.click();
+    });
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
     await act(async () => finish(json({ message: "Unavailable" }, 503)));
     await settle();
     expect(host.textContent).toContain("Couldn’t confirm Unlink");

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { Button, Dialog } from "@moss/ui";
 
 export function MeetingUnlinkDialog({
@@ -17,38 +17,11 @@ export function MeetingUnlinkDialog({
   readonly onConfirm: () => void;
 }) {
   const cancel = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement;
-    cancel.current?.focus();
-    return () => {
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
-    };
-  }, []);
-  useEffect(() => {
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !pending) {
-        event.preventDefault();
-        onClose();
-      }
-      if (event.key !== "Tab") return;
-      const buttons = cancel.current
-        ?.closest('[role="dialog"]')
-        ?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
-      const first = buttons?.[0],
-        last = buttons?.[buttons.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    document.addEventListener("keydown", keydown);
-    return () => document.removeEventListener("keydown", keydown);
-  }, [onClose, pending]);
   return (
     <Dialog
+      initialFocusRef={cancel}
+      dismissOnEscape={!pending}
+      dismissOnBackdrop={!pending}
       title={<span id="meeting-unlink-title">Unlink {name}?</span>}
       aria-labelledby="meeting-unlink-title"
       onClose={() => {
