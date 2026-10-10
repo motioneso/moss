@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -68,18 +68,20 @@ afterEach(() => {
   container.remove();
   vi.unstubAllGlobals();
 });
-async function render() {
+async function render(taskId: string | null = task.id) {
   await act(async () =>
     root.render(
-      <QueryClientProvider client={client}>
-        <TaskDetailsDialog
-          open
-          taskId={task.id}
-          currentUserLabel="Owner"
-          lists={[]}
-          onClose={() => undefined}
-        />
-      </QueryClientProvider>
+      <StrictMode>
+        <QueryClientProvider client={client}>
+          <TaskDetailsDialog
+            open
+            taskId={taskId}
+            currentUserLabel="Owner"
+            lists={[]}
+            onClose={() => undefined}
+          />
+        </QueryClientProvider>
+      </StrictMode>
     )
   );
 }
@@ -119,6 +121,55 @@ function enter(field: HTMLElement) {
   );
 }
 describe("task details truthful recovery", () => {
+  it("focuses the title after a delayed read when loading focus is untouched", async () => {
+    let resolveTask!: (value: { task: TaskDto }) => void;
+    api.getTask.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTask = resolve;
+      })
+    );
+    await render();
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(document.activeElement).toBe(dialog);
+    await act(async () => resolveTask({ task }));
+    await eventually(() =>
+      expect(document.activeElement).toBe(container.querySelector('[aria-label="Task title"]'))
+    );
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Task title"]')?.value).toBe(
+      task.title
+    );
+  });
+  it("does not steal focus chosen during loading or overwrite later title edits", async () => {
+    let resolveTask!: (value: { task: TaskDto }) => void;
+    api.getTask.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTask = resolve;
+      })
+    );
+    await render();
+    const cancel = button("Cancel");
+    cancel.focus();
+    await act(async () => resolveTask({ task }));
+    await eventually(() => expect(button("Save changes").disabled).toBe(false));
+    expect(document.activeElement).toBe(cancel);
+    type('[aria-label="Task title"]', "My unsaved title");
+    const notes = container.querySelector<HTMLTextAreaElement>("#task-notes-input")!;
+    notes.focus();
+    await act(async () => {
+      client.setQueryData(queryKeys.tasks.detail(task.id), {
+        task: { ...task, title: "Refreshed server title" }
+      });
+    });
+    expect(document.activeElement).toBe(notes);
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Task title"]')?.value).toBe(
+      "My unsaved title"
+    );
+  });
+  it.each(["new", "cached"])("focuses the immediately available %s task title", async (kind) => {
+    if (kind === "cached") client.setQueryData(queryKeys.tasks.detail(task.id), { task });
+    await render(kind === "new" ? null : task.id);
+    expect(document.activeElement).toBe(container.querySelector('[aria-label="Task title"]'));
+  });
   it("announces the initial detail load without blank editable fields or false empty activity", async () => {
     api.getTask.mockReturnValue(new Promise(() => undefined));
     await render();
