@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { OutgoingHttpHeaders } from "node:http";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import { DataContextRunner, createDatabase, type DataContextDb, type MossDatabase } from "@moss/db";
@@ -61,7 +61,7 @@ describe("owner resolves differing saved quiet hours", () => {
 
   beforeAll(async () => {
     await resetEmptyFoundationDatabase();
-    appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 4 });
+    appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 6 });
     await setInstanceSetting("registration.requires_approval", { value: false });
     boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
     server = createApiServer({ appDb, boss, logger: false });
@@ -185,6 +185,24 @@ describe("owner resolves differing saved quiet hours", () => {
       expect(await alertsPolicy(user.id)).toBeNull();
     });
 
+    it("refuses a choice from an older version even when both schedules changed back", async () => {
+      const user = await conflictedOwner(PROFILE_ON, alertsRecord(true, "20:00", "08:00"));
+      const read = await getQuietHours(user.cookie);
+      await seed(user.id, { profile: { ...PROFILE_ON, start: "23:00" } });
+      await seed(user.id, { profile: PROFILE_ON });
+      const before = await rawRows(user.id);
+
+      const response = await resolve(user.cookie, {
+        choice: "profile",
+        quietHours: PROFILE_ON,
+        expectedVersion: read.version
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(await rawRows(user.id)).toEqual(before);
+      expect((await getQuietHours(user.cookie)).authority.status).toBe("conflict");
+    });
+
     it("refuses a malformed choice with 400 and changes nothing", async () => {
       const user = await conflictedOwner(PROFILE_ON, alertsRecord(true, "20:00", "08:00"));
       const read = await getQuietHours(user.cookie);
@@ -210,6 +228,22 @@ describe("owner resolves differing saved quiet hours", () => {
       const response = await resolve(user.cookie, {
         choice: "alerts",
         quietHours: ALERTS_EARLY,
+        expectedVersion: read.version
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(await rawRows(user.id)).toEqual(before);
+    });
+
+    it("refuses a choice when both saved schedules already agree", async () => {
+      const user = await conflictedOwner(PROFILE_ON, alertsRecord(true, "22:00", "07:00"));
+      const read = await getQuietHours(user.cookie);
+      expect(read.authority.status).toBe("carried");
+      const before = await rawRows(user.id);
+
+      const response = await resolve(user.cookie, {
+        choice: "profile",
+        quietHours: PROFILE_ON,
         expectedVersion: read.version
       });
 
@@ -275,18 +309,30 @@ describe("owner resolves differing saved quiet hours", () => {
       const user = await conflictedOwner(PROFILE_ON, alertsRecord(true, "20:00", "08:00"));
       const read = await getQuietHours(user.cookie);
 
-      const [first, second] = await Promise.all([
-        resolve(user.cookie, {
-          choice: "profile",
-          quietHours: PROFILE_ON,
-          expectedVersion: read.version
-        }),
-        resolve(user.cookie, {
-          choice: "alerts",
-          quietHours: ALERTS_EARLY,
-          expectedVersion: read.version
-        })
-      ]);
+      // Hold the owner's quiet-hours lock and Profile row so both choices are in flight together.
+      let racing!: Promise<Awaited<ReturnType<typeof resolve>>[]>;
+      await asUser(user.id, async (scopedDb) => {
+        await sql`select pg_advisory_xact_lock(hashtext('quiet-hours:' || app.current_actor_user_id()))`.execute(
+          scopedDb.db
+        );
+        await sql`select 1 from app.preferences where key = ${PROFILE_KEY} for update`.execute(
+          scopedDb.db
+        );
+        racing = Promise.all([
+          resolve(user.cookie, {
+            choice: "profile",
+            quietHours: PROFILE_ON,
+            expectedVersion: read.version
+          }),
+          resolve(user.cookie, {
+            choice: "alerts",
+            quietHours: ALERTS_EARLY,
+            expectedVersion: read.version
+          })
+        ]);
+        await waitForLockWaiters(2);
+      });
+      const [first, second] = await racing;
 
       expect([first.statusCode, second.statusCode].sort()).toEqual([200, 409]);
       const winner = first.statusCode === 200 ? first : second;
@@ -419,6 +465,19 @@ describe("owner resolves differing saved quiet hours", () => {
 
   function alertsPolicy(actorUserId: string) {
     return asUser(actorUserId, (scopedDb) => resolveAlertsQuietPolicy(scopedDb));
+  }
+
+  async function waitForLockWaiters(count: number): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const { rows } = await sql<{ waiting: number }>`
+        select count(*)::int as waiting from pg_stat_activity
+        where datname = current_database() and wait_event_type = 'Lock'
+      `.execute(appDb);
+      if ((rows[0]?.waiting ?? 0) >= count) return;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 25));
+    }
+    throw new Error(`fewer than ${count} requests reached the lock within 10s`);
   }
 
   function asUser<T>(actorUserId: string, work: (scopedDb: DataContextDb) => Promise<T>) {
