@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 /**
  * Guard 1: every literal `jds-*` class used in TSX must be defined by a CSS file in the pinned
@@ -95,6 +96,7 @@ export interface CheckResult {
   readonly definedClasses: ReadonlySet<string>;
   readonly undefinedClassViolations: ClassViolation[];
   readonly unlistedInterpolationViolations: InterpolationViolation[];
+  readonly moduleLocalClassViolations: ModuleLocalClassViolation[];
 }
 
 export async function collectDefinedClasses(root: string): Promise<Set<string>> {
@@ -176,7 +178,411 @@ export async function checkUiClasses(root: string): Promise<CheckResult> {
     }
   }
 
-  return { definedClasses, undefinedClassViolations, unlistedInterpolationViolations };
+  const moduleLocalClassViolations = await checkModuleLocalClasses(root);
+  return {
+    definedClasses,
+    undefinedClassViolations,
+    unlistedInterpolationViolations,
+    moduleLocalClassViolations
+  };
+}
+
+/** Audited first-party modules only; held replacement modules are not enrolled here. */
+export const MODULE_LOCAL_ROOTS = [
+  "packages/news/src",
+  "packages/sports/src",
+  "packages/workshop/src",
+  "packages/backtrack/src",
+  "packages/meetings/src",
+  "external-modules/finance/src"
+] as const;
+
+interface StructuralHook {
+  readonly path: string;
+  readonly className: string;
+  readonly reason: string;
+}
+interface DynamicClassValues {
+  readonly path: string;
+  readonly expression: string;
+  readonly values: readonly string[];
+  readonly reason: string;
+}
+interface LocalClassOptions {
+  readonly structuralHooks?: readonly StructuralHook[];
+  readonly dynamicValues?: readonly DynamicClassValues[];
+}
+export interface ModuleLocalClassViolation extends ClassViolation {
+  readonly kind: "undefined-class" | "unresolved-expression";
+}
+
+// Exceptions identify one intentional nonvisual hook, never a whole file or prefix.
+const STRUCTURAL_MODULE_HOOKS: readonly StructuralHook[] = [
+  {
+    path: "packages/news/src/web/today-widget.tsx",
+    className: "nw-twnote__eyebrow",
+    reason: "Today context-note UAT locator verifies heading content and shared Eyebrow weight."
+  },
+  {
+    path: "packages/sports/src/web/sports-news.tsx",
+    className: "sp-latest",
+    reason: "Sports page regression locator for the labeled Top stories section."
+  },
+  {
+    path: "packages/sports/src/web/sports-ticker.tsx",
+    className: "sp-tk__next--live",
+    reason: "Live-status regression locator distinguishes live and upcoming footer content."
+  },
+  {
+    path: "packages/sports/src/web/sports-ticker.tsx",
+    className: "sp-tk--league",
+    reason: "League-versus-team cardinality regression locator; no distinct visual skin."
+  },
+  {
+    path: "packages/sports/src/web/sports-page.tsx",
+    className: "sp-scorebar__clock",
+    reason: "Dedicated game-clock formatting regression locator; inherits its text role."
+  }
+];
+const DYNAMIC_MODULE_CLASSES: readonly DynamicClassValues[] = [
+  {
+    path: "packages/news/src/web/lead-art.tsx",
+    expression: "leadArtPalette(topic)",
+    values: ["climate", "world", "culture", "technology"],
+    reason: "LeadArtPalette's four categories; each resulting modifier must have a real selector."
+  },
+  {
+    path: "packages/sports/src/web/sports-parts.tsx",
+    expression: "props.size",
+    values: ["sm", "md", "lg"],
+    reason: "Crest's public size union; each resulting modifier must have a real selector."
+  },
+  {
+    path: "packages/sports/src/web/sports-parts.tsx",
+    expression: "result.toLowerCase()",
+    values: ["w", "d", "l"],
+    reason: "FormPip result union W/D/L maps to the three stable non-danger outcomes."
+  },
+  {
+    path: "packages/sports/src/web/sports-standings.tsx",
+    expression: "edge",
+    values: ["away", "home"],
+    reason: "KnockTeam edge union selects the two bracket positions."
+  },
+  {
+    path: "packages/sports/src/web/sports-around-ticker.tsx",
+    expression: "props.className",
+    values: ["sp-around__logo"],
+    reason: "Private Mark helper has exactly two local calls, both league-logo images."
+  },
+  {
+    path: "packages/meetings/src/web/meeting-record.tsx",
+    expression: 'buttonLinkClassName("link")',
+    values: ["jds-btn jds-btn--link"],
+    reason: "Canonical @moss/ui ButtonLink helper for a router link; public class guard owns jds."
+  },
+  {
+    path: "packages/meetings/src/web/meetings-page.tsx",
+    expression: 'buttonLinkClassName("link")',
+    values: ["jds-btn jds-btn--link"],
+    reason: "Canonical @moss/ui ButtonLink helper for a router link; public class guard owns jds."
+  }
+];
+
+function localCssClasses(contents: string): Set<string> {
+  // Only selector text counts. Comments and quoted strings cannot bless a hook.
+  const css = stripCssComments(contents).replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, "");
+  const result = new Set<string>();
+  for (const block of css.matchAll(/([^{}]+)\{/g)) {
+    if (block[1]!.trim().startsWith("@")) continue;
+    for (const match of block[1]!.matchAll(/\.([a-zA-Z_][a-zA-Z0-9_-]*)/g)) {
+      result.add(match[1]!);
+    }
+  }
+  return result;
+}
+
+function nearestScope(node: ts.Node): ts.Block | ts.SourceFile {
+  let current: ts.Node = node;
+  while (!ts.isBlock(current) && !ts.isSourceFile(current)) current = current.parent;
+  return current;
+}
+function findLocalBinding(node: ts.Identifier): ts.VariableDeclaration | undefined {
+  let scope: ts.Node | undefined = nearestScope(node);
+  while (scope) {
+    if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
+      for (const statement of scope.statements) {
+        if (!ts.isVariableStatement(statement)) continue;
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name) && declaration.name.text === node.text) {
+            return declaration;
+          }
+        }
+      }
+    }
+    scope = scope.parent;
+  }
+  return undefined;
+}
+
+/** Static finite class values only; unknown expressions fail rather than silently disappear. */
+function moduleClassValues(
+  expression: ts.Expression,
+  source: ts.SourceFile,
+  path: string,
+  contracts: readonly DynamicClassValues[],
+  unknown: Set<ts.Node>,
+  visiting = new Set<ts.Node>()
+): string[] {
+  const contract = contracts.find(
+    (entry) => entry.path === path && entry.expression === expression.getText(source)
+  );
+  if (contract?.reason.trim() && contract.values.length) return [...contract.values];
+  const values = (node: ts.Expression) =>
+    moduleClassValues(node, source, path, contracts, unknown, visiting);
+  const product = (left: string[], right: string[], separator = "") => {
+    if (left.length * right.length > 256) {
+      unknown.add(expression);
+      return [];
+    }
+    return [...new Set(left.flatMap((a) => right.map((b) => `${a}${separator}${b}`)))];
+  };
+  if (visiting.has(expression)) {
+    unknown.add(expression);
+    return [];
+  }
+  if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
+    return [expression.text];
+  }
+  if (
+    expression.kind === ts.SyntaxKind.NullKeyword ||
+    expression.kind === ts.SyntaxKind.FalseKeyword ||
+    (ts.isIdentifier(expression) && expression.text === "undefined")
+  )
+    return [""];
+  if (
+    ts.isParenthesizedExpression(expression) ||
+    ts.isAsExpression(expression) ||
+    ts.isNonNullExpression(expression) ||
+    ts.isSatisfiesExpression(expression)
+  )
+    return values(expression.expression);
+  if (ts.isConditionalExpression(expression)) {
+    return [...new Set([...values(expression.whenTrue), ...values(expression.whenFalse)])];
+  }
+  if (ts.isBinaryExpression(expression)) {
+    if (expression.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      return product(values(expression.left), values(expression.right));
+    }
+    if (expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+      return ["", ...values(expression.right)];
+    }
+    if (
+      [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(
+        expression.operatorToken.kind
+      )
+    ) {
+      return [...new Set([...values(expression.left), ...values(expression.right)])];
+    }
+  }
+  if (ts.isTemplateExpression(expression)) {
+    let result = [expression.head.text];
+    for (const span of expression.templateSpans) {
+      result = product(result, values(span.expression)).map((value) => value + span.literal.text);
+    }
+    return result;
+  }
+  if (ts.isArrayLiteralExpression(expression)) {
+    let result = [""];
+    for (const element of expression.elements) {
+      if (ts.isSpreadElement(element)) {
+        unknown.add(element);
+        return [];
+      }
+      result = product(result, values(element), " ");
+    }
+    return result;
+  }
+  if (ts.isIdentifier(expression)) {
+    const declaration = findLocalBinding(expression);
+    if (declaration?.initializer) {
+      visiting.add(expression);
+      let result = values(declaration.initializer);
+      // Only immutable values and explicit array pushes are supported. Do not silently
+      // trust a valid initializer when later assignment or a mutating method changes it.
+      const scope = nearestScope(declaration);
+      const referencesBinding = (node: ts.Node): boolean =>
+        ts.isIdentifier(node) && findLocalBinding(node) === declaration;
+      const visit = (node: ts.Node) => {
+        if (node !== scope && ts.isFunctionLike(node)) return;
+        if (
+          ts.isBinaryExpression(node) &&
+          node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+          node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+          (referencesBinding(node.left) ||
+            (ts.isElementAccessExpression(node.left) && referencesBinding(node.left.expression)))
+        ) {
+          unknown.add(node);
+        }
+        if (
+          ts.isCallExpression(node) &&
+          ts.isPropertyAccessExpression(node.expression) &&
+          referencesBinding(node.expression.expression)
+        ) {
+          const method = node.expression.name.text;
+          if (method === "push" && ts.isArrayLiteralExpression(declaration.initializer!)) {
+            for (const argument of node.arguments) {
+              result = product(result, ["", ...values(argument)], " ");
+            }
+          } else if (method !== "filter" && method !== "join") {
+            unknown.add(node);
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(scope);
+      visiting.delete(expression);
+      return result;
+    }
+  }
+  if (ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression)) {
+    const method = expression.expression.name.text;
+    if (
+      method === "filter" &&
+      expression.arguments.length === 1 &&
+      expression.arguments[0]!.getText(source) === "Boolean"
+    ) {
+      return values(expression.expression.expression);
+    }
+    if (
+      method === "join" &&
+      expression.arguments.length === 1 &&
+      ts.isStringLiteral(expression.arguments[0]!) &&
+      expression.arguments[0]!.text === " "
+    ) {
+      return values(expression.expression.expression);
+    }
+  }
+  unknown.add(expression);
+  return [];
+}
+
+export async function checkModuleLocalClasses(
+  root: string,
+  options: LocalClassOptions = {}
+): Promise<ModuleLocalClassViolation[]> {
+  const shared = new Set<string>();
+  for (const directory of ["packages/ui/src/styles", "apps/web/src/styles"]) {
+    for await (const file of walk(join(root, directory))) {
+      if (extname(file) === ".css") {
+        for (const name of localCssClasses(await readFile(file, "utf8"))) shared.add(name);
+      }
+    }
+  }
+  try {
+    for (const name of localCssClasses(
+      await readFile(join(root, "apps/web/src/styles.css"), "utf8")
+    ))
+      shared.add(name);
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+  }
+  const violations: ModuleLocalClassViolation[] = [];
+  for (const moduleRoot of MODULE_LOCAL_ROOTS) {
+    const files: string[] = [];
+    const defined = new Set(shared);
+    for await (const file of walk(join(root, moduleRoot))) {
+      if (extname(file) === ".tsx") files.push(file);
+      if (extname(file) === ".css") {
+        for (const name of localCssClasses(await readFile(file, "utf8"))) defined.add(name);
+      }
+      // Finance ships a static stylesheet on its module contract rather than as a CSS asset.
+      if (normalizePath(relative(root, file)) === "external-modules/finance/src/web/styles.ts") {
+        const source = ts.createSourceFile(
+          file,
+          await readFile(file, "utf8"),
+          ts.ScriptTarget.Latest,
+          true
+        );
+        const visit = (node: ts.Node) => {
+          if (
+            ts.isVariableDeclaration(node) &&
+            ts.isIdentifier(node.name) &&
+            node.name.text === "MODULE_STYLES" &&
+            node.initializer &&
+            ts.isNoSubstitutionTemplateLiteral(node.initializer)
+          ) {
+            for (const name of localCssClasses(node.initializer.text)) defined.add(name);
+          }
+          ts.forEachChild(node, visit);
+        };
+        visit(source);
+      }
+    }
+    for (const file of files) {
+      const path = normalizePath(relative(root, file));
+      const contents = await readFile(file, "utf8");
+      const source = ts.createSourceFile(
+        file,
+        contents,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX
+      );
+      const unknown = new Set<ts.Node>();
+      const reported = new Set<string>();
+      const report = (
+        node: ts.Node,
+        className: string,
+        kind: ModuleLocalClassViolation["kind"]
+      ) => {
+        const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+        const key = `${line}:${className}:${kind}`;
+        if (reported.has(key)) return;
+        reported.add(key);
+        violations.push({
+          path,
+          line,
+          className,
+          kind,
+          text: contents.split(/\r?\n/)[line - 1]?.trim() ?? ""
+        });
+      };
+      const visit = (node: ts.Node) => {
+        if (
+          ts.isJsxAttribute(node) &&
+          node.name.getText(source) === "className" &&
+          node.initializer
+        ) {
+          const expression = ts.isJsxExpression(node.initializer)
+            ? node.initializer.expression
+            : node.initializer;
+          if (expression) {
+            const values = moduleClassValues(
+              expression,
+              source,
+              path,
+              options.dynamicValues ?? DYNAMIC_MODULE_CLASSES,
+              unknown
+            );
+            for (const name of new Set(
+              values.flatMap((value) => value.split(/\s+/)).filter(Boolean)
+            )) {
+              if (name.startsWith("jds-") || defined.has(name)) continue; // Existing public jds guard owns that namespace.
+              const excepted = (options.structuralHooks ?? STRUCTURAL_MODULE_HOOKS).some(
+                (entry) => entry.path === path && entry.className === name && entry.reason.trim()
+              );
+              if (!excepted) report(node, name, "undefined-class");
+            }
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+      for (const node of unknown) report(node, node.getText(source), "unresolved-expression");
+    }
+  }
+  return violations;
 }
 
 async function* walk(directory: string): AsyncGenerator<string> {
@@ -231,10 +637,14 @@ async function selfTest(): Promise<void> {
 async function main(): Promise<void> {
   await selfTest();
 
-  const { undefinedClassViolations, unlistedInterpolationViolations } =
+  const { undefinedClassViolations, unlistedInterpolationViolations, moduleLocalClassViolations } =
     await checkUiClasses(rootDirectory);
 
-  if (undefinedClassViolations.length === 0 && unlistedInterpolationViolations.length === 0) {
+  if (
+    undefinedClassViolations.length === 0 &&
+    unlistedInterpolationViolations.length === 0 &&
+    moduleLocalClassViolations.length === 0
+  ) {
     console.log("No UI class violations found.");
     return;
   }
@@ -263,6 +673,17 @@ async function main(): Promise<void> {
     );
   }
 
+  if (moduleLocalClassViolations.length > 0) {
+    console.error("Module-local class contracts (audited modules; own/shared CSS only):");
+    for (const violation of moduleLocalClassViolations) {
+      console.error(
+        `- ${violation.path}:${violation.line} ${violation.kind}: ${violation.className} — ${violation.text}`
+      );
+    }
+    console.error(
+      "Define or remove the hook, or document an exact intentional nonvisual hook/finite dynamic contract. Do not add broad file/prefix exemptions."
+    );
+  }
   process.exitCode = 1;
 }
 
