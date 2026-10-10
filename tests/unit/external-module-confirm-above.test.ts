@@ -65,10 +65,21 @@ function check(
   stored: Record<string, unknown> | Error,
   declaredDefault: number | null = null
 ) {
-  const demo = moneyModule(rule);
-  demo.manifest.preferences = [
-    { key: "freedomLimitDollars", label: "Limit", type: "integer", default: declaredDefault }
-  ];
+  const base = moneyModule(rule);
+  const demo = {
+    ...base,
+    manifest: {
+      ...base.manifest,
+      preferences: [
+        {
+          key: "freedomLimitDollars",
+          label: "Limit",
+          type: "integer" as const,
+          default: declaredDefault
+        }
+      ]
+    }
+  };
   const [manifest] = createExternalToolManifests([demo], invoke, undefined, async () => {
     if (stored instanceof Error) throw stored;
     return stored;
