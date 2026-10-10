@@ -5,11 +5,12 @@ import { moduleSettingsHref } from "../settings/module-settings-deep-link.js";
 export function ModuleSettingsButton(props: {
   readonly moduleId: string;
   readonly moduleName: string;
+  readonly modules?: readonly { readonly id: string; readonly settingsPath?: string }[];
   readonly className?: string;
 }) {
   return (
     <Link
-      to={moduleSettingsHref(props.moduleId)}
+      to={moduleSettingsHref(props.moduleId, props.modules)}
       className={`topbar-settings-button jds-iconbtn jds-iconbtn--sm ${props.className ?? ""}`.trim()}
       aria-label={`${props.moduleName} settings`}
       title={`${props.moduleName} settings`}

@@ -172,6 +172,20 @@ export interface ModuleFetchResponse {
   readonly bodyBase64: string;
 }
 
+/**
+ * Numeric confirmation rule (P3). The tool asks when
+ * `abs(input[inputKey] - (input[baseKey] ?? 0)) > preference * scale`, whatever the family tier.
+ * `preferenceKey` names one of the module's own integer preferences. A missing or non-numeric
+ * preference, a missing or non-numeric input, or a declared `baseKey` absent from the input
+ * all ask.
+ */
+export interface ExternalModuleConfirmAboveRule {
+  readonly inputKey: string;
+  readonly baseKey?: string;
+  readonly preferenceKey: string;
+  readonly scale: number;
+}
+
 export interface ExternalModuleConfirmWhenClause {
   readonly key: string;
   readonly equals: string | number | boolean;
@@ -208,6 +222,7 @@ export interface ExternalModuleAssistantToolDeclaration {
   readonly selfOperationGrant?: ModuleAssistantToolSelfOperationGrant;
   readonly confirmWhen?: readonly ExternalModuleConfirmWhenClause[];
   readonly confirmWhenKeys?: readonly string[];
+  readonly confirmAbove?: ExternalModuleConfirmAboveRule;
   readonly inputSchema?: JsonSchema;
   readonly outputSchema?: JsonSchema;
   /** Opt-in to the chat classifier menu; absent means ineligible. See ExternalModuleClassifierDeclaration. */
@@ -422,6 +437,13 @@ export interface JsonMossModuleManifest {
    * instead. Optional: a module that declares none contributes no briefing section.
    */
   readonly briefing?: ExternalModuleBriefingDeclaration;
+  /**
+   * Module-relative path of this module's own settings page (#3184), e.g. "/settings". When set,
+   * the top-bar gear opens `/m/<moduleId><settingsPath>` and the host Settings page lists the
+   * module as a link there instead of rendering its switches and credential slots. Validated
+   * in packages/module-registry/src/external/validate-declarations.ts.
+   */
+  readonly settingsPath?: string;
   /** Entries for Moss's app map (#3168). Optional; validated in validate-declarations.ts. */
   readonly appMap?: ExternalModuleAppMapDeclaration;
   readonly assistantOnboarding?: ModuleAssistantOnboardingManifest;

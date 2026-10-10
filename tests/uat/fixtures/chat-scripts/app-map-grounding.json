@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["List every settings screen I can use"],
+      "calls": [],
+      "reply": "Scripted reply for the settings question."
+    }
+  ]
+}
