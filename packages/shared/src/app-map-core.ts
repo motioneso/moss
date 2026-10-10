@@ -65,7 +65,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     id: "notifications",
     label: "Notifications",
     description:
-      "Review notifications produced by enabled modules. The account menu button at the bottom of the rail shows the person's name and avatar only (no email line, unless no name is set) and the unread count as a badge when the menu is closed, and screen readers hear the number as part of the button's spoken label. The page header shows the title and the date under it (for example SUN · OCT 4) and has no settings cog, because this page has no settings of its own.",
+      "Review notifications produced by enabled modules. The account menu button at the bottom of the rail shows the person's name and avatar only (no email line, unless no name is set) and the unread count as a badge when the menu is closed, and screen readers hear the number as part of the button's spoken label. The page header shows the title and the date under it (for example SUN · OCT 4) and has no settings cog, because this page has no settings of its own. How much Moss pushes to the phone is set in Settings under Notifications, as one saved choice per person: Quiet pushes only urgent items, Balanced (the default) pushes urgent and normal items but not low ones, and Proactive pushes everything. The same choice decides whether the summary sent when quiet hours end is sent for a deferred item. The list here and the daily briefing always show every notification whatever the level.",
     path: "/notifications",
     scope: "user"
   },

@@ -65,6 +65,8 @@ const EXPECTED: readonly string[] = [
   "settings PUT /api/me/notification-preferences/:moduleId write user_authored",
   "settings GET /api/me/notification-digest-preference read user_authored",
   "settings PUT /api/me/notification-digest-preference blocked external_effect",
+  "settings GET /api/me/notification-sensitivity read user_authored",
+  "settings PUT /api/me/notification-sensitivity blocked external_effect",
   "settings GET /api/me/weather-location read user_authored",
   "settings PUT /api/me/weather-location write user_authored",
   "settings GET /api/me/weather-location/search read outbound",
