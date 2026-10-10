@@ -84,7 +84,7 @@ describe("SearchResults league grouping (#2278)", () => {
     expect(html).toContain("Follow all of Premier League");
     // ...but NFL only appears because Dallas Cowboys matched, so it gets a plain heading instead.
     expect(html).not.toContain("Follow all of NFL");
-    expect(html).toMatch(/class="jds-eyebrow sp-search__group-heading">NFL</);
+    expect(html).toMatch(/class="jds-eyebrow jds-eyebrow--strong sp-search__group-heading">NFL</);
     // Each league's teams sit directly under its own group, not mixed into one shared grid.
     const eplGroup = html.slice(html.indexOf("Premier League"), html.indexOf(">NFL<"));
     expect(eplGroup).toContain("ARS");
@@ -140,7 +140,10 @@ describe("SearchResults league grouping (#2278)", () => {
     expect(groups).toHaveLength(3);
     for (const group of groups) {
       expect(group.match(/sp-search__group-heading/g)).toHaveLength(1);
-      expect(group.match(/class="sp-team[ "]/g)).toHaveLength(1);
+      const teams = group.match(/<button\b[^>]*aria-pressed="false"[^>]*>/g) ?? [];
+      expect(teams).toHaveLength(1);
+      expect(teams[0]).toContain("jds-btn--chip");
+      expect(teams[0]).toContain('aria-label="Follow ');
     }
     expect(groups[0]).toContain("Follow NC State");
     expect(groups[2]).toContain("Follow Dallas Cowboys");

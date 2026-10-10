@@ -1,3 +1,4 @@
+import { Button, DisclosureToggle, Eyebrow, Field, IconButton, SectionHead } from "@moss/ui";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -299,9 +300,8 @@ function FollowedSummary(props: {
               crestUrl={wholeLeague ? null : team?.crestUrl}
             />
             <span className="sp-chip__lbl">{label}</span>
-            <button
-              type="button"
-              className="sp-chip__remove"
+            <IconButton
+              size="sm"
               aria-label={`Unfollow ${label}`}
               disabled={
                 pendingDirectionFor(
@@ -322,7 +322,7 @@ function FollowedSummary(props: {
               }
             >
               ×
-            </button>
+            </IconButton>
             <ActionError
               actionState={props.actionState}
               competitionKey={follow.competitionKey}
@@ -360,9 +360,9 @@ export function SearchResults(props: {
     return (
       <Note>
         Couldn&rsquo;t search right now.{" "}
-        <button type="button" className="sp-managebtn" onClick={props.onRetry}>
+        <Button variant="secondary" size="sm" onClick={props.onRetry}>
           Retry
-        </button>
+        </Button>
       </Note>
     );
   }
@@ -414,9 +414,10 @@ export function SearchResults(props: {
     const state = followControlState("team", team.name, active, pendingHere);
     return (
       <span className="sp-action-target" key={`${team.competitionKey}:${team.teamKey}`}>
-        <button
-          type="button"
-          className={`sp-team${active ? " is-active" : ""}`}
+        <Button
+          variant="chip"
+          active={active}
+          block
           aria-pressed={active}
           aria-label={state.ariaLabel}
           disabled={pendingHere !== null}
@@ -435,7 +436,7 @@ export function SearchResults(props: {
             <span className="sp-team__name">{team.shortName || team.name}</span>
           </span>
           {state.visible ? <span className="sp-team__state">{state.visible}</span> : null}
-        </button>
+        </Button>
         <ActionError
           actionState={props.actionState}
           competitionKey={team.competitionKey}
@@ -465,9 +466,9 @@ export function SearchResults(props: {
           <div className="sp-search__group" key={`g-${competition.competitionKey}`}>
             {matched ? (
               <span className="sp-action-target sp-action-target--wide">
-                <button
-                  type="button"
-                  className={`sp-whole${wholeActive ? " is-active" : ""}`}
+                <Button
+                  variant="chip"
+                  active={wholeActive}
                   aria-pressed={wholeActive}
                   aria-label={state.ariaLabel}
                   disabled={pendingHere !== null}
@@ -475,8 +476,8 @@ export function SearchResults(props: {
                     props.onToggle(competition.competitionKey, null, competition.label, "picker")
                   }
                 >
-                  <span className="sp-whole__lbl">{state.visible}</span>
-                </button>
+                  <span>{state.visible}</span>
+                </Button>
                 <ActionError
                   actionState={props.actionState}
                   competitionKey={competition.competitionKey}
@@ -485,7 +486,9 @@ export function SearchResults(props: {
                 />
               </span>
             ) : (
-              <div className="jds-eyebrow sp-search__group-heading">{competition.label}</div>
+              <Eyebrow as="div" className="sp-search__group-heading">
+                {competition.label}
+              </Eyebrow>
             )}
             {teams.length > 0 ? <div className="sp-teamgrid">{teams.map(renderTeam)}</div> : null}
           </div>
@@ -493,9 +496,9 @@ export function SearchResults(props: {
       })}
       {unrecognizedLeagueKeys.map((competitionKey) => (
         <div className="sp-search__group" key={`g-${competitionKey}`}>
-          <div className="jds-eyebrow sp-search__group-heading">
+          <Eyebrow as="div" className="sp-search__group-heading">
             {`Unrecognized league (${competitionKey})`}
-          </div>
+          </Eyebrow>
           <div className="sp-teamgrid">
             {(teamsByLeague.get(competitionKey) ?? []).map(renderTeam)}
           </div>
@@ -581,10 +584,9 @@ export function BrowseGroups(props: {
             return (
               <div key={competition.competitionKey}>
                 <div className="sp-browse__row">
-                  <button
-                    type="button"
+                  <DisclosureToggle
                     className="sp-browse__league"
-                    aria-expanded={expanded}
+                    expanded={expanded}
                     onClick={() => props.onExpand(expanded ? null : competition.competitionKey)}
                   >
                     {expanded ? (
@@ -593,11 +595,11 @@ export function BrowseGroups(props: {
                       <ChevronRight size={16} aria-hidden="true" />
                     )}
                     <span>{competition.label}</span>
-                  </button>
+                  </DisclosureToggle>
                   <span className="sp-action-target">
-                    <button
-                      type="button"
-                      className={`sp-whole${wholeActive ? " is-active" : ""}`}
+                    <Button
+                      variant="chip"
+                      active={wholeActive}
                       aria-pressed={wholeActive}
                       aria-label={wholeState.ariaLabel}
                       disabled={wholePendingHere !== null}
@@ -610,7 +612,7 @@ export function BrowseGroups(props: {
                         )
                       }
                     >
-                      <span className="sp-whole__lbl">
+                      <span>
                         {/* The league name already heads the row, so the button reads
                             "Follow all" and every row's button lines up at one width
                             (Ben, 2026-09-03). The aria-label keeps the full name. */}
@@ -620,7 +622,7 @@ export function BrowseGroups(props: {
                             ? "Following all"
                             : "Follow all"}
                       </span>
-                    </button>
+                    </Button>
                     <ActionError
                       actionState={props.actionState}
                       competitionKey={competition.competitionKey}
@@ -635,13 +637,9 @@ export function BrowseGroups(props: {
                   ) : props.expandedDegraded ? (
                     <Note>
                       Couldn&rsquo;t load this league&rsquo;s clubs.{" "}
-                      <button
-                        type="button"
-                        className="sp-managebtn"
-                        onClick={props.onRetryExpanded}
-                      >
+                      <Button variant="secondary" size="sm" onClick={props.onRetryExpanded}>
                         Retry
-                      </button>
+                      </Button>
                     </Note>
                   ) : (
                     <div className="sp-teamgrid">
@@ -665,9 +663,10 @@ export function BrowseGroups(props: {
                             className="sp-action-target"
                             key={`${team.competitionKey}:${team.teamKey}`}
                           >
-                            <button
-                              type="button"
-                              className={`sp-team${active ? " is-active" : ""}`}
+                            <Button
+                              variant="chip"
+                              active={active}
+                              block
                               aria-pressed={active}
                               aria-label={state.ariaLabel}
                               disabled={pendingHere !== null}
@@ -692,7 +691,7 @@ export function BrowseGroups(props: {
                               {state.visible ? (
                                 <span className="sp-team__state">{state.visible}</span>
                               ) : null}
-                            </button>
+                            </Button>
                             <ActionError
                               actionState={props.actionState}
                               competitionKey={team.competitionKey}
@@ -834,10 +833,8 @@ export default function SportsSettings() {
         desc="Choose what you follow, where your sports news comes from, and which standings you can browse."
       />
       <div className="sp-follow__head">
-        <h2 className="jds-section-title">Following</h2>
-        <p className="jds-section-sub">
-          Follow competitions or teams to see them on your Sports page and in briefings.
-        </p>
+        <SectionHead title="Following" />
+        <Note>Follow competitions or teams to see them on your Sports page and in briefings.</Note>
       </div>
       <FollowedSummary
         follows={follows}
@@ -847,14 +844,16 @@ export default function SportsSettings() {
         actionState={actionState}
       />
       <div className="sp-search">
-        <input
-          type="search"
-          className="sp-search__input"
-          aria-label="Find a team or league"
-          placeholder="Find a team or league…"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
+        <Field>
+          <input
+            type="search"
+            className="jds-input"
+            aria-label="Find a team or league"
+            placeholder="Find a team or league…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </Field>
       </div>
       {searchEnabled ? (
         <SearchResults
@@ -872,11 +871,10 @@ export default function SportsSettings() {
         <Note>Search above to find teams or leagues to follow.</Note>
       ) : (
         <>
-          <button
-            type="button"
+          <DisclosureToggle
             className="sp-browse-toggle"
-            aria-expanded={browseOpen}
-            aria-controls="sp-browse-panel"
+            expanded={browseOpen}
+            controls="sp-browse-panel"
             onClick={() => setBrowseOpen((open) => !open)}
           >
             {browseOpen ? (
@@ -885,7 +883,7 @@ export default function SportsSettings() {
               <ChevronRight size={16} aria-hidden="true" />
             )}
             Browse leagues
-          </button>
+          </DisclosureToggle>
           {browseOpen ? (
             <div id="sp-browse-panel">
               <BrowseGroups

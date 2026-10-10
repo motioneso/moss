@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Group, Note, PaneHead, Row, Select, Switch } from "@moss/settings-ui";
@@ -61,7 +62,10 @@ export function draftAutoTierFromChecked(checked: boolean): AiActionPolicyTier {
   return checked ? "trusted_auto" : "ask_each_time";
 }
 
-async function requestJson<T>(path: string, init?: RequestInit & { body?: unknown }): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  init?: Omit<RequestInit, "body"> & { body?: unknown }
+): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("accept", "application/json");
   if (init?.body !== undefined) headers.set("content-type", "application/json");
@@ -75,8 +79,8 @@ async function requestJson<T>(path: string, init?: RequestInit & { body?: unknow
   return (await response.json()) as T;
 }
 
-function getSourceBehaviors() {
-  return requestJson<ListSourceBehaviorsResponse>("/api/me/source-behaviors");
+function getSourceBehaviors(signal: AbortSignal) {
+  return requestJson<ListSourceBehaviorsResponse>("/api/me/source-behaviors", { signal });
 }
 
 function putSourceBehavior(enabled: boolean) {
@@ -89,8 +93,8 @@ function putSourceBehavior(enabled: boolean) {
   );
 }
 
-function getEmailSettings() {
-  return requestJson<GetEmailBriefingSettingsResponse>("/api/email/briefing-settings");
+function getEmailSettings(signal: AbortSignal) {
+  return requestJson<GetEmailBriefingSettingsResponse>("/api/email/briefing-settings", { signal });
 }
 
 function patchEmailSettings(body: UpdateEmailBriefingSettingsRequest) {
@@ -100,8 +104,8 @@ function patchEmailSettings(body: UpdateEmailBriefingSettingsRequest) {
   });
 }
 
-function getEmailTaskMode() {
-  return requestJson<EmailTaskCreationModeResponse>("/api/email/task-creation-mode");
+function getEmailTaskMode(signal: AbortSignal) {
+  return requestJson<EmailTaskCreationModeResponse>("/api/email/task-creation-mode", { signal });
 }
 
 function putEmailTaskMode(body: UpdateEmailTaskCreationModeRequest) {
@@ -111,8 +115,8 @@ function putEmailTaskMode(body: UpdateEmailTaskCreationModeRequest) {
   });
 }
 
-function getActionPolicies() {
-  return requestJson<GetAiActionPoliciesResponse>("/api/ai/action-policy");
+function getActionPolicies(signal: AbortSignal) {
+  return requestJson<GetAiActionPoliciesResponse>("/api/ai/action-policy", { signal });
 }
 
 function patchDraftPolicy(tier: AiActionPolicyTier) {
@@ -127,55 +131,117 @@ function patchDraftPolicy(tier: AiActionPolicyTier) {
 
 export default function EmailSettings() {
   const queryClient = useQueryClient();
-  const sourceBehaviors = useQuery({ queryKey: SOURCE_BEHAVIORS_KEY, queryFn: getSourceBehaviors });
-  const settingsQuery = useQuery({ queryKey: EMAIL_SETTINGS_KEY, queryFn: getEmailSettings });
+  const sourceBehaviors = useQuery({
+    queryKey: SOURCE_BEHAVIORS_KEY,
+    queryFn: ({ signal }) => getSourceBehaviors(signal)
+  });
+  const settingsQuery = useQuery({
+    queryKey: EMAIL_SETTINGS_KEY,
+    queryFn: ({ signal }) => getEmailSettings(signal)
+  });
   const behaviorMutation = useMutation({
     mutationFn: putSourceBehavior,
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: SOURCE_BEHAVIORS_KEY
-      })
+    onMutate: () => queryClient.cancelQueries({ queryKey: SOURCE_BEHAVIORS_KEY, exact: true }),
+    onSuccess: async (data) => {
+      await queryClient.cancelQueries({ queryKey: SOURCE_BEHAVIORS_KEY, exact: true });
+      queryClient.setQueryData(SOURCE_BEHAVIORS_KEY, data);
+    }
   });
   const settingsMutation = useMutation({
     mutationFn: patchEmailSettings,
-    onSuccess: (data) => queryClient.setQueryData(EMAIL_SETTINGS_KEY, data)
+    onMutate: () => queryClient.cancelQueries({ queryKey: EMAIL_SETTINGS_KEY, exact: true }),
+    onSuccess: async (data) => {
+      // A focus refresh or retry can start during the mutation, after onMutate's cancellation.
+      // Only the successful server response may replace the confirmed choice at this point.
+      await queryClient.cancelQueries({ queryKey: EMAIL_SETTINGS_KEY, exact: true });
+      queryClient.setQueryData(EMAIL_SETTINGS_KEY, data);
+    }
   });
-  const taskModeQuery = useQuery({ queryKey: EMAIL_TASK_MODE_KEY, queryFn: getEmailTaskMode });
+  const taskModeQuery = useQuery({
+    queryKey: EMAIL_TASK_MODE_KEY,
+    queryFn: ({ signal }) => getEmailTaskMode(signal)
+  });
   const taskModeMutation = useMutation({
     mutationFn: (mode: EmailTaskCreationMode) => putEmailTaskMode({ mode }),
-    onSuccess: (data) => {
+    onMutate: () => queryClient.cancelQueries({ queryKey: EMAIL_TASK_MODE_KEY, exact: true }),
+    onSuccess: async (data) => {
+      await queryClient.cancelQueries({ queryKey: EMAIL_TASK_MODE_KEY, exact: true });
       queryClient.setQueryData(EMAIL_TASK_MODE_KEY, data);
     }
   });
-  const policiesQuery = useQuery({ queryKey: ACTION_POLICY_KEY, queryFn: getActionPolicies });
+  const policiesQuery = useQuery({
+    queryKey: ACTION_POLICY_KEY,
+    queryFn: ({ signal }) => getActionPolicies(signal)
+  });
   const draftPolicyMutation = useMutation({
     mutationFn: patchDraftPolicy,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ACTION_POLICY_KEY })
+    onMutate: () => queryClient.cancelQueries({ queryKey: ACTION_POLICY_KEY, exact: true }),
+    onSuccess: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ACTION_POLICY_KEY, exact: true });
+      queryClient.setQueryData<GetAiActionPoliciesResponse>(ACTION_POLICY_KEY, (previous) => ({
+        policies: [
+          ...(previous?.policies ?? []).filter(
+            (policy) =>
+              policy.moduleId !== data.moduleId || policy.actionFamilyId !== data.actionFamilyId
+          ),
+          data
+        ]
+      }));
+    }
   });
 
   const behaviorEnabled =
     sourceBehaviors.data?.sources
       .flatMap((source) => source.behaviors)
       .find((behavior) => behavior.id === EMAIL_BEHAVIOR_ID)?.enabled ?? true;
-  const settings = (settingsMutation.data ?? settingsQuery.data)?.settings;
-  const taskMode = (taskModeMutation.data ?? taskModeQuery.data)?.mode ?? DEFAULT_EMAIL_TASK_MODE;
+  const settings = settingsQuery.data?.settings;
+  const taskMode = taskModeQuery.data?.mode ?? DEFAULT_EMAIL_TASK_MODE;
   const taskModeOption = EMAIL_TASK_MODE_OPTIONS.find((option) => option.value === taskMode);
   const draftAutoTier = draftAutoTierFromPolicies(policiesQuery.data?.policies ?? []);
-  const disabled =
-    sourceBehaviors.isLoading ||
-    settingsQuery.isLoading ||
-    taskModeQuery.isLoading ||
+  const hasReadError =
+    sourceBehaviors.isError ||
+    settingsQuery.isError ||
+    taskModeQuery.isError ||
+    policiesQuery.isError;
+  const anyWritePending =
     behaviorMutation.isPending ||
     settingsMutation.isPending ||
-    taskModeMutation.isPending;
-  const draftPolicyDisabled = policiesQuery.isLoading || draftPolicyMutation.isPending;
+    taskModeMutation.isPending ||
+    draftPolicyMutation.isPending;
+  const retryReads = () => {
+    if (anyWritePending) return;
+    void sourceBehaviors.refetch();
+    void settingsQuery.refetch();
+    void taskModeQuery.refetch();
+    void policiesQuery.refetch();
+  };
+  const head = (
+    <PaneHead
+      title="Email"
+      desc="How important email appears in briefings and becomes tasks and replies."
+    />
+  );
+  if (!sourceBehaviors.data || !settings || !taskModeQuery.data || !policiesQuery.data)
+    return (
+      <>
+        {head}
+        <p role="status">
+          {hasReadError ? "Could not load email settings." : "Loading email settings…"}
+        </p>
+        {hasReadError ? (
+          <Button variant="secondary" size="sm" disabled={anyWritePending} onClick={retryReads}>
+            Try again
+          </Button>
+        ) : null}
+      </>
+    );
+  const disabled =
+    behaviorMutation.isPending || settingsMutation.isPending || taskModeMutation.isPending;
+  const draftPolicyDisabled = draftPolicyMutation.isPending;
 
   return (
     <>
-      <PaneHead
-        title="Email"
-        desc="How briefing-worthy email turns into signal, suggestions, and governed follow-through."
-      />
+      {head}
       <Group title="Briefing signal">
         <Row
           name="Include email signal in briefings"
@@ -249,7 +315,7 @@ export default function EmailSettings() {
         />
         <Row
           name="Auto-send replies"
-          desc="High-governance option. Still requires the normal send policy and never creates a briefing-only bypass."
+          desc="Sending still follows your email approval rules. Turning this on does not change those rules."
           control={
             <Switch
               ariaLabel="Auto-send replies"
@@ -274,15 +340,21 @@ export default function EmailSettings() {
           }
         />
       </Group>
-      {sourceBehaviors.isError ||
-      settingsQuery.isError ||
-      taskModeQuery.isError ||
-      behaviorMutation.isError ||
+      {hasReadError ? (
+        <div role="status">
+          <Note>Could not refresh email settings. Showing the last saved choices.</Note>
+          <Button variant="secondary" size="sm" disabled={anyWritePending} onClick={retryReads}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
+      {behaviorMutation.isError ||
       settingsMutation.isError ||
       taskModeMutation.isError ||
-      policiesQuery.isError ||
       draftPolicyMutation.isError ? (
-        <Note>Could not save email settings. Try again.</Note>
+        <div role="alert">
+          <Note>Could not save email settings. Try again.</Note>
+        </div>
       ) : null}
     </>
   );

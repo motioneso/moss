@@ -4,10 +4,9 @@ import "../styles/wellness-3.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Link } from "react-router";
-import { Button, buttonLinkClassName } from "@moss/ui";
+import { Button, SectionHead, buttonLinkClassName } from "@moss/ui";
 import {
   localDay,
-  moodIndex,
   moodBand,
   type CheckinDto,
   type WellnessEmotionCore,
@@ -29,7 +28,7 @@ import { WellnessTherapyNotes } from "./wellness-therapy-notes";
 import { CheckinModal, type CheckinFormValue } from "./checkin-modal";
 import { ManageMedsModal } from "./manage-meds-modal";
 import { WellnessExportModal } from "./export-modal";
-import { computeStreak } from "./wellness-date-utils";
+import { computeStreak, recentMoodAverage } from "./wellness-date-utils";
 import { readColorMode } from "../theme/color-mode";
 
 function useTheme(): "light" | "dark" {
@@ -114,22 +113,8 @@ export function WellnessPage() {
   // Hero stats
   const today = localDay(new Date(), localTimezone);
 
-  const last14 = checkins
-    .filter((c) => {
-      const d = localDay(c.checkedInAt ?? c.createdAt ?? "", localTimezone);
-      return d && d < today;
-    })
-    .slice(0, 14);
-
-  const avgMood = last14.length
-    ? Math.round(
-        (last14.reduce((s, c) => s + moodIndex(c.feelingCore, c.intensity ?? 3), 0) /
-          last14.length) *
-          10
-      ) / 10
-    : 0;
-
-  const avgBand = moodBand(avgMood);
+  const avgMood = recentMoodAverage(checkins, localTimezone);
+  const avgBand = avgMood === null ? null : moodBand(avgMood);
   const streak = computeStreak(checkins, localTimezone);
 
   const openFresh = () => {
@@ -202,22 +187,36 @@ export function WellnessPage() {
           </p>
         </div>
         <div className="wl-hero__stat">
-          <div className="wl-herostat">
-            <div className="k">Mood &middot; 14d</div>
-            <div className="v">
-              {avgMood > 0 ? "+" : ""}
-              {avgMood}
-              <small> {MOOD_BAND_LABELS[avgBand] ?? avgBand}</small>
-            </div>
-          </div>
-          <div className="wl-herostat wl-herostat--streak">
-            <div className="k">Check-in streak</div>
-            <div className="v">
-              <FlameIcon size={15} />
-              {streak}
-              <small> {streak === 1 ? "day" : "days"}</small>
-            </div>
-          </div>
+          {checkinsQuery.data ? (
+            <>
+              <div className="wl-herostat">
+                <div className="k">Mood · past 14 days</div>
+                <div className="v">
+                  {avgMood === null ? (
+                    <small>No check-ins in this period</small>
+                  ) : (
+                    <>
+                      {avgMood > 0 ? "+" : ""}
+                      {avgMood}
+                      <small> {avgBand ? MOOD_BAND_LABELS[avgBand] : ""}</small>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="wl-herostat wl-herostat--streak">
+                <div className="k">Check-in streak</div>
+                <div className="v">
+                  <FlameIcon size={15} />
+                  {streak}
+                  <small> {streak === 1 ? "day" : "days"}</small>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p role="status">
+              {checkinsQuery.isError ? "Check-in statistics unavailable." : "Loading check-ins…"}
+            </p>
+          )}
           <Button variant="quiet" size="sm" onClick={() => setExportOpen(true)}>
             Export
           </Button>
@@ -232,8 +231,23 @@ export function WellnessPage() {
         </div>
       </header>
 
+      {checkinsQuery.isError ? (
+        <p role="status">
+          {checkinsQuery.data
+            ? "Could not refresh check-ins. Showing the last loaded entries."
+            : "Could not load check-ins. Your saved entries are unavailable right now."}{" "}
+          <Button variant="link" onClick={() => void checkinsQuery.refetch()}>
+            Try again
+          </Button>
+        </p>
+      ) : null}
       <section className="wl-sec">
+        <SectionHead number="01" title="Today" />
         <WellnessToday
+          checkinsReadState={
+            checkinsQuery.data ? "ready" : checkinsQuery.isError ? "error" : "pending"
+          }
+          onRetryCheckins={() => void checkinsQuery.refetch()}
           checkins={checkins}
           streak={streak}
           theme={theme}
@@ -254,14 +268,16 @@ export function WellnessPage() {
       <WellnessTrends theme={theme} />
 
       <div ref={histRef}>
-        <WellnessHistory
-          checkins={checkins}
-          theme={theme}
-          filter={histFilter}
-          onClearFilter={() => setHistFilter(null)}
-          onEdit={openEdit}
-          timezone={localTimezone}
-        />
+        {checkinsQuery.data ? (
+          <WellnessHistory
+            checkins={checkins}
+            theme={theme}
+            filter={histFilter}
+            onClearFilter={() => setHistFilter(null)}
+            onEdit={openEdit}
+            timezone={localTimezone}
+          />
+        ) : null}
       </div>
 
       <WellnessTherapyNotes theme={theme} />

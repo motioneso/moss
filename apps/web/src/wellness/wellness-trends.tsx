@@ -1,3 +1,4 @@
+import { Button, SectionHead, Segmented } from "@moss/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -118,30 +119,43 @@ export function WellnessTrends({ theme = "light" }: Props) {
 
   return (
     <section className="wl-sec">
-      <div className="wl-sec__head">
-        <div className="wl-sec__title">
-          Trends<span className="sub">history</span>
-        </div>
-        <div className="wl-sec__aside">
-          <div role="group" aria-label="Chart range" className="wl-rangetoggle">
-            {([14, 30] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={range === v}
-                className={`wl-rangetoggle__btn${range === v ? " wl-rangetoggle__btn--active" : ""}`}
-                onClick={() => setRange(v)}
-              >
-                {v} days
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      <SectionHead
+        number="03"
+        title="Trends"
+        meta={
+          <Segmented
+            ariaLabel="Chart range"
+            value={String(range)}
+            options={[
+              { value: "14", label: "14 days" },
+              { value: "30", label: "30 days" }
+            ]}
+            onChange={(value) => setRange(value === "14" ? 14 : 30)}
+          />
+        }
+      />
 
       {checkinsQuery.isError || adherenceQuery.isError ? (
+        <p role="status">
+          Couldn&apos;t refresh trend data.{" "}
+          <Button
+            variant="link"
+            onClick={() => {
+              void checkinsQuery.refetch();
+              void adherenceQuery.refetch();
+            }}
+          >
+            Try again
+          </Button>
+        </p>
+      ) : null}
+      {!checkinsQuery.data || !adherenceQuery.data ? (
         <div className="wl-chartcard" style={{ padding: "16px 20px" }}>
-          <span className="wl-subtle-text">Couldn&apos;t load trend data — try refreshing.</span>
+          <span className="wl-subtle-text" role="status">
+            {checkinsQuery.isPending || adherenceQuery.isPending
+              ? "Loading trend data…"
+              : "Trend data unavailable."}
+          </span>
         </div>
       ) : (
         <div className="wl-chartcard">

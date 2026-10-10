@@ -6,7 +6,7 @@
    packages/ui/src/styles/components-wellness-1.css and components-wellness-2.css (#1392). */
 
 .wl-wrap {
-  max-width: 1060px;
+  max-width: 1220px;
   margin: 0 auto;
   padding: 30px 40px 110px;
 }
@@ -33,8 +33,10 @@
 }
 .wl-hero__stat {
   display: flex;
-  gap: 22px;
-  flex: none;
+  gap: var(--space-3) var(--space-5);
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
 }
 .wl-herostat {
   text-align: right;
@@ -256,8 +258,9 @@
   line-height: 1.5;
 }
 .wl-emostrip {
-  display: flex;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-2);
   margin: 18px 0 16px;
 }
 .wl-emostrip__b {
@@ -351,7 +354,7 @@
 
 /* ===================== INSIGHTS ===================== */
 .wl-insights {
-  overflow: hidden;
+  padding-top: var(--space-5);
 }
 .wl-insights__hd {
   display: flex;
@@ -368,7 +371,7 @@
   text-transform: uppercase;
 }
 .wl-insights__body {
-  padding: 4px 20px 8px;
+  padding: var(--space-3) 0 0;
 }
 .wl-insight {
   display: flex;
@@ -411,7 +414,7 @@
 
 /* ===================== CHARTS ===================== */
 .wl-chartcard {
-  padding: 16px 18px 14px;
+  padding: var(--space-5) 0;
 }
 .wl-chartcard + .wl-chartcard {
   margin-top: 16px;
@@ -581,4 +584,52 @@
   opacity: 0.6;
   font-style: italic;
   margin-top: 3px;
+}
+
+.wl-sec > .jds-section-head {
+  margin-bottom: var(--space-5);
+}
+@media (max-width: 620px) {
+  .wl-wrap {
+    padding: var(--space-5) var(--space-3) var(--space-9);
+  }
+  .wl-hero__stat {
+    width: 100%;
+  }
+  .wl-herostat {
+    text-align: left;
+  }
+  .wl-emostrip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .wl-card__hd {
+    flex-wrap: wrap;
+  }
+  .wl-chart__title {
+    white-space: normal;
+    flex-wrap: wrap;
+  }
+}
+
+.wl-chart-data {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.wl-chart-data select {
+  max-width: 20rem;
+}
+.wl-chart-data p {
+  margin: 0;
+}
+.wl-chart-data details {
+  overflow-x: auto;
+}
+.wl-chart-data table {
+  width: 100%;
+}
+.wl-chart-data th,
+.wl-chart-data td {
+  padding: var(--space-2);
+  text-align: left;
 }

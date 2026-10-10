@@ -38,12 +38,12 @@ async function signIn(page: Page) {
 async function openManageMedications(page: Page) {
   await page.goto(`${requireBaseURL()}/wellness`);
   await page.getByRole("button", { name: "Manage", exact: true }).click();
-  await expect(page.locator(".wl-modal")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Manage medications", exact: true })).toBeVisible();
 }
 
 /** Fill the shared fields, pick a schedule choice, then let the caller fill that choice's own. */
 async function startMedication(page: Page, name: string, choice: string) {
-  const modal = page.locator(".wl-modal");
+  const modal = page.getByRole("dialog", { name: "Manage medications", exact: true });
   await modal.getByLabel("Medication name", { exact: true }).fill(name);
   // Exact, or this also matches "Dose time 1", "Dose time 2", ...
   await modal.getByLabel("Dose", { exact: true }).fill("10 mg");
@@ -53,7 +53,7 @@ async function startMedication(page: Page, name: string, choice: string) {
 
 /** Press add and wait for the medication to show up in the list above the form. */
 async function addAndConfirm(page: Page, name: string) {
-  const modal = page.locator(".wl-modal");
+  const modal = page.getByRole("dialog", { name: "Manage medications", exact: true });
   const addButton = modal.getByRole("button", { name: "Add medication" });
   await expect(addButton).toBeEnabled();
   await addButton.click();
@@ -100,7 +100,7 @@ test("every schedule choice can be created through the real form (#1970)", async
   test.setTimeout(180_000);
   await signIn(page);
   await openManageMedications(page);
-  const modal = page.locator(".wl-modal");
+  const modal = page.getByRole("dialog", { name: "Manage medications", exact: true });
 
   // 1. Every day, one time — stored as once_daily.
   await startMedication(page, "UAT Daily", "Every day");

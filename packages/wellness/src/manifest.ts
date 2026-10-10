@@ -86,7 +86,7 @@ export const wellnessModuleManifest = {
       id: "wellness.ai-consent",
       label: "Wellness",
       description:
-        "Allow or block your assistant from reading your mood check-ins and medication adherence counts, so it can reference them in briefings and answer questions about them.",
+        "Allow assistant access to mood check-ins and medication adherence for briefings and questions. Unknown choices stay unavailable; read failures offer Retry separately from save errors. Failed refreshes retain the confirmed choice.",
       path: "/settings?section=modules&module=wellness",
       scope: "user",
       order: 40,
@@ -346,8 +346,7 @@ export const wellnessModuleManifest = {
     {
       id: "wellness.mood_checkins",
       description:
-        "Log a daily mood check-in with emotion, energy and a short note; Wellness keeps the history " +
-        "and charts past check-ins. Insights summarise trends once there are enough check-ins."
+        "Log emotion, energy and a note; review history and insights. Failed reads offer Retry and retain known data. The mood average covers the previous 14 calendar days. Trends offer keyboard day selection and daily values alongside the chart."
     },
     {
       id: "wellness.medication_tracking",
@@ -358,8 +357,7 @@ export const wellnessModuleManifest = {
     {
       id: "wellness.therapy_notes",
       description:
-        "Keep therapy notes that stay private: the assistant never reads them, and the data " +
-        "export includes them with everything else."
+        "Keep private therapy notes the assistant cannot read; include them in your export. Failed exports and failed status checks offer Retry without discarding the export selection."
     }
   ]
 } satisfies MossModuleManifest;

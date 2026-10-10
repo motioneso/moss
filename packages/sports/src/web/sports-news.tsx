@@ -1,3 +1,4 @@
+import { ButtonLink, IconButton } from "@moss/ui";
 import { useCallback, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Headline, SportsNewsGroup } from "@moss/shared";
@@ -116,15 +117,15 @@ function HeroSlide({
               wants on every lead. ESPN's feed gives only this one-paragraph description as body
               text — a deeper excerpt would need per-article fetching (own task+spec). Kept out
               of the tab order on inactive slides like the headline link. */}
-          <a
-            className="sp-hero__more"
+          <ButtonLink
+            variant="link"
             href={headline.url}
             target="_blank"
             rel="noreferrer"
             tabIndex={active ? undefined : -1}
           >
             Continue reading<span aria-hidden="true"> →</span>
-          </a>
+          </ButtonLink>
         </div>
         {/* Feedback dots sit in the hero's top-right corner and show on hover (.sp-fbhost). */}
         {active ? (
@@ -197,14 +198,12 @@ export function HeroCarousel({
       </div>
       {count > 1 ? (
         <div className="sp-carousel__ctl">
-          <button
-            type="button"
-            className="sp-carousel__nav"
+          <IconButton
             aria-label="Previous story"
             onClick={() => setIndex((active - 1 + count) % count)}
           >
             <ChevronLeft size={16} aria-hidden="true" />
-          </button>
+          </IconButton>
           <div className="sp-carousel__dots">
             {slides.map((headline, i) => (
               <button
@@ -217,14 +216,9 @@ export function HeroCarousel({
               />
             ))}
           </div>
-          <button
-            type="button"
-            className="sp-carousel__nav"
-            aria-label="Next story"
-            onClick={() => setIndex((active + 1) % count)}
-          >
+          <IconButton aria-label="Next story" onClick={() => setIndex((active + 1) % count)}>
             <ChevronRight size={16} aria-hidden="true" />
-          </button>
+          </IconButton>
         </div>
       ) : null}
     </section>
