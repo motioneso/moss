@@ -171,6 +171,21 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     {
+      id: "chat.reminder_list",
+      description:
+        "In Main chat, 'list my reminders' shows waiting reminders with time left, then up to 10 recent " +
+        "ones marked sent, cancelled or couldn't be sent. Only your own reminders; not in other chats.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.reminder_cancel",
+      description:
+        "In Main chat, 'cancel the reminder to stretch' stops a waiting reminder so it never arrives. " +
+        "If it was already sent, Moss says so and it stops counting toward the limit of 20. " +
+        "When several match, Moss names them and cancels none.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.pending_action_disclosure",
       description:
         "App cards show exact server targets and human-readable changes. Memory and note deletion use red Approve. " +
