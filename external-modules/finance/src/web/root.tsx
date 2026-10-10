@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
   type ReactNodeLike
 } from "@moss/module-web-sdk";
-import { ModuleLink, navigate, useModulePath } from "./router";
+import { navigate, useModulePath } from "./router";
 import { AccountsScreen } from "./screens/accounts";
 import { BudgetScreen } from "./screens/budget";
 import { ReportsScreen } from "./screens/reports";
@@ -55,11 +55,6 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
   return (
     <div className="fnm-root">
       <LiveRegion />
-      <header className="fnm-header">
-        <ModuleLink to="/settings" variant="quiet" size="sm">
-          Settings
-        </ModuleLink>
-      </header>
       <div className="fnm-tabs">
         <Segmented
           ariaLabel="Finance views"

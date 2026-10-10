@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// #1759: a module page has to lead to its own settings page, which Finance now owns (#3186).
+// #1759: module settings are reached by the shell's header cog, never a link inside the module.
 //
 // The three screens are mocked: each one fetches on mount, and none of them is what this test is
 // about. The header, the tabs and the router run for real.
@@ -22,16 +22,18 @@ vi.mock("../../external-modules/finance/src/web/screens/reports", () => ({
 import { Root } from "../../external-modules/finance/src/web/root";
 
 describe("Finance module root (#1759)", () => {
-  it("links to its own settings page from the header", async () => {
+  it("renders no Settings link of its own; the shell header cog is the only entry", async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(createElement(Root, { hostActions: { openAssistant: vi.fn() } }));
     });
 
-    const hrefs = renderer.root
-      .findAllByType("a")
-      .map((node) => node.props.href as string | undefined);
-    expect(hrefs).toContain("/m/finance/settings");
+    const settingsLinks = renderer.root.findAllByType("a").filter((node) => {
+      const text = JSON.stringify(node.props.children ?? "");
+      return /settings/i.test(text) || /\/settings$/.test(String(node.props.href ?? ""));
+    });
+    expect(settingsLinks).toHaveLength(0);
+    expect(renderer.root.findAll((node) => node.props.className === "fnm-header")).toHaveLength(0);
   });
 
   it("shows Budget, Transactions and Accounts tabs, with Budget at the module home (#3173)", async () => {
