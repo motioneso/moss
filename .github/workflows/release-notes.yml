@@ -103,10 +103,27 @@ jobs:
           # Enable auto-merge so it lands automatically once CI gate passes (#2507)
           gh pr merge "$pull_request" --repo "$REPOSITORY" --squash --auto || true
 
-          # If GitHub placed any workflow run into waiting/action_required, attempt approval
-          for run_id in $(gh api "repos/$REPOSITORY/actions/runs?branch=$branch&event=pull_request" --jq '.workflow_runs[] | select(.status == "waiting" or .status == "action_required") | .id' 2>/dev/null || true); do
-            echo "Approving pending workflow run $run_id..."
-            gh api -X POST "repos/$REPOSITORY/actions/runs/$run_id/approve" || true
+          # GitHub holds the pull_request CI run for a bot-pushed commit, and only that
+          # run satisfies the required check. The held run appears a few seconds after
+          # the push, as conclusion action_required, so poll for it before approving (#3054).
+          head_sha=$(gh api "repos/$REPOSITORY/git/ref/heads/$branch" --jq '.object.sha' || true)
+          held_runs=""
+          for _ in $(seq 1 24); do
+            [ -n "$head_sha" ] || break
+            held_runs=$(gh api "repos/$REPOSITORY/actions/runs?head_sha=$head_sha&event=pull_request" \
+              --jq '.workflow_runs[] | select(.status == "waiting" or .conclusion == "action_required") | .id' || true)
+            [ -n "$held_runs" ] && break
+            sleep 5
+          done
+
+          if [ -z "$held_runs" ]; then
+            echo "No held CI run for $head_sha; nothing to approve."
+          fi
+          for run_id in $held_runs; do
+            echo "Approving held CI run $run_id for $head_sha..."
+            if ! gh api -X POST "repos/$REPOSITORY/actions/runs/$run_id/approve"; then
+              echo "::warning title=Release-note CI approval failed::Run $run_id needs manual approval (#3054)."
+            fi
           done
 
           # Trigger CI gate directly via workflow_dispatch so checks run without manual approval (#2507)
