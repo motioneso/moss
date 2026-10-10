@@ -1,0 +1,199 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QuietHoursSettingsDto } from "@moss/shared";
+import { Button, Combobox, type ComboboxOption } from "@moss/ui";
+import { MoonStar } from "lucide-react";
+import { useMemo, useState } from "react";
+
+import { getLocaleSettings, getQuietHoursSettings, putQuietHoursSettings } from "../api/client.js";
+import { queryKeys } from "../api/query-keys.js";
+import { TIME_ZONE_OPTIONS } from "./settings-personal-panes.js";
+import {
+  isStaleQuietHoursSave,
+  quietHoursDraftDirty,
+  quietHoursDraftProblem,
+  quietHoursSavedLine,
+  quietHoursSaveFailure,
+  quietHoursSaveRequest
+} from "./settings-quiet-hours-draft.js";
+import { readError } from "./settings-types.js";
+import { Badge, Field, Group, Note, Row, Switch } from "./settings-ui.js";
+
+const DEFAULT_QUIET_HOURS: QuietHoursSettingsDto = {
+  enabled: false,
+  start: "22:00",
+  end: "07:00",
+  timezone: null
+};
+
+// Combobox values are strings; this one stands for a schedule that follows the profile zone.
+const PROFILE_ZONE = "";
+
+type Feedback =
+  | { readonly kind: "saved" }
+  | { readonly kind: "problem"; readonly text: string }
+  | { readonly kind: "failed"; readonly text: string };
+
+/**
+ * The one quiet-hours editor. Edits stay in a local draft until Save; the saved line always names
+ * the stored schedule, so an unsaved or failed edit never reads as the schedule in force.
+ */
+export function QuietHoursEditor() {
+  const queryClient = useQueryClient();
+  const quietHoursQuery = useQuery({
+    queryKey: queryKeys.settings.quietHours,
+    queryFn: getQuietHoursSettings,
+    retry: false
+  });
+  const localeQuery = useQuery({
+    queryKey: queryKeys.settings.locale,
+    queryFn: getLocaleSettings,
+    retry: false
+  });
+  const loaded = quietHoursQuery.data;
+  const saved = loaded?.quietHours ?? DEFAULT_QUIET_HOURS;
+  const profileTimeZone = localeQuery.data?.locale.timezone ?? null;
+  const [draft, setDraft] = useState<QuietHoursSettingsDto | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const editing = draft ?? saved;
+  const dirty = draft !== null && quietHoursDraftDirty(saved, draft);
+
+  const save = useMutation({
+    // An offline save fails at once and keeps the draft, rather than waiting paused as "Saving".
+    networkMode: "always",
+    mutationFn: (next: QuietHoursSettingsDto) =>
+      putQuietHoursSettings(quietHoursSaveRequest(next, loaded)),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.settings.quietHours, data);
+      setDraft(null);
+      setFeedback({ kind: "saved" });
+    },
+    onError: (error) => {
+      // A stale save lost to a newer stored schedule, so the editor shows that one. Any other
+      // failure keeps the draft for Try again; the stored schedule is unchanged either way.
+      if (isStaleQuietHoursSave(error)) {
+        setDraft(null);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.settings.quietHours });
+        setFeedback({ kind: "problem", text: quietHoursSaveFailure(error) });
+        return;
+      }
+      setFeedback({ kind: "failed", text: quietHoursSaveFailure(error) });
+    }
+  });
+
+  const held = quietHoursQuery.isLoading || quietHoursQuery.isError || save.isPending;
+  const edit = (patch: Partial<QuietHoursSettingsDto>) => {
+    setDraft({ ...editing, ...patch });
+    setFeedback(null);
+  };
+  const submit = () => {
+    const problem = quietHoursDraftProblem(editing);
+    if (problem) {
+      setFeedback({ kind: "problem", text: problem });
+      return;
+    }
+    save.mutate(editing);
+  };
+
+  const zoneOptions = useMemo<readonly ComboboxOption[]>(() => {
+    const profileOption: ComboboxOption = {
+      value: PROFILE_ZONE,
+      label: profileTimeZone ? `Profile time zone (${profileTimeZone})` : "Profile time zone",
+      keywords: "profile default"
+    };
+    const savedZone = saved.timezone;
+    const savedMissing =
+      savedZone !== null && !TIME_ZONE_OPTIONS.some((option) => option.value === savedZone);
+    return [
+      profileOption,
+      ...(savedMissing ? [{ value: savedZone, label: savedZone }] : []),
+      ...TIME_ZONE_OPTIONS
+    ];
+  }, [profileTimeZone, saved.timezone]);
+
+  const olderAlerts = loaded?.authority.status === "conflict" ? loaded.authority.alerts : null;
+
+  return (
+    <Group title="Quiet hours" action={dirty ? <Badge>Unsaved changes</Badge> : undefined}>
+      {quietHoursQuery.isLoading ? <p role="status">Loading quiet hours…</p> : null}
+      {quietHoursQuery.isError ? (
+        <Note icon={<MoonStar size={13} aria-hidden="true" />}>
+          {readError(quietHoursQuery.error)}{" "}
+          <Button variant="link" size="sm" onClick={() => void quietHoursQuery.refetch()}>
+            Try again
+          </Button>
+        </Note>
+      ) : null}
+      {olderAlerts ? (
+        <Note icon={<MoonStar size={13} aria-hidden="true" />}>
+          Your saved quiet hours differ.{" "}
+          {olderAlerts.enabled
+            ? `Email alerts still follow an older schedule, ${olderAlerts.start} to ${olderAlerts.end}.`
+            : "Email alerts still follow an older schedule, which is switched off."}{" "}
+          Saving here changes only the notification schedule.
+        </Note>
+      ) : null}
+      <Row
+        name="Enable quiet hours"
+        desc={loaded ? quietHoursSavedLine(loaded, profileTimeZone) : undefined}
+        control={
+          <Switch
+            ariaLabel="Enable quiet hours"
+            checked={editing.enabled}
+            disabled={held}
+            onChange={(enabled) => edit({ enabled })}
+          />
+        }
+      />
+      <div className="quiet-hours__times">
+        <Field label="From">
+          <input
+            className="jds-input"
+            type="time"
+            required
+            value={editing.start}
+            aria-label="Quiet hours from"
+            disabled={held}
+            onChange={(event) => edit({ start: event.currentTarget.value })}
+          />
+        </Field>
+        <Field label="Until">
+          <input
+            className="jds-input"
+            type="time"
+            required
+            value={editing.end}
+            aria-label="Quiet hours until"
+            disabled={held}
+            onChange={(event) => edit({ end: event.currentTarget.value })}
+          />
+        </Field>
+      </div>
+      <Field label="Time zone">
+        <Combobox
+          value={editing.timezone ?? PROFILE_ZONE}
+          aria-label="Quiet hours time zone"
+          options={zoneOptions}
+          disabled={held}
+          searchPlaceholder="Search time zones"
+          emptyText="No time zone matches."
+          onChange={(value) => edit({ timezone: value === PROFILE_ZONE ? null : value })}
+        />
+      </Field>
+      <div className="quiet-hours__actions">
+        <Button variant="secondary" size="sm" disabled={held || !dirty} onClick={submit}>
+          {save.isPending ? "Saving…" : "Save quiet hours"}
+        </Button>
+        {feedback?.kind === "failed" ? (
+          <Button variant="link" size="sm" disabled={save.isPending} onClick={submit}>
+            Try again
+          </Button>
+        ) : null}
+      </div>
+      {feedback ? (
+        <p role="status" className="quiet-hours__status">
+          {feedback.kind === "saved" ? "Quiet hours saved." : feedback.text}
+        </p>
+      ) : null}
+    </Group>
+  );
+}

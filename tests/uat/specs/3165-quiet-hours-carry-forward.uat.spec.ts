@@ -195,8 +195,8 @@ async function visibleTaskCards(page: Page): Promise<string[]> {
   return body.cards.filter((card) => card.title === TASK_TITLE).map((card) => card.stableKey);
 }
 
-async function openProfile(page: Page): Promise<void> {
-  await page.goto(`${baseUrl()}/settings?section=profile`);
+async function openQuietHours(page: Page): Promise<void> {
+  await page.goto(`${baseUrl()}/settings?section=alerts`);
   await expect(page.getByLabel("Quiet hours from")).toBeEnabled({ timeout: 30_000 });
 }
 
@@ -299,9 +299,9 @@ test("saved quiet hours carry into Profile and the installed workers (#3165)", a
   await restartUatStack(projectName(), baseUrl());
   expect(rawPreference(PROFILE_KEY)).toBeNull();
   expect(rawPreference(ALERTS_KEY)).toEqual(alertsBeforeRestart);
-  await openProfile(page);
+  await openQuietHours(page);
   await expect(page.getByLabel("Quiet hours from")).toHaveValue(sole.start);
-  await expect(page.getByLabel("Quiet hours to")).toHaveValue(sole.end);
+  await expect(page.getByLabel("Quiet hours until")).toHaveValue(sole.end);
   await page.reload();
   await expect(page.getByLabel("Quiet hours from")).toHaveValue(sole.start);
   expect(rawPreference(PROFILE_KEY)).toBeNull();
@@ -331,16 +331,17 @@ test("saved quiet hours carry into Profile and the installed workers (#3165)", a
   expect((await quietHours(page)).quietHours).toMatchObject({ start: "21:30", end: "06:15" });
   console.log(`[3165 legacy form] edit landed on Profile as canonical; older read save -> 409`);
 
-  // 5. A Profile edit keeps one canonical schedule and leaves the alert record alone.
-  await openProfile(page);
+  // 5. A screen edit keeps one canonical schedule and leaves the alert record alone.
+  await openQuietHours(page);
   await page.getByLabel("Quiet hours from").fill("21:45");
+  await page.getByRole("button", { name: "Save quiet hours" }).click();
   await expect.poll(async () => (await quietHours(page)).quietHours.start).toBe("21:45");
   const afterProfile = await quietHours(page);
   expect(afterProfile.authority.status).toBe("canonical");
   expect(rawPreference(ALERTS_KEY)).toEqual(alertsBeforeRestart);
   await page.reload();
   await expect(page.getByLabel("Quiet hours from")).toHaveValue("21:45");
-  await expect(page.getByText("Alerts still follow an older schedule")).toHaveCount(0);
+  await expect(page.getByText("Email alerts still follow an older schedule")).toHaveCount(0);
   console.log(`[3165 profile edit] 21:45-06:15 canonical after reload, alert record untouched`);
 
   // 6. Identical older records carry, including a Profile zone equal to the owner zone.
@@ -375,13 +376,13 @@ test("saved quiet hours carry into Profile and the installed workers (#3165)", a
       label: "schedule",
       profile: { enabled: true, start: "22:00", end: "07:00", timezone: null },
       alerts: { enabled: true, start: "23:00", end: "08:00" },
-      note: "Alerts still follow an older schedule, 23:00 to 08:00."
+      note: "Email alerts still follow an older schedule, 23:00 to 08:00."
     },
     {
       label: "enabled",
       profile: { enabled: false, start: "22:00", end: "07:00", timezone: null },
       alerts: { enabled: true, start: "22:00", end: "07:00" },
-      note: "Alerts still follow an older schedule, 22:00 to 07:00."
+      note: "Email alerts still follow an older schedule, 22:00 to 07:00."
     }
   ];
   for (const [index, conflict] of conflicts.entries()) {
@@ -399,7 +400,7 @@ test("saved quiet hours carry into Profile and the installed workers (#3165)", a
     if (index === conflicts.length - 1) {
       await restartUatStack(projectName(), baseUrl());
     }
-    await openProfile(page);
+    await openQuietHours(page);
     await page.reload();
     await expect(page.getByText(conflict.note)).toBeVisible();
     expect(rawPreference(PROFILE_KEY)).toEqual(conflict.profile);

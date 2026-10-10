@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Mail, MoonStar } from "lucide-react";
+import { Mail } from "lucide-react";
 import { Button } from "@moss/ui";
 
 import {
@@ -9,6 +9,7 @@ import {
 import { listConnectorAccounts } from "../api/client.js";
 import { getConnectorFeatureGrants } from "../api/connectors-client.js";
 import { queryKeys } from "../api/query-keys.js";
+import { QuietHoursEditor } from "./settings-quiet-hours-editor.js";
 import type { PaneProps } from "./settings-types.js";
 import { readError } from "./settings-types.js";
 import { Group, Note, PaneHead, Row, Switch } from "./settings-ui.js";
@@ -67,7 +68,7 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
     <>
       <PaneHead
         title="Alerts & quiet hours"
-        desc="Choose which automatic updates Moss may check, and where delivery preferences live."
+        desc="Choose which automatic updates Moss may check, and when interruptions wait."
       />
       <div className="alerts-pane__grid">
         <div>
@@ -121,16 +122,9 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
             />
           </Group>
         </div>
-        <Group
-          title="Quiet hours"
-          desc="Quiet-hour controls remain in Account & preferences until their saved schedules are reconciled."
-        >
-          <Note icon={<MoonStar size={13} aria-hidden="true" />}>
-            <Button variant="link" size="sm" onClick={() => onSelectSection?.("profile")}>
-              Open quiet hours
-            </Button>
-          </Note>
-        </Group>
+        <div className="alerts-pane__quiet">
+          <QuietHoursEditor />
+        </div>
       </div>
     </>
   );
