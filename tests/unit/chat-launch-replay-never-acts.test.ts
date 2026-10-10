@@ -31,6 +31,8 @@ class ActingEngine implements CliChatEngine {
   readonly calls: Promise<unknown>[] = [];
   launchOpts: EngineLaunchOpts | null = null;
   launchCount = 0;
+  /** Text the model writes on the next read, as if it answered the replay. */
+  pendingReply: string | null = null;
 
   constructor(
     private readonly act: () => Promise<unknown>,
@@ -47,7 +49,13 @@ class ActingEngine implements CliChatEngine {
     await this.respond();
   }
   async readNew(offset: number) {
-    return { records: [], offset, complete: true };
+    const text = this.pendingReply;
+    this.pendingReply = null;
+    return {
+      records: text === null ? [] : [{ kind: "reply" as const, text }],
+      offset: offset + 1,
+      complete: true
+    };
   }
   async isAlive(): Promise<boolean> {
     return true;
@@ -95,7 +103,14 @@ function harness(serverOwnsDrain: boolean) {
       touchExistingThread: vi.fn(async () => true)
     }
   });
-  return { h, tool, engine, revokeMcpToken, manager: new ChatSessionManager(deps as never) };
+  return {
+    h,
+    tool,
+    engine,
+    revokeMcpToken,
+    persistence: deps.persistence,
+    manager: new ChatSessionManager(deps as never)
+  };
 }
 
 describe("a resumed chat replaying a code-answered request", () => {
@@ -115,6 +130,20 @@ describe("a resumed chat replaying a code-answered request", () => {
     expect(h.createPending).not.toHaveBeenCalled();
     expect(h.audit).not.toHaveBeenCalled();
     expect(h.tokens.isInLaunchReplay(h.token)).toBe(false);
+  });
+
+  it("keeps a text answer to the replay out of the stream and the thread", async () => {
+    const { h, engine, persistence, manager } = harness(false);
+    engine.pendingReply = "I'll create a task to stretch now.";
+    const streamed: unknown[] = [];
+    manager.subscribe("actor-a", (record) => streamed.push(record));
+    await manager.resumeThread("actor-a", "thread-a");
+    await manager.ensureSession("actor-a", "Ben");
+
+    expect(engine.pendingReply).toBeNull();
+    expect(streamed).toEqual([]);
+    expect(persistence.recordTurn).not.toHaveBeenCalled();
+    expect(h.records).toEqual([]);
   });
 
   it("lets the next real message raise the usual card", async () => {
