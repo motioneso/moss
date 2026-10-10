@@ -76,6 +76,7 @@ export function TaskDetailsDialog(props: {
 }) {
   const isNew = props.taskId === null;
   const headingId = useId();
+  const titleRef = useRef<HTMLInputElement>(null);
 
   const requireTaskId = () => {
     if (!props.taskId) throw new Error("Task id required for this operation");
@@ -125,6 +126,18 @@ export function TaskDetailsDialog(props: {
     queryFn: () => listTaskActivity(requireTaskId())
   });
   const task = taskQuery.data?.task;
+  const titleReady = props.open && (isNew || Boolean(task));
+  useEffect(() => {
+    const title = titleRef.current;
+    // A disabled title cannot receive the dialog's initial focus. Complete that handoff
+    // when details first arrive, but retain any focus the user chose while waiting.
+    if (
+      titleReady &&
+      title &&
+      title.ownerDocument.activeElement === title.closest('[role="dialog"]')
+    )
+      title.focus();
+  }, [titleReady]);
 
   // An existing task's tags live in its own list, unknown until the task loads.
   const tagsListId = isNew ? form.listId : (task?.listId ?? "");
@@ -330,6 +343,7 @@ export function TaskDetailsDialog(props: {
       className="tk-modal"
       aria-labelledby={headingId}
       onClose={props.onClose}
+      initialFocusRef={titleRef}
       title={
         <div className="tk-modal__head">
           <div className="tk-modal__headmain">
@@ -338,8 +352,8 @@ export function TaskDetailsDialog(props: {
             </div>
             <input
               className="tk-modal__titlein"
+              ref={titleRef}
               value={form.title}
-              autoFocus
               disabled={!isNew && !task}
               placeholder="What needs doing?"
               aria-label="Task title"

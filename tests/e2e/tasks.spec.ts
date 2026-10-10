@@ -156,8 +156,10 @@ test("a tag is never filed before the task loads, then lands in the task's own l
   await page.getByRole("button", { name: "Open Learn cello" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Task details" });
   const tagInput = dialog.getByRole("textbox", { name: "Add a tag" });
-  await tagInput.fill("cellist");
-  await tagInput.press("Enter");
+  await expect(dialog.getByRole("status")).toHaveText("Loading task details…");
+  await expect(tagInput).toHaveCount(0);
+  await expect(dialog.getByRole("textbox", { name: "Task title" })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Save changes" })).toBeDisabled();
   expect(tagPosts).toEqual([]);
 
   releaseTask();
@@ -180,12 +182,45 @@ test("task details window is named, closes on Escape and returns focus", async (
 });
 
 test("opening task details moves keyboard focus inside the window", async ({ page }) => {
+  let releaseTask: () => void = () => {};
+  const taskGate = new Promise<void>((resolve) => (releaseTask = resolve));
+  await page.route("**/api/tasks/t-critical", async (route) => {
+    await taskGate;
+    await route.fallback();
+  });
   await page.goto("/tasks");
   await page.getByRole("button", { name: "Open File taxes" }).first().focus();
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Task details" });
+  await expect(dialog.getByRole("status")).toHaveText("Loading task details…");
+  await expect(dialog).toBeFocused();
+  releaseTask();
   await expect(dialog.getByRole("textbox", { name: "Task title" })).toHaveValue("File taxes");
   await expect(dialog.getByRole("textbox", { name: "Task title" })).toBeFocused();
+});
+
+test("loaded task details preserve focus deliberately moved during loading", async ({ page }) => {
+  let releaseTask: () => void = () => {};
+  const taskGate = new Promise<void>((resolve) => (releaseTask = resolve));
+  await page.route("**/api/tasks/t-critical", async (route) => {
+    await taskGate;
+    await route.fallback();
+  });
+  await page.goto("/tasks");
+  const opener = page.getByRole("button", { name: "Open File taxes" }).first();
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Task details" });
+  await expect(dialog).toBeFocused();
+  await page.keyboard.press("Tab");
+  const close = dialog.getByRole("button", { name: "Close", exact: true });
+  await expect(close).toBeFocused();
+  releaseTask();
+  await expect(dialog.getByRole("textbox", { name: "Task title" })).toHaveValue("File taxes");
+  await expect(close).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
 });
 
 test("Escape in the status menu closes only the menu and keeps unsaved edits", async ({ page }) => {

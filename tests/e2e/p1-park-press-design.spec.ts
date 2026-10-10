@@ -91,10 +91,5 @@ test("task trailing open action is visible at keyboard focus", async ({ page }) 
   await page.keyboard.press("Tab");
   const trailing = page.locator(".tk-task__open button").first();
   await expect(trailing).toBeFocused();
-  expect(
-    await page
-      .locator(".tk-task__open")
-      .first()
-      .evaluate((el) => getComputedStyle(el).opacity)
-  ).toBe("1");
+  await expect(page.locator(".tk-task__open").first()).toHaveCSS("opacity", "1");
 });

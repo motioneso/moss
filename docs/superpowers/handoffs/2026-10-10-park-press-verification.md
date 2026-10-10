@@ -212,6 +212,22 @@ write, pending and recovery branches. Exhaustive failure browser combinations,
 touch hardware, zoom/assistive technology and the real-data live gate remain
 unverified; they are not hidden planning code-completion claims.
 
+### Planning CI follow-through
+
+The first planning web run found that a task title disabled during its initial
+read did not receive focus when it became editable. The title now completes
+initial focus only while the dialog surface still owns focus; a user who moves
+to another control keeps that choice. StrictMode and delayed-read regressions
+cover this transition and subsequent refreshes.
+
+The tag acceptance fixture now releases the deliberately held read before using
+loaded controls, retaining the exact mutation outcome assertions. The trailing
+control test waits for the authored opacity transition to finish at exactly 1.
+Workshop viewport fixtures explicitly enable the module for their actor, so the
+real host gate is exercised rather than bypassed. These correct the six initial
+web failures; they do not claim the first CI run passed. The active scheduled
+quick-add tests remain disjoint and their patch still applies cleanly.
+
 ## Lifestyle retained-screen batch
 
 This batch covers the retained News, Sports, Wellness, Notifications and utility
@@ -282,6 +298,11 @@ shared changes and remained byte-identical to the measured artifact: all fifteen
 width/theme combinations retained 6.343 px disclosure clearance, contained layout,
 phone hit targets and keyboard expansion. These fixtures do not exercise real
 capture, permission changes, account data or external financial writes.
+
+The first registry check correctly rejected changing the already published Finance
+0.6.8 artifact. The repaired UI/metadata now declares a new 0.6.9 patch version,
+absent from the current release assets; the immutable-artifact rule is preserved.
+This version correction changes no capability, approval policy or money limit.
 
 Native production code is unchanged. Local Linux checks do not replace the recorded
 macOS, real-data live-path or capture/accessibility gates. No release or merge
