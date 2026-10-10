@@ -43,7 +43,7 @@ import {
   type PreviewPart
 } from "./settings-theme-preview";
 import { Field, Group, Note, PaneHead, Row } from "./settings-ui";
-import { Badge, BrandMark, Button, ColorBox, ColorPopover, Segmented } from "@moss/ui";
+import { Badge, BrandMark, Button, Eyebrow, ColorBox, ColorPopover, Segmented } from "@moss/ui";
 import { assistantName, personalize } from "../api/use-assistant-name.js";
 
 interface DraftTheme {
@@ -403,7 +403,9 @@ export function AppearancePane() {
         />
 
         <div className="theme-gallery">
-          <div className="jds-eyebrow theme-gallery__eyebrow">Built in</div>
+          <Eyebrow as="div" className="theme-gallery__eyebrow">
+            Built in
+          </Eyebrow>
           <div className="theme-gallery__grid">
             {builtIn.map((theme) => (
               <ThemeCard
@@ -418,7 +420,9 @@ export function AppearancePane() {
             ))}
           </div>
 
-          <div className="jds-eyebrow theme-gallery__eyebrow">Your themes</div>
+          <Eyebrow as="div" className="theme-gallery__eyebrow">
+            Your themes
+          </Eyebrow>
           {custom.length ? (
             <div className="theme-gallery__grid">
               {custom.map((theme) => (
