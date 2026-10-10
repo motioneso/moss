@@ -145,7 +145,7 @@ it("does not overwrite an already saved-off email choice with unrelated preferen
   };
 
   await appContext.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
-    preferencesRepository.upsert(scopedDb, savedOff)
+    preferencesRepository.upsertWithRevision(scopedDb, savedOff, null)
   );
   await context.withDataContext({ actorUserId: ids.userA }, (scopedDb) =>
     preferencesRepository.initializeAutomaticEmailAlerts(scopedDb)

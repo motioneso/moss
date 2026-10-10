@@ -9,6 +9,7 @@ export {
 } from "./manifest.js";
 export {
   ProactiveMonitoringPreferencesRepository,
+  ProactivePreferenceRevisionConflictError,
   isProactiveSourceEnabled,
   resolveAutomaticEmailAlertsEnabled,
   type SavedProactiveMonitoringPreference,

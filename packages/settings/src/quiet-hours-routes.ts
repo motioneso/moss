@@ -4,26 +4,26 @@ import type { AccessContext, DataContextRunner } from "@moss/db";
 import {
   getQuietHoursSettingsRouteSchema,
   putQuietHoursSettingsRouteSchema,
-  type PutQuietHoursSettingsRequest,
-  type QuietHoursSettingsDto
+  type PutQuietHoursSettingsRequest
 } from "@moss/shared";
-import { HttpError } from "@moss/module-sdk";
+import { PreferenceRevisionConflictError } from "@moss/structured-state";
 
-import type { ProfilePreferencesPort } from "./preferences-port.js";
+import type { QuietHoursPreferencesPort } from "./preferences-port.js";
+import {
+  applyQuietHoursEdit,
+  normalizeQuietHours,
+  QUIET_HOURS_PREFERENCE_KEY,
+  quietHoursVersion
+} from "./quiet-hours-application.js";
 import { handleSettingsRouteError } from "./route-error.js";
 
-const QUIET_HOURS_PREFERENCE_KEY = "quiet-hours";
-const DEFAULT_QUIET_HOURS: QuietHoursSettingsDto = {
-  enabled: false,
-  start: "22:00",
-  end: "07:00",
-  timezone: null
-};
+export const QUIET_HOURS_CONFLICT_MESSAGE =
+  "Quiet hours changed somewhere else. Reload to see the latest schedule, then try again.";
 
 interface QuietHoursRoutesDependencies {
   readonly dataContext: DataContextRunner;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
-  readonly preferencesRepository: ProfilePreferencesPort;
+  readonly preferencesRepository: QuietHoursPreferencesPort;
 }
 
 export function registerQuietHoursRoutes(
@@ -36,10 +36,10 @@ export function registerQuietHoursRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const raw = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          dependencies.preferencesRepository.get(scopedDb, QUIET_HOURS_PREFERENCE_KEY)
+        const row = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          dependencies.preferencesRepository.getVersioned(scopedDb, QUIET_HOURS_PREFERENCE_KEY)
         );
-        return { quietHours: normalizeQuietHours(raw) };
+        return { quietHours: normalizeQuietHours(row?.value), version: quietHoursVersion(row) };
       } catch (error) {
         return handleSettingsRouteError(error, reply);
       }
@@ -53,45 +53,38 @@ export function registerQuietHoursRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const body = request.body as PutQuietHoursSettingsRequest;
-        const quietHours = sanitizeQuietHours(body.quietHours);
-        await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          dependencies.preferencesRepository.upsert(
+        return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+          const repository = dependencies.preferencesRepository;
+          const row = await repository.getVersioned(scopedDb, QUIET_HOURS_PREFERENCE_KEY, {
+            forUpdate: true
+          });
+
+          // The caller's full schedule was built from the version it read; any other version means
+          // a newer save (or an undo) landed in between and this payload would overwrite it.
+          if (quietHoursVersion(row) !== body.expectedVersion) {
+            throw new PreferenceRevisionConflictError(QUIET_HOURS_PREFERENCE_KEY);
+          }
+
+          const edit = applyQuietHoursEdit(row?.value, body.quietHours, row !== null);
+          if (!edit.changed) {
+            return { quietHours: edit.effective, version: quietHoursVersion(row) };
+          }
+
+          await repository.upsertWithRevision(
             scopedDb,
             QUIET_HOURS_PREFERENCE_KEY,
-            quietHours
-          )
-        );
-        return { quietHours };
+            edit.next,
+            row?.revision ?? null
+          );
+          const saved = await repository.getVersioned(scopedDb, QUIET_HOURS_PREFERENCE_KEY);
+          return { quietHours: edit.effective, version: quietHoursVersion(saved) };
+        });
       } catch (error) {
+        if (error instanceof PreferenceRevisionConflictError) {
+          return reply.code(409).send({ error: QUIET_HOURS_CONFLICT_MESSAGE });
+        }
         return handleSettingsRouteError(error, reply);
       }
     }
   );
-}
-
-function normalizeQuietHours(value: unknown): QuietHoursSettingsDto {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return DEFAULT_QUIET_HOURS;
-  const r = value as Record<string, unknown>;
-  const enabled = typeof r.enabled === "boolean" ? r.enabled : DEFAULT_QUIET_HOURS.enabled;
-  const start = isValidHHMM(r.start) ? r.start : DEFAULT_QUIET_HOURS.start;
-  const end = isValidHHMM(r.end) ? r.end : DEFAULT_QUIET_HOURS.end;
-  const timezone =
-    typeof r.timezone === "string" && r.timezone.length > 0 && r.timezone.length <= 100
-      ? r.timezone
-      : null;
-  return { enabled, start, end, timezone };
-}
-
-function sanitizeQuietHours(dto: QuietHoursSettingsDto): QuietHoursSettingsDto {
-  if (!isValidHHMM(dto.start)) throw new HttpError(400, "start must be HH:MM (00:00–23:59)");
-  if (!isValidHHMM(dto.end)) throw new HttpError(400, "end must be HH:MM (00:00–23:59)");
-  const timezone =
-    dto.timezone !== null && dto.timezone !== undefined && dto.timezone.trim().length > 0
-      ? dto.timezone.trim()
-      : null;
-  return { enabled: dto.enabled, start: dto.start, end: dto.end, timezone };
-}
-
-function isValidHHMM(s: unknown): s is string {
-  return typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 }

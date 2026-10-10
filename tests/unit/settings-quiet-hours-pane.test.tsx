@@ -5,7 +5,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GetQuietHoursSettingsResponse, MeResponse } from "@moss/shared";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
-import { isValidQuietHoursTime } from "../../apps/web/src/settings/settings-personal-panes.js";
+import { ApiError } from "../../apps/web/src/api/client.js";
+import {
+  isValidQuietHoursTime,
+  QUIET_HOURS_STALE_SAVE_MESSAGE,
+  quietHoursSaveError,
+  quietHoursSaveRequest
+} from "../../apps/web/src/settings/settings-personal-panes.js";
 
 vi.mock("virtual:moss-module-settings", () => ({
   MODULE_SETTINGS_SURFACES: [],
@@ -13,7 +19,8 @@ vi.mock("virtual:moss-module-settings", () => ({
 }));
 
 const quietHours: GetQuietHoursSettingsResponse = {
-  quietHours: { enabled: true, start: "22:00", end: "07:00", timezone: "America/Chicago" }
+  quietHours: { enabled: true, start: "22:00", end: "07:00", timezone: "America/Chicago" },
+  version: "3:1700000000000"
 };
 
 afterEach(() => {
@@ -31,9 +38,12 @@ describe("quiet-hours settings client", () => {
       await import("../../apps/web/src/api/client.js");
 
     await expect(getQuietHoursSettings()).resolves.toEqual(quietHours);
-    await expect(putQuietHoursSettings({ quietHours: quietHours.quietHours })).resolves.toEqual(
-      quietHours
-    );
+    await expect(
+      putQuietHoursSettings({
+        quietHours: quietHours.quietHours,
+        expectedVersion: "3:1700000000000"
+      })
+    ).resolves.toEqual(quietHours);
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -45,7 +55,10 @@ describe("quiet-hours settings client", () => {
       "/api/me/quiet-hours",
       expect.objectContaining({
         method: "PUT",
-        body: JSON.stringify({ quietHours: quietHours.quietHours }),
+        body: JSON.stringify({
+          quietHours: quietHours.quietHours,
+          expectedVersion: "3:1700000000000"
+        }),
         credentials: "include"
       })
     );
@@ -53,6 +66,32 @@ describe("quiet-hours settings client", () => {
 
   it("has a dedicated settings query key", () => {
     expect(queryKeys.settings.quietHours).toEqual(["settings", "quiet-hours"]);
+  });
+});
+
+describe("quiet-hours save request", () => {
+  const next = { ...quietHours.quietHours, start: "23:00" };
+
+  it("sends the version the controls were loaded from", () => {
+    expect(quietHoursSaveRequest(next, quietHours)).toEqual({
+      quietHours: next,
+      expectedVersion: "3:1700000000000"
+    });
+  });
+
+  it("expects no saved schedule when none was loaded", () => {
+    expect(quietHoursSaveRequest(next, { ...quietHours, version: null })).toEqual({
+      quietHours: next,
+      expectedVersion: null
+    });
+    expect(quietHoursSaveRequest(next, undefined).expectedVersion).toBeNull();
+  });
+
+  it("explains a refused stale save and passes other errors through", () => {
+    expect(quietHoursSaveError(new ApiError(409, "conflict"))).toBe(QUIET_HOURS_STALE_SAVE_MESSAGE);
+    expect(
+      quietHoursSaveError(new ApiError(400, "Quiet hours must start and end at different times"))
+    ).toBe("Quiet hours must start and end at different times");
   });
 });
 
