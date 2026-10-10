@@ -21,6 +21,7 @@ import {
 } from "./settings-quiet-hours-draft.js";
 import {
   quietHoursChoiceFailure,
+  quietHoursChoiceNote,
   quietHoursChoiceRequest,
   quietHoursChoices,
   quietHoursChosenLine,
@@ -177,8 +178,7 @@ export function QuietHoursEditor() {
       {choices.length > 0 ? (
         <>
           <Note icon={<MoonStar size={13} aria-hidden="true" />}>
-            Your saved quiet hours differ. Choose which schedule to use for future interruptions.
-            Nothing changes until you choose.
+            {quietHoursChoiceNote(choices)}
           </Note>
           <div className="quiet-hours__actions">
             {choices.map((option) => (

@@ -7,6 +7,7 @@ import { ApiError } from "../../apps/web/src/api/client.js";
 import {
   QUIET_HOURS_STALE_CHOICE_MESSAGE,
   quietHoursChoiceFailure,
+  quietHoursChoiceNote,
   quietHoursChoiceRequest,
   quietHoursChoices,
   quietHoursChosenLine
@@ -113,6 +114,28 @@ describe("quietHoursChoices", () => {
       ).toEqual([]);
     }
   );
+});
+
+describe("quietHoursChoiceNote", () => {
+  it("says the schedules differ when two are offered", () => {
+    const choices = quietHoursChoices(
+      conflict(off, { enabled: true, start: "20:00", end: "08:00" })
+    );
+    expect(quietHoursChoiceNote(choices)).toBe(
+      "Your saved quiet hours differ. Choose which schedule to use for future interruptions. Nothing changes until you choose."
+    );
+  });
+
+  it.each([
+    ["both schedules are the same", { enabled: false, start: "22:00", end: "07:00" }],
+    ["the alert schedule is gone", null]
+  ] as const)("asks the owner to confirm the one schedule when %s", (_case, alerts) => {
+    const note = quietHoursChoiceNote(quietHoursChoices(conflict(off, alerts)));
+    expect(note).toBe(
+      "Confirm your saved quiet hours to use them for future interruptions. Nothing changes until you confirm."
+    );
+    expect(note).not.toContain("differ");
+  });
 });
 
 describe("quietHoursChoiceRequest", () => {

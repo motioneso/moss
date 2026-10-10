@@ -49,6 +49,13 @@ export function quietHoursChoices(
   return choices;
 }
 
+/** One offered schedule has nothing to differ from, so the owner confirms it instead. */
+export function quietHoursChoiceNote(choices: readonly QuietHoursChoice[]): string {
+  return choices.length > 1
+    ? "Your saved quiet hours differ. Choose which schedule to use for future interruptions. Nothing changes until you choose."
+    : "Confirm your saved quiet hours to use them for future interruptions. Nothing changes until you confirm.";
+}
+
 export function quietHoursChoiceRequest(
   chosen: QuietHoursChoice,
   version: string | null
