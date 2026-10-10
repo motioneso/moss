@@ -78,9 +78,28 @@
   background: var(--surface);
   color: var(--white);
 }
-.jds-check input:checked + .jds-check__box {
+.jds-check input:checked + .jds-check__box,
+.jds-check input:indeterminate + .jds-check__box {
   background: var(--accent);
   border-color: var(--accent);
+}
+/* The native input remains the state source, including checked + mixed. */
+.jds-check input:indeterminate + .jds-check__box {
+  position: relative;
+  color: var(--text-on-accent);
+}
+.jds-check input[type="checkbox"]:indeterminate + .jds-check__box svg {
+  opacity: 0;
+}
+.jds-check input:indeterminate + .jds-check__box::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--space-2);
+  height: var(--border-w-strong);
+  background: currentColor;
+  transform: translate(-50%, -50%);
 }
 .jds-check input:focus-visible + .jds-check__box {
   box-shadow: 0 0 0 3px var(--focus-ring);
