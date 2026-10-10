@@ -74,19 +74,7 @@ export async function tryGatedTurn(
 }> {
   // Capture identity and privacy together BEFORE the gate-mode wait. A warm engine stays bound,
   // an explicit resume/new chat follows current state, and only a cold drawer reconnect selects Main.
-  const sessionKey = surfaceSessionKey(actorUserId, surface);
-  const existingSession = host.sessions.get(sessionKey);
-  const threadState = existingSession
-    ? { id: existingSession.threadId, incognito: existingSession.incognito }
-    : await getSelectedThreadState({
-        actorUserId,
-        surface,
-        useMain: usesMainThreadSelection({
-          surface,
-          forceReplay: host.pendingForcedReplay.has(sessionKey)
-        }),
-        persistence: host.deps.persistence
-      });
+  const threadState = await selectTurnThread(host, actorUserId, surface);
   const requestIncognito = threadState?.incognito ?? false;
   const requestThreadId = threadState?.id ?? null;
   const gate = host.deps.classifierGate;
@@ -160,8 +148,29 @@ export async function tryGatedTurn(
   };
 }
 
+/** The thread a turn lands in: a warm engine stays bound, a cold drawer reconnect selects Main. */
+export async function selectTurnThread(
+  host: GateLifecycleHost,
+  actorUserId: string,
+  surface: ChatSurface
+): Promise<{ readonly id: string | null; readonly incognito: boolean } | undefined> {
+  const sessionKey = surfaceSessionKey(actorUserId, surface);
+  const existingSession = host.sessions.get(sessionKey);
+  if (existingSession)
+    return { id: existingSession.threadId, incognito: existingSession.incognito };
+  return getSelectedThreadState({
+    actorUserId,
+    surface,
+    useMain: usesMainThreadSelection({
+      surface,
+      forceReplay: host.pendingForcedReplay.has(sessionKey)
+    }),
+    persistence: host.deps.persistence
+  });
+}
+
 /** Emits the same status the default path uses on Stop and persists nothing. */
-function cancelledTurn(
+export function cancelledTurn(
   host: GateLifecycleHost,
   actorUserId: string,
   surface: ChatSurface
@@ -277,7 +286,7 @@ async function persistGateOutcome(
  * Drops any live session for this actor + surface after a gate-handled turn and marks the key for a
  * forced replay, so the next default turn relaunches with the handled turn in normal history.
  */
-async function dropWarmSessionForGate(
+export async function dropWarmSessionForGate(
   host: GateLifecycleHost,
   actorUserId: string,
   surface: ChatSurface

@@ -124,6 +124,13 @@ export const chatModuleManifest = {
       featureFlagId: "chat.module"
     },
     {
+      id: "chat.relative_reminders",
+      description:
+        "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder that Moss posts once in Main, " +
+        "noting if late. Up to 20 at once, 30 days ahead. No clock times, repeats or private chats.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.pending_action_disclosure",
       description:
         "App cards show exact server targets and human-readable changes. Memory and note deletion use red Approve. " +

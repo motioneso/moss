@@ -37,6 +37,7 @@ export class ReminderRepository {
   async create(
     scopedDb: DataContextDb,
     input: {
+      readonly id?: string;
       readonly threadId: string;
       readonly sourceMessageId: string;
       readonly delaySeconds: number;
@@ -47,7 +48,7 @@ export class ReminderRepository {
     const row = await scopedDb.db
       .insertInto("app.chat_reminders")
       .values({
-        id: randomUUID(),
+        id: input.id ?? randomUUID(),
         owner_user_id: sql<string>`app.current_actor_user_id()`,
         thread_id: input.threadId,
         source_message_id: input.sourceMessageId,
