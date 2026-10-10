@@ -331,9 +331,11 @@ The final owner freshness check keeps main at the recorded merged baseline and
 preserves active work. The new trust/approval branch overlaps only separate Finance
 UAT locator lines; its behavior assertions apply cleanly and are not imported.
 Other approved disjoint patches remain compatible, apart from the explicitly
-pre-existing assistant-name fixture conflict and the preserved current Finance
-manifest version. Remaining Conversations/Alerts replacements, Meals/Food and Job
-Search replacements, native branding, Reports retirement and real-data/native/AT
+pre-existing assistant-name fixture conflict and the older pending Finance
+manifest version. Main’s published 0.6.8 artifact remains immutable; the reviewed
+UI/metadata repair declares the new 0.6.9 patch version. Remaining Conversations/Alerts
+replacements, Meals/Food and Job Search replacements, native branding, Reports
+retirement and real-data/native/AT
 proof are still held or unverified, not counted as completed repairs.
 
 ## Explicit outstanding gates
