@@ -61,9 +61,46 @@ describe("settings canonical adapters", () => {
     act(() => root.unmount());
     host.remove();
   });
-  it("keeps legacy children and names their group; Row accepts layout-only className", () => {
+  it.each(["Acme API token", "Assistant name"])(
+    "keeps the existing %s label on exactly one usable control",
+    (label) => {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const root = createRoot(host);
+      act(() =>
+        root.render(
+          <Field label={label}>
+            <input aria-label={label} />
+            {label === "Acme API token" ? <button>Save</button> : null}
+          </Field>
+        )
+      );
+      // Both aria-label and aria-labelledby are label-query targets. Naming a wrapper
+      // after this same single field makes the existing user-facing label ambiguous.
+      const labeled = [
+        ...host.querySelectorAll<HTMLElement>("[aria-label], [aria-labelledby]")
+      ].filter((node) => {
+        const ids = node.getAttribute("aria-labelledby");
+        const name = ids
+          ? ids
+              .split(/\s+/)
+              .map((id) => document.getElementById(id)?.textContent ?? "")
+              .join(" ")
+          : node.getAttribute("aria-label");
+        return name === label;
+      });
+      const input = host.querySelector("input")!;
+      expect(labeled).toEqual([input]);
+      expect(input.tabIndex).toBe(0);
+      input.focus();
+      expect(document.activeElement).toBe(input);
+      act(() => root.unmount());
+      host.remove();
+    }
+  );
+  it("keeps explicit multi-control grouping; Row accepts layout-only className", () => {
     const field = renderToStaticMarkup(
-      <Field label="Actions">
+      <Field label="Actions" group>
         <button>One</button>
         <button>Two</button>
       </Field>

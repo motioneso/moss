@@ -289,7 +289,9 @@ returnFocusRef, dismissOnEscape, backdropRef})`; attach its returned onKeyDown t
 - Settings `Switch`, `Segmented`, `Avatar` and `Indicator` re-export canonical components. The
   compatibility Badge translates `pine` to `forest`. Settings `Field` accepts `controlId`, `hintId`,
   `errorId`, and `error`; the consumer supplies matching control id/aria-describedby/aria-invalid.
-  Legacy multi-control fields retain a named group; they are not automatically relabeled by cloning.
+  Field wrappers are neutral by default so an independently labeled control has one label target.
+  Use `group` explicitly for multiple independently labeled controls without `controlId`; arbitrary
+  children are never automatically relabeled or cloned.
 - Shared SectionHead keeps its 25px reference geometry and explicit bold weight; Today retains
   its heavier local heading treatment. RowIndex supplies bottom rules, not a top rule.
 

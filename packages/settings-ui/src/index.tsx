@@ -130,6 +130,8 @@ export function Field(props: {
   readonly error?: ReactNode;
   /** Match this to the nested control's id; wrapper children are never cloned. */
   readonly controlId?: string;
+  /** Opt into a named group of independently labeled controls (without controlId). */
+  readonly group?: boolean;
   /** Match these to the control's aria-describedby when providing a hint or error. */
   readonly hintId?: string;
   readonly errorId?: string;
@@ -150,8 +152,8 @@ export function Field(props: {
       )}
       <div
         className="fld__row"
-        role={props.controlId ? undefined : "group"}
-        aria-labelledby={props.controlId ? undefined : labelId}
+        role={!props.controlId && props.group ? "group" : undefined}
+        aria-labelledby={!props.controlId && props.group ? labelId : undefined}
       >
         {props.children}
       </div>
