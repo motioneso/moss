@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Sports briefing and ticker fixes.** The morning briefing now shows a followed team's current game instead of yesterday's result, and the sports ticker no longer breaks when you follow your first team. [PR #3300](https://github.com/motioneso/moss/pull/3300)
 - **Medication times and failed saves.** Medication doses now appear at the right time and day for your time zone, every-few-hours schedules count correctly, and a wellness note you type is kept with an error message if saving fails. [PR #3283](https://github.com/motioneso/moss/pull/3283)
 - **Workshop replies no longer get stuck.** Workshop no longer shows an endless "Thinking" after a failed reply, and it now shows new replies in long projects. [PR #3296](https://github.com/motioneso/moss/pull/3296)
 - **Deleted household members no longer appear in assistant answers.** When someone is removed from your household, the assistant no longer reports their shared accounts, transactions or spending. [PR #3269](https://github.com/motioneso/moss/pull/3269)
