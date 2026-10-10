@@ -422,6 +422,13 @@ export interface JsonMossModuleManifest {
    * instead. Optional: a module that declares none contributes no briefing section.
    */
   readonly briefing?: ExternalModuleBriefingDeclaration;
+  /**
+   * Module-relative path of this module's own settings page (#3184), e.g. "/settings". When set,
+   * the top-bar gear opens `/m/<moduleId><settingsPath>` and the host Settings page lists the
+   * module as a link there instead of rendering its switches and credential slots. Validated
+   * in packages/module-registry/src/external/validate-declarations.ts.
+   */
+  readonly settingsPath?: string;
   /** Entries for Moss's app map (#3168). Optional; validated in validate-declarations.ts. */
   readonly appMap?: ExternalModuleAppMapDeclaration;
   readonly assistantOnboarding?: ModuleAssistantOnboardingManifest;
