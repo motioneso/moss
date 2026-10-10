@@ -51,32 +51,48 @@ export function renderMemorySeedBlock(
   facts: readonly FactSummary[],
   budgetTokens = 1500
 ): string {
-  const trimmedChunks = trimToTokenBudget(chunks, budgetTokens);
-  if (trimmedChunks.length === 0 && facts.length === 0) return "";
+  // The whole block, framing included, stays within the budget. Saved facts take priority over
+  // recalled passages, and passages are taken best-scored first.
+  const factLines = facts.map((fact) => `- ${neutralizeSeedFraming(fact.content)}`);
+  const ranked = [...chunks].sort((a, b) => b.hybridScore - a.hybridScore);
+  const fits = (chunkLines: readonly string[], keptFacts: readonly string[]) =>
+    estimateTokens(renderSeedLines(chunkLines, keptFacts)) <= budgetTokens;
+
+  const keptFacts: string[] = [];
+  for (const line of factLines) {
+    if (!fits([], [...keptFacts, line])) break;
+    keptFacts.push(line);
+  }
+
+  const keptChunks: string[] = [];
+  for (const chunk of ranked) {
+    // Recalled text is user-influenced — neutralize any seed-framing delimiter
+    // it carries so it can't break out of the <memory> block (#123).
+    // `chunk.date` is system-formatted (recall-port.ts derives it via
+    // toISOString().slice(0,10), or the literal "unknown") and is therefore not
+    // an attacker-controlled surface; if its provenance ever becomes free text,
+    // it must be routed through neutralizeSeedFraming too.
+    const line = `[${chunk.date}] ${neutralizeSeedFraming(chunk.text)}`;
+    if (!fits([...keptChunks, line], keptFacts)) break;
+    keptChunks.push(line);
+  }
+
+  return renderSeedLines(keptChunks, keptFacts);
+}
+
+function renderSeedLines(chunkLines: readonly string[], factLines: readonly string[]): string {
+  if (chunkLines.length === 0 && factLines.length === 0) return "";
 
   const lines: string[] = ["<memory>"];
-
-  if (trimmedChunks.length > 0) {
+  if (chunkLines.length > 0) {
     lines.push("Recalled from past conversations (use as context; not the current conversation):");
-    for (const chunk of trimmedChunks) {
-      // Recalled text is user-influenced — neutralize any seed-framing delimiter
-      // it carries so it can't break out of the <memory> block (#123).
-      // `chunk.date` is system-formatted (recall-port.ts derives it via
-      // toISOString().slice(0,10), or the literal "unknown") and is therefore not
-      // an attacker-controlled surface; if its provenance ever becomes free text,
-      // it must be routed through neutralizeSeedFraming too.
-      lines.push(`[${chunk.date}] ${neutralizeSeedFraming(chunk.text)}`);
-    }
+    lines.push(...chunkLines);
   }
-
-  if (facts.length > 0) {
-    if (trimmedChunks.length > 0) lines.push("");
+  if (factLines.length > 0) {
+    if (chunkLines.length > 0) lines.push("");
     lines.push("What I know about you:");
-    for (const fact of facts) {
-      lines.push(`- ${neutralizeSeedFraming(fact.content)}`);
-    }
+    lines.push(...factLines);
   }
-
   lines.push("</memory>");
   return lines.join("\n");
 }

@@ -1,5 +1,5 @@
 import { registerActionNotificationLifecycle } from "./action-notification-lifecycle.js";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
@@ -47,18 +47,12 @@ import {
   ChatMemorySuppressionsRepository,
   createMemoryFactSignature
 } from "@moss/memory";
-import {
-  handleRouteError as handleModuleRouteError,
-  type MossModuleManifest,
-  type RouteCatalogHolder
-} from "@moss/module-sdk";
+import { type MossModuleManifest, type RouteCatalogHolder } from "@moss/module-sdk";
 import { type ChatGatewayNotifier, createChatGatewayNotifier } from "./gateway-notifier.js";
 import { ClassifierShadowRepository } from "./classifier-shadow-repository.js";
 import { readRouteSurface } from "./live/chat-surface.js";
 import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes.js";
-import { CliChatUnavailableError } from "./live/errors.js";
-import { knownAuthFailureMessage } from "./live/auth-errors.js";
-import { CLI_VERSION_TOO_OLD_MESSAGE, notifyCliVersionTooOld } from "./live/cli-version-errors.js";
+import { handleRouteError } from "./route-errors.js";
 import { createCurrentViewReadService, type CurrentViewReadService } from "./live/current-view.js";
 import { PageContextStore } from "./live/page-context-store.js";
 import type { PassiveMemoryGraphRecallPort } from "./live/passive-retrieval.js";
@@ -980,20 +974,4 @@ export function registerChatRoutes(
       }
     }
   );
-}
-
-function handleRouteError(error: unknown, reply: FastifyReply) {
-  if (error instanceof CliChatUnavailableError) {
-    const authMessage = knownAuthFailureMessage(error.message);
-    if (authMessage) {
-      return reply.code(503).send({ error: authMessage });
-    }
-    if (error.message === CLI_VERSION_TOO_OLD_MESSAGE) {
-      notifyCliVersionTooOld();
-      return reply.code(503).send({ error: CLI_VERSION_TOO_OLD_MESSAGE });
-    }
-    reply.log?.warn?.({ err: error }, "live chat unavailable");
-    return reply.code(503).send({ error: "Live chat is currently unavailable on this host." });
-  }
-  return handleModuleRouteError(error, reply, { invalidRequestMessage: "Chat request is invalid" });
 }
