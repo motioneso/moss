@@ -94,6 +94,8 @@ export interface ChatPersistencePort {
       readonly usage?: ChatTurnUsageDto;
       /** #3311 — reserved reminder message ids this turn was shown; acknowledged with the save. */
       readonly acknowledgeReminderMessageIds?: readonly string[];
+      /** #3128 — live turn identity; the save clears its in-flight record. */
+      readonly turnId?: string;
     },
     surface?: ChatSurface
   ): Promise<
@@ -104,6 +106,24 @@ export interface ChatPersistencePort {
       }
     | undefined
   >;
+  /**
+   * #3128 — record a reply in flight just before the model receives it, so a restart can
+   * store the question and an interrupted note. Optional: embedders without recovery omit it.
+   */
+  beginLiveTurn?(
+    actorUserId: string,
+    turn: {
+      readonly turnId: string;
+      readonly threadId: string;
+      readonly userText: string;
+      readonly attachments?: readonly ChatAttachmentDto[];
+    }
+  ): Promise<void>;
+  /**
+   * #3128 — close an unsaved live turn. `interrupted` stores the question and the interrupted
+   * note; otherwise the record is dropped, as for a stopped turn.
+   */
+  settleLiveTurn?(actorUserId: string, turnId: string, interrupted: boolean): Promise<void>;
   /**
    * #3311 — delivered reminders whose context is still pending in this exact Main chat, oldest
    * first and bounded. Optional: embedders without reminders omit it.

@@ -27,6 +27,7 @@ import {
   mergeTerminalAction,
   type TerminalActionRecord
 } from "./action-record-history.js";
+import { deleteLiveTurn, findStoredTurn } from "./live-turns.js";
 
 /** Absorbed synthetic rows remain stored; only their visible replacement participates in history. */
 function visibleChatMessage(table: "app.chat_messages" | "m" = "app.chat_messages") {
@@ -68,6 +69,8 @@ export interface CompletedTurnOptions {
   readonly activityRecords?: readonly unknown[];
   readonly elapsedMs?: number;
   readonly usage?: ChatTurnUsageDto;
+  /** #3128: live turn identity; stamped on both rows and clears the in-flight record. */
+  readonly turnId?: string;
 }
 
 /**
@@ -509,6 +512,14 @@ export class ChatRepository {
     }
 
     await this.lockActionHistory(scopedDb, threadId);
+    // #3128: the turn lands once, and its in-flight record goes in the same transaction so a
+    // later restart can never also store it as interrupted.
+    if (opts?.turnId) {
+      const landed = await findStoredTurn(scopedDb, threadId, opts.turnId);
+      await deleteLiveTurn(scopedDb, opts.turnId);
+      if (landed) return landed;
+    }
+    const turnIdentity = opts?.turnId ? { turnId: opts.turnId } : {};
     let activity = [...(opts?.activityRecords ?? opts?.actionResults ?? [])];
     let actionResults: readonly unknown[] = [...(opts?.actionResults ?? [])];
     const actionIds = new Set(activity.map(actionRecordId).filter((id): id is string => !!id));
@@ -583,6 +594,7 @@ export class ChatRepository {
       modelMetadata: {},
       toolMetadata: {
         selectedTools: [],
+        ...turnIdentity,
         ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
         // #1133 — chip rendering in history; JSONB metadata only, bytes stay in the vault.
         ...(opts?.attachments?.length ? { attachments: opts.attachments } : {})
@@ -597,6 +609,7 @@ export class ChatRepository {
       modelMetadata: assistantModelMetadata,
       toolMetadata: {
         selectedTools: [],
+        ...turnIdentity,
         ...(opts?.meetingContext ? { meetingChatV1: opts.meetingContext } : {}),
         ...(opts?.sourceFreshness ? { sourceFreshness: opts.sourceFreshness } : {}),
         ...(opts?.answerProvenance !== undefined

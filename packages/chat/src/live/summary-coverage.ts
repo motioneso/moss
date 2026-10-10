@@ -42,12 +42,34 @@ export interface SummaryCoveragePlan<T extends CoverageTurn> {
   readonly throughMessageId: string;
 }
 
-/** Stored user and assistant turns, in history order, as coverage turns. */
-export function storedCoverageTurns(
-  messages: readonly { id: string; role: string; status: string; body: string }[]
-): CoverageTurn[] {
+interface CoverageSourceMessage {
+  readonly id: string;
+  readonly role: string;
+  readonly status: string;
+  readonly body: string;
+  readonly tool_metadata?: Record<string, unknown>;
+}
+
+/** #3128: the note stored in place of a reply an interruption cut off. */
+export function isInterruptedNote(message: CoverageSourceMessage): boolean {
+  return (
+    message.role === "assistant" &&
+    message.status === "error" &&
+    message.tool_metadata?.interruptedTurn === true
+  );
+}
+
+/**
+ * Stored user and assistant turns, in history order, as coverage turns. An interrupted note
+ * counts as the answer to its question, so the model never sees that question as open.
+ */
+export function storedCoverageTurns(messages: readonly CoverageSourceMessage[]): CoverageTurn[] {
   return messages
-    .filter((m) => m.status === "stored" && (m.role === "user" || m.role === "assistant"))
+    .filter(
+      (m) =>
+        (m.status === "stored" && (m.role === "user" || m.role === "assistant")) ||
+        isInterruptedNote(m)
+    )
     .map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.body }));
 }
 

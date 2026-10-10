@@ -9,6 +9,7 @@ import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
 import { beginClassifierGateShadowTurn } from "./classifier-gate-shadow.js";
 import { admissionForActor, admitToContext, submitPreparedTurn } from "./context-admission.js";
+import { openLiveTurnRecord, settleLiveTurnRecord } from "./live-turn-record.js";
 import { buildEngineText } from "./engine-text.js";
 import { snapshotMainReminders } from "./main-reminder-context.js";
 import {
@@ -132,6 +133,10 @@ export async function runChatTurn(
   let turnUsage: ChatTurnUsageDto | undefined;
   // #2907 (plan 3.5) — the turn's shadow tracker; created once its own session is resolved.
   let gateShadow: ReturnType<typeof beginClassifierGateShadowTurn> | undefined;
+  // #3128: in-flight record state, settled in the finally unless the turn saved.
+  let liveTurnOpen = false;
+  let liveTurnSaved = false;
+  let liveTurnInterrupted = false;
   try {
     await waitForOriginThreadTransition(host.originTransitions, sessionKey, controller.signal);
     if (controller.signal.aborted)
@@ -263,6 +268,11 @@ export async function runChatTurn(
     // #2934 finding 1 — stop before the submit so flipped-thread text never reaches the model.
     if (controller.signal.aborted)
       return finishRefusedTurn(host, actorUserId, surface, sessionKey, session, gateShadow);
+    liveTurnOpen = await openLiveTurnRecord(host.deps.persistence, actorUserId, session, {
+      turnId,
+      userText: text,
+      attachments
+    });
     try {
       await submitPreparedTurn(session.engine, engineText);
       noteSessionSubmission(session.usage, engineText.text, "turn");
@@ -398,6 +408,7 @@ export async function runChatTurn(
     }
 
     if (watchdogTripped) {
+      liveTurnInterrupted = true;
       const seconds = Math.round(host.idleWatchdogMs / 1000);
       host.emit(actorUserId, surface, {
         kind: "status",
@@ -467,10 +478,12 @@ export async function runChatTurn(
         usage: turnUsage,
         ...(mainReminders.messageIds.length > 0
           ? { acknowledgeReminderMessageIds: mainReminders.messageIds }
-          : {})
+          : {}),
+        turnId
       },
       surface
     );
+    liveTurnSaved = stored !== undefined;
     session.lastActivity = host.deps.clock.now();
     host.deps.touchMcpToken?.(sessionKey);
 
@@ -507,9 +520,12 @@ export async function runChatTurn(
       sourceFreshness: stored?.sourceFreshness
     };
   } catch (error) {
+    liveTurnInterrupted = !controller.signal.aborted;
     if (!controller.signal.aborted || error !== controller.signal.reason) throw error;
     return finishRefusedTurn(host, actorUserId, surface, sessionKey, undefined, gateShadow);
   } finally {
+    if (liveTurnOpen && !liveTurnSaved)
+      await settleLiveTurnRecord(host.deps.persistence, actorUserId, turnId, liveTurnInterrupted);
     // #2907 — record a no-model-tool turn distinctly. A recorded cancel outranks this in the runner.
     gateShadow?.finish();
     // #2956: release the filing slot so later tool calls cannot join this turn.

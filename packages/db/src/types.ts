@@ -1043,6 +1043,16 @@ export interface ChatRemindersTable {
   created_at: TimestampColumn;
 }
 
+export interface ChatLiveTurnsTable {
+  turn_id: string;
+  owner_user_id: string;
+  thread_id: string;
+  boot_id: string;
+  user_text: string;
+  attachments: ColumnType<unknown[], unknown[] | undefined, unknown[]>;
+  started_at: TimestampColumn;
+}
+
 export type ChatSkillSource = "authored" | "uploaded";
 
 export interface ChatSkillsTable {
@@ -1991,6 +2001,7 @@ export interface MossDatabase {
   "app.chat_automatic_action_reservations": ChatAutomaticActionReservationsTable;
   "app.chat_messages": ChatMessagesTable;
   "app.chat_reminders": ChatRemindersTable;
+  "app.chat_live_turns": ChatLiveTurnsTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_classifier_release_eligibility": ChatClassifierReleaseEligibilityTable;
   "app.chat_classifier_shadow_reviews": ChatClassifierShadowReviewsTable;
