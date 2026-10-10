@@ -166,7 +166,7 @@ export const chatModuleManifest = {
       id: "chat.automatic_session_handoff",
       description:
         "Moss counts what a chat's model session holds. Before a turn passes the budget, Moss starts a fresh session " +
-        "for the same chat and model with the summary and newer turns, if they fit. Private chats never hand off.",
+        "for the same chat and model from its summary and newer turns, once a summary is ready. Not in private chats.",
       featureFlagId: "chat.module",
       errors: [
         {
