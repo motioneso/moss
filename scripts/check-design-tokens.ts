@@ -166,7 +166,7 @@ export const MIGRATED_SECTION_CSS_FILES: readonly string[] = [
 ];
 
 async function loadValidTokens(root: string): Promise<Set<string>> {
-  const tokensFile = await readFile(join(root, allowedColorLiteralFile), "utf8");
+  const tokensFile = stripCssComments(await readFile(join(root, allowedColorLiteralFile), "utf8"));
   const validTokens = new Set<string>();
   const tokenDefPattern = /(?:^|[;{])\s*(--[a-zA-Z0-9-]+)\s*:/gm;
   let match;

@@ -101,6 +101,19 @@ describe("token scan includes shared primitives", () => {
       (await checkTokens(second)).some((item) => item.text.includes("Undefined token --first"))
     ).toBe(true);
   });
+  it("rejects tokens that only occur in commented-out examples", async () => {
+    const root = await buildFixture(".unrelated-page { color: var(--retired-color); }");
+    await writeFile(
+      join(root, "apps/web/src/styles/tokens.css"),
+      ":root { --text: #282c25; } /* Historical example: :root { --retired-color: #282c25; } */\n"
+    );
+    expect(await checkTokens(root)).toEqual([
+      expect.objectContaining({
+        path: "apps/web/src/styles/kit-example.css",
+        text: expect.stringContaining("Undefined token --retired-color")
+      })
+    ]);
+  });
   it("allows Calendar's scoped gutter only in its declared time-grid consumer", async () => {
     const root = await buildFixture(".unrelated-page { width: var(--cal-gutter, 60px); }");
     await writeFile(join(root, "apps/web/src/styles/tokens.css"), ":root { --text: #282c25; }\n");
