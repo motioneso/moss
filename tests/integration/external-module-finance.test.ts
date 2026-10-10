@@ -3,7 +3,7 @@
 // invoke paths — build the bundle, install the trust set via the admin
 // registration route, invoke finance.accounts.list over
 // /api/ai/assistant-tools (the response crosses three lossy layers:
-// sanitizeAssistantToolResult projection, 16k degradation, and
+// sanitizeAssistantToolResult projection, the screen size limit, and
 // fast-json-stringify's silent field drop — the recurring #859/#885 trap),
 // and assert queue/schedule reconciliation registers finance.sync-run /
 // finance.connect-poll / finance.sync-sweep.
@@ -238,6 +238,33 @@ describe("finance module surface (#1146)", () => {
       status: "blocked",
       blockedReason: "confirmation_required"
     });
+  });
+  it("returns a reply larger than the chat render cap whole, so a screen can read it", async () => {
+    const ids = Array.from({ length: 80 }, (_, i) => `acc-big-${String(i).padStart(2, "0")}`);
+    for (const accountId of ids) {
+      await seedKv(NS.accounts, accountId, {
+        accountId,
+        itemId: "item-1",
+        name: `Everyday checking account ${accountId}`,
+        officialName: null,
+        type: "depository",
+        subtype: "checking",
+        mask: "0000",
+        balanceCents: 500000,
+        isoCurrency: "USD",
+        updatedAt: "2026-07-18T06:00:00Z"
+      });
+    }
+
+    const response = await invokeTool("finance.accounts.list");
+    expect(response.statusCode).toBe(200);
+    const invocation = response.json<{
+      invocation: { status: string; result: { accounts?: Array<{ accountId: string }> } };
+    }>().invocation;
+    expect(invocation.status).toBe("succeeded");
+    expect(JSON.stringify(invocation.result).length).toBeGreaterThan(16_000);
+    const returned = (invocation.result.accounts ?? []).map((account) => account.accountId);
+    expect(returned).toEqual(expect.arrayContaining(ids));
   });
 });
 

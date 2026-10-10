@@ -85,10 +85,7 @@ import {
   listAssistantToolsFromManifests,
   summarizeAssistantToolInput
 } from "./assistant-tools.js";
-import {
-  sanitizeAssistantToolResult,
-  boundedAssistantToolResultData
-} from "./gateway/output-validation.js";
+import { sanitizeAssistantToolResult, screenToolResultData } from "./gateway/output-validation.js";
 import { ToolInputValidationError, validateToolInput } from "./gateway/input-validation.js";
 import { cliAvailableForAcpAgent, type ProviderKind } from "./cli-availability.js";
 import type { CliToolVersionReader, CliToolVersions } from "./cli-tool-versions.js";
@@ -1034,7 +1031,11 @@ export function registerAiRoutes(
           ).then((rawResult): Record<string, unknown> => {
             const toolResult: ToolResult = { ...rawResult, data: rawResult.data ?? {} };
             const sanitized = sanitizeAssistantToolResult(manifestTool.outputSchema, toolResult);
-            return boundedAssistantToolResultData(sanitized);
+            const data = screenToolResultData(sanitized);
+            if (data === null) {
+              throw new HttpError(413, "The tool result is too large to show.");
+            }
+            return data;
           })
         );
 

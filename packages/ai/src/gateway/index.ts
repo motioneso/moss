@@ -18,7 +18,8 @@ export {
 export { validateToolInput, ToolInputValidationError, compilePattern } from "./input-validation.js";
 export {
   sanitizeAssistantToolResult,
-  boundedAssistantToolResultData,
+  screenToolResultData,
+  MAX_SCREEN_TOOL_RESULT_CHARS,
   capRenderedToolResult,
   liveStreamResult,
   renderAndCap
