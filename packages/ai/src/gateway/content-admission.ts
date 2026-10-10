@@ -92,7 +92,7 @@ export async function admitResolvedCard(
   }
 }
 
-/** Missing guards cannot authorize automatic effects. Post-dispatch failures never ask again. */
+/** A missing guard never claims a clean conversation. Post-dispatch failures never ask again. */
 export async function runAutomaticAction<T>(
   provenance: ConversationProvenancePort | undefined,
   ctx: Pick<ToolContext, "actorUserId" | "threadId">,

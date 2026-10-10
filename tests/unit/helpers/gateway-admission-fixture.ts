@@ -120,7 +120,9 @@ export function admissionFixture(
     }
   };
   const provenance: ConversationProvenancePort = {
-    isTainted: vi.fn(async () => state.tainted),
+    // Mirrors the store: a held reservation reads as tainted but is never a durable mark.
+    isTainted: vi.fn(async () => state.tainted || state.held),
+    isMarked: vi.fn(async () => state.tainted && !state.held),
     recordAdmission,
     runAutomatic: runAutomaticImpl
   };
