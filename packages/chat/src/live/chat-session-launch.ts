@@ -15,7 +15,11 @@ import {
   type LaunchSessionOpts,
   type UserSession
 } from "./chat-session-provider-identity.js";
-import { createSessionUsage, noteSessionSubmission } from "./chat-session-usage.js";
+import {
+  createSessionUsage,
+  noteSessionOutput,
+  noteSessionSubmission
+} from "./chat-session-usage.js";
 import {
   DEFAULT_CHAT_SURFACE,
   normalizeChatSurface,
@@ -276,8 +280,10 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   // #342 — only in-process engines need manager-owned replay submit + drain.
   if (replayBatch !== undefined && !serverOwnsDrain) {
     await engine.submit(replayBatch);
-    // Drain (and discard) so real turn records start from a clean offset.
-    session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, pollMs);
+    // Drain so real turn records start from a clean offset. The replies still count.
+    session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, pollMs, (r) =>
+      noteSessionOutput(session.usage, r)
+    );
   }
 
   return session;
@@ -323,7 +329,12 @@ export async function seedChatContext(args: SeedChatContextArgs): Promise<void> 
   if (!admitted) return;
   await submitAdmittedContext(session.engine, admitted);
   noteSessionSubmission(session.usage, admitted.text, "context");
-  session.transcriptOffset = await drainEngine(session.engine, session.transcriptOffset, pollMs);
+  session.transcriptOffset = await drainEngine(
+    session.engine,
+    session.transcriptOffset,
+    pollMs,
+    (r) => noteSessionOutput(session.usage, r)
+  );
   if (idempotencyKey) session.seededContextKeys.add(idempotencyKey);
   session.lastActivity = deps.clock.now();
   deps.touchMcpToken?.(sessionKey);

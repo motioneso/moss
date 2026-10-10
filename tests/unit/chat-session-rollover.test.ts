@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatSessionManager } from "../../packages/chat/src/live/chat-session-manager.js";
 import {
   CHAT_CHANGED_WHILE_STARTING_MESSAGE,
-  CHAT_PROVIDER_CHANGED_MESSAGE
+  CHAT_PROVIDER_CHANGED_MESSAGE,
+  CliChatUnavailableError
 } from "../../packages/chat/src/live/errors.js";
 import type { EngineLaunchOpts, TranscriptRecord } from "../../packages/chat/src/live/types.js";
 import { makeMinimalDeps } from "./chat-session-manager.test.js";
@@ -26,8 +27,10 @@ class Engine {
   readonly submitted: string[] = [];
   killed = false;
   launchGate: Promise<void> = Promise.resolve();
+  /** Runs once on the next submit; a thrown error fails that submit. */
+  onSubmit: (() => void) | null = null;
 
-  constructor(private readonly output: TranscriptRecord[] = []) {}
+  constructor(public output: TranscriptRecord[] = []) {}
 
   async launch(opts: EngineLaunchOpts): Promise<{ offset: number }> {
     await this.launchGate;
@@ -35,6 +38,9 @@ class Engine {
     return { offset: 0 };
   }
   async submit(text: string): Promise<void> {
+    const hook = this.onSubmit;
+    this.onSubmit = null;
+    hook?.();
     this.submitted.push(text);
   }
   async readNew(afterOffset: number) {
@@ -400,7 +406,7 @@ describe("automatic session handoff (#3157)", () => {
     expect(fresh.submitted).toHaveLength(1);
   });
 
-  it("does not seed the same context twice into the fresh session", async () => {
+  it("seeds page context into the fresh session once, since it never saw it", async () => {
     vi.stubEnv("JARVIS_CHAT_SESSION_BUDGET_TOKENS", BUDGET);
     const h = harness();
     await h.manager.seedContext("u1", "Ben", "You are looking at the budget page.", "page-1");
@@ -408,6 +414,41 @@ describe("automatic session handoff (#3157)", () => {
     await h.manager.submitTurn("u1", "Ben", "second");
     expect(h.engines).toHaveLength(2);
     await h.manager.seedContext("u1", "Ben", "You are looking at the budget page.", "page-1");
-    expect(h.engines[1]!.submitted).toHaveLength(1);
+    await h.manager.seedContext("u1", "Ben", "You are looking at the budget page.", "page-1");
+    const seeded = h.engines[1]!.submitted.filter((t) => t.includes("budget page"));
+    expect(seeded).toHaveLength(1);
+  });
+
+  it("counts the model's reply to seeded context toward the budget", async () => {
+    vi.stubEnv("JARVIS_CHAT_SESSION_BUDGET_TOKENS", BUDGET);
+    const first = new Engine();
+    const h = harness({ engines: [first, new Engine()] });
+    await h.manager.submitTurn("u1", "Ben", "first");
+    first.output = [{ kind: "tool", toolName: "search", text: BIG_TOOL_OUTPUT }];
+    await h.manager.seedContext("u1", "Ben", "You are looking at the budget page.", "page-1");
+    first.output = [];
+    await h.manager.submitTurn("u1", "Ben", "second");
+    expect(h.engines).toHaveLength(2);
+  });
+
+  it("refuses a healed resubmit after a handoff when the selection moved", async () => {
+    vi.stubEnv("JARVIS_CHAT_SESSION_BUDGET_TOKENS", BUDGET);
+    const fresh = new Engine();
+    const healed = new Engine();
+    const h = harness({
+      engines: [
+        new Engine([{ kind: "tool", toolName: "search", text: BIG_TOOL_OUTPUT }]),
+        fresh,
+        healed
+      ]
+    });
+    await h.manager.submitTurn("u1", "Ben", "first");
+    fresh.onSubmit = () => {
+      h.select({ id: OTHER_THREAD, incognito: false });
+      throw new CliChatUnavailableError("not ready");
+    };
+    await h.manager.submitTurn("u1", "Ben", "second");
+    expect(h.engines).toHaveLength(3);
+    expect(healed.submitted.filter((t) => t.includes("second"))).toHaveLength(0);
   });
 });

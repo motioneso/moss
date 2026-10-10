@@ -50,7 +50,7 @@ launch refuses with an actionable message and queues a summary run.
 
 A live provider session also hands off on its own. The app estimates everything one session was
 sent and returned: launch input, seeded context, prepared turns and every transcript record,
-tool output included. Reported output usage can raise that count but never lower it. Before a
+tool output and the replies to launch replay and seeded context included. Reported output usage can raise that count but never lower it. Before a
 turn would pass the budget, the next admitted turn relaunches that exact session for the same
 owner, conversation and provider, replaying the accepted summary plus every uncovered turn. With no
 accepted summary, or a replay that would not fit, the healthy session keeps serving and a summary
