@@ -163,6 +163,21 @@ export const chatModuleManifest = {
       ]
     },
     {
+      id: "chat.automatic_session_handoff",
+      description:
+        "Moss counts what a chat's model session holds. Before a turn passes the budget, Moss starts a fresh session " +
+        "for the same chat and model with the summary and newer turns, if they fit. Private chats never hand off.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat_changed_during_handoff",
+          class: "transient",
+          description:
+            "You switched chats or models while Moss was starting the fresh session, so the message was not sent. Send it again."
+        }
+      ]
+    },
+    {
       id: "chat.relative_reminders",
       description:
         "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder that Moss posts once in Main, " +

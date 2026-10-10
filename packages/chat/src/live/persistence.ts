@@ -227,7 +227,11 @@ export class DataContextChatPersistence implements ChatPersistencePort {
 
   async listPriorTurns(
     actorUserId: string,
-    opts?: { readonly forceReplay?: boolean; readonly threadId?: string | null },
+    opts?: {
+      readonly forceReplay?: boolean;
+      readonly threadId?: string | null;
+      readonly measureOnly?: boolean;
+    },
     surface?: ChatSurface
   ): Promise<{
     recent: readonly ReplayMessage[];
@@ -268,6 +272,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         content: m.content
       }));
       const oldSummary = split.summary;
+      if (opts?.measureOnly) return { recent, oldSummary };
 
       // D8: visibility only — counts and trigger, never message/summary content.
       // "switch" is a valid trigger value but unreachable in Phase 1: switchProvider

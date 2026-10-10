@@ -12,9 +12,16 @@ import { admissionForActor, admitToContext, submitPreparedTurn } from "./context
 import { buildEngineText } from "./engine-text.js";
 import {
   assertProviderIdentityForPendingTurn,
+  type EnsureSessionOpts,
   type UserSession
 } from "./chat-session-provider-identity.js";
 import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
+import { rollOverSessionIfDue } from "./chat-session-rollover.js";
+import {
+  noteSessionOutput,
+  noteSessionSubmission,
+  noteSessionTurnUsage
+} from "./chat-session-usage.js";
 import { DEFAULT_CHAT_SURFACE, surfaceSessionKey, type ChatSurface } from "./chat-surface.js";
 import {
   mapChatEngineReadError,
@@ -58,7 +65,7 @@ export interface ChatTurnHost {
   ensureSession(
     actorUserId: string,
     userName: string,
-    opts?: { readonly forceReplay?: boolean; readonly signal?: AbortSignal },
+    opts?: EnsureSessionOpts & { readonly signal?: AbortSignal },
     surface?: string
   ): Promise<UserSession>;
 }
@@ -209,6 +216,36 @@ export async function runChatTurn(
     const currentProvider = await host.deps.persistence.resolveActiveProvider(actorUserId);
     await assertProviderIdentityForPendingTurn(turnProviderIdentity, currentProvider);
     host.emit(actorUserId, surface, { kind: "user", text });
+    // #3157 — an over-budget session hands off to a fresh one for this exact conversation.
+    const servingThreadId = session.threadId;
+    let rollover: Awaited<ReturnType<typeof rollOverSessionIfDue>>;
+    try {
+      rollover = await rollOverSessionIfDue(host, {
+        actorUserId,
+        userName,
+        session,
+        nextTurnText: engineText.text,
+        signal: controller.signal
+      });
+    } catch (err) {
+      if (controller.signal.aborted)
+        return finishRefusedTurn(host, actorUserId, surface, sessionKey, undefined, gateShadow);
+      throw err;
+    }
+    session = rollover.session;
+    if (rollover.waited) {
+      if (
+        controller.signal.aborted ||
+        session.incognito !== requestIncognito ||
+        session.threadId !== servingThreadId
+      )
+        return finishRefusedTurn(host, actorUserId, surface, sessionKey, session, gateShadow);
+      await assertProviderIdentityForPendingTurn(turnProviderIdentity, session.providerIdentity);
+      await assertProviderIdentityForPendingTurn(
+        turnProviderIdentity,
+        host.deps.persistence.resolveActiveProvider(actorUserId)
+      );
+    }
     let toolsListBaseline = session.mcpToken
       ? host.deps.getToolsListObservationCount?.(session.mcpToken)
       : undefined;
@@ -217,6 +254,7 @@ export async function runChatTurn(
       return finishRefusedTurn(host, actorUserId, surface, sessionKey, session, gateShadow);
     try {
       await submitPreparedTurn(session.engine, engineText);
+      noteSessionSubmission(session.usage, engineText.text, "turn");
     } catch (err) {
       // #2934 finding 1 — a stop around a failed submit refuses instead of resubmitting.
       if (controller.signal.aborted)
@@ -250,6 +288,7 @@ export async function runChatTurn(
           ? host.deps.getToolsListObservationCount?.(session.mcpToken)
           : undefined;
         await submitPreparedTurn(session.engine, engineText);
+        noteSessionSubmission(session.usage, engineText.text, "turn");
       } else {
         throw err;
       }
@@ -293,6 +332,7 @@ export async function runChatTurn(
         session.engine.resetActivityDeadline?.();
       }
       for (const record of records) {
+        noteSessionOutput(session.usage, record);
         if (record.sequence !== undefined) flushPending(record.sequence);
         const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
         if (!rejectionOnly) {
@@ -335,6 +375,7 @@ export async function runChatTurn(
       }
       if (host.pollMs > 0) await delay(host.pollMs);
     }
+    noteSessionTurnUsage(session.usage, turnUsage);
 
     if (stopped) {
       // Stopped turns emit status and discard the user message and any partial reply.
