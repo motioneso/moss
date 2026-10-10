@@ -2342,6 +2342,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             { actorUserId, requestId: "gateway:web-search-engine" },
             async (scopedDb) => (await resolveNewsWebSearch(scopedDb)).engine
           ),
+        passiveMemoryRecall: deps.passiveMemoryRecall,
         notesRecall: deps.notesRecall,
         googleConnectionService: deps.googleConnectionService,
         googleApiClient: deps.googleApiClient,

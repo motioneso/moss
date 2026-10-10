@@ -612,21 +612,35 @@ async function maybePromoteCandidate(
   }
 
   if (candidate.kind === "entity" && candidate.entity) {
-    await graphRepository.createEntity(scopedDb, ownerUserId, {
-      kind: candidate.entity.kind,
-      name: candidate.entity.name,
-      summary: candidate.entity.summary,
-      importance: candidate.importance
-    });
+    // Reuses an entity of the same name so repeated suggestions do not create duplicates.
+    const existing = await graphRepository.findEntitiesByName(
+      scopedDb,
+      ownerUserId,
+      candidate.entity.name
+    );
+    if (existing.length === 0) {
+      await graphRepository.createEntity(scopedDb, ownerUserId, {
+        kind: candidate.entity.kind,
+        name: candidate.entity.name,
+        summary: candidate.entity.summary,
+        importance: candidate.importance
+      });
+    }
     await candidatesRepository.markPromoted(scopedDb, ownerUserId, record.id, decision.reason);
     return;
   }
 
   if (candidate.fact) {
-    const self = await graphRepository.ensureSelfEntity(scopedDb, ownerUserId);
+    const subjectEntityId = await graphRepository.resolveSubjectEntityId(
+      scopedDb,
+      ownerUserId,
+      candidate.fact.subject
+    );
+    // Several entities share the name, so the fact stays staged for review.
+    if (!subjectEntityId) return;
     await graphRepository.createFactFromEpisode(scopedDb, ownerUserId, {
       episodeId,
-      subjectEntityId: self.id,
+      subjectEntityId,
       predicate: candidate.fact.predicate,
       objectText: candidate.fact.objectText ?? candidate.fact.objectName,
       recordKind: recordKindForCandidate(candidate),

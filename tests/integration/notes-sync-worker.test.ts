@@ -403,6 +403,61 @@ describe("handleNotesSyncJob", () => {
     }
   });
 
+  it.each(["handleNotesSyncJob", "handleNotesSyncJobWithDataContext"] as const)(
+    "drops chunks and index rows of deleted notes on the next sync through %s",
+    async (variant) => {
+      const dir = join(jobNotesDir, `deleted-sync-${variant}`);
+      await mkdir(dir, { recursive: true });
+      const gone = join(dir, "gone.md");
+      const kept = join(dir, "kept.md");
+      await writeFile(gone, "# Gone\n\nZebra marmalade secret.\n");
+      await writeFile(kept, "# Kept\n\nStill here.\n");
+      // The worker runs the data-context variant, so both entry points must purge.
+      const runSync = () =>
+        variant === "handleNotesSyncJob"
+          ? dataContext.withDataContext(
+              { actorUserId: jobUserId, requestId: "req:deleted-sync" },
+              (db) => handleNotesSyncJob(makeJob(jobNotesDir), db, provider, prefsRepo)
+            )
+          : handleNotesSyncJobWithDataContext(
+              makeJob(jobNotesDir),
+              workerDataContext,
+              async () => provider,
+              prefsRepo
+            );
+      await runSync();
+
+      const client = new Client({ connectionString: connectionStrings.bootstrap });
+      await client.connect();
+      try {
+        const count = async (table: string, like: string) =>
+          Number(
+            (
+              await client.query(
+                `SELECT count(*) AS n FROM app.${table}
+               WHERE owner_user_id = $1 AND source_kind = 'notes' AND source_path LIKE $2`,
+                [jobUserId, like]
+              )
+            ).rows[0].n
+          );
+        expect(await count("memory_chunks", `%/deleted-sync-${variant}/gone.md`)).toBeGreaterThan(
+          0
+        );
+
+        await rm(gone);
+        await runSync();
+
+        expect(await count("memory_chunks", `%/deleted-sync-${variant}/gone.md`)).toBe(0);
+        expect(await count("memory_file_index", `%/deleted-sync-${variant}/gone.md`)).toBe(0);
+        expect(await count("memory_chunks", `%/deleted-sync-${variant}/kept.md`)).toBeGreaterThan(
+          0
+        );
+      } finally {
+        await client.end();
+      }
+    }
+  );
+
   it("throws when JARVIS_NOTES_ROOTS is not configured", async () => {
     delete process.env["JARVIS_NOTES_ROOTS"];
     await expect(
