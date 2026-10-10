@@ -167,7 +167,7 @@ apps/web/src/settings/settings-page.tsx,I0,active-owner-hold,3154,Single integra
 apps/web/src/settings/settings-people-pane.tsx,C4,reserved,,Settings consumer and state logic
 apps/web/src/settings/settings-persona-preview.ts,C4,reserved,,Settings consumer and state logic
 apps/web/src/settings/settings-personal-data-panes.tsx,C4,reserved,,Settings consumer and state logic
-apps/web/src/settings/settings-personal-panes.tsx,C4,active-owner-hold,3154,Settings consumer and state logic
+apps/web/src/settings/settings-personal-panes.tsx,C4,scoped-disjoint-release,3154,Only existing Location Field group opt-in approved; preserve active imports timezone helpers and Quiet hours hunks
 apps/web/src/settings/settings-profile-subviews.tsx,C4,reserved,,Settings consumer and state logic
 apps/web/src/settings/settings-provider-login-dialog.tsx,C4,reserved,,Settings consumer and state logic
 apps/web/src/settings/settings-quiet-hours-draft.ts,C4,active-owner-hold,3154,New scheduled-work path; do not recreate or overwrite current owner
