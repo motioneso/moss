@@ -65,7 +65,8 @@
  * THIS IS THE ONLY CSS FILE IN apps/web PERMITTED TO CONTAIN HEX / rgb() LITERALS.
  */
 
-:root {
+:root,
+.jds-theme-scope {
   /* ============ COLOR — primitives ============ */
   /* User themes may override aesthetic variables only: paper/surface/ink/line/accent.
      Semantic red/amber/steel stay locked so error/caution/info meaning remains stable. */
@@ -670,7 +671,8 @@
 }
 
 /* Stable Wellness categories: hue carries the same meaning in either mode. */
-:root {
+:root,
+.jds-theme-scope {
   --wellness-happy-soft: oklch(0.955 0.028 150);
   --wellness-happy-soft2: oklch(0.905 0.045 150);
   --wellness-happy-tint: oklch(0.62 0.115 150);
@@ -821,7 +823,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root {
+  :root,
+  .jds-theme-scope {
     --dur-instant: 0ms;
     --dur-fast: 0ms;
     --dur-base: 0ms;
