@@ -99,6 +99,10 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.budget.status", "budget.status"],
         ["finance.budget.draft.get", "budget.draft.get"],
         ["finance.budget.assign", "budget.assign"],
+        ["finance.budget.move", "budget.move"],
+        ["finance.rule.set", "rule.set"],
+        ["finance.category.upsert", "category.upsert"],
+        ["finance.category.archive", "category.archive"],
         ["finance.account.set-shared", "account.set-shared"],
         // FIN-05 (#1150): read-only report tools.
         ["finance.reports.spending", "reports.spending"],
@@ -131,6 +135,35 @@ describe("finance manifest contract (#1146)", () => {
       executionPolicy: "auto",
       risk: "write"
     });
+    // #3185: money moves carry the dollar limit; the limit defaults to $100.
+    expect(toolByName("finance.budget.assign")).toMatchObject({
+      actionFamilyId: "moving_money",
+      confirmAbove: {
+        inputKey: "amountCents",
+        baseKey: "previousCents",
+        preferenceKey: "freedomLimitDollars",
+        scale: 100
+      }
+    });
+    expect(toolByName("finance.budget.move")).toMatchObject({
+      actionFamilyId: "moving_money",
+      confirmAbove: { inputKey: "amountCents", preferenceKey: "freedomLimitDollars", scale: 100 }
+    });
+    expect(toolByName("finance.budget.move").confirmAbove?.baseKey).toBeUndefined();
+    expect(toolByName("finance.rule.set").actionFamilyId).toBe("rules");
+    expect(toolByName("finance.category.upsert").actionFamilyId).toBe("categories");
+    expect(toolByName("finance.category.archive").actionFamilyId).toBe("categories");
+    expect(result.manifest.preferences).toEqual([
+      expect.objectContaining({ key: "freedomLimitDollars", type: "integer", default: 100 })
+    ]);
+    expect(
+      Object.fromEntries(
+        (result.manifest.assistantActionFamilies ?? []).map((f) => [f.id, f.freedom])
+      )
+    ).toMatchObject({ rules: "new", moving_money: "routine", categories: "new" });
+    expect(result.manifest.assistantOnboarding?.guidance.split(/\s+/).length ?? 999).toBeLessThan(
+      150
+    );
     expect(toolByName("finance.connect.start").actionFamilyId).toBe("bank_connections");
     expect(toolByName("finance.connect.poll").actionFamilyId).toBe("bank_connections");
     expect(
@@ -141,6 +174,9 @@ describe("finance manifest contract (#1146)", () => {
     ).toEqual([
       ["sorting", "ask_each_time"],
       ["sorting_new", "ask_each_time"],
+      ["rules", "ask_each_time"],
+      ["moving_money", "ask_each_time"],
+      ["categories", "ask_each_time"],
       ["bank_connections", "always_confirm"],
       ["sharing", "always_confirm"]
     ]);
