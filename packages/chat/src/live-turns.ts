@@ -35,7 +35,8 @@ export async function insertLiveTurn(scopedDb: DataContextDb, turn: LiveTurnStar
       thread_id: turn.threadId,
       boot_id: turn.bootId,
       user_text: turn.userText,
-      attachments: [...(turn.attachments ?? [])]
+      // pg sends a bare JS array as a Postgres array literal, so encode the list as JSON.
+      attachments: sql<unknown[]>`${JSON.stringify(turn.attachments ?? [])}::jsonb`
     })
     .execute();
 }
