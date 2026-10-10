@@ -53,6 +53,7 @@ import type { ChatPersistencePort } from "./chat-session-manager.js";
 import type {
   ConversationSummaryRequestStatus,
   HandledTurnOptions,
+  PendingMainReminder,
   ReminderTurnOptions
 } from "./chat-session-ports.js";
 import { selectSummaryRoute } from "../summary-job.js";
@@ -110,7 +111,11 @@ interface PersistTurnOptions {
   readonly elapsedMs?: number;
   readonly usage?: ChatTurnUsageDto;
   readonly sourceFreshness?: SourceFreshnessV1 | null;
+  readonly acknowledgeReminderMessageIds?: readonly string[];
 }
+
+/** #3311: at most this many delivered reminders are shown to one Main turn. */
+const MAIN_REMINDER_CONTEXT_LIMIT = 20;
 
 export function toolNameToSource(toolName: string): string | null {
   if (toolName.startsWith("email.")) return "email";
@@ -303,6 +308,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       readonly activityRecords?: readonly TranscriptRecord[];
       readonly elapsedMs?: number;
       readonly usage?: ChatTurnUsageDto;
+      readonly acknowledgeReminderMessageIds?: readonly string[];
     },
     surface?: ChatSurface
   ): Promise<{ readonly userMessageId: string; readonly assistantMessageId: string } | undefined> {
@@ -497,6 +503,14 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               )
             : undefined;
       if (result && handled && "save" in handled) await handled.save?.(result.userMessage.id);
+      // #3311: only a stored model turn acknowledges the reminders it was shown.
+      if (result && "executed" in turn && opts?.acknowledgeReminderMessageIds) {
+        await this.reminders.acknowledgeMain(
+          scopedDb,
+          thread.id,
+          opts.acknowledgeReminderMessageIds
+        );
+      }
 
       // Throwing here rolls back the turn, the reminder and its delivery job together.
       if ("reminder" in turn && turn.stopSignal?.aborted) throw new ReminderTurnStopped();
@@ -655,6 +669,15 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       const thread = await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface);
       return thread ? { id: thread.id, incognito: thread.incognito } : undefined;
     });
+  }
+
+  async listPendingMainReminders(
+    actorUserId: string,
+    threadId: string
+  ): Promise<readonly PendingMainReminder[]> {
+    return this.run(actorUserId, "list-pending-main-reminders", (scopedDb) =>
+      this.reminders.listPendingMain(scopedDb, threadId, MAIN_REMINDER_CONTEXT_LIMIT)
+    );
   }
 
   async getMainThreadState(
