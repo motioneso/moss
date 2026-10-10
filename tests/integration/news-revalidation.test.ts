@@ -186,6 +186,37 @@ describe("news revalidation core (#975 Slice 4)", () => {
     expect(writes).toEqual([]);
   });
 
+  it("recovers an approved source stuck on temporarily_unavailable when it fetches again (#3227)", async () => {
+    const { repository, sources } = makeRepository(
+      [makeSource({ healthStatus: "temporarily_unavailable" })],
+      []
+    );
+    const { logger } = makeLogger();
+    const outcome = await revalidateOwnerNews(scopedDb, {
+      fetch: fetchOk,
+      ai: makeAi({ fingerprint: "fp2" }),
+      repository,
+      logger
+    });
+    expect(outcome).toMatchObject({ sourcesChecked: 1, sourcesNeedingAttention: 0 });
+    expect(sources[0]).toMatchObject({ validationStatus: "approved", healthStatus: "healthy" });
+  });
+
+  it("leaves an approved temporarily_unavailable source alone while it still fails (#3227)", async () => {
+    const { repository, sources } = makeRepository(
+      [makeSource({ healthStatus: "temporarily_unavailable" })],
+      []
+    );
+    const { logger } = makeLogger();
+    await revalidateOwnerNews(scopedDb, {
+      fetch: fetchFail,
+      ai: makeAi({ fingerprint: "fp2" }),
+      repository,
+      logger
+    });
+    expect(sources[0]).toMatchObject({ healthStatus: "temporarily_unavailable" });
+  });
+
   it("re-approves drifted items under the new fingerprint without raising attention", async () => {
     const { repository, sources, topics } = makeRepository(
       [makeSource({ validationFingerprint: "fp1" })],

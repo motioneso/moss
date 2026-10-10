@@ -43,6 +43,8 @@ import { newsTopHeadlinesTodayExecute } from "@moss/news";
 import { sportsFollowedFactsTodayExecute } from "@moss/sports";
 
 import { getBuiltInModuleRegistrations } from "../../packages/module-registry/src/index.js";
+import { usefulnessFeedbackRepository } from "../../packages/module-registry/src/built-in-module-helpers.js";
+import { storyFeedbackTargetRef } from "@moss/usefulness-feedback";
 import { composeBriefing } from "../../packages/briefings/src/compose.js";
 import { definition, fakeScopedDb, makeFakeDeps, runInput } from "./briefings-compose.harness.js";
 
@@ -131,12 +133,26 @@ describe("briefing source startup wiring (#2313)", () => {
     await news.registerWorkers!(fakeBoss(), workerDeps as never);
     expect(seams.configureSportsBriefingService).toHaveBeenCalledTimes(1);
     expect(seams.configureNewsBriefingService).toHaveBeenCalledTimes(1);
-    // The briefing honours dismissed stories, so it needs the story feedback port (#3227).
+    // The briefing honours dismissed stories (#3227): the port it receives must hand back the
+    // refs of "less like this" rules only, and must name stories the way the news page does.
     const feedbackPort = seams.configureNewsBriefingService.mock.calls[0]?.[1] as
-      | { listDismissedRefs?: unknown; storyRef?: unknown }
+      | {
+          listDismissedRefs: (db: unknown, owner: string) => Promise<ReadonlySet<string>>;
+          storyRef: (url: string) => string;
+        }
       | undefined;
-    expect(typeof feedbackPort?.listDismissedRefs).toBe("function");
-    expect(typeof feedbackPort?.storyRef).toBe("function");
+    expect(feedbackPort, "worker startup passes the story feedback port").toBeDefined();
+    const rules = vi.spyOn(usefulnessFeedbackRepository, "listActiveStoryRules").mockResolvedValue([
+      { direction: "less", targetRef: "news:dismissed" },
+      { direction: "more", targetRef: "news:boosted" }
+    ] as never);
+    const dismissed = await feedbackPort!.listDismissedRefs(fakeScopedDb, "owner-1");
+    expect([...dismissed]).toEqual(["news:dismissed"]);
+    expect(rules).toHaveBeenCalledWith(fakeScopedDb, "owner-1", "news");
+    expect(feedbackPort!.storyRef("https://example.com/a")).toBe(
+      storyFeedbackTargetRef("news", "https://example.com/a")
+    );
+    rules.mockRestore();
     // The worker fetch seam reaches both dataset clients.
     for (const sourceId of ["espn", "newsfeeds"]) {
       const calls = seams.datasetClients.filter((call) => call.sourceId === sourceId);

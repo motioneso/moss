@@ -104,6 +104,15 @@ export async function revalidateOwnerNews(
   for (const source of sourcesBefore) {
     // Idempotency: an approved verdict under the current fingerprint is still valid.
     if (source.validationStatus === "approved" && source.validationFingerprint === fingerprint) {
+      // An approved source marked temporarily unavailable is re-fetched so Retry can clear
+      // the flag. authentication_failed stays with the credentialed refresh path.
+      if (source.healthStatus === "temporarily_unavailable") {
+        sourcesChecked += 1;
+        const probe = await deps.fetch(source.feedUrl ?? source.homepageUrl);
+        if (probe.ok) {
+          await deps.repository.updateSourceHealth(scopedDb, source.id, "healthy");
+        }
+      }
       continue;
     }
     sourcesChecked += 1;
