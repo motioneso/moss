@@ -70,7 +70,8 @@ export const chatModuleManifest = {
       "sql/0299_main_chat.sql",
       "sql/0305_chat_summary_frontier.sql",
       "sql/0306_chat_relative_reminders.sql",
-      "sql/0307_chat_summary_worker_publish.sql"
+      "sql/0307_chat_summary_worker_publish.sql",
+      "sql/0308_chat_reminder_cancel.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [

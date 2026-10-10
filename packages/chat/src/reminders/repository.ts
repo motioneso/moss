@@ -5,7 +5,12 @@ import { randomUUID } from "node:crypto";
 
 import { sql } from "kysely";
 
-import { assertDataContextDb, type ChatReminderState, type DataContextDb } from "@moss/db";
+import {
+  assertDataContextDb,
+  type ChatReminderContextState,
+  type ChatReminderState,
+  type DataContextDb
+} from "@moss/db";
 
 export interface SavedReminder {
   readonly id: string;
@@ -22,6 +27,42 @@ export interface DueReminder {
   readonly state: ChatReminderState;
   readonly version: number;
   readonly dueAt: Date;
+}
+
+export interface OwnedReminder {
+  readonly id: string;
+  readonly text: string;
+  readonly state: ChatReminderState;
+  readonly contextState: ChatReminderContextState;
+  readonly dueAt: Date;
+  readonly createdAt: Date;
+}
+
+const OWNED_COLUMNS = [
+  "id",
+  "reminder_text",
+  "state",
+  "context_state",
+  "due_at",
+  "created_at"
+] as const;
+
+function toOwned(row: {
+  id: string;
+  reminder_text: string;
+  state: ChatReminderState;
+  context_state: ChatReminderContextState;
+  due_at: Date;
+  created_at: Date;
+}): OwnedReminder {
+  return {
+    id: row.id,
+    text: row.reminder_text,
+    state: row.state,
+    contextState: row.context_state,
+    dueAt: new Date(row.due_at),
+    createdAt: new Date(row.created_at)
+  };
 }
 
 export class ReminderRepository {
@@ -130,6 +171,62 @@ export class ReminderRepository {
       .where("id", "=", reminderId)
       .executeTakeFirst();
     return row && { ownerUserId: row.owner_user_id, state: row.state };
+  }
+
+  /** The actor's reminders, newest first. Row security limits them to the actor's own. */
+  async listOwned(scopedDb: DataContextDb): Promise<OwnedReminder[]> {
+    assertDataContextDb(scopedDb);
+    const rows = await scopedDb.db
+      .selectFrom("app.chat_reminders")
+      .select(OWNED_COLUMNS)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .orderBy("created_at", "desc")
+      .orderBy("id", "desc")
+      .execute();
+    return rows.map(toOwned);
+  }
+
+  /**
+   * Locks one of the actor's reminders for cancel. An in-flight delivery holds the same lock,
+   * so this waits for it and then reads the delivery's result.
+   */
+  async lockForCancel(
+    scopedDb: DataContextDb,
+    reminderId: string
+  ): Promise<OwnedReminder | undefined> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.chat_reminders")
+      .select(OWNED_COLUMNS)
+      .where("id", "=", reminderId)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .forUpdate()
+      .executeTakeFirst();
+    return row && toOwned(row);
+  }
+
+  async markCancelled(scopedDb: DataContextDb, reminderId: string): Promise<void> {
+    assertDataContextDb(scopedDb);
+    const result = await scopedDb.db
+      .updateTable("app.chat_reminders")
+      .set({ state: "cancelled" })
+      .where("id", "=", reminderId)
+      .where("state", "=", "queued")
+      .executeTakeFirstOrThrow();
+    if (result.numUpdatedRows !== 1n) throw new Error("chat reminder was not cancelled");
+  }
+
+  /** Frees the slot a delivered reminder holds while its context is still pending. */
+  async dismissContext(scopedDb: DataContextDb, reminderId: string): Promise<void> {
+    assertDataContextDb(scopedDb);
+    const result = await scopedDb.db
+      .updateTable("app.chat_reminders")
+      .set({ context_state: "dismissed" })
+      .where("id", "=", reminderId)
+      .where("state", "=", "delivered")
+      .where("context_state", "=", "pending")
+      .executeTakeFirstOrThrow();
+    if (result.numUpdatedRows !== 1n) throw new Error("chat reminder context was not dismissed");
   }
 
   /** The database clock, so the due check and the late flag never depend on worker clocks. */
