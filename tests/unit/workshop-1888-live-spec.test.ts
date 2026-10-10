@@ -21,6 +21,10 @@ describe("workshop-1888 live spec (#3281)", () => {
     expect(text).toMatch(/url\.searchParams\.get\("surface"\) === "drawer"/);
     expect(text).toMatch(/expect\(\(await cleared\)\.status\(\)\)\.toBe\(204\)/);
     expect(text, "old replies gone").toMatch(/drawer\.locator\(REPLIES\)\)\.toHaveCount\(0\)/);
+    const listening = text.indexOf("const cleared = page.waitForResponse(");
+    const opened = text.indexOf('getByRole("button", { name: "Open conversations" }).click()');
+    expect(listening, "clear listener").toBeGreaterThan(-1);
+    expect(opened, "clear listener armed before the clicks").toBeGreaterThan(listening);
     const started = text.indexOf("await startSideChat(page, drawer)");
     const noCards = text.indexOf("await expect(planCards).toHaveCount(0)");
     const asked = text.indexOf('await composer.press("Enter")');
@@ -32,6 +36,8 @@ describe("workshop-1888 live spec (#3281)", () => {
 
   it("signs in as the disposable install's owner", async () => {
     const text = await source();
-    expect(text).toMatch(/email: process\.env\.LIVE_OWNER_EMAIL/);
+    expect(text).toMatch(/email: OWNER_EMAIL/);
+    expect(text, "no fallback to the dev account").not.toMatch(/LIVE_OWNER_EMAIL \?\?/);
+    expect(text).toMatch(/if \(!OWNER_EMAIL \|\| !OWNER_PASSWORD\)/);
   });
 });

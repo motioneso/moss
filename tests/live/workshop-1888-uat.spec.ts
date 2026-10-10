@@ -8,15 +8,15 @@
 //     npx playwright test --config playwright.live.config.ts workshop-1888
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+const OWNER_EMAIL = process.env.LIVE_OWNER_EMAIL;
 const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
-if (!OWNER_PASSWORD) {
+if (!OWNER_EMAIL || !OWNER_PASSWORD) {
   throw new Error(
-    "Set LIVE_OWNER_PASSWORD to the development instance sign-in password before running this " +
-      "test. The current password is not in this repository; it is kept in the memory note " +
-      "named dev-instance-lan-spinup-trusted-origins."
+    "Set LIVE_OWNER_EMAIL and LIVE_OWNER_PASSWORD to the owner of the disposable instance under " +
+      "test. Neither is kept in this repository."
   );
 }
-const OWNER = { email: process.env.LIVE_OWNER_EMAIL ?? "ben@ben.com", password: OWNER_PASSWORD };
+const OWNER = { email: OWNER_EMAIL, password: OWNER_PASSWORD };
 const REPLIES = ".chatd-msg:not(.chatd-msg--me) .chatd-bubble";
 
 // One message that supplies everything workshop.buildModule's description tells the model to
@@ -82,7 +82,7 @@ test("Moss builds and installs a working Word of the Day module through the UI",
   // nothing had happened - no new build record, no new entry in the tool audit log.
   const staleCards = await page.getByRole("button", { name: /^Build it$/ }).count();
   await startSideChat(page, drawer);
-  console.log(`[1888] new side chat cleared ${staleCards} earlier plan cards before asking`);
+  console.log(`[1888] ${staleCards} earlier plan cards on screen before the new side chat`);
 
   // Exactly one card, and only after the ask, so neither a leftover card nor a polite refusal
   // nor a follow-up question can pass this.
