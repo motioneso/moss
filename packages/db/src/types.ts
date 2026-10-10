@@ -1020,7 +1020,7 @@ export interface ChatMessagesTable {
 }
 
 export type ChatReminderState = "queued" | "delivered" | "failed" | "cancelled";
-export type ChatReminderContextState = "pending" | "dismissed";
+export type ChatReminderContextState = "pending" | "dismissed" | "acknowledged";
 
 export interface ChatRemindersTable {
   id: string;

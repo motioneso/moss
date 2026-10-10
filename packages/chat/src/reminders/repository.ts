@@ -173,6 +173,56 @@ export class ReminderRepository {
     return row && { ownerUserId: row.owner_user_id, state: row.state };
   }
 
+  /**
+   * #3311: delivered reminders whose context is pending in this exact Main chat, oldest first.
+   * The body is the reserved assistant message the owner saw.
+   */
+  async listPendingMain(
+    scopedDb: DataContextDb,
+    threadId: string,
+    limit: number
+  ): Promise<readonly { reservedMessageId: string; body: string }[]> {
+    assertDataContextDb(scopedDb);
+    const rows = await scopedDb.db
+      .selectFrom("app.chat_reminders as reminder")
+      .innerJoin("app.chat_threads as thread", "thread.id", "reminder.thread_id")
+      .innerJoin("app.chat_messages as message", (join) =>
+        join
+          .onRef("message.id", "=", "reminder.reserved_message_id")
+          .onRef("message.thread_id", "=", "reminder.thread_id")
+      )
+      .select(["reminder.reserved_message_id", "message.body"])
+      .where("reminder.thread_id", "=", threadId)
+      .where("reminder.owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .where("reminder.state", "=", "delivered")
+      .where("reminder.context_state", "=", "pending")
+      .where("thread.is_main", "=", true)
+      .where("thread.incognito", "=", false)
+      .orderBy("reminder.delivered_at")
+      .orderBy("reminder.id")
+      .limit(limit)
+      .execute();
+    return rows.map((row) => ({ reservedMessageId: row.reserved_message_id, body: row.body }));
+  }
+
+  /** #3311: acknowledges exactly the shown reminders that are still pending in this Main chat. */
+  async acknowledgeMain(
+    scopedDb: DataContextDb,
+    threadId: string,
+    reservedMessageIds: readonly string[]
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    if (reservedMessageIds.length === 0) return;
+    await scopedDb.db
+      .updateTable("app.chat_reminders")
+      .set({ context_state: "acknowledged" })
+      .where("thread_id", "=", threadId)
+      .where("reserved_message_id", "in", [...reservedMessageIds])
+      .where("state", "=", "delivered")
+      .where("context_state", "=", "pending")
+      .execute();
+  }
+
   /** The actor's reminders, newest first. Row security limits them to the actor's own. */
   async listOwned(scopedDb: DataContextDb): Promise<OwnedReminder[]> {
     assertDataContextDb(scopedDb);

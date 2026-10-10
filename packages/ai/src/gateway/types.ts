@@ -19,6 +19,7 @@ export type AdmissionPath =
   | "launch_memory_seed"
   | "seed_route"
   | "evening_seed"
+  | "main_reminder_context"
   | "module_control_context"
   | "native_vault_read"
   | "native_tool_result"
