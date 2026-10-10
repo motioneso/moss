@@ -138,7 +138,7 @@ describe("Finance settings (#3186)", () => {
       renderer.root.findByProps({ id: "fnm-limit" }).props.onBlur();
     });
     await act(async () => {});
-    expect(renderer.root.findByProps({ id: "fnm-limit" }).props.value).toBe("100");
+    expect(renderer.root.findByProps({ id: "fnm-limit" }).props.value).toBe("$100");
     expect(text(renderer)).toContain("Couldn't save the limit.");
   });
 

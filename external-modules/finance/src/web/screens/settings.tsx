@@ -348,7 +348,7 @@ export function SettingsScreen(): ReactNodeLike {
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const [stepError, setStepError] = useState<string | null>(null);
   const [familyError, setFamilyError] = useState<string | null>(null);
-  const [limit, setLimit] = useState(String(DEFAULT_LIMIT_DOLLARS));
+  const [limit, setLimit] = useState(`$${DEFAULT_LIMIT_DOLLARS}`);
   const [savedLimit, setSavedLimit] = useState(DEFAULT_LIMIT_DOLLARS);
   const [limitError, setLimitError] = useState<string | null>(null);
 
@@ -361,7 +361,7 @@ export function SettingsScreen(): ReactNodeLike {
     void fetchLimit().then((found) => {
       if (found !== null) {
         setSavedLimit(found);
-        setLimit(String(found));
+        setLimit(`$${found}`);
       }
     });
   }, []);
@@ -411,16 +411,16 @@ export function SettingsScreen(): ReactNodeLike {
     }
     setLimitError(null);
     if (parsed === savedLimit) {
-      setLimit(String(parsed));
+      setLimit(`$${parsed}`);
       return;
     }
     void saveLimit(parsed).then((ok) => {
       if (ok) {
         setSavedLimit(parsed);
-        setLimit(String(parsed));
+        setLimit(`$${parsed}`);
         return;
       }
-      setLimit(String(savedLimit));
+      setLimit(`$${savedLimit}`);
       setLimitError("Couldn't save the limit. Put back to the old amount.");
       announce("Couldn't save the limit.");
     });
