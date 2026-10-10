@@ -36,7 +36,7 @@ The two boot/app body minimum widths now respect the scrollbar-reduced viewport.
 | F-05 | Legacy global control/type rules are scoped to preserve shared controls. |
 | F-06 | Current extraction and typography/material guidance reconciled. Historical design choices are not silently replaced. |
 | F-07 | App/shared/module token scope and explicit cross-file inputs enforced; negative scope/comment tests added. Not a universal module-local class-existence checker. |
-| F-08 | Named-theme selector/ground and focus pairs tested. The custom-theme Settings readout remains a separate core followup; arbitrary palettes are not automatically corrected or guaranteed compliant. |
+| F-08 | Named-theme selector/ground and focus pairs tested. The core batch below supplies actual custom-theme readouts; arbitrary palettes are not automatically corrected or guaranteed compliant. |
 | F-09 | Flat shared material and reduced-motion contracts repaired; rendered consumer motion remains a separate check. |
 | F-10 | Editorial SectionHead/RowIndex contracts documented and preserved. |
 | F-11 | Menu roving focus, trigger association and tooltip descriptions/Escape covered. Native browser Tab/Shift+Tab within a modal were exercised. |
@@ -97,6 +97,46 @@ page width changed from 320 px against 305 px usable width to 305/305. At 390 px
 and 1440 px it measured 375/375 and 1425/1425; primary controls remained visible.
 These observations establish fixture layout and interaction only, not live data,
 server authorization, provider behavior or assistive-technology acceptance.
+
+## Core retained-screen batch
+
+This dependent batch implements the C1-C5 repairs and their existing-route recovery
+metadata. It also supplies the opt-in semantic token scope required to measure a
+custom palette in isolation from the active outer theme. Palette values and the
+existing Save policy are unchanged; a failing pair is a nonblocking warning, not
+an automatic palette modification or a compliance guarantee.
+
+| Finding | Result |
+| --- | --- |
+| CORE-01 | Memory has authored, responsive rows and named controls. Active #3084 FactActions import/export/delete call remains untouched. |
+| CORE-03 | Memory, People, members, oversight and audit distinguish failed reads from empty results and expose recovery while retaining confirmed rows. |
+| CORE-04 | Auth and onboarding use the approved shared control/type contracts. |
+| CORE-05 | Onboarding step labels point to actual heading IDs. |
+| CORE-06 | Onboarding/Today dialogs use shared lifecycle; the source tray deliberately remains nonmodal with focus entry, Escape, return and associated trigger. |
+| CORE-07 | Account actions use shared Menu; the phone navigation uses modal lifecycle, a named close control and actual expanded/controls state. Closed phone navigation is hidden from focus; desktop resize releases modal state. |
+| CORE-08 | Plan and workflow approval presentation uses shared controls while preserving pending and repeated-click guards. |
+| CORE-09 | Today semantic band text and wrapped action spacing repaired without changing the approved composition. |
+| CORE-10 | Missing local form/action layout hooks implemented. |
+| CORE-11 | Activity uses canonical Settings heading anatomy. |
+| CORE-12 | Theme deletion and encryption-key actions use authored confirmations with existing consequence/cancel semantics. |
+| CORE-13 | Offline fallback uses the retained shared visual identity. |
+| CORE-14 | Merged Finance module-owned Settings link is migrated. Conversations/Alerts from active #3154 are still held, not recreated or claimed complete. |
+| CORE-15 | Owned core underfloor text repaired; no claim of exhaustive whole-app rendered typography validation. |
+| CORE-16 | Priority settings use shared controls and distinguish read/write recovery. |
+| F-08 C4 | Nine readability readouts measure actual computed semantic foreground/ground pairs. Built-in duplicates and draft previews explicitly isolate their own palette/mode; warnings describe limited coverage. |
+
+Focused tests cover failed-read retries, retained drafts, destructive cancellation,
+mobile open/close/scrim/Escape/reopen, account navigation focus, responsive modal
+release and separate nonmodal source trays. Independent review includes stale
+closure/measurement and multiple-message source-tray probes. Source-faithful
+browser measurements verified all nine readability results against rendered
+colors and independently recalculated contrast, including a failing dark-palette
+pair and a changed custom light palette. No theme Save was issued in browser proof.
+
+This batch adds no routes or authority. Core declarations describe the repaired
+recovery controls in the same batch. The active Memory and host chat patches were
+apply-checked for compatibility; no other branch was edited or imported wholesale.
+Final command counts and remaining browser cases are recorded in its draft body.
 
 ## Explicit outstanding gates
 
