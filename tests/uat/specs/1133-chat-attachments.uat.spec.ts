@@ -108,6 +108,7 @@ test("attaching a file really uploads to the vault and the turn carries its id (
   await drawer.getByRole("button", { name: "Send" }).click();
 
   // The turn body carries the server-issued id (never bytes) into the real /turn handler.
+  // That handler checks each id and the private-chat rule before the model runs.
   await expect
     .poll(() => turnBody)
     .toEqual({
