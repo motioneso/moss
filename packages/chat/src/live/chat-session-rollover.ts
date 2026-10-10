@@ -64,13 +64,15 @@ export async function rollOverSessionIfDue(
     return { session, waited: true };
   }
   input.signal.throwIfAborted();
-  console.info(JSON.stringify({ event: "chat.session.rollover", ...event }));
   const next = await host.ensureSession(
     actorUserId,
     input.userName,
     { rollover: session, signal: input.signal },
     session.surface
   );
+  // The selection moved, or another caller already replaced this exact session.
+  const outcome = next === session ? "chat.session.rollover_skipped" : "chat.session.rollover";
+  console.info(JSON.stringify({ event: outcome, ...event }));
   // Context seeded into the old session must not be framed again by a remounted caller.
   if (next !== session && next.threadId === session.threadId) {
     for (const key of session.seededContextKeys) next.seededContextKeys.add(key);

@@ -10,6 +10,7 @@ import {
 import { getPinnedThreadState, getSelectedThreadState } from "./chat-thread-selection.js";
 import {
   ApiKeyLiveChatUnavailableError,
+  CHAT_CHANGED_WHILE_STARTING_MESSAGE,
   ChatProviderChangedError,
   CliChatUnavailableError,
   UnsupportedLegacyCliProviderError
@@ -35,7 +36,7 @@ export interface UserSession {
   readonly mcpToken?: string;
   readonly startsToolClientPerTurn: boolean;
   /** App-side count of what this provider session was fed and produced. */
-  readonly usage?: SessionUsageMeter;
+  readonly usage: SessionUsageMeter;
 }
 
 export function sameActiveChatProvider(
@@ -132,9 +133,6 @@ export interface LaunchSessionOpts {
   /** Bind the launch to this conversation, refusing if it is no longer selected. */
   readonly pinThreadId?: string;
 }
-
-export const CHAT_CHANGED_WHILE_STARTING_MESSAGE =
-  "Your chat changed while it was starting. Please try again.";
 
 export async function ensureSessionForCurrentProvider(input: {
   readonly actorUserId: string;

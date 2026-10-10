@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatSessionManager } from "../../packages/chat/src/live/chat-session-manager.js";
+import {
+  CHAT_CHANGED_WHILE_STARTING_MESSAGE,
+  CHAT_PROVIDER_CHANGED_MESSAGE
+} from "../../packages/chat/src/live/errors.js";
 import type { EngineLaunchOpts, TranscriptRecord } from "../../packages/chat/src/live/types.js";
 import { makeMinimalDeps } from "./chat-session-manager.test.js";
 
@@ -126,7 +130,10 @@ function harness(
   };
 }
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe("automatic session handoff (#3157)", () => {
   it("keeps one session while the count stays under the budget", async () => {
@@ -259,7 +266,11 @@ describe("automatic session handoff (#3157)", () => {
     const h = harness();
     await h.manager.submitTurn("u1", "Ben", "first");
     h.select({ id: OTHER_THREAD, incognito: false });
+    const info = vi.spyOn(console, "info");
     await h.manager.submitTurn("u1", "Ben", "second");
+    const events = info.mock.calls.map(([line]) => JSON.parse(String(line)).event as string);
+    expect(events).toContain("chat.session.rollover_skipped");
+    expect(events).not.toContain("chat.session.rollover");
     expect(h.engines).toHaveLength(1);
     expect(h.engines[0]!.killed).toBe(false);
     expect(h.engines[0]!.submitted[1]).toContain("second");
@@ -286,7 +297,7 @@ describe("automatic session handoff (#3157)", () => {
     await vi.waitFor(() => expect(h.engines).toHaveLength(2));
     h.select({ id: OTHER_THREAD, incognito: false });
     release();
-    await expect(turn).rejects.toThrow();
+    await expect(turn).rejects.toThrow(CHAT_CHANGED_WHILE_STARTING_MESSAGE);
     const submittedAnywhere = h.engines.flatMap((e) => e.submitted);
     expect(submittedAnywhere.filter((t) => t.includes("second"))).toHaveLength(0);
     expect(h.engines).toHaveLength(2);
@@ -304,7 +315,9 @@ describe("automatic session handoff (#3157)", () => {
       if (binding.measureOnly) h.setProvider({ provider: "anthropic", model: "opus" });
       return measure(actor, binding);
     });
-    await expect(h.manager.submitTurn("u1", "Ben", "second")).rejects.toThrow();
+    await expect(h.manager.submitTurn("u1", "Ben", "second")).rejects.toThrow(
+      CHAT_PROVIDER_CHANGED_MESSAGE
+    );
     const submittedAnywhere = h.engines.flatMap((e) => e.submitted);
     expect(submittedAnywhere.filter((t) => t.includes("second"))).toHaveLength(0);
     expect(h.recordTurn).toHaveBeenCalledTimes(1);

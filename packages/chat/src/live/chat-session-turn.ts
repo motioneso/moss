@@ -26,6 +26,7 @@ import { DEFAULT_CHAT_SURFACE, surfaceSessionKey, type ChatSurface } from "./cha
 import {
   mapChatEngineReadError,
   CliChatDeliveryUnknownError,
+  CHAT_CHANGED_WHILE_STARTING_MESSAGE,
   CliChatUnavailableError,
   ApiKeyLiveChatUnavailableError,
   UnsupportedLegacyCliProviderError
@@ -234,12 +235,10 @@ export async function runChatTurn(
     }
     session = rollover.session;
     if (rollover.waited) {
-      if (
-        controller.signal.aborted ||
-        session.incognito !== requestIncognito ||
-        session.threadId !== servingThreadId
-      )
+      if (controller.signal.aborted)
         return finishRefusedTurn(host, actorUserId, surface, sessionKey, session, gateShadow);
+      if (session.incognito !== requestIncognito || session.threadId !== servingThreadId)
+        throw new CliChatUnavailableError(CHAT_CHANGED_WHILE_STARTING_MESSAGE);
       await assertProviderIdentityForPendingTurn(turnProviderIdentity, session.providerIdentity);
       await assertProviderIdentityForPendingTurn(
         turnProviderIdentity,

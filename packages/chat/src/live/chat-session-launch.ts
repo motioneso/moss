@@ -11,7 +11,6 @@ import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js"
 import {
   assertLiveCliProvider,
   assertProviderIdentityBeforeReplay,
-  CHAT_CHANGED_WHILE_STARTING_MESSAGE,
   type ActiveChatProvider,
   type LaunchSessionOpts,
   type UserSession
@@ -24,7 +23,7 @@ import {
   type ChatSurface
 } from "./chat-surface.js";
 import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
-import { CliChatUnavailableError } from "./errors.js";
+import { CHAT_CHANGED_WHILE_STARTING_MESSAGE, CliChatUnavailableError } from "./errors.js";
 import { renderPersona } from "./persona.js";
 import { estimateTokens, renderMemorySeedBlock } from "./recall-seed.js";
 import { getReplayTokenCap, SUMMARY_TOKEN_CAP } from "./replay-window.js";

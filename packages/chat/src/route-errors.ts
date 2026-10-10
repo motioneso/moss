@@ -1,6 +1,6 @@
 import type { FastifyReply } from "fastify";
 import { handleRouteError as handleModuleRouteError } from "@moss/module-sdk";
-import { CliChatUnavailableError } from "./live/errors.js";
+import { CHAT_CHANGED_WHILE_STARTING_MESSAGE, CliChatUnavailableError } from "./live/errors.js";
 import { knownAuthFailureMessage } from "./live/auth-errors.js";
 import { CLI_VERSION_TOO_OLD_MESSAGE, notifyCliVersionTooOld } from "./live/cli-version-errors.js";
 import { CONVERSATION_RESUME_MESSAGES } from "./live/summary-coverage.js";
@@ -15,7 +15,10 @@ export function handleRouteError(error: unknown, reply: FastifyReply) {
       notifyCliVersionTooOld();
       return reply.code(503).send({ error: CLI_VERSION_TOO_OLD_MESSAGE });
     }
-    if (CONVERSATION_RESUME_MESSAGES.has(error.message)) {
+    if (
+      CONVERSATION_RESUME_MESSAGES.has(error.message) ||
+      error.message === CHAT_CHANGED_WHILE_STARTING_MESSAGE
+    ) {
       return reply.code(503).send({ error: error.message });
     }
     reply.log?.warn?.({ err: error }, "live chat unavailable");

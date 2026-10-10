@@ -173,7 +173,13 @@ export const chatModuleManifest = {
           code: "chat_changed_during_handoff",
           class: "transient",
           description:
-            "You switched chats or models while Moss was starting the fresh session, so the message was not sent. Send it again."
+            "You switched chats while Moss was starting the fresh session, so the message was not sent. Moss says your chat changed while it was starting. Send it again."
+        },
+        {
+          code: "chat_model_changed_during_handoff",
+          class: "transient",
+          description:
+            "The chat's AI provider or model changed while Moss was starting the fresh session, so the message was not sent. Send it again."
         }
       ]
     },
