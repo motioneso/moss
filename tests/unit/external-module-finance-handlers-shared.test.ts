@@ -378,6 +378,7 @@ function plaidForSync(balance: Partial<PlaidAccount> = {}): PlaidClient {
     accountsGet: async () => {
       throw new Error("not used");
     },
+    institutionGet: async () => ({ name: null }),
     accountsBalanceGet: async () => ({
       accounts: [
         {

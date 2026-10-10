@@ -375,6 +375,21 @@ export class TasksRepository {
       updates.status = input.status;
       updates.completed_at = input.status === "done" ? new Date() : null;
     }
+    if (input.recurrence !== undefined) {
+      if (input.recurrence === null) {
+        updates.recurrence = null;
+        updates.recurrence_series_id = null;
+      } else {
+        // Keep the existing series so already-generated occurrences stay linked.
+        const current = await scopedDb.db
+          .selectFrom("app.tasks")
+          .select("recurrence_series_id")
+          .where("id", "=", taskId)
+          .executeTakeFirst();
+        updates.recurrence = { ...input.recurrence };
+        updates.recurrence_series_id = current?.recurrence_series_id ?? randomUUID();
+      }
+    }
 
     // List move: drop assignments whose tag does not belong to the destination list, BEFORE the
     // move. Same ambient transaction as the rest of update() (withDataContext wraps the callback
@@ -393,6 +408,41 @@ export class TasksRepository {
           )
         )
         .execute();
+
+      // Subtasks follow their parent only when the list actually changes: same list, and tags
+      // foreign to the destination are dropped.
+      const stored = await scopedDb.db
+        .selectFrom("app.tasks")
+        .select("list_id")
+        .where("id", "=", taskId)
+        .executeTakeFirst();
+      const children =
+        stored && stored.list_id !== input.listId
+          ? await scopedDb.db
+              .selectFrom("app.tasks")
+              .select("id")
+              .where("parent_task_id", "=", taskId)
+              .execute()
+          : [];
+      if (children.length > 0) {
+        const childIds = children.map((child) => child.id);
+        await scopedDb.db
+          .deleteFrom("app.task_tag_assignments")
+          .where("task_id", "in", childIds)
+          .where((eb) =>
+            eb(
+              "tag_id",
+              "not in",
+              eb.selectFrom("app.task_tags").select("id").where("list_id", "=", input.listId!)
+            )
+          )
+          .execute();
+        await scopedDb.db
+          .updateTable("app.tasks")
+          .set({ list_id: input.listId, updated_at: updates.updated_at })
+          .where("id", "in", childIds)
+          .execute();
+      }
     }
 
     const updated = await scopedDb.db

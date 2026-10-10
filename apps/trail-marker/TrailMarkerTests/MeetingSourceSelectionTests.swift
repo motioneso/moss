@@ -85,6 +85,41 @@ final class MeetingSourceSelectionTests: XCTestCase {
         XCTAssertNil(host.sourceSelectionError)
     }
 
+    func testManualSourceEditSupersedesAdoptedRecoveryAwaitingRecordingAcknowledgment() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        fixture.permission = .granted
+        let originalDevice = fixture.device
+        let replacement = Device()
+        let host = fixture.host(snapshot: snapshot(), factory: { selection in
+            [.microphone: selection.microphoneDeviceID == 43 ? replacement : originalDevice]
+        }) { false }
+        defer {
+            host.shutdown(reason: "Manual edit supersedes recovery test")
+            fixture.server.releaseRecordingStatusReplies()
+        }
+        try await start(host, fixture)
+        fixture.server.holdRecordingStatusReplies(forGeneration: 2)
+        fixture.device.receiver?.fail(.sourceReconfigured)
+        host.service()
+        try await waitUntil(timeout: 6) { fixture.device.starts == 2 && host.phase == .recording }
+        XCTAssertTrue(host.canChangeSourcesFromUserClick)
+        let unchanged = try XCTUnwrap(host.currentSourceChoice)
+        try host.changeSourcesFromUserClick(unchanged)
+        let invalid = MeetingCaptureChoice(mode: "microphone-only", microphone: nil,
+            outputSourceId: nil, appProcessTreeId: nil, scope: nil)
+        XCTAssertThrowsError(try host.changeSourcesFromUserClick(invalid))
+        XCTAssertEqual(fixture.device.stops, 1, "Invalid and unchanged edits must leave the adopted pair alone")
+        host.selectMicrophoneFromUserClick(second)
+        fixture.server.releaseRecordingStatusReplies()
+        try await waitUntil(timeout: 6) { replacement.starts == 1 || host.interruptionWarning != nil }
+        XCTAssertEqual(replacement.starts, 1, "An explicit source edit must supersede the pending automatic recovery")
+        XCTAssertEqual(host.phase, .recording)
+        XCTAssertEqual(host.currentSourceChoice?.microphone, second)
+        XCTAssertEqual(fixture.server.captureEpoch, 3)
+        XCTAssertNil(host.sourceSelectionError)
+    }
+
     func testLiveSourceChangeClosesOldReceiverBeforeControlAndWaitsForExactStatus() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }

@@ -401,7 +401,7 @@ function ControlledVoiceComposer(props: { readonly selected: "a" | "b" }) {
         }))
       }
       onQueue={() => {}}
-      onSend={() => {}}
+      onSend={() => true}
       onStop={() => {}}
       privateMode={false}
       queuedText={null}
@@ -456,7 +456,7 @@ async function renderInteractiveComposer(
       lockedModelUnavailable: false,
       privateMode: false,
       queuedText: null,
-      onSend: () => {},
+      onSend: () => true,
       onQueue: () => {},
       onDiscardQueuedText: () => {},
       onStop: () => {}
@@ -554,7 +554,7 @@ async function renderComposer(
         lockedModelUnavailable: false,
         privateMode: false,
         queuedText: null,
-        onSend: () => {},
+        onSend: () => true,
         onQueue: () => {},
         onDiscardQueuedText: () => {},
         onStop: () => {}

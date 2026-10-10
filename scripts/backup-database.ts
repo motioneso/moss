@@ -5,17 +5,24 @@ import { dirname, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
-import { getMossDatabaseUrls } from "@moss/db";
+import { createDatabase, getMossDatabaseUrls } from "@moss/db";
 
-const POSTGRES_CONTAINER = "jarv1s-postgres";
+import {
+  assertContainerMatchesConnection,
+  resolvePostgresContainer
+} from "./postgres-container.js";
 
 export interface BackupPlanInput {
   readonly connectionString?: string;
+  readonly container?: string;
   readonly now?: Date;
   readonly outputFile?: string;
 }
 
 export interface BackupPlan {
+  readonly container: string;
+  readonly database: string;
+  readonly username: string;
   readonly dockerArgs: readonly string[];
   readonly dockerCommand: "docker";
   readonly env: Readonly<Record<"PGPASSWORD", string>>;
@@ -39,27 +46,17 @@ export function createBackupPlan(input: BackupPlanInput = {}): BackupPlan {
     throw new Error("Backup database URL must include a password");
   }
 
-  const dockerPgDumpArgs = [
-    "--username",
-    username,
-    "--dbname",
-    database,
-    "--format=custom",
-    "--no-owner",
-    "--no-privileges"
-  ];
+  const container = resolvePostgresContainer(input.container);
+
+  // Owners and ACLs stay in the dump so a restore keeps the role-scoped definer/RLS setup.
+  const dockerPgDumpArgs = ["--username", username, "--dbname", database, "--format=custom"];
 
   return {
+    container,
+    database,
+    username,
     dockerCommand: "docker",
-    dockerArgs: [
-      "exec",
-      "-i",
-      "--env",
-      "PGPASSWORD",
-      POSTGRES_CONTAINER,
-      "pg_dump",
-      ...dockerPgDumpArgs
-    ],
+    dockerArgs: ["exec", "-i", "--env", "PGPASSWORD", container, "pg_dump", ...dockerPgDumpArgs],
     env: {
       PGPASSWORD: password
     },
@@ -69,9 +66,24 @@ export function createBackupPlan(input: BackupPlanInput = {}): BackupPlan {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const connectionString = getMossDatabaseUrls().bootstrap;
   const plan = createBackupPlan({
+    connectionString,
+    container: args.container,
     outputFile: args.output
   });
+
+  const db = createDatabase({ connectionString });
+  try {
+    await assertContainerMatchesConnection(db, {
+      container: plan.container,
+      database: plan.database,
+      username: plan.username,
+      password: plan.env.PGPASSWORD
+    });
+  } finally {
+    await db.destroy();
+  }
 
   await mkdir(dirname(plan.outputFile), { recursive: true });
   console.log(`Writing sensitive database backup to ${plan.outputFile}`);
@@ -85,10 +97,17 @@ function defaultBackupFile(now: Date): string {
   return `backups/jarv1s-${stamp}.dump`;
 }
 
-function parseArgs(args: readonly string[]): { readonly output?: string } {
+function parseArgs(args: readonly string[]): {
+  readonly container?: string;
+  readonly output?: string;
+} {
   const output = readFlag(args, "--output");
+  const container = readFlag(args, "--container");
 
-  return output === undefined ? {} : { output };
+  return {
+    ...(output === undefined ? {} : { output }),
+    ...(container === undefined ? {} : { container })
+  };
 }
 
 function readFlag(args: readonly string[], name: string): string | undefined {

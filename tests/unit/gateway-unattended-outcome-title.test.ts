@@ -62,6 +62,14 @@ describe("unattended action outcome titles", () => {
     }
   );
 
+  it("reports the owning module as affected for a write tool with no per-call resolution", async () => {
+    const tool = admissionTool("example.logMeal", { risk: "write" });
+    const h = admissionFixture([tool]);
+    await h.gateway.callTool(h.token, tool.name, {});
+    expect(h.records[0]).toMatchObject({ kind: "action_result", outcome: "executed" });
+    expect(h.records[0]).toHaveProperty("affectsModules", ["example"]);
+  });
+
   it.each(outcomes)("retains a resolved app-action title on unattended %s", async (outcome) => {
     const resolution = resolvedCall({ summary: "Change your preferred theme" });
     const execute = vi.fn<ToolExecute>(async () => {

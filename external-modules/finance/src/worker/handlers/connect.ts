@@ -21,6 +21,7 @@ import type {
 } from "../../domain/index.js";
 import type { TokenMap, WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
+import { syncRunHandler } from "./sync.js";
 import { InputError, readEnum } from "../validate.js";
 
 const LINK_PREFIX = "link:";
@@ -154,7 +155,7 @@ async function completePublicToken(
   await store.putItem(item);
 }
 
-export const connectPollHandler: ToolFactory = (ports) => async () => {
+export const connectPollHandler: ToolFactory = (ports) => async (input) => {
   const store = await ports.store();
   const keys = await ports.kv.list(NS.connections);
   const sessionKeys = keys.filter((key) => key.startsWith(LINK_PREFIX));
@@ -197,6 +198,17 @@ export const connectPollHandler: ToolFactory = (ports) => async () => {
     }
     await ports.kv.set(NS.connections, key, { ...session, status: "completed" });
     completed += 1;
+  }
+
+  // First sync right after connect, so transactions do not wait for the
+  // 6-hour sweep. Best effort: the connection is already saved, and a failed
+  // first sync is retried by the schedule and the sync tool.
+  if (completed > 0 && typeof input.actorUserId === "string") {
+    try {
+      await syncRunHandler(ports)({ actorUserId: input.actorUserId });
+    } catch {
+      console.warn("finance.connect first_sync_failed");
+    }
   }
 
   return {

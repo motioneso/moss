@@ -36,6 +36,16 @@ export function createAppMapReadService(deps: {
   readonly artifact: AppMapArtifact;
   readonly resolveActiveModules: (actorUserId: string) => Promise<readonly { id: string }[]>;
   readonly resolveFeatureFlagState: ResolveFeatureFlagState;
+  /**
+   * Entries installed modules add to the map (#3168). Called per query with the actor's id and
+   * expected to return only modules active for that actor, so the built artifact stays static
+   * while installs take effect immediately.
+   */
+  readonly resolveExternalAppMap?: (actorUserId: string) => Promise<{
+    readonly screens: readonly AppMapItem[];
+    readonly settings: readonly AppMapItem[];
+    readonly features: readonly AppMapItem[];
+  }>;
   readonly getUser: (
     scopedDb: DataContextDb,
     userId: string
@@ -45,10 +55,14 @@ export function createAppMapReadService(deps: {
   return {
     getBuildInfo: () => deps.artifact.build,
     async query(scopedDb, actorUserId, input) {
-      const [active, user] = await Promise.all([
+      const [active, user, external] = await Promise.all([
         deps.resolveActiveModules(actorUserId),
-        deps.getUser(scopedDb, actorUserId)
+        deps.getUser(scopedDb, actorUserId),
+        deps.resolveExternalAppMap?.(actorUserId)
       ]);
+      const screens = [...deps.artifact.screens, ...(external?.screens ?? [])];
+      const settings = [...deps.artifact.settings, ...(external?.settings ?? [])];
+      const features = [...deps.artifact.features, ...(external?.features ?? [])];
       const activeIds = new Set(["core", ...active.map((module) => module.id)]);
       const isAdmin = user?.is_instance_admin === true || user?.isInstanceAdmin === true;
       const limit = Math.max(1, Math.min(input.limit ?? 8, 8));
@@ -63,15 +77,15 @@ export function createAppMapReadService(deps: {
       const [kind, raw] = selector;
       const source =
         kind === "screen"
-          ? deps.artifact.screens
+          ? screens
           : kind === "setting"
-            ? deps.artifact.settings
+            ? settings
             : kind === "error"
               ? deps.artifact.errors
               : [
-                  ...deps.artifact.screens,
-                  ...deps.artifact.settings,
-                  ...deps.artifact.features,
+                  ...screens,
+                  ...settings,
+                  ...features,
                   ...deps.artifact.errors,
                   ...deps.artifact.remediations
                 ];

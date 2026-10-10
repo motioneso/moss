@@ -7,6 +7,7 @@ import { HttpError } from "@moss/module-sdk";
 import type {
   ApplyItemResult,
   DayPlanApplyBatchDto,
+  DayPlanApplyBatchInput,
   DayPlanApplySelectionEntry,
   DayPlanOperationOutcome,
   DayPlanPendingChange
@@ -51,12 +52,18 @@ function entryOf(block: DayPlanApplyResolvableBlock): DayPlanApplySelectionEntry
   };
 }
 
-// Resolves the reviewed explicit selection plus every still-pending addition,
+export type ReserveApplyBatchInput = DayPlanApplyBatchInput & {
+  // False reserves exactly selectedBlockIds; the default adds every pending addition.
+  includePendingAdditions?: boolean;
+};
+
+// Resolves the reviewed explicit selection plus (unless disabled) every still-pending addition,
 // ordered by plan position so the snapshot is stable. Unknown ids and blocks
 // without a pending change fail exactly like the preview authority.
 export function resolveApplySelection(
   blocks: readonly DayPlanApplyResolvableBlock[],
-  selectedBlockIds?: readonly string[]
+  selectedBlockIds?: readonly string[],
+  options: { readonly includePendingAdditions?: boolean } = {}
 ): DayPlanApplySelectionEntry[] {
   const byId = new Map(blocks.map((block) => [block.id, block]));
   const explicit = new Map<string, DayPlanApplySelectionEntry>();
@@ -64,7 +71,7 @@ export function resolveApplySelection(
     if (explicit.has(id)) continue;
     explicit.set(id, entryOf(requireSelectedPlanBlock(byId, id)));
   }
-  for (const block of blocks) {
+  for (const block of options.includePendingAdditions === false ? [] : blocks) {
     if (explicit.has(block.id)) continue;
     if (block.pendingChange?.kind === "add") explicit.set(block.id, entryOf(block));
   }

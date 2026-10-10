@@ -27,22 +27,17 @@ import {
   getChatPrivacyState,
   listChatThreadMessages,
   listChatThreads,
-  lookupAiCapabilityRoute,
   resumeChat,
   sendChatTurn
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name.js";
-import {
-  DEFAULT_CHAT_SURFACE,
-  type ChatAttachmentDto,
-  type ChatSurface,
-  type LookupAiCapabilityRouteResponse
-} from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE, type ChatAttachmentDto, type ChatSurface } from "@moss/shared";
 import { ChatModelPill } from "./chat-model-pill";
 import { ChatEmptyState } from "./chat-empty-state";
 import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
+import { useChatRoute } from "./use-chat-route";
 import { Thread } from "@moss/ui";
 import { trapFocus } from "../shell/command-palette";
 import { RecordRow } from "./message-row";
@@ -196,15 +191,9 @@ export function ChatDrawer(props: {
     setPrivateActivationError(null);
     setQueuedSendText(null);
   }, [props.surface]);
-  const chatRouteQuery = useQuery({
-    queryKey: queryKeys.ai.capability("chat"),
-    queryFn: () => lookupAiCapabilityRoute("chat"),
-    enabled: props.open,
-    retry: false
-  });
-  const lockedModelUnavailable = chatRouteQuery.data?.route?.reason === "admin-pin-unavailable";
-  const chatUnavailable = chatRouteQuery.isSuccess && !chatAvailableFromRoute(chatRouteQuery.data);
-  const noModelAvailable = chatUnavailable && !lockedModelUnavailable;
+
+  const { lockedModelUnavailable, chatUnavailable, rechecking } = useChatRoute(props.open);
+  const noModelAvailable = chatUnavailable && !lockedModelUnavailable && !rechecking;
   const threadsQuery = useQuery({
     queryKey: queryKeys.chat.threads(props.surface),
     queryFn: () => listChatThreads(props.surface),
@@ -291,7 +280,7 @@ export function ChatDrawer(props: {
     selection
   ]);
   const sendMessage = useCallback(
-    (text: string, attachments?: readonly ChatAttachmentDto[]): void => {
+    (text: string, attachments?: readonly ChatAttachmentDto[]): boolean => {
       const trimmed = text.trim();
       if (
         (!trimmed && !attachments?.length) ||
@@ -302,7 +291,7 @@ export function ChatDrawer(props: {
         historyActivationPending ||
         (Boolean(props.meetingContext) && reviewThreadId !== null)
       ) {
-        return;
+        return false;
       }
       if (reviewThreadId !== null) {
         setFallbackRecords(recordsFromMessages(messagesQuery.data?.messages ?? []));
@@ -421,6 +410,7 @@ export function ChatDrawer(props: {
           }
         }
       })();
+      return true;
     },
     [
       activatingPrivate,
@@ -696,14 +686,18 @@ export function ChatDrawer(props: {
           </span>
           <div className="chatd__id">
             <div className="chatd__name">{assistantName || "Chat"}</div>
-            <div className={`chatd__status${chatUnavailable ? " chatd__status--offline" : ""}`}>
-              {lockedModelUnavailable && chatUnavailable
-                ? "Model unavailable"
-                : noModelAvailable
-                  ? "Not connected"
-                  : props.meetingContext
-                    ? "Meeting questions only"
-                    : "Here when you need me"}
+            <div
+              className={`chatd__status${chatUnavailable && !rechecking ? " chatd__status--offline" : ""}`}
+            >
+              {rechecking
+                ? "Checking connection"
+                : lockedModelUnavailable && chatUnavailable
+                  ? "Model unavailable"
+                  : noModelAvailable
+                    ? "Not connected"
+                    : props.meetingContext
+                      ? "Meeting questions only"
+                      : "Here when you need me"}
             </div>
           </div>
           {props.onToggleExpanded ? (
@@ -861,6 +855,8 @@ export function ChatDrawer(props: {
                 />
               )}
             />
+          ) : rechecking ? (
+            <div className="chatd-empty" aria-busy="true" />
           ) : noModelAvailable ? (
             <ConnectProviderEmpty isFounder={props.isFounder} />
           ) : props.meetingContext ? (
@@ -971,6 +967,7 @@ export function ChatDrawer(props: {
             props.selectionPending ||
             moduleIdentityPending ||
             historyActivationPending ||
+            rechecking ||
             (transition.pending && !activatingPrivate) ||
             (Boolean(props.meetingContext) && reviewing)
           }
@@ -993,7 +990,4 @@ export function ChatDrawer(props: {
       </div>
     </aside>
   );
-}
-export function chatAvailableFromRoute(data: LookupAiCapabilityRouteResponse | undefined): boolean {
-  return data?.route?.available === true;
 }

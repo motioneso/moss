@@ -169,6 +169,8 @@ export interface MemoryRecallItem {
   readonly title: string;
   readonly text: string;
   readonly score: number;
+  /** Name of the person or thing a fact is about; absent for facts about the owner. */
+  readonly subjectName?: string;
   readonly recordKind?: MemoryRecordKind;
   readonly status?: MemoryFactStatus;
   readonly confidence: number;

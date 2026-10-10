@@ -286,3 +286,27 @@ export function validateModulePreferences(
   }
   return preferences;
 }
+
+/**
+ * #3184: an optional module-relative path for the module's own settings page. Same clean-path
+ * rule as navigation entries, but never the bare root, so the gear cannot point at the module's
+ * home screen by accident. serializeExternalModule is the only place it becomes a real route.
+ */
+export function validateModuleSettingsPath(
+  obj: Record<string, unknown>,
+  errors: string[]
+): string | undefined {
+  const value = obj.settingsPath;
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== "string" ||
+    value.length > 128 ||
+    !/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(value)
+  ) {
+    errors.push(
+      `settingsPath must be a clean module-relative path (e.g. "/settings"): ${String(value)}`
+    );
+    return undefined;
+  }
+  return value;
+}

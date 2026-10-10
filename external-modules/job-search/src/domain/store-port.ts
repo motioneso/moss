@@ -158,7 +158,11 @@ export interface JobSearchStore {
       readonly criteriaSnapshot?: SearchCriteria;
     }
   ): Promise<boolean>;
-  setMatchState(matchId: string, state: Match["state"]): Promise<void>;
+  /**
+   * True when a match row was updated; false when the id has no match row (an unscored posting
+   * shown on the board, a wrong-owner id, or a deleted match).
+   */
+  setMatchState(matchId: string, state: Match["state"]): Promise<boolean>;
   /** #1330: the detail read behind `job-search.match.get`. `listMatches`'s row is a capped
    * summary (render-cap arithmetic, N38); this is the one place the AI's full, untruncated
    * Fit/Want reasons are readable. `null` on a missing id or an id that resolves to nothing

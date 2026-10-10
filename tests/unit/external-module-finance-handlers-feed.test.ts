@@ -2,17 +2,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  categorize,
   contentHash,
   DEFAULT_CATEGORIES,
   itemKey,
   kvStore,
-  normalizePayee,
   NS
 } from "../../external-modules/finance/src/domain/index.js";
 import type {
+  ActivityInput,
   FinanceKv,
-  Rule,
   SharedMirrorKv,
   TransactionRecord
 } from "../../external-modules/finance/src/domain/index.js";
@@ -22,7 +20,9 @@ import {
 } from "../../external-modules/finance/src/domain/shared-pool.js";
 import {
   categorizeApplyHandler,
+  reviewApplyHandler,
   transactionCategorizeHandler,
+  transactionCategorizeNewHandler,
   transactionsQueryHandler
 } from "../../external-modules/finance/src/worker/handlers/feed.js";
 import type { WorkerPorts } from "../../external-modules/finance/src/worker/ports.js";
@@ -81,7 +81,11 @@ function readOnlyMirror(seed?: Record<string, Record<string, unknown>>): SharedM
 // Feed handlers are pure KV reads/writes: any touch of Plaid credentials,
 // the token map, or instance settings is a contract violation, so every
 // non-kv port throws on use.
-function fakePorts(kv: FinanceKv, mirror?: SharedMirrorKv): WorkerPorts {
+function fakePorts(
+  kv: FinanceKv,
+  mirror?: SharedMirrorKv,
+  activity: ActivityInput[] = []
+): WorkerPorts {
   return {
     kv,
     // Default: categorize handlers are mirror-blind (share/sync territory).
@@ -124,7 +128,12 @@ function fakePorts(kv: FinanceKv, mirror?: SharedMirrorKv): WorkerPorts {
     now: () => NOW,
     // FIN-06b (#1166): pre-cutover handler tests stay on kvStore — the
     // FIN-06c cutover (Tasks 8-10) is what makes handlers actually call this.
-    store: async () => kvStore(kv)
+    store: async () => ({
+      ...kvStore(kv),
+      appendActivity: async (entry) => {
+        activity.push(entry);
+      }
+    })
   };
 }
 
@@ -232,7 +241,7 @@ describe("finance feed handlers (#1147)", () => {
     );
   });
 
-  it("query defaults limit to 50, allows up to 200, rejects beyond", async () => {
+  it("query defaults limit to 50, allows up to 2000, rejects beyond, and reports the total", async () => {
     const kv = fakeKv();
     await seedAccount(kv, "acc-1");
     await kv.set(NS.transactions, "acc-1:2026-07", {
@@ -244,18 +253,32 @@ describe("finance feed handlers (#1147)", () => {
     const handler = (input: Record<string, unknown>) => query({ actorUserId: ACTOR, ...input });
     expect(ids(await handler({})).length).toBe(50);
     expect(ids(await handler({ limit: 200 })).length).toBe(60);
-    await expect(handler({ limit: 201 })).rejects.toThrow("at most 200");
+    await expect(handler({ limit: 2001 })).rejects.toThrow("at most 2000");
+    // The total lets the screen offer Show more (review A11).
+    expect((await handler({ limit: 10 })).totalCount).toBe(60);
     await expect(handler({ month: "July 2026" })).rejects.toThrow("month must be YYYY-MM");
   });
 
-  it("categorize tool sets user provenance and persists notes", async () => {
+  it("categorize-new sets user provenance, confirms the row, and persists notes", async () => {
     const kv = fakeKv();
     await seedFeed(kv);
-    const result = await transactionCategorizeHandler(fakePorts(kv))({
+    // t-a is a needs_look guess from a merchant nobody has confirmed yet.
+    const chunk0 = (await kv.get(NS.transactions, "acc-1:2026-07")) as {
+      transactions: TransactionRecord[];
+    };
+    const guess = chunk0.transactions.find((record) => record.id === "t-a")!;
+    guess.categoryId = "dining";
+    guess.categorizedBy = "ai";
+    guess.reviewState = "needs_look";
+    guess.aiConfidence = 0.4;
+    await kv.set(NS.transactions, "acc-1:2026-07", chunk0);
+
+    const result = await transactionCategorizeNewHandler(fakePorts(kv))({
       transactionId: "t-a",
       accountId: "acc-1",
       month: "2026-07",
       categoryId: "groceries",
+      amountCents: 1234,
       notes: "weekly shop"
     });
     expect(result.status).toBe("ok");
@@ -266,42 +289,84 @@ describe("finance feed handlers (#1147)", () => {
     expect(updated).toMatchObject({
       categoryId: "groceries",
       categorizedBy: "user",
+      reviewState: "confirmed",
       notes: "weekly shop"
     });
-    // Sibling records untouched; no rule written without createRule.
+    // Sibling records untouched; the tool no longer writes rules.
     expect(chunk.transactions.find((record) => record.id === "t-b")!.categoryId).toBe("dining");
     expect(await kv.list(NS.rules)).toEqual([]);
   });
 
-  it("createRule upserts the payee rule and a later pipeline run applies it", async () => {
+  it("categorize sorts a merchant with confirmed history and refuses a new one", async () => {
+    const kv = fakeKv();
+    await seedFeed(kv);
+    const ids = { accountId: "acc-1", month: "2026-07", categoryId: "groceries" };
+    // t-b is "ACME" with a confirmed category: the merchant has history.
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [
+        txRecord({ id: "t-a", date: "2026-07-15", name: "Some Diner" }),
+        txRecord({ id: "t-b", date: "2026-07-10", categoryId: "dining", name: "ACME #1" }),
+        txRecord({ id: "t-c", date: "2026-07-11", name: "ACME #2" })
+      ]
+    });
+    const routine = transactionCategorizeHandler(fakePorts(kv));
+    const sortNew = transactionCategorizeNewHandler(fakePorts(kv));
+
+    await expect(
+      routine({ ...ids, transactionId: "t-a", amountCents: 1234 })
+    ).rejects.toMatchObject({ code: "new_merchant" });
+    await expect(
+      sortNew({ ...ids, transactionId: "t-c", amountCents: 1234 })
+    ).rejects.toMatchObject({ code: "merchant_seen" });
+
+    expect((await routine({ ...ids, transactionId: "t-c", amountCents: 1234 })).status).toBe("ok");
+    expect((await sortNew({ ...ids, transactionId: "t-a", amountCents: 1234 })).status).toBe("ok");
+  });
+
+  it("a needs_look guess does not count as history for its merchant", async () => {
     const kv = fakeKv();
     await seedFeed(kv);
     await kv.set(NS.transactions, "acc-1:2026-07", {
-      transactions: [txRecord({ id: "t-tj", name: "TRADER JOE'S #123" })]
+      transactions: [
+        txRecord({
+          id: "t-a",
+          name: "Some Diner",
+          categoryId: "dining",
+          categorizedBy: "ai",
+          reviewState: "needs_look",
+          aiConfidence: 0.9
+        }),
+        txRecord({ id: "t-d", name: "Some Diner 2" })
+      ]
     });
-    await transactionCategorizeHandler(fakePorts(kv))({
-      transactionId: "t-tj",
-      accountId: "acc-1",
-      month: "2026-07",
-      categoryId: "groceries",
-      createRule: true
-    });
-    const key = contentHash(normalizePayee("TRADER JOE'S #123"));
-    const rule = (await kv.get(NS.rules, key)) as Rule | null;
-    expect(rule).toMatchObject({
-      payeeKey: "trader joes",
-      categoryId: "groceries",
-      createdAt: NOW.toISOString()
-    });
-    // The stored rule feeds the Task 9 pipeline: the next sync categorizes
-    // the same payee without AI.
-    const next = await categorize(
-      [txRecord({ id: "t-next", name: "Trader Joes 999" })],
-      [rule as Rule],
-      [...DEFAULT_CATEGORIES],
-      null
-    );
-    expect(next[0]).toMatchObject({ categoryId: "groceries", categorizedBy: "rule" });
+    await expect(
+      transactionCategorizeHandler(fakePorts(kv))({
+        transactionId: "t-d",
+        accountId: "acc-1",
+        month: "2026-07",
+        categoryId: "dining",
+        amountCents: 1234
+      })
+    ).rejects.toMatchObject({ code: "new_merchant" });
+  });
+
+  it("categorize rejects an amount that differs from the stored transaction", async () => {
+    const kv = fakeKv();
+    await seedFeed(kv);
+    const call = (amountCents: unknown) =>
+      transactionCategorizeNewHandler(fakePorts(kv))({
+        transactionId: "t-a",
+        accountId: "acc-1",
+        month: "2026-07",
+        categoryId: "dining",
+        amountCents
+      });
+    await expect(call(9999)).rejects.toMatchObject({ code: "amount_mismatch" });
+    await expect(call(undefined)).rejects.toThrow("amountCents is required");
+    const chunk = (await kv.get(NS.transactions, "acc-1:2026-07")) as {
+      transactions: TransactionRecord[];
+    };
+    expect(chunk.transactions.find((record) => record.id === "t-a")!.categoryId).toBeNull();
   });
 
   it("rejects unknown transaction ids and unknown or archived categories", async () => {
@@ -364,6 +429,30 @@ describe("finance feed handlers (#1147)", () => {
     expect(updated.notes).toBeUndefined();
     expect(await kv.list(NS.rules)).toEqual([]);
   });
+
+  it("queue path logs a user activity row with ids only and undo to the old category (#3174)", async () => {
+    const kv = fakeKv();
+    await seedFeed(kv);
+    const activity: ActivityInput[] = [];
+    await categorizeApplyHandler(fakePorts(kv, undefined, activity))({
+      actorUserId: "00000000-0000-4000-8000-000000000001",
+      jobKind: "finance.categorize-apply",
+      idempotencyKey: "finance:finance.categorize-apply:job-2",
+      params: {
+        transactionId: "t-a",
+        accountId: "acc-1",
+        month: "2026-07",
+        categoryId: "transport"
+      }
+    });
+    expect(activity).toHaveLength(1);
+    expect(activity[0]).toMatchObject({
+      actor: "user",
+      kind: "transaction.categorize",
+      params: { transactionId: "t-a", categoryId: "transport" }
+    });
+    expect(activity[0]!.undo).toMatchObject({ transactionId: "t-a" });
+  });
 });
 
 // FIN-04 (#1149) Task 5: transactions.query merges OTHER owners' shared
@@ -415,6 +504,7 @@ describe("finance transactions.query household merge (#1149)", () => {
     const writesBefore = (kv as ReturnType<typeof fakeKv>).ops.length;
     const result = await transactionsQueryHandler(fakePorts(kv, sharedMirror()))({
       actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER],
       limit: 200
     });
     expect(ids(result)).toEqual(["t-a", "t-x1", "t-c", "t-x2", "t-b"]);
@@ -436,7 +526,8 @@ describe("finance transactions.query household merge (#1149)", () => {
     const kv = fakeKv();
     await seedFeed(kv);
     const query = transactionsQueryHandler(fakePorts(kv, sharedMirror()));
-    const handler = (input: Record<string, unknown>) => query({ actorUserId: ACTOR, ...input });
+    const handler = (input: Record<string, unknown>) =>
+      query({ actorUserId: ACTOR, activeUserIds: [ACTOR, OTHER], ...input });
     expect(ids(await handler({ categoryId: "dining" }))).toEqual(["t-x2", "t-b"]);
     expect(ids(await handler({ search: "joint" }))).toEqual(["t-x1"]);
     expect(ids(await handler({ pendingOnly: true }))).toEqual(["t-x2", "t-b"]);
@@ -448,8 +539,235 @@ describe("finance transactions.query household merge (#1149)", () => {
     await seedFeed(kv);
     const result = await transactionsQueryHandler(fakePorts(kv, sharedMirror()))({
       actorUserId: ACTOR,
+      activeUserIds: [ACTOR, OTHER],
       accountId: "acc-x"
     });
     expect(ids(result)).toEqual(["t-x1", "t-x2"]);
+  });
+
+  it("drops rows and accounts of owners missing from the active list, and fails closed without it", async () => {
+    const kv = fakeKv();
+    await seedFeed(kv);
+    const query = transactionsQueryHandler(fakePorts(kv, sharedMirror()));
+    for (const extra of [{ activeUserIds: [ACTOR] }, {}]) {
+      const result = await query({ actorUserId: ACTOR, limit: 200, ...extra });
+      expect(ids(result)).toEqual(["t-a", "t-c", "t-b"]);
+      const accounts = result.accounts as { accountId: string }[];
+      expect(accounts.map((account) => account.accountId)).toEqual(["acc-1", "acc-2"]);
+    }
+  });
+});
+
+// #3176: the Transactions screen. The query counts and filters rows that need a
+// look; the review-apply queue confirms rows (all-or-nothing) and makes a merchant
+// rule only when asked, for a single row.
+describe("finance review (#3176)", () => {
+  async function seedReview(kv: FinanceKv): Promise<void> {
+    await seedAccount(kv, "acc-1");
+    await kv.set(NS.transactions, "acc-1:2026-07", {
+      transactions: [
+        txRecord({
+          id: "r-1",
+          name: "Blue Bottle 12",
+          categoryId: "dining",
+          reviewState: "needs_look"
+        }),
+        txRecord({
+          id: "r-2",
+          name: "Shell Oil",
+          categoryId: "transport",
+          reviewState: "needs_look"
+        }),
+        txRecord({ id: "r-3", name: "Rent", categoryId: "housing", reviewState: "confirmed" }),
+        txRecord({ id: "r-4", name: "Blue Bottle 99", categoryId: "dining" })
+      ]
+    });
+  }
+  const envelope = (params: Record<string, unknown>) => ({
+    actorUserId: ACTOR,
+    jobKind: "finance.review-apply",
+    idempotencyKey: "k",
+    params
+  });
+  const rows = async (kv: FinanceKv) =>
+    ((await kv.get(NS.transactions, "acc-1:2026-07")) as { transactions: TransactionRecord[] })
+      .transactions;
+
+  it("query counts rows that need a look and can show only those", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const query = transactionsQueryHandler(fakePorts(kv, readOnlyMirror()));
+    const all = await query({ actorUserId: ACTOR, month: "2026-07" });
+    expect(all.needsLookCount).toBe(2);
+    expect(ids(all)).toHaveLength(4);
+    const look = await query({ actorUserId: ACTOR, month: "2026-07", needsLookOnly: true });
+    expect(ids(look).sort()).toEqual(["r-1", "r-2"]);
+    expect(look.needsLookCount).toBe(2);
+    // The count follows search, so Confirm all matches what search shows.
+    const searched = await query({ actorUserId: ACTOR, month: "2026-07", search: "shell" });
+    expect(searched.needsLookCount).toBe(1);
+  });
+
+  it("confirms the listed rows with no merchant rule", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    await reviewApplyHandler(fakePorts(kv))(
+      envelope({
+        transactionIds: ["r-1", "r-2"],
+        accountIds: ["acc-1", "acc-1"],
+        months: ["2026-07", "2026-07"],
+        categoryIds: ["dining", "transport"]
+      })
+    );
+    const after = await rows(kv);
+    expect(after.filter((r) => r.reviewState === "needs_look")).toEqual([]);
+    expect(after.find((r) => r.id === "r-3")!.categorizedBy).toBeNull();
+    expect(await kv.list(NS.rules)).toEqual([]);
+  });
+
+  it("changes one category and makes a merchant rule only when asked", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const one = {
+      transactionIds: ["r-1"],
+      accountIds: ["acc-1"],
+      months: ["2026-07"],
+      categoryIds: ["groceries"]
+    };
+    await reviewApplyHandler(fakePorts(kv))(envelope({ ...one, createRule: false }));
+    expect(await kv.list(NS.rules)).toEqual([]);
+    expect((await rows(kv)).find((r) => r.id === "r-1")).toMatchObject({
+      categoryId: "groceries",
+      reviewState: "confirmed"
+    });
+    await reviewApplyHandler(fakePorts(kv))(envelope({ ...one, createRule: true }));
+    const keys = await kv.list(NS.rules);
+    expect(keys).toHaveLength(1);
+    expect(await kv.get(NS.rules, keys[0]!)).toMatchObject({
+      payeeKey: "blue bottle",
+      categoryId: "groceries"
+    });
+  });
+
+  it("changes nothing when any row is invalid, and refuses rules on a batch", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const before = JSON.stringify(await rows(kv));
+    await expect(
+      reviewApplyHandler(fakePorts(kv))(
+        envelope({
+          transactionIds: ["r-1", "nope"],
+          accountIds: ["acc-1", "acc-1"],
+          months: ["2026-07", "2026-07"],
+          categoryIds: ["dining", "dining"]
+        })
+      )
+    ).rejects.toThrow();
+    await expect(
+      reviewApplyHandler(fakePorts(kv))(
+        envelope({
+          transactionIds: ["r-1", "r-2"],
+          accountIds: ["acc-1", "acc-1"],
+          months: ["2026-07", "2026-07"],
+          categoryIds: ["dining", "transport"],
+          createRule: true
+        })
+      )
+    ).rejects.toThrow();
+    expect(JSON.stringify(await rows(kv))).toBe(before);
+  });
+
+  it("logs a user activity row per changed row, a confirm row per unchanged row (review finding 4)", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const activity: ActivityInput[] = [];
+    await reviewApplyHandler(fakePorts(kv, undefined, activity))(
+      envelope({
+        transactionIds: ["r-1", "r-2"],
+        accountIds: ["acc-1", "acc-1"],
+        months: ["2026-07", "2026-07"],
+        categoryIds: ["groceries", "transport"]
+      })
+    );
+    expect(activity.map((entry) => [entry.actor, entry.kind])).toEqual([
+      ["user", "transaction.categorize"],
+      ["user", "transaction.confirm"]
+    ]);
+    expect(activity[0]!.params).toMatchObject({
+      transactionId: "r-1",
+      categoryId: "groceries",
+      previousCategoryId: "dining"
+    });
+    expect(activity[0]!.undo).toMatchObject({ transactionId: "r-1", categoryId: "dining" });
+  });
+
+  it("logs the merchant rule it makes (review finding 4)", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const activity: ActivityInput[] = [];
+    await reviewApplyHandler(fakePorts(kv, undefined, activity))(
+      envelope({
+        transactionIds: ["r-1"],
+        accountIds: ["acc-1"],
+        months: ["2026-07"],
+        categoryIds: ["groceries"],
+        createRule: true
+      })
+    );
+    expect(activity.map((entry) => entry.kind)).toEqual([
+      "transaction.categorize",
+      "merchant-rule.set"
+    ]);
+    expect(activity.every((entry) => entry.actor === "user")).toBe(true);
+    expect(activity[1]!.params).toMatchObject({ categoryId: "groceries" });
+  });
+
+  it("writes one rule per merchant and removes the old-format key (review finding 5)", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const legacyKey = contentHash("blue bottle");
+    await kv.set(NS.rules, legacyKey, {
+      payeeKey: "blue bottle",
+      categoryId: "dining",
+      createdAt: "2026-06-01T00:00:00Z"
+    });
+    await reviewApplyHandler(fakePorts(kv))(
+      envelope({
+        transactionIds: ["r-1"],
+        accountIds: ["acc-1"],
+        months: ["2026-07"],
+        categoryIds: ["groceries"],
+        createRule: true
+      })
+    );
+    expect(await kv.list(NS.rules)).toEqual([`rule:${legacyKey}`]);
+    expect(await kv.get(NS.rules, `rule:${legacyKey}`)).toMatchObject({ categoryId: "groceries" });
+  });
+
+  it("loads categories and each month chunk once for the whole batch (review finding 9)", async () => {
+    const kv = fakeKv();
+    await seedReview(kv);
+    const ports = fakePorts(kv);
+    const inner = await ports.store();
+    let chunkReads = 0;
+    const counting: WorkerPorts = {
+      ...ports,
+      store: async () => ({
+        ...inner,
+        getTransactionChunk: async (accountId, month) => {
+          chunkReads += 1;
+          return inner.getTransactionChunk(accountId, month);
+        }
+      })
+    };
+    await reviewApplyHandler(counting)(
+      envelope({
+        transactionIds: ["r-1", "r-2", "r-3"],
+        accountIds: ["acc-1", "acc-1", "acc-1"],
+        months: ["2026-07", "2026-07", "2026-07"],
+        categoryIds: ["dining", "transport", "rent-mortgage"]
+      })
+    );
+    expect(chunkReads).toBe(1);
   });
 });
