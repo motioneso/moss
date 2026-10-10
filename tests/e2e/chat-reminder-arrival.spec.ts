@@ -232,3 +232,62 @@ test("Main shows a reminder that arrives after a private chat ends", async ({ pa
   arrival.release();
   await expect(drawer.getByText("Reminder: stretch", { exact: true })).toHaveCount(1);
 });
+
+test("Main picked again from the conversation list shows a reminder at once", async ({ page }) => {
+  const main = createMockChatThread("own-main", "Main chat", { isMain: true });
+  const side = createMockChatThread("side-chat", "New chat", {
+    lastActiveAt: "2026-06-05T12:00:00.000Z"
+  });
+  await mockChat(page, [main, side], {
+    [main.id]: [createMockChatMessage("earlier", main.id, "Earlier talk")],
+    [side.id]: []
+  });
+  let shownThread: string | undefined;
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/clear"),
+    async (route) => {
+      shownThread = side.id;
+      await route.fulfill({ status: 204, body: "" });
+    }
+  );
+  await page.route(/\/api\/chat\/threads\/[^/]+\/resume/, async (route) => {
+    shownThread = /threads\/([^/]+)\/resume/.exec(route.request().url())?.[1];
+    await route.fulfill({ status: 204, body: "" });
+  });
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/privacy"),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          incognito: false,
+          ...(shownThread ? { threadId: shownThread } : {})
+        })
+      })
+  );
+
+  // Hold every stream open until Main is back on screen, then deliver the reminder.
+  const arrival = gate();
+  await page.route("**/api/chat/stream*", async (route) => {
+    await arrival.promise;
+    await fulfillStream(route, sse(reminderRecord)).catch(() => undefined);
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
+  const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+  await expect(drawer.getByText("Earlier talk", { exact: true })).toBeVisible();
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  await drawer.getByRole("button", { name: "New side chat" }).click();
+  await expect(drawer.getByText("Earlier talk", { exact: true })).toHaveCount(0);
+
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  const conversations = drawer.getByLabel("Conversations", { exact: true });
+  await conversations.getByRole("button", { name: "Main chat", exact: true }).click();
+  await expect(drawer.getByText("Earlier talk", { exact: true })).toBeVisible();
+  await expect.poll(() => shownThread).toBe(main.id);
+
+  arrival.release();
+  await expect(drawer.getByText("Reminder: stretch", { exact: true })).toHaveCount(1);
+});

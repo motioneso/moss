@@ -197,6 +197,14 @@ describe("the delivery worker's notification", () => {
     expect(await heardBefore()).toEqual([]);
   });
 
+  it("is not sent for a reminder cancelled before it fell due", async () => {
+    const saved = await saveDue();
+    await asOwner(ids.userA, (db) => reminders.markCancelled(db, saved.id));
+
+    await expect(deliver(saved)).resolves.toBe("cancelled");
+    expect(await heardBefore()).toEqual([]);
+  });
+
   it("is not sent again when an already delivered job replays", async () => {
     const saved = await saveDue();
     await expect(deliver(saved)).resolves.toBe("delivered");

@@ -4,7 +4,9 @@ import type { TranscriptRecord } from "./types.js";
 
 // #3195: a stored background message (a delivered reminder) reaches only the owner's drawer,
 // and only while that drawer shows the owner's Main thread. The shown thread comes from the
-// privacy-state read the browser also uses to pick its thread.
+// privacy-state read the browser also uses to pick its thread. With no live session that read
+// answers Main, even if the browser still displays a side chat, so the browser's own side-chat
+// drop is the backstop for that case.
 
 export type BackgroundRecord = TranscriptRecord & {
   readonly kind: "reply";

@@ -134,6 +134,8 @@ export function useChatStream(
   const hydratedMainThread = useRef<string | undefined>(undefined);
   // A side or module chat never shows a background message, even one sent before a switch.
   const hydratedSideThread = useRef(false);
+  // Reminders Main already held when a switch landed there, so a reconnect never re-adds them.
+  const knownMainReminders = useRef<Promise<ReadonlySet<string>>>(Promise.resolve(new Set()));
   const streamScope = useRef({ surface, enabled });
   streamScope.current = { surface, enabled };
 
@@ -145,6 +147,9 @@ export function useChatStream(
       (streamScope.current.surface ?? DEFAULT_CHAT_SURFACE) === DEFAULT_CHAT_SURFACE;
     hydratedMainThread.current = onMain ? mainThreadId : undefined;
     hydratedSideThread.current = !onMain;
+    knownMainReminders.current = onMain
+      ? readBackgroundMessageIds(mainThreadId, streamScope.current.surface)
+      : Promise.resolve(new Set());
     hydrationGeneration.current += 1;
     setRecords([]);
     setStreamGeneration(hydrationGeneration.current);
@@ -171,11 +176,14 @@ export function useChatStream(
     const catchUpMain = () => {
       const threadId = hydratedMainThread.current;
       if (!threadId) return;
-      void listChatThreadMessages(threadId, surface)
-        .then(({ messages }) => {
+      void Promise.all([knownMainReminders.current, listChatThreadMessages(threadId, surface)])
+        .then(([known, { messages }]) => {
           if (!isCurrent() || hydratedMainThread.current !== threadId) return;
+          const missed = recordsFromMessages(messages).filter(
+            (record) => !record.messageId || !known.has(record.messageId)
+          );
           setRecords((current) =>
-            isCurrent() ? mergeBackgroundRecords(current, recordsFromMessages(messages)) : current
+            isCurrent() ? mergeBackgroundRecords(current, missed) : current
           );
         })
         .catch(() => undefined);
@@ -228,6 +236,7 @@ export function useChatStream(
     setHydratedSurface(undefined);
     hydratedMainThread.current = undefined;
     hydratedSideThread.current = false;
+    knownMainReminders.current = Promise.resolve(new Set());
     if (!surface || !enabled) return;
     let active = true;
     const generation = hydrationGeneration.current;
@@ -368,6 +377,23 @@ export function mergeWorkflowApprovalRecords(
     ...merged,
     ...approvals.filter((approval) => !knownIds.has(approval.id)).map(workflowApprovalRecord)
   ];
+}
+
+/** Ids of the stored background messages in a thread; empty when the read fails. */
+async function readBackgroundMessageIds(
+  threadId: string,
+  surface: ChatSurface | undefined
+): Promise<ReadonlySet<string>> {
+  try {
+    const { messages } = await listChatThreadMessages(threadId, surface);
+    return new Set(
+      recordsFromMessages(messages).flatMap((record) =>
+        isBackgroundRecord(record) && record.messageId ? [record.messageId] : []
+      )
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 export function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRecord[] {

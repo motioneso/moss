@@ -138,6 +138,7 @@ export function ChatDrawer(props: {
       selection.confirm(vars.threadId, vars.transition);
       callerDraft.bind(vars.threadId, vars.surface, vars.transition.generation, true);
       props.clearRecords(vars.threadId === mainThreadId ? vars.threadId : undefined);
+      if (vars.threadId === mainThreadId) setLiveThreadId(vars.threadId);
       privateModeDecidedLocally.current = true;
       setPrivateMode(false);
       setPrivateEnded(false);

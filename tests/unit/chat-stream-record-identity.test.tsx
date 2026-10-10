@@ -292,6 +292,45 @@ describe("Main stream reconnect", () => {
     expect(JSON.stringify(renderer!.toJSON())).toContain("Reminder: drink water");
   });
 
+  it("does not bring back Main's earlier reminders on a reconnect after a switch there", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [mainThread] });
+    vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [reminderMessage] });
+    let clear!: (mainThreadId?: string) => void;
+    function SwitchProbe() {
+      const { records, clearRecords } = useChatStream("drawer" as ChatSurface);
+      clear = clearRecords;
+      return createElement("div", null, records.map((record) => record.text).join("|"));
+    }
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(SwitchProbe));
+    });
+    await vi.waitFor(() =>
+      expect(JSON.stringify(renderer!.toJSON())).toContain("Reminder: stretch")
+    );
+
+    // Landing on Main clears the log. A reminder delivered while the stream is down is caught
+    // up on reconnect, but the one Main already held is not shown again.
+    await act(async () => clear("main-thread"));
+    const main = FakeEventSource.instances.at(-1)!;
+    await act(async () => main.onopen?.());
+    const missed = message({
+      id: "reminder-2",
+      body: "Reminder: drink water",
+      origin: { version: 1, kind: "reminder", event: "delivered", reminderId: "r-2", late: false }
+    });
+    vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [reminderMessage, missed] });
+    await act(async () => {
+      main.onerror?.();
+      main.onopen?.();
+    });
+    await vi.waitFor(() =>
+      expect(JSON.stringify(renderer!.toJSON())).toContain("Reminder: drink water")
+    );
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain("Reminder: stretch");
+  });
+
   it("does not catch up a side chat stream", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const side = { ...mainThread, id: "side-thread", isMain: false };

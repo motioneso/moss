@@ -1,15 +1,18 @@
 // #3195: the API listener turns a committed delivery's id-only notification into one live
-// reminder. A malformed payload is dropped, and a dropped connection is reopened.
+// reminder. A malformed payload is dropped, the owner re-read refuses anything but a stored
+// delivered reminder in the owner's Main, and a dropped connection is reopened.
 
 import { EventEmitter } from "node:events";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { OwnedPgClient } from "@moss/db";
+import type { DataContextDb, DataContextRunner, OwnedPgClient } from "@moss/db";
 
 import type { MainBackgroundMessage } from "../../packages/chat/src/live/background-message-routing.js";
+import type { ChatRepository } from "../../packages/chat/src/repository.js";
 import {
   parseReminderArrival,
+  readReminderArrival,
   REMINDER_ARRIVAL_CHANNEL,
   startReminderArrivalListener,
   type ReminderArrival
@@ -92,6 +95,69 @@ describe("parseReminderArrival", () => {
     ]) {
       expect(parseReminderArrival(payload)).toBeUndefined();
     }
+  });
+});
+
+describe("readReminderArrival", () => {
+  const main = { id: ids.threadId, incognito: false };
+  const stored = {
+    id: ids.messageId,
+    owner_user_id: ids.actorUserId,
+    thread_id: ids.threadId,
+    role: "assistant",
+    status: "stored",
+    body: "Reminder: stretch",
+    model_metadata: {
+      origin: { version: 1, kind: "reminder", event: "delivered", reminderId: "r-1", late: false }
+    }
+  };
+  const asOwner = {
+    withDataContext: (_context: unknown, work: (db: DataContextDb) => Promise<unknown>) =>
+      work({} as DataContextDb)
+  } as unknown as DataContextRunner;
+
+  function read(over: { main?: object | undefined; message?: object | undefined }) {
+    const chat = {
+      getMainThread: async () => ("main" in over ? over.main : main),
+      getMessageById: async () => ("message" in over ? over.message : stored)
+    } as unknown as ChatRepository;
+    return readReminderArrival(asOwner, ids, chat);
+  }
+
+  it("accepts a stored delivered reminder in the owner's own Main", async () => {
+    expect(await read({})).toEqual({
+      actorUserId: ids.actorUserId,
+      mainThreadId: ids.threadId,
+      record: {
+        kind: "reply",
+        text: "Reminder: stretch",
+        messageId: ids.messageId,
+        background: true
+      }
+    });
+  });
+
+  it.each([
+    ["the owner has no Main", { main: undefined }],
+    ["Main is private", { main: { ...main, incognito: true } }],
+    ["the payload names another thread", { main: { ...main, id: "other-main" } }],
+    ["the message is missing", { message: undefined }],
+    ["another owner wrote the message", { message: { ...stored, owner_user_id: "someone-else" } }],
+    ["the message sits in another thread", { message: { ...stored, thread_id: "side-thread" } }],
+    ["the message is the user's own", { message: { ...stored, role: "user" } }],
+    ["the message is not stored yet", { message: { ...stored, status: "streaming" } }],
+    ["the message is an ordinary reply", { message: { ...stored, model_metadata: {} } }],
+    [
+      "the message only confirms a saved reminder",
+      {
+        message: {
+          ...stored,
+          model_metadata: { origin: { ...stored.model_metadata.origin, event: "saved" } }
+        }
+      }
+    ]
+  ])("refuses when %s", async (_case, over) => {
+    expect(await read(over)).toBeUndefined();
   });
 });
 
