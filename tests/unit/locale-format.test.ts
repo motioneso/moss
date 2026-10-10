@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { localDay, type LocaleSettingsDto } from "@moss/shared";
-import { formatDate, formatDateTime, formatTime } from "../../apps/web/src/locale/locale-format.js";
+import {
+  formatClockTime,
+  formatDate,
+  formatDateTime,
+  formatTime
+} from "../../apps/web/src/locale/locale-format.js";
 
 const newYork12: LocaleSettingsDto = {
   timezone: "America/New_York",
@@ -13,6 +18,7 @@ const tokyo24: LocaleSettingsDto = {
   region: "en-US",
   dateFormat: "24"
 };
+const tokyo12: LocaleSettingsDto = { timezone: "Asia/Tokyo", region: "en-US", dateFormat: "12" };
 const utc24: LocaleSettingsDto = { timezone: "UTC", region: "en-US", dateFormat: "24" };
 const utc12: LocaleSettingsDto = { timezone: "UTC", region: "en-US", dateFormat: "12" };
 
@@ -65,5 +71,19 @@ describe("locale-format", () => {
     const instant = "2026-01-15T01:30:00Z";
     expect(localDay(instant, "America/New_York")).toBe("2026-01-14");
     expect(localDay(instant, "Asia/Tokyo")).toBe("2026-01-15");
+  });
+});
+
+describe("formatClockTime", () => {
+  it("renders a wall-clock HH:MM in the user's 12/24-hour preference without shifting zones", () => {
+    expect(formatClockTime("21:00", newYork12)).toBe("9:00 PM");
+    expect(formatClockTime("00:05", tokyo24)).toBe("00:05");
+    expect(formatClockTime("21:00", utc24)).toBe("21:00");
+    expect(formatClockTime("08:30", tokyo12)).toBe("8:30 AM");
+  });
+
+  it("returns the input unchanged when it is not an HH:MM clock", () => {
+    expect(formatClockTime("", utc12)).toBe("");
+    expect(formatClockTime("soon", utc12)).toBe("soon");
   });
 });
