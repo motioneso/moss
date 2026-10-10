@@ -207,3 +207,134 @@ export function installUatRealChatCodexAuth(
     }
   };
 }
+
+// #3361: which signed-in command-line tool a real-chat run uses. "codex" (the default) copies
+// the host's own Codex login in, as above. "claude" copies nothing: the spec drives Moss's own
+// Claude sign-in and the operator approves its one-time link (real-chat-signin.ts). The box's
+// own Claude login is never copied, because it shares one refresh token with every agent here.
+export const REAL_CHAT_PROVIDER_ENV = "JARVIS_UAT_REAL_CHAT_PROVIDER";
+
+export type UatRealChatProvider = "codex" | "claude";
+
+export function uatRealChatProvider(): UatRealChatProvider {
+  const value = process.env[REAL_CHAT_PROVIDER_ENV]?.trim() || "codex";
+  if (value !== "codex" && value !== "claude") {
+    throw new Error(`[uat real-chat] ${REAL_CHAT_PROVIDER_ENV} must be "codex" or "claude"`);
+  }
+  return value;
+}
+
+/** Moss's provider kind for the selected tool (packages/shared/src/onboarding-api.ts). */
+export function uatRealChatProviderKind(): "openai-compatible" | "anthropic" {
+  return uatRealChatProvider() === "claude" ? "anthropic" : "openai-compatible";
+}
+
+/**
+ * The provisioner's one real-chat entry point. Codex: the host-login copy above (undefined when
+ * the host has none). Claude: always available once selected; nothing is copied in, and the
+ * returned cleanup removes the token the in-run sign-in mints.
+ */
+export function installUatRealChatAuth(
+  projectName: string,
+  actorUserId: string,
+  buildComposeArgs: (extra: readonly string[]) => readonly string[]
+): UatRealChatCodexAuth | undefined {
+  if (uatRealChatProvider() === "codex") {
+    return installUatRealChatCodexAuth(projectName, actorUserId, buildComposeArgs);
+  }
+  return prepareUatRealChatClaudeSignIn(projectName, actorUserId, buildComposeArgs);
+}
+
+const CLAUDE_TOKEN_FILE = ".jarvis/cli-tokens/anthropic";
+
+/**
+ * #3361: the Claude sign-in mints a long-lived setup token into the cli-auth volume, either in
+ * the instance home or in the signing-in user's agent home (cli-runner provider-token-store).
+ * Cleanup removes both copies and their temp files before `down -v`. Removing the file does not
+ * revoke the token at Anthropic.
+ */
+function prepareUatRealChatClaudeSignIn(
+  projectName: string,
+  actorUserId: string,
+  buildComposeArgs: (extra: readonly string[]) => readonly string[]
+): UatRealChatCodexAuth {
+  const owner = execDockerCompose(buildComposeArgs, [
+    "exec",
+    "-T",
+    "jarv1s",
+    "stat",
+    "-c",
+    "%u:%g",
+    "/data/cli-auth"
+  ]);
+  if (!OWNER_RE.test(owner)) {
+    throw new Error(`[uat real-chat] invalid cli-auth owner metadata for ${projectName}`);
+  }
+  const agentHome = `/data/cli-auth/agents/${actorUserId}`;
+
+  let removed = false;
+  return {
+    cleanup: async () => {
+      if (removed) return;
+      removed = true;
+
+      let failed = false;
+      try {
+        execDockerCompose(buildComposeArgs, [
+          "exec",
+          "-T",
+          "--user",
+          owner,
+          "jarv1s",
+          "rm",
+          "-f",
+          `/data/cli-auth/${CLAUDE_TOKEN_FILE}`,
+          `/data/cli-auth/${CLAUDE_TOKEN_FILE}.tmp`
+        ]);
+      } catch {
+        failed = true;
+      }
+
+      // The agent home belongs to the actor's uid slot; its absence means no per-user sign-in ran.
+      let agentOwner: string;
+      try {
+        agentOwner = execDockerCompose(buildComposeArgs, [
+          "exec",
+          "-T",
+          "jarv1s",
+          "stat",
+          "-c",
+          "%u:%g",
+          agentHome
+        ]);
+      } catch {
+        agentOwner = "";
+      }
+      if (OWNER_RE.test(agentOwner)) {
+        try {
+          execDockerCompose(buildComposeArgs, [
+            "exec",
+            "-T",
+            "--user",
+            agentOwner,
+            "jarv1s",
+            "rm",
+            "-f",
+            `${agentHome}/${CLAUDE_TOKEN_FILE}`,
+            `${agentHome}/${CLAUDE_TOKEN_FILE}.tmp`
+          ]);
+        } catch {
+          failed = true;
+        }
+      }
+
+      if (failed) {
+        // Fixed message, no credential content: this can surface in CI logs.
+        throw new Error(
+          `[uat real-chat] Claude token cleanup failed for ${projectName}; a minted Claude ` +
+            "token may remain in the stack's volume"
+        );
+      }
+    }
+  };
+}

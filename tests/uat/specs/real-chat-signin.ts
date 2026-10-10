@@ -5,17 +5,28 @@
 // directly would also register its top-level test() calls (the same reason the specs used to
 // hand-copy this logic instead of importing one another).
 //
-// Every real-chat spec signs in with the operator's own Codex login, already copied into the
-// stack by the provisioner (real-chat-env.ts) before any spec runs, then discovers and binds the
-// cheapest ("economy" tier) chat-capable model Ben's ruling requires — never a hardcoded model
-// name, and never a silent widen to a pricier tier when none is found.
+// Every real-chat spec signs in with the provider JARVIS_UAT_REAL_CHAT_PROVIDER selects
+// (real-chat-env.ts). Codex, the default, uses the operator's own login, already copied into the
+// stack by the provisioner. Claude (#3361) signs in through Moss here, with the operator
+// approving a one-time link (claude-signin-handoff.ts). Either way the spec then discovers and
+// binds the cheapest ("economy" tier) chat-capable model Ben's ruling requires — never a
+// hardcoded model name, and never a silent widen to a pricier tier when none is found.
 
-import { expect, type APIResponse, type Page } from "@playwright/test";
+import { expect, test, type APIResponse, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { pickCheapestActiveChatModel, type UatDiscoveredModel } from "../model-tier.js";
+import { uatRealChatProvider, uatRealChatProviderKind } from "../real-chat-env.js";
+import {
+  claudeSignInPaths,
+  claudeSignInWaitMs,
+  signInClaudeThroughMoss
+} from "../claude-signin-handoff.js";
 
-/** Codex's provider kind (#2732) — the retired token-based "anthropic" path is gone. */
-export const REAL_CHAT_PROVIDER_KIND = "openai-compatible";
+/** The selected provider's kind: "openai-compatible" for Codex, "anthropic" for Claude. */
+export const REAL_CHAT_PROVIDER_KIND = uatRealChatProviderKind();
+
+/** Time the Claude sign-in adds on top of a spec's own budget: the code wait plus Moss's settle. */
+const CLAUDE_SIGNIN_EXTRA_MS = 5 * 60_000;
 
 export const MODEL_DISCOVERY_DEADLINE_MS = 60_000;
 const POLL_INITIAL_INTERVAL_MS = 500;
@@ -59,9 +70,10 @@ export async function signInUatAdmin(page: Page): Promise<void> {
 }
 
 /**
- * Installs the Codex CLI and drives its admin-gated login. The CLI is already authenticated by
+ * Installs the selected CLI and drives its admin-gated login. Codex is already authenticated by
  * the operator's own login the provisioner copied into the cli-auth volume (real-chat-env.ts),
- * so this settles to "ready" non-interactively rather than returning an authorization URL.
+ * so it settles to "ready" non-interactively. Claude waits for the operator to approve a
+ * one-time link, so the running test's timeout grows by that wait first.
  */
 export async function bringUpRealChatProvider(page: Page): Promise<void> {
   const install = (await readUatJson(
@@ -73,6 +85,22 @@ export async function bringUpRealChatProvider(page: Page): Promise<void> {
     install.installState,
     `provider-install did not settle to installed (got "${install.installState}")`
   ).toBe("installed");
+
+  if (uatRealChatProvider() === "claude") {
+    const codeWaitMs = claudeSignInWaitMs();
+    test.info().setTimeout(test.info().timeout + codeWaitMs + CLAUDE_SIGNIN_EXTRA_MS);
+    await signInClaudeThroughMoss(
+      {
+        post: async (path, data) => readUatJson(await page.request.post(path, { data }))
+      },
+      {
+        paths: claudeSignInPaths(requireUatProjectName()),
+        codeWaitMs,
+        sleep: (ms) => page.waitForTimeout(ms)
+      }
+    );
+    return;
+  }
 
   const begin = (await readUatJson(
     await page.request.post("/api/onboarding/provider-login/begin", {
@@ -137,7 +165,7 @@ export async function selectChatModelOverride(
 }
 
 /**
- * The full setup real turns run against: install + log in the Codex CLI, discover the cheapest
+ * The full setup real turns run against: install + log in the selected CLI, discover the cheapest
  * eligible model, and bind it as the account's chat override. Returns the model so a spec can
  * assert against its id.
  */
