@@ -449,9 +449,15 @@ export function ChatDrawer(props: {
     sendMessage(queued.text);
   }, [moduleIdentityPending, queuedSendText, sendPending, props.surface, sendMessage]);
   const reviewing = reviewThreadId !== null;
-  const displayRecords = reviewing
-    ? recordsFromMessages(messagesQuery.data?.messages ?? [])
-    : props.records;
+  const persistedRecords = reviewing ? recordsFromMessages(messagesQuery.data?.messages ?? []) : [];
+
+  // A reviewed thread shows its stored history plus the live turn not yet stored. The live tail
+  // waits for activation so the previous thread's stream never shows under this one.
+  const liveTail =
+    reviewing && !historyActivationPending && !props.meetingContext
+      ? reconcileFallbacks(props.records, persistedRecords)
+      : [];
+  const displayRecords = reviewing ? [...persistedRecords, ...liveTail] : props.records;
   const visibleFallbackRecords = reconcileFallbacks(fallbackRecords, displayRecords);
   const effectiveRecords: readonly TranscriptRecord[] = [
     ...displayRecords,

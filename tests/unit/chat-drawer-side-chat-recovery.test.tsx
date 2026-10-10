@@ -7,7 +7,7 @@ import { expect, it, vi } from "vitest";
 vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 
-import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE, type ChatSurface, type TranscriptRecord } from "@moss/shared";
 import type * as ApiClientModule from "../../apps/web/src/api/client.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
@@ -951,4 +951,64 @@ it("keeps the owner's Main and its draft when a newer shared Main is listed firs
   expect(findByAriaLabel(renderer, "Main chat")!.props["aria-pressed"]).toBe(true);
   expect(findByAriaLabel(renderer, "Shared planning")!.props["aria-pressed"]).toBe(false);
   expect(JSON.parse(drafts.get("moss.chatDrafts")!).drafts["own-main"]).toBe("Unsent Main");
+});
+
+it("shows the live turn in a new side chat before the turn ends", async () => {
+  vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false, threadId: "side-1" });
+  vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
+  vi.mocked(listChatThreads).mockResolvedValue({ threads: [chatThread("a", "Main", true)] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = (records: readonly TranscriptRecord[]) =>
+    createElement(
+      QueryClientProvider,
+      { client },
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(ChatDrawer, {
+          open: true,
+          onClose: () => undefined,
+          records,
+          clearRecords: () => undefined,
+          streamErrorCount: 0,
+          isFounder: false,
+          ownerId: "owner",
+          surface: DEFAULT_CHAT_SURFACE
+        }) as ReactElement
+      )
+    );
+  let renderer!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      renderer = create(view([]));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => findByAriaLabel(renderer, "Open conversations")!.props.onClick());
+    await act(async () => {
+      findByAriaLabel(renderer, "New side chat")!.props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      renderer.update(
+        view([
+          { kind: "user", text: "Turn the porch light on" },
+          { kind: "action_request", actionRequestId: "request-1", text: "Approve light.set" }
+        ])
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const shown = JSON.stringify(renderer.toJSON());
+    expect(shown).toContain("Turn the porch light on");
+    expect(findByAriaLabel(renderer, "Action request")).not.toBeNull();
+  } finally {
+    await act(async () => renderer?.unmount());
+    client.clear();
+    vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false });
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [] });
+    vi.mocked(listChatThreadMessages).mockReset();
+  }
 });
