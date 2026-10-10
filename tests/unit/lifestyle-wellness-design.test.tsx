@@ -13,6 +13,7 @@ import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { WellnessExportModal } from "../../apps/web/src/wellness/export-modal.js";
 import { WellnessPage } from "../../apps/web/src/wellness/wellness-page.js";
 import { MedToday, WellnessToday } from "../../apps/web/src/wellness/wellness-today.js";
+import { WellnessHistory } from "../../apps/web/src/wellness/wellness-history.js";
 import { WellnessChart } from "../../apps/web/src/wellness/wellness-chart.js";
 import { RadialDial } from "../../apps/web/src/wellness/radial-dial.js";
 import { CheckinDetailFields } from "../../apps/web/src/wellness/checkin-detail-fields.js";
@@ -397,6 +398,57 @@ describe("Medication read-state safety", () => {
       if (renderer) await act(async () => renderer.unmount());
       queryClient.clear();
       vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("Wellness history disclosure relationships", () => {
+  it("links each expanded toggle to its own stable detail region", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const queryClient = client();
+    queryClient.setQueryData(queryKeys.settings.locale, {
+      locale: { timezone: "UTC", region: "en-US", dateFormat: "24" }
+    });
+    try {
+      await act(async () =>
+        root.render(
+          <QueryClientProvider client={queryClient}>
+            <WellnessHistory
+              checkins={[
+                { ...checkin("2026-10-09T12:00:00Z"), id: "first-checkin", note: "First note" },
+                { ...checkin("2026-10-08T12:00:00Z"), id: "second-checkin", note: "Second note" }
+              ]}
+              onClearFilter={() => {}}
+              onEdit={() => {}}
+              timezone="UTC"
+            />
+          </QueryClientProvider>
+        )
+      );
+      const toggles = host.querySelectorAll<HTMLButtonElement>("button[aria-controls]");
+      expect(toggles).toHaveLength(2);
+      expect(toggles[0]!.getAttribute("aria-controls")).not.toBe(
+        toggles[1]!.getAttribute("aria-controls")
+      );
+      for (const [index, toggle] of Array.from(toggles).entries()) {
+        const detailId = toggle.getAttribute("aria-controls")!;
+        await act(async () => toggle.click());
+        expect(toggle.getAttribute("aria-expanded")).toBe("true");
+        expect(document.getElementById(detailId)?.textContent).toContain(
+          index === 0 ? "First note" : "Second note"
+        );
+        await act(async () => toggle.click());
+        expect(toggle.getAttribute("aria-expanded")).toBe("false");
+        await act(async () => toggle.click());
+        expect(toggle.getAttribute("aria-controls")).toBe(detailId);
+        expect(document.getElementById(detailId)).not.toBeNull();
+      }
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+      queryClient.clear();
     }
   });
 });

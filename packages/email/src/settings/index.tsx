@@ -76,8 +76,8 @@ async function requestJson<T>(path: string, init?: RequestInit & { body?: unknow
   return (await response.json()) as T;
 }
 
-function getSourceBehaviors() {
-  return requestJson<ListSourceBehaviorsResponse>("/api/me/source-behaviors");
+function getSourceBehaviors(signal: AbortSignal) {
+  return requestJson<ListSourceBehaviorsResponse>("/api/me/source-behaviors", { signal });
 }
 
 function putSourceBehavior(enabled: boolean) {
@@ -90,8 +90,8 @@ function putSourceBehavior(enabled: boolean) {
   );
 }
 
-function getEmailSettings() {
-  return requestJson<GetEmailBriefingSettingsResponse>("/api/email/briefing-settings");
+function getEmailSettings(signal: AbortSignal) {
+  return requestJson<GetEmailBriefingSettingsResponse>("/api/email/briefing-settings", { signal });
 }
 
 function patchEmailSettings(body: UpdateEmailBriefingSettingsRequest) {
@@ -101,8 +101,8 @@ function patchEmailSettings(body: UpdateEmailBriefingSettingsRequest) {
   });
 }
 
-function getEmailTaskMode() {
-  return requestJson<EmailTaskCreationModeResponse>("/api/email/task-creation-mode");
+function getEmailTaskMode(signal: AbortSignal) {
+  return requestJson<EmailTaskCreationModeResponse>("/api/email/task-creation-mode", { signal });
 }
 
 function putEmailTaskMode(body: UpdateEmailTaskCreationModeRequest) {
@@ -112,8 +112,8 @@ function putEmailTaskMode(body: UpdateEmailTaskCreationModeRequest) {
   });
 }
 
-function getActionPolicies() {
-  return requestJson<GetAiActionPoliciesResponse>("/api/ai/action-policy");
+function getActionPolicies(signal: AbortSignal) {
+  return requestJson<GetAiActionPoliciesResponse>("/api/ai/action-policy", { signal });
 }
 
 function patchDraftPolicy(tier: AiActionPolicyTier) {
@@ -128,30 +128,63 @@ function patchDraftPolicy(tier: AiActionPolicyTier) {
 
 export default function EmailSettings() {
   const queryClient = useQueryClient();
-  const sourceBehaviors = useQuery({ queryKey: SOURCE_BEHAVIORS_KEY, queryFn: getSourceBehaviors });
-  const settingsQuery = useQuery({ queryKey: EMAIL_SETTINGS_KEY, queryFn: getEmailSettings });
+  const sourceBehaviors = useQuery({
+    queryKey: SOURCE_BEHAVIORS_KEY,
+    queryFn: ({ signal }) => getSourceBehaviors(signal)
+  });
+  const settingsQuery = useQuery({
+    queryKey: EMAIL_SETTINGS_KEY,
+    queryFn: ({ signal }) => getEmailSettings(signal)
+  });
   const behaviorMutation = useMutation({
     mutationFn: putSourceBehavior,
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: SOURCE_BEHAVIORS_KEY
-      })
+    onMutate: () => queryClient.cancelQueries({ queryKey: SOURCE_BEHAVIORS_KEY, exact: true }),
+    onSuccess: async (data) => {
+      await queryClient.cancelQueries({ queryKey: SOURCE_BEHAVIORS_KEY, exact: true });
+      queryClient.setQueryData(SOURCE_BEHAVIORS_KEY, data);
+    }
   });
   const settingsMutation = useMutation({
     mutationFn: patchEmailSettings,
-    onSuccess: (data) => queryClient.setQueryData(EMAIL_SETTINGS_KEY, data)
+    onMutate: () => queryClient.cancelQueries({ queryKey: EMAIL_SETTINGS_KEY, exact: true }),
+    onSuccess: async (data) => {
+      // A focus refresh or retry can start during the mutation, after onMutate's cancellation.
+      // Only the successful server response may replace the confirmed choice at this point.
+      await queryClient.cancelQueries({ queryKey: EMAIL_SETTINGS_KEY, exact: true });
+      queryClient.setQueryData(EMAIL_SETTINGS_KEY, data);
+    }
   });
-  const taskModeQuery = useQuery({ queryKey: EMAIL_TASK_MODE_KEY, queryFn: getEmailTaskMode });
+  const taskModeQuery = useQuery({
+    queryKey: EMAIL_TASK_MODE_KEY,
+    queryFn: ({ signal }) => getEmailTaskMode(signal)
+  });
   const taskModeMutation = useMutation({
     mutationFn: (mode: EmailTaskCreationMode) => putEmailTaskMode({ mode }),
-    onSuccess: (data) => {
+    onMutate: () => queryClient.cancelQueries({ queryKey: EMAIL_TASK_MODE_KEY, exact: true }),
+    onSuccess: async (data) => {
+      await queryClient.cancelQueries({ queryKey: EMAIL_TASK_MODE_KEY, exact: true });
       queryClient.setQueryData(EMAIL_TASK_MODE_KEY, data);
     }
   });
-  const policiesQuery = useQuery({ queryKey: ACTION_POLICY_KEY, queryFn: getActionPolicies });
+  const policiesQuery = useQuery({
+    queryKey: ACTION_POLICY_KEY,
+    queryFn: ({ signal }) => getActionPolicies(signal)
+  });
   const draftPolicyMutation = useMutation({
     mutationFn: patchDraftPolicy,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ACTION_POLICY_KEY })
+    onMutate: () => queryClient.cancelQueries({ queryKey: ACTION_POLICY_KEY, exact: true }),
+    onSuccess: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ACTION_POLICY_KEY, exact: true });
+      queryClient.setQueryData<GetAiActionPoliciesResponse>(ACTION_POLICY_KEY, (previous) => ({
+        policies: [
+          ...(previous?.policies ?? []).filter(
+            (policy) =>
+              policy.moduleId !== data.moduleId || policy.actionFamilyId !== data.actionFamilyId
+          ),
+          data
+        ]
+      }));
+    }
   });
 
   const behaviorEnabled =
@@ -167,7 +200,13 @@ export default function EmailSettings() {
     settingsQuery.isError ||
     taskModeQuery.isError ||
     policiesQuery.isError;
+  const anyWritePending =
+    behaviorMutation.isPending ||
+    settingsMutation.isPending ||
+    taskModeMutation.isPending ||
+    draftPolicyMutation.isPending;
   const retryReads = () => {
+    if (anyWritePending) return;
     void sourceBehaviors.refetch();
     void settingsQuery.refetch();
     void taskModeQuery.refetch();
@@ -187,7 +226,7 @@ export default function EmailSettings() {
           {hasReadError ? "Could not load email settings." : "Loading email settings…"}
         </p>
         {hasReadError ? (
-          <Button variant="secondary" size="sm" onClick={retryReads}>
+          <Button variant="secondary" size="sm" disabled={anyWritePending} onClick={retryReads}>
             Try again
           </Button>
         ) : null}
@@ -301,7 +340,7 @@ export default function EmailSettings() {
       {hasReadError ? (
         <div role="status">
           <Note>Could not refresh email settings. Showing the last saved choices.</Note>
-          <Button variant="secondary" size="sm" onClick={retryReads}>
+          <Button variant="secondary" size="sm" disabled={anyWritePending} onClick={retryReads}>
             Try again
           </Button>
         </div>

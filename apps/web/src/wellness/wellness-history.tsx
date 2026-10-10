@@ -204,7 +204,11 @@ export function WellnessHistory({
                 </span>
               </DisclosureToggle>
               {isOpen ? (
-                <div className="wl-hdetail" style={{ "--em-tint": c.tint } as React.CSSProperties}>
+                <div
+                  id={`checkin-${ck.id}`}
+                  className="wl-hdetail"
+                  style={{ "--em-tint": c.tint } as React.CSSProperties}
+                >
                   {ck.sensations && (ck.sensations as string[]).length > 0 ? (
                     <div className="wl-hdetail__sens">
                       <span className="wl-hdetail__lbl">Sensations</span>

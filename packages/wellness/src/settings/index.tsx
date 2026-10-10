@@ -21,8 +21,8 @@ async function requestJson<T>(path: string, init?: RequestInit & { body?: unknow
   return (await response.json()) as T;
 }
 
-function getWellnessAiConsent(): Promise<WellnessAiConsentResponse> {
-  return requestJson<WellnessAiConsentResponse>("/api/wellness/ai-consent");
+function getWellnessAiConsent(signal: AbortSignal): Promise<WellnessAiConsentResponse> {
+  return requestJson<WellnessAiConsentResponse>("/api/wellness/ai-consent", { signal });
 }
 
 function putWellnessAiConsent(granted: boolean): Promise<WellnessAiConsentResponse> {
@@ -36,11 +36,17 @@ export default function WellnessSettings() {
   const queryClient = useQueryClient();
   const consentQuery = useQuery({
     queryKey: AI_CONSENT_KEY,
-    queryFn: getWellnessAiConsent
+    queryFn: ({ signal }) => getWellnessAiConsent(signal)
   });
   const consentMutation = useMutation({
     mutationFn: putWellnessAiConsent,
-    onSuccess: (data) => queryClient.setQueryData(AI_CONSENT_KEY, data)
+    onMutate: () => queryClient.cancelQueries({ queryKey: AI_CONSENT_KEY, exact: true }),
+    onSuccess: async (data) => {
+      // A focus refresh or explicit retry may have started while the write was pending.
+      // Cancel both that read and any pre-write read before publishing the server response.
+      await queryClient.cancelQueries({ queryKey: AI_CONSENT_KEY, exact: true });
+      queryClient.setQueryData(AI_CONSENT_KEY, data);
+    }
   });
 
   const consent = consentQuery.data;
@@ -57,7 +63,12 @@ export default function WellnessSettings() {
             : "Loading Wellness AI access…"}
         </p>
         {consentQuery.isError ? (
-          <Button variant="secondary" size="sm" onClick={() => void consentQuery.refetch()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={consentMutation.isPending}
+            onClick={() => void consentQuery.refetch()}
+          >
             Try again
           </Button>
         ) : null}
@@ -88,7 +99,12 @@ export default function WellnessSettings() {
       {consentQuery.isError ? (
         <div role="status">
           <Note>Could not refresh Wellness AI access. Showing the last saved choice.</Note>
-          <Button variant="secondary" size="sm" onClick={() => void consentQuery.refetch()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={consentMutation.isPending}
+            onClick={() => void consentQuery.refetch()}
+          >
             Try again
           </Button>
         </div>
