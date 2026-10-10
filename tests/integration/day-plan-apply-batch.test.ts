@@ -187,6 +187,23 @@ describe("apply batch reservation boundary", () => {
     expect(providerFetch).not.toHaveBeenCalled();
   });
 
+  it("reserves only the explicit selection when pending additions are excluded", async () => {
+    const { plan, byTitle } = await seedPlanWithPending(nextDay());
+    const moveId = byTitle.get("Sync")!.id;
+
+    const batch = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.reserveApplyBatch(scopedDb, {
+        planId: plan.id,
+        expectedRevision: plan.revision,
+        idempotencyKey: `exact-${randomUUID()}`,
+        selectedBlockIds: [moveId],
+        includePendingAdditions: false
+      })
+    );
+
+    expect(batch.items.map((item) => item.blockId)).toEqual([moveId]);
+  });
+
   it("returns the same reservation on exact replay", async () => {
     const { plan, byTitle } = await seedPlanWithPending(nextDay());
     const key = `batch-replay-${randomUUID()}`;

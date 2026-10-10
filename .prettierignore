@@ -34,6 +34,11 @@ docs/superpowers/design/
 # System" project in Claude Design. They are the target the code is measured against, so they have
 # to stay byte-identical to the source — a format pass rewrote all seven of them once already.
 docs/superpowers/specs/job-search-mockup/
+# Finance R1 mockups: pages rendered by build.tsx and a frozen copy of the shipped CSS.
+docs/superpowers/specs/finance-redesign/*.html
+docs/superpowers/specs/finance-redesign/moss-ui.css
+docs/superpowers/specs/finance-redesign/moss-ui.phone.css
+docs/superpowers/specs/finance-redesign/p6.phone.css
 
 # #1326: unit-test fixtures mkdtemp() a ".tmp-*" directory directly in the repo root
 # (external-worker-runtime, external-module-invocation-budget, module-sdk-worker); a

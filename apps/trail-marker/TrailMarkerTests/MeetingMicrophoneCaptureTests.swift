@@ -47,6 +47,9 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         var failAt: Set<String> = []
         var failureOverride: Error?
         var onStart: (() -> Void)?
+        var onStop: (() -> Void)?
+        var referenceSelections: [AudioDeviceID] = []
+        var verifyReference: ((AudioDeviceID) throws -> Void)?
         var onInitialize: (() -> Void)?
         var onDispose: (() -> Void)?
         var selectedDevice: AudioDeviceID?
@@ -99,6 +102,10 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
 
         func enableInput() throws { try step("input") }
         func configureOutput() throws { try step("output") }
+        func selectReferenceDevice(_ deviceID: AudioDeviceID) throws {
+            referenceSelections.append(deviceID)
+            try verifyReference?(deviceID)
+        }
         func selectDevice(_ deviceID: AudioDeviceID) throws { try step("device"); selectedDevice = deviceID }
         func inputFormat() throws -> AudioStreamBasicDescription {
             formatReads += 1
@@ -148,7 +155,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         }
         func installDeviceListener(_ context: MeetingMicrophoneRenderContext) throws { try step("deviceListener") }
         func start() throws { onStart?(); try step("start") }
-        func stop() throws { try step("stop") }
+        func stop() throws { onStop?(); try step("stop") }
         func uninitialize() throws { try step("uninitialize") }
         func dispose() throws { try step("dispose"); context = nil; onDispose?() }
 
@@ -251,7 +258,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         unit.context?.audioUnitFormatDidChange(scope: kAudioUnitScope_Input, element: 0)
         unit.context?.verifyFormatIfNeeded()
         unit.emit()
-        XCTAssertEqual(receiver.failures, [.invalidFormat])
+        XCTAssertEqual(receiver.failures, [.sourceReconfigured])
         XCTAssertEqual(receiver.diagnostics.last?.code, .voiceReferenceFormatVerification)
         XCTAssertTrue(receiver.batches.isEmpty)
         try capture.stop()
@@ -1218,7 +1225,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         try capture.start(into: receiver)
         unit.emit()
         unit.emit(at: 200)
-        XCTAssertEqual(receiver.failures, [.invalidFormat])
+        XCTAssertEqual(receiver.failures, [.sourceReconfigured])
         XCTAssertTrue(receiver.batches.isEmpty)
         XCTAssertEqual(unit.renderCount, 1)
         try capture.stop()
@@ -1299,7 +1306,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         unit.context?.formatDidChange()
         unit.context?.verifyFormatIfNeeded()
         unit.emit()
-        XCTAssertEqual(receiver.failures, [.invalidFormat])
+        XCTAssertEqual(receiver.failures, [.sourceReconfigured])
         XCTAssertEqual(unit.renderCount, 0)
         try capture.stop()
     }
@@ -1447,7 +1454,7 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
             context.formatDidChange()
             context.verifyFormatIfNeeded()
             unit.emit()
-            assertCallbackFailure(.invalidFormat, diagnostic: .init(.microphoneFormatVerification), in: ring)
+            assertCallbackFailure(.sourceReconfigured, diagnostic: .init(.microphoneFormatVerification), in: ring)
             XCTAssertEqual(unit.renderCount, 0)
             try capture.stop()
         }
@@ -1550,4 +1557,72 @@ final class MeetingMicrophoneCaptureTests: XCTestCase {
         try capture.stop()
     }
 
+
+    func testSoftFormatFailureCannotHideDeviceLossWhileDisposingUnit() throws {
+        let unit = FakeUnit(), ring = try diagnosticBuffer()
+        let capture = unit.capture(voiceProcessing: true)
+        try capture.start(into: ring)
+        unit.referenceOutput = unit.configuredOutput
+        unit.referenceOutput?.mSampleRate = 44_100
+        let context = try XCTUnwrap(unit.context)
+        context.audioUnitFormatDidChange(scope: kAudioUnitScope_Input, element: 0)
+        context.verifyFormatIfNeeded()
+        XCTAssertEqual(ring.failure, .sourceReconfigured)
+        unit.onStop = { context.deviceDidDisappear() }
+        try capture.stop()
+        XCTAssertEqual(ring.failure, .invalidSelection, "Teardown must retain hard route evidence after a soft format fault")
+        context.referenceDidDisappear()
+        XCTAssertEqual(ring.failureDiagnostic?.code, .microphoneDeviceGone, "Disposed contexts must be inert")
+    }
+
+    func testPendingMicrophoneCapacityAndReadFaultsDrainBeforeDisposal() throws {
+        for readFailure in [false, true] {
+            let unit = FakeUnit(), ring = try diagnosticBuffer()
+            let capture = unit.capture()
+            try capture.start(into: ring)
+            ring.fail(.sourceReconfigured) // The peer source triggered paired quiescence.
+            if readFailure { unit.failAt = ["verifyFormat"] }
+            else { unit.verifiedCapacity = 9 }
+            unit.context?.formatDidChange()
+            try capture.stop()
+            XCTAssertEqual(ring.failure, readFailure ? .invalidFormat : .bufferFull,
+                "Pending hard verification must run before closing the peer unit")
+            XCTAssertEqual(unit.events.last, "dispose")
+        }
+    }
+
+    func testPinnedReferenceIsVerifiedBeforeAndAfterAcquisitionWithoutRetargeting() throws {
+        for changesRoute in [false, true] {
+            let unit = FakeUnit(), receiver = Receiver()
+            var modes: [Bool] = []
+            unit.verifyReference = { expected in
+                XCTAssertEqual(expected, 11)
+                if changesRoute, unit.referenceSelections.count == 2 { throw MeetingAudioFailure.invalidSelection }
+            }
+            let capture = MeetingMicrophoneCapture(selectedDeviceID: 42, voiceProcessing: true,
+                expectedReferenceDeviceID: 11, makeUnit: { mode in modes.append(mode); return unit })
+            if changesRoute {
+                XCTAssertThrowsError(try capture.start(into: receiver)) {
+                    XCTAssertEqual($0 as? MeetingAudioFailure, .invalidSelection)
+                }
+                XCTAssertEqual(unit.events.last, "dispose")
+            } else { try capture.start(into: receiver) }
+            XCTAssertEqual(unit.referenceSelections, [11, 11])
+            XCTAssertEqual(unit.selectedDevice, 42)
+            XCTAssertEqual(modes, [true], "Physical route loss must not select HAL fallback")
+            try capture.stop()
+        }
+    }
+
+    func testPinnedReferenceLossDuringStartupNeverBecomesCompatibilityFallback() throws {
+        let unit = FakeUnit(), receiver = Receiver()
+        var modes: [Bool] = []
+        unit.onStart = { unit.context?.defaultOutputDidChange() }
+        let capture = MeetingMicrophoneCapture(selectedDeviceID: 42, voiceProcessing: true,
+            expectedReferenceDeviceID: 11, makeUnit: { mode in modes.append(mode); return unit })
+        XCTAssertThrowsError(try capture.start(into: receiver))
+        XCTAssertEqual(modes, [true])
+        XCTAssertEqual(unit.events.last, "dispose")
+        XCTAssertTrue(receiver.batches.isEmpty)
+    }
 }

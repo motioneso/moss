@@ -5,6 +5,44 @@
 // Domain files never import @moss/* (bundler independence — see kv-port.ts).
 import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetLedger } from "./envelope.js";
+import type { BudgetDraft, DraftBuild, DraftLine } from "./draft.js";
+
+/**
+ * One row of the activity trail (#3174). `params` and `undo` hold ids, cents
+ * and category ids only, never free text; the row's wording renders from
+ * `kind` plus `params` in code.
+ */
+export interface ActivityInput {
+  actor: "user" | "moss";
+  kind: string;
+  params: Record<string, string | number | null>;
+  undo?: Record<string, string | number | null> | null;
+}
+
+/**
+ * Budget totals, their activity rows and an optional draft start or undo mark, applied as one
+ * unit. Either every part lands or none does.
+ */
+export interface BudgetChange {
+  month: string;
+  assignments: { categoryId: string; amountCents: number }[];
+  activity: ActivityInput[];
+  /** Marks this open draft started; the change applies only while the draft is still open. */
+  startDraft?: { draftId: string; at: string };
+  /** Marks this row undone; the change applies only while the row is not yet undone. */
+  markUndone?: { activityId: string; at: string };
+}
+
+/** One stored activity row as the Settings list reads it. */
+export interface ActivityRecord {
+  id: string;
+  at: string;
+  actor: "user" | "moss";
+  kind: string;
+  params: Record<string, string | number | null>;
+  undo: Record<string, string | number | null> | null;
+  undoneAt: string | null;
+}
 
 export interface FinanceStore {
   listItems(): Promise<ItemRecord[]>;
@@ -31,6 +69,11 @@ export interface FinanceStore {
     month: string,
     records: TransactionRecord[]
   ): Promise<void>;
+  /**
+   * Payee names (transaction `name`) of categorized rows whose review state is
+   * confirmed. A merchant counts as "seen" when its normalized name is here.
+   */
+  listConfirmedPayeeNames(): Promise<string[]>;
   /** Rewrite a single transaction in place (feed categorize/note paths). */
   putTransaction(record: TransactionRecord): Promise<void>;
 
@@ -45,4 +88,39 @@ export interface FinanceStore {
   getLedger(month: string): Promise<BudgetLedger | null>;
   /** Sets the TOTAL for one category (FIN-03 replay-safe semantics). */
   setAssignment(month: string, categoryId: string, amountCents: number): Promise<void>;
+
+  /**
+   * Writes every assignment total, every activity row and the optional draft start or undo mark
+   * in one atomic step. Returns false (and writes nothing) when a guard fails: the draft is no
+   * longer open or the row was already undone.
+   */
+  commitBudgetChange(change: BudgetChange): Promise<boolean>;
+
+  /** Appends one activity row for the acting user, stamped with the current time. */
+  appendActivity(entry: ActivityInput): Promise<void>;
+
+  /** Activity rows with `from <= at < to`, newest first, at most `limit`. */
+  listActivity(from: string, to: string, limit: number): Promise<ActivityRecord[]>;
+  getActivity(id: string): Promise<ActivityRecord | null>;
+  /** Marks a row undone. False when it was already undone or does not exist. */
+  markActivityUndone(id: string, at: string): Promise<boolean>;
+
+  /** Amount of the newest budget.assign row for one category and month; null when none. */
+  lastLoggedAssignment(month: string, categoryId: string): Promise<number | null>;
+
+  /** The newest draft that is open or started; null when none was ever built. */
+  getLatestDraft(): Promise<BudgetDraft | null>;
+  /**
+   * Store a freshly built draft as the open one and discard any older open
+   * draft. A draft becomes visible only after all its lines are written.
+   * Returns the new draft id.
+   */
+  createDraft(build: DraftBuild, createdAt: string): Promise<string>;
+  /** Mark an open draft started. A draft that is not open is left alone. */
+  markDraftStarted(draftId: string, startedAt: string): Promise<void>;
+  /**
+   * Insert or replace one line of an open draft. A draft that is not open (started,
+   * discarded or unknown) is left alone, so a late edit cannot change a started budget.
+   */
+  saveDraftLine(draftId: string, line: DraftLine): Promise<void>;
 }

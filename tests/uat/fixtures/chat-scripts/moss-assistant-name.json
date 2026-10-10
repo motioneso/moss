@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["UAT-assistant-name"],
+      "calls": [],
+      "reply": "Scripted assistant-name reply."
+    }
+  ]
+}

@@ -130,7 +130,8 @@ describe("day-plan auto effects", () => {
     expect(reserveApplyBatch.mock.calls[0]?.[1]).toMatchObject({
       expectedRevision: 2,
       idempotencyKey: "day-plan-auto:run-1",
-      selectedBlockIds: result?.autoBlockIds
+      selectedBlockIds: result?.autoBlockIds,
+      includePendingAdditions: false
     });
   });
 

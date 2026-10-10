@@ -52,6 +52,12 @@ export function captureStatusLabel(capture: MeetingCaptureState, connected: bool
     return "Recording authority ended";
   if (!connected) return "Capture status unconfirmed";
   if (capture.observed?.phase === "error") return "Capture interrupted";
+  if (
+    capture.desired === "recording" &&
+    capture.observed?.phase === "recovering" &&
+    capture.observed.generation === capture.generation
+  )
+    return "Recovering audio…";
   if (captureAcknowledged(capture)) {
     return { idle: "Connected", recording: "Recording", paused: "Paused", stopped: "Stopped" }[
       capture.desired

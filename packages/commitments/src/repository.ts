@@ -189,11 +189,17 @@ export class CommitmentsRepository {
       .where("owner_user_id", "=", ownerUserId)
       .where("thread_ref", "is not", null)
       .where("status", "in", ["pending_review", "accepted", "snoozed"])
+      .where((eb) =>
+        eb.or([eb("status", "!=", "snoozed"), eb("snoozed_until", "<=", sql<Date>`now()`)])
+      )
       .where("resolution_ref", "is", null)
       .orderBy(sql`due_local_date nulls last`)
       .orderBy("last_seen_at", "desc")
       .execute();
-    return rows.map(rowToCandidate);
+    // A snooze that survives the filter has elapsed; the item is back, so drop the old date.
+    return rows
+      .map(rowToCandidate)
+      .map((c) => (c.status === "snoozed" ? { ...c, snoozedUntil: null } : c));
   }
 
   async addEvidenceRow(scopedDb: unknown, input: AddEvidenceInput): Promise<boolean> {
@@ -240,9 +246,30 @@ export class CommitmentsRepository {
       .selectAll()
       .where("c.owner_user_id", "=", ownerUserId)
       .orderBy("c.last_seen_at", "desc");
-    if (status) q = q.where("c.status", "=", status);
+    // A snooze past its end date counts as pending_review again.
+    if (status === "pending_review") {
+      q = q.where((eb) =>
+        eb.or([
+          eb("c.status", "=", "pending_review"),
+          eb.and([eb("c.status", "=", "snoozed"), eb("c.snoozed_until", "<=", sql<Date>`now()`)])
+        ])
+      );
+    } else if (status === "snoozed") {
+      q = q
+        .where("c.status", "=", "snoozed")
+        .where((eb) =>
+          eb.or([eb("c.snoozed_until", "is", null), eb("c.snoozed_until", ">", sql<Date>`now()`)])
+        );
+    } else if (status) {
+      q = q.where("c.status", "=", status);
+    }
     const rows = await q.execute();
-    return rows.map(rowToCandidate);
+    const candidates = rows.map(rowToCandidate);
+    return status === "pending_review"
+      ? candidates.map((c) =>
+          c.status === "snoozed" ? { ...c, status: "pending_review", snoozedUntil: null } : c
+        )
+      : candidates;
   }
 
   async getCandidate(

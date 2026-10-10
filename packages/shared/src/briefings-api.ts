@@ -58,8 +58,15 @@ export interface BriefingFeedbackItemDto {
   readonly metadata: Record<string, unknown>;
 }
 
+/** A briefing source an installed external module offers, shown as a switch in settings. */
+export interface BriefingExternalSourceDto {
+  readonly toolName: string;
+  readonly label: string;
+}
+
 export interface ListBriefingDefinitionsResponse {
   readonly definitions: readonly BriefingDefinitionDto[];
+  readonly externalSources: readonly BriefingExternalSourceDto[];
 }
 
 export interface CreateBriefingDefinitionRequest {
@@ -294,9 +301,18 @@ export const briefingRunPayloadSchema = {
 export const listBriefingDefinitionsResponseSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["definitions"],
+  required: ["definitions", "externalSources"],
   properties: {
-    definitions: { type: "array", items: briefingDefinitionSchema }
+    definitions: { type: "array", items: briefingDefinitionSchema },
+    externalSources: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["toolName", "label"],
+        properties: { toolName: { type: "string" }, label: { type: "string" } }
+      }
+    }
   }
 } as const;
 

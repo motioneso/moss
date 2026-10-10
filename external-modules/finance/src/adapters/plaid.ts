@@ -9,6 +9,26 @@
 import type { FinanceFetch, FinanceFetchRequest, PlaidEnv } from "./types.js";
 import { FinanceFetchError } from "./types.js";
 
+// Plaid's lookup only finds a bank in the countries named, so name every supported one.
+const INSTITUTION_COUNTRIES = [
+  "US",
+  "CA",
+  "GB",
+  "IE",
+  "FR",
+  "ES",
+  "NL",
+  "DE",
+  "IT",
+  "PL",
+  "DK",
+  "NO",
+  "SE",
+  "EE",
+  "LT",
+  "LV"
+];
+
 export type { PlaidEnv } from "./types.js";
 
 export type PlaidCreds = { clientId: string; secret: string };
@@ -17,10 +37,21 @@ export type PlaidCreds = { clientId: string; secret: string };
  * message = Plaid error CODE only, NEVER the response body — error_message
  * is provider prose that could echo institution details into logs/results.
  */
+/**
+ * Plaid's own diagnostic fields for a failed call. Plaid error bodies carry
+ * no credentials; only these three fields are ever kept, length-capped.
+ */
+export type PlaidErrorDetail = {
+  type: string | null;
+  message: string | null;
+  requestId: string | null;
+};
+
 export class PlaidError extends Error {
   constructor(
     readonly code: string,
-    readonly httpStatus: number
+    readonly httpStatus: number,
+    readonly detail: PlaidErrorDetail = { type: null, message: null, requestId: null }
   ) {
     super(code);
     this.name = "PlaidError";
@@ -70,6 +101,8 @@ export interface PlaidClient {
   accountsGet(
     accessToken: string
   ): Promise<{ institutionId: string | null; accounts: PlaidAccount[] }>;
+  /** Public institution lookup: the bank's display name, or null when Plaid has none. */
+  institutionGet(institutionId: string): Promise<{ name: string | null }>;
   accountsBalanceGet(accessToken: string): Promise<{ accounts: PlaidAccount[] }>;
   transactionsSync(
     accessToken: string,
@@ -100,11 +133,39 @@ function mapAccount(raw: Json): PlaidAccount {
   };
 }
 
+const MAX_DETAIL_CHARS = 500;
+
+/** Plaid error codes are upper snake case; anything else is not trusted as one. */
+function safeCode(value: unknown, status: number): string {
+  return typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value)
+    ? value
+    : `http_${status}`;
+}
+
+/**
+ * Plaid text saved or logged for diagnosis. Anything that looks like a token,
+ * a long digit run (account numbers) or one of our own credentials is
+ * replaced, then the text is capped with an explicit truncation marker.
+ */
+function scrubbed(value: unknown, secrets: readonly string[]): string | null {
+  if (typeof value !== "string") return null;
+  let text = value;
+  for (const secret of secrets) {
+    if (secret.length >= 4) text = text.split(secret).join("[redacted]");
+  }
+  text = text
+    .replace(/\b(?:access|public|link|processor)-[A-Za-z0-9-]+/g, "[redacted]")
+    .replace(/\d[\d -]{4,}\d/g, "[redacted]");
+  return text.length > MAX_DETAIL_CHARS ? `${text.slice(0, MAX_DETAIL_CHARS)}...[truncated]` : text;
+}
+
 export function createPlaid(
   fetchPort: FinanceFetch,
   env: PlaidEnv,
   creds: PlaidCreds
 ): PlaidClient {
+  const secrets = [creds.clientId, creds.secret];
+
   function request(path: string, body: Json): FinanceFetchRequest {
     const payload = { client_id: creds.clientId, secret: creds.secret, ...body };
     return {
@@ -125,10 +186,11 @@ export function createPlaid(
       throw new FinanceFetchError("malformed_payload", "response was not JSON");
     }
     if (response.status < 200 || response.status >= 300) {
-      throw new PlaidError(
-        typeof json.error_code === "string" ? json.error_code : `http_${response.status}`,
-        response.status
-      );
+      throw new PlaidError(safeCode(json.error_code, response.status), response.status, {
+        type: scrubbed(json.error_type, secrets),
+        message: scrubbed(json.error_message, secrets),
+        requestId: scrubbed(json.request_id, secrets)
+      });
     }
     return json;
   }
@@ -193,6 +255,16 @@ export function createPlaid(
         institutionId: (item.institution_id as string | null) ?? null,
         accounts: (Array.isArray(json.accounts) ? (json.accounts as Json[]) : []).map(mapAccount)
       };
+    },
+
+    async institutionGet(institutionId) {
+      const json = await call("/institutions/get_by_id", {
+        institution_id: institutionId,
+        country_codes: INSTITUTION_COUNTRIES
+      });
+      const institution = (json.institution ?? {}) as Json;
+      const name = typeof institution.name === "string" ? institution.name.trim() : "";
+      return { name: name === "" ? null : name };
     },
 
     async accountsBalanceGet(accessToken) {

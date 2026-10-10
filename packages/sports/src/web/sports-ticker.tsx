@@ -173,6 +173,13 @@ export function SportsTicker(props: {
     return () => window.removeEventListener("resize", updateEdges);
   }, [props.followed]);
 
+  // Pointer drag-to-scroll (mrb7mwhv): the strip is wide editorial cards now, so click-and-drag
+  // is the natural gesture across the row. The arrows STAY (Ben's ask) as the discoverable
+  // affordance for anyone who doesn't think to drag. A 4px movement threshold latches `moved`
+  // so a drag that ends over a story link doesn't also fire that link's click (onClickCapture
+  // swallows it) — dragging never accidentally opens a story. Touch is left to native scroll.
+  const dragRef = useRef<{ startX: number; startLeft: number; moved: boolean } | null>(null);
+
   if (props.followed.length === 0) return null;
   const ordered = orderFollowedCards(props.followed, Date.now());
 
@@ -181,13 +188,6 @@ export function SportsTicker(props: {
     if (!el) return;
     el.scrollBy({ left: direction * Math.round(el.clientWidth * 0.8), behavior: "smooth" });
   }
-
-  // Pointer drag-to-scroll (mrb7mwhv): the strip is wide editorial cards now, so click-and-drag
-  // is the natural gesture across the row. The arrows STAY (Ben's ask) as the discoverable
-  // affordance for anyone who doesn't think to drag. A 4px movement threshold latches `moved`
-  // so a drag that ends over a story link doesn't also fire that link's click (onClickCapture
-  // swallows it) — dragging never accidentally opens a story. Touch is left to native scroll.
-  const dragRef = useRef<{ startX: number; startLeft: number; moved: boolean } | null>(null);
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
     const el = scrollRef.current;

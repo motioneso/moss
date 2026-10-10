@@ -1,7 +1,9 @@
 import { CalendarCheck, Clock, GitCommitHorizontal, MapPin, Users, X } from "lucide-react";
 import { CategoryDot, HeldBanner, PeekCloseButton, PeekPanel } from "@moss/ui";
 import { useAssistantName } from "../api/use-assistant-name.js";
-import { fmtDateLabel, fmtDur, fmtTime, type CalendarViewEvent } from "./calendar-model.js";
+import { dateRangeLabel, fmtDur, fmtTime, type CalendarViewEvent } from "./calendar-model.js";
+
+const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
 
 interface CalendarPeekProps {
   readonly event: CalendarViewEvent | null;
@@ -48,12 +50,22 @@ export function CalendarPeek({ event, onClose }: CalendarPeekProps) {
             </span>
             <div>
               <div className="cal-peek__rowmain">
-                {event.allDay ? "All day" : fmtTime(event.startMin) + " – " + fmtTime(event.endMin)}
+                {event.allDay
+                  ? "All day"
+                  : fmtTime(minutesOfDay(event.startsAt)) +
+                    " – " +
+                    fmtTime(minutesOfDay(event.endsAt))}
                 {!event.allDay ? (
-                  <span className="cal-peek__dur"> · {fmtDur(event.endMin - event.startMin)}</span>
+                  <span className="cal-peek__dur">
+                    {" "}
+                    ·{" "}
+                    {fmtDur(
+                      Math.round((event.endsAt.getTime() - event.startsAt.getTime()) / 60000)
+                    )}
+                  </span>
                 ) : null}
               </div>
-              <div className="cal-peek__rowsub">{fmtDateLabel(event.date)}</div>
+              <div className="cal-peek__rowsub">{dateRangeLabel(event)}</div>
             </div>
           </div>
           {event.where ? (

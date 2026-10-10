@@ -71,9 +71,19 @@ function setup(module: MossModuleManifest, declared: ModuleAssistantToolManifest
   const services = Object.fromEntries((tool.requiresServices ?? []).map((key) => [key, {}]));
   const yoloMode = vi.fn(async () => yolo);
   const getFamilyTier = vi.fn(async () => "trusted_auto" as const);
+  // The fixture tools name the shared "change" family, which a real module declares.
   const getFamilyManifest = vi.fn(
     async (_module: string, id: string) =>
-      module.assistantActionFamilies?.find((family) => family.id === id) ?? null
+      module.assistantActionFamilies?.find((family) => family.id === id) ??
+      (id === "change"
+        ? {
+            id: "change",
+            label: "Change",
+            description: "Change settings",
+            defaultTier: "ask_each_time" as const,
+            allowedTiers: ["ask_each_time" as const, "trusted_auto" as const]
+          }
+        : null)
   );
   const h = admissionFixture([], {
     deps: {
