@@ -8,6 +8,7 @@ import {
   type CheckinDto,
   type ScheduleSlotDto
 } from "@moss/shared";
+import { formatClockTime, useUserLocale } from "../locale/locale-format.js";
 import { getMedicationSchedule, logMedicationDose } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { emoColor, coreLabel, type WellnessEmotionCore, type Theme } from "./emotion-taxonomy.js";
@@ -204,6 +205,7 @@ export function slotClock(slot: Pick<ScheduleSlotDto, "scheduledFor" | "localTim
 
 function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
   const date = localDay(new Date(), timeZone);
+  const locale = useUserLocale();
   const queryClient = useQueryClient();
 
   const scheduleQuery = useQuery({
@@ -421,7 +423,9 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                           Taken
                         </span>
                       ) : (
-                        <span className="wl-medrow__time">{slotClock(slot)}</span>
+                        <span className="wl-medrow__time">
+                          {formatClockTime(slotClock(slot), locale)}
+                        </span>
                       )}
                     </div>
                   );
