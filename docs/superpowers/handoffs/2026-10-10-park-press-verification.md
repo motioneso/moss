@@ -212,6 +212,49 @@ write, pending and recovery branches. Exhaustive failure browser combinations,
 touch hardware, zoom/assistive technology and the real-data live gate remain
 unverified; they are not hidden planning code-completion claims.
 
+## Lifestyle retained-screen batch
+
+This batch covers the retained News, Sports, Wellness, Notifications and utility
+settings surfaces. Their same-batch declarations describe repaired recovery and
+interaction behavior without adding routes or changing backend authority.
+
+| Finding | Result |
+| --- | --- |
+| LN01 | Wellness distinguishes unknown/error/empty/known reads, retains stale observations and uses the previous fourteen calendar days for the labelled mood interval. |
+| LN02 | Check-in, medication management and export use shared dialog lifecycle; pending check-in saves cannot be dismissed and failures retain drafts. |
+| LN03 | Emotion selection and chart day inspection have keyboard controls and exposed selected state; daily values provide a non-hover data equivalent. |
+| LN04 | Owned News/Sports/Wellness typography respects the authored floor; narrow layouts reflow rather than shrink meaningful labels. |
+| LN05 | Wellness uses the shared editorial introduction, section hierarchy and flat rules while retaining domain controls. |
+| LN06 | Wellness category ramps and on-category text use the F0 semantic contract and named-theme contrast regression. |
+| LN07 | Export provenance says Moss; valid medication-note cells, explicit selected-empty categories and repeated headers are retained in print-safe styling. Actual pagination remains unverified. |
+| LN08 | News keeps source identity/content and uses shared controls, quiet read status and retry. |
+| LN09 | Inert Sports preview navigation is removed; no replacement destinations are invented. |
+| LN10 | Sports shared controls and flat sections retain picker hierarchy, scoreboard and standings semantics. Popup placement remains inside its full header when controls wrap; native mixed checkboxes visibly show partial selection. The existing clippings override already flattened the scoped team cards. |
+| LN11, settings portion | Email/Wellness show only confirmed choices and distinguish read/save failure. Cancellation prevents older reads overwriting confirmed writes; future authoritative refresh remains effective. Finance follows in its own batch. |
+| LN12 | Backtrack opts into the supported narrow stacked-row layout; explicit deletion confirmations remain. |
+| LN13 | Notifications has its own layout, quiet status, distinct unread-empty state, safe retry and item-specific mark-read progress/failure. |
+| LN23 | Wellness hero actions/statistics wrap and emotion labels remain readable at phone widths. |
+| LN24 | Sports phone score tracks retain readable team identity and three-digit scores. |
+
+Independent review reproduced and repaired the settings stale-read race and missing
+history disclosure target, with red-before regressions. Source-faithful Chromium
+fixtures verified all six 320/390/1440 start/end Sports picker placements and item
+hit tests, hierarchical selection/back/Escape/focus return, true mixed-to-checked
+keyboard state, long settings labels, and 118/122 scores. Page/client widths matched
+at 305, 375 and 1425 px. The shared mixed-state patch is F0-owned but intentionally
+travels with this dependent consumer batch.
+
+Wellness phone/dark/alternate-theme states, emotion keys, chart values, Notifications
+long-body and failed-mark behavior, News and Backtrack were also exercised against
+synthetic data. Selected-but-empty and long export data were inspected, but no
+native paginated print preview was available. Eight medication assertions in two UAT files
+were aligned with the named shared dialog without changing edit/save expectations.
+No health data, live writes, native capture, or real export worker was exercised.
+
+
+The notification receipt assertion now locates the semantic article containing its
+exact title, retaining visibility, mark-read PATCH, badge and cleanup assertions.
+
 ## Explicit outstanding gates
 
 - Later planning, lifestyle and Meetings/Finance batches must receive their own
