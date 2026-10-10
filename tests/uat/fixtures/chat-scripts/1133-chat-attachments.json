@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["Please read this file."],
+      "calls": [],
+      "reply": "Received the attached file."
+    }
+  ]
+}
