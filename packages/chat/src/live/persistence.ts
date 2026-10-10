@@ -13,7 +13,7 @@ import { extractTimezone, resolveEffectiveTimezone } from "../locale-utils.js";
 import { sql, type Kysely } from "kysely";
 import {
   assertDataContextDb,
-  resolveMossEnv,
+  type ChatThread,
   type DataContextDb,
   type DataContextRunner,
   type MossDatabase,
@@ -25,6 +25,7 @@ import type {
   AiAuthMethod,
   ChatAttachmentDto,
   ChatSurface,
+  ChatClassifierGateOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   SourceFreshnessEntry,
@@ -41,26 +42,37 @@ import {
   CHAT_ARCHIVE_DAY_QUEUE,
   CHAT_EMBED_TURN_QUEUE,
   CHAT_EXTRACT_FACTS_QUEUE,
+  CHAT_SUMMARIZE_CONVERSATION_QUEUE,
   type ArchiveDayJobPayload,
+  type SummarizeConversationJobPayload,
   type EmbedTurnJobPayload,
   type ExtractFactsJobPayload
 } from "../jobs.js";
 import { containsSensitiveMemoryText } from "../memory-distillation.js";
 import type { ChatPersistencePort } from "./chat-session-manager.js";
-import type { HandledTurnOptions } from "./chat-session-ports.js";
+import type {
+  ConversationSummaryRequestStatus,
+  HandledTurnOptions,
+  ReminderTurnOptions
+} from "./chat-session-ports.js";
+import { selectSummaryRoute } from "../summary-job.js";
 import type { ChatRepository } from "../repository.js";
+import { ReminderRepository } from "../reminders/repository.js";
+import { decideReminderTurn, type ReminderTurnPlan } from "../reminders/turn.js";
 import { normalizeChatSurface } from "./chat-surface.js";
 import { terminalActionRecord } from "../action-record-history.js";
 import { estimateTokens } from "./recall-seed.js";
 import { UnsupportedLegacyCliProviderError } from "./errors.js";
+import { getReplayK, getReplayTokenCap, type ReplayMessage } from "./replay-window.js";
 import {
-  capSummary,
-  DEFAULT_REPLAY_MESSAGES,
-  REPLAY_TOKEN_CAP,
-  SUMMARY_TOKEN_CAP,
-  selectReplayWindow,
-  type ReplayMessage
-} from "./replay-window.js";
+  SUMMARY_RUN_INPUT_TOKENS,
+  planSummaryCoverage,
+  splitAtSummaryFrontier,
+  storedCoverageTurns,
+  type CoverageTurn
+} from "./summary-coverage.js";
+
+export { getReplayK, getReplayTokenCap } from "./replay-window.js";
 
 /** Provider-kinds the live CLI runtime can drive (the narrow ProviderKind set). */
 const LIVE_PROVIDER_KINDS: readonly ProviderKind[] = ["anthropic", "openai-compatible", "google"];
@@ -156,6 +168,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly dataContext: DataContextRunner;
   private readonly rootDb: Kysely<MossDatabase> | undefined;
   private readonly chat: ChatRepository;
+  private readonly reminders = new ReminderRepository();
   private readonly ai: AiRepository;
   private readonly boss: PgBoss | undefined;
   private readonly connectorSyncAt: DataContextChatPersistenceDeps["connectorSyncAt"];
@@ -241,17 +254,20 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       }
 
       const messages = await this.chat.listMessages(scopedDb, thread.id);
-      const turns: ReplayMessage[] = messages
-        .filter((m) => m.status === "stored" && (m.role === "user" || m.role === "assistant"))
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.body }));
+      const turns = storedCoverageTurns(messages);
 
-      const recent = selectReplayWindow(turns, {
-        maxMessages: getReplayK(),
-        maxTokens: getReplayTokenCap()
+      // Replay is the accepted summary plus every turn after its frontier, untruncated.
+      // The launch refuses a replay that overflows its budget instead of dropping turns.
+      const split = splitAtSummaryFrontier(turns, {
+        summary: thread.conversation_summary,
+        coveredThroughMessageId: thread.summary_covered_through_message_id,
+        revision: thread.summary_revision
       });
-      const oldSummary = thread.conversation_summary
-        ? capSummary(thread.conversation_summary, SUMMARY_TOKEN_CAP)
-        : null;
+      const recent: ReplayMessage[] = split.uncovered.map((m) => ({
+        role: m.role,
+        content: m.content
+      }));
+      const oldSummary = split.summary;
 
       // D8: visibility only — counts and trigger, never message/summary content.
       // "switch" is a valid trigger value but unreachable in Phase 1: switchProvider
@@ -311,7 +327,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     actorUserId: string,
     userText: string,
     assistantReply: string,
-    origin: ChatTurnOriginV1,
+    origin: ChatClassifierGateOriginV1,
     opts?: HandledTurnOptions,
     surface?: ChatSurface
   ): Promise<
@@ -334,6 +350,52 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   }
 
   /**
+   * #3309: persist the code-written answer to a recognised reminder request. The reply and origin
+   * are decided inside the turn's transaction, and an accepted reminder commits with the turn.
+   */
+  async recordReminderTurn(
+    actorUserId: string,
+    userText: string,
+    plan: ReminderTurnPlan,
+    opts?: ReminderTurnOptions,
+    surface?: ChatSurface
+  ): Promise<
+    | {
+        readonly userMessageId: string;
+        readonly assistantMessageId: string;
+        readonly reply: string;
+        readonly origin: ChatTurnOriginV1;
+      }
+    | "stopped"
+    | undefined
+  > {
+    const { stopSignal, ...turnOpts } = opts ?? {};
+    let stored: Awaited<ReturnType<typeof this.persistCompletedTurn>>;
+    try {
+      stored = await this.persistCompletedTurn(
+        actorUserId,
+        "record-reminder-turn",
+        userText,
+        "",
+        turnOpts,
+        surface,
+        { reminder: plan, stopSignal }
+      );
+    } catch (error) {
+      if (error instanceof ReminderTurnStopped) return "stopped";
+      throw error;
+    }
+    return stored?.reply !== undefined && stored.origin !== undefined
+      ? {
+          userMessageId: stored.userMessageId,
+          assistantMessageId: stored.assistantMessageId,
+          reply: stored.reply,
+          origin: stored.origin
+        }
+      : undefined;
+  }
+
+  /**
    * The one completed-turn pipeline shared by model turns and gate-handled turns. `turn` is a
    * discriminated union: either the executing provider/model or the gate origin, never both, so a
    * handled turn can never accidentally write a fabricated `executed` or `usage`.
@@ -348,11 +410,14 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     turn:
       | { readonly executed: { provider: ProviderKind; model: string } }
       | { readonly origin: ChatTurnOriginV1 }
+      | { readonly reminder: ReminderTurnPlan; readonly stopSignal?: AbortSignal }
   ): Promise<
     | {
         readonly userMessageId: string;
         readonly assistantMessageId: string;
         readonly sourceFreshness?: SourceFreshnessV1 | null;
+        readonly reply?: string;
+        readonly origin?: ChatTurnOriginV1;
       }
     | undefined
   > {
@@ -396,6 +461,18 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         elapsedMs: opts?.elapsedMs,
         usage: opts?.usage
       };
+      const handled =
+        "reminder" in turn
+          ? await decideReminderTurn(
+              scopedDb,
+              { reminders: this.reminders, boss: this.boss },
+              actorUserId,
+              thread,
+              turn.reminder
+            )
+          : "origin" in turn
+            ? { reply: assistantReply, origin: turn.origin }
+            : undefined;
       const result = thread.incognito
         ? undefined
         : "executed" in turn
@@ -408,23 +485,26 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               completedOpts,
               chatSurface
             )
-          : await this.chat.recordGateCompletedTurn(
-              scopedDb,
-              thread.id,
-              userText,
-              assistantReply,
-              turn.origin,
-              completedOpts,
-              chatSurface
-            );
+          : handled
+            ? await this.chat.recordGateCompletedTurn(
+                scopedDb,
+                thread.id,
+                userText,
+                handled.reply,
+                handled.origin,
+                completedOpts,
+                chatSurface
+              )
+            : undefined;
+      if (result && handled && "save" in handled) await handled.save?.(result.userMessage.id);
+
+      // Throwing here rolls back the turn, the reminder and its delivery job together.
+      if ("reminder" in turn && turn.stopSignal?.aborted) throw new ReminderTurnStopped();
 
       if (thread.incognito) {
         return undefined;
       }
 
-      // Update rolling summary when stored turns exceed the replay window. D3:
-      // the write gate uses the constant, not the (possibly opted-out) env —
-      // summaries keep accruing for long threads regardless of replay overrides.
       const allMessages = await this.chat.listMessages(scopedDb, thread.id);
       const storedTurns = allMessages.filter(
         (m) => m.status === "stored" && (m.role === "user" || m.role === "assistant")
@@ -432,18 +512,6 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       // Auto-title the thread from the first user turn (#403).
       if (storedTurns.length === 2 && thread.title === DEFAULT_CONVERSATION_TITLE) {
         await this.chat.updateThreadTitle(scopedDb, thread.id, deriveChatTitle(userText));
-      }
-
-      if (storedTurns.length > DEFAULT_REPLAY_MESSAGES) {
-        const oldTurns = storedTurns.slice(0, -DEFAULT_REPLAY_MESSAGES).map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.body
-        }));
-        await this.chat.updateConversationSummary(
-          scopedDb,
-          thread.id,
-          buildRollingSummary(oldTurns)
-        );
       }
 
       if (this.boss && result && !thread.incognito) {
@@ -461,6 +529,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         };
         await sendJob(this.boss, CHAT_EMBED_TURN_QUEUE, embedPayload);
         await sendJob(this.boss, CHAT_EXTRACT_FACTS_QUEUE, extractPayload);
+        await this.sendSummaryJobIfDue(actorUserId, thread, storedCoverageTurns(allMessages));
 
         const archiveEnabled = await this.localePreferences?.get(
           scopedDb,
@@ -480,7 +549,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         ? {
             userMessageId: result.userMessage.id,
             assistantMessageId: result.assistantMessage.id,
-            sourceFreshness
+            sourceFreshness,
+            ...(handled ? { reply: handled.reply, origin: handled.origin } : {})
           }
         : undefined;
     });
@@ -511,6 +581,69 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       this.chat.touchThread(scopedDb, threadId, chatSurface)
     );
     return found !== undefined;
+  }
+
+  /**
+   * Ask for the conversation's uncovered history to be condensed. Used when a fresh
+   * launch refuses an over-budget replay. Private, foreign and other-surface threads
+   * are ignored. `no_route` means no configured model can summarize, so waiting cannot help.
+   * The API cannot see the worker's CLI adapter, so a CLI sign-in route is assumed runnable.
+   */
+  async requestConversationSummary(
+    actorUserId: string,
+    binding: { readonly threadId?: string | null },
+    surface?: ChatSurface
+  ): Promise<ConversationSummaryRequestStatus> {
+    const threadId = binding.threadId;
+    if (!this.boss || threadId === null) return "skipped";
+    const chatSurface = normalizeChatSurface(surface);
+    return this.run(actorUserId, "request-conversation-summary", async (scopedDb) => {
+      const thread =
+        threadId === undefined
+          ? await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface)
+          : await this.chat.getThreadById(scopedDb, threadId, chatSurface);
+      if (!thread || thread.owner_user_id !== actorUserId || thread.surface !== chatSurface)
+        return "skipped";
+      const messages = await this.chat.listMessages(scopedDb, thread.id);
+      return this.sendSummaryJobIfDue(actorUserId, thread, storedCoverageTurns(messages), scopedDb);
+    });
+  }
+
+  /**
+   * Queue one summarization run when the uncovered suffix outgrows the replay window.
+   * With `routeDb`, a due run first checks that a summarization route exists.
+   */
+  private async sendSummaryJobIfDue(
+    actorUserId: string,
+    thread: ChatThread,
+    turns: readonly CoverageTurn[],
+    routeDb?: DataContextDb
+  ): Promise<ConversationSummaryRequestStatus> {
+    if (!this.boss || thread.incognito) return "skipped";
+    const split = splitAtSummaryFrontier(turns, {
+      summary: thread.conversation_summary,
+      coveredThroughMessageId: thread.summary_covered_through_message_id,
+      revision: thread.summary_revision
+    });
+    const plan = planSummaryCoverage(split.uncovered, {
+      keep: getReplayK(),
+      replayTokens: getReplayTokenCap(),
+      maxInputTokens: SUMMARY_RUN_INPUT_TOKENS
+    });
+    if (!plan) return "skipped";
+    if (routeDb && !(await selectSummaryRoute(routeDb, this.ai, { cliAvailable: true })))
+      return "no_route";
+    const payload: SummarizeConversationJobPayload = {
+      actorUserId,
+      threadId: thread.id,
+      expectedRevision: thread.summary_revision,
+      expectedCoveredThroughMessageId: thread.summary_covered_through_message_id,
+      throughMessageId: plan.throughMessageId
+    };
+    await sendJob(this.boss, CHAT_SUMMARIZE_CONVERSATION_QUEUE, payload, {
+      singletonKey: `${thread.id}:${thread.summary_revision}`
+    });
+    return "queued";
   }
 
   async getCurrentThreadState(
@@ -672,38 +805,6 @@ function toLiveProvider(model: AiConfiguredModelSafeRow): ProviderKind {
   );
 }
 
-/**
- * D1: unset/empty -> DEFAULT_REPLAY_MESSAGES (40); explicit "0" -> 0 (valid
- * opt-out); non-numeric or negative -> 40 plus one console.warn. Exported so
- * tests/unit/chat-replay-window.test.ts can unit-test the parsing directly.
- */
-export function getReplayK(): number {
-  const val = resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_K");
-  if (val === undefined || val === "") return DEFAULT_REPLAY_MESSAGES;
-  const parsed = parseInt(val, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    console.warn(
-      `Invalid JARVIS_CHAT_REPLAY_K value "${val}"; defaulting to ${DEFAULT_REPLAY_MESSAGES}.`
-    );
-    return DEFAULT_REPLAY_MESSAGES;
-  }
-  return parsed;
-}
-
-/** D1: sibling override for REPLAY_TOKEN_CAP. Same resolver, same parse rules. */
-function getReplayTokenCap(): number {
-  const val = resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_TOKENS");
-  if (val === undefined || val === "") return REPLAY_TOKEN_CAP;
-  const parsed = parseInt(val, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    console.warn(
-      `Invalid JARVIS_CHAT_REPLAY_TOKENS value "${val}"; defaulting to ${REPLAY_TOKEN_CAP}.`
-    );
-    return REPLAY_TOKEN_CAP;
-  }
-  return parsed;
-}
-
 function deriveChatTitle(userText: string): string {
   const first = userText.split(/[.!?\n]/)[0] ?? userText;
   const cleaned = first.replace(/[^\S\r\n]+/g, " ").trim();
@@ -713,14 +814,4 @@ function deriveChatTitle(userText: string): string {
   return titled;
 }
 
-function buildRollingSummary(
-  oldTurns: readonly { role: "user" | "assistant"; content: string }[]
-): string {
-  const priorContent = oldTurns
-    .map((m) => `${m.role}: ${m.content.trim()}`)
-    .filter(Boolean)
-    .join(" ");
-  const raw = `As of turn ${oldTurns.length}: ${priorContent}`;
-  // Cap to 2000 chars so the column stays bounded while retaining the oldest summarized facts.
-  return raw.length > 2000 ? `${raw.slice(0, 1997)}...` : raw;
-}
+class ReminderTurnStopped extends Error {}

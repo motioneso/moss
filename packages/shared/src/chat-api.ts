@@ -264,7 +264,20 @@ export interface ChatClassifierGateOriginV1 {
   readonly outcome: "executed-success" | "executed-failure-or-unknown";
 }
 
-export type ChatTurnOriginV1 = ChatClassifierGateOriginV1;
+/**
+ * #3309 — a turn written by code for a relative reminder: the saved or refused request, or the
+ * delivered reminder itself. No model ran, so there is no executed provider or usage.
+ */
+export interface ChatReminderOriginV1 {
+  readonly version: 1;
+  readonly kind: "reminder";
+  readonly event: "saved" | "refused" | "delivered";
+  readonly reminderId: string | null;
+  /** Set on delivery: true when the reminder arrived more than a minute after it was due. */
+  readonly late?: boolean;
+}
+
+export type ChatTurnOriginV1 = ChatClassifierGateOriginV1 | ChatReminderOriginV1;
 
 export type MemoryCorrectionReasonDto = "rejected" | "corrected";
 export type MemoryCorrectionSourceDto = "chat" | "pattern-reject";

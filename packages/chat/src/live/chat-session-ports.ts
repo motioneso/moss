@@ -10,6 +10,7 @@ import type {
   AnswerProvenanceMetadataV1,
   ChatAttachmentDto,
   ChatSurface,
+  ChatClassifierGateOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
   SourceFreshnessV1
@@ -23,12 +24,16 @@ import type { NotesContextRetriever } from "./notes-retrieval.js";
 import type { PersonaFs } from "./persona.js";
 import type { AcpPermissionDecider } from "@moss/acp";
 import type { ClassifierGateRunner } from "./classifier-gate-runner.js";
+import type { ReminderTurnPlan } from "../reminders/turn.js";
 import type {
   ActionResultMetadata,
   CliChatEngine,
   EngineKillOpts,
   TranscriptRecord
 } from "./types.js";
+
+/** `no_route`: no configured model can summarize, so the conversation cannot be condensed. */
+export type ConversationSummaryRequestStatus = "queued" | "skipped" | "no_route";
 
 export interface PrivateThreadState {
   readonly actorUserId: string;
@@ -47,7 +52,7 @@ export interface ChatPersistencePort {
     acpAgentId?: string | null;
     acpModel?: string;
   }>;
-  /** Prior stored turns split into recent verbatim turns + older rolling summary. */
+  /** The accepted summary plus every stored turn after its covered frontier. */
   listPriorTurns(
     actorUserId: string,
     opts?: { readonly forceReplay?: boolean; readonly threadId?: string | null },
@@ -56,6 +61,15 @@ export interface ChatPersistencePort {
     recent: readonly { role: "user" | "assistant"; content: string }[];
     oldSummary: string | null;
   }>;
+  /**
+   * Ask for the bound conversation's older turns to be condensed into its summary.
+   * Best-effort; the caller never waits on the summary itself.
+   */
+  requestConversationSummary?(
+    actorUserId: string,
+    binding: { readonly threadId?: string | null },
+    surface?: ChatSurface
+  ): Promise<ConversationSummaryRequestStatus | void>;
   /** Persist a completed turn (user text + assistant reply + executing provider/model). */
   recordTurn(
     actorUserId: string,
@@ -92,7 +106,7 @@ export interface ChatPersistencePort {
     actorUserId: string,
     userText: string,
     assistantReply: string,
-    origin: ChatTurnOriginV1,
+    origin: ChatClassifierGateOriginV1,
     opts?: HandledTurnOptions,
     surface?: ChatSurface
   ): Promise<
@@ -101,6 +115,26 @@ export interface ChatPersistencePort {
         readonly assistantMessageId: string;
         readonly sourceFreshness?: SourceFreshnessV1 | null;
       }
+    | undefined
+  >;
+  /**
+   * #3309 — persist the code-written answer to a recognised reminder request, saving and queuing
+   * an accepted reminder in the same transaction. Optional: embedders without reminders omit it.
+   */
+  recordReminderTurn?(
+    actorUserId: string,
+    userText: string,
+    plan: ReminderTurnPlan,
+    opts?: ReminderTurnOptions,
+    surface?: ChatSurface
+  ): Promise<
+    | {
+        readonly userMessageId: string;
+        readonly assistantMessageId: string;
+        readonly reply: string;
+        readonly origin: ChatTurnOriginV1;
+      }
+    | "stopped"
     | undefined
   >;
   /** Close the current conversation and open a fresh one (for /clear). */
@@ -181,6 +215,11 @@ export interface HandledTurnOptions {
   readonly attachments?: readonly ChatAttachmentDto[];
   readonly actionResults?: readonly ActionResultMetadata[];
   readonly activityRecords?: readonly TranscriptRecord[];
+}
+
+/** A stop that lands before the reminder turn commits rolls the whole turn back. */
+export interface ReminderTurnOptions extends HandledTurnOptions {
+  readonly stopSignal?: AbortSignal;
 }
 
 export interface ChatSessionManagerDeps {

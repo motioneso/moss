@@ -70,7 +70,7 @@ import type {
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
-import { tryGatedTurn } from "./classifier-gate-lifecycle.js";
+import { tryPreModelTurn } from "./pre-model-turn.js";
 import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 import {
   routeOriginRecord,
@@ -307,7 +307,7 @@ export class ChatSessionManager {
         result: gated,
         requestIncognito,
         requestThreadId
-      } = await tryGatedTurn(
+      } = await tryPreModelTurn(
         this.lifecycleHost,
         actorUserId,
         surface,

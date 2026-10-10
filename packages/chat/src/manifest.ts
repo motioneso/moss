@@ -67,7 +67,10 @@ export const chatModuleManifest = {
       "sql/0291_chat_conversation_provenance.sql",
       "sql/0293_chat_automatic_action_reservations.sql",
       "sql/0297_chat_action_history_permissions.sql",
-      "sql/0299_main_chat.sql"
+      "sql/0299_main_chat.sql",
+      "sql/0305_chat_summary_frontier.sql",
+      "sql/0306_chat_relative_reminders.sql",
+      "sql/0307_chat_summary_worker_publish.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -121,6 +124,49 @@ export const chatModuleManifest = {
       description:
         "Reopening Moss returns to your stable Main chat and saved history. The composer waits while Main is restored, " +
         "and the next turn waits for an active conversation resume to finish. Explicit new and private chats keep their selection.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.resume_keeps_decisions",
+      description:
+        "Returning to the same chat after Moss restarts keeps earlier decisions. Older turns are condensed into a summary " +
+        "in the background, and the summary plus every newer turn is restored. Private chats are never condensed.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "conversation_too_long_to_resume",
+          class: "transient",
+          description:
+            "The conversation is too long to restore in full, so Moss is condensing it. Your history is kept. Try again shortly or start a new chat."
+        },
+        {
+          code: "conversation_could_not_condense",
+          class: "transient",
+          description:
+            "The conversation is too long to restore in full and Moss could not start condensing it. Your history is kept. Try again later or start a new chat."
+        },
+        {
+          code: "conversation_needs_summary_model",
+          class: "prerequisite",
+          remediationRef: "chat.add_summary_model",
+          description:
+            "The conversation is too long to restore in full and no AI model that can summarize is set up. Add one in Settings or start a new chat."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.add_summary_model",
+          description:
+            "Set up a model in Settings, AI providers, or ask an admin, then reopen the chat. Starting a new chat also works.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
+    },
+    {
+      id: "chat.relative_reminders",
+      description:
+        "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder that Moss posts once in Main, " +
+        "noting if late. Up to 20 at once, 30 days ahead. No clock times, repeats or private chats.",
       featureFlagId: "chat.module"
     },
     {

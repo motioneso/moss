@@ -8,13 +8,12 @@
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { AiRepository } from "@moss/ai";
 import { ChatRepository } from "@moss/chat";
 import { DataContextChatPersistence } from "../../packages/chat/src/live/persistence.js";
-import { DEFAULT_REPLAY_MESSAGES } from "../../packages/chat/src/live/replay-window.js";
 import {
   estimateTokens,
   trimToTokenBudget,
@@ -104,9 +103,9 @@ describe("trimToTokenBudget", () => {
   });
 });
 
-// ─── Task 3: ChatRepository.updateConversationSummary ─────────────────────────
+// ─── #3156: ChatRepository.publishConversationSummary ─────────────────────────
 
-describe("ChatRepository.updateConversationSummary", () => {
+describe("ChatRepository.publishConversationSummary", () => {
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
   let repository: ChatRepository;
@@ -117,32 +116,304 @@ describe("ChatRepository.updateConversationSummary", () => {
     repository = new ChatRepository();
   });
 
-  it("stores a summary on a thread and is readable back", async () => {
-    const thread = await dataContext.withDataContext(userAContext(), (scopedDb) =>
-      repository.openNewThread(scopedDb, { title: "summary test" })
+  async function seededThread(title: string, incognito = false) {
+    return dataContext.withDataContext(userAContext(), async (db) => {
+      const thread = await repository.openNewThread(db, { title, incognito });
+      await repository.recordCompletedTurn(db, thread.id, "q1", "a1", {
+        provider: "anthropic",
+        model: "x"
+      });
+      await repository.recordCompletedTurn(db, thread.id, "q2", "a2", {
+        provider: "anthropic",
+        model: "x"
+      });
+      const messages = await repository.listMessages(db, thread.id);
+      const fresh = await repository.getOwnedThreadById(db, ids.userA, thread.id);
+      return { thread: fresh!, messageIds: messages.map((m) => m.id) };
+    });
+  }
+
+  const readThread = (threadId: string) =>
+    dataContext.withDataContext(userAContext(), (db) =>
+      repository.getOwnedThreadById(db, ids.userA, threadId)
     );
 
-    await dataContext.withDataContext(userAContext(), (scopedDb) =>
-      repository.updateConversationSummary(scopedDb, thread.id, "As of turn 2: I helped with X.")
-    );
-
-    const updated = await dataContext.withDataContext(userAContext(), (scopedDb) =>
-      repository.getThreadById(scopedDb, thread.id)
-    );
-    expect(updated?.conversation_summary).toBe("As of turn 2: I helped with X.");
-  });
-
-  it("conversation_summary is null on a freshly-created thread", async () => {
+  it("starts a fresh thread with no summary, no frontier and revision 0", async () => {
     const thread = await dataContext.withDataContext(userAContext(), (scopedDb) =>
       repository.openNewThread(scopedDb, { title: "fresh thread" })
     );
     expect(thread.conversation_summary).toBeNull();
+    expect(thread.summary_covered_through_message_id).toBeNull();
+    expect(thread.summary_revision).toBe(0);
+  });
+
+  it("publishes a matching candidate, advances the revision and never touches activity", async () => {
+    const { thread, messageIds } = await seededThread("publish ok");
+    const result = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.publishConversationSummary(db, {
+        threadId: thread.id,
+        expectedRevision: 0,
+        expectedCoveredThroughMessageId: null,
+        throughMessageId: messageIds[1]!,
+        summary: "Decided: blue"
+      })
+    );
+    expect(result).toBe("published");
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBe("Decided: blue");
+    expect(after?.summary_covered_through_message_id).toBe(messageIds[1]);
+    expect(after?.summary_revision).toBe(1);
+    expect(after?.last_active_at).toEqual(thread.last_active_at);
+  });
+
+  it("publishes from the worker role, which is how the summary job runs", async () => {
+    const { thread, messageIds } = await seededThread("publish as worker");
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      const result = await new DataContextRunner(workerDb).withDataContext(userAContext(), (db) =>
+        repository.publishConversationSummary(db, {
+          threadId: thread.id,
+          expectedRevision: 0,
+          expectedCoveredThroughMessageId: null,
+          throughMessageId: messageIds[1]!,
+          summary: "Decided: cedar"
+        })
+      );
+      expect(result).toBe("published");
+    } finally {
+      await workerDb.destroy();
+    }
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBe("Decided: cedar");
+    expect(after?.summary_revision).toBe(1);
+  });
+
+  it("never lets the worker publish into another owner's thread", async () => {
+    const { thread, messageIds } = await seededThread("worker other owner");
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      const result = await new DataContextRunner(workerDb).withDataContext(
+        { actorUserId: ids.userB, requestId: "test" },
+        (db) =>
+          repository.publishConversationSummary(db, {
+            threadId: thread.id,
+            expectedRevision: 0,
+            expectedCoveredThroughMessageId: null,
+            throughMessageId: messageIds[1]!,
+            summary: "stolen"
+          })
+      );
+      expect(result).toBe("missing");
+    } finally {
+      await workerDb.destroy();
+    }
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBeNull();
+    expect(after?.summary_revision).toBe(0);
+  });
+
+  it("lets the worker see a shared thread but never write its summary for the grantee", async () => {
+    const { thread } = await seededThread("worker shared grantee");
+    await dataContext.withDataContext(userAContext(), (db) =>
+      sql`INSERT INTO app.shares (resource_type, resource_id, owner_user_id, grantee_user_id, level)
+      VALUES ('chat_thread', ${thread.id}::uuid, ${ids.userA}::uuid, ${ids.userB}::uuid, 'manage')`.execute(
+        db.db
+      )
+    );
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      const { visible, updated } = await new DataContextRunner(workerDb).withDataContext(
+        { actorUserId: ids.userB, requestId: "test" },
+        async (db) => {
+          const visible = await db.db
+            .selectFrom("app.chat_threads")
+            .select("id")
+            .where("id", "=", thread.id)
+            .execute();
+          const updated = await db.db
+            .updateTable("app.chat_threads")
+            .set({ conversation_summary: "stolen", summary_revision: 9 })
+            .where("id", "=", thread.id)
+            .returning("id")
+            .execute();
+          return { visible, updated };
+        }
+      );
+      expect(visible).toHaveLength(1);
+      expect(updated).toHaveLength(0);
+    } finally {
+      await workerDb.destroy();
+    }
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBeNull();
+    expect(after?.summary_revision).toBe(0);
+  });
+
+  it("never lets the worker change any thread column outside the summary", async () => {
+    const { thread } = await seededThread("worker column limit");
+    const workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 1
+    });
+    try {
+      await expect(
+        new DataContextRunner(workerDb).withDataContext(userAContext(), (db) =>
+          db.db
+            .updateTable("app.chat_threads")
+            .set({ title: "renamed by worker" })
+            .where("id", "=", thread.id)
+            .execute()
+        )
+      ).rejects.toThrow(/permission denied/);
+    } finally {
+      await workerDb.destroy();
+    }
+    const after = await readThread(thread.id);
+    expect(after?.title).toBe("worker column limit");
+  });
+
+  it("refuses a candidate prepared against an older revision", async () => {
+    const { thread, messageIds } = await seededThread("stale revision");
+    const publish = (
+      expectedRevision: number,
+      expectedFrontier: string | null,
+      through: string,
+      summary: string
+    ) =>
+      dataContext.withDataContext(userAContext(), (db) =>
+        repository.publishConversationSummary(db, {
+          threadId: thread.id,
+          expectedRevision,
+          expectedCoveredThroughMessageId: expectedFrontier,
+          throughMessageId: through,
+          summary
+        })
+      );
+    expect(await publish(0, null, messageIds[1]!, "first")).toBe("published");
+    // Frontier matches the live row; only the revision is behind.
+    expect(await publish(0, messageIds[1]!, messageIds[3]!, "late loser")).toBe("stale");
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBe("first");
+    expect(after?.summary_revision).toBe(1);
+  });
+
+  it("refuses a candidate whose expected frontier no longer matches", async () => {
+    const { thread, messageIds } = await seededThread("stale frontier");
+    await dataContext.withDataContext(userAContext(), (db) =>
+      repository.publishConversationSummary(db, {
+        threadId: thread.id,
+        expectedRevision: 0,
+        expectedCoveredThroughMessageId: null,
+        throughMessageId: messageIds[1]!,
+        summary: "first"
+      })
+    );
+    const result = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.publishConversationSummary(db, {
+        threadId: thread.id,
+        expectedRevision: 1,
+        expectedCoveredThroughMessageId: messageIds[0]!,
+        throughMessageId: messageIds[3]!,
+        summary: "wrong base"
+      })
+    );
+    expect(result).toBe("stale");
+    expect((await readThread(thread.id))?.conversation_summary).toBe("first");
+  });
+
+  it("refuses a frontier that does not move past the current one", async () => {
+    const { thread, messageIds } = await seededThread("frontier regress");
+    const publish = (through: string, summary: string) =>
+      dataContext.withDataContext(userAContext(), (db) =>
+        repository.publishConversationSummary(db, {
+          threadId: thread.id,
+          expectedRevision: 1,
+          expectedCoveredThroughMessageId: messageIds[1]!,
+          throughMessageId: through,
+          summary
+        })
+      );
+    await dataContext.withDataContext(userAContext(), (db) =>
+      repository.publishConversationSummary(db, {
+        threadId: thread.id,
+        expectedRevision: 0,
+        expectedCoveredThroughMessageId: null,
+        throughMessageId: messageIds[1]!,
+        summary: "first"
+      })
+    );
+    expect(await publish(messageIds[0]!, "backwards")).toBe("stale");
+    expect(await publish(messageIds[1]!, "same frontier")).toBe("stale");
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBe("first");
+    expect(after?.summary_covered_through_message_id).toBe(messageIds[1]);
+    expect(after?.summary_revision).toBe(1);
+    expect(await publish(messageIds[3]!, "forward")).toBe("published");
+  });
+
+  it("refuses a frontier that belongs to another thread", async () => {
+    const target = await seededThread("frontier target");
+    const other = await seededThread("frontier other");
+    const result = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.publishConversationSummary(db, {
+        threadId: target.thread.id,
+        expectedRevision: 0,
+        expectedCoveredThroughMessageId: null,
+        throughMessageId: other.messageIds[1]!,
+        summary: "cross-thread"
+      })
+    );
+    expect(result).toBe("stale");
+    expect((await readThread(target.thread.id))?.summary_revision).toBe(0);
+  });
+
+  it("never publishes into another owner's thread", async () => {
+    const { thread, messageIds } = await seededThread("foreign owner");
+    const result = await dataContext.withDataContext(
+      { actorUserId: ids.userB, requestId: "foreign" },
+      (db) =>
+        repository.publishConversationSummary(db, {
+          threadId: thread.id,
+          expectedRevision: 0,
+          expectedCoveredThroughMessageId: null,
+          throughMessageId: messageIds[1]!,
+          summary: "intruder"
+        })
+    );
+    expect(result).toBe("missing");
+    const after = await readThread(thread.id);
+    expect(after?.conversation_summary).toBeNull();
+    expect(after?.summary_revision).toBe(0);
+  });
+
+  it("never publishes into a private conversation", async () => {
+    const { thread, messageIds } = await seededThread("private", true);
+    const result = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.publishConversationSummary(db, {
+        threadId: thread.id,
+        expectedRevision: 0,
+        expectedCoveredThroughMessageId: null,
+        throughMessageId: messageIds[1]!,
+        summary: "private leak"
+      })
+    );
+    expect(result).toBe("missing");
+    expect((await readThread(thread.id))?.conversation_summary).toBeNull();
   });
 });
 
-// ─── Task 4: DataContextChatPersistence listPriorTurns + recordTurn ───────────
+// ─── Task 4: DataContextChatPersistence listPriorTurns ────────────────────────
 
-describe("DataContextChatPersistence.listPriorTurns bounded replay", () => {
+describe("DataContextChatPersistence.listPriorTurns replay", () => {
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
   let chatRepo: ChatRepository;
@@ -157,83 +428,53 @@ describe("DataContextChatPersistence.listPriorTurns bounded replay", () => {
       chatRepository: chatRepo,
       aiRepository: new AiRepository()
     });
-    // Create the thread for userB so tests can seed messages independently.
-    await dataContext.withDataContext(
-      { actorUserId: ids.userB, requestId: "test-setup" },
-      (scopedDb) => chatRepo.openNewThread(scopedDb, { title: "replay test" })
-    );
   });
 
-  it("returns all turns by default when under the replay window (unset K -> DEFAULT_REPLAY_MESSAGES)", async () => {
-    const ctx = { actorUserId: ids.userB, requestId: "t" };
+  async function threadWithTurns(actorUserId: string, title: string, count: number) {
+    const ctx = { actorUserId, requestId: "t" };
     const thread = await dataContext.withDataContext(ctx, (db) =>
-      chatRepo.getCurrentThread(db, ids.userB)
+      chatRepo.openNewThread(db, { title })
     );
-    await dataContext.withDataContext(ctx, (db) =>
-      chatRepo.recordCompletedTurn(db, thread!.id, "q1", "a1", {
-        provider: "anthropic",
-        model: "x"
-      })
+    for (let i = 1; i <= count; i++) {
+      await dataContext.withDataContext(ctx, (db) =>
+        chatRepo.recordCompletedTurn(db, thread.id, `q${i}`, `a${i}`, {
+          provider: "anthropic",
+          model: "x"
+        })
+      );
+    }
+    const messages = await dataContext.withDataContext(ctx, (db) =>
+      chatRepo.listMessages(db, thread.id)
     );
-    await dataContext.withDataContext(ctx, (db) =>
-      chatRepo.recordCompletedTurn(db, thread!.id, "q2", "a2", {
-        provider: "anthropic",
-        model: "x"
-      })
-    );
+    return { thread, ctx, messageIds: messages.map((m) => m.id) };
+  }
 
+  it("replays every stored turn when no summary has been accepted", async () => {
+    await threadWithTurns(ids.userB, "no summary", 2);
     const result = await persistence.listPriorTurns(ids.userB);
     expect(result.oldSummary).toBeNull();
-    expect(result.recent.length).toBeGreaterThanOrEqual(4);
-    expect(result.recent.some((t) => t.content === "q1")).toBe(true);
+    expect(result.recent.map((t) => t.content)).toEqual(["q1", "a1", "q2", "a2"]);
   });
 
-  it("returns prior turns when replay K is explicitly overridden", async () => {
-    const origK = process.env.JARVIS_CHAT_REPLAY_K;
-    process.env.JARVIS_CHAT_REPLAY_K = "10";
-    try {
-      const result = await persistence.listPriorTurns(ids.userB);
-      expect(result.oldSummary).toBeNull();
-      expect(result.recent.length).toBeGreaterThanOrEqual(4);
-      expect(result.recent.some((t) => t.content === "q1")).toBe(true);
-    } finally {
-      if (origK === undefined) {
-        delete process.env.JARVIS_CHAT_REPLAY_K;
-      } else {
-        process.env.JARVIS_CHAT_REPLAY_K = origK;
-      }
-    }
-  });
-
-  it("read path: recent is capped by K, oldSummary comes only from the stored column (D3)", async () => {
-    // Fresh thread for userA so this test's turns are isolated.
+  it("replays the accepted summary plus every turn after its frontier, with no gap", async () => {
     const origK = process.env.JARVIS_CHAT_REPLAY_K;
     process.env.JARVIS_CHAT_REPLAY_K = "2";
     try {
-      const ctx = { actorUserId: ids.userA, requestId: "t" };
-      const thread = await dataContext.withDataContext(ctx, (db) =>
-        chatRepo.openNewThread(db, { title: "k-split test" })
-      );
-      // Record 3 turns = 6 messages. With K=2, only last 2 messages are recent.
-      for (let i = 1; i <= 3; i++) {
-        await dataContext.withDataContext(ctx, (db) =>
-          chatRepo.recordCompletedTurn(db, thread.id, `q${i}`, `a${i}`, {
-            provider: "anthropic",
-            model: "x"
-          })
-        );
-      }
-      // D3: oldSummary is read only from the stored `conversation_summary`
-      // column, never synthesized lazily at read time — write it directly
-      // (the write path itself is covered by the "rolling summary" describe
-      // block below).
+      const { thread, ctx, messageIds } = await threadWithTurns(ids.userA, "frontier split", 3);
       await dataContext.withDataContext(ctx, (db) =>
-        chatRepo.updateConversationSummary(db, thread.id, "As of turn 1: a1 happened.")
+        chatRepo.publishConversationSummary(db, {
+          threadId: thread.id,
+          expectedRevision: 0,
+          expectedCoveredThroughMessageId: null,
+          throughMessageId: messageIds[1]!,
+          summary: "Turn 1 settled on blue."
+        })
       );
 
       const result = await persistence.listPriorTurns(ids.userA);
-      expect(result.recent).toHaveLength(2);
-      expect(result.oldSummary).toBe("As of turn 1: a1 happened.");
+      expect(result.oldSummary).toBe("Turn 1 settled on blue.");
+      // K no longer truncates: every uncovered turn replays.
+      expect(result.recent.map((t) => t.content)).toEqual(["q2", "a2", "q3", "a3"]);
     } finally {
       if (origK === undefined) {
         delete process.env.JARVIS_CHAT_REPLAY_K;
@@ -243,143 +484,47 @@ describe("DataContextChatPersistence.listPriorTurns bounded replay", () => {
     }
   });
 
-  it("T2-b: read path never synthesizes a summary, even with plenty of old turns beyond the window", async () => {
-    const ctx = { actorUserId: ids.userA, requestId: "t" };
-    const thread = await dataContext.withDataContext(ctx, (db) =>
-      chatRepo.openNewThread(db, { title: "no-synthesis test" })
-    );
-    // Seed well past DEFAULT_REPLAY_MESSAGES via the repository directly (not
-    // persistence.recordTurn), so the conversation_summary column stays null —
-    // there is plenty of "old" history a read-time synthesizer could summarize.
-    for (let i = 1; i <= 25; i++) {
-      await dataContext.withDataContext(ctx, (db) =>
-        chatRepo.recordCompletedTurn(db, thread.id, `q${i}`, `a${i}`, {
-          provider: "anthropic",
-          model: "x"
-        })
-      );
-    }
-
+  it("never synthesizes a summary on read and never silently drops old turns", async () => {
+    await threadWithTurns(ids.userA, "no-synthesis test", 25);
     const result = await persistence.listPriorTurns(ids.userA);
     expect(result.oldSummary).toBeNull();
+    expect(result.recent).toHaveLength(50);
+    expect(result.recent[0]?.content).toBe("q1");
   });
 
-  it("T2-d: unset K -> forceReplay and plain launch select identical windows (both cap at 40)", async () => {
-    const ctx = { actorUserId: ids.userA, requestId: "t" };
-    const thread = await dataContext.withDataContext(ctx, (db) =>
-      chatRepo.openNewThread(db, { title: "forceReplay collapse test" })
-    );
-    // 25 turns = 50 stored messages, well past DEFAULT_REPLAY_MESSAGES (40).
-    for (let i = 1; i <= 25; i++) {
-      await dataContext.withDataContext(ctx, (db) =>
-        chatRepo.recordCompletedTurn(db, thread.id, `q${i}`, `a${i}`, {
-          provider: "anthropic",
-          model: "x"
-        })
-      );
-    }
-
+  it("forceReplay and plain launch select the same replay", async () => {
+    await threadWithTurns(ids.userA, "forceReplay collapse test", 25);
     const plain = await persistence.listPriorTurns(ids.userA);
     const relaunch = await persistence.listPriorTurns(ids.userA, { forceReplay: true });
-
-    expect(plain.recent).toHaveLength(DEFAULT_REPLAY_MESSAGES);
-    expect(relaunch.recent).toHaveLength(DEFAULT_REPLAY_MESSAGES);
     expect(relaunch.recent).toEqual(plain.recent);
   });
 });
 
-describe("DataContextChatPersistence.recordTurn rolling summary", () => {
-  let appDb: Kysely<MossDatabase>;
-  let dataContext: DataContextRunner;
-  let chatRepo: ChatRepository;
-  let persistence: DataContextChatPersistence;
-
-  beforeAll(async () => {
-    appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
-    dataContext = new DataContextRunner(appDb);
-    chatRepo = new ChatRepository();
-    persistence = new DataContextChatPersistence({
+describe("DataContextChatPersistence.recordTurn summary writes", () => {
+  it("never writes a summary inline; condensing runs only through the summary job", async () => {
+    const appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
+    const dataContext = new DataContextRunner(appDb);
+    const chatRepo = new ChatRepository();
+    const persistence = new DataContextChatPersistence({
       dataContext,
       chatRepository: chatRepo,
       aiRepository: new AiRepository()
     });
-  });
-
-  it("stores conversation_summary on thread after stored turns exceed DEFAULT_REPLAY_MESSAGES (D3 write gate)", async () => {
-    // D3: the write gate is the DEFAULT_REPLAY_MESSAGES constant (40 messages),
-    // not K — set K to something unrelated to prove the write path ignores it.
-    const origK = process.env.JARVIS_CHAT_REPLAY_K;
-    process.env.JARVIS_CHAT_REPLAY_K = "2";
-    try {
-      const ctx = { actorUserId: ids.userA, requestId: "t" };
-      const thread = await dataContext.withDataContext(ctx, (db) =>
-        chatRepo.openNewThread(db, { title: "summary-store test" })
-      );
-      // Drive past the summary's character cap as well as the 40-message write gate.
-      for (let i = 1; i <= 45; i++) {
-        await persistence.recordTurn(ids.userA, `u${i}-${"x".repeat(50)}`, `bot${i}`, {
-          provider: "anthropic",
-          model: "x"
-        });
-      }
-
-      const updated = await dataContext.withDataContext(ctx, (db) =>
-        chatRepo.getThreadById(db, thread.id)
-      );
-      expect(updated?.conversation_summary).not.toBeNull();
-      expect(updated?.conversation_summary).toMatch(/user: u1-/);
-      expect(updated?.conversation_summary).toMatch(/bot1\b/);
-    } finally {
-      if (origK === undefined) {
-        delete process.env.JARVIS_CHAT_REPLAY_K;
-      } else {
-        process.env.JARVIS_CHAT_REPLAY_K = origK;
-      }
+    const ctx = { actorUserId: ids.userA, requestId: "t" };
+    const thread = await dataContext.withDataContext(ctx, (db) =>
+      chatRepo.openNewThread(db, { title: "no inline summary" })
+    );
+    for (let i = 1; i <= 45; i++) {
+      await persistence.recordTurn(ids.userA, `u${i}`, `bot${i}`, {
+        provider: "anthropic",
+        model: "x"
+      });
     }
-  });
-
-  it("T2-a: write gate ignores replay opt-out (K=0) — fires past 40 stored messages, not before", async () => {
-    // D3: the write gate is DEFAULT_REPLAY_MESSAGES, independent of K. Prove it
-    // with the most aggressive opt-out (K=0, meaning "no replay at all") —
-    // summaries must still accrue for long threads regardless.
-    const origK = process.env.JARVIS_CHAT_REPLAY_K;
-    process.env.JARVIS_CHAT_REPLAY_K = "0";
-    try {
-      const ctx = { actorUserId: ids.userA, requestId: "t" };
-      const thread = await dataContext.withDataContext(ctx, (db) =>
-        chatRepo.openNewThread(db, { title: "k-zero write-gate test" })
-      );
-
-      // 15 turns = 30 stored messages: under the 40-message threshold, no write yet.
-      for (let i = 1; i <= 15; i++) {
-        await persistence.recordTurn(ids.userA, `u${i}`, `bot${i}`, {
-          provider: "anthropic",
-          model: "x"
-        });
-      }
-      const beforeGate = await dataContext.withDataContext(ctx, (db) =>
-        chatRepo.getThreadById(db, thread.id)
-      );
-      expect(beforeGate?.conversation_summary).toBeNull();
-
-      // 6 more turns brings stored messages to 42 (> 40): the gate now fires.
-      for (let i = 16; i <= 21; i++) {
-        await persistence.recordTurn(ids.userA, `u${i}`, `bot${i}`, {
-          provider: "anthropic",
-          model: "x"
-        });
-      }
-      const afterGate = await dataContext.withDataContext(ctx, (db) =>
-        chatRepo.getThreadById(db, thread.id)
-      );
-      expect(afterGate?.conversation_summary).not.toBeNull();
-    } finally {
-      if (origK === undefined) {
-        delete process.env.JARVIS_CHAT_REPLAY_K;
-      } else {
-        process.env.JARVIS_CHAT_REPLAY_K = origK;
-      }
-    }
+    const updated = await dataContext.withDataContext(ctx, (db) =>
+      chatRepo.getThreadById(db, thread.id)
+    );
+    expect(updated?.conversation_summary).toBeNull();
+    expect(updated?.summary_revision).toBe(0);
   });
 });
 

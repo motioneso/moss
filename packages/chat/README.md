@@ -38,9 +38,15 @@ pending action requests older than the startup grace window so a restart leaves 
 
 ## Cold-start replay
 
-Live chat defaults `JARVIS_CHAT_REPLAY_K` to `0`. A cold session should not replay prior chat turns
-into the CLI prompt; durable context should come from the database-backed memory and notes tools.
-Set `JARVIS_CHAT_REPLAY_K` only when intentionally testing legacy prompt replay behavior.
+A fresh provider session replays the conversation's accepted summary plus every stored turn the
+summary does not cover. Nothing is dropped silently: if that does not fit the launch budget, the
+launch refuses with an actionable message and queues a summary run.
+
+- `JARVIS_CHAT_REPLAY_K` (default 40): newest uncovered turns kept raw when a summary run is planned.
+  A run starts once more than twice this many turns, or more than the raw token allowance, sit
+  outside the summary.
+- `JARVIS_CHAT_REPLAY_TOKENS` (default 8000): replay budget. Raw turns kept beside a summary stay under half of it,
+  and never more than a launch with a full seed and summary can still fit.
 
 ## Deferred — agent-path PreToolUse policy
 
