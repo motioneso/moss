@@ -488,6 +488,8 @@ describe("rollback-only provenance negative controls", () => {
 
 // The handler is a no-provider sentinel. Provenance lookups, action rows, ownership and
 // confirmation use the real SQL-backed production classes in the isolated CI database.
+// The sentinel is an owned connected tool that sends data out, so YOLO and trusted-auto run it
+// only in a clean conversation (#3338).
 function boundGateway(
   actorUserId: string,
   threadId: string | null,
@@ -516,9 +518,10 @@ function boundGateway(
         ...fixtureApproval("Record local sentinel write", "Provenance test sentinel"),
         description: "Local sentinel write",
         permissionId: "provenance-test.write",
-        risk: "write",
+        risk: "outbound",
         content: "user_authored",
-        isExternal: false,
+        isExternal: true,
+        descriptorOwnerUserId: actorUserId,
         executionPolicy: "auto",
         actionFamilyId: family.id,
         inputSchema: { type: "object", properties: {} },

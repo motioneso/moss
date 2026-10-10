@@ -541,7 +541,8 @@ describe("app actions through the real gateway and app routes", () => {
   });
 
   it("reading other-thread turns taints app writes, outbound GETs and dedicated writes", async () => {
-    const h = gateway({ yoloMode: true, autoApprove: false });
+    // YOLO would run the writes in a tainted thread (#3338), so leave the user's trust off.
+    const h = gateway({ yoloMode: false, autoApprove: false });
     const threadId = threadByActor.get(ids.userA)!;
     const other = await runner.withDataContext(access, async (db) => {
       const repository = new ChatRepository();
