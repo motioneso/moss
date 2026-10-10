@@ -708,7 +708,7 @@ tests/unit/onboarding-provider-connect-step.test.tsx,C1,reserved,,Reserved exist
 tests/unit/onboarding-skip-confirm.test.tsx,C1,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/park-press-integration.design.test.ts,I0,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
 tests/unit/park-press-shell-integration.design.test.tsx,I0,registered-new,,Host trigger/real navigation shared lifecycle integration regression
-tests/unit/plan-approval-card.test.tsx,C5,reserved,,"Exact registration; Finance metadata only, preserve current version and active branch version delta"
+tests/unit/plan-approval-card.test.tsx,C5,reserved,,Existing approval-card regression test assigned before edit
 tests/unit/planning-calendar-design.test.tsx,P2,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
 tests/unit/planning-settings-design.test.tsx,P4,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
 tests/unit/planning-tasks-design.test.tsx,P1,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
@@ -782,5 +782,5 @@ tests/unit/wellness-export-modal-contract.test.ts,L3,reserved,,Specific existing
 tests/unit/wellness-export-render.test.ts,L3,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/wellness-manage-meds-modal.test.tsx,L3,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/wellness-med-builder-form.test.ts,L3,reserved,,Specific existing UI tests delegated by domain owner
-tests/unit/workflow-approval-card.test.tsx,C5,reserved,,"Exact registration; Finance metadata only, preserve current version and active branch version delta"
+tests/unit/workflow-approval-card.test.tsx,C5,reserved,,Existing approval-card regression test assigned before edit
 tests/unit/workshop-project-pages.test.tsx,P3,reserved,,Exact planning report ownership
