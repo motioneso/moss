@@ -26,6 +26,7 @@
 .jds-section-head__title {
   margin: 0;
   font-family: var(--font-display);
+  font-weight: var(--weight-bold);
   font-size: 25px; /* Today's head size; --text-2xl is 24px */
   line-height: 1.18;
   letter-spacing: -0.7px;
@@ -77,4 +78,11 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-regular);
   letter-spacing: normal;
+}
+
+/* A selected chip keeps the canonical active treatment after its flat base rule. */
+.jds-btn--chip.jds-btn--active {
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+  border-color: var(--accent-soft-fg);
 }
