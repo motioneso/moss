@@ -4,6 +4,7 @@ import { readScopedActorUserId, type ActivityFactCounts, type DataContextDb } fr
 import {
   CLOUDFLARE_DECISION_MODELS,
   decisionModelDialect,
+  FOCUS_IMAGE_MAX_CHARS,
   type DecisionModelDialect
 } from "@moss/shared";
 import type { ModuleServiceKey } from "@moss/shared";
@@ -54,7 +55,15 @@ export type GenerateChoicesInput = {
     readonly provider_config_id: string;
     readonly provider_kind: string;
     readonly provider_model_id: string;
+    /** Needed only with `image`: a model without `vision` never receives one. */
+    readonly capabilities?: readonly string[];
   };
+  /**
+   * #3067: one picture, as a data URL, sent beside `state` rather than inside it. Only a model
+   * that takes images (see `choiceModelTakesImages`) receives it; any other answers
+   * `not_supported` without a request. Never logged or recorded; the activity line counts it.
+   */
+  readonly image?: string;
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
 };
@@ -95,6 +104,28 @@ const GENERATE_CHOICES_DEFAULT_TIMEOUT_MS = 20_000;
 /** S3: System One rejects oversize bodies; refuse locally rather than send the state to the provider. */
 const GENERATE_CHOICES_MAX_REQUEST_BYTES = 12_000;
 const PROBABILITY_SUM_TOLERANCE = 0.02;
+
+/**
+ * #3067: whether a choice model can be sent a picture. Only Clef, on Cloudflare's dialect, with
+ * the `vision` capability on its row. The standard dialect never receives `images` until a
+ * service there is proven live. Shared with the focus context so the Mac is offered the picture
+ * source exactly when this call would accept one.
+ */
+export function choiceModelTakesImages(
+  model: {
+    readonly provider_kind: string;
+    readonly provider_model_id: string;
+    readonly capabilities?: readonly string[];
+  },
+  providerBaseUrl: string | null
+): boolean {
+  return (
+    model.provider_kind === SYSTEM_ONE_PROVIDER_KIND &&
+    decisionModelDialect(providerBaseUrl ?? SYSTEM_ONE_DEFAULT_BASE_URL) === "cloudflare" &&
+    isCloudflareDecisionModel(model.provider_model_id) &&
+    (model.capabilities?.includes("vision") ?? false)
+  );
+}
 
 export async function generateChoices(
   scopedDb: DataContextDb,
@@ -238,6 +269,8 @@ export type SystemOneActivity = {
   readonly turnId?: string;
   readonly parentId?: string;
   readonly actionCode: string;
+  /** #3067: how many pictures the call carried; absent when none. A count, never the picture. */
+  readonly images?: number;
 };
 
 async function systemOneActivity(
@@ -249,7 +282,8 @@ async function systemOneActivity(
     actionCode: input.activity?.actionCode ?? modelActivityStructuredCode(input.service),
     ...(scopedOwner ? { ownerUserId: scopedOwner } : {}),
     ...(input.activity?.turnId ? { turnId: input.activity.turnId } : {}),
-    ...(input.activity?.parentId ? { parentId: input.activity.parentId } : {})
+    ...(input.activity?.parentId ? { parentId: input.activity.parentId } : {}),
+    ...(input.image !== undefined ? { images: 1 } : {})
   };
 }
 
@@ -299,15 +333,32 @@ async function postSystemOne(
     return { ok: false, error: "needs_config" };
   }
 
+  // #3067: a picture goes only to a model that takes one. Anything else is refused here, before
+  // the body is built, so the picture never reaches a provider that would not accept it.
+  if (input.image !== undefined && !choiceModelTakesImages(model, provider.base_url)) {
+    return { ok: false, error: "not_supported" };
+  }
+
+  // The text cap covers state and questions only. A picture has its own cap below, so a request
+  // that carries one is not refused for the picture's size against the text limit.
   const body = { model: model.provider_model_id, state: input.state, questions };
-  const serializedBody = JSON.stringify(body);
-  if (Buffer.byteLength(serializedBody, "utf8") > GENERATE_CHOICES_MAX_REQUEST_BYTES) {
+  const textBody = JSON.stringify(body);
+  if (Buffer.byteLength(textBody, "utf8") > GENERATE_CHOICES_MAX_REQUEST_BYTES) {
     deps.logger?.warn(
       { service: input.service, code: "request_too_large" },
       `${logPrefix} request rejected`
     );
     return { ok: false, error: "provider_error" };
   }
+  if (input.image !== undefined && input.image.length > FOCUS_IMAGE_MAX_CHARS) {
+    deps.logger?.warn(
+      { service: input.service, code: "image_too_large" },
+      `${logPrefix} request rejected`
+    );
+    return { ok: false, error: "provider_error" };
+  }
+  const serializedBody =
+    input.image === undefined ? textBody : JSON.stringify({ ...body, images: [input.image] });
 
   const baseUrl = (provider.base_url ?? SYSTEM_ONE_DEFAULT_BASE_URL).replace(/\/+$/, "");
   const dialect = decisionModelDialect(baseUrl);
@@ -413,6 +464,10 @@ export function recordSystemOneActivity(
     readonly failureCode?: ModelActivityFailureCode;
   }
 ): void {
+  const factCounts =
+    activity.images !== undefined
+      ? { ...activity.factCounts, images: activity.images }
+      : activity.factCounts;
   recordModelActivity({
     kind: "structured",
     action: "choices",
@@ -426,7 +481,7 @@ export function recordSystemOneActivity(
     ...(activity.durationMs !== undefined ? { durationMs: activity.durationMs } : {}),
     ...(activity.inputTokens !== undefined ? { inputTokens: activity.inputTokens } : {}),
     ...(activity.outputTokens !== undefined ? { outputTokens: activity.outputTokens } : {}),
-    ...(activity.factCounts ? { factCounts: activity.factCounts } : {}),
+    ...(factCounts ? { factCounts } : {}),
     ...(activity.failureCode ? { failureCode: activity.failureCode } : {})
   });
 }

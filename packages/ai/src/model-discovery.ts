@@ -153,12 +153,13 @@ async function fetchApiKeyModels(input: ModelDiscoveryInput): Promise<{
   if (!apiKey) return { models: [] };
 
   // #3057: Cloudflare's decision-model endpoint has no models list. Its preset is the fixed Clef
-  // family, so discovery answers from the catalog with no network call.
+  // family, so discovery answers from the catalog with no network call. #3067: Clef also reads a
+  // picture beside the questions, so its rows carry `vision`; the standard dialect's do not.
   if (input.providerKind === "system-one" && decisionModelDialect(input.baseUrl) === "cloudflare") {
     return {
-      models: CLOUDFLARE_DECISION_MODELS.map((id) => inferModel(id, "system-one")).filter(
-        (model): model is AiProviderDiscoveredModelDto => model !== null
-      )
+      models: CLOUDFLARE_DECISION_MODELS.map((id) => inferModel(id, "system-one"))
+        .filter((model): model is AiProviderDiscoveredModelDto => model !== null)
+        .map((model) => ({ ...model, capabilities: [...model.capabilities, "vision"] }))
     };
   }
 

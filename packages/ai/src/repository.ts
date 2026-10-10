@@ -2073,6 +2073,22 @@ export class AiRepository {
   }
 
   /**
+   * #3067: a provider's address, without its credential. The focus context needs it to tell
+   * whether the bound judge speaks a dialect that takes pictures. Undefined when not visible.
+   */
+  async selectProviderBaseUrl(
+    scopedDb: DataContextDb,
+    providerId: string
+  ): Promise<{ readonly base_url: string | null } | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.ai_provider_configs")
+      .select("base_url")
+      .where("id", "=", providerId)
+      .executeTakeFirst();
+  }
+
+  /**
    * Returns the provider config row including the raw encrypted credential for use
    * in the pg-boss worker (credential is decrypted in-process; never logged or forwarded).
    */

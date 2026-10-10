@@ -675,6 +675,7 @@ const CLOUDFLARE_BASE_URL = `https://api.cloudflare.com/client/v4/accounts/${CLO
 function cloudflareDeps(
   overrides: {
     readonly modelId?: string;
+    readonly capabilities?: readonly string[];
     readonly fetch?: typeof fetch;
     readonly logger?: GenerateChoicesDeps["logger"];
   } = {}
@@ -684,7 +685,8 @@ function cloudflareDeps(
       resolveModelForService: vi.fn(async () => ({
         model: {
           ...(model as object),
-          provider_model_id: overrides.modelId ?? "clef-flash"
+          provider_model_id: overrides.modelId ?? "clef-flash",
+          ...(overrides.capabilities ? { capabilities: overrides.capabilities } : {})
         } as never,
         reason: "matched-active-model" as const
       })),
@@ -773,5 +775,206 @@ describe("generateChoices Cloudflare dialect (#3057)", () => {
       error: "provider_error"
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("generateChoices image lane (#3067)", () => {
+  // A distinctive base64 run, so a leak into a log or activity row is unmistakable.
+  const IMAGE = `data:image/jpeg;base64,${"QklOR08".repeat(4)}${"A".repeat(200_000)}`;
+
+  it("sends a Clef model with vision the picture in images, outside state", async () => {
+    const { fetchMock } = okFetch({ success: true, result: validResponse });
+    const deps = cloudflareDeps({
+      capabilities: ["json", "vision"],
+      fetch: fetchMock as unknown as typeof fetch
+    });
+
+    // 11,000 bytes of state plus a 200 KB picture: the text cap counts the state, not the picture.
+    const result = await generateChoices(
+      scopedDb,
+      makeInput({ state: { blob: "x".repeat(11_000) }, image: IMAGE }),
+      deps
+    );
+
+    expect(result.ok).toBe(true);
+    const sent = JSON.parse(fetchMock.mock.calls[0]![1].body as string) as Record<string, unknown>;
+    expect(sent["images"]).toEqual([IMAGE]);
+    expect(JSON.stringify(sent["state"])).not.toContain("QklOR08");
+    expect(Object.keys(sent).sort()).toEqual(["images", "model", "questions", "state"]);
+  });
+
+  it("still refuses oversize state when a picture rides along", async () => {
+    const fetchMock = vi.fn();
+    const deps = cloudflareDeps({
+      capabilities: ["json", "vision"],
+      fetch: fetchMock as unknown as typeof fetch
+    });
+
+    const result = await generateChoices(
+      scopedDb,
+      makeInput({ state: { blob: "x".repeat(13_000) }, image: IMAGE }),
+      deps
+    );
+
+    expect(result).toEqual({ ok: false, error: "provider_error" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a picture over its own cap without a request or the picture in the log", async () => {
+    const fetchMock = vi.fn();
+    const warn = vi.fn();
+    const deps = cloudflareDeps({
+      capabilities: ["json", "vision"],
+      fetch: fetchMock as unknown as typeof fetch,
+      logger: { info: vi.fn(), warn }
+    });
+
+    const result = await generateChoices(
+      scopedDb,
+      makeInput({ image: `data:image/jpeg;base64,${"A".repeat(1_048_576)}` }),
+      deps
+    );
+
+    expect(result).toEqual({ ok: false, error: "provider_error" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      { service: "module.focus-judgment", code: "image_too_large" },
+      "ai.generateChoices request rejected"
+    );
+  });
+
+  it.each([
+    ["Clef without vision", () => cloudflareDeps({ capabilities: ["json"] })],
+    ["Clef with no capabilities on the row", () => cloudflareDeps()],
+    [
+      "the standard dialect, even with vision",
+      () =>
+        makeDeps({
+          repository: {
+            resolveModelForService: vi.fn(async () => ({
+              model: { ...(model as object), capabilities: ["json", "vision"] } as never,
+              reason: "matched-active-model" as const
+            }))
+          }
+        })
+    ],
+    [
+      "a model id outside the Clef list, even on Cloudflare with vision",
+      () => cloudflareDeps({ modelId: "jev-latest", capabilities: ["json", "vision"] })
+    ]
+  ])("answers not_supported for %s, and never sends the picture", async (_name, build) => {
+    const fetchMock = vi.fn();
+    const deps = { ...build(), fetch: fetchMock as unknown as typeof fetch };
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      expect(await generateChoices(scopedDb, makeInput({ image: IMAGE }), deps)).toEqual({
+        ok: false,
+        error: "not_supported"
+      });
+    } finally {
+      installModelActivityRecorder(null);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(entries).toHaveLength(0);
+  });
+
+  it("refuses a picture for an explicit model passed without its capabilities", async () => {
+    const fetchMock = vi.fn();
+    const deps = cloudflareDeps({ fetch: fetchMock as unknown as typeof fetch });
+
+    const result = await generateChoices(
+      scopedDb,
+      makeInput({
+        image: IMAGE,
+        explicitModel: {
+          id: "model-1",
+          provider_config_id: "provider-1",
+          provider_kind: "system-one",
+          provider_model_id: "clef-flash"
+        }
+      }),
+      deps
+    );
+
+    expect(result).toEqual({ ok: false, error: "not_supported" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sends a text-only Clef request byte for byte as before, with vision on the row", async () => {
+    const { fetchMock } = okFetch({ success: true, result: validResponse });
+    await generateChoices(
+      scopedDb,
+      makeInput(),
+      cloudflareDeps({
+        capabilities: ["json", "vision"],
+        fetch: fetchMock as unknown as typeof fetch
+      })
+    );
+
+    expect(fetchMock.mock.calls[0]![1].body).toBe(
+      JSON.stringify({
+        model: "clef-flash",
+        state: { app: "Xcode", title: "Editor" },
+        questions: {
+          alignment: {
+            type: "choice",
+            instructions: "Classify the focus",
+            criteria: {
+              focused: "making progress on the task",
+              necessary_detour: "a necessary side trip",
+              distracted: "off task"
+            }
+          }
+        }
+      })
+    );
+  });
+
+  it("counts the picture on the activity line and never records or logs it", async () => {
+    const entries: ModelActivityEntry[] = [];
+    const info = vi.fn();
+    const warn = vi.fn();
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      const ok = okFetch({ success: true, result: validResponse });
+      await generateChoices(
+        scopedDb,
+        makeInput({ image: IMAGE }),
+        cloudflareDeps({
+          capabilities: ["json", "vision"],
+          fetch: ok.fetchMock as unknown as typeof fetch,
+          logger: { info, warn }
+        })
+      );
+      const failing = vi.fn(async () => jsonResponse(500, {}));
+      await generateChoices(
+        scopedDb,
+        makeInput({ image: IMAGE }),
+        cloudflareDeps({
+          capabilities: ["json", "vision"],
+          fetch: failing as unknown as typeof fetch,
+          logger: { info, warn }
+        })
+      );
+      await generateChoices(
+        scopedDb,
+        makeInput(),
+        cloudflareDeps({
+          capabilities: ["json", "vision"],
+          fetch: okFetch({ success: true, result: validResponse })
+            .fetchMock as unknown as typeof fetch
+        })
+      );
+    } finally {
+      installModelActivityRecorder(null);
+    }
+
+    expect(entries).toHaveLength(3);
+    expect(entries[0]!.factCounts).toEqual({ confidence: 0.8, images: 1 });
+    expect(entries[1]!.factCounts).toEqual({ images: 1 });
+    expect(entries[2]!.factCounts).toEqual({ confidence: 0.8 });
+    const recorded = JSON.stringify([entries, info.mock.calls, warn.mock.calls]);
+    expect(recorded).not.toContain("QklOR08");
   });
 });

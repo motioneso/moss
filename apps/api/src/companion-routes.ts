@@ -31,6 +31,7 @@ import {
   decidePairAttemptRouteSchema,
   focusContextRouteSchema,
   focusCorrectRouteSchema,
+  FOCUS_JUDGE_BODY_LIMIT_BYTES,
   focusJudgeRouteSchema,
   getPairAttemptRouteSchema,
   redeemPairAttemptRouteSchema,
@@ -393,17 +394,29 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
               endsAt: result.block.endsAt.toISOString()
             }
           : null,
-        judgmentReady: result.judgmentReady
+        judgmentReady: result.judgmentReady,
+        judgeTakesImages: result.judgeTakesImages,
+        judgeName: result.judgeName
       };
     }
   );
 
   server.post<{ Body: FocusJudgeRequest }>(
     "/api/companion/focus/judge",
-    { schema: focusJudgeRouteSchema, config: ipRateLimit(FOCUS_JUDGE_RATE_MAX) },
+    {
+      schema: focusJudgeRouteSchema,
+      // #3067: room for one screenshot. Every other companion route keeps the default limit.
+      bodyLimit: FOCUS_JUDGE_BODY_LIMIT_BYTES,
+      config: ipRateLimit(FOCUS_JUDGE_RATE_MAX)
+    },
     async (request, reply) => {
       const ctx = await requireCompanion(request, reply);
       if (!ctx) return reply;
+
+      // A picture replaces the description; the two together would judge two different things.
+      if (request.body.image !== undefined && request.body.description !== undefined) {
+        return reply.code(400).send({ error: "Send a picture or a description, not both" });
+      }
 
       const observedAt = new Date(request.body.observedAt);
       if (Number.isNaN(observedAt.getTime())) {
@@ -421,6 +434,7 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
               appName: request.body.appName,
               windowTitle: request.body.windowTitle,
               description: request.body.description,
+              image: request.body.image,
               observedAt
             },
             new Date(),

@@ -265,6 +265,8 @@ describe("CLI model discovery (#2208)", () => {
       const second = await service.discoverModels("k", input);
       expect(second.reason).toBeUndefined();
       expect(second.models.map((m) => m.providerModelId)).toEqual(["jev-latest"]);
+      // #3067: only Clef reads pictures; a standard-dialect model stays json only.
+      expect(second.models[0]?.capabilities).toEqual(["json"]);
     });
 
     it("sends the key without the spaces or line break a paste leaves on it", async () => {
@@ -316,14 +318,15 @@ describe("Cloudflare decision-model discovery (#3057)", () => {
       {
         providerModelId: "clef",
         displayName: "clef",
-        capabilities: ["json"],
+        // #3067: Clef reads a picture beside its questions.
+        capabilities: ["json", "vision"],
         tier: "economy",
         releasedAt: null
       },
       {
         providerModelId: "clef-flash",
         displayName: "clef-flash",
-        capabilities: ["json"],
+        capabilities: ["json", "vision"],
         tier: "economy",
         releasedAt: null
       }

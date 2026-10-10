@@ -283,6 +283,30 @@ describe("activity history storage (#2956)", () => {
     ).rejects.toThrow(/check|failure_code/i);
   });
 
+  it("accepts the images count a judgment with a picture records (#3067)", async () => {
+    const repository = new AiRepository();
+    const runner = new DataContextRunner(appDb);
+    // Rolled back after the insert so the row counts the other cases assert stay unchanged.
+    const rollback = new Error("rollback");
+    let inserted = false;
+    await expect(
+      runner.withDataContext({ actorUserId: ids.userA }, async (scopedDb) => {
+        await repository.insertModelActivity(scopedDb.db, {
+          kind: "structured",
+          action: "choices",
+          outcome: "ok",
+          modelName: "clef-flash",
+          result: "completed",
+          ownerUserId: ids.userA,
+          factCounts: { confidence: 0.9, images: 1 }
+        });
+        inserted = true;
+        throw rollback;
+      })
+    ).rejects.toBe(rollback);
+    expect(inserted).toBe(true);
+  });
+
   it("refuses a detail row attached to another person's line", async () => {
     const repository = new AiRepository();
     const runner = new DataContextRunner(appDb);

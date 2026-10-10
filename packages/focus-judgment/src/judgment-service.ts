@@ -6,6 +6,7 @@ import { FOCUS_LABELS, FOCUS_REASON_MAX_LENGTH, type FocusLabel } from "@moss/sh
 import {
   buildChoiceState,
   FOCUS_CHOICE_QUESTIONS,
+  focusChoiceQuestionsForImage,
   judgmentFromChoiceAnswers,
   type FocusChoiceAnswer,
   type FocusChoiceQuestion
@@ -49,6 +50,8 @@ export interface FocusChooseInput {
   readonly questions: Readonly<Record<string, FocusChoiceQuestion>>;
   readonly requireExplicitBinding: true;
   readonly signal: AbortSignal;
+  /** #3067: one JPEG data URL, sent beside `state`. Only a model that reads pictures gets it. */
+  readonly image?: string;
 }
 
 /**
@@ -93,12 +96,25 @@ export interface FocusPorts {
    * means the provider cannot; every other failure is final.
    */
   choose?(scopedDb: DataContextDb, input: FocusChooseInput): Promise<FocusChoiceResult>;
+  /**
+   * #3067: the bound judge's name and whether it reads pictures, or null when nothing is bound.
+   * Optional: absent means no judge takes pictures.
+   */
+  describeJudge?(scopedDb: DataContextDb): Promise<FocusJudgeDescription | null>;
   logger: FocusLogger;
+}
+
+export interface FocusJudgeDescription {
+  /** The model and its provider, e.g. "Clef-flash (Cloudflare)". Never a key or an address. */
+  readonly name: string;
+  readonly takesImages: boolean;
 }
 
 export interface FocusContext {
   readonly block: FocusCurrentBlock | null;
   readonly judgmentReady: boolean;
+  readonly judgeTakesImages: boolean;
+  readonly judgeName: string | null;
 }
 
 export interface FocusJudgeInput {
@@ -110,6 +126,8 @@ export interface FocusJudgeInput {
   /** Rung 3 (#2570 slice 2): present only when rung 1 alone answered insufficient_evidence and a
    * capture was allowed and taken. */
   readonly description?: string;
+  /** #3067: one JPEG data URL of the window, instead of `description`. Never stored or logged. */
+  readonly image?: string;
   readonly observedAt: Date;
 }
 
@@ -183,8 +201,16 @@ export function buildFocusJudgmentService(
     async currentContext(scopedDb, now) {
       // No model bound: report "not ready" and read nothing else. A server nobody has configured
       // must answer quietly, never strand a Mac with an error.
-      if (!(await ports.hasJudgeModel(scopedDb))) return { block: null, judgmentReady: false };
-      return { block: await ports.currentBlock(scopedDb, now), judgmentReady: true };
+      if (!(await ports.hasJudgeModel(scopedDb))) {
+        return { block: null, judgmentReady: false, judgeTakesImages: false, judgeName: null };
+      }
+      const judge = (await ports.describeJudge?.(scopedDb)) ?? null;
+      return {
+        block: await ports.currentBlock(scopedDb, now),
+        judgmentReady: true,
+        judgeTakesImages: judge?.takesImages ?? false,
+        judgeName: judge?.name ?? null
+      };
     },
 
     async judge(scopedDb, input, now, signal) {
@@ -195,9 +221,16 @@ export function buildFocusJudgmentService(
       if (!block || block.id !== input.blockId) throw new FocusError("focus_no_block");
 
       let answer: { label: FocusLabel; reason: string } | null = null;
+      // #3067: a picture is judged by the choice path or not at all. It never goes to the prompt
+      // path, and the title is never judged alone in its place: either would answer something
+      // other than what the Mac asked, so the result is insufficient evidence.
+      const image = input.image;
       // Prefer the provider's own choice answers. A provider that cannot serve them falls back to
       // the prompt path; any other failure is final and stored as insufficient evidence.
-      let usePromptPath = ports.choose === undefined;
+      let usePromptPath = ports.choose === undefined && image === undefined;
+      if (image !== undefined && !ports.choose) {
+        ports.logger.warn({ event: "focus.judge_failed", error: "judge_image_not_supported" });
+      }
       if (ports.choose) {
         try {
           const chosen = await ports.choose(scopedDb, {
@@ -206,15 +239,20 @@ export function buildFocusJudgmentService(
               blockTitle: block.title,
               appName: input.appName,
               windowTitle: input.windowTitle,
-              description: input.description
+              description: input.description,
+              hasImage: image !== undefined
             }),
-            questions: FOCUS_CHOICE_QUESTIONS,
+            questions:
+              image === undefined ? FOCUS_CHOICE_QUESTIONS : focusChoiceQuestionsForImage(),
             requireExplicitBinding: true,
-            signal
+            signal,
+            ...(image !== undefined ? { image } : {})
           });
           if (chosen.ok) {
             answer = judgmentFromChoiceAnswers(chosen.answers);
             if (!answer) ports.logger.warn({ event: "focus.judge_failed", error: "no_alignment" });
+          } else if (chosen.error === "not_supported" && image !== undefined) {
+            ports.logger.warn({ event: "focus.judge_failed", error: "judge_image_not_supported" });
           } else if (chosen.error === "not_supported") usePromptPath = true;
           else ports.logger.warn({ event: "focus.judge_failed", error: chosen.error });
         } catch {
