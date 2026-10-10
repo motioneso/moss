@@ -6,11 +6,12 @@ import { useChatTransition, type ChatTransition } from "./use-chat-transition";
 import { useInitialCallerDraft } from "./use-initial-caller-draft";
 import { useChatSelectionConfirmation } from "./use-chat-selection-confirmation";
 import { useChatDraftBinding } from "./use-chat-draft-binding";
+import { useChatAutoscroll } from "./use-chat-autoscroll";
+import { usePhoneLayout } from "./use-phone-layout";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Maximize2, Minimize2, MoreHorizontal, ShieldOff, X } from "lucide-react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
-  type UIEvent,
   useCallback,
   useEffect,
   useRef,
@@ -55,7 +56,6 @@ export { recordsFromMessages } from "./use-chat-stream";
 import "../styles/kit-chat.css";
 import "../styles/kit-chat-attach.css";
 import "../styles/kit-chat-skills.css";
-const PHONE_QUERY = "(max-width: 720px)";
 const PRIVATE_DRAFT_KEY = "__private__";
 export function ChatDrawer(props: {
   readonly meetingContext?: MeetingChatSelection & { readonly title: string };
@@ -92,6 +92,7 @@ export function ChatDrawer(props: {
   const latestRecordsRef = useRef(props.records);
   latestRecordsRef.current = props.records;
   const [reviewThreadId, setReviewThreadId] = useState<string | null>(null);
+  const [liveThreadId, setLiveThreadId] = useState<string | null>(null);
   const [conversationOverlayOpen, setConversationOverlayOpen] = useState(false);
   const [drafts, setDrafts] = useState(() => loadChatDrafts(props.ownerId));
   const callerDraft = useInitialCallerDraft(props.initialText, props.surface, generationRef);
@@ -115,23 +116,14 @@ export function ChatDrawer(props: {
     if (closingPrivateChatRef.current) return;
     setPrivateMode(privacyStateQuery.data.incognito);
   }, [privacyStateQuery.isSuccess, privacyStateQuery.data, privacyStateQuery.dataUpdatedAt]);
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  const [stickToBottom, setStickToBottom] = useState(true);
-  const AUTOSCROLL_THRESHOLD_PX = 48;
-  const handleBodyScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
-    const el = event.currentTarget;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    setStickToBottom(distanceFromBottom <= AUTOSCROLL_THRESHOLD_PX);
-  }, []);
-  const scrollToLatest = useCallback((behavior: ScrollBehavior) => {
-    const el = bodyRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior });
-  }, []);
-  const jumpToLatest = useCallback(() => {
-    setStickToBottom(true);
-    scrollToLatest("smooth");
-  }, [scrollToLatest]);
+  const {
+    bodyRef,
+    stickToBottom,
+    setStickToBottom,
+    handleBodyScroll,
+    scrollToLatest,
+    jumpToLatest
+  } = useChatAutoscroll();
   const resumeMutation = useMutation({
     mutationFn: (vars: {
       readonly threadId: string;
@@ -153,6 +145,7 @@ export function ChatDrawer(props: {
       if (!transition.isCurrent(vars.transition)) return;
       callerDraft.retire(vars.surface, vars.transition.generation);
       setReviewThreadId(null);
+      setLiveThreadId(null);
       setConversationOverlayOpen(true);
     },
     onSettled: (_data, _error, vars) => transition.finish(vars.transition)
@@ -192,6 +185,7 @@ export function ChatDrawer(props: {
     setPrivateMode(false);
     setPrivateEnded(false);
     setReviewThreadId(null);
+    setLiveThreadId(null);
     setConversationOverlayOpen(false);
     setIsSending(false);
     setSendError(null);
@@ -449,9 +443,18 @@ export function ChatDrawer(props: {
     sendMessage(queued.text);
   }, [moduleIdentityPending, queuedSendText, sendPending, props.surface, sendMessage]);
   const reviewing = reviewThreadId !== null;
-  const displayRecords = reviewing
-    ? recordsFromMessages(messagesQuery.data?.messages ?? [])
-    : props.records;
+  const persistedRecords = reviewing ? recordsFromMessages(messagesQuery.data?.messages ?? []) : [];
+
+  // A side chat started here shows its stored history plus the live turn not yet stored. A
+  // reopened thread shows stored history only, so the previous thread's stream never shows under it.
+  const liveTail =
+    reviewing &&
+    liveThreadId === reviewThreadId &&
+    !historyActivationPending &&
+    !props.meetingContext
+      ? reconcileFallbacks(props.records, persistedRecords)
+      : [];
+  const displayRecords = reviewing ? [...persistedRecords, ...liveTail] : props.records;
   const visibleFallbackRecords = reconcileFallbacks(fallbackRecords, displayRecords);
   const effectiveRecords: readonly TranscriptRecord[] = [
     ...displayRecords,
@@ -493,17 +496,7 @@ export function ChatDrawer(props: {
     }
   }, [effectiveRecords.length, isWaiting, reviewThreadId, scrollToLatest, stickToBottom]);
   const asideRef = useRef<HTMLElement | null>(null);
-  const [phone, setPhone] = useState(
-    () => typeof window !== "undefined" && !!window.matchMedia?.(PHONE_QUERY).matches
-  );
-  useEffect(() => {
-    const media = window.matchMedia?.(PHONE_QUERY);
-    if (!media) return;
-    const sync = () => setPhone(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
+  const phone = usePhoneLayout();
   useEffect(() => {
     if (!props.open) return;
     const aside = asideRef.current;
@@ -568,6 +561,7 @@ export function ChatDrawer(props: {
         if (state.threadId)
           callerDraft.bind(state.threadId, change.surface, change.generation, true);
         setReviewThreadId(state.threadId ?? null);
+        setLiveThreadId(state.threadId ?? null);
         focusComposerAfterNewSideChat.current = true;
         setIsSending(false);
         setSendError(null);
@@ -606,6 +600,7 @@ export function ChatDrawer(props: {
     if (!change) return;
     callerDraft.retire(change.surface);
     setReviewThreadId(null);
+    setLiveThreadId(null);
     setIsSending(false);
     setSendError(null);
     setNeedsProvider(false);
@@ -741,6 +736,7 @@ export function ChatDrawer(props: {
             setQueuedSendText(null);
             setSendError(null);
             setReviewThreadId(id);
+            setLiveThreadId(null);
             if (change) {
               resumeMutation.mutate({ threadId: id, surface: props.surface, transition: change });
             }

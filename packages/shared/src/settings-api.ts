@@ -9,10 +9,14 @@ export interface QuietHoursSettingsDto {
 
 export interface GetQuietHoursSettingsResponse {
   readonly quietHours: QuietHoursSettingsDto;
+  /** Opaque write expectation for the saved row; null when nothing is saved yet. */
+  readonly version: string | null;
 }
 
 export interface PutQuietHoursSettingsRequest {
   readonly quietHours: QuietHoursSettingsDto;
+  /** The version the caller last read; a mismatch is refused with 409. */
+  readonly expectedVersion: string | null;
 }
 
 export type PutQuietHoursSettingsResponse = GetQuietHoursSettingsResponse;
@@ -80,14 +84,18 @@ const quietHoursSchema = {
   }
 } as const;
 
+const quietHoursVersionSchema = { type: ["string", "null"], maxLength: 64 } as const;
+
+const quietHoursResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["quietHours", "version"],
+  properties: { quietHours: quietHoursSchema, version: quietHoursVersionSchema }
+} as const;
+
 export const getQuietHoursSettingsRouteSchema = {
   response: {
-    200: {
-      type: "object",
-      additionalProperties: false,
-      required: ["quietHours"],
-      properties: { quietHours: quietHoursSchema }
-    },
+    200: quietHoursResponseSchema,
     401: errorResponseSchema
   }
 } as const;
@@ -96,18 +104,14 @@ export const putQuietHoursSettingsRouteSchema = {
   body: {
     type: "object",
     additionalProperties: false,
-    required: ["quietHours"],
-    properties: { quietHours: quietHoursSchema }
+    required: ["quietHours", "expectedVersion"],
+    properties: { quietHours: quietHoursSchema, expectedVersion: quietHoursVersionSchema }
   },
   response: {
-    200: {
-      type: "object",
-      additionalProperties: false,
-      required: ["quietHours"],
-      properties: { quietHours: quietHoursSchema }
-    },
+    200: quietHoursResponseSchema,
     400: errorResponseSchema,
-    401: errorResponseSchema
+    401: errorResponseSchema,
+    409: errorResponseSchema
   }
 } as const;
 

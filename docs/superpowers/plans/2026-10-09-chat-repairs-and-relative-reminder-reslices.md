@@ -181,6 +181,23 @@ without stream injection; after completion/reload assert both persisted IDs/bodi
 recall. Include controlled real worker downtime and honest late recovery. This read-only fit
 assessment is conditional on repaired integration; revalidate seams and full session fit there.
 
+### #3194 reslice (published 2026-10-09)
+
+The #3194 lane stopped before coding: no trusted current-intent capture exists, the worker
+role cannot insert chat messages, the chat session manager and routes file are each at 999
+lines, and warm admission needs a new gateway path. #3194 stays open as the parent of:
+
+| Issue | Outcome                                                                    | Blocked by   |
+| ----- | -------------------------------------------------------------------------- | ------------ |
+| #3309 | Save one requested reminder; worker delivers it once to owner Main history | #3125, #3126 |
+| #3310 | List and cancel, with honest after-delivery answers                        | #3309        |
+| #3311 | Next Main reply admits the delivered batch, warm or cold                   | #3309        |
+
+#3195 is now blocked by #3309 and #3311. #3310 and #3311 may run in parallel.
+Intent authority stays the bounded server-side recognizer above. Until #3311 lands, delivered
+reminders remain pending-context and count toward the 20 cap; only cancel drains them. This is
+accepted because the integration branch does not ship before #3311.
+
 ## #3195 — immediate arrival with exact message identity
 
 Own the smallest proven worker-to-API transport for already committed results, selected owned

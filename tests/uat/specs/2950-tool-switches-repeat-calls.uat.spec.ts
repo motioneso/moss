@@ -75,6 +75,23 @@ async function openConnection(page: Page): Promise<void> {
   await expect(page.getByLabel(`Enable ${FIXTURE_LIST_TOOL}`)).toBeAttached();
 }
 
+// The drawer keeps its last conversation; a fresh chat comes from the Conversations overlay.
+// Sending waits until the drawer's clear is acknowledged and the old replies have left.
+async function startSideChat(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Open conversations" }).click();
+  const cleared = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname === "/api/chat/clear" &&
+      url.searchParams.get("surface") === "drawer"
+    );
+  });
+  await page.getByRole("button", { name: "New side chat", exact: true }).click();
+  expect((await cleared).status()).toBe(204);
+  await expect(page.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")).toHaveCount(0);
+}
+
 test("tool rows have one switch and repeated identical calls reach the service (#2950)", async ({
   page
 }) => {
@@ -115,7 +132,8 @@ test("tool rows have one switch and repeated identical calls reach the service (
         const top = el.getBoundingClientRect().top + window.scrollY - 120;
         window.scrollTo(0, top);
       });
-      await rows.screenshot({ path: `${SHOT_DIR}/2950-${name}-tool-row.png` });
+      if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+        await rows.screenshot({ path: `${SHOT_DIR}/2950-${name}-tool-row.png` });
     });
   }
 
@@ -144,7 +162,7 @@ test("tool rows have one switch and repeated identical calls reach the service (
       const before = listCalls().length;
       await page.goto(`${requireUatBaseURL()}/today`);
       await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
-      await page.getByRole("button", { name: "New chat" }).click();
+      await startSideChat(page);
       // The page shows no ready signal for the background protocol start; give it a bounded settle.
       await page.waitForTimeout(20_000);
       const composer = page.getByRole("textbox", { name: /^Message/ });
@@ -154,11 +172,31 @@ test("tool rows have one switch and repeated identical calls reach the service (
           "arguments and without any other tool in between. Do both calls now, no questions."
       );
       await composer.press("Enter");
-      await expect
-        .poll(() => listCalls().length - before, { timeout: 90_000 })
-        .toBeGreaterThanOrEqual(2)
-        .catch(() => undefined);
+      // YOLO skips no approval while the gateway counts the conversation as tainted
+      // (isConversationTainted in packages/ai/src/gateway/conversation-policy.ts), and live runs
+      // raised a card for each outside call. Approve each one as it appears; approval never
+      // merges or drops a repeat.
+      let approvals = 0;
+      let missedClicks = 0;
+      const deadline = Date.now() + 120_000;
+      while (listCalls().length - before < 2 && Date.now() < deadline) {
+        const card = page
+          .locator('[aria-label="Action request"]')
+          .getByRole("button", { name: "Approve" })
+          .first();
+        if (await card.isVisible()) {
+          await card
+            .click({ timeout: 5_000 })
+            .then(() => approvals++)
+            .catch(() => missedClicks++);
+        }
+        await page.waitForTimeout(1_000);
+      }
       proven = listCalls().slice(before);
+      console.log(
+        `attempt ${attempt}: ${proven.length} list calls, ${approvals} approvals, ` +
+          `${missedClicks} missed approve clicks`
+      );
     }
     expect(
       proven.length,
@@ -199,7 +237,8 @@ test("tool rows have one switch and repeated identical calls reach the service (
       await row.evaluate((el) =>
         window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 160)
       );
-      await row.locator("xpath=..").screenshot({ path: `${SHOT_DIR}/2950-grouped-${name}.png` });
+      if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+        await row.locator("xpath=..").screenshot({ path: `${SHOT_DIR}/2950-grouped-${name}.png` });
     }
   });
 });
