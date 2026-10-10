@@ -126,8 +126,28 @@ export async function revalidateOwnerNews(
       continue;
     }
     sourcesChecked += 1;
-    const fetched = await deps.fetch(source.feedUrl ?? source.homepageUrl);
-    if (!fetched.ok) {
+    // Same Reddit rule as the recovery branch above.
+    const subreddit =
+      source.retrievalMethod === "reddit" && deps.fetchWithOptions
+        ? subredditNameFromUrl(source.feedUrl ?? source.homepageUrl)
+        : null;
+    let sampleHeadlines: string[] | null;
+    if (subreddit !== null && deps.fetchWithOptions) {
+      const read = await readSubreddit(deps.fetchWithOptions, subreddit);
+      sampleHeadlines = read.ok
+        ? read.headlines.slice(0, HEADLINE_SAMPLE_CAP).map((item) => item.title)
+        : null;
+    } else {
+      const fetched = await deps.fetch(source.feedUrl ?? source.homepageUrl);
+      sampleHeadlines = !fetched.ok
+        ? null
+        : source.retrievalMethod === "feed"
+          ? sampleFeedHeadlines(fetched.body, HEADLINE_SAMPLE_CAP).map((item) => item.headline)
+          : extractListingHeadlines(fetched.body, source.homepageUrl, HEADLINE_SAMPLE_CAP).map(
+              (item) => item.headline
+            );
+    }
+    if (sampleHeadlines === null) {
       // Unreachable → owner action required: surface both the health problem and that the
       // verdict is stale under the new fingerprint (so retry re-checks it).
       if (source.healthStatus !== "authentication_failed") {
@@ -139,12 +159,6 @@ export async function revalidateOwnerNews(
       });
       continue;
     }
-    const sampleHeadlines =
-      source.retrievalMethod === "feed"
-        ? sampleFeedHeadlines(fetched.body, HEADLINE_SAMPLE_CAP).map((item) => item.headline)
-        : extractListingHeadlines(fetched.body, source.homepageUrl, HEADLINE_SAMPLE_CAP).map(
-            (item) => item.headline
-          );
     const policy = await decideSourcePolicy(
       scopedDb,
       { ai: deps.ai, repo: deps.repository },
