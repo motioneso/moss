@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  GetQuietHoursSettingsResponse,
   LocaleSettingsDto,
   MeResponse,
+  PutQuietHoursSettingsRequest,
   PutWeatherLocationRequest,
   QuietHoursSettingsDto,
   WeatherLocationDto,
@@ -13,6 +15,7 @@ import { Check, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
+  ApiError,
   getLocaleSettings,
   getQuietHoursSettings,
   putLocaleSettings,
@@ -93,6 +96,23 @@ const DEFAULT_QUIET_HOURS: QuietHoursSettingsDto = {
   end: "07:00",
   timezone: null
 };
+
+export const QUIET_HOURS_STALE_SAVE_MESSAGE =
+  "Quiet hours changed somewhere else, so this change was not saved. The latest schedule is showing now.";
+
+/** The save carries the version the controls were showing, so a newer stored schedule wins. */
+export function quietHoursSaveRequest(
+  next: QuietHoursSettingsDto,
+  loaded: GetQuietHoursSettingsResponse | undefined
+): PutQuietHoursSettingsRequest {
+  return { quietHours: next, expectedVersion: loaded?.version ?? null };
+}
+
+export function quietHoursSaveError(error: unknown): string {
+  return error instanceof ApiError && error.status === 409
+    ? QUIET_HOURS_STALE_SAVE_MESSAGE
+    : readError(error);
+}
 
 export function isValidQuietHoursTime(value: string): boolean {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
@@ -231,11 +251,16 @@ export function ProfilePane({ me }: PaneProps) {
   });
   const quietHours = quietHoursQuery.data?.quietHours ?? DEFAULT_QUIET_HOURS;
   const quietHoursMutation = useMutation({
-    mutationFn: (next: QuietHoursSettingsDto) => putQuietHoursSettings({ quietHours: next }),
+    mutationFn: (next: QuietHoursSettingsDto) =>
+      putQuietHoursSettings(quietHoursSaveRequest(next, quietHoursQuery.data)),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.settings.quietHours, data);
     },
-    onError: (error) => toast(readError(error), { tone: "drift" })
+    onError: (error) => {
+      // A refused save leaves the stored schedule as it was; refetch so the controls show it.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.quietHours });
+      toast(quietHoursSaveError(error), { tone: "drift" });
+    }
   });
   const updateLocale = (patch: Partial<LocaleSettingsDto>) => {
     localeMutation.mutate({ ...locale, ...patch });

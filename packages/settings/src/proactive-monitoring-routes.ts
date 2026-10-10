@@ -5,6 +5,7 @@ import { HttpError } from "@moss/module-sdk";
 import { sessionRateLimitKey } from "@moss/module-sdk/server";
 import {
   ProactiveMonitoringPreferencesRepository,
+  ProactivePreferenceRevisionConflictError,
   resolveAutomaticEmailAlertsEnabled,
   type SavedProactiveMonitoringPreference
 } from "@moss/proactive-monitoring";
@@ -16,7 +17,13 @@ const PROACTIVE_SETTINGS_MAX = parsePositiveIntEnv(
   20
 );
 
+import { isStrictLocalTime } from "./quiet-hours-application.js";
 import { handleSettingsRouteError } from "./route-error.js";
+
+const MAX_WRITE_ATTEMPTS = 3;
+
+export const PROACTIVE_SETTINGS_CONFLICT_MESSAGE =
+  "Alert settings changed while saving. Reload and try again.";
 
 /**
  * Injected by the composition root. Best-effort: implementations swallow errors.
@@ -78,10 +85,27 @@ export function registerProactiveMonitoringSettingsRoutes(
         const ctx = await dependencies.resolveAccessContext(request);
         const patch = parseSettingsPatch(request.body);
 
+        // The row lock serialises concurrent PATCHes; the retry only covers a concurrent first
+        // insert of an absent row. Callers send partial patches, so the merge always applies to
+        // the latest committed record.
         const updated = await dependencies.dataContext.withDataContext(ctx, async (scopedDb) => {
-          const saved = await repository.getSaved(scopedDb);
-          if (saved === null) throw new HttpError(409, "Saved alert preference needs recovery");
-          return repository.upsert(scopedDb, mergePreference(saved?.raw, patch));
+          for (let attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+            const current = await repository.getSavedWithRevision(scopedDb, { forUpdate: true });
+            if (current?.saved === null) {
+              throw new HttpError(409, "Saved alert preference needs recovery");
+            }
+            assertNewQuietTimesValid(current?.saved.preference, patch);
+            try {
+              return await repository.upsertWithRevision(
+                scopedDb,
+                mergePreference(current?.saved.raw, patch),
+                current?.revision ?? null
+              );
+            } catch (error) {
+              if (!(error instanceof ProactivePreferenceRevisionConflictError)) throw error;
+            }
+          }
+          throw new HttpError(409, PROACTIVE_SETTINGS_CONFLICT_MESSAGE);
         });
 
         await reconcileScheduleSafe(
@@ -116,6 +140,32 @@ function parseSettingsPatch(body: unknown): Partial<ProactiveMonitoringPreferenc
     throw new HttpError(400, `Unknown fields: ${unknown.join(", ")}`);
   }
   return value as Partial<ProactiveMonitoringPreferenceV1>;
+}
+
+/**
+ * Validates only quiet times the patch changes. Saved legacy values (loose HH:MM, equal times)
+ * stay effective until the user edits them.
+ */
+function assertNewQuietTimesValid(
+  current: ProactiveMonitoringPreferenceV1 | undefined,
+  patch: Partial<ProactiveMonitoringPreferenceV1>
+): void {
+  if (patch.quietHours === undefined) return;
+  const submitted = objectValue(patch.quietHours);
+  const effective = current?.quietHours ?? defaultProactiveMonitoringPreference().quietHours;
+  const start = "startLocalTime" in submitted ? submitted.startLocalTime : effective.startLocalTime;
+  const end = "endLocalTime" in submitted ? submitted.endLocalTime : effective.endLocalTime;
+  const startChanged = start !== effective.startLocalTime;
+  const endChanged = end !== effective.endLocalTime;
+  if (startChanged && !isStrictLocalTime(start)) {
+    throw new HttpError(400, "quietHours.startLocalTime must be HH:MM (00:00-23:59)");
+  }
+  if (endChanged && !isStrictLocalTime(end)) {
+    throw new HttpError(400, "quietHours.endLocalTime must be HH:MM (00:00-23:59)");
+  }
+  if ((startChanged || endChanged) && start === end) {
+    throw new HttpError(400, "Quiet hours must start and end at different times");
+  }
 }
 
 function mergePreference(

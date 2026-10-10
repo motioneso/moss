@@ -46,6 +46,7 @@ export {
   deriveModuleRegistryRows
 } from "./module-registry-rows.js";
 export {
+  PROACTIVE_SETTINGS_CONFLICT_MESSAGE,
   registerProactiveMonitoringSettingsRoutes,
   type ReconcileProactiveScheduleFn
 } from "./proactive-monitoring-routes.js";

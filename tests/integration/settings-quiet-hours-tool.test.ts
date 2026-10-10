@@ -140,4 +140,72 @@ describe("settings.quietHours.set tool", () => {
     expect(after?.revision).toBe(before?.revision);
     expect(settingsUndoStack.pop(ids.adminUser, "")).toBeUndefined();
   });
+  it("rejects an unknown timezone and an equal-time window without changing the stored value", async () => {
+    const before = await readAs(ids.userA);
+    for (const input of [
+      { enabled: true, start: "22:00", end: "07:00", timezone: "Mars/Olympus_Mons" },
+      { enabled: true, start: "05:00", end: "05:00", timezone: "America/Denver" }
+    ]) {
+      await expect(
+        dataContext.withDataContext(
+          { actorUserId: ids.userA, requestId: "req:quiet-hours-invalid" },
+          (scopedDb) => quietHoursSetExecute(scopedDb, input, toolCtx(ids.userA))
+        )
+      ).rejects.toMatchObject({ statusCode: 400 });
+    }
+    expect(await readAs(ids.userA)).toEqual(before);
+  });
+
+  it("keeps the saved timezone when the request omits it", async () => {
+    const result = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "req:quiet-hours-omit-tz" },
+      (scopedDb) =>
+        quietHoursSetExecute(
+          scopedDb,
+          { enabled: true, start: "23:30", end: "06:15" },
+          toolCtx(ids.userA)
+        )
+    );
+    expect(result.data).toEqual({
+      enabled: true,
+      start: "23:30",
+      end: "06:15",
+      timezone: "America/Denver"
+    });
+  });
+
+  it("keeps a saved legacy equal-time window when only the switch changes", async () => {
+    await dataContext.withDataContext(
+      { actorUserId: ids.userC, requestId: "req:quiet-hours-legacy-seed" },
+      (scopedDb) =>
+        preferences.upsert(scopedDb, QUIET_HOURS_PREFERENCE_KEY, {
+          enabled: false,
+          start: "22:00",
+          end: "22:00",
+          timezone: null
+        })
+    );
+    await dataContext.withDataContext(
+      { actorUserId: ids.userC, requestId: "req:quiet-hours-legacy" },
+      (scopedDb) =>
+        quietHoursSetExecute(
+          scopedDb,
+          { enabled: true, start: "22:00", end: "22:00", timezone: null },
+          toolCtx(ids.userC)
+        )
+    );
+    expect((await readAs(ids.userC))?.value).toEqual({
+      enabled: true,
+      start: "22:00",
+      end: "22:00",
+      timezone: null
+    });
+  });
+
+  function readAs(actorUserId: string) {
+    return dataContext.withDataContext(
+      { actorUserId, requestId: "req:quiet-hours-read" },
+      (scopedDb) => preferences.getWithRevision(scopedDb, QUIET_HOURS_PREFERENCE_KEY)
+    );
+  }
 });

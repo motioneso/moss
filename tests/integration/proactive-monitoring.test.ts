@@ -389,19 +389,23 @@ describe("Proactive Monitoring — integration", () => {
       for (const ctx of [ctxA, ctxB]) {
         const base = defaultProactiveMonitoringPreference();
         await dataContext.withDataContext(ctx, (scopedDb) =>
-          prefsRepo.upsert(scopedDb, {
-            ...base,
-            enabled: true,
-            dailyCardCap: 20,
-            sources: {
-              tasks: { enabled: false, dailyCardCap: 3 },
-              calendar: { enabled: false, dailyCardCap: 3 },
-              email: { enabled: false, dailyCardCap: 3 },
-              notes: { enabled: true, dailyCardCap: 5 }
+          prefsRepo.upsertWithRevision(
+            scopedDb,
+            {
+              ...base,
+              enabled: true,
+              dailyCardCap: 20,
+              sources: {
+                tasks: { enabled: false, dailyCardCap: 3 },
+                calendar: { enabled: false, dailyCardCap: 3 },
+                email: { enabled: false, dailyCardCap: 3 },
+                notes: { enabled: true, dailyCardCap: 5 }
+              },
+              quietHours: { enabled: false, startLocalTime: "22:00", endLocalTime: "08:00" },
+              updatedAt: new Date().toISOString()
             },
-            quietHours: { enabled: false, startLocalTime: "22:00", endLocalTime: "08:00" },
-            updatedAt: new Date().toISOString()
-          })
+            null
+          )
         );
       }
 

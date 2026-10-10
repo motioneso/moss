@@ -21,6 +21,15 @@ export interface NotificationPreferencesPort extends ProfilePreferencesPort {
   ): Promise<{ revision: number }>;
 }
 
+/** NotificationPreferencesPort plus the versioned read the Profile quiet-hours writer checks. */
+export interface QuietHoursPreferencesPort extends NotificationPreferencesPort {
+  getVersioned(
+    scopedDb: DataContextDb,
+    key: string,
+    options?: { forUpdate?: boolean }
+  ): Promise<{ value: unknown; revision: number; updatedAt: Date } | null>;
+}
+
 export interface PersonaPreviewInput {
   readonly actorUserId: string;
   readonly userName: string;

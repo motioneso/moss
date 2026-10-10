@@ -1,9 +1,14 @@
+import Fastify, { type FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import type { ToolContext } from "@moss/module-sdk";
+import { ProactiveMonitoringPreferencesRepository } from "@moss/proactive-monitoring";
 import { PreferencesRepository } from "@moss/structured-state";
+import { registerProactiveMonitoringSettingsRoutes } from "../../packages/settings/src/proactive-monitoring-routes.js";
+import { quietHoursSetExecute } from "../../packages/settings/src/quiet-hours-tool.js";
+import { registerQuietHoursRoutes } from "../../packages/settings/src/quiet-hours-routes.js";
 import { themeModeSetExecute } from "../../packages/settings/src/theme-mode-tool.js";
 import { settingsUndoLastExecute } from "../../packages/settings/src/undo-apply-tool.js";
 import { settingsUndoStack } from "../../packages/settings/src/undo-stack.js";
@@ -166,4 +171,193 @@ describe("settings.undoLast tool", () => {
       message: "There's nothing to undo."
     });
   });
+});
+
+describe("settings.undoLast over quiet-hours writes", () => {
+  const QUIET_HOURS_KEY = "quiet-hours";
+  let appDb: Kysely<MossDatabase>;
+  let dataContext: DataContextRunner;
+  let app: FastifyInstance;
+  const preferences = new PreferencesRepository();
+  const proactive = new ProactiveMonitoringPreferencesRepository();
+
+  beforeAll(async () => {
+    appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+    dataContext = new DataContextRunner(appDb);
+    app = Fastify();
+    const resolveAccessContext = async (request: { headers: Record<string, unknown> }) => ({
+      actorUserId: String(request.headers["x-test-actor"]),
+      requestId: "req:undo-quiet-rest"
+    });
+    registerQuietHoursRoutes(app, {
+      dataContext,
+      resolveAccessContext,
+      preferencesRepository: preferences
+    });
+    registerProactiveMonitoringSettingsRoutes(app, { dataContext, resolveAccessContext });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    await appDb?.destroy();
+  });
+
+  it("restores the previous schedule once, and a repeat undo does nothing", async () => {
+    const actor = ids.userA;
+    settingsUndoStack.clear(actor, "");
+    await setQuietHours(actor, { enabled: true, start: "22:00", end: "07:00", timezone: null });
+    const before = await readQuiet(actor);
+    await setQuietHours(actor, { enabled: true, start: "23:00", end: "06:00", timezone: null });
+
+    expect((await undo(actor)).status).toBe("undone");
+    const restored = await readQuiet(actor);
+    expect(restored?.value).toEqual(before?.value);
+
+    // The restore bumped the revision, so the older create entry no longer matches the row.
+    expect((await undo(actor)).status).toBe("cancelled");
+    expect((await readQuiet(actor))?.value).toEqual(before?.value);
+    expect((await undo(actor)).status).toBe("nothing_to_undo");
+  });
+
+  it("removes a schedule the tool created when there was none", async () => {
+    const actor = ids.userB;
+    settingsUndoStack.clear(actor, "");
+    await setQuietHours(actor, { enabled: true, start: "21:30", end: "06:30", timezone: null });
+    expect((await undo(actor)).status).toBe("undone");
+    expect(await readQuiet(actor)).toBeNull();
+    expect((await undo(actor)).status).toBe("nothing_to_undo");
+  });
+
+  it("refuses to undo over a later Account & preferences save", async () => {
+    const actor = ids.adminUser;
+    settingsUndoStack.clear(actor, "");
+    await setQuietHours(actor, { enabled: true, start: "22:00", end: "07:00", timezone: null });
+    const version = (await restGet(actor)).version;
+    const put = await app.inject({
+      method: "PUT",
+      url: "/api/me/quiet-hours",
+      headers: { "x-test-actor": actor },
+      payload: {
+        quietHours: { enabled: true, start: "20:00", end: "05:00", timezone: "Europe/Paris" },
+        expectedVersion: version
+      }
+    });
+    expect(put.statusCode).toBe(200);
+
+    expect(await undo(actor)).toMatchObject({
+      status: "cancelled",
+      message: "That setting changed again since, so I didn't undo it."
+    });
+    expect((await readQuiet(actor))?.value).toEqual({
+      enabled: true,
+      start: "20:00",
+      end: "05:00",
+      timezone: "Europe/Paris"
+    });
+  });
+
+  it("does not delete a schedule recreated after an undo removed the tool's create", async () => {
+    const actor = ids.userC;
+    settingsUndoStack.clear(actor, "");
+    await setQuietHours(actor, { enabled: true, start: "22:00", end: "07:00", timezone: null });
+    expect((await undo(actor)).status).toBe("undone");
+    expect(await readQuiet(actor)).toBeNull();
+
+    const put = await app.inject({
+      method: "PUT",
+      url: "/api/me/quiet-hours",
+      headers: { "x-test-actor": actor },
+      payload: {
+        quietHours: { enabled: true, start: "22:00", end: "07:00", timezone: null },
+        expectedVersion: null
+      }
+    });
+    expect(put.statusCode).toBe(200);
+    const recreated = await readQuiet(actor);
+    expect(recreated?.revision).toBe(1);
+
+    expect((await undo(actor)).status).toBe("nothing_to_undo");
+    expect(await readQuiet(actor)).toEqual(recreated);
+  });
+
+  it("cancels every stacked undo once a later save lands on top of them", async () => {
+    const actor = ids.userD;
+    settingsUndoStack.clear(actor, "");
+    await setQuietHours(actor, { enabled: true, start: "22:00", end: "07:00", timezone: null });
+    await setQuietHours(actor, { enabled: true, start: "23:00", end: "07:00", timezone: null });
+    const version = (await restGet(actor)).version;
+    const put = await app.inject({
+      method: "PUT",
+      url: "/api/me/quiet-hours",
+      headers: { "x-test-actor": actor },
+      payload: {
+        quietHours: { enabled: false, start: "23:00", end: "07:00", timezone: null },
+        expectedVersion: version
+      }
+    });
+    expect(put.statusCode).toBe(200);
+    const latest = await readQuiet(actor);
+
+    expect((await undo(actor)).status).toBe("cancelled");
+    expect((await undo(actor)).status).toBe("cancelled");
+    expect((await undo(actor)).status).toBe("nothing_to_undo");
+    expect(await readQuiet(actor)).toEqual(latest);
+  });
+
+  it("leaves the separate alert quiet hours alone when undoing a Profile change", async () => {
+    const actor = ids.userA;
+    settingsUndoStack.clear(actor, "");
+    await setQuietHours(actor, { enabled: true, start: "22:30", end: "06:45", timezone: null });
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/api/me/proactive-monitoring-settings",
+      headers: { "x-test-actor": actor },
+      payload: { quietHours: { enabled: true, startLocalTime: "21:00", endLocalTime: "08:00" } }
+    });
+    expect(patch.statusCode).toBe(200);
+
+    expect((await undo(actor)).status).toBe("undone");
+    const alerts = await dataContext.withDataContext(
+      { actorUserId: actor, requestId: "req:undo-quiet-proactive" },
+      (scopedDb) => proactive.getSaved(scopedDb)
+    );
+    expect(alerts?.raw.quietHours).toEqual({
+      enabled: true,
+      startLocalTime: "21:00",
+      endLocalTime: "08:00"
+    });
+  });
+
+  function setQuietHours(actor: string, input: Record<string, unknown>) {
+    return dataContext.withDataContext(
+      { actorUserId: actor, requestId: "req:undo-quiet-set" },
+      (scopedDb) => quietHoursSetExecute(scopedDb, input, toolCtx(actor))
+    );
+  }
+
+  async function undo(actor: string) {
+    const result = await dataContext.withDataContext(
+      { actorUserId: actor, requestId: "req:undo-quiet-undo" },
+      (scopedDb) => settingsUndoLastExecute(scopedDb, {}, toolCtx(actor))
+    );
+    return result.data as { status: string; key: string | null; message: string };
+  }
+
+  function readQuiet(actor: string) {
+    return dataContext.withDataContext(
+      { actorUserId: actor, requestId: "req:undo-quiet-read" },
+      (scopedDb) => preferences.getWithRevision(scopedDb, QUIET_HOURS_KEY)
+    );
+  }
+
+  async function restGet(actor: string): Promise<{ version: string | null }> {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/me/quiet-hours",
+      headers: { "x-test-actor": actor }
+    });
+    expect(response.statusCode).toBe(200);
+    return response.json();
+  }
 });

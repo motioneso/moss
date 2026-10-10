@@ -26,6 +26,13 @@ const PREF_KEYS = new Set([
 const QUIET_HOURS_KEYS = new Set(["enabled", "startLocalTime", "endLocalTime"]);
 const SOURCE_PREF_KEYS = new Set(["enabled", "dailyCardCap"]);
 
+export class ProactivePreferenceRevisionConflictError extends Error {
+  constructor() {
+    super(`Preference "${PROACTIVE_MONITORING_PREFERENCE_KEY}" was modified concurrently`);
+    this.name = "ProactivePreferenceRevisionConflictError";
+  }
+}
+
 export interface SavedProactiveMonitoringPreference {
   readonly raw: Readonly<Record<string, unknown>>;
   readonly preference: ProactiveMonitoringPreferenceV1;
@@ -55,27 +62,69 @@ export class ProactiveMonitoringPreferencesRepository {
     }
   }
 
-  async upsert(
+  /** Locked read for a compare-and-set writer. `saved` is null when the stored record is malformed. */
+  async getSavedWithRevision(
     scopedDb: DataContextDb,
-    value: Record<string, unknown>
-  ): Promise<SavedProactiveMonitoringPreference> {
+    options: { readonly forUpdate?: boolean } = {}
+  ): Promise<
+    | { readonly saved: SavedProactiveMonitoringPreference | null; readonly revision: number }
+    | undefined
+  > {
+    assertDataContextDb(scopedDb);
+    let query = scopedDb.db
+      .selectFrom("app.preferences")
+      .select(["value_json", "revision"])
+      .where("key", "=", PROACTIVE_MONITORING_PREFERENCE_KEY);
+    if (options.forUpdate) query = query.forUpdate();
+    const row = await query.executeTakeFirst();
+    if (!row) return undefined;
+    let saved: SavedProactiveMonitoringPreference | null;
+    try {
+      saved = parse(row.value_json);
+    } catch {
+      saved = null;
+    }
+    return { saved, revision: row.revision };
+  }
+
+  /**
+   * Compare-and-set write. A null expectation inserts only when no row exists; otherwise the row
+   * must still be at `expectedRevision`. Either miss throws ProactivePreferenceRevisionConflictError.
+   */
+  async upsertWithRevision(
+    scopedDb: DataContextDb,
+    value: Record<string, unknown>,
+    expectedRevision: number | null
+  ): Promise<SavedProactiveMonitoringPreference & { readonly revision: number }> {
     assertDataContextDb(scopedDb);
     const saved = parse(value);
-    await scopedDb.db
-      .insertInto("app.preferences")
-      .values({
-        owner_user_id: sql<string>`app.current_actor_user_id()`,
-        key: PROACTIVE_MONITORING_PREFERENCE_KEY,
-        value_json: jsonb(value),
-        updated_at: new Date()
-      })
-      .onConflict((oc) =>
-        oc
-          .columns(["owner_user_id", "key"])
-          .doUpdateSet({ value_json: jsonb(value), updated_at: new Date() })
-      )
-      .execute();
-    return saved;
+    const row =
+      expectedRevision === null
+        ? await scopedDb.db
+            .insertInto("app.preferences")
+            .values({
+              owner_user_id: sql<string>`app.current_actor_user_id()`,
+              key: PROACTIVE_MONITORING_PREFERENCE_KEY,
+              value_json: jsonb(value),
+              revision: 1,
+              updated_at: new Date()
+            })
+            .onConflict((oc) => oc.columns(["owner_user_id", "key"]).doNothing())
+            .returning("revision")
+            .executeTakeFirst()
+        : await scopedDb.db
+            .updateTable("app.preferences")
+            .set({
+              value_json: jsonb(value),
+              revision: expectedRevision + 1,
+              updated_at: new Date()
+            })
+            .where("key", "=", PROACTIVE_MONITORING_PREFERENCE_KEY)
+            .where("revision", "=", expectedRevision)
+            .returning("revision")
+            .executeTakeFirst();
+    if (!row) throw new ProactivePreferenceRevisionConflictError();
+    return { ...saved, revision: row.revision };
   }
 
   async initializeAutomaticEmailAlerts(
