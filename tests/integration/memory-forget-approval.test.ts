@@ -105,7 +105,8 @@ describe("memory.forget owner-bound approval through the production gateway", ()
       target: `Subject: prefers: ${text}`,
       fields: []
     });
-    expect(card.outsideContentNotice).toBe(true);
+    // Forgetting a memory always asks, so outside content is not the reason.
+    expect(card.outsideContentNotice).toBe(false);
     expect(await h.provenance.isTainted(ids.userA, h.threadId)).toBe(true);
     // Both reads acquire the SAME one-connection pool while the approval is still pending.
     expect(await readFact(fact.id)).toMatchObject({ object_text: text });

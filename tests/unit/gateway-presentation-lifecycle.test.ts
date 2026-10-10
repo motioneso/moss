@@ -74,8 +74,9 @@ describe("approval preparation lifecycle", () => {
       "thread-a",
       "tool_external_content"
     );
+    // The card asks in a clean chat too, so outside content is not its reason.
     expect(h.records[0]).toMatchObject({
-      outsideContentNotice: true,
+      outsideContentNotice: false,
       details: { presentation: "human" }
     });
     await rejectAdmissionCard(h, pending);

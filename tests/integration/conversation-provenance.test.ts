@@ -100,9 +100,9 @@ function themeGateway(threadId: string, actorUserId: string = ids.userA, trusted
   return { gateway, token, records, actorUserId };
 }
 
-// The user's own trust runs writes after outside content (#3338). Turn it off so the card's
-// outside-content notice shows whether the thread is tainted.
+// The thread carries a durable outside-content mark, and a write the user has not trusted asks.
 async function expectThemeApproval(threadId: string) {
+  expect(await store.isMarked(ids.userA, threadId)).toBe(true);
   const h = themeGateway(threadId, ids.userA, false);
   const pending = h.gateway.callTool(h.token, "settings.themeMode.set", { mode: "dark" });
   await vi.waitFor(
@@ -110,7 +110,6 @@ async function expectThemeApproval(threadId: string) {
     { timeout: 5000 }
   );
   const request = h.records.find((record) => record.kind === "action_request")!;
-  expect(request.outsideContentNotice).toBe(true);
   await h.gateway.resolveActionRequest(h.actorUserId, request.actionRequestId, "rejected");
   expect(await pending).toMatchObject({ ok: false, denied: true });
 }

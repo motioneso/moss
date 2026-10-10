@@ -13,7 +13,7 @@ const request = {
   toolInput: { command: "echo private-command" }
 };
 
-function setup(active = true) {
+function setup(active = true, marked = false) {
   const yoloMode = vi.fn(async () => active);
   const createPendingAssistantAction = vi.fn(async () => ({ id: "action-1" }));
   const insertActionAuditLog = vi.fn(async () => undefined);
@@ -21,9 +21,10 @@ function setup(active = true) {
   const tokens = new SessionTokenRegistry();
   const confirmations = new ConfirmationRegistry();
   const gateway = new AssistantToolGateway({
-    // Exercise the existing permission rules with a verified clean conversation.
+    // Exercise the existing permission rules with a verified clean or durably marked conversation.
     provenance: {
-      isTainted: async () => false,
+      isTainted: async () => marked,
+      isMarked: async () => marked,
       recordAdmission: async () => {},
       runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
     },
@@ -114,6 +115,20 @@ describe("ACP effective actor YOLO permission", () => {
       expect.objectContaining({ kind: "action_request" })
     );
   });
+
+  it.each([true, false])(
+    "names outside content on a marked chat's card only when YOLO would allow it (YOLO=%s)",
+    async (active) => {
+      const state = setup(active, true);
+      await expect(
+        state.gateway.requestAcpBuiltInPermission(state.token, request)
+      ).resolves.toMatchObject({ decision: "deny", asked: true });
+      expect(state.emit).toHaveBeenCalledWith(
+        "chat-1",
+        expect.objectContaining({ kind: "action_request", outsideContentNotice: active })
+      );
+    }
+  );
 
   it("keeps YOLO off requests on the human approval path", async () => {
     const state = setup(false);
