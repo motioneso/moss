@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const execFileSyncMock = vi.fn<(...args: unknown[]) => string>();
 vi.mock("node:child_process", () => ({
@@ -150,6 +150,23 @@ describe("installUatRealChatAuth provider choice (#3361)", () => {
     vi.resetAllMocks();
     delete process.env.JARVIS_UAT_REAL_CHAT_PROVIDER;
     delete process.env.JARVIS_UAT_REAL_CHAT_CODEX_AUTH_FILE;
+    process.env.MOSS_UAT_CAPTURE_OFF = "1";
+  });
+
+  afterEach(() => {
+    delete process.env.MOSS_UAT_CAPTURE_OFF;
+  });
+
+  it("refuses Claude while captures are on, because a kept trace records the sign-in code", () => {
+    process.env.JARVIS_UAT_REAL_CHAT_PROVIDER = "claude";
+    delete process.env.MOSS_UAT_CAPTURE_OFF;
+    expect(() => uatRealChatProvider()).toThrow(/needs MOSS_UAT_CAPTURE_OFF=1/);
+    expect(() => installUatRealChatAuth("uat-test", "actor-1", buildComposeArgs)).toThrow(
+      /needs MOSS_UAT_CAPTURE_OFF=1/
+    );
+    expect(execFileSyncMock).not.toHaveBeenCalled();
+    process.env.JARVIS_UAT_REAL_CHAT_PROVIDER = "codex";
+    expect(uatRealChatProvider()).toBe("codex");
   });
 
   it("defaults to Codex and rejects an unknown provider", () => {

@@ -10,6 +10,7 @@
 //
 // <dir> is ~/.cache/moss-uat-claude-signin unless JARVIS_UAT_CLAUDE_SIGNIN_DIR is set. The code
 // is sign-in material: it is never logged, and it reaches Moss only as the submit-token body.
+// Claude mode requires MOSS_UAT_CAPTURE_OFF=1 (real-chat-env.ts), so no trace records that body.
 // A plain module, not a spec, so its unit test can import it without registering Playwright tests.
 import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -63,8 +64,8 @@ const PROVIDER_KIND = "anthropic";
 
 function publishLink(paths: ClaudeSignInPaths, url: string): void {
   const dir = join(paths.linkFile, "..");
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  chmodSync(dir, 0o700);
+  // Lock down only a folder this run made; an existing one keeps its owner's choice.
+  if (mkdirSync(dir, { recursive: true, mode: 0o700 }) !== undefined) chmodSync(dir, 0o700);
   rmSync(paths.codeFile, { force: true });
   writeFileSync(paths.linkFile, `${url}\n`, { mode: 0o600 });
 }
@@ -76,9 +77,11 @@ function takeCode(paths: ClaudeSignInPaths): string | undefined {
   } catch {
     return undefined;
   }
-  rmSync(paths.codeFile, { force: true });
+  // An empty file may be an editor's first write; leave it for the operator to finish.
   const code = raw.trim();
-  return code.length > 0 ? code : undefined;
+  if (code.length === 0) return undefined;
+  rmSync(paths.codeFile, { force: true });
+  return code;
 }
 
 function failure(step: string, response: LoginResponse): Error {

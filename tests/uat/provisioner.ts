@@ -23,7 +23,7 @@ import {
   REAL_CHAT_CONFIGURED_ENV,
   installUatRealChatAuth,
   uatRealChatProvider,
-  type UatRealChatCodexAuth
+  type UatRealChatAuth
 } from "./real-chat-env.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID } from "./seed/admin.js";
 import { parseUatSeedLevel } from "./seed/level-validation.js";
@@ -769,7 +769,7 @@ export async function provisionForUat(
 
     // #2732: set once `jarv1s` is up and the Codex credential copy (if any) has run — read by
     // teardownCompose below, so declared before it.
-    let realChatAuth: UatRealChatCodexAuth | undefined;
+    let realChatAuth: UatRealChatAuth | undefined;
 
     // #1306: the fixture container is removed FIRST — an outside container still attached to the
     // Compose network blocks `down -v` from removing that network, and the leak assertion that

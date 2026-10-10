@@ -25,8 +25,9 @@ pnpm test:uat <spec file name>
    `<stack>.link` and `<stack>.code`.
 2. Open the link in `<stack>.link` in a browser signed in to Claude and approve it. The page shows a
    code.
-3. Write that code into `<stack>.code`. The run reads it once, deletes it, hands it to Moss, and
-   carries on when Moss reports Claude ready.
+3. Write that code into `<stack>.code` in one go, for example `printf %s '<code>' > <stack>.code`.
+   The run reads it once, deletes it, hands it to Moss, and carries on when Moss reports Claude
+   ready. An empty file is left alone until the code arrives.
 
 The link lasts 10 minutes, so the run waits 10 minutes for the code by default
 (`JARVIS_UAT_CLAUDE_SIGNIN_WAIT_MS` changes it). The wait is added to the spec's own time limit.
@@ -41,4 +42,6 @@ If nobody answers in time the run cancels the sign-in and fails; rerun for a fre
   volume before the volume itself is removed. Deleting it does not revoke it at Anthropic; revoke
   old tokens from the Claude account settings if needed.
 - The code is sign-in material. The run never logs it, and nothing else should either.
+- `MOSS_UAT_CAPTURE_OFF=1` is required, and the run refuses Claude without it. The code reaches
+  Moss as a page request, and a trace kept from a failed test would record that request.
 - CI never sets the setting, so CI stays on the credential-free default.

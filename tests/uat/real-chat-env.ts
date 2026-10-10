@@ -29,7 +29,7 @@ export function hostCodexAuthPath(): string {
 // can read it as the single "was a real chat model configured for THIS run" signal.
 export const REAL_CHAT_CONFIGURED_ENV = "JARVIS_UAT_REAL_CHAT_CONFIGURED";
 
-export interface UatRealChatCodexAuth {
+export interface UatRealChatAuth {
   /** Removes the copied credential from the container. Safe to call more than once. */
   readonly cleanup: () => Promise<void>;
 }
@@ -70,7 +70,7 @@ export function installUatRealChatCodexAuth(
   projectName: string,
   actorUserId: string,
   buildComposeArgs: (extra: readonly string[]) => readonly string[]
-): UatRealChatCodexAuth | undefined {
+): UatRealChatAuth | undefined {
   const authPath = hostCodexAuthPath();
   if (!existsSync(authPath)) {
     return undefined;
@@ -221,6 +221,12 @@ export function uatRealChatProvider(): UatRealChatProvider {
   if (value !== "codex" && value !== "claude") {
     throw new Error(`[uat real-chat] ${REAL_CHAT_PROVIDER_ENV} must be "codex" or "claude"`);
   }
+  // The Claude code goes out as a page request body, and a kept Playwright trace records those.
+  if (value === "claude" && process.env.MOSS_UAT_CAPTURE_OFF !== "1") {
+    throw new Error(
+      "[uat real-chat] Claude sign-in needs MOSS_UAT_CAPTURE_OFF=1 so no trace records the code"
+    );
+  }
   return value;
 }
 
@@ -238,7 +244,7 @@ export function installUatRealChatAuth(
   projectName: string,
   actorUserId: string,
   buildComposeArgs: (extra: readonly string[]) => readonly string[]
-): UatRealChatCodexAuth | undefined {
+): UatRealChatAuth | undefined {
   if (uatRealChatProvider() === "codex") {
     return installUatRealChatCodexAuth(projectName, actorUserId, buildComposeArgs);
   }
@@ -257,7 +263,7 @@ function prepareUatRealChatClaudeSignIn(
   projectName: string,
   actorUserId: string,
   buildComposeArgs: (extra: readonly string[]) => readonly string[]
-): UatRealChatCodexAuth {
+): UatRealChatAuth {
   const owner = execDockerCompose(buildComposeArgs, [
     "exec",
     "-T",
@@ -272,6 +278,20 @@ function prepareUatRealChatClaudeSignIn(
   }
   const agentHome = `/data/cli-auth/agents/${actorUserId}`;
 
+  const removeToken = (user: string, home: string): void => {
+    execDockerCompose(buildComposeArgs, [
+      "exec",
+      "-T",
+      "--user",
+      user,
+      "jarv1s",
+      "rm",
+      "-f",
+      `${home}/${CLAUDE_TOKEN_FILE}`,
+      `${home}/${CLAUDE_TOKEN_FILE}.tmp`
+    ]);
+  };
+
   let removed = false;
   return {
     cleanup: async () => {
@@ -280,17 +300,7 @@ function prepareUatRealChatClaudeSignIn(
 
       let failed = false;
       try {
-        execDockerCompose(buildComposeArgs, [
-          "exec",
-          "-T",
-          "--user",
-          owner,
-          "jarv1s",
-          "rm",
-          "-f",
-          `/data/cli-auth/${CLAUDE_TOKEN_FILE}`,
-          `/data/cli-auth/${CLAUDE_TOKEN_FILE}.tmp`
-        ]);
+        removeToken(owner, "/data/cli-auth");
       } catch {
         failed = true;
       }
@@ -312,17 +322,7 @@ function prepareUatRealChatClaudeSignIn(
       }
       if (OWNER_RE.test(agentOwner)) {
         try {
-          execDockerCompose(buildComposeArgs, [
-            "exec",
-            "-T",
-            "--user",
-            agentOwner,
-            "jarv1s",
-            "rm",
-            "-f",
-            `${agentHome}/${CLAUDE_TOKEN_FILE}`,
-            `${agentHome}/${CLAUDE_TOKEN_FILE}.tmp`
-          ]);
+          removeToken(agentOwner, agentHome);
         } catch {
           failed = true;
         }

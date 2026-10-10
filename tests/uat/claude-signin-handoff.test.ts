@@ -101,6 +101,29 @@ describe("signInClaudeThroughMoss (#3361)", () => {
     expect(logs.join("\n")).not.toContain(LINK);
   });
 
+  it("leaves an empty code file for the operator to finish, then takes the code", async () => {
+    const moss = fakeMoss({
+      "/api/onboarding/provider-login/begin": [
+        { loginId: "L1", status: "awaiting_token", authorizationUrl: LINK }
+      ],
+      "/api/onboarding/provider-login/submit-token": [{ loginId: "L1", status: "ready" }]
+    });
+    let step = 0;
+    const answer = () => {
+      step += 1;
+      if (step === 1) writeFileSync(paths.codeFile, "");
+      if (step === 2) {
+        expect(existsSync(paths.codeFile), "the empty file was kept").toBe(true);
+        writeFileSync(paths.codeFile, CODE);
+      }
+    };
+
+    await signInClaudeThroughMoss(moss.api, options(answer));
+
+    const submits = moss.calls.filter((c) => c.path.endsWith("/submit-token"));
+    expect(submits.map((c) => c.data.token)).toEqual([CODE]);
+  });
+
   it("returns at once when Moss is already signed in to Claude", async () => {
     const moss = fakeMoss({
       "/api/onboarding/provider-login/begin": [{ loginId: "L1", status: "ready" }]
