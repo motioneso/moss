@@ -33,7 +33,7 @@ import {
 import { ActionRequestRecovery } from "./action-request-recovery.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
-import { isConversationTainted } from "./conversation-policy.js";
+import { isConversationMarked, isConversationTainted } from "./conversation-policy.js";
 import {
   admitToolOutcome,
   recordContextAdmission,
@@ -148,6 +148,12 @@ export interface AssistantToolGatewayDependencies {
 }
 
 const denyPrefs: AgencyPrefLookup = { get: async () => false };
+
+type PlannedCall = {
+  readonly kind: "yolo-confirm" | "yolo-run" | "auto-run" | "confirm";
+  readonly userTrusted?: true;
+};
+
 const defaultPolicyLookup: ActionPolicyLookup = {
   getFamilyTier: async () => null,
   getFamilyManifest: async () => null
@@ -242,7 +248,7 @@ export class AssistantToolGateway {
       if (!this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
         return this.denyRateLimited(found, input, ctx, "yolo");
       }
-      const dispatched = await this.runAutomatically(found, input, ctx);
+      const dispatched = await this.runAutomatically(found, input, ctx, route);
       if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
       const { response: result } = dispatched.value;
       recordUnattendedRun(this.deps, found, ctx, "yolo", dispatched.value, dispatched.outcomeTitle);
@@ -272,7 +278,7 @@ export class AssistantToolGateway {
           "Automatic execution hit its rate limit — please confirm this action."
         );
       }
-      const dispatched = await this.runAutomatically(found, input, ctx);
+      const dispatched = await this.runAutomatically(found, input, ctx, route);
       if (dispatched.kind === "confirm") return this.confirmAndRun(found, input, ctx);
       const { response: result } = dispatched.value;
       if (found.tool.risk !== "read") {
@@ -344,7 +350,7 @@ export class AssistantToolGateway {
       }
       return { kind: "declined", reason: "rate_limited" };
     }
-    const dispatched = await this.runAutomatically(found, input, ctx);
+    const dispatched = await this.runAutomatically(found, input, ctx, route);
     if (dispatched.kind === "confirm") return { kind: "declined", reason: "would_confirm" };
     const { response, audit } = dispatched.value;
     if (limited)
@@ -471,19 +477,19 @@ export class AssistantToolGateway {
     return "failure" in prepared ? prepared : { ...prepared, ctx };
   }
 
-  /** The single approval decision shared by live calls and the gate's dry run. */
+  /**
+   * The single approval decision shared by live calls and the gate's dry run. In a tainted
+   * conversation only the user's own trust runs a write (#3338). `userTrusted` marks that run so
+   * it skips the clean-conversation claim it can no longer win.
+   */
   private async planCall(
     found: ExecutableTool,
     input: Record<string, unknown>,
     ctx: ToolContext
-  ): Promise<{ kind: "yolo-confirm" | "yolo-run" | "auto-run" | "confirm" }> {
+  ): Promise<PlannedCall> {
     if (found.resolution?.forceConfirm) return { kind: "confirm" };
     const confirmWhenTainted = found.resolution?.confirmWhenTainted ?? false;
     if (found.tool.risk === "read" && !confirmWhenTainted) return { kind: "auto-run" };
-    const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
-    if (conversationTainted && (found.tool.risk !== "read" || confirmWhenTainted)) {
-      return { kind: "confirm" };
-    }
     const perCallResolved = found.resolution !== undefined;
     const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
     const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
@@ -492,30 +498,35 @@ export class AssistantToolGateway {
       this.deps.resolveActiveModules,
       ctx.actorUserId
     );
-    if (found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true) {
-      return confirmOverride ||
-        !(await familyAllowsAutoRun(
-          found.tool,
-          found.dto.moduleId,
-          effectiveLookup,
-          perCallResolved
-        ))
-        ? { kind: "yolo-confirm" }
-        : (await isConversationTainted(this.deps.provenance, ctx))
-          ? { kind: "confirm" }
-          : { kind: "yolo-run" };
+    const yolo = found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true;
+    const yoloRuns =
+      yolo &&
+      !confirmOverride &&
+      (await familyAllowsAutoRun(found.tool, found.dto.moduleId, effectiveLookup, perCallResolved));
+    const sortedSafe = yolo ? false : await this.computeSortedSafe(found, ctx);
+
+    // Read taint after every policy hook so content admitted meanwhile still counts.
+    const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
+    if (conversationTainted && (confirmWhenTainted || found.tool.risk === "outbound")) {
+      return { kind: "confirm" };
     }
+    // The user's trust runs past a durable outside-content mark only. Any other taint asks.
+    if (conversationTainted && !(await isConversationMarked(this.deps.provenance, ctx))) {
+      return { kind: yolo ? "yolo-confirm" : "confirm" };
+    }
+    const trusted = conversationTainted ? { userTrusted: true as const } : {};
+    if (yolo) return yoloRuns ? { kind: "yolo-run", ...trusted } : { kind: "yolo-confirm" };
     return (await resolvePolicy(
       found.tool,
       found.dto.moduleId,
       confirmOverride,
       effectiveLookup,
-      await this.computeSortedSafe(found, ctx),
+      sortedSafe,
       perCallResolved,
       conversationTainted,
       confirmWhenTainted
-    )) === "run" && !(await isConversationTainted(this.deps.provenance, ctx))
-      ? { kind: "auto-run" }
+    )) === "run"
+      ? { kind: "auto-run", ...trusted }
       : { kind: "confirm" };
   }
 
@@ -729,11 +740,12 @@ export class AssistantToolGateway {
   private async runAutomatically(
     found: ExecutableTool,
     input: Record<string, unknown>,
-    ctx: ToolContext
+    ctx: ToolContext,
+    route: PlannedCall
   ) {
     const outcomeTitle = captureActionOutcomeTitle(found.tool, input, ctx);
     const result =
-      found.tool.risk === "read" && !found.resolution?.confirmWhenTainted
+      (found.tool.risk === "read" && !found.resolution?.confirmWhenTainted) || route.userTrusted
         ? { kind: "ran" as const, value: await this.dispatchHandler(found, input, ctx) }
         : await runAutomaticAction(this.deps.provenance, ctx, () =>
             this.dispatchHandler(found, input, ctx)

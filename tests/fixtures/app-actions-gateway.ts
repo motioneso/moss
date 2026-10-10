@@ -78,7 +78,9 @@ export function makeAppActionGateway(options: {
     ({
       createPendingAssistantAction: vi.fn(async () => ({ id: `app-action-${++actionSequence}` })),
       insertActionAuditLog: vi.fn(async () => undefined),
-      resolveAssistantAction: vi.fn(async () => ({ status: "confirmed" }))
+      resolveAssistantAction: vi.fn(async () => ({ status: "confirmed" })),
+      listActionPolicies: vi.fn(async () => []),
+      insertActionPolicyIfAbsent: vi.fn(async () => undefined)
     } as unknown as AiRepository);
   const wired = buildChatGatewayDependencies({
     runner: options.runner,

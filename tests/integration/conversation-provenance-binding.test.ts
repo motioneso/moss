@@ -127,6 +127,20 @@ describe("conversation provenance ownership and lifecycle", () => {
     ]);
   });
 
+  it("reports a durable mark only for an owned admitted thread with no automatic run in flight", async () => {
+    const thread = await create();
+    expect(await store.isMarked(ids.userA, undefined)).toBe(false);
+    expect(await store.isMarked(ids.userA, randomUUID())).toBe(false);
+    expect(await store.isMarked(ids.userA, thread.id)).toBe(false);
+    const held = await store.runAutomatic(ids.userA, thread.id, () =>
+      store.isMarked(ids.userA, thread.id)
+    );
+    expect(held).toEqual({ kind: "ran", value: false });
+    await store.recordAdmission(ids.userA, thread.id, "attachment_read");
+    expect(await store.isMarked(ids.userA, thread.id)).toBe(true);
+    expect(await store.isMarked(ids.userB, thread.id)).toBe(false);
+  });
+
   it("preserves the first admission across repeated and concurrent writes, resume and restart", async () => {
     const a = await create();
     await store.recordAdmission(ids.userA, a.id, "app_action_outside");
@@ -488,6 +502,8 @@ describe("rollback-only provenance negative controls", () => {
 
 // The handler is a no-provider sentinel. Provenance lookups, action rows, ownership and
 // confirmation use the real SQL-backed production classes in the isolated CI database.
+// The sentinel is an owned connected tool that sends data out, so YOLO and trusted-auto run it
+// only in a clean conversation (#3338).
 function boundGateway(
   actorUserId: string,
   threadId: string | null,
@@ -516,9 +532,10 @@ function boundGateway(
         ...fixtureApproval("Record local sentinel write", "Provenance test sentinel"),
         description: "Local sentinel write",
         permissionId: "provenance-test.write",
-        risk: "write",
+        risk: "outbound",
         content: "user_authored",
-        isExternal: false,
+        isExternal: true,
+        descriptorOwnerUserId: actorUserId,
         executionPolicy: "auto",
         actionFamilyId: family.id,
         inputSchema: { type: "object", properties: {} },

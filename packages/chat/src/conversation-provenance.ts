@@ -32,6 +32,16 @@ export class ConversationProvenanceStore implements ConversationProvenancePort {
     });
   }
 
+  async isMarked(actorUserId: string, threadId: string | undefined): Promise<boolean> {
+    if (!threadId || !isUuid(threadId)) return false;
+
+    return this.dataContext.withDataContext({ actorUserId }, async (scopedDb) => {
+      const row = await this.ownedProvenance(scopedDb, actorUserId, threadId).executeTakeFirst();
+      if (!row || row.tainted_at === null) return false;
+      return !(await this.hasReservation(scopedDb, threadId));
+    });
+  }
+
   async runAutomatic<T>(
     actorUserId: string,
     threadId: string | undefined,

@@ -482,15 +482,12 @@ describe("AssistantToolGateway self-operation", () => {
 
     // Positive control: user A's own call still finds and removes the row it owns — proves the
     // follow genuinely exists and user B's `removed: false` isn't vacuously true for everyone.
+    // A's promoted sports family still runs in A's tainted thread (#3338).
     emitted.length = 0;
-    const pendingAliceUnfollow = sportsGateway.callTool(tokenA, "sports.unfollowTeam", {
+    const aliceUnfollow = await sportsGateway.callTool(tokenA, "sports.unfollowTeam", {
       competitionKey: "nfl"
     });
-    const request = await waitForActionRequest();
-    expect(request.toolName).toBe("sports.unfollowTeam");
-    expect(emitted[0]?.record).toMatchObject({ outsideContentNotice: true });
-    await sportsGateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
-    const aliceUnfollow = await pendingAliceUnfollow;
+    expect(emitted.some((entry) => entry.record.kind === "action_request")).toBe(false);
     expect(aliceUnfollow.ok).toBe(true);
     if (aliceUnfollow.ok) {
       expect(aliceUnfollow.structuredData).toEqual({ removed: true });
