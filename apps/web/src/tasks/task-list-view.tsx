@@ -10,7 +10,7 @@ import {
   type TaskEffort,
   type TaskListDto
 } from "@moss/shared";
-import { Button, SectionHead } from "@moss/ui";
+import { Button, IconButton, RowButton, SectionHead } from "@moss/ui";
 
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { formatDate, useUserLocale } from "../locale/locale-format.js";
@@ -232,8 +232,7 @@ export function TaskRow(props: {
           </label>
         )}
       </span>
-      <button
-        type="button"
+      <RowButton
         className="tk-task__main"
         onClick={() => props.onOpen(task)}
         aria-label={`Open ${task.title}`}
@@ -282,7 +281,7 @@ export function TaskRow(props: {
             </span>
           ) : null}
         </span>
-      </button>
+      </RowButton>
       <div className="tk-task__right">
         {suggested ? (
           <>
@@ -305,14 +304,15 @@ export function TaskRow(props: {
           </>
         ) : null}
         {!compact && task.effort ? <EffortDot effort={task.effort} /> : null}
-        <button
-          type="button"
-          className="tk-task__open"
-          onClick={() => props.onOpen(task)}
-          aria-label={`Open ${task.title}`}
-        >
-          <PanelRight size={15} aria-hidden="true" />
-        </button>
+        <span className="tk-task__open">
+          <IconButton
+            size="sm"
+            onClick={() => props.onOpen(task)}
+            aria-label={`Open ${task.title}`}
+          >
+            <PanelRight size={15} aria-hidden="true" />
+          </IconButton>
+        </span>
       </div>
     </div>
   );

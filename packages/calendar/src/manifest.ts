@@ -117,7 +117,8 @@ export const calendarModuleManifest = {
     {
       id: "calendar",
       label: "Calendar",
-      description: "View the active actor's connected calendar events.",
+      description:
+        "View your connected events in Day, Week or Month, retaining the selected view. On phones, Week and Month scroll horizontally with readable columns; Day stays compact. Failed reads offer Retry and a failed refresh retains loaded events.",
       path: "/calendar",
       icon: "calendar-days",
       order: 35,
@@ -128,7 +129,8 @@ export const calendarModuleManifest = {
     {
       id: "calendar.module-settings",
       label: "Calendar",
-      description: "Choose calendar briefing and scheduling preferences.",
+      description:
+        "Choose calendar briefing and scheduling preferences. Unknown settings stay unavailable with load-error Retry. Failed refreshes retain confirmed values; failed saves keep the previous choices.",
       path: "/settings?section=modules&module=calendar",
       scope: "user",
       order: 35,

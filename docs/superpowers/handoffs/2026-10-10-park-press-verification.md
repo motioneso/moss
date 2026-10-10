@@ -172,6 +172,62 @@ fixture patch remain apply-compatible. Its assistant-name patch already conflict
 with current main's newer model fixture before this migration; the locator-only
 changes are disjoint and do not import or revert that pending branch.
 
+## Planning retained-screen batch
+
+Tasks, Calendar and Workshop retain their approved views and domain behavior.
+The Calendar phone layout follows the explicit decision to retain Day, Week and
+Month, with contained horizontal scrolling for readable Week/Month columns and a
+compact Day. Selection and persistence remain unchanged.
+
+| Finding | Result |
+| --- | --- |
+| PL-01 | Calendar metadata meets the authored 11 px floor; event height/title space protects labels. |
+| PL-02 | Held events use flat semantic fill, a straight marker and dashed outline instead of hatch. |
+| PL-03 | Week/Month use named, focusable contained scrolling regions; the page does not overflow. |
+| PL-04 | Initial events failure offers Retry; refresh failure retains known events and toolbar context. |
+| PL-05 | Event Peek explicitly opts into shared modal entry, containment, Escape and opener return. |
+| PL-06 | Task detail/activity/subtask/tag reads distinguish unknown, unavailable and empty; failures preserve known fields and unsaved drafts. |
+| PL-07 | Filter metadata and canonical Avatar replace undersized text/initials. |
+| PL-08 | Rows use shared controls; trailing actions become visible on focus, hover and touch layouts without lifted row material. |
+| PL-09 | Owned control and chip gaps use authored spacing; intentional compound controls remain. |
+| PL-10 | Tasks initial loading uses quiet status text. |
+| PL-11 | Workshop deletion uses contained shared Dialog, safe initial Keep it focus, danger action and pending/retry guards. |
+| PL-12 | Workshop read/recovery presentation uses shared status and empty anatomy while retaining content. |
+| PL-13 | Visible Workshop conversations fill the actual host grid row; no fixed header-height subtraction. Hidden expanded chat and other routes retain their scrolling contract. |
+| PL-14 | Task/Calendar settings separate initial read, refresh and save errors; unknown choices cannot write accidental defaults. |
+| PL-15 | Task detail body scrolls internally and phone footer actions wrap within the dialog. |
+
+The F0-owned workspace layout extraction and direct Tasks/Calendar UI dependencies
+are included in this same batch, alongside truthful module recovery declarations.
+The active scheduled Task capture patch is preserved and its declaration patch
+remains apply-compatible.
+
+Source-faithful cloud Chromium fixtures verified Task 320 px internal scrolling
+and complete footer, desktop trailing-action keyboard visibility, Calendar keyboard
+scrolling and persisted Week selection, modal Peek return, and Workshop portrait,
+landscape/offline, desktop/docked, expanded-chat and route-away/back composition.
+Workshop's 390 x 844 viewport retained a wrapped 163 px header and composer bottom
+at 816 px; no actual deletion was performed. Focused regressions cover the read,
+write, pending and recovery branches. Exhaustive failure browser combinations,
+touch hardware, zoom/assistive technology and the real-data live gate remain
+unverified; they are not hidden planning code-completion claims.
+
+### Planning CI follow-through
+
+The first planning web run found that a task title disabled during its initial
+read did not receive focus when it became editable. The title now completes
+initial focus only while the dialog surface still owns focus; a user who moves
+to another control keeps that choice. StrictMode and delayed-read regressions
+cover this transition and subsequent refreshes.
+
+The tag acceptance fixture now releases the deliberately held read before using
+loaded controls, retaining the exact mutation outcome assertions. The trailing
+control test waits for the authored opacity transition to finish at exactly 1.
+Workshop viewport fixtures explicitly enable the module for their actor, so the
+real host gate is exercised rather than bypassed. These correct the six initial
+web failures; they do not claim the first CI run passed. The active scheduled
+quick-add tests remain disjoint and their patch still applies cleanly.
+
 ## Explicit outstanding gates
 
 - Later planning, lifestyle and Meetings/Finance batches must receive their own

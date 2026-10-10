@@ -1,14 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TaskDefaultView, TaskDto, TaskSearchIntent } from "@moss/shared";
 import { Button, Chip, EmptyState, IconButton, Masthead, Segmented } from "@moss/ui";
-import {
-  CheckCheck,
-  CircleAlert,
-  LoaderCircle,
-  Search,
-  GitCommitHorizontal,
-  Tag
-} from "lucide-react";
+import { CheckCheck, CircleAlert, Search, GitCommitHorizontal, Tag } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
@@ -407,10 +400,9 @@ export function TasksPage() {
             ) : null}
 
             {tasksQuery.isPending ? (
-              <EmptyState
-                icon={<LoaderCircle className="spin" size={24} aria-hidden="true" />}
-                title="Loading tasks"
-              />
+              <p className="jds-hint" role="status">
+                Loading tasks…
+              </p>
             ) : tasksQuery.isError && !tasksQuery.data ? (
               <div role="alert">
                 <EmptyState
