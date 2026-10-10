@@ -109,10 +109,12 @@
   }
 }
 
-/* The route owns the available height, so notices and responsive insets are included. */
+/* The host bounds this visible conversation to its actual remaining grid row.
+   Fill that row rather than subtracting a topbar token: narrow headers can wrap. */
 .workshop-page--conversation {
   box-sizing: border-box;
-  height: calc(100dvh - var(--topbar-h));
+  height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
