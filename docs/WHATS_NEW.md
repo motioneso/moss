@@ -29,15 +29,95 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-10
+
+#### Fixed
+
+- **Medication times follow your clock format.** Medication times on Today now follow your 12-hour or 24-hour time setting. [PR #3337](https://github.com/motioneso/moss/pull/3337)
+- **Chat no longer flashes a connect prompt.** The chat drawer no longer briefly shows the connect-a-provider message when you open it after a model has been added. [PR #3329](https://github.com/motioneso/moss/pull/3329)
+
+#### Added
+
+- **Finance first budget, money moves in chat and Finance settings.** Finance drafts your first budget for you, Moss can move money between categories and sort transactions when you ask, and Finance has a settings page where you choose how much it does on its own. [PR #3312](https://github.com/motioneso/moss/pull/3312)
+
+### 2026-10-09
+
+#### Fixed
+
+- **Data download includes all your records.** Your data download now includes your full memory, goals, notifications, followed sports teams and activity history, which were missing before. [PR #3292](https://github.com/motioneso/moss/pull/3292)
+- **Update check and restart after update.** The daily check for new versions now saves its result, and restarting after an update now works on the standard production setup. [PR #3294](https://github.com/motioneso/moss/pull/3294)
+- **Snoozed commitments come back.** Commitments you snooze now return to your review list when the snooze ends, and the assistant now respects which kind of commitments you ask it to list. [PR #3297](https://github.com/motioneso/moss/pull/3297)
+- **Small fixes to goals, people, chat and Food.** Clearing a goal's target date now works, name lookups ignore capital letters, the chat box keeps your text if a message is refused, and the Food day view updates after Moss logs something for you. [PR #3304](https://github.com/motioneso/moss/pull/3304)
+- **Job Search buttons and warnings.** Roles that have not been scored no longer show Save and Pass buttons that did nothing, turning a job source on or off now confirms the real result, and the resume warning says exactly which roles will be scored again. [PR #3302](https://github.com/motioneso/moss/pull/3302)
+- **Briefings show the right all-day events and tools.** Evening briefings now list tomorrow's all-day events correctly, and briefings can use tools from added modules. [PR #3295](https://github.com/motioneso/moss/pull/3295)
+- **Reply works for family members.** The Reply button on Today now works for family members whenever chat is available, instead of staying greyed out. The member setup no longer shows a personal key box that did nothing. [PR #3293](https://github.com/motioneso/moss/pull/3293)
+- **Notification sensitivity is now saved.** The Quiet, Balanced and Proactive setting now stays where you put it and changes how often Moss sends you push notifications. Balanced, the default, no longer sends low-urgency pushes straight away, even for people who never changed the setting. [PR #3289](https://github.com/motioneso/moss/pull/3289)
+- **Expired alerts and digest gaps.** Alert cards that have expired now disappear and cannot be restored, and the notification digest no longer skips notifications when more than 50 are waiting. [PR #3301](https://github.com/motioneso/moss/pull/3301)
+- **News refresh, topic filters and dismissed stories.** News sources that had a temporary outage now come back on their own, topic filters show the matching headlines again, and stories you dismissed no longer reappear in your briefings. [PR #3298](https://github.com/motioneso/moss/pull/3298)
+- **Sports briefing and ticker fixes.** The morning briefing now shows a followed team's current game instead of yesterday's result, and the sports ticker no longer breaks when you follow your first team. [PR #3300](https://github.com/motioneso/moss/pull/3300)
+- **Medication times and failed saves.** Medication doses now appear at the right time and day for your time zone, every-few-hours schedules count correctly, and a wellness note you type is kept with an error message if saving fails. [PR #3283](https://github.com/motioneso/moss/pull/3283)
+- **Workshop replies no longer get stuck.** Workshop no longer shows an endless "Thinking" after a failed reply, and it now shows new replies in long projects. [PR #3296](https://github.com/motioneso/moss/pull/3296)
+- **Deleted household members no longer appear in assistant answers.** When someone is removed from your household, the assistant no longer reports their shared accounts, transactions or spending. [PR #3269](https://github.com/motioneso/moss/pull/3269)
+- **Memory and note search accuracy.** Corrected memories can now be forgotten, deleted notes no longer show up in search, facts about other people are no longer saved as facts about you, and chat now recalls relevant memories automatically. [PR #3271](https://github.com/motioneso/moss/pull/3271)
+- **Multi-day events show on every day.** Calendar events that last several days, or run past midnight, now appear on each day they cover instead of only the first. [PR #3287](https://github.com/motioneso/moss/pull/3287)
+- **Sending email from chat.** Replying to an email from chat now works for regular mail accounts, and a mail-folder problem no longer makes Moss say a sent email was not sent. [PR #3270](https://github.com/motioneso/moss/pull/3270)
+- **Chat no longer sees hidden page text.** Moss no longer picks up text from parts of a page that are hidden or marked private when it looks at what you are viewing. [PR #3254](https://github.com/motioneso/moss/pull/3254)
+- **Task edits no longer lose data.** Editing a repeating task, moving a task with subtasks to another list, searching in plain words, and saving a task while it is still loading now all keep your changes instead of dropping or overwriting them. [PR #3272](https://github.com/motioneso/moss/pull/3272)
+- **Automatic day planning no longer books unapproved drafts.** When Moss plans your day automatically, it now adds only the time blocks it created itself. A draft you have not approved can no longer end up on your calendar. [PR #3205](https://github.com/motioneso/moss/pull/3205)
+- **Upgrades with saved News and Sports sources.** Updating Moss no longer fails to start when you already have custom News or Sports sources saved. [PR #3207](https://github.com/motioneso/moss/pull/3207)
+- **Creating goals works again.** Adding a new goal, or adding progress notes to a goal, no longer fails. [PR #3206](https://github.com/motioneso/moss/pull/3206)
+- **Finance screens refresh after actions.** Finance pages no longer get stuck on Loading after you sync, change a category, or set a budget. [PR #3203](https://github.com/motioneso/moss/pull/3203)
+- **Bank transactions now sync.** Transactions from your connected banks now arrive even when the bank's live balance check fails, and a first sync runs as soon as you connect. [PR #3166](https://github.com/motioneso/moss/pull/3166)
+
+#### Changed
+
+- **Redesigned Finance budget, transactions and accounts.** Finance has a new budget you can edit in place, a transactions list where Moss sorts new spending for you to check, and a clearer accounts page. [PR #3188](https://github.com/motioneso/moss/pull/3188)
+
+### 2026-10-08
+
+#### Fixed
+
+- **Recover meeting audio after call changes.** A meeting recording now keeps going when you join a browser call such as Teams or Google Meet. It reconnects the audio by itself, and a few seconds may be missed while it does. [PR #3153](https://github.com/motioneso/moss/pull/3153)
+- **Reduce speaker echo in meeting recordings.** Meeting recordings use the Mac’s voice processing to reduce speaker audio picked up by the microphone. [PR #3120](https://github.com/motioneso/moss/pull/3120)
+- **Starting meeting recordings.** Meeting recording on Mac can recover from brief microphone startup hiccups without needing Resume. [PR #3119](https://github.com/motioneso/moss/pull/3119)
+- **Cleaner meeting transcripts during silence.** Silent and near-silent recording chunks no longer create repeated transcript lines. [PR #3104](https://github.com/motioneso/moss/pull/3104)
+- **Meeting recording on Mac.** Meeting recording on the mac no longer stops itself a moment after starting. [PR #3099](https://github.com/motioneso/moss/pull/3099)
+
+### 2026-10-07
+
+#### Fixed
+
+- **Meeting summaries use your default model.** Meeting summaries use your default model, explain unavailable setups and timeouts clearly, and never switch to another model. [PR #3093](https://github.com/motioneso/moss/pull/3093)
+- **Clearer action outcomes.** Unattended writes now show a quiet result line, expired requests stay in their original chat, and saved questions stay before replies in history and exports. [PR #3091](https://github.com/motioneso/moss/pull/3091)
+
+#### Changed
+
+- **Simpler meetings with your Mac.** Link your Mac once and start recording from a small pill on your screen; the meeting page now shows just the transcript and your notes, and a summary is written when you stop. [PR #3056](https://github.com/motioneso/moss/pull/3056)
+- **Clearer action approvals.** Deleting a note now always asks first, even when note changes are trusted, and approval cards explain corrections, show clearer keyboard focus, and keep completed choices quiet. [PR #3094](https://github.com/motioneso/moss/pull/3094)
+
+### 2026-10-06
+
+#### Changed
+
+- **Moss can do much more of the app from chat.** Moss can now find and use many more of the app's own actions from chat, such as reviewing memory suggestions, and it shows you a card to approve before deleting anything. Existing chats ask before every change, even in YOLO, until you start a new chat. New chats still ask before every change when they use an outside agent or tools someone else installed, and ask after reading outside content; tools from integrations and add-ons you connected yourself no longer make them ask. Memory suggestions now have clear labels instead of raw labels. [PR #3071](https://github.com/motioneso/moss/pull/3071)
+
 ### 2026-10-05
 
 #### Added
 
+- **Choose your decision model.** You can now use Cloudflare's Clef, or any service compatible with Jev, to sort mail and judge focus. [PR #3059](https://github.com/motioneso/moss/pull/3059)
 - **Meeting drafts, notes and data export.** Create meeting drafts, keep personal notes, find meetings in History and include retained meeting data in your account export; recording is not available yet. [PR #2982](https://github.com/motioneso/moss/pull/2982)
 
 #### Changed
 
 - **Loading screen matches your colours.** The loading screen now follows your light or dark setting and shows a gently animated Moss logo instead of a spinning circle. [PR #3052](https://github.com/motioneso/moss/pull/3052)
+
+#### Fixed
+
+- **Timed-out quick checks now appear in Activity.** When a quick check runs past its time limit, the activity log now says so instead of showing nothing. [PR #3064](https://github.com/motioneso/moss/pull/3064)
+- **Connection classifier counts only tools that can answer.** The classifier panel on a connection page no longer counts look-up tools that it can never offer. [PR #3062](https://github.com/motioneso/moss/pull/3062)
+- **Repeated notices keep their own cards.** When two notices arrive with the same title, each one now keeps its own card with its own details. [PR #3063](https://github.com/motioneso/moss/pull/3063)
+- **Small settings screen fixes.** Admin menu labels now meet the minimum text size, and the Activity filter row wraps instead of running off the edge on narrow phones. [PR #3060](https://github.com/motioneso/moss/pull/3060)
 
 ### 2026-10-04
 
