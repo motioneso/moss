@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 
 import { getLocaleSettings, getQuietHoursSettings, putQuietHoursSettings } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
-import { TIME_ZONE_OPTIONS } from "./settings-personal-panes.js";
 import {
   isStaleQuietHoursSave,
   quietHoursDraftDirty,
@@ -15,6 +14,7 @@ import {
   quietHoursSaveFailure,
   quietHoursSaveRequest
 } from "./settings-quiet-hours-draft.js";
+import { TIME_ZONE_OPTIONS } from "./settings-time-zones.js";
 import { readError } from "./settings-types.js";
 import { Badge, Field, Group, Note, Row, Switch } from "./settings-ui.js";
 
@@ -27,6 +27,9 @@ const DEFAULT_QUIET_HOURS: QuietHoursSettingsDto = {
 
 // Combobox values are strings; this one stands for a schedule that follows the profile zone.
 const PROFILE_ZONE = "";
+
+// A draft keeps the version it was built from; a refetch mid-draft must not move it.
+type Draft = { readonly value: QuietHoursSettingsDto; readonly version: string | null };
 
 type Feedback =
   | { readonly kind: "saved" }
@@ -52,16 +55,16 @@ export function QuietHoursEditor() {
   const loaded = quietHoursQuery.data;
   const saved = loaded?.quietHours ?? DEFAULT_QUIET_HOURS;
   const profileTimeZone = localeQuery.data?.locale.timezone ?? null;
-  const [draft, setDraft] = useState<QuietHoursSettingsDto | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const editing = draft ?? saved;
-  const dirty = draft !== null && quietHoursDraftDirty(saved, draft);
+  const editing = draft?.value ?? saved;
+  const dirty = draft !== null && quietHoursDraftDirty(saved, draft.value);
 
   const save = useMutation({
     // An offline save fails at once and keeps the draft, rather than waiting paused as "Saving".
     networkMode: "always",
-    mutationFn: (next: QuietHoursSettingsDto) =>
-      putQuietHoursSettings(quietHoursSaveRequest(next, loaded)),
+    mutationFn: (next: Draft) =>
+      putQuietHoursSettings(quietHoursSaveRequest(next.value, { version: next.version })),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.settings.quietHours, data);
       setDraft(null);
@@ -82,7 +85,10 @@ export function QuietHoursEditor() {
 
   const held = quietHoursQuery.isLoading || quietHoursQuery.isError || save.isPending;
   const edit = (patch: Partial<QuietHoursSettingsDto>) => {
-    setDraft({ ...editing, ...patch });
+    setDraft({
+      value: { ...editing, ...patch },
+      version: draft ? draft.version : (loaded?.version ?? null)
+    });
     setFeedback(null);
   };
   const submit = () => {
@@ -91,7 +97,7 @@ export function QuietHoursEditor() {
       setFeedback({ kind: "problem", text: problem });
       return;
     }
-    save.mutate(editing);
+    save.mutate({ value: editing, version: draft ? draft.version : (loaded?.version ?? null) });
   };
 
   const zoneOptions = useMemo<readonly ComboboxOption[]>(() => {
@@ -111,6 +117,7 @@ export function QuietHoursEditor() {
   }, [profileTimeZone, saved.timezone]);
 
   const olderAlerts = loaded?.authority.status === "conflict" ? loaded.authority.alerts : null;
+  const unreadable = loaded?.authority.status === "malformed";
 
   return (
     <Group title="Quiet hours" action={dirty ? <Badge>Unsaved changes</Badge> : undefined}>
@@ -130,6 +137,11 @@ export function QuietHoursEditor() {
             ? `Email alerts still follow an older schedule, ${olderAlerts.start} to ${olderAlerts.end}.`
             : "Email alerts still follow an older schedule, which is switched off."}{" "}
           Saving here changes only the notification schedule.
+        </Note>
+      ) : null}
+      {unreadable ? (
+        <Note icon={<MoonStar size={13} aria-hidden="true" />}>
+          Part of your saved quiet hours could not be read. Notifications follow the schedule below.
         </Note>
       ) : null}
       <Row

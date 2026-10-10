@@ -6,8 +6,7 @@ import type {
   WeatherLocationDto,
   WeatherUnit
 } from "@moss/shared";
-import { formatInZone } from "@moss/shared";
-import { Button, Combobox, type ComboboxOption } from "@moss/ui";
+import { Button, Combobox } from "@moss/ui";
 import { Check, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -31,6 +30,7 @@ import { DeleteAccount } from "./delete-account";
 import { useFeedback } from "./settings-feedback";
 import { DataExport, MacCompanion, Sessions } from "./settings-profile-subviews";
 import { quietHoursSavedLine } from "./settings-quiet-hours-draft";
+import { TIME_ZONE_OPTIONS } from "./settings-time-zones";
 import { readError, type PaneProps } from "./settings-types";
 import { Avatar, Badge, Field, Group, PaneHead, Row, Segmented, Select } from "./settings-ui";
 
@@ -39,42 +39,6 @@ const DEFAULT_LOCALE_SETTINGS: LocaleSettingsDto = {
   region: "en-US",
   dateFormat: "24"
 };
-
-function timeZoneOffsetMinutes(timeZone: string, date: Date): number {
-  const label = formatInZone(date, timeZone, { timeZoneName: "shortOffset" }, "en-US");
-  const match = /GMT([+-])(\d+)(?::(\d+))?/.exec(label);
-  if (!match) return 0;
-  const sign = match[1] === "-" ? -1 : 1;
-  return sign * (Number(match[2]) * 60 + Number(match[3] ?? 0));
-}
-
-function formatTimeZoneOffset(offsetMinutes: number): string {
-  const sign = offsetMinutes < 0 ? "-" : "+";
-  const abs = Math.abs(offsetMinutes);
-  const hours = String(Math.floor(abs / 60)).padStart(2, "0");
-  const minutes = String(abs % 60).padStart(2, "0");
-  return `UTC${sign}${hours}:${minutes}`;
-}
-
-// Sorted by UTC offset (then name) and labeled with that offset, rather than
-// the browser's arbitrary IANA-list order — the plain list read as unsorted noise.
-const SUPPORTED_TIME_ZONES = Intl.supportedValuesOf("timeZone")
-  .map((timeZone) => {
-    const offsetMinutes = timeZoneOffsetMinutes(timeZone, new Date());
-    return {
-      timeZone,
-      offsetMinutes,
-      label: `(${formatTimeZoneOffset(offsetMinutes)}) ${timeZone}`
-    };
-  })
-  .sort((a, b) => a.offsetMinutes - b.offsetMinutes || a.timeZone.localeCompare(b.timeZone));
-
-// Searchable picker options: "(UTC-08:00) America/Los_Angeles" also matches "los angeles".
-export const TIME_ZONE_OPTIONS: readonly ComboboxOption[] = SUPPORTED_TIME_ZONES.map((zone) => ({
-  value: zone.timeZone,
-  label: zone.label,
-  keywords: zone.timeZone.replace(/[_/]/g, " ")
-}));
 
 interface WeatherLocationFields {
   readonly label: string;
@@ -208,7 +172,7 @@ export function ProfilePane({ me, onSelectSection }: PaneProps) {
     retry: false
   });
   const quietHoursSummary = quietHoursQuery.data
-    ? quietHoursSavedLine(quietHoursQuery.data, locale.timezone)
+    ? quietHoursSavedLine(quietHoursQuery.data, localeQuery.data?.locale.timezone ?? null)
     : quietHoursQuery.isError
       ? readError(quietHoursQuery.error)
       : "Loading quiet hours…";
@@ -459,9 +423,16 @@ export function ProfilePane({ me, onSelectSection }: PaneProps) {
               : quietHoursSummary
           }
           control={
-            <Button variant="link" size="sm" onClick={() => onSelectSection?.("alerts")}>
-              Edit quiet hours
-            </Button>
+            <span className="quiet-hours__links">
+              {quietHoursQuery.isError ? (
+                <Button variant="link" size="sm" onClick={() => void quietHoursQuery.refetch()}>
+                  Try again
+                </Button>
+              ) : null}
+              <Button variant="link" size="sm" onClick={() => onSelectSection?.("alerts")}>
+                Edit quiet hours
+              </Button>
+            </span>
           }
         />
       </Group>

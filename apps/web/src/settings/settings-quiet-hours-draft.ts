@@ -63,10 +63,10 @@ export function quietHoursSavedLine(
   return `${lead}: every day, ${quietHours.start} to ${quietHours.end}, ${zone}.`;
 }
 
-/** The save carries the version the editor was showing, so a newer stored schedule wins. */
+/** The save carries the version the draft was built from, so a newer stored schedule wins. */
 export function quietHoursSaveRequest(
   next: QuietHoursSettingsDto,
-  loaded: GetQuietHoursSettingsResponse | undefined
+  loaded: Pick<GetQuietHoursSettingsResponse, "version"> | undefined
 ): PutQuietHoursSettingsRequest {
   return { quietHours: next, expectedVersion: loaded?.version ?? null };
 }

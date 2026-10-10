@@ -72,8 +72,10 @@ async function flush() {
   }
 }
 
+let client: QueryClient;
+
 async function mount(): Promise<ReactTestRenderer> {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let tree!: ReactTestRenderer;
   act(() => {
     tree = create(createElement(QueryClientProvider, { client }, createElement(QuietHoursEditor)));
@@ -230,6 +232,34 @@ describe("QuietHoursEditor", () => {
     expect(out(tree)).not.toContain("Unsaved changes");
   });
 
+  it("saves a draft against the version it was built from, even after a refetch", async () => {
+    const elsewhere = { ...overnight, timezone: "Europe/Paris" };
+    const api = serve(loaded(overnight), [
+      (body) => {
+        const { expectedVersion } = body as { expectedVersion: string | null };
+        if (expectedVersion !== "2:200") {
+          return new Response(JSON.stringify({ error: "conflict" }), { status: 409 });
+        }
+        return new Response(JSON.stringify(loaded(overnight, "3:300")), { status: 200 });
+      }
+    ]);
+    const tree = await mount();
+
+    setTime(tree, "Quiet hours until", "06:00");
+    api.setStored(loaded(elsewhere, "2:200"));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["settings"] });
+    });
+    await flush();
+    await save(tree);
+
+    expect(api.sent).toEqual([
+      { quietHours: { ...overnight, end: "06:00" }, expectedVersion: "1:100" }
+    ]);
+    expect(out(tree)).toContain("Quiet hours changed somewhere else");
+    expect(out(tree)).toContain("Saved schedule: every day, 22:00 to 07:00, Europe/Paris time.");
+  });
+
   it("can follow the profile time zone and names it", async () => {
     const next = { ...overnight, timezone: null };
     const api = serve(loaded(overnight), [
@@ -263,6 +293,15 @@ describe("QuietHoursEditor", () => {
     expect(out(tree)).not.toContain("Saved schedule");
     expect(button(tree, "Keep quiet hours off")).toHaveLength(0);
     expect(button(tree, "Use 23:00 to 08:00")).toHaveLength(0);
+  });
+
+  it("says when the saved schedule cannot be read in full, without calling it saved", async () => {
+    serve(loaded(overnight, "1:100", { status: "malformed", alerts: null }));
+    const tree = await mount();
+
+    expect(out(tree)).toContain("Part of your saved quiet hours could not be read.");
+    expect(out(tree)).toContain("Notifications follow: every day, 22:00 to 07:00");
+    expect(out(tree)).not.toContain("Saved schedule");
   });
 
   it("holds the controls while loading and offers Try again after a failed load", async () => {

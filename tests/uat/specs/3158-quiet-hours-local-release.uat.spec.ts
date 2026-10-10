@@ -3,8 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { execUatSql } from "./job-search-board-sql.js";
 
-// Uses the actual Settings controls (the Alerts & quiet hours editor) and installed scheduling worker. Its disposable third-party
-// briefing writer fixture is scripted, so this does not prove a real model reply or push device.
+// Uses the actual Settings controls (the Alerts & quiet hours editor) and installed scheduling
+// worker. Its disposable third-party briefing writer fixture is scripted, so this does not prove
+// a real model reply or push device.
 export const uatLevel = {
   level: "admin+data",
   without: [],

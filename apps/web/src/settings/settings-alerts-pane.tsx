@@ -1,6 +1,6 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail } from "lucide-react";
-import { Button } from "@moss/ui";
+import { Button, Divider } from "@moss/ui";
 
 import {
   getProactiveMonitoringSettings,
@@ -122,6 +122,9 @@ export function AlertsPane({ onSelectSection }: PaneProps) {
             />
           </Group>
         </div>
+        <span className="alerts-pane__rule">
+          <Divider orientation="vertical" weight="strong" />
+        </span>
         <div className="alerts-pane__quiet">
           <QuietHoursEditor />
         </div>

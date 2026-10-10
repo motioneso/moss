@@ -164,6 +164,38 @@ describe("ProfilePane quiet-hours summary", () => {
     expect(html).not.toContain("Loading quiet hours");
   });
 
+  it("offers Try again after a failed load and shows the schedule once it loads", async () => {
+    let quietHoursCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const respond = (value: unknown, status = 200) =>
+        Promise.resolve(new Response(JSON.stringify(value), { status }));
+      if (String(input) !== "/api/me/quiet-hours") return respond({ error: "unused" }, 503);
+      quietHoursCalls += 1;
+      return quietHoursCalls === 1
+        ? respond({ error: "Quiet hours are unavailable right now" }, 503)
+        : respond(quietHours);
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    locale(client);
+    const tree = await profileTree(client, () => {});
+    await settle();
+
+    const retry = () =>
+      tree.root.findAll((node) => node.type === "button" && textOf(node.children) === "Try again");
+    expect(textOf(tree.toJSON())).toContain("Quiet hours are unavailable right now");
+    expect(retry()).toHaveLength(1);
+
+    await act(async () => {
+      retry()[0]!.props.onClick();
+    });
+    await settle();
+
+    expect(quietHoursCalls).toBe(2);
+    expect(textOf(tree.toJSON())).toContain("Saved schedule: every day, 22:00 to 07:00");
+    expect(retry()).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
   it("never calls a conflicting schedule the saved setting", async () => {
     const html = await renderPane((client) => {
       locale(client);
@@ -234,6 +266,14 @@ async function profileTree(client: QueryClient, onSelectSection: (id: string) =>
     );
   });
   return tree;
+}
+
+async function settle() {
+  for (let i = 0; i < 6; i += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
 }
 
 function textOf(node: unknown): string {
