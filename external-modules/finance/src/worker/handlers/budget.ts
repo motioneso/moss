@@ -207,7 +207,104 @@ export const budgetAssignHandler: ToolFactory = (ports) => async (input) => {
     min: -AMOUNT_BOUND,
     max: AMOUNT_BOUND
   });
-  return applyAssignment(ports, { month, categoryId, amountCents }, "moss");
+  // The gateway's dollar limit measures the jump from previousCents, so a stale or
+  // invented base would hide a large change. Reject anything that differs from the stored total.
+  const previousCents = readInt(input, "previousCents", {
+    required: true,
+    min: -AMOUNT_BOUND,
+    max: AMOUNT_BOUND
+  });
+  const store = await ports.store();
+  const stored = (await store.getLedger(month))?.assignments[categoryId] ?? 0;
+  if (stored !== previousCents) {
+    throw new InputError(
+      "stale_previous",
+      "previousCents does not match the stored total; read finance.budget.status again"
+    );
+  }
+  const result = await applyAssignment(ports, { month, categoryId, amountCents }, "moss");
+  return {
+    ...result,
+    before: { assignedCents: previousCents },
+    after: { assignedCents: amountCents }
+  };
+};
+
+/** Source id that draws from unassigned money instead of a category. */
+export const READY_TO_ASSIGN = "ready_to_assign";
+
+/**
+ * Moves money between two categories for one month, or from unassigned money into one.
+ * The source must hold the amount (its available balance, or the ready-to-assign figure).
+ */
+export const budgetMoveHandler: ToolFactory = (ports) => async (input) => {
+  const month = readMonth(input);
+  const fromCategoryId = readString(input, "fromCategoryId", { required: true });
+  const toCategoryId = readString(input, "toCategoryId", { required: true });
+  const amountCents = readInt(input, "amountCents", { required: true, min: 1, max: AMOUNT_BOUND });
+  if (toCategoryId === READY_TO_ASSIGN) {
+    throw new InputError("invalid_category", "toCategoryId must be a category");
+  }
+  if (fromCategoryId === toCategoryId) {
+    throw new InputError("invalid_category", "fromCategoryId and toCategoryId must differ");
+  }
+  const live = new Set(
+    (await loadCategories(ports)).filter((entry) => !entry.archived).map((entry) => entry.id)
+  );
+  if (
+    !live.has(toCategoryId) ||
+    (fromCategoryId !== READY_TO_ASSIGN && !live.has(fromCategoryId))
+  ) {
+    throw new InputError("invalid_category", "a category id is not a live category");
+  }
+
+  const store = await ports.store();
+  const { state } = await computeMonthState(ports, store, month);
+  const assigned = (await store.getLedger(month))?.assignments ?? {};
+  const toBefore = assigned[toCategoryId] ?? 0;
+  let fromBefore: number | null = null;
+  if (fromCategoryId === READY_TO_ASSIGN) {
+    const ready = readyToAssignCents(await store.listAccounts(), state.categories);
+    if (amountCents > ready) {
+      throw new InputError("not_enough_ready", "amountCents is more than is ready to assign");
+    }
+  } else {
+    fromBefore = assigned[fromCategoryId] ?? 0;
+    const available = state.categories[fromCategoryId]?.availableCents ?? fromBefore;
+    if (amountCents > available) {
+      throw new InputError("not_enough_available", "amountCents is more than the source holds");
+    }
+  }
+
+  if (fromBefore !== null) {
+    await store.setAssignment(month, fromCategoryId, fromBefore - amountCents);
+  }
+  await store.setAssignment(month, toCategoryId, toBefore + amountCents);
+  await store.appendActivity({
+    actor: "moss",
+    kind: "budget.move",
+    params: { month, fromCategoryId, toCategoryId, amountCents },
+    undo: {
+      month,
+      fromCategoryId,
+      toCategoryId,
+      fromPreviousCents: fromBefore,
+      toPreviousCents: toBefore
+    }
+  });
+
+  return {
+    status: "ok",
+    month,
+    fromCategoryId,
+    toCategoryId,
+    amountCents,
+    before: { fromAssignedCents: fromBefore, toAssignedCents: toBefore },
+    after: {
+      fromAssignedCents: fromBefore === null ? null : fromBefore - amountCents,
+      toAssignedCents: toBefore + amountCents
+    }
+  };
 };
 
 /** Queue twin of budget.assign — consumes the host job envelope. */
