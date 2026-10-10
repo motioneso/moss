@@ -27,7 +27,7 @@ export function reminderRefusedReply(reason: ReminderUnsupportedReason): string 
   }
 }
 
-export const REMINDER_CAPACITY_REPLY = `You already have ${REMINDER_OPEN_LIMIT} reminders waiting, so I didn't set this one. Try again once one has gone off and you've replied to it.`;
+export const REMINDER_CAPACITY_REPLY = `You already have ${REMINDER_OPEN_LIMIT} reminders, which is the most I can hold, so I didn't set this one.`;
 
 export const REMINDER_MAIN_ONLY_REPLY =
   "I can only set reminders in your Main chat, so I didn't set this one.";

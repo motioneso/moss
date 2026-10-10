@@ -60,6 +60,7 @@ export async function tryPreModelTurn(
       plan,
       {
         threadId: requestThreadId,
+        stopSignal: controller.signal,
         attachments:
           attachments.length > 0
             ? attachments.map((meta) => ({
@@ -75,6 +76,7 @@ export async function tryPreModelTurn(
   } catch {
     stored = undefined;
   }
+  if (stored === "stopped") return done(cancelledTurn(host, actorUserId, surface));
   if (!stored) {
     return done(emitUnsaved(host, actorUserId, surface, text, REMINDER_STORAGE_FAILURE_MESSAGE));
   }

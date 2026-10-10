@@ -310,7 +310,7 @@ export class ChatRepository {
 
   /**
    * Writes a code-authored assistant message under an id reserved earlier, for example a
-   * reminder delivery. No RETURNING, because the worker may insert but not read messages.
+   * reminder delivery. No RETURNING; the caller already holds the id it reserved.
    */
   async insertReservedAssistantMessage(
     scopedDb: DataContextDb,

@@ -113,7 +113,7 @@ export interface ChatPersistencePort {
     actorUserId: string,
     userText: string,
     plan: ReminderTurnPlan,
-    opts?: HandledTurnOptions,
+    opts?: ReminderTurnOptions,
     surface?: ChatSurface
   ): Promise<
     | {
@@ -122,6 +122,7 @@ export interface ChatPersistencePort {
         readonly reply: string;
         readonly origin: ChatTurnOriginV1;
       }
+    | "stopped"
     | undefined
   >;
   /** Close the current conversation and open a fresh one (for /clear). */
@@ -202,6 +203,11 @@ export interface HandledTurnOptions {
   readonly attachments?: readonly ChatAttachmentDto[];
   readonly actionResults?: readonly ActionResultMetadata[];
   readonly activityRecords?: readonly TranscriptRecord[];
+}
+
+/** A stop that lands before the reminder turn commits rolls the whole turn back. */
+export interface ReminderTurnOptions extends HandledTurnOptions {
+  readonly stopSignal?: AbortSignal;
 }
 
 export interface ChatSessionManagerDeps {

@@ -48,7 +48,7 @@ import {
 } from "../jobs.js";
 import { containsSensitiveMemoryText } from "../memory-distillation.js";
 import type { ChatPersistencePort } from "./chat-session-manager.js";
-import type { HandledTurnOptions } from "./chat-session-ports.js";
+import type { HandledTurnOptions, ReminderTurnOptions } from "./chat-session-ports.js";
 import type { ChatRepository } from "../repository.js";
 import { ReminderRepository } from "../reminders/repository.js";
 import { decideReminderTurn, type ReminderTurnPlan } from "../reminders/turn.js";
@@ -345,7 +345,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     actorUserId: string,
     userText: string,
     plan: ReminderTurnPlan,
-    opts?: HandledTurnOptions,
+    opts?: ReminderTurnOptions,
     surface?: ChatSurface
   ): Promise<
     | {
@@ -354,17 +354,25 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         readonly reply: string;
         readonly origin: ChatTurnOriginV1;
       }
+    | "stopped"
     | undefined
   > {
-    const stored = await this.persistCompletedTurn(
-      actorUserId,
-      "record-reminder-turn",
-      userText,
-      "",
-      opts,
-      surface,
-      { reminder: plan }
-    );
+    const { stopSignal, ...turnOpts } = opts ?? {};
+    let stored: Awaited<ReturnType<typeof this.persistCompletedTurn>>;
+    try {
+      stored = await this.persistCompletedTurn(
+        actorUserId,
+        "record-reminder-turn",
+        userText,
+        "",
+        turnOpts,
+        surface,
+        { reminder: plan, stopSignal }
+      );
+    } catch (error) {
+      if (error instanceof ReminderTurnStopped) return "stopped";
+      throw error;
+    }
     return stored?.reply !== undefined && stored.origin !== undefined
       ? {
           userMessageId: stored.userMessageId,
@@ -390,7 +398,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     turn:
       | { readonly executed: { provider: ProviderKind; model: string } }
       | { readonly origin: ChatTurnOriginV1 }
-      | { readonly reminder: ReminderTurnPlan }
+      | { readonly reminder: ReminderTurnPlan; readonly stopSignal?: AbortSignal }
   ): Promise<
     | {
         readonly userMessageId: string;
@@ -477,6 +485,9 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               )
             : undefined;
       if (result && handled && "save" in handled) await handled.save?.(result.userMessage.id);
+
+      // Throwing here rolls back the turn, the reminder and its delivery job together.
+      if ("reminder" in turn && turn.stopSignal?.aborted) throw new ReminderTurnStopped();
 
       if (thread.incognito) {
         return undefined;
@@ -785,3 +796,5 @@ function buildRollingSummary(
   // Cap to 2000 chars so the column stays bounded while retaining the oldest summarized facts.
   return raw.length > 2000 ? `${raw.slice(0, 1997)}...` : raw;
 }
+
+class ReminderTurnStopped extends Error {}

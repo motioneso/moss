@@ -47,6 +47,10 @@ function asOwner<T>(actorUserId: string, work: (db: DataContextDb) => Promise<T>
   return app.withDataContext({ actorUserId }, work);
 }
 
+function assertNotStopped<T>(result: T): asserts result is Exclude<T, "stopped"> {
+  if (result === "stopped") throw new Error("the turn reported a stop it never had");
+}
+
 async function mainThreadId(actorUserId: string): Promise<string> {
   return asOwner(actorUserId, async (db) => {
     const existing = await chat.getMainThread(db, actorUserId);
@@ -111,6 +115,7 @@ describe("saving a reminder from a chat turn (#3309)", () => {
     const stored = await persistenceWith(appBoss).recordReminderTurn(ids.userA, SAY, REQUEST, {
       threadId
     });
+    assertNotStopped(stored);
 
     expect(stored?.reply).toBe(reminderSavedReply(600, "stretch"));
     expect(stored?.origin).toMatchObject({ kind: "reminder", event: "saved" });
@@ -154,7 +159,9 @@ describe("saving a reminder from a chat turn (#3309)", () => {
     const threadId = await mainThreadId(ids.userA);
     const persistence = persistenceWith(appBoss);
     const first = await persistence.recordReminderTurn(ids.userA, SAY, REQUEST, { threadId });
+    assertNotStopped(first);
     const second = await persistence.recordReminderTurn(ids.userA, SAY, REQUEST, { threadId });
+    assertNotStopped(second);
     const firstId = (first!.origin as { reminderId: string }).reminderId;
     const secondId = (second!.origin as { reminderId: string }).reminderId;
     expect(firstId).not.toBe(secondId);
@@ -170,6 +177,7 @@ describe("saving a reminder from a chat turn (#3309)", () => {
     expect(await counts(ids.userA)).toMatchObject({ reminders: 20, jobs: 20 });
 
     const refused = await persistence.recordReminderTurn(ids.userA, SAY, REQUEST, { threadId });
+    assertNotStopped(refused);
     expect(refused?.reply).toBe(REMINDER_CAPACITY_REPLY);
     expect(refused?.origin).toMatchObject({ event: "refused", reminderId: null });
     expect(await counts(ids.userA)).toMatchObject({ reminders: 20, jobs: 20 });
@@ -185,7 +193,7 @@ describe("saving a reminder from a chat turn (#3309)", () => {
       persistence.recordReminderTurn(ids.userA, SAY, REQUEST, { threadId }),
       persistence.recordReminderTurn(ids.userA, SAY, REQUEST, { threadId })
     ]);
-    expect(replies.map((r) => r?.origin)).toEqual(
+    expect(replies.map((r) => (r === "stopped" ? r : r?.origin))).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ event: "saved" }),
         expect.objectContaining({ event: "refused" })
@@ -200,6 +208,7 @@ describe("saving a reminder from a chat turn (#3309)", () => {
     const refused = await persistenceWith(appBoss).recordReminderTurn(ids.userA, SAY, REQUEST, {
       threadId
     });
+    assertNotStopped(refused);
     expect(refused?.reply).toBe(REMINDER_MAIN_ONLY_REPLY);
     expect(await counts(ids.userA)).toEqual({ ...before, messages: before.messages + 2 });
   });
@@ -213,6 +222,7 @@ describe("saving a reminder from a chat turn (#3309)", () => {
       { kind: "main_only" },
       { threadId }
     );
+    assertNotStopped(refused);
     expect(refused?.reply).toBe(REMINDER_MAIN_ONLY_REPLY);
     expect(await counts(ids.userA)).toEqual({ ...before, messages: before.messages + 2 });
   });
@@ -226,6 +236,7 @@ describe("saving a reminder from a chat turn (#3309)", () => {
       { kind: "unsupported", reason: "needs_relative_duration" },
       { threadId }
     );
+    assertNotStopped(refused);
     expect(refused?.reply).toBe(reminderRefusedReply("needs_relative_duration"));
     expect(refused?.origin).toMatchObject({ event: "refused", reminderId: null });
     expect(await counts(ids.userA)).toEqual({ ...before, messages: before.messages + 2 });
@@ -237,6 +248,7 @@ describe("saving a reminder from a chat turn (#3309)", () => {
     const stored = await persistenceWith(appBoss).recordReminderTurn(ids.userA, SAY, REQUEST, {
       threadId
     });
+    assertNotStopped(stored);
     expect(stored).toBeUndefined();
     expect(await counts(ids.userA)).toEqual(before);
   });
@@ -289,6 +301,27 @@ describe("saving a reminder from a chat turn (#3309)", () => {
         threadId
       })
     ).rejects.toThrow(/failed after queueing/);
+    expect(await counts(ids.userA)).toEqual(before);
+  });
+
+  it("rolls back the whole turn when the user stops it during the save", async () => {
+    const threadId = await mainThreadId(ids.userA);
+    const before = await counts(ids.userA);
+    const stop = new AbortController();
+    const stopsWhileQueueing = {
+      send: async (...args: Parameters<PgBoss["send"]>) => {
+        const job = await (appBoss.send as (...a: unknown[]) => Promise<unknown>)(...args);
+        stop.abort();
+        return job;
+      }
+    };
+    const stored = await persistenceWith(stopsWhileQueueing as never).recordReminderTurn(
+      ids.userA,
+      SAY,
+      REQUEST,
+      { threadId, stopSignal: stop.signal }
+    );
+    expect(stored).toBe("stopped");
     expect(await counts(ids.userA)).toEqual(before);
   });
 });

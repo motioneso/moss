@@ -148,4 +148,32 @@ describe("chat reminder turn (#3309)", () => {
     expect(result.reply).toBe("");
     expect(ctx.records).toEqual([{ kind: "status", text: "Stopped by user." }]);
   });
+
+  it("passes the stop signal to the store so a stop during the save rolls it back", async () => {
+    const holder: { manager?: ChatSessionManager } = {};
+    const record = vi.fn(async (_a, _t, _p, opts: { stopSignal?: AbortSignal }) => {
+      await holder.manager?.stopTurn("u1");
+      return opts.stopSignal?.aborted ? "stopped" : SAVED;
+    });
+    const ctx = setup({ record });
+    holder.manager = ctx.manager;
+    const result = await ctx.manager.submitTurn("u1", "Ben", "remind me in 10 minutes to stretch");
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(ctx.engine.launchCount).toBe(0);
+    expect(result.reply).toBe("");
+    expect(ctx.records).toEqual([{ kind: "status", text: "Stopped by user." }]);
+  });
+
+  it("shows the saved reply when the save committed before a late stop", async () => {
+    const holder: { manager?: ChatSessionManager } = {};
+    const record = vi.fn(async () => {
+      await holder.manager?.stopTurn("u1");
+      return SAVED;
+    });
+    const ctx = setup({ record });
+    holder.manager = ctx.manager;
+    const result = await ctx.manager.submitTurn("u1", "Ben", "remind me in 10 minutes to stretch");
+    expect(result.reply).toBe(SAVED.reply);
+    expect(ctx.records.at(-1)).toMatchObject({ kind: "reply", text: SAVED.reply });
+  });
 });
