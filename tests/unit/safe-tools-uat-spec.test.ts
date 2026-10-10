@@ -5,15 +5,25 @@ const SPEC = "2984-safe-tools-run.uat.spec.ts";
 
 const source = () => readFile(new URL(`../uat/specs/${SPEC}`, import.meta.url), "utf8");
 
-// Safety assertions the move to the Conversations controls must keep, verbatim.
-const KEPT_ASSERTIONS = [
-  "expect(tools.get(FIXTURE_LIGHT_TOOL)).toMatchObject({ asksFirst: false });",
-  'expect(tools.get(RESET_TOOL)).toMatchObject({ risk: "destructive", asksFirst: true });',
-  'expect(ran, "the light call reached the service without a card").toBe(true);',
-  "await expect(page.locator(ACTION_CARD)).toHaveCount(0);",
-  "expect(asked, `the reset tool asked first at ${name} width`).toBe(true);",
-  "expect(callsTo(RESET_TOOL)).toHaveLength(0);",
-  '.toEqual(["current", "current"]);'
+// Every assertion the move to the Conversations controls must keep, verbatim, with its count.
+const KEPT_ASSERTIONS: readonly (readonly [string, number])[] = [
+  ["await expect(composer).toBeEnabled();", 1],
+  ["await expect(skipSetup.or(userMenu).first()).toBeVisible({ timeout: 30_000 });", 1],
+  ["await expect(userMenu).toBeVisible();", 1],
+  ["await expect(page.getByText(FIXTURE_LIGHT_TOOL).first()).toBeVisible({ timeout: 30_000 });", 1],
+  [".toBeVisible({ timeout: 180_000 })", 1],
+  ['.toEqual(["current", "current"]);', 1],
+  ["expect(tools.get(FIXTURE_LIGHT_TOOL)).toMatchObject({ asksFirst: false });", 1],
+  ['expect(tools.get(RESET_TOOL)).toMatchObject({ risk: "destructive", asksFirst: true });', 1],
+  [
+    "expect(yolo.ok() || yolo.status() === 403, `PUT /api/me/yolo -> ${yolo.status()}`).toBe(true);",
+    1
+  ],
+  [".toBeGreaterThanOrEqual(1)", 1],
+  ["await expect(page.locator(ACTION_CARD)).toHaveCount(0);", 2],
+  ['expect(ran, "the light call reached the service without a card").toBe(true);', 1],
+  ["expect(asked, `the reset tool asked first at ${name} width`).toBe(true);", 1],
+  ["expect(callsTo(RESET_TOOL)).toHaveLength(0);", 1]
 ];
 
 /** Every problem the 2984 spec has with fresh chats, captures or kept assertions. */
@@ -52,8 +62,8 @@ function problems(text: string): string[] {
   if (direct.length !== 2) found.push(`expected 2 screenshots, found ${direct.length}`);
   if (guarded.length !== direct.length) found.push("a screenshot ignores the capture opt-out");
 
-  for (const assertion of KEPT_ASSERTIONS) {
-    if (!text.includes(assertion)) found.push(`lost assertion: ${assertion}`);
+  for (const [assertion, count] of KEPT_ASSERTIONS) {
+    if (text.split(assertion).length - 1 < count) found.push(`lost assertion: ${assertion}`);
   }
   return found;
 }
@@ -122,6 +132,15 @@ describe("connected-tools safety live spec (#3361)", () => {
           "$1"
         )
       ).toContain("a screenshot ignores the capture opt-out");
+    });
+
+    it("one of the two identical no-card checks dropped", async () => {
+      expect(
+        await mutate(
+          "      await expect(page.locator(ACTION_CARD)).toHaveCount(0);\n    }\n",
+          "    }\n"
+        )
+      ).toContain("lost assertion: await expect(page.locator(ACTION_CARD)).toHaveCount(0);");
     });
 
     it("a dropped safety assertion", async () => {
