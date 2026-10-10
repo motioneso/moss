@@ -697,7 +697,7 @@ tests/unit/meeting-title-web.test.tsx,L4,reserved,,Specific existing UI tests de
 tests/unit/meeting-transcript-web.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/meeting-web-interaction.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/meeting-web.test.tsx,L4,reserved,,Specific existing UI tests delegated by domain owner
-tests/unit/meetings-css-boundaries.test.ts,L4,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/meetings-css-boundaries.test.ts,F0,reserved,,Transferred from L4 for shared control-boundary regression and standalone foundation CI repair
 tests/unit/module-build-plan-record.test.tsx,C5,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/module-settings-ui-contract.test.ts,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/module-web-sdk-ui-smoke.test.tsx,F0,reserved,,Shared component/token behavior tests
