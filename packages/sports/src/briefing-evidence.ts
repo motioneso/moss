@@ -14,7 +14,7 @@ import {
 import { matchTargetFor, resolveFollowIdentity } from "./follow-identity.js";
 import {
   filterTeamHeadlines,
-  findTeamGame,
+  currentTeamGame,
   matchupLine,
   scoreLine,
   teamFact,
@@ -198,7 +198,7 @@ export function composeSportsBriefingEvidence(input: SportsEvidenceInput): {
         continue;
       }
       const board = input.scoreboardByComp.get(follow.competitionKey) ?? [];
-      const game = findTeamGame(board, target);
+      const game = currentTeamGame(board, target, input.now);
       if (game) {
         pushGame(game);
         facts.push({ competitionKey: follow.competitionKey, text: teamFact(game, target) });

@@ -222,6 +222,50 @@ describe("sports evidence composition", () => {
     expect(evidence.state).toBe("unknown");
   });
 
+  it("a followed team with yesterday's final and tonight's game reports tonight's game", () => {
+    const yesterday = game({
+      id: "yesterday",
+      startsAt: "2026-06-30T20:00:00.000Z",
+      state: "final",
+      statusDetail: "Final"
+    });
+    const tonight = game({ id: "tonight", startsAt: "2026-07-01T23:00:00.000Z" });
+    const { evidence } = composeSportsBriefingEvidence({
+      follows: [
+        {
+          id: "f1",
+          competitionKey: "nfl",
+          teamKey: "dal",
+          sourceTeamId: "6",
+          createdAt: "2026-06-01T00:00:00.000Z"
+        }
+      ],
+      teamsByComp: new Map([
+        [
+          "nfl",
+          [
+            {
+              teamKey: "dal",
+              competitionKey: "nfl",
+              name: "Dallas Cowboys",
+              shortName: "DAL",
+              crestUrl: null,
+              sourceTeamId: "6",
+              abbreviation: "DAL"
+            }
+          ]
+        ]
+      ]),
+      scoreboardByComp: new Map([["nfl", [yesterday, tonight]]]),
+      headlinesByComp: new Map(),
+      now: NOW,
+      timeZone: "UTC",
+      degraded: false,
+      capturedAt: NOW.toISOString()
+    });
+    expect(evidence.games.map((g) => g.id)).toEqual(["tonight"]);
+  });
+
   it("caps games at 8 and stories at 6 total", () => {
     const boards = new Map([["nfl", Array.from({ length: 12 }, (_, i) => game({ id: `g${i}` }))]]);
     const { evidence } = composeSportsBriefingEvidence({
