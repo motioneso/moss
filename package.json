@@ -135,7 +135,8 @@
     "test:uat:3125-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3125-main-chat-real.uat.spec.ts",
     "test:uat:3191-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3191-caller-provider-real.uat.spec.ts",
     "test:uat:3126-real": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3126-side-chat-overlay-real.uat.spec.ts",
-    "test:uat:3192": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3192-owner-main.uat.spec.ts"
+    "test:uat:3192": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3192-owner-main.uat.spec.ts",
+    "test:uat:3164": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3164-quiet-hours-writers.uat.spec.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",
