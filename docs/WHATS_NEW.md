@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Deleted household members no longer appear in assistant answers.** When someone is removed from your household, the assistant no longer reports their shared accounts, transactions or spending. [PR #3269](https://github.com/motioneso/moss/pull/3269)
 - **Memory and note search accuracy.** Corrected memories can now be forgotten, deleted notes no longer show up in search, facts about other people are no longer saved as facts about you, and chat now recalls relevant memories automatically. [PR #3271](https://github.com/motioneso/moss/pull/3271)
 - **Multi-day events show on every day.** Calendar events that last several days, or run past midnight, now appear on each day they cover instead of only the first. [PR #3287](https://github.com/motioneso/moss/pull/3287)
 - **Sending email from chat.** Replying to an email from chat now works for regular mail accounts, and a mail-folder problem no longer makes Moss say a sent email was not sent. [PR #3270](https://github.com/motioneso/moss/pull/3270)
