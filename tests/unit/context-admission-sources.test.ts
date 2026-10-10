@@ -195,6 +195,7 @@ describe("context admission source coverage", () => {
     expect(launch).toContain('args.admissionPath ?? "seed_route"');
     expect(launch).toContain("await submitAdmittedContext(session.engine, admitted)");
     expect(manager).toContain('"module_control_context"');
+    expect(compact(read("main-reminder-context.ts"))).toContain('"main_reminder_context"');
     expect(manager.match(/submitPreparedTurn\(session.engine, engineText\)/g)).toHaveLength(2);
     expect(compact(read("runtime.ts"))).toContain(
       "gateway.runReadToolForActor(actorUserId, toolName, input, binding)"

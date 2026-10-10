@@ -92,6 +92,8 @@ export interface ChatPersistencePort {
       readonly activityRecords?: readonly TranscriptRecord[];
       readonly elapsedMs?: number;
       readonly usage?: ChatTurnUsageDto;
+      /** #3311 — reserved reminder message ids this turn was shown; acknowledged with the save. */
+      readonly acknowledgeReminderMessageIds?: readonly string[];
     },
     surface?: ChatSurface
   ): Promise<
@@ -102,6 +104,14 @@ export interface ChatPersistencePort {
       }
     | undefined
   >;
+  /**
+   * #3311 — delivered reminders whose context is still pending in this exact Main chat, oldest
+   * first and bounded. Optional: embedders without reminders omit it.
+   */
+  listPendingMainReminders?(
+    actorUserId: string,
+    threadId: string
+  ): Promise<readonly PendingMainReminder[]>;
   /**
    * Task 4.1 (#2901) — persist one completed gate-handled turn. The assistant message carries the
    * gate-origin contract instead of an executed provider/model or usage. Optional: embedders that
@@ -363,4 +373,9 @@ export interface ChatSessionManagerDeps {
   readonly serverOwnsDrain?: boolean;
   // Wall-clock seam for buildEngineText's time context; deliberately separate from `clock` above (idle/heartbeat elapsed time).
   readonly now?: () => Date;
+}
+
+export interface PendingMainReminder {
+  readonly reservedMessageId: string;
+  readonly body: string;
 }

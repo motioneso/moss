@@ -10,6 +10,7 @@ import { renderAttachmentsManifest } from "./attachments-manifest.js";
 import { beginClassifierGateShadowTurn } from "./classifier-gate-shadow.js";
 import { admissionForActor, admitToContext, submitPreparedTurn } from "./context-admission.js";
 import { buildEngineText } from "./engine-text.js";
+import { snapshotMainReminders } from "./main-reminder-context.js";
 import {
   assertProviderIdentityForPendingTurn,
   type EnsureSessionOpts,
@@ -197,6 +198,13 @@ export async function runChatTurn(
       "module_control_context",
       opts?.moduleControl ?? ""
     );
+    const mainReminders = await snapshotMainReminders(
+      host.deps,
+      actorUserId,
+      surface,
+      session,
+      opts?.moduleControl
+    );
     const engineText = await buildEngineText(
       {
         persistence: host.deps.persistence,
@@ -211,7 +219,11 @@ export async function runChatTurn(
       text,
       surface,
       { threadId: session.threadId, chatSessionId: sessionKey },
-      { attachmentManifest: renderAttachmentsManifest(attachments), moduleControl }
+      {
+        attachmentManifest: renderAttachmentsManifest(attachments),
+        moduleControl,
+        mainReminders: mainReminders.context
+      }
     );
     const { pendingItems } = engineText;
     const currentProvider = await host.deps.persistence.resolveActiveProvider(actorUserId);
@@ -452,7 +464,10 @@ export async function runChatTurn(
         actionResults: host.actionResultsBySession.get(sessionKey),
         activityRecords: turnActivityRecords,
         elapsedMs: turnElapsedMs,
-        usage: turnUsage
+        usage: turnUsage,
+        ...(mainReminders.messageIds.length > 0
+          ? { acknowledgeReminderMessageIds: mainReminders.messageIds }
+          : {})
       },
       surface
     );
