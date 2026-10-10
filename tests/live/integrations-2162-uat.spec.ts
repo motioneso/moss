@@ -1,17 +1,25 @@
 // Live-Path Gate for #2162 — connecting Moss to real external services through the real UI.
-// Runs against a REAL running dev instance: real API, real Postgres with RLS, and two REAL
-// services on the LAN: a Home Assistant MCP server and a Radarr install (OpenAPI, pasted spec).
+// Runs against a REAL running instance: real API, real Postgres with RLS, and two REAL
+// services: a Home Assistant MCP server and a Radarr install (OpenAPI, pasted spec).
 // Nothing is mocked. See docs/DEVELOPMENT_STANDARDS.md.
 //
-// Run with:
-//   LIVE_BASE_URL=http://127.0.0.1:5173 \
-//   LIVE_OWNER_PASSWORD=... \
+// On a disposable install (provisions its own stack and real model, then tears it down):
+//   JARVIS_UAT_CLAIMED_WEB_PORT=<devports claim> \
 //   LIVE_HA_MCP_URL=... LIVE_HA_TOKEN=... \
 //   LIVE_RADARR_URL=... LIVE_RADARR_KEY=... LIVE_RADARR_SPEC_FILE=... \
+//     pnpm test:uat:2162-live [playwright args, e.g. --grep OpenAPI]
+//
+// Against an already running instance with a configured chat model:
+//   LIVE_BASE_URL=... LIVE_OWNER_EMAIL=... LIVE_OWNER_PASSWORD=... <service vars as above> \
 //     npx playwright test --config playwright.live.config.ts integrations-2162
+//
+// A missing service or credential fails the test: an unconfigured run is unverified, not green.
 import { readFileSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
+
+import { REAL_CHAT_CONFIGURED_ENV } from "../uat/real-chat-env.js";
+import { bringUpRealChatModel } from "../uat/specs/real-chat-signin.js";
 
 const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
 if (!OWNER_PASSWORD) {
@@ -21,13 +29,20 @@ if (!OWNER_PASSWORD) {
       "named dev-instance-lan-spinup-trusted-origins."
   );
 }
-const OWNER = { email: "ben@ben.com", password: OWNER_PASSWORD };
+const OWNER = { email: process.env.LIVE_OWNER_EMAIL ?? "ben@ben.com", password: OWNER_PASSWORD };
 
 const HA_MCP_URL = process.env.LIVE_HA_MCP_URL ?? "";
 const HA_TOKEN = process.env.LIVE_HA_TOKEN ?? "";
 const RADARR_URL = process.env.LIVE_RADARR_URL ?? "";
 const RADARR_KEY = process.env.LIVE_RADARR_KEY ?? "";
 const RADARR_SPEC_FILE = process.env.LIVE_RADARR_SPEC_FILE ?? "";
+
+function requireEnv(names: Record<string, string>): void {
+  const missing = Object.entries(names)
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+  if (missing.length > 0) throw new Error(`unverified: set ${missing.join(", ")} to run this test`);
+}
 
 async function signInThroughUi(page: Page) {
   await page.goto("/");
@@ -37,7 +52,47 @@ async function signInThroughUi(page: Page) {
     .locator("form")
     .getByRole("button", { name: /sign in/i })
     .click();
-  await expect(page.getByRole("navigation").first()).toBeVisible();
+
+  // A freshly provisioned owner lands on the first-run wizard.
+  const skipSetup = page.getByRole("button", { name: "Skip setup" });
+  const nav = page.getByRole("navigation").first();
+  await expect(skipSetup.or(nav).first()).toBeVisible({ timeout: 30_000 });
+  if (await skipSetup.isVisible()) {
+    await skipSetup.click();
+    await page.getByRole("button", { name: "Skip anyway" }).click();
+  }
+  await expect(nav).toBeVisible();
+}
+
+// A disposable install has no chat model until the provisioned Codex login is bound to the
+// account's cheapest model. A long-lived instance already has one configured.
+async function ensureChatModel(page: Page) {
+  if (!process.env.JARVIS_UAT_BASE_URL) return;
+  if (!process.env[REAL_CHAT_CONFIGURED_ENV]) {
+    throw new Error("no Codex sign-in was copied into this stack; refusing to fake the model");
+  }
+  await bringUpRealChatModel(page);
+}
+
+// The drawer keeps its last conversation; a fresh chat comes from the Conversations overlay.
+// Sending waits until the drawer's clear is acknowledged and the transcript is empty.
+async function startSideChat(page: Page) {
+  await page.getByRole("button", { name: "Open conversations" }).click();
+  const cleared = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname === "/api/chat/clear" &&
+      url.searchParams.get("surface") === "drawer"
+    );
+  });
+  await page.getByRole("button", { name: "New side chat", exact: true }).click();
+  expect((await cleared).status()).toBe(204);
+  await expect(page.getByRole("dialog").locator(".chatd-msg")).toHaveCount(0);
+}
+
+function toolsMeta(page: Page) {
+  return page.locator(".intg-tools .jds-section-head__meta");
 }
 
 async function openIntegrationsPane(page: Page) {
@@ -58,7 +113,7 @@ async function removeConnectionIfPresent(page: Page, name: string) {
 
 test.describe("integrations live path (#2162)", () => {
   test("MCP: connect Home Assistant, discover real tools, see them enabled", async ({ page }) => {
-    test.skip(!HA_MCP_URL || !HA_TOKEN, "needs LIVE_HA_MCP_URL and LIVE_HA_TOKEN");
+    requireEnv({ LIVE_HA_MCP_URL: HA_MCP_URL, LIVE_HA_TOKEN: HA_TOKEN });
     test.setTimeout(180_000);
 
     await signInThroughUi(page);
@@ -72,10 +127,9 @@ test.describe("integrations live path (#2162)", () => {
     await page.getByRole("button", { name: "Connect", exact: true }).click();
 
     // Detail view: discovery really happened against the live HA MCP server.
-    const toolsMeta = page.getByText(/^\d+ of \d+ on, \d+ always ask$/);
-    await expect(toolsMeta).toBeVisible({ timeout: 60_000 });
+    await expect(toolsMeta(page)).toHaveText(/^\d+ of \d+ on$/, { timeout: 60_000 });
     await expect(page.getByText("Connected").first()).toBeVisible();
-    const toolsOn = (await toolsMeta.textContent()) ?? "";
+    const toolsOn = (await toolsMeta(page).textContent()) ?? "";
     expect(Number.parseInt(toolsOn, 10)).toBeGreaterThan(0);
 
     // The credential must never come back to the browser.
@@ -94,10 +148,11 @@ test.describe("integrations live path (#2162)", () => {
     page,
     request
   }) => {
-    test.skip(
-      !RADARR_URL || !RADARR_KEY || !RADARR_SPEC_FILE,
-      "needs LIVE_RADARR_URL, LIVE_RADARR_KEY and LIVE_RADARR_SPEC_FILE"
-    );
+    requireEnv({
+      LIVE_RADARR_URL: RADARR_URL,
+      LIVE_RADARR_KEY: RADARR_KEY,
+      LIVE_RADARR_SPEC_FILE: RADARR_SPEC_FILE
+    });
     test.setTimeout(900_000);
 
     // Ground truth straight from Radarr, so the chat answer below cannot be a guess. A single
@@ -114,6 +169,7 @@ test.describe("integrations live path (#2162)", () => {
     expect(probeMovie.title.length).toBeGreaterThan(0);
 
     await signInThroughUi(page);
+    await ensureChatModel(page);
     await removeConnectionIfPresent(page, "Radarr");
 
     await page.getByRole("button", { name: "Add connection" }).click();
@@ -133,7 +189,7 @@ test.describe("integrations live path (#2162)", () => {
     await expect(
       page.getByText("This app has a lot of tools, so they start off.", { exact: false })
     ).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(/^0 of \d+ on, \d+ always ask$/)).toBeVisible();
+    await expect(toolsMeta(page)).toHaveText(/^0 of \d+ on$/);
 
     // Turn on the movie tools through their real switches. Each switch's checkbox input is
     // visually hidden; the user clicks the styled label.
@@ -143,9 +199,7 @@ test.describe("integrations live path (#2162)", () => {
     for (const box of await switches.all()) {
       if (!(await box.isChecked())) await box.locator("xpath=ancestor::label").click();
     }
-    await expect(page.getByText(/^[1-9]\d* of \d+ on, \d+ always ask$/)).toBeVisible({
-      timeout: 15_000
-    });
+    await expect(toolsMeta(page)).toHaveText(/^[1-9]\d* of \d+ on$/, { timeout: 15_000 });
 
     // The credential must never come back to the browser.
     const pageText = (await page.locator("body").textContent()) ?? "";
@@ -155,7 +209,7 @@ test.describe("integrations live path (#2162)", () => {
     await page.getByRole("button", { name: /^(Chat with .+|Open chat)$/ }).click();
     const composer = page.getByRole("textbox", { name: /^Message/ });
     await expect(composer).toBeVisible();
-    await page.getByRole("button", { name: /^New chat$/ }).click();
+    await startSideChat(page);
 
     await composer.fill(
       `Use the Radarr connection's tools to look up the movie with id ${probeMovie.id} ` +
