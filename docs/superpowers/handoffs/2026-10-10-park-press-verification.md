@@ -144,6 +144,29 @@ recovery controls in the same batch. The active Memory and host chat patches wer
 apply-checked for compatibility; no other branch was edited or imported wholesale.
 Final command counts and remaining browser cases are recorded in its draft body.
 
+### Core CI assertion follow-through
+
+The first core draft head exposed browser acceptance tests still waiting on the
+removed account-menu styling class and button roles for items now correctly
+represented as menuitems. The account readiness waits now target the named Account
+menu button, including unread-count suffixes. Contextually verified Settings,
+Notifications and Log out assertions use menuitem roles. Authentication fixtures,
+waits, timeouts and navigation outcomes are preserved, with closed/open and
+unread-count runtime coverage added.
+
+Directly affected Auth name assertions follow the actual canonical eyebrow inside
+the auth panel, retaining exact saved/default-name expectations. Encryption-key
+replacement acceptance now exercises the authored confirmation: safe initial
+Cancel focus, cancellation without a request, then one explicit confirmation and
+the original ready outcome. Today medication tests retain Escape, Done, backdrop
+and opener-return checks using the intended initial focus and shared backdrop.
+These are repaired assertion contracts, not successful first-run CI claims.
+
+The active scheduled work's three affected sign-in specs and the attachment
+fixture patch remain apply-compatible. Its assistant-name patch already conflicts
+with current main's newer model fixture before this migration; the locator-only
+changes are disjoint and do not import or revert that pending branch.
+
 ## Explicit outstanding gates
 
 - Later planning, lifestyle and Meetings/Finance batches must receive their own
