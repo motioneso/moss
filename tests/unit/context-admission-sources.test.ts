@@ -92,7 +92,7 @@ const NO_NEW_TAINT = {
     reason: "The directly typed user message is an instruction, not an outside source."
   },
   g: {
-    file: "chat-session-manager.ts",
+    file: "chat-session-turn.ts",
     evidence: "attachmentManifest: renderAttachmentsManifest(attachments)",
     reason: "Only server-composed attachment metadata; file bytes use read-tool admission."
   },
@@ -179,7 +179,7 @@ describe("context admission source coverage", () => {
 
   it("routes every raw non-tool source through admission and submits only its branded result", () => {
     const launch = compact(read("chat-session-launch.ts"));
-    const manager = compact(read("chat-session-manager.ts"));
+    const manager = compact(read("chat-session-turn.ts"));
     const turn = compact(read("engine-text.ts"));
     for (const path of ["recall_memory_turn", "recall_cross_tool", "recall_notes"]) {
       expect(turn).toContain(`admitToContext(admission, turnBinding?.threadId ?? null, "${path}"`);
