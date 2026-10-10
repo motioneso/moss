@@ -9,6 +9,7 @@ import { NS } from "./kv-port.js";
 import { monthKey } from "./keys.js";
 import type { AccountRecord, ItemRecord, TransactionRecord } from "./records.js";
 import type { BudgetLedger } from "./envelope.js";
+import type { BudgetDraft } from "./draft.js";
 import type { FinanceStore } from "./store-port.js";
 
 // Same prefix connect.ts's loadItems() filters on — duplicated here (not
@@ -16,6 +17,7 @@ import type { FinanceStore } from "./store-port.js";
 // convention: worker depends on domain, never the reverse).
 const ITEM_PREFIX = "item:";
 const LEDGER_PREFIX = "ledger:";
+const DRAFT_KEY = "draft:first-budget";
 
 function transactionChunkKey(accountId: string, month: string): string {
   return `${accountId}:${month}`;
@@ -170,12 +172,99 @@ export function kvStore(kv: FinanceKv): FinanceStore {
       await kv.set(NS.budgets, key, ledger as unknown as Record<string, unknown>);
     },
 
+    // The KV store applies the parts in order; only the SQL store is atomic.
+    async commitBudgetChange(change) {
+      if (change.startDraft) {
+        const draft = await this.getLatestDraft();
+        if (!draft || draft.id !== change.startDraft.draftId || draft.status !== "open") {
+          return false;
+        }
+      }
+      if (change.markUndone) {
+        const existing = await this.getActivity(change.markUndone.activityId);
+        if (existing?.undoneAt) return false;
+      }
+      for (const a of change.assignments) {
+        await this.setAssignment(change.month, a.categoryId, a.amountCents);
+      }
+      for (const entry of change.activity) await this.appendActivity(entry);
+      if (change.startDraft) {
+        await this.markDraftStarted(change.startDraft.draftId, change.startDraft.at);
+      }
+      if (change.markUndone) {
+        await this.markActivityUndone(change.markUndone.activityId, change.markUndone.at);
+      }
+      return true;
+    },
+
     // The activity trail lives in SQL only; the KV store (migration source
     // and unit-test fake) keeps no trail.
     async appendActivity() {},
+    async listActivity() {
+      return [];
+    },
+    async getActivity() {
+      return null;
+    },
+    async markActivityUndone() {
+      return false;
+    },
 
     async lastLoggedAssignment() {
       return null;
+    },
+
+    // One draft per owner, kept under the budgets namespace beside the ledgers.
+    async getLatestDraft() {
+      const stored = await kv.get(NS.budgets, DRAFT_KEY);
+      const draft = (stored as unknown as BudgetDraft | null) ?? null;
+      return draft && draft.status !== "discarded" ? draft : null;
+    },
+
+    async createDraft(build, createdAt) {
+      const id = globalThis.crypto.randomUUID();
+      const draft: BudgetDraft = {
+        id,
+        status: "open",
+        basisFrom: build.basisFrom,
+        basisTo: build.basisTo,
+        monthlyIncomeCents: build.monthlyIncomeCents,
+        createdAt,
+        startedAt: null,
+        lines: build.lines.map((line) => ({
+          ...line,
+          adjustedCents: null,
+          adjustedBy: null,
+          dropped: false
+        }))
+      };
+      await kv.set(NS.budgets, DRAFT_KEY, draft as unknown as Record<string, unknown>);
+      return id;
+    },
+
+    async markDraftStarted(draftId, startedAt) {
+      const stored = (await kv.get(NS.budgets, DRAFT_KEY)) as unknown as BudgetDraft | null;
+      if (!stored || stored.id !== draftId || stored.status !== "open") return;
+      await kv.set(NS.budgets, DRAFT_KEY, {
+        ...stored,
+        status: "started",
+        startedAt
+      } as unknown as Record<string, unknown>);
+    },
+
+    async saveDraftLine(draftId, line) {
+      const stored = (await kv.get(NS.budgets, DRAFT_KEY)) as unknown as BudgetDraft | null;
+      if (!stored || stored.id !== draftId || stored.status !== "open") return;
+      const exists = stored.lines.some((existing) => existing.categoryKey === line.categoryKey);
+      const lines = exists
+        ? stored.lines.map((existing) =>
+            existing.categoryKey === line.categoryKey ? line : existing
+          )
+        : [...stored.lines, line];
+      await kv.set(NS.budgets, DRAFT_KEY, { ...stored, lines } as unknown as Record<
+        string,
+        unknown
+      >);
     }
   };
 }

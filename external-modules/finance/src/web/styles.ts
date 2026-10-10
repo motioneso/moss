@@ -7,8 +7,6 @@
 // rule and theme switching are untouched by this module.
 export const MODULE_STYLES = `
 .fnm-root { max-width: 72rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-.fnm-header { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
-.fnm-settings-link { flex: none; text-decoration: none; }
 .fnm-stack { display: flex; flex-direction: column; gap: 1rem; }
 .fnm-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .fnm-state { display: flex; flex-direction: column; gap: 0.5rem; }
@@ -37,6 +35,13 @@ export const MODULE_STYLES = `
 .fnm-bank-status-row { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .fnm-bank-status { display: none; }
 .fnm-bal { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; font-variant-numeric: tabular-nums; }
+.fnm-switch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: var(--border-w) solid var(--border-subtle); }
+.fnm-switch-text { display: flex; flex-direction: column; gap: var(--space-1); }
+.fnm-limit { max-width: 14rem; }
+.fnm-disclosure-head { display: inline-flex; align-items: center; gap: var(--space-2); }
+.fnm-disclosure-head::after { content: ""; width: 0.5rem; height: 0.5rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-0.15rem) rotate(45deg); transition: transform 120ms ease; }
+.fnm-disclosure-head[aria-expanded="true"]::after { transform: translateY(0.1rem) rotate(-135deg); }
+.fnm-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 @media (max-width: 720px) {
   .fnm-bank-meta { display: none; }
   .fnm-bank-status { display: block; }

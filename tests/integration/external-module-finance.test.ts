@@ -54,7 +54,9 @@ beforeAll(async () => {
   cpSync(join(sourceDir, "jarvis.module.json"), join(installedDir, "jarvis.module.json"));
   cpSync(join(sourceDir, "dist"), join(installedDir, "dist"), { recursive: true });
 
-  appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+  // Two connections: a tool call on a module that declares preferences reads them in a
+  // second data context while the invoke route still holds the first.
+  appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
   workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 1 });
   server = createApiServer({
     appDb,
@@ -292,8 +294,16 @@ describe("finance job reconciliation (#1146)", () => {
       'update:finance.share-apply:{"retryLimit":1}',
       "create:finance.storage-migrate",
       'update:finance.storage-migrate:{"retryLimit":1}',
+      "create:finance.draft-build",
+      'update:finance.draft-build:{"retryLimit":1}',
+      "create:finance.draft-start",
+      'update:finance.draft-start:{"retryLimit":1}',
+      "create:finance.draft-set",
+      'update:finance.draft-set:{"retryLimit":1}',
       "create:finance.review-apply",
-      'update:finance.review-apply:{"retryLimit":1}'
+      'update:finance.review-apply:{"retryLimit":1}',
+      "create:finance.activity-undo",
+      'update:finance.activity-undo:{"retryLimit":1}'
     ]);
     // One schedule per active user; payload is metadata-only (D6) and the
     // key is the reconciler's module/schedule/user triple ("/"-separated —

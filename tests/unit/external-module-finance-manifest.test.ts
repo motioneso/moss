@@ -49,8 +49,50 @@ describe("finance manifest app map (#3177)", () => {
     expect(countTopLevelKeys(readFileSync(manifestPath, "utf8"), "appMap")).toBe(1);
   });
 
-  it("promises no history-built first budget, which phase 1 does not do (review A4)", () => {
-    expect(readFileSync(manifestPath, "utf8")).not.toMatch(/three months|months of history/i);
+  it("declares its own settings page and the settings features (#3186)", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      settingsPath: string;
+      appMap: { screens: { id: string; path: string }[]; features: { id: string }[] };
+    };
+    expect(manifest.settingsPath).toBe("/settings");
+    expect(manifest.appMap.screens).toContainEqual(
+      expect.objectContaining({ id: "finance.settings", path: "/settings" })
+    );
+    expect(manifest.appMap.features.map((f) => f.id)).toEqual(
+      expect.arrayContaining([
+        "finance.settings-freedom",
+        "finance.settings-limit",
+        "finance.settings-actions",
+        "finance.settings-bank-keys",
+        "finance.settings-activity"
+      ])
+    );
+  });
+
+  it("declares the history-built first budget and no assistant tool that starts one (#3180)", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      appMap: { features: { id: string }[] };
+      assistantTools: { name: string; handler?: string }[];
+    };
+    expect(manifest.appMap.features.map((f) => f.id)).toContain("finance.first-budget");
+    expect(manifest.assistantTools.map((t) => t.name)).toContain("finance.budget.draft.get");
+    expect(manifest.assistantTools.filter((t) => t.handler === "draft.start")).toEqual([]);
+    expect(manifest.assistantTools.filter((t) => t.handler === "draft.build")).toEqual([]);
+  });
+
+  it("lets chat adjust the draft through the drafting family, never start it (#3181)", () => {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      assistantTools: { name: string; handler?: string; risk: string; actionFamilyId?: string }[];
+      assistantActionFamilies: { id: string }[];
+      worker: { queues: { name: string; handler: string }[] };
+    };
+    const update = manifest.assistantTools.find((t) => t.name === "finance.budget.draft.update");
+    expect(update).toMatchObject({ risk: "write", actionFamilyId: "drafting" });
+    expect(manifest.assistantActionFamilies.map((f) => f.id)).toContain("drafting");
+    expect(manifest.worker.queues).toContainEqual(
+      expect.objectContaining({ name: "finance.draft-set", handler: "draft.set" })
+    );
+    expect(manifest.assistantTools.filter((t) => t.handler === "draft.set")).toEqual([]);
   });
 
   it("the duplicate-key check really counts a repeated block", () => {
@@ -90,11 +132,19 @@ describe("finance manifest contract (#1146)", () => {
         ["finance.transaction.categorize", "transaction.categorize"],
         ["finance.transaction.categorize-new", "transaction.categorize-new"],
         ["finance.budget.status", "budget.status"],
+        ["finance.budget.draft.get", "budget.draft.get"],
+        ["finance.budget.draft.update", "budget.draft.update"],
         ["finance.budget.assign", "budget.assign"],
+        ["finance.budget.move", "budget.move"],
+        ["finance.rule.set", "rule.set"],
+        ["finance.category.upsert", "category.upsert"],
+        ["finance.category.archive", "category.archive"],
         ["finance.account.set-shared", "account.set-shared"],
         // FIN-05 (#1150): read-only report tools.
         ["finance.reports.spending", "reports.spending"],
-        ["finance.reports.net-worth", "reports.net-worth"]
+        ["finance.reports.net-worth", "reports.net-worth"],
+        // #3186: the Settings activity list.
+        ["finance.activity.list", "activity.list"]
       ]
     );
     for (const tool of result.manifest.assistantTools ?? []) {
@@ -123,6 +173,35 @@ describe("finance manifest contract (#1146)", () => {
       executionPolicy: "auto",
       risk: "write"
     });
+    // #3185: money moves carry the dollar limit; the limit defaults to $100.
+    expect(toolByName("finance.budget.assign")).toMatchObject({
+      actionFamilyId: "moving_money",
+      confirmAbove: {
+        inputKey: "amountCents",
+        baseKey: "previousCents",
+        preferenceKey: "freedomLimitDollars",
+        scale: 100
+      }
+    });
+    expect(toolByName("finance.budget.move")).toMatchObject({
+      actionFamilyId: "moving_money",
+      confirmAbove: { inputKey: "amountCents", preferenceKey: "freedomLimitDollars", scale: 100 }
+    });
+    expect(toolByName("finance.budget.move").confirmAbove?.baseKey).toBeUndefined();
+    expect(toolByName("finance.rule.set").actionFamilyId).toBe("rules");
+    expect(toolByName("finance.category.upsert").actionFamilyId).toBe("categories");
+    expect(toolByName("finance.category.archive").actionFamilyId).toBe("categories");
+    expect(result.manifest.preferences).toEqual([
+      expect.objectContaining({ key: "freedomLimitDollars", type: "integer", default: 100 })
+    ]);
+    expect(
+      Object.fromEntries(
+        (result.manifest.assistantActionFamilies ?? []).map((f) => [f.id, f.freedom])
+      )
+    ).toMatchObject({ rules: "new", moving_money: "routine", categories: "new" });
+    expect(result.manifest.assistantOnboarding?.guidance.split(/\s+/).length ?? 999).toBeLessThan(
+      150
+    );
     expect(toolByName("finance.connect.start").actionFamilyId).toBe("bank_connections");
     expect(toolByName("finance.connect.poll").actionFamilyId).toBe("bank_connections");
     expect(
@@ -131,11 +210,21 @@ describe("finance manifest contract (#1146)", () => {
         family.defaultTier
       ])
     ).toEqual([
-      ["sorting", "ask_each_time"],
+      ["sorting", "trusted_auto"],
       ["sorting_new", "ask_each_time"],
+      ["rules", "ask_each_time"],
+      ["moving_money", "trusted_auto"],
+      ["categories", "ask_each_time"],
       ["bank_connections", "always_confirm"],
+      ["drafting", "trusted_auto"],
+      ["upkeep", "trusted_auto"],
       ["sharing", "always_confirm"]
     ]);
+    // Draft edits and bank refreshes always run (spec step table); money moves still ask above
+    // the dollar limit through confirmAbove.
+    expect(toolByName("finance.budget.draft.update").actionFamilyId).toBe("drafting");
+    expect(toolByName("finance.sync.run-now").actionFamilyId).toBe("upkeep");
+    expect(toolByName("finance.sync.run-now").executionPolicy).toBe("auto");
     // Sharing balances with the household must always ask, even unattended (review A1).
     expect(toolByName("finance.account.set-shared").actionFamilyId).toBe("sharing");
     expect(
@@ -278,6 +367,36 @@ describe("finance manifest contract (#1146)", () => {
         allowManualRun: true
       },
       {
+        // #3180: build the first-budget draft; no params.
+        name: "finance.draft-build",
+        handler: "draft.build",
+        retryLimit: 1,
+        allowManualRun: true
+      },
+      {
+        // #3180: the only path that starts a budget; the button sends it.
+        name: "finance.draft-start",
+        handler: "draft.start",
+        retryLimit: 1,
+        allowManualRun: true,
+        paramsSchema: { type: "object", fields: { draftId: { type: "uuid" } } }
+      },
+      {
+        // #3181: a plan amount typed on the draft screen.
+        name: "finance.draft-set",
+        handler: "draft.set",
+        retryLimit: 1,
+        allowManualRun: true,
+        paramsSchema: {
+          type: "object",
+          fields: {
+            draftId: { type: "uuid" },
+            categoryKey: { type: "identifier" },
+            amountCents: { type: "integer", min: 0, max: 100000000 }
+          }
+        }
+      },
+      {
         // #3176: confirm or change Needs a look rows. Parallel id lists (queue params
         // allow arrays of scalars only); one job so the per-user manual singleton
         // never drops part of a Confirm all.
@@ -295,6 +414,14 @@ describe("finance manifest contract (#1146)", () => {
             createRule: { type: "boolean" }
           }
         }
+      },
+      {
+        // #3186: reverse one activity row; the handler refuses when the data moved on.
+        name: "finance.activity-undo",
+        handler: "activity.undo",
+        retryLimit: 1,
+        allowManualRun: true,
+        paramsSchema: { type: "object", fields: { activityId: { type: "uuid" } } }
       }
     ]);
     expect(result.manifest.worker?.schedules).toEqual([

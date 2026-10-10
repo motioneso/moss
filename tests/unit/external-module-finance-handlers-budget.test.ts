@@ -295,14 +295,17 @@ describe("finance budget.assign — tool path (#1148)", () => {
     const result = await budgetAssignHandler(fakePorts(kv))({
       month: "2026-07",
       categoryId: "groceries",
-      amountCents: 50_000
+      amountCents: 50_000,
+      previousCents: 0
     });
 
     expect(result).toEqual({
       status: "ok",
       month: "2026-07",
       categoryId: "groceries",
-      amountCents: 50_000
+      amountCents: 50_000,
+      before: { assignedCents: 0 },
+      after: { assignedCents: 50_000 }
     });
     expect(await kv.get(NS.budgets, "ledger:2026-07")).toEqual({
       assignments: { dining: 5_000, groceries: 50_000 }
@@ -312,8 +315,18 @@ describe("finance budget.assign — tool path (#1148)", () => {
   it("replaces on re-assign — set semantics, never increment", async () => {
     const kv = fakeKv();
     const assign = budgetAssignHandler(fakePorts(kv));
-    await assign({ month: "2026-07", categoryId: "groceries", amountCents: 50_000 });
-    await assign({ month: "2026-07", categoryId: "groceries", amountCents: 20_000 });
+    await assign({
+      month: "2026-07",
+      categoryId: "groceries",
+      amountCents: 50_000,
+      previousCents: 0
+    });
+    await assign({
+      month: "2026-07",
+      categoryId: "groceries",
+      amountCents: 20_000,
+      previousCents: 50_000
+    });
 
     expect(await kv.get(NS.budgets, "ledger:2026-07")).toEqual({
       assignments: { groceries: 20_000 }
@@ -324,13 +337,18 @@ describe("finance budget.assign — tool path (#1148)", () => {
     const kv = fakeKv();
     const assign = budgetAssignHandler(fakePorts(kv));
     await expect(
-      assign({ month: "2026-07", categoryId: "yachts", amountCents: 1 })
+      assign({ month: "2026-07", categoryId: "yachts", amountCents: 1, previousCents: 0 })
     ).rejects.toThrow("not a live category");
     await expect(
-      assign({ month: "2026-07", categoryId: "groceries", amountCents: 10.5 })
+      assign({ month: "2026-07", categoryId: "groceries", amountCents: 10.5, previousCents: 0 })
     ).rejects.toThrow();
     await expect(
-      assign({ month: "2026-07", categoryId: "groceries", amountCents: 100_000_001 })
+      assign({
+        month: "2026-07",
+        categoryId: "groceries",
+        amountCents: 100_000_001,
+        previousCents: 0
+      })
     ).rejects.toThrow();
     expect(await kv.get(NS.budgets, "ledger:2026-07")).toBeNull();
   });
@@ -406,7 +424,8 @@ describe("finance budget activity rows (#3174)", () => {
     await budgetAssignHandler(fakePorts(kv, activity))({
       month: "2026-07",
       categoryId: "groceries",
-      amountCents: 7_500
+      amountCents: 7_500,
+      previousCents: 0
     });
     expect(activity).toHaveLength(1);
     expect(activity[0]).toMatchObject({
@@ -422,7 +441,8 @@ describe("finance budget activity rows (#3174)", () => {
     await budgetAssignHandler(fakePorts(kv, activity))({
       month: "2026-07",
       categoryId: "groceries",
-      amountCents: 20_000
+      amountCents: 20_000,
+      previousCents: 20_000
     });
     expect(activity).toEqual([]);
   });
@@ -492,7 +512,8 @@ describe("finance budget activity rows (#3174)", () => {
       budgetAssignHandler(fakePorts(kv, activity))({
         month: "2026-07",
         categoryId: "no-such-category",
-        amountCents: 100
+        amountCents: 100,
+        previousCents: 0
       })
     ).rejects.toThrow();
     expect(activity).toEqual([]);

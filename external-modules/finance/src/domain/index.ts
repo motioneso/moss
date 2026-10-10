@@ -4,6 +4,7 @@
 // from here only — individual domain files stay internal to this directory.
 export * from "./categorize.js";
 export * from "./envelope.js";
+export * from "./draft.js";
 export * from "./errors.js";
 export * from "./keys.js";
 export * from "./kv-port.js";
