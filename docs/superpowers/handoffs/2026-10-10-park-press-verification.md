@@ -271,6 +271,26 @@ No health data, live writes, native capture, or real export worker was exercised
 The notification receipt assertion now locates the semantic article containing its
 exact title, retaining visibility, mark-read PATCH, badge and cleanup assertions.
 
+### Lifestyle CI follow-through
+
+The first descendant web runs exposed stale assertions for the distinct unread
+empty state and native emotion radio controls. Their corrected tests retain
+notification mutations/counts and the exact check-in payload. The export job’s
+provenance assertion now follows the intentional Moss footer; all content,
+privacy and job assertions remain. That database-backed test was not run locally.
+
+News had lost its prior empty-state heading semantics during shared-component
+adoption. A native h2 in the existing title slot restores those semantics while
+inheriting the shared typography. Both existing browser heading assertions remain
+unchanged, with negative-before unit regressions added.
+
+The Sports viewport test now proves its start/end trigger precondition with
+measured distinct edges before retaining every popup, item-hit and keyboard
+assertion. Earlier private true-edge fixture proof remains distinct from this
+repaired authored test. The old lifestyle web phase-cap timeout has no established
+cause and is not relabelled as solved by this coverage correction; the next
+exact-head CI result is the acceptance gate.
+
 ## Meetings, companion and Finance batch
 
 The approved minimal Meetings workspace and recording pill are preserved. This

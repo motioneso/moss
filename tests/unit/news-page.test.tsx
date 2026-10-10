@@ -116,6 +116,28 @@ describe("personalized News page", () => {
   });
 });
 
+describe("News empty states", () => {
+  it.each([
+    { enabledSources: [], title: "Choose your sources" },
+    {
+      enabledSources: [{ sourceKey: "bbc", label: "BBC News" }],
+      title: "Nothing on the wire"
+    }
+  ])("retains a level-two heading for $title", ({ enabledSources, title }) => {
+    const html = renderNews({
+      topStories: [],
+      sourceGroups: [],
+      activeTopics: [],
+      enabledSources,
+      degraded: false
+    });
+    expect(html).toContain(`<h2>${title}</h2>`);
+    expect(html).toContain("jds-empty__title");
+    expect(html).toContain('href="/settings?section=modules&amp;module=news"');
+    expect(html).toContain("Choose sources");
+  });
+});
+
 describe("News cold load", () => {
   it("keeps page identity and a status sentence without placeholder stories", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
