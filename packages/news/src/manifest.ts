@@ -562,6 +562,70 @@ export const newsModuleManifest = {
   ],
   features: [
     {
+      id: "news.filtered_front_page",
+      description:
+        "Topic filters offer Show all stories when no matching stories loaded. Empty degraded coverage is unavailable. Aged News pages refresh on focus after ten minutes."
+    },
+    {
+      id: "news.story_feedback_management",
+      description:
+        "News settings edits reasons and removes preferences with pending, failed or confirmed outcomes. Writes are serialized per row; failed drafts stay available, and removing the last row retains its receipt."
+    },
+    {
+      id: "news.preference_recovery",
+      description:
+        "Curated choices stay unavailable until catalog and saved preferences load; Retry preferences reloads them. Writes show pending, saved or partial-failure receipts and read back choices before the next edit.",
+      remediations: [
+        {
+          id: "news.preference_recovery.retry_reads",
+          description:
+            "Use Retry preferences to reload the catalog and saved source/topic choices.",
+          path: "/settings?section=modules&module=news"
+        },
+        {
+          id: "news.preference_recovery.review_choices",
+          description:
+            "Check the loaded choices after a partial save before trying the change again.",
+          path: "/settings?section=modules&module=news"
+        }
+      ],
+      errors: [
+        {
+          code: "news.preference_recovery.read_unavailable",
+          class: "transient",
+          description:
+            "Saved source/topic choices are unavailable; their On/Off state is unknown and edits are disabled."
+        },
+        {
+          code: "news.preference_recovery.partial_write",
+          class: "transient",
+          description:
+            "Not all preference operations saved; some changes may have persisted and the choices are read back."
+        }
+      ]
+    },
+    {
+      id: "news.story_feedback_receipts",
+      description:
+        "Feedback shows pending, failed or saved outcomes and retains rejected reason drafts. News preserves a saved dismissal receipt after its story disappears. Saving a preference does not promise immediate reranking.",
+      remediations: [
+        {
+          id: "news.story_feedback_receipts.retry",
+          description:
+            "Retry the retained reason draft or failed row action. Manage saved preferences in News settings.",
+          path: "/settings?section=modules&module=news"
+        }
+      ],
+      errors: [
+        {
+          code: "news.story_feedback_receipts.write_failed",
+          class: "transient",
+          description:
+            "The feedback save, reason edit, or removal failed; the unchanged draft or row stays available to retry."
+        }
+      ]
+    },
+    {
       id: "news.publisher_removal_approval",
       description:
         "Removing a publisher asks first and discloses deletion of any saved publisher credentials and removal of its articles, including subdomains, from saved briefings."

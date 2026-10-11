@@ -137,6 +137,11 @@ export const sportsModuleManifest = {
   },
   features: [
     {
+      id: "sports.rotation_controls",
+      description:
+        "Pause or resume either hero carousel without stopping score updates. Hover, focus within and live reduced motion also stop rotation; internal focus moves stay paused. Explicit pause survives manual navigation and motion changes."
+    },
+    {
       id: "sports.approval_effects",
       description:
         "Sports approvals disclose source removal's coverage and photo loss, and unfollow's coverage removal. ESPN coverage replaces the whole list; an empty list turns headlines off."
@@ -199,7 +204,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.refresh_trouble_notice",
       description:
-        "When Moss cannot refresh scores, standings or stories, the Sports page says some sports information could not be updated. If a league's standings cannot be refreshed, the standings area says so too."
+        "Failed score, standings or story refreshes show an update warning; unavailable league standings say so. An empty degraded story hero says Sports information is unavailable."
     },
     {
       id: "sports.remembered_standings",

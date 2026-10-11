@@ -1,8 +1,10 @@
-import Fastify from "fastify";
-import { describe, expect, it } from "vitest";
+import { EventEmitter } from "node:events";
+import Fastify, { type RouteHandlerMethod } from "fastify";
+import { describe, expect, it, vi } from "vitest";
 
 import { registerChatLiveRoutes } from "./live-routes.js";
 import { PageContextStore } from "./live/page-context-store.js";
+import { ChatSessionManager } from "./live/chat-session-manager.js";
 
 const ACTOR = "00000000-0000-4000-8000-0000000000a1";
 
@@ -55,6 +57,52 @@ async function openStream(ensureSession: () => Promise<unknown>) {
 }
 
 describe("GET /api/chat/stream session pre-start", () => {
+  it.each(["success", "failure"])(
+    "leaves no subscriber when the client closes during a %s pre-start",
+    async (outcome) => {
+      const { app, handler, manager, request, requestRaw, reply, raw } = await streamLifecycle();
+      let start: () => void = () => undefined;
+      let release: () => void = () => undefined;
+      const started = new Promise<void>((resolve) => (start = resolve));
+      const startup = new Promise<void>((resolve) => (release = resolve));
+      vi.spyOn(manager, "ensureSession").mockImplementation(async () => {
+        start();
+        await startup;
+        if (outcome === "failure") throw new Error("launch failed");
+        return undefined as never;
+      });
+      try {
+        const running = handler.call(app, request, reply);
+        await started;
+        requestRaw.emit("close");
+        raw.destroyed = true;
+        raw.emit("close");
+        release();
+        await running;
+
+        expect(manager["countSubscribers"](ACTOR)).toBe(0);
+        expect(raw.writeHead).not.toHaveBeenCalled();
+      } finally {
+        await app.close();
+      }
+    }
+  );
+
+  it("keeps a connected subscriber until the response connection closes", async () => {
+    const { app, handler, manager, request, requestRaw, reply, raw } = await streamLifecycle();
+    vi.spyOn(manager, "ensureSession").mockResolvedValue(undefined as never);
+    try {
+      await handler.call(app, request, reply);
+      expect(manager["countSubscribers"](ACTOR)).toBe(1);
+      requestRaw.emit("close");
+      expect(manager["countSubscribers"](ACTOR)).toBe(1);
+      raw.emit("close");
+      expect(manager["countSubscribers"](ACTOR)).toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("subscribes after a successful pre-start", async () => {
     const result = await openStream(async () => undefined);
 
@@ -91,3 +139,30 @@ describe("GET /api/chat/stream session pre-start", () => {
     expect(log).not.toContain(PRIVATE_MARKER);
   });
 });
+
+async function streamLifecycle() {
+  const app = Fastify();
+  let handler: RouteHandlerMethod | undefined;
+  app.addHook("onRoute", (route) => {
+    if (route.url === "/api/chat/stream" && route.method === "GET") handler = route.handler;
+  });
+  const manager = new ChatSessionManager({} as never);
+  registerChatLiveRoutes(app, {
+    resolveAccessContext: async () => ({ actorUserId: ACTOR, requestId: "request:disconnect" }),
+    runtime: { manager, resolveUserName: async () => "Stream Tester" } as never,
+    pageContextStore: new PageContextStore({ now: () => Date.now(), ttlMs: 300_000 })
+  });
+  await app.ready();
+  if (!handler) throw new Error("Chat stream route missing");
+  const raw = Object.assign(new EventEmitter(), {
+    destroyed: false,
+    writableEnded: false,
+    writeHead: vi.fn(),
+    write: vi.fn(),
+    end: vi.fn()
+  });
+  const requestRaw = new EventEmitter();
+  const request = { raw: requestRaw, query: { surface: "drawer" } } as never;
+  const reply = { raw, log: { warn: vi.fn() } } as never;
+  return { app, handler, manager, request, requestRaw, reply, raw };
+}
