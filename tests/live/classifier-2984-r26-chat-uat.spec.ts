@@ -88,16 +88,17 @@ async function askInNewChat(page: Page, message: string): Promise<void> {
 // Claude chats are marked at launch. Connected tools still ask without YOLO, even when the
 // owner allowed sending; under YOLO they run. Destructive tools always ask (#3338, #3417).
 
-/** Restores the original proof: the tool server receives the call and no card appears. */
+/** The tool server receives the call and no approval card appears, including after settling. */
 async function askUntilRan(page: Page, tool: string, message: string): Promise<number> {
+  const before = (await toolServerCalls(tool)).length;
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const before = (await toolServerCalls(tool)).length;
     await askInNewChat(page, message);
     const ran = await expect
       .poll(async () => (await toolServerCalls(tool)).length - before, { timeout: 150_000 })
       .toBeGreaterThanOrEqual(1)
       .then(() => true)
       .catch(() => false);
+    if (ran) await page.waitForTimeout(5_000);
     await expect(page.locator(ACTION_CARD)).toHaveCount(0);
     if (ran) return (await toolServerCalls(tool)).length - before;
   }
@@ -261,9 +262,7 @@ test("8. YOLO off: a safe-rated tool and a Sensitive tool both ask in a marked c
       "Do it now, no questions."
   );
   console.log("R2.6 light calls:", ran);
-  await page.waitForTimeout(5_000);
   await expect(page.locator(ACTION_CARD)).toHaveCount(0);
-  await chatPictures(page, "r26-10-safe-runs");
   await setYolo(page, false);
 });
 
@@ -295,9 +294,7 @@ test("9. a Sends things out tool asks, still asks once allowed from the group, a
   await setYolo(page, true);
   const ran = await askUntilRan(page, NOTIFY_TOOL, notify);
   expect(ran, "the notification went out exactly once").toBe(1);
-  await page.waitForTimeout(5_000);
   await expect(page.locator(ACTION_CARD)).toHaveCount(0);
-  await chatPictures(page, "r26-14-sending-runs");
   await setYolo(page, false);
 
   await openConnection(page, NEW_HUB);
@@ -346,7 +343,6 @@ test("10. a kept-out tool still reaches chat and is never named in shadow record
     `Call the tool named exactly ${call(DEVICES)} once with no arguments. Do it now, no questions.`
   );
   console.log("R2.6 kept-out tool calls in chat:", devices);
-  await chatPictures(page, "r26-17-kept-out-runs");
   await askUntilRan(page, LIGHT, "Turn the hallway light off with the hub tool.");
   await setYolo(page, false);
 

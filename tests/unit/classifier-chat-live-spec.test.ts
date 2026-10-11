@@ -89,6 +89,13 @@ const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
 
 // The reachable pre-#3388 runs, under the current marked-chat YOLO rule.
 const RESTORED_RUN_ASSERTIONS: readonly (readonly [string, number])[] = [
+  ["if (ran) await page.waitForTimeout(5_000);", 1],
+  [
+    "async function askUntilRan(page: Page, tool: string, message: string): Promise<number> {\n" +
+      "  const before = (await toolServerCalls(tool)).length;\n" +
+      "  for (let attempt = 1; attempt <= 2; attempt++) {",
+    1
+  ],
   [".poll(async () => (await toolServerCalls(tool)).length - before, { timeout: 150_000 })", 1],
   ["      .toBeGreaterThanOrEqual(1)\n      .then(() => true)", 1],
   ["await expect(page.locator(ACTION_CARD)).toHaveCount(0);", 3],
