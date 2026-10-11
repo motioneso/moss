@@ -101,9 +101,7 @@ export const workshopModuleManifest = {
     {
       id: "workshop.projects",
       description:
-        "Admins can save private projects and messages; other admins cannot access them. " +
-        "Creating a project starts no planning or build. The Workshop assistant replies to each " +
-        "message, marked awaiting delivery only if that reply fails.",
+        "Admins save private projects and messages, hidden from other admins. Creation starts no planning or build. Only failed replies are marked awaiting delivery. Delete opens a focused Keep it/Delete confirmation; failure stays for retry.",
       remediations: [
         {
           id: "workshop.projects.retry",
@@ -124,7 +122,8 @@ export const workshopModuleManifest = {
         },
         {
           id: "workshop.projects.delete_retry",
-          description: "Open the More menu and choose Delete project again.",
+          description:
+            "Retry Delete in the open confirmation, or choose Keep it to leave the project unchanged.",
           path: "/workshop"
         }
       ],
@@ -132,7 +131,8 @@ export const workshopModuleManifest = {
         {
           code: "workshop.projects.load_failed",
           class: "transient",
-          description: "The saved projects or messages could not be loaded."
+          description:
+            "The saved projects or messages could not be loaded. An already loaded transcript remains visible after a failed refresh."
         },
         {
           code: "workshop.projects.save_failed",

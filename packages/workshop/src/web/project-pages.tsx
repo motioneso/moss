@@ -3,7 +3,7 @@ import type { UIEvent } from "react";
 import { ArrowUp } from "lucide-react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
-import { Button, ButtonLink, Card, EmptyState, Masthead, RowIndex, RowIndexItem } from "@moss/ui";
+import { Button, ButtonLink, Dialog, EmptyState, Masthead, RowIndex, RowIndexItem } from "@moss/ui";
 import {
   ActivityPeek,
   ApiError,
@@ -42,16 +42,31 @@ function formatStartedOn(createdAt: string, locale: LocaleSettingsDto): string {
   return formatDate(createdAt, locale);
 }
 
-export function ProjectError({ title, retry }: { title: string; retry: () => void }) {
-  return (
-    <Card>
-      <div role="alert">
-        <p className="workshop-status">{title}</p>
-        <Button variant="secondary" onClick={retry}>
-          Try again
-        </Button>
-      </div>
-    </Card>
+export function ProjectError({
+  title,
+  retry,
+  retained = false
+}: {
+  title: string;
+  retry: () => void;
+  retained?: boolean;
+}) {
+  const action = (
+    <Button variant="secondary" onClick={retry}>
+      Try again
+    </Button>
+  );
+  return retained ? (
+    <div className="workshop-notice" role="alert">
+      <p className="workshop-status jds-caption">{title}</p>
+      {action}
+    </div>
+  ) : (
+    <div role="alert">
+      <EmptyState title={title}>
+        <div className="workshop-empty-action">{action}</div>
+      </EmptyState>
+    </div>
   );
 }
 
@@ -86,13 +101,14 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
         }
       />
       {query.isPending ? (
-        <p className="workshop-status" role="status">
+        <p className="workshop-status jds-caption" role="status">
           Loading your projects…
         </p>
       ) : null}
       {query.isError ? (
         <ProjectError
           title="Your projects could not be loaded. Try again to get the latest saved work."
+          retained={Boolean(query.data)}
           retry={() => void query.refetch()}
         />
       ) : null}
@@ -307,6 +323,7 @@ function WorkshopProjectContent({
   const [text, setText] = useState("");
   const [messageId, setMessageId] = useState(() => randomUuid());
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const keepProjectRef = useRef<HTMLButtonElement>(null);
   // Turns already sent but not yet back from the feed: they render in the thread
   // immediately so sending never looks stuck, and leave as their rows arrive.
   const [pending, setPending] = useState<readonly { messageId: string; text: string }[]>([]);
@@ -481,36 +498,50 @@ function WorkshopProjectContent({
   return (
     <section className="workshop-chat" aria-label="Project conversation">
       {confirmingDelete ? (
-        <Card>
-          <div role="alertdialog" aria-label="Delete this project">
-            <p className="workshop-status">
-              Delete “{record.title}”? Its messages go with it. This cannot be undone.
+        <Dialog
+          title="Delete this project?"
+          initialFocusRef={keepProjectRef}
+          closeLabel="Close delete confirmation"
+          closeDisabled={deleteMutation.isPending}
+          dismissOnEscape={!deleteMutation.isPending}
+          dismissOnBackdrop={!deleteMutation.isPending}
+          onClose={() => {
+            if (!deleteMutation.isPending) setConfirmingDelete(false);
+          }}
+          footer={
+            <>
+              <Button
+                ref={keepProjectRef}
+                variant="secondary"
+                disabled={deleteMutation.isPending}
+                onClick={() => setConfirmingDelete(false)}
+              >
+                Keep it
+              </Button>
+              <Button
+                variant="danger"
+                disabled={deleteMutation.isPending || !canMutate}
+                onClick={() => deleteMutation.mutate()}
+              >
+                {deleteMutation.isPending ? "Deleting…" : "Delete project"}
+              </Button>
+            </>
+          }
+        >
+          <p className="workshop-status jds-caption">
+            Delete “{record.title}”? Its messages go with it. This cannot be undone.
+          </p>
+          {deleteMutation.isError ? (
+            <p className="jds-hint jds-hint--error" role="alert">
+              The project could not be deleted. Try again.
             </p>
-            {deleteMutation.isError ? (
-              <p className="workshop-status" role="alert">
-                The project could not be deleted. Try again.
-              </p>
-            ) : null}
-            <Button
-              variant="secondary"
-              disabled={deleteMutation.isPending}
-              onClick={() => setConfirmingDelete(false)}
-            >
-              Keep it
-            </Button>{" "}
-            <Button
-              variant="primary"
-              disabled={deleteMutation.isPending}
-              onClick={() => deleteMutation.mutate()}
-            >
-              {deleteMutation.isPending ? "Deleting…" : "Delete project"}
-            </Button>
-          </div>
-        </Card>
+          ) : null}
+        </Dialog>
       ) : null}
       {project.isError ? (
         <ProjectError
           title="The project could not be refreshed. Reload it before making changes."
+          retained
           retry={() => void project.refetch()}
         />
       ) : null}
@@ -519,15 +550,14 @@ function WorkshopProjectContent({
         {messages.isError ? (
           <ProjectError
             title="Messages could not be refreshed. Your unsent text is still here."
+            retained
             retry={() => void messages.refetch()}
           />
         ) : null}
-        {!messages.isPending && !messages.isError ? (
-          <Thread records={visibleTranscript} working={thinking} />
-        ) : null}
+        {messages.data ? <Thread records={visibleTranscript} working={thinking} /> : null}
         {thinking ? <ActivityPeek records={[]} inProgress /> : null}
         {unanswered && !thinking ? (
-          <p role="status" className="workshop-status">
+          <p role="status" className="workshop-status jds-caption">
             Moss did not reply to your last message. Send it again to retry.
           </p>
         ) : null}
