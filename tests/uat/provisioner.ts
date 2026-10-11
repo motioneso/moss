@@ -18,6 +18,7 @@ import {
   removeClassifierFixtureContainer,
   startClassifierFixtureContainer
 } from "./fixtures/classifier-fixture-container.js";
+import { CLAUDE_TOKEN_REUSED_ENV } from "./claude-signin-handoff.js";
 import * as mcpFixture from "./classifier-mcp-fixture-container.js";
 import {
   REAL_CHAT_CONFIGURED_ENV,
@@ -866,9 +867,11 @@ export async function provisionForUat(
       if (realChatAuth !== undefined) {
         process.env[REAL_CHAT_CONFIGURED_ENV] = "1";
         console.log(
-          uatRealChatProvider() === "claude"
-            ? `[uat] Claude sign-in selected for ${projectName}; the spec asks for a sign-in link`
-            : `[uat] host Codex login copied into ${projectName}; real chat is available`
+          uatRealChatProvider() !== "claude"
+            ? `[uat] host Codex login copied into ${projectName}; real chat is available`
+            : process.env[CLAUDE_TOKEN_REUSED_ENV] === "1"
+              ? `[uat] Claude sign-in selected for ${projectName}; the spec tries the saved sign-in first`
+              : `[uat] Claude sign-in selected for ${projectName}; the spec asks for a sign-in link`
         );
       }
       // #1306: after the plan loop, because the Compose network it attaches to does not exist
