@@ -66,7 +66,7 @@ test("source changes and resumed archives tell the truth through real interrupti
     await expect(source.getByText("Couldn't check linked folder")).toBeVisible();
     await expect(source.getByText("No folder linked", { exact: true })).toHaveCount(0);
     await expect(source.getByRole("button", { name: "Browse…" })).toBeDisabled();
-    controlApp(project, ["start", "--wait"]);
+    controlApp(project, ["up", "-d", "--no-deps", "--no-recreate", "--wait"]);
     appStopped = false;
     await source.getByRole("button", { name: "Try again" }).click();
     await expect(source.getByText("No folder linked", { exact: true })).toBeVisible();
@@ -109,7 +109,7 @@ test("source changes and resumed archives tell the truth through real interrupti
     await expect(source.getByRole("button", { name: "Unlink", exact: true })).toBeEnabled();
     await expect(source.locator(".vault__path")).toHaveText(noteRoot);
     await expect(page.getByText("Folder unlinked", { exact: true })).toHaveCount(0);
-    controlApp(project, ["start", "--wait"]);
+    controlApp(project, ["up", "-d", "--no-deps", "--no-recreate", "--wait"]);
     appStopped = false;
     expect(await readUatJson(await page.request.get("/api/me/notes-source"))).toEqual({
       path: noteRoot
@@ -154,7 +154,7 @@ test("source changes and resumed archives tell the truth through real interrupti
       await page.evaluate(() => window.sessionStorage.getItem("moss.settings.export-job-id"))
     ).toBe(jobId);
     expect(exportPosts).toBe(1);
-    controlApp(project, ["start", "--wait"]);
+    controlApp(project, ["up", "-d", "--no-deps", "--no-recreate", "--wait"]);
     appStopped = false;
     await page.getByRole("button", { name: "Try again", exact: true }).click();
     await expect(downloadLink).toBeVisible();
@@ -210,6 +210,6 @@ test("source changes and resumed archives tell the truth through real interrupti
     }
   } finally {
     if (appPaused) controlApp(project, ["unpause"]);
-    if (appStopped) controlApp(project, ["start", "--wait"]);
+    if (appStopped) controlApp(project, ["up", "-d", "--no-deps", "--no-recreate", "--wait"]);
   }
 });
