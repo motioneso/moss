@@ -96,7 +96,7 @@ async function save(
     const saved = await reminders.create(db, {
       threadId,
       sourceMessageId: source.id,
-      delaySeconds: 60,
+      when: { timing: "relative", delaySeconds: 60 },
       text
     });
     await enqueueReminderDelivery(appBoss, db, actorUserId, saved);

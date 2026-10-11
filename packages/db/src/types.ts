@@ -1019,7 +1019,8 @@ export interface ChatMessagesTable {
   updated_at: TimestampColumn;
 }
 
-export type ChatReminderState = "queued" | "delivered" | "failed" | "cancelled";
+export type ChatReminderState = "queued" | "delivered" | "failed" | "cancelled" | "expired";
+export type ChatReminderTiming = "relative" | "local_clock";
 export type ChatReminderContextState = "pending" | "dismissed" | "acknowledged";
 
 export interface ChatRemindersTable {
@@ -1029,8 +1030,13 @@ export interface ChatRemindersTable {
   source_message_id: string;
   reserved_message_id: string;
   reminder_text: string;
-  delay_seconds: number;
+  delay_seconds: number | null;
   due_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  timing: ColumnType<ChatReminderTiming, ChatReminderTiming | undefined, ChatReminderTiming>;
+  local_due: string | null;
+  time_zone: string | null;
+  deadline_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  expired_at: NullableTimestampColumn;
   state: ColumnType<ChatReminderState, ChatReminderState | undefined, ChatReminderState>;
   context_state: ColumnType<
     ChatReminderContextState,

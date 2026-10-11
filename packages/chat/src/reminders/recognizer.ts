@@ -1,5 +1,14 @@
 // #3309: bounded recognizer for one explicit relative reminder in a raw Main chat request.
 // It reads only the user's own words. No model output, retrieval or tool result reaches it.
+// #3150: a request that fits no relative form may still name a local clock time.
+
+import {
+  DEADLINE_CUE,
+  RECURRENCE,
+  UNSUPPORTED_DAY,
+  recognizeClockReminder,
+  type LocalClockSpec
+} from "./clock-recognizer.js";
 
 export const REMINDER_MIN_DELAY_SECONDS = 1;
 export const REMINDER_MAX_DELAY_SECONDS = 2_592_000;
@@ -8,16 +17,20 @@ export const REMINDER_MAX_TEXT_LENGTH = 500;
 const MAX_REQUEST_LENGTH = 700;
 
 export type ReminderUnsupportedReason =
-  | "needs_relative_duration"
+  | "needs_time"
   | "out_of_range"
   | "text_length"
-  | "clock_or_recurrence"
+  | "recurrence"
+  | "unsupported_day"
+  | "needs_am_pm"
+  | "deadline_needs_clock"
   | "ambiguous";
 
 export type ReminderRecognition =
   | { kind: "none" }
   | { kind: "unsupported"; reason: ReminderUnsupportedReason }
-  | { kind: "request"; delaySeconds: number; text: string };
+  | { kind: "request"; delaySeconds: number; text: string }
+  | { kind: "clock_request"; clock: LocalClockSpec; text: string };
 
 const UNIT_SECONDS: Readonly<Record<string, number>> = {
   s: 1,
@@ -83,8 +96,8 @@ const TASK_LEAD = /^(?:to|that)\b/;
 const RECALL_LEAD = /^(?:what|how|who|whom|whose|where|when|why|which|whether|if|again)\b/;
 const TIME_CUE =
   /\b(?:in|after|within|for) (?:\d|an?\b|half\b|a few\b|a couple\b|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty|forty|fifty)|\b(?:later|soon|tomorrow|tonight|next|every|each|daily|weekly|monthly|hourly)\b|\b(?:at|by|before|until) \d|\b\d{1,2}(?::\d{2}) ?(?:am|pm)?\b|\b\d{1,2} ?(?:am|pm)\b/;
-const CLOCK_OR_RECURRENCE =
-  /\b(?:every|each|daily|weekly|monthly|hourly|tomorrow|tonight)\b|\b(?:at|by|before|until) \d{1,2}(?::\d{2})? ?(?:am|pm)?\b|\b\d{1,2}(?::\d{2}) ?(?:am|pm)?\b|\b\d{1,2} ?(?:am|pm)\b/;
+const CLOCK_OR_DAY =
+  /\b(?:tomorrow|tonight)\b|\b(?:at|by|before|until) \d{1,2}(?::\d{2})? ?(?:am|pm)?\b|\b\d{1,2}(?::\d{2}) ?(?:am|pm)?\b|\b\d{1,2} ?(?:am|pm)\b/;
 
 export function recognizeRelativeReminder(raw: string): ReminderRecognition {
   if (raw.length > MAX_REQUEST_LENGTH) {
@@ -107,21 +120,30 @@ export function recognizeRelativeReminder(raw: string): ReminderRecognition {
     return buildRequest(Number(amount), unit, text, raw);
   }
 
-  return fallback(request);
+  const clock = recognizeClockReminder(request);
+  if (clock?.kind === "clock_request") {
+    return { ...clock, text: originalCaseText(raw, clock.text) };
+  }
+  return clock ?? fallback(request);
 }
 
 function fallback(request: string): ReminderRecognition {
   if (ANY_DURATION.test(request) && ANY_HEDGE.test(request)) {
     return { kind: "unsupported", reason: "ambiguous" };
   }
-  if (request.startsWith("set ")) return { kind: "unsupported", reason: "needs_relative_duration" };
+  if (request.startsWith("set ")) return needsTime(request);
 
   const rest = request.replace(/^remind me\b[ ,:;]*/, "");
-  if (TASK_LEAD.test(rest)) return { kind: "unsupported", reason: "needs_relative_duration" };
+  if (TASK_LEAD.test(rest)) return needsTime(rest);
   if (RECALL_LEAD.test(rest)) return { kind: "none" };
-  return TIME_CUE.test(rest)
-    ? { kind: "unsupported", reason: "needs_relative_duration" }
-    : { kind: "none" };
+  return TIME_CUE.test(rest) || UNSUPPORTED_DAY.test(rest) ? needsTime(rest) : { kind: "none" };
+}
+
+/** A reminder request with no usable time says what is missing or unsupported. */
+function needsTime(request: string): ReminderRecognition {
+  if (RECURRENCE.test(request)) return { kind: "unsupported", reason: "recurrence" };
+  if (UNSUPPORTED_DAY.test(request)) return { kind: "unsupported", reason: "unsupported_day" };
+  return { kind: "unsupported", reason: "needs_time" };
 }
 
 function buildRequest(
@@ -138,8 +160,12 @@ function buildRequest(
   ) {
     return { kind: "unsupported", reason: "out_of_range" };
   }
-  if (normalizedText.includes("?") || CLOCK_OR_RECURRENCE.test(normalizedText)) {
-    return { kind: "unsupported", reason: "clock_or_recurrence" };
+  if (RECURRENCE.test(normalizedText)) return { kind: "unsupported", reason: "recurrence" };
+  if (DEADLINE_CUE.test(normalizedText)) {
+    return { kind: "unsupported", reason: "deadline_needs_clock" };
+  }
+  if (normalizedText.includes("?") || CLOCK_OR_DAY.test(normalizedText)) {
+    return { kind: "unsupported", reason: "ambiguous" };
   }
   if (
     SECOND_DURATION.test(normalizedText) ||

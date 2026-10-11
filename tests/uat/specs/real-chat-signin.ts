@@ -8,15 +8,17 @@
 // Every real-chat spec signs in with the provider JARVIS_UAT_REAL_CHAT_PROVIDER selects
 // (real-chat-env.ts). Codex, the default, uses the operator's own login, already copied into the
 // stack by the provisioner. Claude (#3361) signs in through Moss here, with the operator
-// approving a one-time link (claude-signin-handoff.ts). Either way the spec then discovers and
-// binds the cheapest ("economy" tier) chat-capable model Ben's ruling requires — never a
-// hardcoded model name, and never a silent widen to a pricier tier when none is found.
+// approving a one-time link (claude-signin-handoff.ts) only when no saved token works (#3387).
+// Either way the spec then discovers and binds the cheapest ("economy" tier) chat-capable model
+// Ben's ruling requires — never a hardcoded model name, and never a silent widen to a pricier
+// tier when none is found.
 
 import { expect, test, type APIResponse, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { pickCheapestActiveChatModel, type UatDiscoveredModel } from "../model-tier.js";
 import { uatRealChatProvider, uatRealChatProviderKind } from "../real-chat-env.js";
 import {
+  CLAUDE_TOKEN_REUSED_ENV,
   claudeSignInPaths,
   claudeSignInWaitMs,
   signInClaudeThroughMoss
@@ -75,8 +77,9 @@ export async function signInUatAdmin(page: Page): Promise<void> {
 /**
  * Installs the selected CLI and drives its admin-gated login. Codex is already authenticated by
  * the operator's own login the provisioner copied into the cli-auth volume (real-chat-env.ts),
- * so it settles to "ready" non-interactively. Claude waits for the operator to approve a
- * one-time link, so the running test's timeout grows by that wait first.
+ * so it settles to "ready" non-interactively. Claude settles at once on an accepted saved token;
+ * otherwise it waits for the operator to approve a one-time link, so the running test's timeout
+ * grows by that wait first.
  */
 export async function bringUpRealChatProvider(page: Page): Promise<void> {
   const install = (await readUatJson(
@@ -99,7 +102,8 @@ export async function bringUpRealChatProvider(page: Page): Promise<void> {
       {
         paths: claudeSignInPaths(requireUatProjectName()),
         codeWaitMs,
-        sleep: (ms) => page.waitForTimeout(ms)
+        sleep: (ms) => page.waitForTimeout(ms),
+        reusingSavedToken: process.env[CLAUDE_TOKEN_REUSED_ENV] === "1"
       }
     );
     return;

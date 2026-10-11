@@ -232,12 +232,12 @@ describe("saving a reminder from a chat turn (#3309)", () => {
     const before = await counts(ids.userA);
     const refused = await persistenceWith(appBoss).recordReminderTurn(
       ids.userA,
-      "remind me tomorrow at 9am to stretch",
-      { kind: "unsupported", reason: "needs_relative_duration" },
+      "remind me sometime to stretch",
+      { kind: "unsupported", reason: "needs_time" },
       { threadId }
     );
     assertNotStopped(refused);
-    expect(refused?.reply).toBe(reminderRefusedReply("needs_relative_duration"));
+    expect(refused?.reply).toBe(reminderRefusedReply("needs_time"));
     expect(refused?.origin).toMatchObject({ event: "refused", reminderId: null });
     expect(await counts(ids.userA)).toEqual({ ...before, messages: before.messages + 2 });
   });
