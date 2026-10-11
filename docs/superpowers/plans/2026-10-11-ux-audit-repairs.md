@@ -12,7 +12,7 @@ Source, planning and shell branches start there. Wellness and feeds are isolated
 #3348 `f3e6c057b621e76b79eab5e86b4c147edd30bb5e`, tree
 `59bc999ef0a63eabb7f5a6793f27714d6d8c850a`. Meetings is an isolated stack on #3349
 `9e44c081778137bf49df188d04b2260138e01d4d`, tree
-`83865243d` (full tree rechecked before publication). Existing owner branches and acceptance
+`8386524326acd312daf00d54ad3dc7c951dac05a` (full tree rechecked before publication). Existing owner branches and acceptance
 artifacts are never edited. Refresh exact base/head before publication; retarget stacked drafts
 only after their base lands, and recheck affected code.
 

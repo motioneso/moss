@@ -253,3 +253,6 @@ blocking	apps/trail-marker/TrailMarker/Services/LoginItemState.swift	tests/uat/s
 blocking	apps/trail-marker/TrailMarker/Views/Settings/ThisMacPane.swift	tests/uat/specs/audit-meetings.uat.spec.ts
 blocking	apps/trail-marker/TrailMarkerTests/LoginItemStateTests.swift	tests/uat/specs/audit-meetings.uat.spec.ts
 blocking	packages/meetings/src/web/meeting-transcript.tsx	tests/uat/specs/2981-meeting-drafts.uat.spec.ts
+# #3397 shared modal focus recovery through real task comments.
+blocking	packages/ui/src/use-dialog-lifecycle.ts	tests/uat/specs/audit-modal-focus.uat.spec.ts
+blocking	tests/unit/audit-modal-focus-recovery.test.tsx	tests/uat/specs/audit-modal-focus.uat.spec.ts
