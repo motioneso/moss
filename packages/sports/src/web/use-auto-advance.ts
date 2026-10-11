@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
 
 /**
  * Auto-advance + pause behaviour shared by the two hero carousels: the top-stories carousel
@@ -14,17 +14,11 @@ import { useEffect, useRef, useState } from "react";
  * rebuilds the callback each render would otherwise reset the interval every render, and the
  * slide would never advance at all.
  */
-export function useAutoAdvance(
-  count: number,
-  advance: () => void,
-  intervalMs: number
-): {
-  readonly onMouseEnter: () => void;
-  readonly onMouseLeave: () => void;
-  readonly onFocus: () => void;
-  readonly onBlur: () => void;
-} {
+export function useAutoAdvance(count: number, advance: () => void, intervalMs: number) {
   const [paused, setPaused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const advanceRef = useRef(advance);
 
   useEffect(() => {
@@ -32,18 +26,31 @@ export function useAutoAdvance(
   }, [advance]);
 
   useEffect(() => {
-    if (paused || count < 2) return;
-    // Auto-advancing carousels are a classic reduced-motion offender; honour the OS setting and
-    // leave the reader on whichever slide they're on, reachable by the controls.
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (count < 2) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(media.matches);
+    const changed = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
+    media.addEventListener?.("change", changed);
+    return () => media.removeEventListener?.("change", changed);
+  }, [count]);
+
+  useEffect(() => {
+    if (paused || hovered || focused || reducedMotion || count < 2) return;
     const timer = window.setInterval(() => advanceRef.current(), intervalMs);
     return () => window.clearInterval(timer);
-  }, [paused, count, intervalMs]);
+  }, [paused, hovered, focused, reducedMotion, count, intervalMs]);
 
   return {
-    onMouseEnter: () => setPaused(true),
-    onMouseLeave: () => setPaused(false),
-    onFocus: () => setPaused(true),
-    onBlur: () => setPaused(false)
+    paused,
+    reducedMotion,
+    togglePaused: () => setPaused((current) => !current),
+    pauseHandlers: {
+      onMouseEnter: () => setHovered(true),
+      onMouseLeave: () => setHovered(false),
+      onFocus: () => setFocused(true),
+      onBlur: (event: FocusEvent<HTMLElement>) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+      }
+    }
   };
 }

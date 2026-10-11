@@ -30,3 +30,8 @@
   justify-content: flex-end;
   margin-top: var(--space-2);
 }
+
+.nw-feedback__receipt {
+  width: min(19rem, calc(100vw - 3rem));
+  margin-top: var(--space-3);
+}

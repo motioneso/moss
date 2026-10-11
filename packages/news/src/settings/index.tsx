@@ -1,5 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useIsFetching,
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient
+} from "@tanstack/react-query";
 import { Newspaper, Plus } from "lucide-react";
 import { Badge, formatTimestamp, Note, PaneHead } from "@moss/settings-ui";
 import { Button } from "@moss/module-web-sdk";
@@ -42,6 +49,17 @@ import "./news-settings.css";
    clears itself. Long enough to read twice, short enough that it cannot be mistaken for the
    result of something done much later. */
 const KEY_NOTICE_VISIBLE_MS = 8000;
+
+// The QueryClient belongs to the signed-in session and is cleared on sign-out.
+// A navigating settings pane must still see a write/readback started by its predecessor.
+const CURATED_PREFERENCE_WRITE_KEY = ["news", "curated-preference-write"] as const;
+
+function curatedReadsReady(queryClient: QueryClient): boolean {
+  return [newsQueryKeys.catalog, newsQueryKeys.prefs].every((queryKey) => {
+    const state = queryClient.getQueryState(queryKey);
+    return state?.status === "success" && state.fetchStatus === "idle" && !state.isInvalidated;
+  });
+}
 
 // The re-check runs as a background job, so the lists are refetched a few times after Retry.
 const REVALIDATION_REFETCH_DELAYS_MS = [2000, 6000, 15000] as const;
@@ -240,6 +258,8 @@ export default function NewsSettings() {
   const queryClient = useQueryClient();
   const catalogQuery = useQuery({ queryKey: newsQueryKeys.catalog, queryFn: getNewsCatalog });
   const prefsQuery = useQuery({ queryKey: newsQueryKeys.prefs, queryFn: listNewsPrefs });
+  const catalogFetches = useIsFetching({ queryKey: newsQueryKeys.catalog, exact: true });
+  const prefsFetches = useIsFetching({ queryKey: newsQueryKeys.prefs, exact: true });
   const personalizationQuery = useQuery({
     queryKey: newsQueryKeys.personalization,
     queryFn: getNewsPersonalization
@@ -249,12 +269,18 @@ export default function NewsSettings() {
   const [exclusionInput, setExclusionInput] = useState("");
   const [exclusionValidation, setExclusionValidation] = useState<string | null>(null);
 
+  const curatedWrites = useIsMutating({ mutationKey: CURATED_PREFERENCE_WRITE_KEY, exact: true });
   const opsMutation = useMutation({
+    mutationKey: CURATED_PREFERENCE_WRITE_KEY,
     mutationFn: runOps,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: newsQueryKeys.prefs });
+    onSettled: async () => {
+      // Keep the planner locked until partial or successful writes have been read back.
       // The front page recomposes from prefs server-side, so its cache is stale too.
-      void queryClient.invalidateQueries({ queryKey: newsQueryKeys.overview });
+      await Promise.all([
+        // Read back even if navigation removed the last observer before the write settled.
+        queryClient.invalidateQueries({ queryKey: newsQueryKeys.prefs, refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: newsQueryKeys.overview })
+      ]);
     }
   });
 
@@ -346,11 +372,34 @@ export default function NewsSettings() {
   const followedTopics = new Set(
     prefs.filter((pref) => pref.kind === "topic").map((pref) => pref.key)
   );
-  const pending = catalogQuery.isLoading || prefsQuery.isLoading || opsMutation.isPending;
-  const error = catalogQuery.isError || prefsQuery.isError || opsMutation.isError;
+  // Cached success is not authoritative while a readback is paused or still invalidated.
+  // Cache fetch subscriptions also avoid the observer's optimistic SSR fetching flag.
+  const preferencesReady = curatedReadsReady(queryClient);
+  const preferencesError = catalogQuery.isError || prefsQuery.isError;
+  const preferencesPaused =
+    catalogQuery.fetchStatus === "paused" || prefsQuery.fetchStatus === "paused";
+  const preferencesInvalidated =
+    queryClient.getQueryState(newsQueryKeys.catalog)?.isInvalidated ||
+    queryClient.getQueryState(newsQueryKeys.prefs)?.isInvalidated;
+  const pending = !preferencesReady || curatedWrites > 0;
+  const mutatePreferences = (ops: readonly PrefOp[]) => {
+    // Also guard synchronously against a second activation before observers rerender.
+    if (
+      pending ||
+      !curatedReadsReady(queryClient) ||
+      queryClient.isMutating({ mutationKey: CURATED_PREFERENCE_WRITE_KEY, exact: true }) > 0
+    )
+      return;
+    opsMutation.mutate(ops);
+  };
 
   const tileStates = new Map(
-    sources.map((source) => [source.sourceKey, curatedTileState(source, prefs, excludedDomains)])
+    preferencesReady
+      ? sources.map((source) => [
+          source.sourceKey,
+          curatedTileState(source, prefs, excludedDomains)
+        ])
+      : []
   );
   const enabledCount = sources.filter((source) => tileStates.get(source.sourceKey) === "on").length;
   const anyTileExcluded = sources.some((source) => tileStates.get(source.sourceKey) === "excluded");
@@ -533,6 +582,37 @@ export default function NewsSettings() {
         desc="Pick the sources your front page draws from, and optionally narrow it to the topics you follow. These choices also shape news in briefings."
       />
 
+      {!preferencesReady ? (
+        <p className="nw-set__hint" role="status">
+          {preferencesError
+            ? "Could not load your saved preferences. Source and topic choices are unavailable."
+            : preferencesPaused
+              ? "Waiting to reload your saved preferences. Source and topic choices are unavailable."
+              : "Loading your saved preferences…"}{" "}
+          {preferencesError || preferencesPaused || preferencesInvalidated ? (
+            <Button
+              variant="quiet"
+              size="sm"
+              disabled={catalogFetches > 0 || prefsFetches > 0 || curatedWrites > 0}
+              onClick={() => {
+                void catalogQuery.refetch();
+                void prefsQuery.refetch();
+              }}
+            >
+              Retry preferences
+            </Button>
+          ) : null}
+        </p>
+      ) : null}
+      {curatedWrites > 0 ? <p role="status">Saving preferences…</p> : null}
+      {opsMutation.isSuccess ? <p role="status">Preferences saved.</p> : null}
+      {opsMutation.isError ? (
+        <p className="nw-set__exerr" role="alert">
+          Could not save all preferences. Some changes may have saved; check the loaded choices
+          before trying again.
+        </p>
+      ) : null}
+
       <section className="nw-set" aria-label="Topics">
         <div className="nw-set__head">
           <h2 className="jds-section-title">Topics</h2>
@@ -554,15 +634,17 @@ export default function NewsSettings() {
           </p>
           <div className="nw-set__chips">
             {topics.map((topic: NewsTopicOption) => {
-              const active = followedTopics.has(topic.topicKey);
+              const active = preferencesReady && followedTopics.has(topic.topicKey);
               return (
                 <button
                   key={topic.topicKey}
                   type="button"
                   className={`nw-settopic${active ? " is-active" : ""}`}
                   disabled={pending}
-                  aria-pressed={active}
-                  onClick={() => opsMutation.mutate(planTopicToggle(topic.topicKey, prefs))}
+                  aria-pressed={preferencesReady ? active : undefined}
+                  onClick={() => {
+                    mutatePreferences(planTopicToggle(topic.topicKey, prefs));
+                  }}
                 >
                   {topic.label}
                 </button>
@@ -633,14 +715,24 @@ export default function NewsSettings() {
                   type="button"
                   className={`nw-setsrc${active ? " is-active" : ""}${excluded ? " is-excluded" : ""}`}
                   disabled={pending || excluded}
-                  aria-pressed={active}
-                  onClick={() =>
-                    opsMutation.mutate(planSourceToggle(source.sourceKey, sources, prefs))
-                  }
+                  aria-pressed={preferencesReady ? active : undefined}
+                  onClick={() => {
+                    if (!pending && !excluded) {
+                      mutatePreferences(planSourceToggle(source.sourceKey, sources, prefs));
+                    }
+                  }}
                 >
                   <span className="nw-setsrc__name">{source.label}</span>
                   <span className="nw-setsrc__state">
-                    {excluded ? "Excluded" : active ? "On" : "Off"}
+                    {!preferencesReady
+                      ? preferencesError
+                        ? "Unavailable"
+                        : "Loading…"
+                      : excluded
+                        ? "Excluded"
+                        : active
+                          ? "On"
+                          : "Off"}
                   </span>
                 </button>
               );
@@ -652,7 +744,7 @@ export default function NewsSettings() {
               below.
             </Note>
           ) : null}
-          {!pending && enabledCount === 0 ? (
+          {preferencesReady && !pending && enabledCount === 0 ? (
             <Note>No sources enabled — your News page will be empty until you turn one on.</Note>
           ) : null}
         </div>
@@ -822,8 +914,6 @@ export default function NewsSettings() {
       </section>
 
       <StoryFeedbackSettings />
-
-      {error ? <Note>Could not load or save news preferences. Try again.</Note> : null}
     </>
   );
 }

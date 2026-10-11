@@ -316,6 +316,7 @@
 /* Controls sit centered under the stage, above the grid's section rule. */
 .sp-carousel__ctl {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: var(--space-4);
@@ -364,6 +365,7 @@
    affordance rather than the main control the story carousel's dots need them to be. */
 .sp-gameday__ctl {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) 0 var(--space-3);
