@@ -61,8 +61,11 @@ test("planning audit journeys preserve goals, task dates, comments and month nav
   try {
     for (const timezone of ["Pacific/Kiritimati", "Pacific/Auckland", "America/Los_Angeles"]) {
       expect(
-        (await api(page, "/api/me/locale", "PUT", { timezone, region: "en-US", dateFormat: "24" }))
-          .status
+        (
+          await api(page, "/api/me/locale", "PUT", {
+            locale: { timezone, region: "en-US", dateFormat: "24" }
+          })
+        ).status
       ).toBe(200);
       await page.goto("/tasks");
       await page
@@ -173,7 +176,7 @@ test("planning audit journeys preserve goals, task dates, comments and month nav
     });
   } finally {
     if (priorLocale.status === 200)
-      await api(page, "/api/me/locale", "PUT", priorLocale.body.locale);
+      await api(page, "/api/me/locale", "PUT", { locale: priorLocale.body.locale });
     await api(page, `/api/tasks/${taskId}`, "PATCH", { status: "archived" });
     if (goalId !== null) await api(page, `/api/goals/${goalId}`, "PATCH", { status: "archived" });
   }
