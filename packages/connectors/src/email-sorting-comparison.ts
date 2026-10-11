@@ -1,3 +1,4 @@
+import type { LocaleSettingsDto } from "@moss/shared";
 import { signInCodeDecision } from "@moss/shared/email-otp-rule";
 
 import {
@@ -91,7 +92,8 @@ export function storedBySortingModel(signals: unknown): boolean {
 export async function shadowSortEmail(
   message: EmailSortingComparisonMessage,
   ask: EmailSortingAsk,
-  now: Date
+  now: Date,
+  locale: LocaleSettingsDto
 ): Promise<Omit<EmailSortingComparisonRow, "stored">> {
   const signInCode = signInCodeDecision({
     from: message.sender,
@@ -109,7 +111,8 @@ export async function shadowSortEmail(
       receivedAt: message.receivedAt,
       body: message.text
     },
-    now
+    now,
+    locale
   );
   const result = await ask(state, EMAIL_SORTING_QUESTIONS);
   if (!result.ok) {

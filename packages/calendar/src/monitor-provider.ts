@@ -7,6 +7,7 @@ import type {
   ProactiveMonitorResult,
   ProactiveMonitorSignal
 } from "@moss/module-sdk";
+import { formatLocaleDateTime, localDay } from "@moss/shared";
 
 import { CalendarRepository } from "./repository.js";
 
@@ -54,12 +55,13 @@ export const calendarMonitorProvider: ProactiveMonitorProvider = {
 
     const signals: ProactiveMonitorSignal[] = [];
 
-    // Dense schedule: 3+ events in next 24h
+    // Dense schedule: 3+ events in next 24h, one card per owner-local day
     if (upcoming.length >= 3 && signals.length < input.maxSignals) {
+      const today = localDay(now, input.locale.timezone);
       signals.push({
         source: "calendar",
-        stableKey: `dense-schedule:${stableHash(input.now.slice(0, 10))}`,
-        sourceRefHash: stableHash(`dense:${upcoming.length}:${input.now.slice(0, 10)}`),
+        stableKey: `dense-schedule:${stableHash(today)}`,
+        sourceRefHash: stableHash(`dense:${upcoming.length}:${today}`),
         signalType: "dense_schedule",
         title: "Dense schedule ahead",
         summary: `${upcoming.length} events in the next 24 hours`,
@@ -85,7 +87,7 @@ export const calendarMonitorProvider: ProactiveMonitorProvider = {
         summary:
           hoursUntil <= 2
             ? `Upcoming in ${Math.round(hoursUntil * 60)} min${event.location ? ` — ${sanitizeSnippet(event.location)}` : ""}`
-            : `Starts ${starts.toLocaleString()}${event.location ? ` — ${sanitizeSnippet(event.location)}` : ""}`,
+            : `Starts ${formatLocaleDateTime(starts, input.locale)}${event.location ? ` — ${sanitizeSnippet(event.location)}` : ""}`,
         targetAt: starts.toISOString(),
         occurredAt: event.updated_at
           ? new Date(event.updated_at as unknown as string).toISOString()

@@ -2,6 +2,7 @@ import type { PgBoss, QueueOptions } from "pg-boss";
 
 import type { ExternalModuleQueueDeclaration } from "@moss/module-sdk";
 import { assertModuleJobPayload, type ExternalModuleJobPayload } from "@moss/jobs";
+import { DEFAULT_LOCALE_SETTINGS } from "@moss/shared";
 
 import type { ExternalModuleDiscovery } from "./types.js";
 
@@ -21,6 +22,8 @@ export class ExternalModuleJobReconciler {
       readonly reservedQueueNames?: ReadonlySet<string>;
       readonly isModuleEnabled: (moduleId: string) => Promise<boolean>;
       readonly listActiveUserIds: (moduleId: string) => Promise<readonly string[]>;
+      /** The actor's effective timezone, for schedules that declare none. */
+      readonly resolveActorTimezone?: (actorUserId: string) => Promise<string>;
       readonly registerWorker?: (
         module: ExternalModuleDiscovery,
         queue: ExternalModuleQueueDeclaration
@@ -28,6 +31,12 @@ export class ExternalModuleJobReconciler {
       readonly logger?: { warn(data: Record<string, unknown>, message?: string): void };
     }
   ) {}
+
+  private async actorTimezone(actorUserId: string): Promise<string> {
+    return (
+      (await this.deps.resolveActorTimezone?.(actorUserId)) ?? DEFAULT_LOCALE_SETTINGS.timezone
+    );
+  }
 
   async reconcileAll(): Promise<void> {
     const discoveries = this.deps.discoveries();
@@ -150,7 +159,7 @@ export class ExternalModuleJobReconciler {
         };
         assertModuleJobPayload(queue, payload);
         await this.deps.boss.schedule(queue.name, schedule.cron, payload, {
-          tz: schedule.tz ?? "UTC",
+          tz: schedule.tz ?? (await this.actorTimezone(actorUserId)),
           key
         });
         desiredScheduleKeys.add(key);

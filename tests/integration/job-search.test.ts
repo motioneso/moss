@@ -310,7 +310,10 @@ describe("job-search reconciler binds crawl-sweep's schedule to its own queue (#
           jobKind: "job-search.crawl-sweep",
           manifestHash: module.manifestHash
         },
-        options: { tz: "UTC", key: `job-search/job-search.crawl-sweep/${ids.userA}` }
+        options: {
+          tz: "America/Los_Angeles",
+          key: `job-search/job-search.crawl-sweep/${ids.userA}`
+        }
       },
       {
         name: "job-search.crawl-sweep",
@@ -321,7 +324,10 @@ describe("job-search reconciler binds crawl-sweep's schedule to its own queue (#
           jobKind: "job-search.rescore-sweep",
           manifestHash: module.manifestHash
         },
-        options: { tz: "UTC", key: `job-search/job-search.rescore-sweep/${ids.userA}` }
+        options: {
+          tz: "America/Los_Angeles",
+          key: `job-search/job-search.rescore-sweep/${ids.userA}`
+        }
       }
     ]);
   });

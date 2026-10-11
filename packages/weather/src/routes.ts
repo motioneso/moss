@@ -1,7 +1,11 @@
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextRunner, PreferencesPort } from "@moss/db";
 import { handleRouteError } from "@moss/module-sdk";
-import { getWeatherTodayRouteSchema } from "@moss/shared";
+import {
+  getWeatherTodayRouteSchema,
+  LOCALE_PREFERENCE_KEY,
+  resolveEffectiveLocale
+} from "@moss/shared";
 import { WeatherService } from "./weather-service.js";
 
 interface WeatherRoutesDependencies {
@@ -16,18 +20,19 @@ interface WeatherRoutesDependencies {
   readonly fetchFn?: typeof fetch;
 }
 
-type WeatherRequest = FastifyRequest & { readonly timeZone?: string };
-
+/** The person's saved locale timezone, or the shared default when nothing is saved (#3395). */
 async function resolveRouteTimeZone(
   dependencies: WeatherRoutesDependencies,
   request: FastifyRequest,
   accessContext: AccessContext
 ): Promise<string> {
-  return (
-    (await dependencies.resolveRequestTimeZone?.(request, accessContext)) ??
-    (request as WeatherRequest).timeZone ??
-    "UTC"
+  if (dependencies.resolveRequestTimeZone) {
+    return dependencies.resolveRequestTimeZone(request, accessContext);
+  }
+  const stored = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+    dependencies.preferencesRepo.get(scopedDb, LOCALE_PREFERENCE_KEY)
   );
+  return resolveEffectiveLocale(stored).timezone;
 }
 
 export function registerWeatherRoutes(

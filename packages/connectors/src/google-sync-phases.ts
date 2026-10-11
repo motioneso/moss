@@ -13,6 +13,7 @@ import { isRetryableGoogleError } from "./google-api-client.js";
 import {
   EmailExtractNeedsConfigurationError,
   EmailExtractRetryableError,
+  emailPromptLocale,
   extractEmailSignalsBatch,
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
@@ -649,6 +650,7 @@ async function sortOnSortingModelFirst(
     },
     knownSender: (parsed) => knownSenders?.has(senderAddress(parsed.from)) ?? false,
     now: context.now,
+    locale: await emailPromptLocale(context.deps.emailExtractDeps),
     guard: (work) => withSavepoint(context.scopedDb, () => work())
   });
   if (pass.sorted.length > 0) {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_LOCALE_SETTINGS, localDay } from "@moss/shared";
+
 import {
   extractEmailSignalsBatch,
   type EmailExtractDeps,
@@ -60,12 +62,14 @@ async function capturePrompt(message: ParsedEmail): Promise<string> {
 describe("what the model is told about dates", () => {
   it("gives it the date the email arrived", async () => {
     const prompt = await capturePrompt(email());
+    // No saved locale: the default zone, Los Angeles. Date only, no time.
     expect(prompt).toContain("Received: 2026-09-03");
+    expect(prompt).not.toContain("02:15");
   });
 
   it("gives it today's date", async () => {
     const prompt = await capturePrompt(email());
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDay(new Date(), DEFAULT_LOCALE_SETTINGS.timezone);
     expect(prompt).toContain(`Today: ${today}`);
   });
 

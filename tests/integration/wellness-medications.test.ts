@@ -4,9 +4,9 @@ import pg from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
-import { registerRequestTimeZoneHook } from "../../apps/api/src/server.js";
 import { registerWellnessRoutes } from "@moss/wellness";
 
+import { saveLocaleTimeZone } from "./locale-preference.js";
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -41,9 +41,9 @@ afterAll(async () => {
 // without a 400, every_n_hours produces interval schedule slots (was invisible), and
 // out-of-range numeric discriminator fields surface as friendly 400s (not DB-CHECK 500s).
 describe("wellness REST routes", () => {
-  async function buildApp(actorUserId: string) {
+  async function buildApp(actorUserId: string, timeZone: string | null = "UTC") {
+    await saveLocaleTimeZone(dataContext, actorUserId, timeZone);
     const app = Fastify();
-    registerRequestTimeZoneHook(app);
     registerWellnessRoutes(app, {
       resolveAccessContext: async () => ({ actorUserId, requestId: "req:route-test" }),
       dataContext
@@ -75,18 +75,17 @@ describe("wellness REST routes", () => {
     }
   });
 
-  it("POST /api/wellness/checkins persists local_date from the request timezone, not UTC (#326/#771)", async () => {
+  it("POST /api/wellness/checkins persists local_date from the saved timezone, not UTC (#326/#771)", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     // 06:30 UTC is 23:30 the evening *before* in America/Los_Angeles (PDT, UTC-7 in June): the
     // UTC calendar day has already rolled over, but the caller's local calendar day has not.
     vi.setSystemTime(new Date("2026-06-09T06:30:00.000Z"));
-    const app = await buildApp(userId);
+    const app = await buildApp(userId, "America/Los_Angeles");
     try {
       const created = await app.inject({
         method: "POST",
         url: "/api/wellness/checkins",
-        payload: { feelingCore: "happy" },
-        headers: { "x-timezone": "America/Los_Angeles" }
+        payload: { feelingCore: "happy" }
       });
       expect(created.statusCode).toBe(201);
       const checkinId = created.json().checkin.id as string;
@@ -108,10 +107,10 @@ describe("wellness REST routes", () => {
     }
   });
 
-  it("POST /api/wellness/checkins without a request timezone defaults local_date to UTC (#326/#771)", async () => {
+  it("POST /api/wellness/checkins with no saved timezone uses the shared default zone, not UTC (#3395)", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-06-09T06:30:00.000Z"));
-    const app = await buildApp(userId);
+    const app = await buildApp(userId, null);
     try {
       const created = await app.inject({
         method: "POST",
@@ -128,8 +127,8 @@ describe("wellness REST routes", () => {
           `SELECT local_date, timezone_offset FROM app.wellness_checkins WHERE id = $1`,
           [checkinId]
         );
-        expect(row.rows[0]?.local_date).toBe("2026-06-09");
-        expect(row.rows[0]?.timezone_offset).toBe(0);
+        expect(row.rows[0]?.local_date).toBe("2026-06-08");
+        expect(row.rows[0]?.timezone_offset).toBe(-420);
       } finally {
         await client.end();
       }
@@ -424,10 +423,10 @@ describe("wellness REST routes", () => {
     }
   });
 
-  it("buckets adherence summary by request timezone, not UTC day", async () => {
+  it("buckets adherence summary by saved timezone, not UTC day", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-06-20T01:00:00.000Z"));
-    const app = await buildApp(userId);
+    const app = await buildApp(userId, "America/New_York");
     try {
       const created = await app.inject({
         method: "POST",
@@ -453,8 +452,7 @@ describe("wellness REST routes", () => {
 
       const summary = await app.inject({
         method: "GET",
-        url: "/api/wellness/medications/logs?sinceDays=1",
-        headers: { "x-timezone": "America/New_York" }
+        url: "/api/wellness/medications/logs?sinceDays=1"
       });
 
       expect(summary.statusCode, summary.body).toBe(200);
@@ -473,8 +471,8 @@ describe("wellness REST routes", () => {
     }
   });
 
-  it("includes PRN logs from the request timezone day in medication schedule", async () => {
-    const app = await buildApp(userId);
+  it("includes PRN logs from the saved timezone day in medication schedule", async () => {
+    const app = await buildApp(userId, "America/New_York");
     try {
       const created = await app.inject({
         method: "POST",
@@ -505,8 +503,7 @@ describe("wellness REST routes", () => {
 
       const sched = await app.inject({
         method: "GET",
-        url: "/api/wellness/medications/schedule?date=2026-06-19",
-        headers: { "x-timezone": "America/New_York" }
+        url: "/api/wellness/medications/schedule?date=2026-06-19"
       });
 
       expect(sched.statusCode, sched.body).toBe(200);

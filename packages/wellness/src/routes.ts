@@ -22,6 +22,8 @@ import {
   MEDICATION_LOG_STATUSES,
   isValidFeelingPath,
   localDay,
+  LOCALE_PREFERENCE_KEY,
+  resolveEffectiveLocale,
   type MedicationLogStatusApi,
   type WellnessEmotionCore as WellnessFeelingCore
 } from "@moss/shared";
@@ -524,12 +526,19 @@ async function resolveWellnessConsent(
   return resolveEffectiveWellnessConsent(scopedDb, preferences, undefined, wellnessActive);
 }
 
+/** The person's saved locale timezone, or the shared default when nothing is saved (#3395). */
 async function resolveRouteTimeZone(
   dependencies: WellnessRoutesDependencies,
   request: FastifyRequest,
   accessContext: AccessContext
 ): Promise<string> {
-  return dependencies.resolveRequestTimeZone?.(request, accessContext) ?? request.timeZone ?? "UTC";
+  if (dependencies.resolveRequestTimeZone) {
+    return dependencies.resolveRequestTimeZone(request, accessContext);
+  }
+  const stored = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+    new PreferencesRepository().get(scopedDb, LOCALE_PREFERENCE_KEY)
+  );
+  return resolveEffectiveLocale(stored).timezone;
 }
 
 function addDays(dateKey: string, days: number): string {

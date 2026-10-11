@@ -4,9 +4,9 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
-import { registerRequestTimeZoneHook } from "../../apps/api/src/server.js";
 import { registerWellnessRoutes } from "@moss/wellness";
 
+import { saveLocaleTimeZone } from "./locale-preference.js";
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -40,9 +40,9 @@ afterAll(async () => {
 // Covers issue #1959: the two new schedule types (every_interval, monthly) and the real
 // time zone every medication now records on save.
 describe("wellness medications: every_interval and monthly schedule types", () => {
-  async function buildApp(actorUserId: string) {
+  async function buildApp(actorUserId: string, timeZone: string | null = "UTC") {
+    await saveLocaleTimeZone(dataContext, actorUserId, timeZone);
     const app = Fastify();
-    registerRequestTimeZoneHook(app);
     registerWellnessRoutes(app, {
       resolveAccessContext: async () => ({ actorUserId, requestId: "req:v2-route-test" }),
       dataContext
@@ -342,7 +342,7 @@ describe("wellness medications: every_interval and monthly schedule types", () =
   });
 
   it("a saved every_interval medication produces correct occurrences across a daylight-saving change", async () => {
-    const app = await buildApp(userId);
+    const app = await buildApp(userId, "America/New_York");
     try {
       const created = await app.inject({
         method: "POST",
@@ -354,8 +354,7 @@ describe("wellness medications: every_interval and monthly schedule types", () =
           intervalCount: 1,
           scheduleTimes: ["09:00"],
           startDate: "2026-03-01"
-        },
-        headers: { "x-timezone": "America/New_York" }
+        }
       });
       expect(created.statusCode, created.body).toBe(201);
 
@@ -363,13 +362,11 @@ describe("wellness medications: every_interval and monthly schedule types", () =
       // before and the day after and confirm the local clock time stayed fixed at 09:00.
       const before = await app.inject({
         method: "GET",
-        url: "/api/wellness/medications/schedule?date=2026-03-07",
-        headers: { "x-timezone": "America/New_York" }
+        url: "/api/wellness/medications/schedule?date=2026-03-07"
       });
       const after = await app.inject({
         method: "GET",
-        url: "/api/wellness/medications/schedule?date=2026-03-09",
-        headers: { "x-timezone": "America/New_York" }
+        url: "/api/wellness/medications/schedule?date=2026-03-09"
       });
       expect(before.statusCode, before.body).toBe(200);
       expect(after.statusCode, after.body).toBe(200);
@@ -425,13 +422,12 @@ describe("wellness medications: every_interval and monthly schedule types", () =
   });
 
   it("every new save gets a real time zone recorded, for both an old-family and a new-family request", async () => {
-    const app = await buildApp(userId);
+    const app = await buildApp(userId, "America/Los_Angeles");
     try {
       const oldFamily = await app.inject({
         method: "POST",
         url: "/api/wellness/medications",
-        payload: { name: "Old family med", frequencyType: "once_daily", scheduleTimes: ["08:00"] },
-        headers: { "x-timezone": "America/Los_Angeles" }
+        payload: { name: "Old family med", frequencyType: "once_daily", scheduleTimes: ["08:00"] }
       });
       expect(oldFamily.statusCode).toBe(201);
       const oldFamilyId = oldFamily.json().medication.id as string;
@@ -446,8 +442,7 @@ describe("wellness medications: every_interval and monthly schedule types", () =
           intervalCount: 1,
           scheduleTimes: ["08:00"],
           startDate: "2026-01-01"
-        },
-        headers: { "x-timezone": "America/Los_Angeles" }
+        }
       });
       expect(newFamily.statusCode).toBe(201);
       const newFamilyId = newFamily.json().medication.id as string;
