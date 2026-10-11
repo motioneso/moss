@@ -414,5 +414,5 @@ it("keeps re-preview available after an unavailable calendar preview", async () 
   expect(save.disabled).toBe(false);
   await act(async () => save.click());
   expect(saveChanges).toHaveBeenCalledOnce();
-  expect(document.body.textContent).toContain("Try Save changes again");
+  expect(document.body.textContent).toContain("The calendar is unavailable.");
 });

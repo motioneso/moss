@@ -189,8 +189,7 @@ export function DayPlanReview(props: DayPlanReviewProps) {
           ) : null}
           {unavailableCalendar ? (
             <p className="plan-review__hint" role="status">
-              The calendar is unavailable. Try Save changes again to recheck it; your choices are
-              kept.
+              The calendar is unavailable.
             </p>
           ) : null}
           <div className="plan-review__changes">

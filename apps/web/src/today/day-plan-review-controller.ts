@@ -231,9 +231,7 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
           revisionRef.current = response.revision;
           setRevision(response.revision);
           if (response.calendarAvailability === "unavailable") {
-            setNotice(
-              "The calendar is unavailable. Your choices are kept; try again to recheck it."
-            );
+            setNotice("The calendar is unavailable.");
             return false;
           }
           setNotice(null);
