@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Approval cards no longer blame outside content by mistake.** The note saying Moss read something from outside your account now appears only when that is actually why Moss is asking for your approval. [PR #3366](https://github.com/motioneso/moss/pull/3366)
 - **Catch visual contract drift earlier.** Design checks catch unsupported or undefined class references in the audited screen modules before they reach users. [PR #3350](https://github.com/motioneso/moss/pull/3350)
 - **Forgetting a memory from chat clears its conflict.** When you ask Moss in chat to forget one of two conflicting memories, the other memory now becomes active again, just like forgetting it from the Memory screen. [PR #3416](https://github.com/motioneso/moss/pull/3416)
 - **More reliable meeting and companion controls.** Meeting confirmations use consistent keyboard behavior, companion requests stay readable on phones, and Finance settings make loading and retry states clearer. [PR #3349](https://github.com/motioneso/moss/pull/3349)
