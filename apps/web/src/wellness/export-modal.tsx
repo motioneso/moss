@@ -1,9 +1,28 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { Button, ButtonLink, Dialog } from "@moss/ui";
-import { WELLNESS_EXPORT_CATEGORIES, type WellnessExportCategory } from "@moss/shared";
-import { getDataExportDownloadUrl, getDataExportStatus, type ExportJobStatus } from "../api/client";
+import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { Button, ButtonLink, Dialog, Note } from "@moss/ui";
+import {
+  WELLNESS_EXPORT_CATEGORIES,
+  type WellnessExportCategory,
+  type MeResponse
+} from "@moss/shared";
+import {
+  ApiError,
+  getMe,
+  getDataExportDownloadUrl,
+  getDataExportStatus,
+  type ExportJobStatus
+} from "../api/client";
 import { requestWellnessExport } from "../api/wellness-export";
+import { queryKeys } from "../api/query-keys";
+import {
+  exportDraftKey,
+  exportDay,
+  exportRangeDays,
+  readExportDraft,
+  saveExportDraft,
+  type ExportDraft
+} from "./export-draft";
 
 function DownloadIcon() {
   return (
@@ -49,16 +68,6 @@ const CATEGORY_LABELS: { readonly [K in WellnessExportCategory]: string } = {
   insights: "Insights"
 };
 
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function todayIso(): string {
-  return isoDaysAgo(0);
-}
-
 const SENSITIVE_COPY =
   "This export will contain sensitive health and wellness data. Anyone you share it with will see it. Generate only if you trust the recipient (e.g. your doctor or therapist).";
 
@@ -67,36 +76,75 @@ interface Props {
   onClose: () => void;
 }
 
-export function WellnessExportModal({ open, onClose }: Props) {
-  const [from, setFrom] = useState<string>(isoDaysAgo(90));
-  const [to, setTo] = useState<string>(todayIso());
-  const [categories, setCategories] = useState<readonly WellnessExportCategory[]>([
-    ...WELLNESS_EXPORT_CATEGORIES
-  ]);
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [jobId, setJobId] = useState<string | null>(null);
+export function WellnessExportModal(props: Props) {
+  const account = useQuery<MeResponse>({
+    queryKey: queryKeys.auth.me,
+    queryFn: getMe,
+    enabled: false
+  });
+  const userId = account.data?.user.id ?? null;
+  return <AccountExportModal key={userId ?? "unknown"} {...props} userId={userId} />;
+}
 
-  const rangeValid = from <= to && from !== "" && to !== "";
+function AccountExportModal({ open, onClose, userId }: Props & { userId: string | null }) {
+  const queryClient = useQueryClient();
+  const draftQuery = useQuery({
+    queryKey: exportDraftKey(userId),
+    queryFn: () => readExportDraft(queryClient, userId),
+    initialData: () => readExportDraft(queryClient, userId),
+    enabled: false
+  });
+  const draft = draftQuery.data;
+  const pendingStarts = useMutationState({
+    filters: { mutationKey: ["wellness-export", "start", userId], status: "pending" },
+    select: (mutation) => mutation.state.status
+  });
+  const isStarting = pendingStarts.length > 0;
+  const { from, to, categories, jobId } = draft;
+  const [acknowledged, setAcknowledged] = useState(false);
+  const starting = useRef(false);
+  function updateDraft(next: ExportDraft) {
+    saveExportDraft(queryClient, userId, next);
+  }
+  const days = exportRangeDays(from, to);
+  const rangeValid = days !== null && days <= 366;
   const categoriesValid = categories.length > 0;
 
   const statusQuery = useQuery<ExportJobStatus>({
-    queryKey: ["wellness-export", "status", jobId],
+    queryKey: ["wellness-export", "status", userId, jobId],
     queryFn: () => getDataExportStatus(jobId!),
-    enabled: jobId !== null,
+    enabled: open && jobId !== null,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "pending" || status === "building" ? 2000 : false;
     }
   });
 
+  const [expiryTick, setExpiryTick] = useState(0);
+  const expiresAt = statusQuery.data?.expiresAt;
+  useEffect(() => {
+    if (!open || statusQuery.data?.status !== "ready" || !expiresAt) return;
+    const remaining = Date.parse(expiresAt) - Date.now();
+    if (!Number.isFinite(remaining) || remaining <= 0) return;
+    const timer = setTimeout(
+      () => setExpiryTick((tick) => tick + 1),
+      Math.min(remaining, 2_147_483_647)
+    );
+    return () => clearTimeout(timer);
+  }, [open, statusQuery.data?.status, expiresAt, expiryTick]);
+
   const startMutation = useMutation({
-    mutationFn: () =>
+    mutationKey: ["wellness-export", "start", userId],
+    mutationFn: (selection: ExportDraft) =>
       requestWellnessExport({
-        from,
-        to,
-        categories: [...categories] as readonly WellnessExportCategory[]
+        from: selection.from,
+        to: selection.to,
+        categories: [...selection.categories]
       }),
-    onSuccess: (data) => setJobId(data.jobId)
+    onSuccess: (data, selection) => updateDraft({ ...selection, jobId: data.jobId }),
+    onSettled: () => {
+      starting.current = false;
+    }
   });
 
   if (!open) return null;
@@ -104,21 +152,32 @@ export function WellnessExportModal({ open, onClose }: Props) {
   const status = statusQuery.data?.status;
   const isReady = status === "ready";
   const isFailed = status === "failed";
+  const isExpired =
+    status === "expired" ||
+    (status === "ready" && expiresAt !== undefined && Date.parse(expiresAt) <= Date.now());
+  const isUnavailable =
+    statusQuery.error instanceof ApiError && [404, 410].includes(statusQuery.error.status);
   const inProgress = status === "pending" || status === "building";
-  const canGenerate = rangeValid && categoriesValid && acknowledged && (jobId === null || isFailed);
+  const canGenerate =
+    rangeValid && categoriesValid && acknowledged && !isStarting && (jobId === null || isFailed);
 
   function toggleCategory(cat: WellnessExportCategory) {
-    setCategories((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
+    updateDraft({
+      ...draft,
+      categories: categories.includes(cat)
+        ? categories.filter((c) => c !== cat)
+        : [...categories, cat]
+    });
   }
 
   function reset() {
-    setJobId(null);
+    updateDraft({ ...draft, jobId: null });
     setAcknowledged(false);
     startMutation.reset();
   }
 
   function close() {
-    reset();
+    setAcknowledged(false);
     onClose();
   }
 
@@ -142,6 +201,13 @@ export function WellnessExportModal({ open, onClose }: Props) {
             you choose. Open it in a browser and print to PDF to share.
           </p>
 
+          <Note variant="practical" className="wl-export-boundaries">
+            Dates include UTC calendar days, from 00:00 UTC through the end of the To day. These may
+            differ from your local days. Choose up to 366 days, including both dates.
+          </Note>
+          {!rangeValid ? (
+            <p role="alert">Choose an ordered date range of no more than 366 inclusive days.</p>
+          ) : null}
           <div className="wl-field" style={{ marginBottom: 12 }}>
             <label htmlFor="wlexport-from" className="wl-field__label">
               From
@@ -152,7 +218,8 @@ export function WellnessExportModal({ open, onClose }: Props) {
               className="wl-input"
               value={from}
               max={to}
-              onChange={(e) => setFrom(e.target.value)}
+              disabled={isStarting}
+              onChange={(e) => updateDraft({ ...draft, from: e.target.value })}
             />
           </div>
           <div className="wl-field" style={{ marginBottom: 12 }}>
@@ -164,8 +231,9 @@ export function WellnessExportModal({ open, onClose }: Props) {
               type="date"
               className="wl-input"
               value={to}
-              max={todayIso()}
-              onChange={(e) => setTo(e.target.value)}
+              max={exportDay()}
+              disabled={isStarting}
+              onChange={(e) => updateDraft({ ...draft, to: e.target.value })}
             />
           </div>
 
@@ -175,6 +243,7 @@ export function WellnessExportModal({ open, onClose }: Props) {
               <label key={cat} className="jds-check">
                 <input
                   type="checkbox"
+                  disabled={isStarting}
                   checked={categories.includes(cat)}
                   onChange={() => toggleCategory(cat)}
                 />
@@ -189,6 +258,7 @@ export function WellnessExportModal({ open, onClose }: Props) {
           <label className="jds-check" style={{ marginBottom: 14, alignItems: "flex-start" }}>
             <input
               type="checkbox"
+              disabled={isStarting}
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
             />
@@ -204,22 +274,39 @@ export function WellnessExportModal({ open, onClose }: Props) {
               role="alert"
               style={{ marginBottom: 10 }}
             >
-              Export failed. Please try again.
+              {startMutation.error instanceof ApiError && startMutation.error.status === 409
+                ? "An export is already in progress with different parameters. Keep this selection and try again when that export finishes."
+                : "Export failed. Your selection is still here. Please try again."}
             </div>
           ) : null}
 
           <Button
             variant="primary"
             icon={<DownloadIcon />}
-            disabled={!canGenerate || startMutation.isPending}
-            onClick={() => startMutation.mutate()}
+            disabled={!canGenerate || isStarting}
+            onClick={() => {
+              if (!canGenerate || starting.current) return;
+              starting.current = true;
+              startMutation.mutate({ ...draft, categories: [...categories] });
+            }}
           >
-            {startMutation.isPending ? "Starting…" : "Generate export"}
+            {isStarting ? "Starting…" : "Generate export"}
           </Button>
         </>
+      ) : isExpired || isUnavailable ? (
+        <div role="status">
+          <p>
+            {isExpired ? "This export has expired." : "This export is no longer available."} Your
+            selected range and categories are still here.
+          </p>
+          <Button variant="primary" onClick={reset}>
+            Generate again
+          </Button>
+        </div>
       ) : statusQuery.isError ? (
         <p role="alert">
-          Could not check your export.{" "}
+          Could not check your export. Your job is still saved; retry its status before starting
+          another export.{" "}
           <Button variant="link" onClick={() => void statusQuery.refetch()}>
             Try again
           </Button>

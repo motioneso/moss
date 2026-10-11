@@ -177,10 +177,13 @@ export function registerWellnessRoutes(
         const query = request.query as Record<string, unknown>;
         const since = parseSince(query["since"]);
         const limit = parseLimit(query["limit"]);
-        const checkins = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repo.listCheckins(scopedDb, { since, limit })
+        const cursor = query["cursor"];
+        if (cursor !== undefined && typeof cursor !== "string")
+          throw new HttpError(400, "cursor must be a string");
+        const page = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repo.listCheckinsPage(scopedDb, { since, limit, cursor })
         );
-        return { checkins: checkins.map(serializeCheckin) };
+        return { checkins: page.checkins.map(serializeCheckin), nextCursor: page.nextCursor };
       } catch (error) {
         return handleRouteError(error, reply);
       }

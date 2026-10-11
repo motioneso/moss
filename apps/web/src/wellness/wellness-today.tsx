@@ -1,16 +1,17 @@
 import { Button } from "@moss/ui";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 import {
   EMOTIONS,
   localDay,
   moodIndex,
   moodBand,
   type CheckinDto,
+  type MeResponse,
   type ScheduleSlotDto
 } from "@moss/shared";
 import { formatClockTime, useUserLocale } from "../locale/locale-format.js";
-import { getMedicationSchedule, logMedicationDose } from "../api/client.js";
+import { ApiError, getMe, getMedicationSchedule, logMedicationDose } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { emoColor, coreLabel, type WellnessEmotionCore, type Theme } from "./emotion-taxonomy.js";
 
@@ -204,52 +205,151 @@ export function slotClock(slot: Pick<ScheduleSlotDto, "scheduledFor" | "localTim
   return slot.localTime ?? (slot.scheduledFor ? slot.scheduledFor.slice(11, 16) : "");
 }
 
-function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
+interface DoseWrite {
+  medicationId: string;
+  status: "taken" | "skipped" | "prn";
+  scheduledFor: string | null;
+  prnReason?: string | null;
+}
+
+function MedToday(props: MedTodayProps) {
+  const account = useQuery<MeResponse>({
+    queryKey: queryKeys.auth.me,
+    queryFn: getMe,
+    enabled: false
+  });
+  const userId = account.data?.user.id ?? null;
+  return <AccountMedToday key={userId ?? "unknown"} {...props} userId={userId} />;
+}
+
+interface UnresolvedPrn {
+  readonly input: DoseWrite;
+  readonly date: string;
+}
+
+function AccountMedToday({
+  theme: _theme,
+  onManage,
+  timeZone,
+  userId
+}: MedTodayProps & { userId: string | null }) {
   const date = localDay(new Date(), timeZone);
   const locale = useUserLocale();
   const queryClient = useQueryClient();
+  const writeInFlight = useRef(false);
+  const [prnRechecked, setPrnRechecked] = useState(false);
+  const [checkingPrn, setCheckingPrn] = useState(false);
+  const [prnCheckFailed, setPrnCheckFailed] = useState(false);
+  const unresolvedKey = ["wellness", "unresolved-prn", userId] as const;
+  const unresolvedQuery = useQuery<UnresolvedPrn | null>({
+    queryKey: unresolvedKey,
+    queryFn: () => null,
+    initialData: null,
+    enabled: false,
+    gcTime: Infinity
+  });
+  const unresolvedPrn = unresolvedQuery.data;
+  const ambiguousPrnFailure = unresolvedPrn != null;
 
   const scheduleQuery = useQuery({
     queryKey: queryKeys.wellness.schedule(date),
     queryFn: () => getMedicationSchedule(date)
   });
 
+  const doseMutationKey = ["wellness", "dose-write", userId] as const;
+  const pendingDoseWrites = useMutationState({
+    filters: { mutationKey: doseMutationKey, status: "pending" },
+    select: (mutation) => mutation.state.variables as DoseWrite | undefined
+  });
+  const pendingPrn = pendingDoseWrites.find((input) => input?.status === "prn");
+
   const logMutation = useMutation({
-    mutationFn: (input: {
-      medicationId: string;
-      status: "taken" | "skipped" | "prn";
-      scheduledFor: string | null;
-      prnReason?: string | null;
-    }) =>
+    mutationKey: doseMutationKey,
+    mutationFn: (input: DoseWrite) =>
       logMedicationDose(input.medicationId, {
         status: input.status,
         scheduledFor: input.scheduledFor,
         prnReason: input.prnReason ?? null
       }),
+    onError: (error, input) => {
+      if (
+        input.status === "prn" &&
+        !(error instanceof ApiError && error.status >= 400 && error.status < 500)
+      ) {
+        queryClient.setQueryData(unresolvedKey, { input, date } satisfies UnresolvedPrn);
+      }
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.schedule(date) });
       void queryClient.invalidateQueries({ queryKey: ["wellness", "adherence-summary"] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.insights });
+    },
+    onSettled: () => {
+      writeInFlight.current = false;
     }
   });
 
+  const isSaving = logMutation.isPending || pendingDoseWrites.length > 0;
+  const resumablePrnDraft = unresolvedPrn?.input ?? pendingPrn;
+
+  const latestPrnUncertain =
+    logMutation.isError &&
+    logMutation.variables?.status === "prn" &&
+    !(
+      logMutation.error instanceof ApiError &&
+      logMutation.error.status >= 400 &&
+      logMutation.error.status < 500
+    );
+
   // PRN ("as needed") dose entry. Reason is optional — the user may log a dose without
   // a reason (persists as null). PRN doses are repeatable: each submit inserts a new log.
-  const [prnOpenFor, setPrnOpenFor] = useState<string | null>(null);
-  const [prnReason, setPrnReason] = useState("");
+  const [prnOpenFor, setPrnOpenFor] = useState<string | null>(
+    resumablePrnDraft?.medicationId ?? null
+  );
+  const [prnReason, setPrnReason] = useState(resumablePrnDraft?.prnReason ?? "");
 
-  function logPrnDose(medicationId: string) {
-    if (scheduleQuery.isError || logMutation.isPending) return;
-    const reason = prnReason.trim() || null;
-    logMutation.mutate(
-      { medicationId, status: "prn", scheduledFor: null, prnReason: reason },
-      {
-        onSuccess: () => {
+  function submitDose(input: DoseWrite) {
+    if (scheduleQuery.isError || writeInFlight.current || isSaving) return;
+    if (input.status === "prn" && ambiguousPrnFailure) return;
+    writeInFlight.current = true;
+    setPrnRechecked(false);
+    logMutation.mutate(input, {
+      onSuccess: () => {
+        if (input.status === "prn") {
           setPrnOpenFor(null);
           setPrnReason("");
         }
       }
-    );
+    });
+  }
+
+  function logPrnDose(medicationId: string) {
+    submitDose({
+      medicationId,
+      status: "prn",
+      scheduledFor: null,
+      prnReason: prnReason.trim() || null
+    });
+  }
+
+  async function recheckSavedDoses() {
+    if (!unresolvedPrn || checkingPrn) return;
+    setCheckingPrn(true);
+    setPrnCheckFailed(false);
+    try {
+      await queryClient.fetchQuery({
+        queryKey: queryKeys.wellness.schedule(unresolvedPrn.date),
+        queryFn: () => getMedicationSchedule(unresolvedPrn.date),
+        staleTime: 0
+      });
+      queryClient.setQueryData(unresolvedKey, null);
+      setPrnRechecked(true);
+    } catch {
+      setPrnCheckFailed(true);
+      // Keep the unresolved outcome and draft until the saved-dose read succeeds.
+    } finally {
+      setCheckingPrn(false);
+    }
   }
 
   const slots = scheduleQuery.data?.slots ?? [];
@@ -294,6 +394,50 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
         </span>
       </div>
       <div className="wl-medlist">
+        {isSaving ? <p role="status">Saving dose…</p> : null}
+        {ambiguousPrnFailure ? (
+          <div role="alert">
+            <p>
+              We could not confirm whether this as-needed dose saved. Your reason is still here.
+              Check saved doses before logging again to avoid a duplicate.
+            </p>
+            {prnCheckFailed ? (
+              <p>Could not check saved doses. Your reason and unresolved outcome are still here.</p>
+            ) : null}
+            <Button variant="link" disabled={checkingPrn} onClick={() => void recheckSavedDoses()}>
+              Check saved doses
+            </Button>
+          </div>
+        ) : null}
+        {logMutation.isError && !latestPrnUncertain ? (
+          <div role="alert">
+            <p>
+              Could not save this dose as{" "}
+              {logMutation.variables?.status === "prn"
+                ? "an as-needed dose"
+                : logMutation.variables?.status}
+              . The last confirmed status is still shown.
+            </p>
+            <Button
+              variant="link"
+              disabled={
+                scheduleQuery.isError ||
+                isSaving ||
+                (logMutation.variables?.status === "prn" && ambiguousPrnFailure)
+              }
+              onClick={() => {
+                if (logMutation.variables) submitDose(logMutation.variables);
+              }}
+            >
+              Retry dose
+            </Button>
+          </div>
+        ) : null}
+        {prnRechecked ? (
+          <p role="status">
+            Schedule checked. Review the logged-today count before logging another dose.
+          </p>
+        ) : null}
         {scheduleQuery.isPending ? (
           <p className="wl-subtle-text" role="status">
             Loading medication schedule…
@@ -328,17 +472,19 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                             {slot.name}
                             <span className="wl-medrow__prn">as needed</span>
                           </span>
-                          {(slot.prnCount ?? 0) > 0 ? (
-                            <span className="wl-prn__count">{slot.prnCount} logged today</span>
-                          ) : null}
+                          <span className="wl-prn__count">{slot.prnCount ?? 0} logged today</span>
                           <button
                             type="button"
                             className="wl-prn__log"
-                            disabled={scheduleQuery.isError}
+                            disabled={scheduleQuery.isError || isSaving}
                             aria-expanded={open}
                             onClick={() => {
                               setPrnOpenFor(open ? null : slot.medicationId);
-                              setPrnReason("");
+                              setPrnReason(
+                                unresolvedPrn?.input.medicationId === slot.medicationId
+                                  ? (unresolvedPrn.input.prnReason ?? "")
+                                  : ""
+                              );
                             }}
                           >
                             <PlusIcon />
@@ -353,6 +499,7 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                                   key={r}
                                   type="button"
                                   className={`wl-prn__chip${prnReason === r ? " is-on" : ""}`}
+                                  disabled={isSaving}
                                   onClick={() => setPrnReason(r)}
                                 >
                                   {r}
@@ -366,6 +513,7 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                               placeholder="Reason for this dose (optional)"
                               aria-label="Reason for this dose"
                               maxLength={120}
+                              disabled={isSaving}
                               onChange={(ev) => setPrnReason(ev.target.value)}
                               onKeyDown={(ev) => {
                                 if (ev.key === "Enter") {
@@ -379,6 +527,7 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                                 type="button"
                                 className="ghost-button wl-fs12"
                                 style={{ padding: "5px 12px", minHeight: "unset" }}
+                                disabled={isSaving}
                                 onClick={() => {
                                   setPrnOpenFor(null);
                                   setPrnReason("");
@@ -390,7 +539,7 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                                 type="button"
                                 className="primary-button wl-fs12"
                                 style={{ padding: "5px 12px", minHeight: "unset" }}
-                                disabled={logMutation.isPending || scheduleQuery.isError}
+                                disabled={isSaving || scheduleQuery.isError || ambiguousPrnFailure}
                                 onClick={() => logPrnDose(slot.medicationId)}
                               >
                                 Log dose
@@ -407,21 +556,22 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                       key={`${slot.medicationId}-${i}`}
                       className={`wl-medrow wl-medrow--tight${on ? " is-on" : ""}`}
                       role="button"
-                      aria-disabled={scheduleQuery.isError || logMutation.isPending}
+                      aria-label={`${slot.name}, ${formatClockTime(slotClock(slot), locale)}, ${slot.status}. ${on ? "Mark skipped (replaces taken)" : "Mark taken"}`}
+                      aria-disabled={scheduleQuery.isError || isSaving}
                       tabIndex={0}
                       onClick={() => {
-                        if (scheduleQuery.isError || logMutation.isPending) return;
-                        logMutation.mutate({
+                        if (scheduleQuery.isError || isSaving) return;
+                        submitDose({
                           medicationId: slot.medicationId,
                           status: on ? "skipped" : "taken",
                           scheduledFor: slot.scheduledFor ?? null
                         });
                       }}
                       onKeyDown={(ev) => {
-                        if (scheduleQuery.isError || logMutation.isPending) return;
+                        if (scheduleQuery.isError || isSaving) return;
                         if (ev.key === "Enter" || ev.key === " ") {
                           ev.preventDefault();
-                          logMutation.mutate({
+                          submitDose({
                             medicationId: slot.medicationId,
                             status: on ? "skipped" : "taken",
                             scheduledFor: slot.scheduledFor ?? null
@@ -433,16 +583,17 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                       <span className="wl-medrow__main">
                         <span className="wl-medrow__name">{slot.name}</span>
                       </span>
-                      {on ? (
-                        <span className="wl-medrow__taken">
-                          <CheckIcon size={12} />
-                          Taken
-                        </span>
-                      ) : (
-                        <span className="wl-medrow__time">
-                          {formatClockTime(slotClock(slot), locale)}
-                        </span>
-                      )}
+                      <span className="wl-medrow__taken">
+                        {on ? <CheckIcon size={12} /> : null}
+                        {slot.status === "taken"
+                          ? "Taken"
+                          : slot.status === "skipped"
+                            ? "Skipped"
+                            : "Pending"}
+                      </span>
+                      <span className="wl-medrow__time">
+                        {formatClockTime(slotClock(slot), locale)}
+                      </span>
                     </div>
                   );
                 })}
@@ -641,6 +792,7 @@ function CheckinToday({
         </span>
       </div>
       <div className="wl-done">
+        <p className="wl-fs12 wl-text-subtle">Saved today</p>
         <div className="wl-done__top">
           <span className="wl-done__chip">
             <span className="d" />

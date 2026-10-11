@@ -346,18 +346,103 @@ export const wellnessModuleManifest = {
     {
       id: "wellness.mood_checkins",
       description:
-        "Log emotion, energy and a note; review history and insights. Failed reads offer Retry and retain known data. The mood average covers the previous 14 calendar days. Trends offer keyboard day selection and daily values alongside the chart."
+        "Log emotions and a note; Today confirms saved reflections. Review and edit older check-ins through paged history. Complete date-window reads feed summaries and trends, with keyboard day selection and daily chart values.",
+      errors: [
+        {
+          code: "wellness_checkins_unavailable",
+          class: "transient",
+          description:
+            "Failed reads show unavailable or last-loaded data; a failed later page never becomes a complete statistic."
+        }
+      ],
+      remediations: [
+        {
+          id: "wellness.retry_checkins",
+          description:
+            "Retry the failed summary, trend or history read. Load older check-ins to continue history and find older edits or filtered notes.",
+          path: "/wellness"
+        }
+      ]
     },
     {
       id: "wellness.medication_tracking",
       description:
-        "Keep a medication list with schedules and as-needed doses. The day view asks about scheduled " +
-        "doses, and 30-day adherence shows up in Wellness insights and in briefings when allowed."
+        "Keep schedules and optional-reason as-needed doses. Rows show Pending, Taken or Skipped with a clock. Mark skipped replaces Taken. Thirty-day adherence appears in insights and briefings when allowed.",
+      errors: [
+        {
+          code: "wellness_dose_save_failed",
+          class: "transient",
+          description:
+            "Dose failures keep the last confirmed status. Uncertain as-needed outcomes and reasons stay in account-separated memory across other dose updates and route re-entry, blocking another insert until a saved-dose read succeeds."
+        }
+      ],
+      remediations: [
+        {
+          id: "wellness.retry_dose",
+          description:
+            "Retry the same scheduled slot and intended status. For an uncertain as-needed save, Check saved doses and review the logged-today count before logging again.",
+          path: "/wellness"
+        }
+      ]
+    },
+    {
+      id: "wellness.dose_write_reentry",
+      description:
+        "Pending dose writes stay visible and block another write after account-scoped route re-entry. The optional as-needed reason is restored from memory. Late uncertain outcomes keep the guard until saved doses are checked successfully."
     },
     {
       id: "wellness.therapy_notes",
       description:
-        "Keep private therapy notes the assistant cannot read; include them in your export. Failed exports and failed status checks offer Retry without discarding the export selection."
+        "Keep private therapy notes the assistant cannot read; include them in a selective clinician export."
+    },
+    {
+      id: "wellness.completed_day_summary",
+      description:
+        "Mood averages 14 completed local days. The check-in streak ends yesterday, up to 90 days. Statistics read every observation in their window; failed pages never produce partial statistics."
+    },
+    {
+      id: "wellness.export_reentry",
+      description:
+        "Dates, categories and export job identity survive Close and account-scoped route re-entry, including a completed response after navigation. Failed status checks retry the saved job without creating another."
+    },
+    {
+      id: "wellness.selective_export",
+      description:
+        "Choose dates and categories for a printable clinician report. Dates use inclusive UTC days, up to 366, with local-day differences disclosed. Sensitive-data acknowledgment is required and is not restored after Close.",
+      errors: [
+        {
+          code: "wellness_export_range_invalid",
+          class: "validation",
+          description:
+            "An invalid, reversed or over-366-inclusive-day range cannot start an export."
+        },
+        {
+          code: "wellness_export_parameters_conflict",
+          class: "transient",
+          description:
+            "Another export is in progress with different parameters; this selection is retained for retry after it finishes."
+        },
+        {
+          code: "wellness_export_status_unavailable",
+          class: "transient",
+          description:
+            "A failed status read keeps job identity and offers a status retry without starting another job."
+        },
+        {
+          code: "wellness_export_expired",
+          class: "transient",
+          description:
+            "Expired or unavailable jobs offer Generate again, retaining dates and categories. A ready job whose download deadline passes is shown as expired, including while the dialog stays open."
+        }
+      ],
+      remediations: [
+        {
+          id: "wellness.export_recovery",
+          description:
+            "Correct the range or retry a failed job. Retry status for a saved job; Generate again for an expired or unavailable job and acknowledge the sensitive data before submitting.",
+          path: "/wellness"
+        }
+      ]
     }
   ]
 } satisfies MossModuleManifest;
