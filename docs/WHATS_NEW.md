@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Forgetting a memory fact works.** Choosing Forget on a saved memory now removes it instead of showing an error. [PR #3084](https://github.com/motioneso/moss/pull/3084)
 - **Long attachments read in full.** Moss now reads all of a long PDF or text attachment and can search it for a figure or word. [PR #3373](https://github.com/motioneso/moss/pull/3373)
 - **Clearer everyday screens and recovery.** Everyday screens keep useful information when requests fail, and phone controls, settings and dialogs are easier to read and use with a keyboard. [PR #3348](https://github.com/motioneso/moss/pull/3348)
 - **Readable planning screens on phones.** Tasks and Calendar keep useful context when a request fails, and planning dialogs and Workshop conversations fit narrow screens more reliably. [PR #3347](https://github.com/motioneso/moss/pull/3347)
