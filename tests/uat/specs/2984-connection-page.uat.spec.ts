@@ -162,7 +162,7 @@ test("the connection page groups sorted tools and controls sending without askin
   await test.step("sign in, real default model, connect the tool server", async () => {
     await signIn(page);
     if (!process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED) {
-      throw new Error("no Codex sign-in was copied into this stack; refusing to fake the model");
+      throw new Error("no real chat model is set up for this stack; refusing to fake the model");
     }
     await bringUpRealChatModel(page);
     setFixtureTools([
