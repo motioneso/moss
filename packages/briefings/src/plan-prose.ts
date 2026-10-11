@@ -1,6 +1,11 @@
-import type { BriefingPlanBlockV1, BriefingPlanContextV1 } from "@moss/shared";
+import {
+  formatLocaleTime,
+  type BriefingPlanBlockV1,
+  type BriefingPlanContextV1,
+  type LocaleSettingsDto
+} from "@moss/shared";
 
-import { capLines, emptySection, type Section } from "./compose-shared.js";
+import { capLines, emptySection, localStamp, type Section } from "./compose-shared.js";
 import { planOvernightChanges } from "./plan-reconcile.js";
 import { sanitizeExternal } from "./trust-boundary.js";
 
@@ -21,31 +26,33 @@ function taskTitle(
   return null;
 }
 
-function committedWindow(block: BriefingPlanBlockV1): string {
+function committedWindow(block: BriefingPlanBlockV1, locale: LocaleSettingsDto): string {
   const placement = block.actualPlacement;
   if (!placement || !placement.startsAt || !placement.durationMinutes) return "committed";
   const end = new Date(new Date(placement.startsAt).getTime() + placement.durationMinutes * 60_000);
   return Number.isNaN(end.getTime())
     ? "committed"
-    : `committed ${placement.startsAt}-${end.toISOString()}`;
+    : `committed ${localStamp(placement.startsAt, locale)}-${formatLocaleTime(end, locale)}`;
 }
 
-function blockLine(block: BriefingPlanBlockV1): string {
+function blockLine(block: BriefingPlanBlockV1, locale: LocaleSettingsDto): string {
   const name = `${block.kind} "${block.title ?? block.id}" (position ${block.position})`;
   if (block.pendingChange) return `${name}: pending change: ${block.pendingChange}`;
   if (!block.actualPlacement) return `${name}: proposed, not on the calendar yet`;
-  return `${name}: ${committedWindow(block)}`;
+  return `${name}: ${committedWindow(block, locale)}`;
 }
 
 /**
  * Render the saved day plan as one untrusted data section. Every free string
  * passes through sanitizeExternal; the list passes through capLines. A null
- * context yields an empty section, which renders as "(none today)".
+ * context yields an empty section, which renders as "(none today)". Committed
+ * windows read in the person's locale.
  */
 export function planSection(
   plan: BriefingPlanContextV1 | null | undefined,
   taskItems: readonly Record<string, unknown>[] | undefined,
-  calendarItems?: readonly Record<string, unknown>[] | undefined
+  calendarItems: readonly Record<string, unknown>[] | undefined,
+  locale: LocaleSettingsDto
 ): Section {
   if (!plan) return emptySection(DAY_PLAN_SECTION_KEY, DAY_PLAN_SECTION_LABEL);
   const lines: string[] = [];
@@ -64,7 +71,7 @@ export function planSection(
     }
   }
   for (const block of plan.blocks) {
-    lines.push(blockLine(block));
+    lines.push(blockLine(block, locale));
   }
   for (const change of planOvernightChanges(plan, calendarItems, taskItems)) {
     lines.push(change);

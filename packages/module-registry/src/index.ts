@@ -2413,7 +2413,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           : {}),
         boss: deps.boss,
         dayPlanRead: briefingsAutoDayPlanRepository,
-        feedbackRepository: usefulnessFeedbackRepository
+        feedbackRepository: usefulnessFeedbackRepository,
+        localePreferences: new PreferencesRepository()
       }),
     registerWorkers: (boss, dependencies) => {
       const briefingsLogger = dependencies.logger
@@ -2445,6 +2446,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           createCliStructuredAdapter: createCliStructuredAdapterFactory(),
           personaRepository: new PreferencesRepository(),
           priorityPreferencesRepository: new PreferencesRepository(),
+          localePreferences: new PreferencesRepository(),
           focusReadiness: dependencies.focusSignals,
           sourceBehaviorPolicy: {
             manifests: getBuiltInModuleManifests(),
