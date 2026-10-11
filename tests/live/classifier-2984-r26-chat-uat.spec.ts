@@ -32,6 +32,8 @@ import {
   toolServerCalls,
   deviceOn
 } from "./classifier-2984-r26-helpers.js";
+import { GateSpeedRecord } from "../../packages/chat/src/live/classifier-gate-speed.js";
+import { pickCheapestActiveChatModel } from "../uat/model-tier.js";
 
 test.describe.configure({ mode: "serial" });
 
@@ -139,13 +141,14 @@ async function setGate(page: Page, mode: "off" | "shadow" | "on"): Promise<void>
 interface ClassifierModel {
   id: string;
   providerModelId: string | null;
+  status: string;
   capabilities: readonly string[];
   tier: string;
 }
 
 // LIVE_R26_CLASSIFIER_MODEL_ID pins the classifier to one of the owner's configured models, by
-// its id or its provider's model name; without it the first model that returns structured
-// answers is used. Tests 7 and 11 both pick through here, so they agree on the model.
+// its id or its provider's model name; without it the cheapest active model that returns
+// structured answers is used. Tests 7 and 11 both pick through here, so they agree on the model.
 async function findClassifierModel(page: Page): Promise<ClassifierModel | undefined> {
   const models = (
     (await (await page.request.get("/api/ai/models")).json()) as {
@@ -153,11 +156,12 @@ async function findClassifierModel(page: Page): Promise<ClassifierModel | undefi
     }
   ).models;
   const pinned = process.env.LIVE_R26_CLASSIFIER_MODEL_ID;
-  return models.find((model) =>
-    pinned
-      ? model.id === pinned || model.providerModelId === pinned
-      : model.capabilities.includes("json")
-  );
+  if (pinned) {
+    return models.find((model) => model.id === pinned || model.providerModelId === pinned);
+  }
+  const structured = models.filter((model) => model.capabilities.includes("json"));
+  const cheapest = pickCheapestActiveChatModel(structured);
+  return structured.find((model) => model.id === cheapest.id);
 }
 
 const call = (tool: string) => `"${SLUG}.${tool}"`;
@@ -309,7 +313,8 @@ test("10. a kept-out tool still works in chat and is never named in shadow recor
 });
 
 // The gate's time limit follows the routing model's measured speed (#3365), so a slow sign-in
-// model gets a longer limit. Each turn logs the routing model's time per question.
+// model gets a longer limit. Each turn logs the routing model's time per question and the limit
+// it ran under.
 test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) => {
   test.setTimeout(1_200_000);
   await signIn(page);
@@ -318,6 +323,7 @@ test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) =>
   expect(classifier, "the classifier model test 7 bound").toBeTruthy();
   const modelId = classifier!.id;
   const providerModelId = classifier!.providerModelId;
+  console.log("R2.6 YOLO routing model:", JSON.stringify(classifier));
   sql(
     "insert into app.chat_classifier_shadow_reviews " +
       "(classifier_model_id, classifier_provider_model_id, reviewed_by_user_id) values " +
@@ -352,6 +358,29 @@ test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) =>
           `where action_code = 'chat.answer' and occurred_at > '${since}'`
       )
     );
+  // The gate keeps its speed record in API memory only. This replays every routing check the
+  // owner's model logged before `until` through the gate's own record, one attempt per chat turn,
+  // so it holds while the API has run unbroken since the first check. A timeout line carries the
+  // whole attempt's time, and its question counts as asked.
+  const gateLimitMs = (until: string) => {
+    const record = new GateSpeedRecord();
+    const attempts = sql(
+      "select count(*) || '|' || coalesce(sum(duration_ms), 0) || '|' || " +
+        "coalesce(max(duration_ms) filter (where failure_code = 'timeout'), -1) " +
+        "from app.moss_model_activity_log where action_code = 'chat.tool_check' " +
+        `and owner_user_id = '${ownerId}' and model_name = '${providerModelId}' ` +
+        `and occurred_at < '${until}' group by coalesce(turn_id::text, id::text) ` +
+        "order by min(occurred_at)"
+    )
+      .split("\n")
+      .filter(Boolean);
+    for (const attempt of attempts) {
+      const [asked = 1, total = 0, timedOut = -1] = attempt.split("|").map(Number);
+      record.record(modelId, (timedOut >= 0 ? timedOut : total) / asked);
+    }
+    return record.limitMs(modelId);
+  };
+
   const confidencesOf = (lines: readonly string[]) =>
     lines.flatMap((line) => {
       const match = /"confidence":\s*([0-9.]+)/.exec(line);
@@ -363,6 +392,7 @@ test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) =>
   const turn = async (label: string, message: string) => {
     await switchAllDevicesOff();
     const since = sql("select now()::text");
+    const limitMs = gateLimitMs(since);
     const before = (await toolServerCalls(DOOR)).length;
     await askInNewChat(page, message);
     const card = page.locator(ACTION_CARD).last().getByRole("button", { name: "Approve" });
@@ -389,7 +419,7 @@ test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) =>
     const perQuestionMs = result.checks.map((line) => Number(line.split("|")[1]?.split(" ")[0]));
     console.log(
       `R2.6 YOLO ${label}:`,
-      JSON.stringify({ message, ...result, confidences, perQuestionMs })
+      JSON.stringify({ message, ...result, confidences, perQuestionMs, limitMs })
     );
     await chatPictures(page, `r26-19-yolo-${label}`);
     return { ...result, confidences };
@@ -450,6 +480,11 @@ test("12. the shadow report screen lists the records", async ({ page }) => {
   );
   await page.goto("/settings?section=shadowreport");
   expect((await report).ok()).toBe(true);
+  const { report: summary } = (await (await report).json()) as { report: { checked: number } };
+  expect(summary.checked, "shadow records reached the report").toBeGreaterThanOrEqual(1);
+  await expect(
+    page.locator(".set-row", { hasText: "Messages checked" }).locator(".set-row__control")
+  ).toHaveText(String(summary.checked));
   await page.waitForTimeout(3_000);
   // No crowding check here: the admin side menu's group labels are 10px on main, outside this work.
   for (const [size, viewport] of SIZES) {

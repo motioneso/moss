@@ -54,7 +54,17 @@ const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
   ["expect(records.filter((row) => keptOutName.test(row))).toEqual([]);", 1],
   ['expect(records.some((row) => new RegExp(LIGHT.replaceAll("_", "[._]"), "i").test(row))).', 1],
   ["expect(saved.ok(), `${route} -> ${saved.status()}`).toBe(true);", 1],
-  ["result.confidences.every((value) => value >= 0.95)", 1],
+  [
+    "      result.ran &&\n      result.unlocked &&\n      !result.failureShown &&\n      !result.asked &&\n" +
+      "      result.chatAnswers === 0 &&\n      result.confidences.length >= 2 &&\n" +
+      "      result.confidences.every((value) => value >= 0.95)",
+    1
+  ],
+  ["JSON.stringify({ message, ...result, confidences, perQuestionMs, limitMs })", 1],
+  ["const limitMs = gateLimitMs(since);", 1],
+  ["record.record(modelId, (timedOut >= 0 ? timedOut : total) / asked);", 1],
+  ['expect(summary.checked, "shadow records reached the report").toBeGreaterThanOrEqual(1);', 1],
+  ['.locator(".set-row__control")\n  ).toHaveText(String(summary.checked));', 1],
   ['"the gate ran the Sensitive tool itself above 0.95 and it completed', 1],
   ['"the classifier decided the vague request"', 1],
   ['"its confidence is under the Sensitive bar"', 1],
