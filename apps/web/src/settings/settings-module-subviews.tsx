@@ -156,10 +156,12 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
       putSourceBehavior(input.id, { enabled: input.enabled }),
     onSuccess: (data) => writeSourceBehaviorCache(queryClient, data)
   });
+  // A new definition stores the person's zone, so saves wait for it to load.
   const busy =
     definitionsQuery.isLoading ||
     toolsQuery.isLoading ||
     sourceBehaviorsQuery.isLoading ||
+    localeQuery.isPending ||
     mutation.isPending ||
     sourceBehaviorMutation.isPending;
   const error =
@@ -310,9 +312,14 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
 
 /**
  * Zone a digest save sends (#877 finding 4, #3396). A new digest, or one stuck at the server's
- * "UTC" default, takes the person's zone; any other prior choice is theirs and stays.
+ * "UTC" default, takes the person's zone; any other prior choice is theirs and stays. If their
+ * zone failed to load, the stored zone stays and only a brand-new digest takes the default.
  */
-export function digestSaveTimezone(current: string | undefined, personTimezone: string): string {
+export function digestSaveTimezone(
+  current: string | undefined,
+  personTimezone: string | undefined
+): string {
+  if (personTimezone === undefined) return current ?? DEFAULT_LOCALE.timezone;
   return current === undefined || current === "UTC" ? personTimezone : current;
 }
 
@@ -360,7 +367,7 @@ export function NotificationSettings(props: {
     queryKey: queryKeys.settings.locale,
     queryFn: getLocaleSettings
   });
-  const personTimezone = localeQuery.data?.locale.timezone ?? DEFAULT_LOCALE.timezone;
+  const personTimezone = localeQuery.data?.locale.timezone;
   const mutation = useMutation({
     mutationFn: (input: {
       readonly moduleId: string;

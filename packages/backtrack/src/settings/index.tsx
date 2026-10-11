@@ -103,7 +103,12 @@ function plural(count: number, one: string, many: string): string {
 
 export default function BacktrackSettings() {
   const queryClient = useQueryClient();
-  const { locale, ready: localeReady } = useUserLocaleStatus();
+  const {
+    locale,
+    ready: localeReady,
+    failed: localeFailed,
+    retry: retryLocale
+  } = useUserLocaleStatus();
   const status = useQuery({
     queryKey: STATUS_KEY,
     queryFn: () => requestJson<BacktrackStatusResponse>("/api/backtrack/status")
@@ -287,6 +292,14 @@ export default function BacktrackSettings() {
         </Note>
       ) : null}
       {remove.isError ? <Note>Could not delete. Try again.</Note> : null}
+      {localeFailed ? (
+        <>
+          <Note>Could not load your time zone, so deleting by day is off. </Note>
+          <Button variant="secondary" size="sm" onClick={retryLocale}>
+            Try again
+          </Button>
+        </>
+      ) : null}
     </Group>
   );
 

@@ -23,12 +23,22 @@ async function getLocaleSettings(): Promise<GetLocaleSettingsResponse> {
   return (await response.json()) as GetLocaleSettingsResponse;
 }
 
-/** The person's locale, and whether it has loaded. Until then `locale` is the shared default. */
-export function useUserLocaleStatus(): { locale: LocaleSettingsDto; ready: boolean } {
+/**
+ * The person's locale and whether it has loaded. Until it loads `locale` is the shared default,
+ * and `failed` reports a load that gave up; `retry` asks again.
+ */
+export function useUserLocaleStatus(): {
+  locale: LocaleSettingsDto;
+  ready: boolean;
+  failed: boolean;
+  retry: () => void;
+} {
   const query = useQuery({ queryKey: LOCALE_QUERY_KEY, queryFn: getLocaleSettings });
   return {
     locale: query.data?.locale ?? DEFAULT_LOCALE_SETTINGS,
-    ready: query.data !== undefined
+    ready: query.data !== undefined,
+    failed: query.data === undefined && query.isError,
+    retry: () => void query.refetch()
   };
 }
 

@@ -16,6 +16,7 @@ import { OversightPane } from "../../apps/web/src/settings/settings-admin-panes.
 import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
 import { sinceForRange } from "../../apps/web/src/settings/settings-activity-pane.js";
 import {
+  BriefingSettings,
   digestSaveTimezone,
   NotificationSettings
 } from "../../apps/web/src/settings/settings-module-subviews.js";
@@ -56,13 +57,28 @@ afterAll(() => {
   else process.env.TZ = originalTz;
 });
 
+/** A second person who differs from the shared default in zone and clock. */
+const TOKYO_12: LocaleSettingsDto = { timezone: "Asia/Tokyo", region: "en-US", dateFormat: "12" };
+
+type LocaleState = LocaleSettingsDto | "loading" | "failed";
+
 function render(
   node: ReactNode,
   seed: (client: QueryClient) => void,
-  { localeLoaded = true }: { localeLoaded?: boolean } = {}
+  locale: LocaleState = LA_24
 ): string {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  if (localeLoaded) client.setQueryData(queryKeys.settings.locale, { locale: LA_24 });
+  // retryOnMount off keeps a seeded failure visible; otherwise the first render re-pends it.
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryOnMount: false } }
+  });
+  if (locale === "failed") {
+    client
+      .getQueryCache()
+      .build(client, { queryKey: queryKeys.settings.locale })
+      .setState({ status: "error", error: new Error("down"), fetchStatus: "idle" });
+  } else if (locale !== "loading") {
+    client.setQueryData(queryKeys.settings.locale, { locale });
+  }
   seed(client);
   return renderToString(
     createElement(QueryClientProvider, { client }, createElement(FeedbackProvider, null, node))
@@ -145,11 +161,17 @@ describe("settings timestamps use the person's zone and clock", () => {
       lastSyncError: null,
       lastSyncCounts: null
     };
-    const html = render(createElement(OversightPane), (client) =>
-      client.setQueryData(queryKeys.settings.adminConnectorAccounts, { accounts: [account] })
-    );
+    const renderOversight = (locale: LocaleState) =>
+      render(
+        createElement(OversightPane),
+        (client) =>
+          client.setQueryData(queryKeys.settings.adminConnectorAccounts, { accounts: [account] }),
+        locale
+      );
+    const html = renderOversight(LA_24);
     expect(html).toContain("Oct 9, 2026, 20:30");
     expect(html).not.toContain("Oct 10, 2026");
+    expect(renderOversight(TOKYO_12)).toContain("Oct 10, 2026, 12:30 PM");
   });
 
   it("shows a data source's last sync in the person's zone", () => {
@@ -162,20 +184,30 @@ describe("settings timestamps use the person's zone and clock", () => {
   });
 
   it("shows a saved news story's date in the person's zone", () => {
-    const html = render(createElement(StoryFeedbackSettings), (client) =>
-      client.setQueryData(newsQueryKeys.feedback, { feedback: [feedback({})] })
-    );
-    expect(html).toContain("Oct 9, 2026, 20:30");
+    const renderNews = (locale: LocaleState) =>
+      render(
+        createElement(StoryFeedbackSettings),
+        (client) => client.setQueryData(newsQueryKeys.feedback, { feedback: [feedback({})] }),
+        locale
+      );
+    expect(renderNews(LA_24)).toContain("Oct 9, 2026, 20:30");
+    expect(renderNews(TOKYO_12)).toContain("Oct 10, 2026, 12:30 PM");
   });
 
   it("shows a saved sports story's date in the person's zone", () => {
-    const html = render(createElement(StoryPreferencesSection), (client) =>
-      client.setQueryData(["sports", "story-feedback"], {
-        feedback: [feedback({ targetKind: "sports_story", surface: "sports" })]
-      })
-    );
+    const renderSports = (locale: LocaleState) =>
+      render(
+        createElement(StoryPreferencesSection),
+        (client) =>
+          client.setQueryData(["sports", "story-feedback"], {
+            feedback: [feedback({ targetKind: "sports_story", surface: "sports" })]
+          }),
+        locale
+      );
+    const html = renderSports(LA_24);
     expect(html).toContain("Oct 9, 2026");
     expect(html).not.toContain("10/10/2026");
+    expect(renderSports(TOKYO_12)).toContain("Oct 10, 2026");
   });
 
   it("shows when Backtrack last received text in the person's zone", () => {
@@ -220,7 +252,7 @@ describe("Backtrack delete ranges use the person's day", () => {
 });
 
 describe("day deletes wait for the person's zone", () => {
-  function renderBacktrack(localeLoaded: boolean): string {
+  function renderBacktrack(locale: LocaleState): string {
     return render(
       createElement(BacktrackSettings),
       (client) => {
@@ -234,19 +266,26 @@ describe("day deletes wait for the person's zone", () => {
         });
         client.setQueryData(["settings", "sessions"], { sessions: [] });
       },
-      { localeLoaded }
+      locale
     );
   }
 
   it("keeps Today and Choose a day off until the zone loads, and Last hour on", () => {
-    const loading = renderBacktrack(false);
+    const loading = renderBacktrack("loading");
     expect(tagAround(loading, "button", "Today")).toContain("disabled");
     expect(tagAround(loading, "button", "Choose a day")).toContain("disabled");
     expect(tagAround(loading, "button", "Last hour")).not.toContain("disabled");
 
-    const loaded = renderBacktrack(true);
+    const loaded = renderBacktrack(LA_24);
     expect(tagAround(loaded, "button", "Today")).not.toContain("disabled");
     expect(tagAround(loaded, "button", "Choose a day")).not.toContain("disabled");
+    expect(loaded).not.toContain("Could not load your time zone");
+  });
+
+  it("says so, and keeps day deletes off, when the zone fails to load", () => {
+    const failed = renderBacktrack("failed");
+    expect(failed).toContain("Could not load your time zone, so deleting by day is off.");
+    expect(tagAround(failed, "button", "Today")).toContain("disabled");
   });
 });
 
@@ -269,6 +308,12 @@ describe("other small screens use the person's day and zone", () => {
     expect(digestSaveTimezone("Europe/London", LA_24.timezone)).toBe("Europe/London");
   });
 
+  it("keeps the stored digest zone when the person's zone failed to load", () => {
+    expect(digestSaveTimezone("UTC", undefined)).toBe("UTC");
+    expect(digestSaveTimezone("Asia/Tokyo", undefined)).toBe("Asia/Tokyo");
+    expect(digestSaveTimezone(undefined, undefined)).toBe("America/Los_Angeles");
+  });
+
   it("keeps the digest controls off until the person's zone loads", () => {
     const digest: GetNotificationDigestPreferenceResponse = {
       digest: {
@@ -279,16 +324,33 @@ describe("other small screens use the person's day and zone", () => {
         unavailableReason: null
       }
     };
-    const renderDigest = (localeLoaded: boolean) =>
+    const renderDigest = (loaded: boolean) =>
       render(
         createElement(NotificationSettings, { onBack: () => undefined }),
         (client) => client.setQueryData(queryKeys.settings.notificationDigest, digest),
-        { localeLoaded }
+        loaded ? LA_24 : "loading"
       );
     const sendTime = (html: string) =>
       /<input[^>]*aria-label="Digest send time"[^>]*>/.exec(html)?.[0] ?? "";
     expect(sendTime(renderDigest(false))).toContain("disabled");
     expect(sendTime(renderDigest(true))).not.toContain("disabled");
     expect(sendTime(renderDigest(true))).toContain('value="08:00"');
+  });
+
+  it("keeps the briefing controls off until the person's zone loads", () => {
+    const renderBriefings = (locale: LocaleState) =>
+      render(
+        createElement(BriefingSettings, { onBack: () => undefined }),
+        (client) => {
+          client.setQueryData(queryKeys.briefings.definitions, { definitions: [] });
+          client.setQueryData(queryKeys.ai.assistantTools, { tools: [] });
+          client.setQueryData(queryKeys.settings.sourceBehaviors, { sources: [] });
+        },
+        locale
+      );
+    const morningTime = (html: string) =>
+      /<input[^>]*aria-label="Morning briefing time"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(morningTime(renderBriefings("loading"))).toContain("disabled");
+    expect(morningTime(renderBriefings(LA_24))).not.toContain("disabled");
   });
 });
