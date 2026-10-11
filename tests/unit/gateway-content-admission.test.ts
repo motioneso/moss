@@ -56,7 +56,7 @@ describe("gateway content admission", () => {
     "withholds all outside text, raw data and media after failed admission (%s)",
     async (entry) => {
       const tool = admissionTool("example.read", {
-        risk: entry === "confirmed" ? "write" : "read",
+        risk: entry === "confirmed" ? "outbound" : "read",
         ...(entry === "confirmed"
           ? {
               actionLabel: "Read example",
@@ -152,7 +152,7 @@ describe("gateway content admission", () => {
 
 describe("content determines later app-action policy", () => {
   it.each([false, true])(
-    "outside reads force app writes and outbound GET approval (YOLO=%s)",
+    "outside reads force app writes and outbound GET approval unless YOLO trusts the write (YOLO=%s)",
     async (yolo) => {
       for (const outboundGet of [false, true]) {
         const read = admissionTool("example.read", { content: "outside" });
@@ -175,6 +175,12 @@ describe("content determines later app-action policy", () => {
           }
         });
         expect(await h.gateway.callTool(h.token, read.name, {})).toMatchObject({ ok: true });
+        if (yolo && !outboundGet) {
+          expect(await h.gateway.callTool(h.token, write.name, {})).toMatchObject({ ok: true });
+          expect(write.execute).toHaveBeenCalledOnce();
+          expect(h.createPending).not.toHaveBeenCalled();
+          continue;
+        }
         await rejectAdmissionCard(h, h.gateway.callTool(h.token, write.name, {}));
         expect(write.execute).not.toHaveBeenCalled();
         expect(h.records).toContainEqual(
@@ -184,19 +190,38 @@ describe("content determines later app-action policy", () => {
     }
   );
 
-  it("a dedicated write tool follows the same admitted-content policy", async () => {
-    const read = admissionTool("example.read", { content: "outside" });
-    const write = admissionTool("settings.themeMode.set", {
-      risk: "write",
-      actionLabel: "Change appearance",
-      approvalContent: "user_authored",
-      approvalPresentation: async () => ({ target: "Appearance", fields: [] })
-    });
-    const h = admissionFixture([read, write]);
-    await h.gateway.callTool(h.token, read.name, {});
-    await rejectAdmissionCard(h, h.gateway.callTool(h.token, write.name, {}));
-    expect(write.execute).not.toHaveBeenCalled();
-  });
+  it.each(["ask_each_time", "trusted_auto"] as const)(
+    "a dedicated write keeps the user's family tier after outside content (%s)",
+    async (tier) => {
+      const read = admissionTool("example.read", { content: "outside" });
+      const write = admissionTool("settings.themeMode.set", { risk: "write" });
+      const h = admissionFixture([read, write], {
+        deps: {
+          yoloMode: async () => false,
+          actionPolicy: () => ({
+            getFamilyTier: async () => tier,
+            getFamilyManifest: async () => ({
+              id: "change",
+              label: "Change",
+              description: "Change settings",
+              defaultTier: "ask_each_time" as const,
+              allowedTiers: ["ask_each_time" as const, "trusted_auto" as const]
+            })
+          })
+        }
+      });
+      await h.gateway.callTool(h.token, read.name, {});
+      expect(h.state.tainted).toBe(true);
+      if (tier === "trusted_auto") {
+        expect(await h.gateway.callTool(h.token, write.name, {})).toMatchObject({ ok: true });
+        expect(write.execute).toHaveBeenCalledOnce();
+        expect(h.runAutomatic).not.toHaveBeenCalled();
+      } else {
+        await rejectAdmissionCard(h, h.gateway.callTool(h.token, write.name, {}));
+        expect(write.execute).not.toHaveBeenCalled();
+      }
+    }
+  );
 
   it("per-call user-authored content overrides static app.callAction outside content", async () => {
     const app = admissionTool("app.callAction", {

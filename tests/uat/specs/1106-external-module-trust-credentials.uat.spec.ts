@@ -76,7 +76,7 @@ test("an undeclared external module shows its trust warning and credential field
   // not the app shell (tests/uat/specs/1270-provider-signin.uat.spec.ts's skipOnboarding does the
   // same dance). Skip it to reach the usermenu.
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible();
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
@@ -84,8 +84,8 @@ test("an undeclared external module shows its trust warning and credential field
   }
   await expect(userMenu).toBeVisible();
 
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Instance modules" }).click();
 

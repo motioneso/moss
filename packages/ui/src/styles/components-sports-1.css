@@ -125,14 +125,9 @@
   font-size: var(--text-md);
   color: var(--text-muted);
 }
-/* editorial photo placeholders (striped swatch — a real image can drop in here) */
+/* Quiet no-photo surface; real imagery can replace it when available. */
 .sp-photo {
   background-color: var(--surface-2);
-  background-image: repeating-linear-gradient(
-    135deg,
-    transparent 0 9px,
-    var(--border-subtle) 9px 10px
-  );
   border: 1px solid var(--border-subtle);
   border-radius: 0;
 }
@@ -216,15 +211,6 @@
   font-weight: 700;
   color: var(--text);
   background: var(--surface);
-}
-.sp-standings__select {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: var(--text-2xs);
-  font-weight: 600;
 }
 .sp-standings__hd svg {
   color: var(--text-subtle);
@@ -361,83 +347,25 @@
    sports-1.css purely for the 1000-line file-size gate (sports-1.css has no headroom); imported
    directly by index.tsx as a colocated side-effect import (module web registry, #799). */
 
-.sp-whole {
-  border: 1px solid var(--border-subtle);
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  font-family: var(--font-sans);
-}
-.sp-whole:hover {
-  background: var(--surface-2);
-}
-.sp-whole.is-active {
-  background: var(--forest-soft);
-  border-color: var(--forest-soft-2);
-}
-.sp-whole__lbl {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-.sp-whole.is-active .sp-whole__lbl {
-  color: var(--forest-ink);
-}
 .sp-action-error {
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 600;
   color: var(--danger);
 }
-.sp-team {
-  border: 1px solid var(--border-subtle);
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
 .sp-team__state {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
-  color: var(--text-faint);
-}
-.sp-team.is-active .sp-team__state {
-  color: var(--forest-ink);
-}
-.sp-team:hover {
-  background: var(--surface-2);
-}
-.sp-team.is-active {
-  background: var(--forest-soft);
-  border-color: var(--forest-soft-2);
-  color: var(--forest-ink);
 }
 
 .sp-pickcrest {
   border-radius: 6px;
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 800;
   background: var(--surface-2);
   color: var(--text-subtle);
-}
-.sp-search__input {
-  border: 1px solid var(--border-subtle);
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--ink);
-}
-.sp-search__input::placeholder {
-  color: var(--text-faint);
-}
-.sp-search__input:focus {
-  outline: none;
-  border-color: var(--forest-soft-2);
-  background: var(--surface-2);
 }
 .sp-chip {
   border: 1px solid var(--forest-soft-2);
@@ -448,36 +376,9 @@
   font-weight: 600;
   color: var(--forest-ink);
 }
-.sp-chip__remove {
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--forest-ink);
-}
-.sp-chip__remove:hover {
-  background: var(--surface-2);
-}
 
 /* Browse leagues disclosure (#989): collapsed by default so the empty-query view leads with
    search, not the full catalog — the confederation groups below only render once expanded. */
-.sp-browse-toggle {
-  border: 1px solid var(--border-subtle);
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-.sp-browse-toggle:hover {
-  background: var(--surface-2);
-}
-.sp-browse-toggle[aria-expanded="true"] {
-  color: var(--ink);
-}
 
 /* Confederation-grouped browse mode (#907): shown when the search box is empty, replacing the
    old "Search above…" hint. Reuses .sp-whole/.sp-teamgrid/.sp-team for the follow-all button and
@@ -488,27 +389,9 @@
      2026-07-08 ("kill mono anywhere in the app"); --font-sans is the current eyebrow face
      everywhere else in this file. */
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
-}
-
-.sp-browse__league {
-  border: 1px solid var(--border-subtle);
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-.sp-browse__league:hover {
-  background: var(--surface-2);
-}
-.sp-browse__league[aria-expanded="true"] {
-  background: var(--forest-soft);
-  border-color: var(--forest-soft-2);
-  color: var(--forest-ink);
 }
 
 /* Sports feedback pass (#668) — story photos + league news grid.           */

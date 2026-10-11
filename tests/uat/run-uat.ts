@@ -1,7 +1,6 @@
-import { spawn } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import { basename, join, matchesGlob } from "node:path";
-import { captureFailureEvidence, provisionForUat } from "./provisioner.js";
+import { runPlaywrightOnStack } from "./provisioned-run.js";
 import type { UatChatScript, UatSeedChunk, UatSeedLevel } from "./seed/types.js";
 import { UAT_CHAT_SCRIPTS } from "./seed/types.js";
 
@@ -9,19 +8,6 @@ const SPEC_DIR = "tests/uat/specs";
 const LEVELS = new Set<UatSeedLevel>(["bare", "solo-admin", "admin+data", "multi-user"]);
 const CHUNKS = new Set<UatSeedChunk>(["news", "sports", "tasks", "calendar", "notes", "finance"]);
 const CHAT_SCRIPTS = new Set<UatChatScript>(UAT_CHAT_SCRIPTS);
-
-function readClaimedWebPort(): number | undefined {
-  const raw = process.env.JARVIS_UAT_CLAIMED_WEB_PORT;
-  if (raw === undefined || raw === "") return undefined;
-  if (!/^\d+$/.test(raw)) {
-    throw new Error("JARVIS_UAT_CLAIMED_WEB_PORT must be a decimal TCP port");
-  }
-  const port = Number(raw);
-  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
-    throw new Error("JARVIS_UAT_CLAIMED_WEB_PORT must be between 1 and 65535");
-  }
-  return port;
-}
 
 async function resolveSpecPaths(filters: readonly string[]): Promise<string[]> {
   const available = (await readdir(SPEC_DIR))
@@ -135,61 +121,28 @@ async function readUatLevel(specPath: string): Promise<{
 
 async function runSpec(specPath: string): Promise<number> {
   const uatLevel = await readUatLevel(specPath);
-  const claimedWebPort = readClaimedWebPort();
-  const { baseURL, projectName, teardown } = await provisionForUat(uatLevel.level, {
-    ...(claimedWebPort === undefined ? {} : { claimedWebPort }),
-    excludeChunks: uatLevel.without,
-    withoutNewsJsonBinding: uatLevel.withoutNewsJsonBinding,
-    withJobSearchFixture: uatLevel.withJobSearchFixture,
-    withSportsPublicSourceFixtures: uatLevel.withSportsPublicSourceFixtures,
-    withWorkflowApprovalFixture: uatLevel.withWorkflowApprovalFixture,
-    withActivityOutcomeFixture: uatLevel.withActivityOutcomeFixture,
-    withWorkshopStorageFixture: uatLevel.withWorkshopStorageFixture,
-    chatScript: uatLevel.chatScript,
-    withEspnFixture: uatLevel.withEspnFixture,
-    withBriefingWriterFixture: uatLevel.withBriefingWriterFixture,
-    withClassifierFixture: uatLevel.withClassifierFixture,
-    withClassifierMcpFixture: uatLevel.withClassifierMcpFixture
-  });
-
-  const onSignal = () => {
-    void teardown().finally(() => process.exit(1));
-  };
-  process.on("SIGINT", onSignal);
-  process.on("SIGTERM", onSignal);
-
-  try {
-    console.log(`[uat] running ${specPath} against ${baseURL} (project ${projectName})`);
-    const exitCode = await new Promise<number>((resolvePromise) => {
-      const child = spawn(
-        "npx",
-        ["playwright", "test", "--config=tests/uat/playwright.uat.config.ts", specPath],
-        {
-          stdio: "inherit",
-          env: {
-            ...process.env,
-            JARVIS_UAT_BASE_URL: baseURL,
-            JARVIS_UAT_PROJECT_NAME: projectName
-          }
-        }
-      );
-      child.on("exit", (code) => resolvePromise(code ?? 1));
-    });
-    if (exitCode !== 0) {
-      // #2164: capture app/live-model evidence BEFORE teardown (the `finally` below) removes the
-      // container — a spec assertion failure used to go straight to teardown with nothing retained
-      // to distinguish "model never called the tool" from "the SSE delivery path dropped it".
-      await captureFailureEvidence(
-        projectName,
-        `spec ${basename(specPath)} failed (exit ${exitCode})`
-      );
-    }
-    return exitCode;
-  } finally {
-    process.off("SIGINT", onSignal);
-    process.off("SIGTERM", onSignal);
-    await teardown();
-  }
+  return runPlaywrightOnStack(
+    uatLevel.level,
+    {
+      excludeChunks: uatLevel.without,
+      withoutNewsJsonBinding: uatLevel.withoutNewsJsonBinding,
+      withJobSearchFixture: uatLevel.withJobSearchFixture,
+      withSportsPublicSourceFixtures: uatLevel.withSportsPublicSourceFixtures,
+      withWorkflowApprovalFixture: uatLevel.withWorkflowApprovalFixture,
+      withActivityOutcomeFixture: uatLevel.withActivityOutcomeFixture,
+      withWorkshopStorageFixture: uatLevel.withWorkshopStorageFixture,
+      chatScript: uatLevel.chatScript,
+      withEspnFixture: uatLevel.withEspnFixture,
+      withBriefingWriterFixture: uatLevel.withBriefingWriterFixture,
+      withClassifierFixture: uatLevel.withClassifierFixture,
+      withClassifierMcpFixture: uatLevel.withClassifierMcpFixture
+    },
+    specPath,
+    ({ baseURL, projectName }) => ({
+      args: ["--config=tests/uat/playwright.uat.config.ts", specPath],
+      env: { ...process.env, JARVIS_UAT_BASE_URL: baseURL, JARVIS_UAT_PROJECT_NAME: projectName }
+    })
+  );
 }
 
 async function main(): Promise<void> {

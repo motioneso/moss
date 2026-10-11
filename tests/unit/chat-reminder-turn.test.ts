@@ -105,10 +105,10 @@ describe("chat reminder turn (#3309)", () => {
 
   it("passes an unsupported request through so the store can refuse it", async () => {
     const { manager, engine, recordReminderTurn } = setup({});
-    await manager.submitTurn("u1", "Ben", "remind me tomorrow at 9am to stretch");
+    await manager.submitTurn("u1", "Ben", "remind me on Friday at 9am to stretch");
     expect(recordReminderTurn.mock.calls[0]![2]).toEqual({
       kind: "unsupported",
-      reason: "needs_relative_duration"
+      reason: "unsupported_day"
     });
     expect(engine.launchCount).toBe(0);
   });

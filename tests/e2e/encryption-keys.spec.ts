@@ -58,10 +58,12 @@ test("a broken key tells the truth and replaces with confirmation", async ({ pag
     tasks: []
   });
   let source = "broken";
+  let replacements = 0;
   await page.route("**/api/admin/settings/encryption-keys", (route) =>
     route.fulfill({ json: { keys: [{ family: "integrations", source }] } })
   );
   await page.route("**/api/admin/settings/encryption-keys/rotate", (route) => {
+    replacements += 1;
     source = "store";
     return route.fulfill({ json: { keys: [{ family: "integrations", source }] } });
   });
@@ -69,14 +71,27 @@ test("a broken key tells the truth and replaces with confirmation", async ({ pag
   await expect(page.getByText("Stopped: the stored key no longer opens")).toBeVisible();
   await expect(page.getByRole("button", { name: "Rotate" })).toHaveCount(0);
 
-  let dialogShown = false;
-  page.on("dialog", (dialog) => {
-    dialogShown = true;
-    void dialog.accept();
-  });
-  await page.getByRole("button", { name: "Replace key" }).click();
+  const replace = page.getByRole("button", { name: "Replace key", exact: true });
+  await replace.click();
+  const confirmation = page.getByRole("dialog", { name: "Replace this key?", exact: true });
+  await expect(confirmation).toBeVisible();
+  await expect(
+    confirmation.getByText("Anything locked under the old one stays unreadable.")
+  ).toBeVisible();
+  await expect(confirmation.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  expect(replacements).toBe(0);
+  await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(confirmation).toBeHidden();
+  await expect(replace).toBeFocused();
+  expect(replacements).toBe(0);
+  await expect(page.getByText("Stopped: the stored key no longer opens")).toBeVisible();
+
+  await replace.click();
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button", { name: "Replace key", exact: true }).click();
+  await expect(confirmation).toBeHidden();
   await expect(page.getByText("Ready (stored).")).toBeVisible();
-  expect(dialogShown).toBe(true);
+  expect(replacements).toBe(1);
 });
 
 test("a settings-file cause offers no button, only the fix-it-there sentence", async ({ page }) => {

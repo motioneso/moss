@@ -14,7 +14,8 @@
   font-size: var(--text-xs);
   color: var(--text-subtle);
 }
-.jds-hint--error {
+.jds-hint--error,
+.jds-hint.jds-hint--error {
   color: var(--danger-fg);
 }
 
@@ -35,7 +36,7 @@
 .jds-input:hover,
 .jds-textarea:hover,
 .jds-select:hover {
-  border-color: var(--ink-3);
+  border-color: var(--text-faint);
 }
 .jds-input:focus,
 .jds-textarea:focus,
@@ -77,9 +78,28 @@
   background: var(--surface);
   color: var(--white);
 }
-.jds-check input:checked + .jds-check__box {
+.jds-check input:checked + .jds-check__box,
+.jds-check input:indeterminate + .jds-check__box {
   background: var(--accent);
   border-color: var(--accent);
+}
+/* The native input remains the state source, including checked + mixed. */
+.jds-check input:indeterminate + .jds-check__box {
+  position: relative;
+  color: var(--text-on-accent);
+}
+.jds-check input[type="checkbox"]:indeterminate + .jds-check__box svg {
+  opacity: 0;
+}
+.jds-check input:indeterminate + .jds-check__box::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--space-2);
+  height: var(--border-w-strong);
+  background: currentColor;
+  transform: translate(-50%, -50%);
 }
 .jds-check input:focus-visible + .jds-check__box {
   box-shadow: 0 0 0 3px var(--focus-ring);
@@ -191,7 +211,7 @@
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .jds-combobox__trigger:disabled {
-  color: var(--ink-4);
+  color: var(--text-faint);
   cursor: not-allowed;
 }
 .jds-combobox__value {
@@ -202,12 +222,12 @@
   white-space: nowrap;
 }
 .jds-combobox__value--empty {
-  color: var(--ink-4);
+  color: var(--text-faint);
 }
 .jds-combobox__chev {
   display: inline-flex;
   flex: none;
-  color: var(--ink-4);
+  color: var(--text-faint);
 }
 .jds-combobox__pop {
   position: absolute;
@@ -261,7 +281,7 @@
 }
 .jds-combobox__empty {
   padding: var(--space-2);
-  color: var(--ink-3);
+  color: var(--text-faint);
   font-size: var(--text-sm);
 }
 

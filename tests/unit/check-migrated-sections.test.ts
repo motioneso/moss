@@ -63,6 +63,15 @@ describe("check-migrated-sections guard 5: raw jds-* class ban", () => {
     expect(violations.map((v) => v.className)).toEqual(["jds-badge", "jds-badge--forest"]);
   });
 
+  it("flags the actual NavIndex class family and its elements", async () => {
+    const root = await buildFixture(
+      'export const Thing = () => <nav className="jds-navindex"><span className="jds-navindex__label" /></nav>;\n'
+    );
+    const violations = await checkRawClasses(root, ["apps/web/src/widgets/thing.tsx"]);
+    // The existing scanner reports the mapped family prefix for BEM elements.
+    expect(violations.map((v) => v.className)).toEqual(["jds-navindex", "jds-navindex"]);
+  });
+
   it("does not flag a class family with no backing component (ruling #1387, option 1)", async () => {
     const root = await buildFixture(
       'export const Thing = () => <section className="jds-brief"><div className="jds-task jds-task__title" /></section>;\n'

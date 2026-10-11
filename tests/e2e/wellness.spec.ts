@@ -233,8 +233,14 @@ test("wellness page renders the new screen and a guided check-in can be saved", 
   // so the emotion-strip buttons on the page behind it are excluded.
   await dialog.locator(".wl-dial__seg", { hasText: "Happy" }).click();
 
-  // Step 2: pick a feeling word (Joy is a Happy feeling) from the feeling chips.
-  await dialog.getByRole("button", { name: "Joy", exact: true }).click();
+  // Step 2: pick a feeling word (Joy is a Happy feeling) from the native radio choices.
+  await dialog
+    .getByRole("radiogroup", { name: "Shade of Happy", exact: true })
+    .getByRole("radio", { name: "Joy", exact: true })
+    .click();
+  await expect(
+    dialog.getByText("Body sensations that come with “Joy.”", { exact: false })
+  ).toBeVisible();
 
   // No "Next" step — detail fields appear inline once both emotion and feeling are set.
   const [request] = await Promise.all([
@@ -394,7 +400,7 @@ test("Meds dialog opens from the rail, closes on Escape, and returns focus", asy
   await opener.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+  await expect(dialog.getByRole("button", { name: "Done", exact: true })).toBeFocused();
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
@@ -410,7 +416,10 @@ test("Meds dialog opens from the rail, closes on Escape, and returns focus", asy
   await opener.focus();
   await page.keyboard.press("Enter");
   await expect(dialog).toBeVisible();
-  await page.locator(".wl-modal-scrim").click({ position: { x: 10, y: 10 } });
+  await page
+    .locator(".jds-dialog-scrim")
+    .filter({ has: dialog })
+    .click({ position: { x: 10, y: 10 } });
   await expect(dialog).toBeHidden();
   await expect(opener).toBeFocused();
 });

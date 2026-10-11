@@ -102,3 +102,6 @@ export { RadioCardGroup } from "./radio-card-group.js";
 export type { RadioCardGroupProps, RadioCardOption } from "./radio-card-group.js";
 export * from "./control-pill.js";
 export * from "./highlight.js";
+
+export { useDialogLifecycle } from "./use-dialog-lifecycle.js";
+export type { DialogLifecycleOptions } from "./use-dialog-lifecycle.js";

@@ -39,6 +39,7 @@ describe("InfoTip", () => {
     act(() => trigger().click());
     expect(trigger().getAttribute("aria-expanded")).toBe("true");
     expect(panel()?.textContent).toBe("Explanation text.");
+    expect(trigger().getAttribute("aria-describedby")).toBe(panel()?.id);
   });
 
   it("closes on Escape and returns focus to the trigger", () => {

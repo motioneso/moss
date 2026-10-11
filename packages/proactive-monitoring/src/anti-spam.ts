@@ -59,20 +59,23 @@ export class AntiSpamPolicy {
       return { allow: false, reason: "source_hourly_cap" };
     }
 
-    // Quiet hours deferral. The saved schedule, when one governs, replaces the nested one.
-    const quietHours = quiet ?? { ...pref.quietHours, timeZone };
-    if (quietHours.enabled) {
-      const deferredUntil = quietHoursDeferral(nowIso, quietHours.timeZone, quietHours);
-      if (deferredUntil) {
-        return { allow: true, deferredUntil };
-      }
-    }
+    return { allow: true, deferredUntil: this.quietDeferral(pref, nowIso, timeZone, quiet) };
+  }
 
-    return { allow: true, deferredUntil: null };
+  /** When quiet hours are on now, the instant they end. The saved schedule replaces the nested one. */
+  quietDeferral(
+    pref: ProactiveMonitoringPreferenceV1,
+    nowIso: string,
+    timeZone: string,
+    quiet?: ProactiveQuietPolicy | null
+  ): string | null {
+    const quietHours = quiet ?? { ...pref.quietHours, timeZone };
+    if (!quietHours.enabled) return null;
+    return quietHoursDeferral(nowIso, quietHours.timeZone, quietHours);
   }
 }
 
-function localMidnight(nowIso: string, timeZone: string): string {
+export function localMidnight(nowIso: string, timeZone: string): string {
   try {
     return wallTimeToInstant(
       localDateString(new Date(nowIso), timeZone),

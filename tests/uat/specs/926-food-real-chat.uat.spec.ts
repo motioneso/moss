@@ -42,8 +42,8 @@ const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED
 const MEAL_TEXT = "oatmeal with blueberries";
 
 async function openInstanceModules(page: Page): Promise<void> {
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Instance modules" }).click();
   await expect(page.getByRole("heading", { name: "Instance modules" })).toBeVisible();

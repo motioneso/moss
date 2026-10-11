@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { Dialog } from "@moss/ui";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 
@@ -77,5 +79,24 @@ describe("SkipConfirmDialog (rendered)", () => {
 
   it("does not leak the raw backend error string", () => {
     expect(render()).not.toContain("No active chat-capable model is configured");
+  });
+});
+
+describe("SkipConfirmDialog shared dismissal", () => {
+  it("does not dismiss an in-flight skip and keeps both action controls disabled", () => {
+    const onCancel = vi.fn();
+    const onConfirm = vi.fn();
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(<SkipConfirmDialog pending onCancel={onCancel} onConfirm={onConfirm} />);
+    });
+    const dialog = renderer.root.findByType(Dialog);
+    act(() => dialog.props.onClose());
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(renderer.root.findAllByType("button").every((button) => button.props.disabled)).toBe(
+      true
+    );
+    act(() => renderer.unmount());
   });
 });

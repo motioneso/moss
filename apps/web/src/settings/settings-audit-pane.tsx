@@ -163,6 +163,14 @@ export function AuditPane() {
           </div>
         </div>
 
+        {auditQuery.isError ? (
+          <div className="set2-read-state" role="status">
+            <span>Could not load activity.</span>
+            <Button variant="quiet" size="sm" onClick={() => void auditQuery.refetch()}>
+              Try again
+            </Button>
+          </div>
+        ) : null}
         {rows.length ? (
           <div className="aud">
             {rows.map((event) => (
@@ -175,8 +183,8 @@ export function AuditPane() {
               </div>
             ))}
           </div>
-        ) : (
-          <div className="aud__empty">
+        ) : !auditQuery.isError ? (
+          <div className="aud__empty" role="status">
             <SearchX size={18} aria-hidden="true" />
             {auditQuery.isLoading
               ? "Loading activity…"
@@ -184,10 +192,12 @@ export function AuditPane() {
                 ? "No activity matches these filters."
                 : "Admin and system actions appear here once recorded."}
           </div>
-        )}
-        <div className="aud__count">
-          {rows.length} of {events.length} events
-        </div>
+        ) : null}
+        {auditQuery.data ? (
+          <div className="aud__count">
+            {rows.length} of {events.length} events
+          </div>
+        ) : null}
       </Group>
 
       <Group title="Data & backups">

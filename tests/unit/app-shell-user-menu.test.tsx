@@ -72,7 +72,10 @@ function renderShellWithUnread(unreadCount: number): string {
 describe("RailUserMenu notification badge", () => {
   it("renders the unread notification badge on the closed user menu when unreadCount > 0", () => {
     const html = renderShellWithUnread(11);
-    expect(html).toContain('class="jds-usermenu__trigger "');
+    const trigger = html.match(/<button[^>]*aria-label="Account menu(?:,[^"]*)?"[^>]*>/)?.[0];
+    expect(trigger).toBeDefined();
+    expect(trigger).toContain('aria-haspopup="menu"');
+    expect(trigger).toContain('aria-expanded="false"');
     expect(html).toContain('<span class="jds-badge-count"');
     expect(html).toContain(">11</span>");
     expect(html).toContain('aria-label="Account menu, 11 unread notifications"');
@@ -80,7 +83,10 @@ describe("RailUserMenu notification badge", () => {
 
   it("hides the unread notification badge on the closed user menu when unreadCount is 0", () => {
     const html = renderShellWithUnread(0);
-    expect(html).toContain('class="jds-usermenu__trigger "');
+    const trigger = html.match(/<button[^>]*aria-label="Account menu(?:,[^"]*)?"[^>]*>/)?.[0];
+    expect(trigger).toBeDefined();
+    expect(trigger).toContain('aria-haspopup="menu"');
+    expect(trigger).toContain('aria-expanded="false"');
     expect(html).not.toContain('<span class="jds-badge-count"');
     expect(html).toContain('aria-label="Account menu"');
   });

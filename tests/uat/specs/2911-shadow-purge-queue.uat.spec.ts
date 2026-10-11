@@ -80,7 +80,7 @@ test("the retired shadow-purge queue is really gone after the worker starts (#29
     await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
     await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
     const skip = page.getByRole("button", { name: "Skip setup" });
-    const menu = page.locator(".jds-usermenu__trigger");
+    const menu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
     await expect(skip.or(menu).first()).toBeVisible({ timeout: 30_000 });
     if (await skip.isVisible()) {
       await skip.click();

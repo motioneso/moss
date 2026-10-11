@@ -66,6 +66,12 @@ describe("email_drafts policy ↔ toggle mapping", () => {
 describe("EmailSettings pane", () => {
   it("renders the draft-agency toggle without redundant send-policy copy", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["settings", "source-behaviors"], { sources: [] });
+    client.setQueryData(["email", "briefing-settings"], {
+      settings: { createTasks: true, suggestReplies: true, draftReplies: true, autoSend: false }
+    });
+    client.setQueryData(["email", "task-mode"], { mode: "suggest" });
+    client.setQueryData(["ai", "action-policy"], { policies: [policy({})] });
     const html = renderToString(
       createElement(QueryClientProvider, { client }, createElement(EmailSettings))
     );

@@ -110,11 +110,11 @@ test("Finance reports derive net worth and pairing-excluded spending end-to-end"
   // Scoped to the form: the auth-mode segmented control has its own "Sign in" tab button
   // with the same accessible name as the submit button (apps/web/src/auth/auth-screen.tsx).
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
 
   // --- Enable through the real admin UI ------------------------------------------------
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Instance modules" }).click();
   await expect(page.getByRole("heading", { name: "Instance modules" })).toBeVisible();

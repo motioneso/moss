@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Group, Note, PaneHead, Row, Select, Switch } from "@moss/settings-ui";
+import { Button } from "@moss/ui";
 import type {
   CalendarAutomationMode,
   GetCalendarBriefingSettingsResponse,
@@ -33,7 +34,10 @@ export const CALENDAR_MODE_OPTIONS: ReadonlyArray<{
 const CALENDAR_TIME_BLOCK_AUTO_DESC =
   "Create time blocks automatically, both when your assistant proposes them in chat and unattended in the background.";
 
-async function requestJson<T>(path: string, init?: RequestInit & { body?: unknown }): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  init?: Omit<RequestInit, "body"> & { body?: unknown }
+): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("accept", "application/json");
   if (init?.body !== undefined) headers.set("content-type", "application/json");
@@ -89,7 +93,7 @@ export default function CalendarSettings() {
     sourceBehaviors.data?.sources
       .flatMap((source) => source.behaviors)
       .find((behavior) => behavior.id === CALENDAR_BEHAVIOR_ID)?.enabled ?? true;
-  const settings = (settingsMutation.data ?? settingsQuery.data)?.settings;
+  const settings = settingsQuery.data?.settings;
   const prepTaskMode = settings?.prepTaskMode ?? "suggest";
   const timeBlockMode = settings?.timeBlockMode ?? "suggest";
   const prepTaskModeOption = CALENDAR_MODE_OPTIONS.find((option) => option.value === prepTaskMode);
@@ -97,10 +101,7 @@ export default function CalendarSettings() {
     (option) => option.value === timeBlockMode
   );
   const disabled =
-    sourceBehaviors.isLoading ||
-    settingsQuery.isLoading ||
-    behaviorMutation.isPending ||
-    settingsMutation.isPending;
+    !sourceBehaviors.data || !settings || behaviorMutation.isPending || settingsMutation.isPending;
 
   return (
     <>
@@ -108,6 +109,29 @@ export default function CalendarSettings() {
         title="Calendar"
         desc="How calendar-derived signals show up in briefings, without bypassing normal task or time-block governance."
       />
+      {sourceBehaviors.isPending || settingsQuery.isPending ? (
+        <p role="status">Loading calendar settings…</p>
+      ) : null}
+      {sourceBehaviors.isError || settingsQuery.isError ? (
+        <div role="alert">
+          <Note>
+            {sourceBehaviors.data && settings
+              ? "Could not refresh calendar settings. Your last saved settings are shown."
+              : "Could not load calendar settings. Some saved settings are unavailable."}
+          </Note>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={sourceBehaviors.isFetching || settingsQuery.isFetching}
+            onClick={() => {
+              if (sourceBehaviors.isError) void sourceBehaviors.refetch();
+              if (settingsQuery.isError) void settingsQuery.refetch();
+            }}
+          >
+            Retry loading
+          </Button>
+        </div>
+      ) : null}
       <Group title="Briefing signal">
         <Row
           name="Include calendar signal in briefings"
@@ -184,11 +208,13 @@ export default function CalendarSettings() {
           }
         />
       </Group>
-      {sourceBehaviors.isError ||
-      settingsQuery.isError ||
-      behaviorMutation.isError ||
-      settingsMutation.isError ? (
-        <Note>Could not save calendar briefing settings. Try again.</Note>
+      {behaviorMutation.isError || settingsMutation.isError ? (
+        <div role="alert">
+          <Note>
+            Could not save calendar briefing settings. Your last confirmed settings are shown. Try
+            again.
+          </Note>
+        </div>
       ) : null}
     </>
   );

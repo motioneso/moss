@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Terminal } from "lucide-react";
+import { useId } from "react";
 
 import type { AiCliToolsDto } from "@moss/shared";
 
@@ -14,6 +15,7 @@ export function cliVersionLine(name: string, tools: AiCliToolsDto | undefined): 
 
 export function OpenCodeAcpCard(props: { readonly cli: AiCliToolsDto | undefined }) {
   const queryClient = useQueryClient();
+  const modelId = useId();
   const settingsQuery = useQuery({
     queryKey: queryKeys.chat.settings,
     queryFn: getChatSettings,
@@ -40,9 +42,13 @@ export function OpenCodeAcpCard(props: { readonly cli: AiCliToolsDto | undefined
       <div className="prov__edit">
         <Field
           label="Chat model"
+          controlId={modelId}
+          hintId={`${modelId}-hint`}
           hint="Saved for the next OpenCode ACP session; the agent applies it when it advertises a model choice."
         >
           <Select
+            id={modelId}
+            aria-describedby={`${modelId}-hint`}
             value={model}
             disabled={settingsQuery.isLoading || settingsMutation.isPending}
             onChange={(event) =>

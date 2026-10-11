@@ -1,15 +1,21 @@
+import { Eyebrow, RowButton } from "@moss/ui";
 import type { ReactNode } from "react";
 import { Check, Info } from "lucide-react";
 
 export function StepHeader(props: {
+  readonly titleId: string;
   readonly eyebrow: string;
   readonly title: string;
   readonly lede?: ReactNode;
 }) {
   return (
     <div>
-      <div className="onb-eyebrow">{props.eyebrow}</div>
-      <h1 className="onb-title">{props.title}</h1>
+      <Eyebrow tone="accent" className="onb-eyebrow">
+        {props.eyebrow}
+      </Eyebrow>
+      <h1 id={props.titleId} className="onb-title">
+        {props.title}
+      </h1>
       {props.lede ? <p className="onb-lede">{props.lede}</p> : null}
     </div>
   );
@@ -25,7 +31,7 @@ export function OptionCard(props: {
   readonly children?: ReactNode;
 }) {
   return (
-    <button
+    <RowButton
       type="button"
       className={`onb-opt${props.selected ? " is-sel" : ""}`}
       disabled={props.disabled}
@@ -43,7 +49,7 @@ export function OptionCard(props: {
         {props.desc ? <span className="onb-opt__desc">{props.desc}</span> : null}
         {props.children ? <span className="onb-opt__status">{props.children}</span> : null}
       </span>
-    </button>
+    </RowButton>
   );
 }
 
