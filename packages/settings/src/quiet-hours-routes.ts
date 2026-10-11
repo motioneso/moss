@@ -4,13 +4,16 @@ import type { AccessContext, DataContextRunner } from "@moss/db";
 import {
   getQuietHoursSettingsRouteSchema,
   putQuietHoursSettingsRouteSchema,
-  type PutQuietHoursSettingsRequest
+  resolveQuietHoursConflictRouteSchema,
+  type PutQuietHoursSettingsRequest,
+  type ResolveQuietHoursConflictRequest
 } from "@moss/shared";
 import { PreferenceRevisionConflictError } from "@moss/structured-state";
 
 import type { QuietHoursPreferencesPort } from "./preferences-port.js";
 import { QUIET_HOURS_PREFERENCE_KEY } from "./quiet-hours-application.js";
 import { readQuietHoursAuthority, type QuietHoursAuthorityRead } from "./quiet-hours-authority.js";
+import { planQuietHoursResolution } from "./quiet-hours-resolution.js";
 import {
   displayedQuietHours,
   quietHoursAuthorityDto,
@@ -75,6 +78,39 @@ export function registerQuietHoursRoutes(
           );
           const after = saved.changed ? await readQuietHoursAuthority(scopedDb) : before;
           return quietHoursResponse(after);
+        });
+      } catch (error) {
+        if (error instanceof PreferenceRevisionConflictError) {
+          return reply.code(409).send({ error: QUIET_HOURS_CONFLICT_MESSAGE });
+        }
+        return handleSettingsRouteError(error, reply);
+      }
+    }
+  );
+
+  server.post(
+    "/api/me/quiet-hours/resolution",
+    { schema: resolveQuietHoursConflictRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const body = request.body as ResolveQuietHoursConflictRequest;
+        return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+          const before = await readQuietHoursForWrite(scopedDb);
+          const plan = planQuietHoursResolution(before, quietHoursAuthorityVersion(before), body);
+          if (plan.kind === "stale") {
+            throw new PreferenceRevisionConflictError(QUIET_HOURS_PREFERENCE_KEY);
+          }
+          if (plan.kind === "unchanged") return quietHoursResponse(before);
+
+          // The Profile row exists for every conflict, so this updates it in place under the lock.
+          await dependencies.preferencesRepository.upsertWithRevision(
+            scopedDb,
+            QUIET_HOURS_PREFERENCE_KEY,
+            plan.value,
+            before.profileRow?.revision ?? null
+          );
+          return quietHoursResponse(await readQuietHoursAuthority(scopedDb));
         });
       } catch (error) {
         if (error instanceof PreferenceRevisionConflictError) {
