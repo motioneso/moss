@@ -200,7 +200,7 @@ function EmptyState({
         title={<h2>No stories for {topicLabel(filter)}</h2>}
         description={
           data.degraded
-            ? "No matching stories in the loaded front page. Some sources are unavailable, so coverage may be incomplete."
+            ? "No matching stories in the loaded front page. Some sources are unavailable."
             : "No matching stories in the loaded front page."
         }
       >

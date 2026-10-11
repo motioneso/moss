@@ -120,6 +120,19 @@ collected tests, synthetic component browsers, and focused unit passes are not
 that proof. If the isolated instance cannot run, status is code-complete,
 unverified. No merge, deployment, or existing-owner acceptance artifact changes.
 
+### Verification as run (2026-10-11)
+
+- Automated UAT `tests/uat/specs/audit-feeds.uat.spec.ts` covers News only: settings
+  save/read-back and feedback receipts/removal, on fixture RSS/model inputs compiled
+  through the production compiler behind the real API. It proves feedback UI/API
+  persistence, not real News acquisition, production AI routing or live refresh.
+- Sports pause/resume was proven manually on a real account with real ESPN data,
+  following teams through the app and removing the follows afterwards. Evidence is on
+  the PR. No automated Sports browser test exists.
+- Mixed pointer/keyboard input beyond that manual run, runtime reduced motion, the
+  1440/390/320 widths for Sports, and controlled unavailable/read/write states remain
+  unit-tested only and live-unverified.
+
 ## Exclusions
 
 No reader library, spoiler policy, new alerts, Sports redesign, News rotation
