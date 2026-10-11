@@ -5,7 +5,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { DayPlanDto } from "@moss/shared";
+import type { CalendarEventDto, DayPlanDto } from "@moss/shared";
 
 import {
   useEveningPlanning,
