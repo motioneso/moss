@@ -8,7 +8,9 @@
 // JARVIS_UAT_REAL_CHAT_PROVIDER picks the sign-in, "codex" (default) or "claude".
 // Codex: LIVE_R26_CODEX_AUTH is the operator's Codex sign-in file, copied into the owner's model
 // folder (mode 600) and removed again at teardown; LIVE_R26_CLI_AUTH_BASE is the model folder base.
-// Claude: Moss's own sign-in through tests/uat/claude-signin-handoff.ts; nothing is copied in.
+// Claude: Moss's own sign-in through tests/uat/claude-signin-handoff.ts. With LIVE_R26_CLI_AUTH_BASE
+// set, a saved sign-in (#3387) is seeded into the owner's model folder first, so no link is needed.
+// The box's own Claude login is never copied.
 // A Claude run needs MOSS_UAT_CAPTURE_OFF=1 so no trace records the code; do not pass --trace.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync } from "node:fs";
@@ -17,6 +19,8 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   claudeSignInPaths,
   claudeSignInWaitMs,
+  readSavedClaudeToken,
+  saveClaudeToken,
   signInClaudeThroughMoss
 } from "../uat/claude-signin-handoff.js";
 import { pickCheapestActiveChatModel, type UatDiscoveredModel } from "../uat/model-tier.js";
@@ -202,6 +206,16 @@ async function signInChatModel(page: Page): Promise<void> {
   expect((await install.json()).installState).toBe("installed");
 
   if (provider === "claude") {
+    // A from-source instance shares the box's cli-runner, which reads a user's Claude token from
+    // <base>/agents/<user>/.jarvis/cli-tokens/anthropic. A link after seeding may mean a wrong
+    // base rather than a refused token, so the saved file is left for the provisioner to judge.
+    const saved = readSavedClaudeToken();
+    const base = process.env.LIVE_R26_CLI_AUTH_BASE;
+    if (saved !== undefined && base) {
+      const ownerId = sql(`select id from app.users where email = '${R26.ownerEmail}'`);
+      saveClaudeToken(saved, `${base}/agents/${ownerId}/.jarvis/cli-tokens/anthropic`);
+      console.log("[uat real-chat] saved Claude sign-in seeded into the owner's model folder");
+    }
     const codeWaitMs = claudeSignInWaitMs();
     test.info().setTimeout(test.info().timeout + codeWaitMs);
     await signInClaudeThroughMoss(
