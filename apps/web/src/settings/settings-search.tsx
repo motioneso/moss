@@ -57,6 +57,8 @@ export function SettingsSearch({ items, onSelect }: SettingsSearchProps) {
   const open = focused && query.trim().length > 0;
   const activeIndex = Math.min(active, Math.max(0, results.length - 1));
 
+  const optionId = (item: SettingsSearchItem) => `${listId}-${item.id}`;
+
   const pick = (item: SettingsSearchItem) => {
     setQuery("");
     setActive(0);
@@ -73,6 +75,9 @@ export function SettingsSearch({ items, onSelect }: SettingsSearchProps) {
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-activedescendant={
+          open && results[activeIndex] ? optionId(results[activeIndex]) : undefined
+        }
         placeholder="Search settings"
         value={query}
         onChange={(event) => {
@@ -103,6 +108,7 @@ export function SettingsSearch({ items, onSelect }: SettingsSearchProps) {
               {results.map((item, index) => (
                 <button
                   key={item.id}
+                  id={optionId(item)}
                   type="button"
                   role="option"
                   aria-selected={index === activeIndex}
