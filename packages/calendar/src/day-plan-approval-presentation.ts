@@ -5,9 +5,10 @@ import {
   type ApprovalField,
   type HumanActionDetails,
   type RouteApprovalPresentation,
-  type ToolApprovalPresentation
+  type ToolApprovalPresentation,
+  type ToolContext
 } from "@moss/module-sdk";
-import type { DayPlanDto } from "@moss/shared";
+import { DEFAULT_LOCALE_SETTINGS, formatLocaleDateTime, type DayPlanDto } from "@moss/shared";
 import type { DayPlanRoutesDependencies } from "./day-plan-routes.js";
 
 type Dependencies = Pick<DayPlanRoutesDependencies, "findTask" | "findRun"> & {
@@ -195,11 +196,12 @@ class PlanDisclosure {
 async function present(
   db: unknown,
   raw: unknown,
-  actor: string,
+  ctx: ToolContext,
   planId?: string,
   tool = false
 ): Promise<HumanActionDetails | null> {
   assertDataContextDb(db);
+  const actor = ctx.actorUserId;
   const body = object(raw);
   if (
     !dependencies ||
@@ -238,7 +240,7 @@ async function present(
         view.references.push(run);
         view.add(
           "Briefing",
-          `${run.briefing_type === "morning" ? "Morning" : run.briefing_type === "evening" ? "Evening" : "Briefing"} · ${new Date(run.created_at).toISOString()}`
+          `${run.briefing_type === "morning" ? "Morning" : run.briefing_type === "evening" ? "Evening" : "Briefing"} · ${formatLocaleDateTime(run.created_at, ctx.locale ?? DEFAULT_LOCALE_SETTINGS)}`
         );
       }
     }
@@ -255,10 +257,10 @@ async function present(
 }
 
 export const createDayPlanPresentation: RouteApprovalPresentation = async (db, input, ctx) =>
-  input.query && Object.keys(input.query).length ? null : present(db, input.body, ctx.actorUserId);
+  input.query && Object.keys(input.query).length ? null : present(db, input.body, ctx);
 export const saveDayPlanPresentation: RouteApprovalPresentation = async (db, input, ctx) =>
   input.query && Object.keys(input.query).length
     ? null
-    : present(db, input.body, ctx.actorUserId, input.params.id);
+    : present(db, input.body, ctx, input.params.id);
 export const dayPlanDraftPresentation: ToolApprovalPresentation = async (db, input, ctx) =>
-  typeof input.planId === "string" ? present(db, input, ctx.actorUserId, input.planId, true) : null;
+  typeof input.planId === "string" ? present(db, input, ctx, input.planId, true) : null;

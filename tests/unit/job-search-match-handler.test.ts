@@ -472,10 +472,10 @@ describe("createMatchesListHandler", () => {
   });
 
   it("worst case render-survival: MATCHES_LIST_MAX_LIMIT matches with every field maxed stay <=80% of the tool-result render cap", async () => {
-    // packages/ai/src/routes.ts's boundedAssistantToolResultData substitutes {text: "…truncated"}
-    // past 16 000 RENDERED characters — and `renderToolResult` (module-sdk) renders a uniform
-    // flat array of scalars as a markdown table, not JSON.stringify. Past that cap the board has
-    // nothing to render at all, not a short list, so this drives every text field the row still
+    // Moss reads this tool through the chat render cap (renderAndCap), which cuts past 16 000
+    // RENDERED characters — and `renderToolResult` (module-sdk) renders a uniform flat array of
+    // scalars as a markdown table, not JSON.stringify. Past that cap Moss sees only part of the
+    // list, so this drives every text field the row still
     // carries post-N39 (the posting's title/company — which this module doesn't control the
     // length of — and #1330's `url`; NOT fitReason/wantReason, which N39 removed from the row
     // entirely) to its cap and checks the REAL render function, not an approximation of it.

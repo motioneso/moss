@@ -37,6 +37,11 @@ export interface ConversationProvenancePort {
   /** Missing, legacy and foreign threads are tainted. The actor owns the lookup scope. */
   isTainted(actorUserId: string, threadId: string | undefined): Promise<boolean>;
   recordAdmission(actorUserId: string, threadId: string, path: AdmissionPath): Promise<void>;
+  /**
+   * True only for an owned thread durably marked as holding outside content with no automatic
+   * run in flight. The user's trust runs writes past this taint and no other (#3338).
+   */
+  isMarked?(actorUserId: string, threadId: string | undefined): Promise<boolean>;
   /** Claim before execution, release only after its actual promise settles. No expiry. */
   runAutomatic?<T>(
     actorUserId: string,

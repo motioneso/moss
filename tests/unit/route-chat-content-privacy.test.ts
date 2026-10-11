@@ -359,9 +359,8 @@ describe("private-content approval target resolvers", () => {
     const { scoped, queries } = makeRecordingDb({
       rows: [{ created_at: new Date("2026-10-01T14:30:00Z") }]
     });
-    expect(await target(scoped, { id: TARGET_ID })).toBe(
-      "Therapy note from 2026-10-01T14:30:00.000Z"
-    );
+    // No ctx: the default locale (Los Angeles, 24-hour), never UTC.
+    expect(await target(scoped, { id: TARGET_ID })).toBe("Therapy note from Oct 1, 2026, 07:30");
     expect(queries).toHaveLength(1);
     expect(queries[0]?.sql).toContain('select "created_at"');
     expect(queries[0]?.sql).not.toMatch(/\bbody\b|\*/i);

@@ -1,9 +1,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { addLocalDays, todayLocalDayKey } from "@moss/module-sdk/time";
 import { Button, ButtonLink, Dialog } from "@moss/ui";
 import { WELLNESS_EXPORT_CATEGORIES, type WellnessExportCategory } from "@moss/shared";
 import { getDataExportDownloadUrl, getDataExportStatus, type ExportJobStatus } from "../api/client";
 import { requestWellnessExport } from "../api/wellness-export";
+import { useUserLocale } from "../locale/locale-format";
 
 function DownloadIcon() {
   return (
@@ -49,14 +51,13 @@ const CATEGORY_LABELS: { readonly [K in WellnessExportCategory]: string } = {
   insights: "Insights"
 };
 
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function todayIso(): string {
-  return isoDaysAgo(0);
+/** Default range: the 90 days up to today, as calendar days in the person's time zone. */
+export function defaultExportRange(
+  timeZone: string,
+  now: Date = new Date()
+): { readonly from: string; readonly to: string } {
+  const today = todayLocalDayKey(timeZone, now);
+  return { from: addLocalDays(today, -90), to: today };
 }
 
 const SENSITIVE_COPY =
@@ -68,8 +69,13 @@ interface Props {
 }
 
 export function WellnessExportModal({ open, onClose }: Props) {
-  const [from, setFrom] = useState<string>(isoDaysAgo(90));
-  const [to, setTo] = useState<string>(todayIso());
+  const locale = useUserLocale();
+  const defaults = defaultExportRange(locale.timezone);
+  // Untouched dates follow the person's zone once it loads.
+  const [fromInput, setFrom] = useState<string | null>(null);
+  const [toInput, setTo] = useState<string | null>(null);
+  const from = fromInput ?? defaults.from;
+  const to = toInput ?? defaults.to;
   const [categories, setCategories] = useState<readonly WellnessExportCategory[]>([
     ...WELLNESS_EXPORT_CATEGORIES
   ]);
@@ -164,7 +170,7 @@ export function WellnessExportModal({ open, onClose }: Props) {
               type="date"
               className="wl-input"
               value={to}
-              max={todayIso()}
+              max={defaults.to}
               onChange={(e) => setTo(e.target.value)}
             />
           </div>

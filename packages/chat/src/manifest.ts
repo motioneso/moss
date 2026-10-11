@@ -116,6 +116,13 @@ export const chatModuleManifest = {
   ],
   features: [
     {
+      id: "chat.time_context",
+      description:
+        "Chat tool results include references giving each timestamp's date and time in the person's time zone, region and 12/24-hour choice. " +
+        "Times without a reference keep the instruction to convert them. Original timestamps stay unchanged.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.pending_action_disclosure",
       description:
         "App cards show exact server targets and human-readable changes. Memory and note deletion use red Approve. " +
@@ -171,8 +178,8 @@ export const chatModuleManifest = {
     {
       id: "chat.conversation_write_confirmation",
       description:
-        "Every write, including installed and connected tools, asks on outside or unknown history, even in YOLO. " +
-        "Admission is recorded before exposure and survives restart. Native vault reads stop if their conversation cannot be recorded.",
+        "Outside history makes writes ask unless trusted by Auto-approve actions or a no-ask action group within its limit. " +
+        "Unknown history asks. Admission is recorded first and survives restart. Native vault reads stop if it cannot be recorded.",
       featureFlagId: "chat.module"
     },
     {

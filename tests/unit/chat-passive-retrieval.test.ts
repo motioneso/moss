@@ -76,7 +76,8 @@ describe("renderRetrievedContextBlock", () => {
             occurredAt: null
           }
         ]
-      }))
+      })),
+      "UTC"
     );
 
     expect(block.match(/^- /gm)).toHaveLength(8);
@@ -90,44 +91,47 @@ describe("renderRetrievedContextBlock", () => {
   });
 
   it("labels stale and conflicting memory safely", () => {
-    const block = renderRetrievedContextBlock([
-      {
-        kind: "fact" as const,
-        id: "stale",
-        title: "related_to",
-        text: "Contractor A",
-        score: 0.9,
-        confidence: 0.82,
-        confidenceTier: "high" as const,
-        recordKind: "fact" as const,
-        status: "stale" as const,
-        provenance: "volunteered" as const,
-        validFrom: null,
-        validTo: null,
-        staleAt: new Date("2026-06-01T00:00:00.000Z"),
-        supersededByFactId: null,
-        conflictGroupId: null,
-        sources: []
-      },
-      {
-        kind: "fact" as const,
-        id: "conflict",
-        title: "prefers",
-        text: "Option B",
-        score: 0.9,
-        confidence: 0.7,
-        confidenceTier: "medium" as const,
-        recordKind: "preference" as const,
-        status: "conflicting" as const,
-        provenance: "inferred" as const,
-        validFrom: null,
-        validTo: null,
-        staleAt: null,
-        supersededByFactId: null,
-        conflictGroupId: "group-1",
-        sources: []
-      }
-    ]);
+    const block = renderRetrievedContextBlock(
+      [
+        {
+          kind: "fact" as const,
+          id: "stale",
+          title: "related_to",
+          text: "Contractor A",
+          score: 0.9,
+          confidence: 0.82,
+          confidenceTier: "high" as const,
+          recordKind: "fact" as const,
+          status: "stale" as const,
+          provenance: "volunteered" as const,
+          validFrom: null,
+          validTo: null,
+          staleAt: new Date("2026-06-01T00:00:00.000Z"),
+          supersededByFactId: null,
+          conflictGroupId: null,
+          sources: []
+        },
+        {
+          kind: "fact" as const,
+          id: "conflict",
+          title: "prefers",
+          text: "Option B",
+          score: 0.9,
+          confidence: 0.7,
+          confidenceTier: "medium" as const,
+          recordKind: "preference" as const,
+          status: "conflicting" as const,
+          provenance: "inferred" as const,
+          validFrom: null,
+          validTo: null,
+          staleAt: null,
+          supersededByFactId: null,
+          conflictGroupId: "group-1",
+          sources: []
+        }
+      ],
+      "UTC"
+    );
 
     expect(block).toContain("This may be outdated: Contractor A");
     expect(block).toContain("Conflicting memory: Option B");

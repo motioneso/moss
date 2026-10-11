@@ -6,7 +6,8 @@ import type { CalendarEventDto, GetDayPlanResponse, LocaleSettingsDto } from "@m
 import { Button, Note, RowButton, SectionHead as HeadRow } from "@moss/ui";
 
 import { getCalendarBriefingSettings } from "../api/client.js";
-import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
+import { ClockTime } from "./clock-time.js";
+import { eventCaptureText } from "./today-labels.js";
 import { buildDayItems } from "./day-plan-view-model.js";
 import { buildScheduleGaps } from "./day-plan-gaps.js";
 import {
@@ -97,8 +98,7 @@ function DayItemRow(props: {
         )}
       >
         <div className="day-ev__t">
-          {timeLabel(item.startsAt!, props.locale)}
-          <span className="ap"> {ampm(item.startsAt!, props.locale)}</span>
+          <ClockTime iso={item.startsAt!} locale={props.locale} />
         </div>
         <div>
           <div className="day-ev__title">{item.title}</div>
@@ -112,10 +112,7 @@ function DayItemRow(props: {
     <div className="jds-task" key={item.key} data-state={item.state}>
       <div className="day-ev__t">
         {item.startsAt !== null ? (
-          <>
-            {timeLabel(item.startsAt, props.locale)}
-            <span className="ap"> {ampm(item.startsAt, props.locale)}</span>
-          </>
+          <ClockTime iso={item.startsAt} locale={props.locale} />
         ) : (
           "No time yet"
         )}

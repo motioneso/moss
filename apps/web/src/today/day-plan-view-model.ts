@@ -7,7 +7,7 @@ import {
   localDay
 } from "@moss/shared";
 
-import { ampm, byStart, isToday, timeLabel } from "./today-labels.js";
+import { byStart, clockText, isToday } from "./today-labels.js";
 
 export type DayItemState =
   | "committed"
@@ -196,7 +196,7 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
       const label =
         input.proposedCaption === "short" && readerCaptionWord !== null
           ? readerEndsAt !== null
-            ? `${timeLabel(readerEndsAt, input.locale)}${ampm(readerEndsAt, input.locale)} · ${readerCaptionWord}`
+            ? `${clockText(readerEndsAt, input.locale, "")} · ${readerCaptionWord}`
             : readerCaptionWord
           : DAY_ITEM_STATE_LABELS[state];
       const reasonEvent =
@@ -228,7 +228,7 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
           tag: state === "committed" && block.taskId !== null ? "Flexible" : null,
           reason:
             reasonEvent?.startsAt != null
-              ? `For ${reasonEvent.title} at ${timeLabel(reasonEvent.startsAt, input.locale)}${ampm(reasonEvent.startsAt, input.locale)}`
+              ? `For ${reasonEvent.title} at ${clockText(reasonEvent.startsAt, input.locale, "")}`
               : null
         }
       };

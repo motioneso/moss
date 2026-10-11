@@ -1,4 +1,5 @@
 import { reportActionRecordFailure } from "@moss/ai";
+import type { LocaleSettingsDto } from "@moss/shared";
 import type { ChatPersistencePort } from "./chat-session-ports.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
 import { normalizeChatSurface, surfaceSessionKey, type ChatSurface } from "./chat-surface.js";
@@ -80,12 +81,27 @@ export function routeLiveOriginRecord(
       sequenceBySession: input.sequenceBySession,
       turnRecords: input.turnRecords.get(key),
       actionResults: input.actionResults.get(key),
+      locale: session.locale,
       emit: (next) => input.emit(surface, next)
     });
   } else {
     input.emit(surface, record);
   }
   return true;
+}
+
+/** A failed settings read leaves the approval line on the Settings default. */
+async function storedLocale(
+  persistence: ChatPersistencePort,
+  actorUserId: string,
+  surface: ChatSurface,
+  threadId: string
+): Promise<LocaleSettingsDto | undefined> {
+  try {
+    return (await persistence.getThreadContext(actorUserId, surface, threadId)).locale;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Action delivery is bound to an owned conversation, never to whatever a surface now selects. */
@@ -143,6 +159,12 @@ export async function routeOriginRecord(
     }
   }
   if (input.historyOnly) return receipt;
+  // An approval line formats in the person's clock even before a live turn has loaded it.
+  const locale =
+    record.kind === "action_result" && record.outcome
+      ? (input.sessions.get(key)?.locale ??
+        (await storedLocale(persistence, actorUserId, origin.surface, originThreadId)))
+      : undefined;
   const current = await persistence.getCurrentThreadState?.(actorUserId, origin.surface);
   const transition = input.transitions.get(key);
   if (
@@ -161,7 +183,7 @@ export async function routeOriginRecord(
       approvalSequence ??= Math.max(currentSequence, recordSequence) + 1;
       input.sequenceBySession.set(key, Math.max(currentSequence, approvalSequence));
       const pending = input.pendingBySession.get(key) ?? [];
-      pending.push({ record, recordSequence, approvalSequence });
+      pending.push({ record, recordSequence, approvalSequence, locale });
       input.pendingBySession.set(key, pending);
       return receipt;
     }
@@ -172,6 +194,7 @@ export async function routeOriginRecord(
       approvalSequence,
       turnRecords: input.turnRecords.get(key),
       actionResults: input.actionResults.get(key),
+      locale,
       emit: (next) => input.emit(origin.surface, next)
     });
     return receipt;

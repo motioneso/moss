@@ -627,6 +627,7 @@ describe("notesMonitorProvider.collectSignals", () => {
           sinceCursor: null,
           now: new Date().toISOString(),
           timeZone: "UTC",
+          locale: { timezone: "UTC", region: "en-US", dateFormat: "24" },
           maxSignals: 10,
           priorityAnchors: [{ label: "Roadmap", aliases: [] }]
         })
@@ -649,6 +650,7 @@ describe("notesMonitorProvider.collectSignals", () => {
           sinceCursor: null,
           now: new Date().toISOString(),
           timeZone: "UTC",
+          locale: { timezone: "UTC", region: "en-US", dateFormat: "24" },
           maxSignals: 10,
           priorityAnchors: [{ label: "Nonexistent Topic Xyz", aliases: [] }]
         })

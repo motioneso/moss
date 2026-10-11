@@ -22,6 +22,8 @@ import {
   MEDICATION_LOG_STATUSES,
   isValidFeelingPath,
   localDay,
+  LOCALE_PREFERENCE_KEY,
+  resolveEffectiveLocale,
   type MedicationLogStatusApi,
   type WellnessEmotionCore as WellnessFeelingCore
 } from "@moss/shared";
@@ -66,10 +68,6 @@ export interface WellnessRoutesDependencies {
   readonly resolveActiveModules?: (
     actorUserId: string
   ) => Promise<readonly { readonly id: string }[]>;
-  readonly resolveRequestTimeZone?: (
-    request: FastifyRequest,
-    accessContext: AccessContext
-  ) => Promise<string>;
   readonly repository?: WellnessRepository;
 }
 
@@ -142,7 +140,7 @@ export function registerWellnessRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = parseCheckinBody(request.body);
-        const timeZone = await resolveRouteTimeZone(dependencies, request, accessContext);
+        const timeZone = await resolveRouteTimeZone(dependencies, accessContext);
         const checkin = await dependencies.dataContext.withDataContext(
           accessContext,
           async (scopedDb) => {
@@ -246,7 +244,7 @@ export function registerWellnessRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = parseCreateMedicationBody(request.body);
-        const timeZone = await resolveRouteTimeZone(dependencies, request, accessContext);
+        const timeZone = await resolveRouteTimeZone(dependencies, accessContext);
         const med = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
           repo.createMedication(scopedDb, input, timeZone)
         );
@@ -264,7 +262,7 @@ export function registerWellnessRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = parseUpdateMedicationBody(request.body);
-        const timeZone = await resolveRouteTimeZone(dependencies, request, accessContext);
+        const timeZone = await resolveRouteTimeZone(dependencies, accessContext);
         const med = await dependencies.dataContext.withDataContext(
           accessContext,
           async (scopedDb) => {
@@ -294,7 +292,7 @@ export function registerWellnessRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const timeZone = await resolveRouteTimeZone(dependencies, request, accessContext);
+        const timeZone = await resolveRouteTimeZone(dependencies, accessContext);
         const query = request.query as Record<string, unknown>;
         const dateStr = parseDateParam(query["date"]);
         const date = new Date(`${dateStr}T00:00:00.000Z`);
@@ -349,7 +347,7 @@ export function registerWellnessRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const timeZone = await resolveRouteTimeZone(dependencies, request, accessContext);
+        const timeZone = await resolveRouteTimeZone(dependencies, accessContext);
         const now = new Date();
         const sinceDays = 30;
         const { checkins, logs, meds } = await dependencies.dataContext.withDataContext(
@@ -442,7 +440,7 @@ export function registerWellnessRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const timeZone = await resolveRouteTimeZone(dependencies, request, accessContext);
+        const timeZone = await resolveRouteTimeZone(dependencies, accessContext);
         const query = request.query as Record<string, unknown>;
         const sinceDays = parseSinceDays(query["sinceDays"]);
         const { meds, logs } = await dependencies.dataContext.withDataContext(
@@ -524,12 +522,15 @@ async function resolveWellnessConsent(
   return resolveEffectiveWellnessConsent(scopedDb, preferences, undefined, wellnessActive);
 }
 
+/** The person's saved locale timezone, or the shared default when nothing is saved (#3395). */
 async function resolveRouteTimeZone(
   dependencies: WellnessRoutesDependencies,
-  request: FastifyRequest,
   accessContext: AccessContext
 ): Promise<string> {
-  return dependencies.resolveRequestTimeZone?.(request, accessContext) ?? request.timeZone ?? "UTC";
+  const stored = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+    new PreferencesRepository().get(scopedDb, LOCALE_PREFERENCE_KEY)
+  );
+  return resolveEffectiveLocale(stored).timezone;
 }
 
 function addDays(dateKey: string, days: number): string {

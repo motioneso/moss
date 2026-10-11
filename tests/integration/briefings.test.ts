@@ -619,6 +619,15 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
   });
 
   it("reconciles the pg-boss schedule on create (daily enabled → boss.schedule keyed by id)", async () => {
+    // The owner's saved locale timezone wins over the definition's stored timezone (#3390).
+    const prefs = new PreferencesRepository();
+    await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      prefs.upsert(scopedDb, "locale", {
+        timezone: "America/New_York",
+        region: "en-US",
+        dateFormat: "12"
+      })
+    );
     const calls = spyBossSchedule(appBoss);
     try {
       const response = await server.inject({
@@ -628,7 +637,7 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
         payload: {
           title: "Scheduled morning briefing",
           cadence: "daily",
-          scheduleMetadata: { targetTime: "06:00", timezone: "America/New_York" },
+          scheduleMetadata: { targetTime: "06:00", timezone: "UTC" },
           enabled: true,
           selectedToolNames: ["tasks.list"]
         }
@@ -653,6 +662,9 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
       });
     } finally {
       calls.restore();
+      await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        prefs.delete(scopedDb, "locale")
+      );
     }
   });
 

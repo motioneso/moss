@@ -7,7 +7,9 @@ import {
   admissionFixture,
   admissionModule,
   admissionTool,
-  deferred
+  deferred,
+  expectYoloWriteRunsPastMark,
+  untrustedWrite
 } from "./helpers/gateway-admission-fixture.js";
 
 const outside = "Outside content after trusted owner descriptor listing";
@@ -17,7 +19,7 @@ const ownedTool = (overrides: Partial<ModuleAssistantToolManifest> = {}) =>
     descriptorOwnerUserId: "actor-a",
     ...overrides
   });
-const writeTool = () => admissionTool("settings.themeMode.set", { risk: "write" });
+const writeTool = () => untrustedWrite();
 
 describe("actor-owned descriptor admission", () => {
   it("keeps exact owner descriptors clean so an existing YOLO write can execute", async () => {
@@ -43,22 +45,21 @@ describe("actor-owned descriptor admission", () => {
     ["nonexact owner", { descriptorOwnerUserId: "ACTOR-A" }],
     ["unknown origin despite matching owner", { isExternal: undefined }],
     ["malformed origin despite matching owner", { isExternal: "true" as unknown as boolean }]
-  ] as const)("taints %s descriptors and blocks a later YOLO write", async (_label, stamp) => {
-    const write = writeTool();
-    const h = admissionFixture([ownedTool(stamp), write]);
-    expect(await h.gateway.listToolsForSession(h.token)).toHaveLength(2);
-    expect(h.recordAdmission).toHaveBeenCalledExactlyOnceWith(
-      "actor-a",
-      "thread-a",
-      "tool_external_descriptors"
-    );
-    expect(h.state.tainted).toBe(true);
-    expect(await h.gateway.callToolForGate(h.token, write.name, {}, "dry-run")).toEqual({
-      kind: "declined",
-      reason: "would_confirm"
-    });
-    expect(write.execute).not.toHaveBeenCalled();
-  });
+  ] as const)(
+    "taints %s descriptors so a later YOLO write runs past the mark",
+    async (_label, stamp) => {
+      const write = writeTool();
+      const h = admissionFixture([ownedTool(stamp), write]);
+      expect(await h.gateway.listToolsForSession(h.token)).toHaveLength(2);
+      expect(h.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+        "actor-a",
+        "thread-a",
+        "tool_external_descriptors"
+      );
+      expect(h.state.tainted).toBe(true);
+      await expectYoloWriteRunsPastMark(h, write);
+    }
+  );
 
   it("taints a mixed listing even when its first descriptor belongs to the actor", async () => {
     const h = admissionFixture([
@@ -129,7 +130,7 @@ describe("actor-owned descriptor admission", () => {
 
 describe("owner descriptor trust does not extend to returned content", () => {
   it.each(["result", "forwarded error"] as const)(
-    "admits the owned tool's %s after its clean listing and blocks the next YOLO write",
+    "admits the owned tool's %s after its clean listing so the next YOLO write runs past the mark",
     async (kind) => {
       const tool = ownedTool({
         safeErrors: true,
@@ -151,10 +152,7 @@ describe("owner descriptor trust does not extend to returned content", () => {
         "tool_external_content"
       );
       expect(h.state.tainted).toBe(true);
-      expect(await h.gateway.callToolForGate(h.token, write.name, {}, "dry-run")).toEqual({
-        kind: "declined",
-        reason: "would_confirm"
-      });
+      await expectYoloWriteRunsPastMark(h, write);
     }
   );
 

@@ -15,6 +15,7 @@ export interface BriefingScheduleMetadataV1 {
   readonly [key: string]: unknown;
   readonly version: 1;
   readonly targetTime: string;
+  /** Fallback only: runs and briefing text use the owner's saved locale timezone (#3390). */
   readonly timezone: string;
   readonly dayOfWeek?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   readonly quietHoursBehavior: "defer_notification";

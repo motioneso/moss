@@ -1,6 +1,9 @@
 import { dataContextBrand } from "@moss/db";
 import { GoalsRepository } from "../../packages/goals/src/repository.js";
-import { goalEvidencePresentation } from "../../packages/goals/src/approval-presentation.js";
+import {
+  configureGoalApprovalReferences,
+  goalEvidencePresentation
+} from "../../packages/goals/src/approval-presentation.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApprovalSourceReferences } from "../../packages/module-registry/src/approval-source-references.js";
 const actor = "11111111-1111-4111-8111-111111111111";
@@ -85,6 +88,49 @@ it("resolves configured note paths and memory facts through their owning public 
 });
 
 afterEach(() => vi.restoreAllMocks());
+it("labels a calendar source with its start in the person's locale", async () => {
+  const row = { id, owner_user_id: actor, title: "Standup", starts_at: "2026-10-08T09:00:00Z" };
+  const resolve = createApprovalSourceReferences({
+    calendar: { getById: vi.fn().mockResolvedValue(row) }
+  });
+  const input = { actorUserId: actor, sourceKind: "calendar" as const, sourceRef: id };
+  const la = { timezone: "America/Los_Angeles", region: "en-US" };
+  expect(await resolve(db, { ...input, locale: { ...la, dateFormat: "24" } })).toMatchObject({
+    label: "Standup\nOct 8, 2026, 02:00"
+  });
+  expect(await resolve(db, input)).toMatchObject({ label: "Standup\nOct 8, 2026, 02:00" });
+  vi.spyOn(GoalsRepository.prototype, "getById").mockResolvedValue({
+    id,
+    title: "My goal",
+    updatedAt: "today"
+  } as never);
+  configureGoalApprovalReferences(resolve);
+  try {
+    const view = await goalEvidencePresentation(
+      { [dataContextBrand]: true, db: {} },
+      {
+        goalId: id,
+        evidenceKind: "context",
+        sourceKind: "calendar",
+        sourceRef: id,
+        sourceLabel: "Calendar",
+        summary: "Evidence"
+      },
+      {
+        actorUserId: actor,
+        requestId: "request",
+        chatSessionId: "session",
+        locale: { ...la, dateFormat: "12" }
+      }
+    );
+    expect(view?.fields).toContainEqual({
+      label: "Source",
+      value: "Standup\nOct 8, 2026, 2:00 AM"
+    });
+  } finally {
+    configureGoalApprovalReferences(undefined);
+  }
+});
 it("renders manual source references as exact submitted text without identifier heuristics", async () => {
   vi.spyOn(GoalsRepository.prototype, "getById").mockResolvedValue({
     id,

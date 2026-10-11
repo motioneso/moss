@@ -2,7 +2,7 @@ import type { CalendarEventDto, LocaleSettingsDto } from "@moss/shared";
 
 import { Note } from "@moss/ui";
 
-import { ampm, timeLabel } from "./today-labels.js";
+import { clockText } from "./today-labels.js";
 
 /** The next timed, not-yet-started event today that names a place, other than
     the meeting the First meeting card already shows. Null when nothing backs a
@@ -36,7 +36,7 @@ export function PracticalNote(props: {
 }) {
   const event = findPracticalEvent(props.events, props.now, props.excludeEventId);
   if (!event) return null;
-  const time = `${timeLabel(event.startsAt, props.locale)} ${ampm(event.startsAt, props.locale)}`;
+  const time = clockText(event.startsAt, props.locale);
   return (
     <Note variant="practical" className="cmd-practical" aria-label="A little practical context">
       <p>

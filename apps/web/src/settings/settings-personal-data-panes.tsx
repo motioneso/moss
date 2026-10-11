@@ -78,8 +78,13 @@ import {
 } from "./settings-ui";
 import { ModuleOwnPageLink } from "./settings-module-own-page-link";
 import { VaultChooser } from "./settings-vault-chooser";
+import { useUserLocale } from "../locale/locale-format";
 import { useChatControls } from "../shell/chat-controls-context";
-import { type ConnectorAccountDto, type PutNotesSourceRequest } from "@moss/shared";
+import {
+  type ConnectorAccountDto,
+  type LocaleSettingsDto,
+  type PutNotesSourceRequest
+} from "@moss/shared";
 import { Button } from "@moss/ui";
 
 const MODULE_ICONS: Record<string, LucideIcon> = {
@@ -335,9 +340,13 @@ function ConnectedPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
 
 /* ----------------------------------------------------------- Data sources */
 
-function formatLastSync(at: string | null, lastError?: string): string {
+export function formatLastSync(
+  at: string | null,
+  locale: LocaleSettingsDto,
+  lastError?: string
+): string {
   if (!at) return "Never synced";
-  const relative = formatTimestamp(at, at);
+  const relative = formatTimestamp(at, at, locale);
   return lastError ? `Last sync failed: ${relative}` : `Last sync: ${relative}`;
 }
 
@@ -348,6 +357,7 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
   const { toast, confirm } = useFeedback();
   const { pendingNotesDelete, openActionRequest } = useChatControls();
   const assistantName = useAssistantName();
+  const locale = useUserLocale();
 
   // Notes source (#449): real API calls replace the prior NotWired stub.
   const notesSourceQuery = useQuery({
@@ -521,8 +531,8 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
                     ? "Couldn't check linked folder. This is the last known folder; try again to verify it."
                     : lastSync
                       ? lastSync.lastError
-                        ? formatLastSync(lastSync.at, lastSync.lastError)
-                        : `${lastSync.ingested} ingested · ${lastSync.skipped} unchanged · ${lastSync.errors} errors · ${formatLastSync(lastSync.at)}`
+                        ? formatLastSync(lastSync.at, locale, lastSync.lastError)
+                        : `${lastSync.ingested} ingested · ${lastSync.skipped} unchanged · ${lastSync.errors} errors · ${formatLastSync(lastSync.at, locale)}`
                       : "Linked — run Sync now to ingest."}
                 </div>
               </>

@@ -1332,6 +1332,9 @@ importers:
       '@moss/priority':
         specifier: workspace:*
         version: link:../priority
+      '@moss/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@moss/ui':
         specifier: workspace:*
         version: link:../ui

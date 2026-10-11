@@ -10,7 +10,7 @@ import {
   type ProviderKind
 } from "@moss/ai";
 import type { AccessContext, DataContextRunner, PreferencesPort } from "@moss/db";
-import { localDay } from "@moss/shared";
+import { LOCALE_PREFERENCE_KEY, localDay, resolveEffectiveLocale } from "@moss/shared";
 
 import { HttpError } from "./errors.js";
 import { TaskListsRepository } from "./lists.js";
@@ -126,12 +126,9 @@ function parseQuery(body: unknown): string {
 async function getLocaleTimeZone(
   scopedDb: Parameters<PreferencesPort["get"]>[0],
   preferencesRepository: PreferencesPort | undefined
-): Promise<string | undefined> {
-  if (!preferencesRepository) return undefined;
-  const locale = await preferencesRepository.get(scopedDb, "locale");
-  if (!locale || typeof locale !== "object" || Array.isArray(locale)) return undefined;
-  const timeZone = (locale as Record<string, unknown>)["timezone"];
-  return typeof timeZone === "string" && timeZone.length > 0 ? timeZone : undefined;
+): Promise<string> {
+  const locale = await preferencesRepository?.get(scopedDb, LOCALE_PREFERENCE_KEY);
+  return resolveEffectiveLocale(locale).timezone;
 }
 
 function unavailable(): HttpError {

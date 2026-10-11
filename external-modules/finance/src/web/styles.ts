@@ -39,8 +39,8 @@ export const MODULE_STYLES = `
 .fnm-switch-text { display: flex; flex-direction: column; gap: var(--space-1); }
 .fnm-limit { max-width: 14rem; }
 .fnm-disclosure-head { display: inline-flex; align-items: center; gap: var(--space-2); }
-.fnm-disclosure-head::after { content: ""; width: 0.5rem; height: 0.5rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-0.15rem) rotate(45deg); transition: transform 120ms ease; }
-.fnm-disclosure-head[aria-expanded="true"]::after { transform: translateY(0.1rem) rotate(-135deg); }
+.fnm-disclosure-marker { flex: 0 0 auto; width: 0.5rem; height: 0.5rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-0.15rem) rotate(45deg); transition: transform 120ms ease; }
+.fnm-disclosure-head[aria-expanded="true"] .fnm-disclosure-marker { transform: translateY(0.1rem) rotate(-135deg); }
 .fnm-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 @media (max-width: 720px) {
   .fnm-bank-meta { display: none; }
