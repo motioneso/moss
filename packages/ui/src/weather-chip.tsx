@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 
 export interface WeatherDayTileProps {
   readonly label: ReactNode;
@@ -20,6 +20,7 @@ interface TooltipState {
 }
 
 export function WeatherChip(props: WeatherChipProps) {
+  const tooltipId = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
@@ -38,7 +39,18 @@ export function WeatherChip(props: WeatherChipProps) {
   const hideTooltip = () => setTooltip(null);
 
   return (
-    <div className="jds-weather-chip-wrapper" ref={wrapperRef}>
+    <div
+      className="jds-weather-chip-wrapper"
+      ref={wrapperRef}
+      onMouseLeave={hideTooltip}
+      onKeyDown={(event) => {
+        if (tooltip && event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          hideTooltip();
+        }
+      }}
+    >
       <span className="jds-weather-chip__location">{props.location}</span>
       <div className="jds-weather-chip">
         {props.days.map((day, index) => (
@@ -48,8 +60,8 @@ export function WeatherChip(props: WeatherChipProps) {
             target="_blank"
             rel="noopener noreferrer"
             className="jds-weather-chip__day"
+            aria-describedby={tooltip?.index === index ? tooltipId : undefined}
             onMouseEnter={(event) => showTooltip(index, event.currentTarget)}
-            onMouseLeave={hideTooltip}
             onFocus={(event) => showTooltip(index, event.currentTarget)}
             onBlur={hideTooltip}
           >
@@ -60,7 +72,12 @@ export function WeatherChip(props: WeatherChipProps) {
         ))}
       </div>
       {tooltip ? (
-        <div className="jds-weather-chip__tooltip" style={{ left: tooltip.left, top: tooltip.top }}>
+        <div
+          id={tooltipId}
+          role="tooltip"
+          className="jds-weather-chip__tooltip"
+          style={{ left: tooltip.left, top: tooltip.top }}
+        >
           {props.days[tooltip.index]?.detail}
         </div>
       ) : null}

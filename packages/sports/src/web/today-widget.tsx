@@ -217,7 +217,7 @@ export function SportsTodayWidget(): ReactNode {
               desk (Ben 2026-09-03: "the dots hovering on the image like news does in the top
               right ... only show up when the user hovers over that story"). .sp-fbhost carries
               the hover rule; see sports-4-grid.css. */}
-          <div className="sp-lead-wrap sp-fbhost">
+          <div className="sp-fbhost">
             <a className="sp-lead" href={lead.url} target="_blank" rel="noreferrer">
               {lead.imageUrl && lead.imageUrl !== failedLeadPhoto ? (
                 <img

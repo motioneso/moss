@@ -1,7 +1,7 @@
 import "./workshop.css";
 import { useCallback, useEffect, useState } from "react";
 import { onlineManager, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Routes, Route } from "react-router";
+import { Routes, Route, useMatch } from "react-router";
 import { Button, EmptyState } from "@moss/ui";
 import { requestJson } from "@moss/module-web-sdk";
 import type { MeResponse } from "@moss/shared";
@@ -14,6 +14,7 @@ import {
 
 export function WorkshopProjectRoutes() {
   const client = useQueryClient();
+  const isProjectList = useMatch({ path: "/workshop", end: true }) !== null;
   const [connection, setConnection] = useState<"ready" | "offline" | "refreshing" | "error">(() =>
     onlineManager.isOnline() ? "ready" : "offline"
   );
@@ -72,10 +73,10 @@ export function WorkshopProjectRoutes() {
     );
   const canMutate = connection === "ready" && !me.isFetching && !me.isError;
   return (
-    <div className="workshop-page">
+    <div className={`workshop-page${isProjectList ? "" : " workshop-page--conversation"}`}>
       {connection !== "ready" ? (
-        <div role="status">
-          <p>
+        <div className="workshop-notice" role="status">
+          <p className="workshop-status jds-caption">
             {connection === "offline"
               ? "You’re offline. Your unsent text stays here. Reconnect before making changes."
               : connection === "refreshing"
@@ -92,6 +93,7 @@ export function WorkshopProjectRoutes() {
       {me.isError ? (
         <ProjectError
           title="Your account could not be refreshed. Reload before making changes."
+          retained
           retry={() => void reconnect()}
         />
       ) : null}

@@ -88,7 +88,7 @@ export function NewsTodayWidget(): ReactNode {
         <div className="desk-leadcol">
           {/* Lead story — broadsheet treatment. Photo (when present), source tag, display headline,
               and a one-line dek clamped so a long summary can't push the brief list off the fold. */}
-          <div className="nw-twlead-wrap nw-fbhost">
+          <div className="nw-fbhost">
             <a className="nw-twlead" href={lead.url} target="_blank" rel="noreferrer">
               {/* 16:9 frame of stacked layers: the photo when it loads, the drawn topic art
                   otherwise. A later generated illustration stacks over the art as another layer. */}

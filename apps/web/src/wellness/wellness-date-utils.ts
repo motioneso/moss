@@ -1,4 +1,4 @@
-import { localDay, type CheckinDto } from "@moss/shared";
+import { localDay, moodIndex, type CheckinDto } from "@moss/shared";
 
 /**
  * Count the consecutive-day streak ending yesterday (exclusive of today).
@@ -37,4 +37,31 @@ export function localDayOffset(
   const base = new Date(Date.UTC(y!, m! - 1, d!));
   base.setUTCDate(base.getUTCDate() - offsetDays);
   return base.toISOString().slice(0, 10);
+}
+
+/** Average observed check-ins from the fourteen completed local calendar days. */
+export function recentMoodAverage(
+  checkins: readonly CheckinDto[],
+  timeZone?: string,
+  from: Date = new Date()
+): number | null {
+  const today = localDay(from, timeZone);
+  const since = localDayOffset(14, timeZone, today);
+  const recent = checkins.filter((checkin) => {
+    const stamp = checkin.checkedInAt ?? checkin.createdAt;
+    if (!stamp) return false;
+    const day = localDay(stamp, timeZone);
+    return day >= since && day < today;
+  });
+  if (recent.length === 0) return null;
+  return (
+    Math.round(
+      (recent.reduce(
+        (sum, checkin) => sum + moodIndex(checkin.feelingCore, checkin.intensity ?? 3),
+        0
+      ) /
+        recent.length) *
+        10
+    ) / 10
+  );
 }

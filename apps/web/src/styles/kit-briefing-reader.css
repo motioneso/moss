@@ -181,7 +181,7 @@
   font-weight: 700;
   line-height: 17.5px;
   letter-spacing: 1.7px;
-  color: var(--sage);
+  color: var(--hero-fg);
 }
 .brief-reader--report:is(:has(.brief-reader__grid), :has(.evening-plan__grid))
   .brief-reader__title {

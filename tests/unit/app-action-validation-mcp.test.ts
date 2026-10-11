@@ -68,6 +68,8 @@ async function harness(kind: "schema" | "route presentation" | "dedicated presen
           kind === "dedicated presentation" && tool.name === "settings.themeMode.set"
             ? {
                 ...tool,
+                // Only an approval card consults the presentation, so the write must ask.
+                executionPolicy: "confirm" as const,
                 execute,
                 approvalPresentation: async () => {
                   throw new ApprovalInputError(correction);

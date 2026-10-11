@@ -162,7 +162,9 @@ describe("TodayQuickActions", () => {
       });
       expect(dialog()).not.toBeNull();
       await domAct(async () => {
-        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        document.activeElement?.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+        );
       });
       expect(dialog()).toBeNull();
       expect(document.activeElement).toBe(opener());
@@ -179,9 +181,9 @@ describe("TodayQuickActions", () => {
         opener().click();
       });
       const scrim = dialog()?.parentElement;
-      expect(scrim?.className).toContain("wl-modal-scrim");
+      expect(scrim?.className).toContain("jds-dialog-scrim");
       await domAct(async () => {
-        scrim!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+        scrim!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
       });
       expect(dialog()).toBeNull();
       expect(document.activeElement).toBe(opener());
@@ -262,9 +264,12 @@ describe("TodayQuickActions", () => {
         buttonByText(root, "Check in").props.onClick();
       });
       expect(textOf(root)).toContain("How are you feeling right now?");
-      const input = root.findByProps({ className: "wl-search__input" });
+      const input = root.find(
+        (node) => node.type === "input" && node.props["aria-label"] === "Search feelings"
+      );
       act(() => {
-        input.props.onFocus();
+        // React focus bubbles to the search group, which keeps its result buttons reachable.
+        root.findByProps({ className: "wl-search" }).props.onFocus();
         input.props.onChange({ target: { value: "a" } });
       });
       const results = root.findAllByProps({ className: "wl-search__item" });

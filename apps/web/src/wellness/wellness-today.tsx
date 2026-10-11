@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -8,6 +9,7 @@ import {
   type CheckinDto,
   type ScheduleSlotDto
 } from "@moss/shared";
+import { formatClockTime, useUserLocale } from "../locale/locale-format.js";
 import { getMedicationSchedule, logMedicationDose } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { emoColor, coreLabel, type WellnessEmotionCore, type Theme } from "./emotion-taxonomy.js";
@@ -204,6 +206,7 @@ export function slotClock(slot: Pick<ScheduleSlotDto, "scheduledFor" | "localTim
 
 function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
   const date = localDay(new Date(), timeZone);
+  const locale = useUserLocale();
   const queryClient = useQueryClient();
 
   const scheduleQuery = useQuery({
@@ -236,6 +239,7 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
   const [prnReason, setPrnReason] = useState("");
 
   function logPrnDose(medicationId: string) {
+    if (scheduleQuery.isError || logMutation.isPending) return;
     const reason = prnReason.trim() || null;
     logMutation.mutate(
       { medicationId, status: "prn", scheduledFor: null, prnReason: reason },
@@ -290,12 +294,22 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
         </span>
       </div>
       <div className="wl-medlist">
-        {scheduleQuery.isError ? (
-          <p className="wl-subtle-text" style={{ padding: "4px 0" }}>
-            Couldn&apos;t load schedule — try refreshing.
+        {scheduleQuery.isPending ? (
+          <p className="wl-subtle-text" role="status">
+            Loading medication schedule…
           </p>
         ) : null}
-        {!scheduleQuery.isError &&
+        {scheduleQuery.isError ? (
+          <p className="wl-subtle-text" role="status">
+            {scheduleQuery.data
+              ? "Could not refresh the schedule. Showing the last loaded doses."
+              : "Could not load the medication schedule."}{" "}
+            <Button variant="link" onClick={() => void scheduleQuery.refetch()}>
+              Try again
+            </Button>
+          </p>
+        ) : null}
+        {scheduleQuery.data &&
           groups.map((g) => {
             if (!g.rows.length) return null;
             return (
@@ -320,6 +334,7 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                           <button
                             type="button"
                             className="wl-prn__log"
+                            disabled={scheduleQuery.isError}
                             aria-expanded={open}
                             onClick={() => {
                               setPrnOpenFor(open ? null : slot.medicationId);
@@ -375,7 +390,7 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                                 type="button"
                                 className="primary-button wl-fs12"
                                 style={{ padding: "5px 12px", minHeight: "unset" }}
-                                disabled={logMutation.isPending}
+                                disabled={logMutation.isPending || scheduleQuery.isError}
                                 onClick={() => logPrnDose(slot.medicationId)}
                               >
                                 Log dose
@@ -392,8 +407,10 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                       key={`${slot.medicationId}-${i}`}
                       className={`wl-medrow wl-medrow--tight${on ? " is-on" : ""}`}
                       role="button"
+                      aria-disabled={scheduleQuery.isError || logMutation.isPending}
                       tabIndex={0}
                       onClick={() => {
+                        if (scheduleQuery.isError || logMutation.isPending) return;
                         logMutation.mutate({
                           medicationId: slot.medicationId,
                           status: on ? "skipped" : "taken",
@@ -401,6 +418,7 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                         });
                       }}
                       onKeyDown={(ev) => {
+                        if (scheduleQuery.isError || logMutation.isPending) return;
                         if (ev.key === "Enter" || ev.key === " ") {
                           ev.preventDefault();
                           logMutation.mutate({
@@ -421,7 +439,9 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
                           Taken
                         </span>
                       ) : (
-                        <span className="wl-medrow__time">{slotClock(slot)}</span>
+                        <span className="wl-medrow__time">
+                          {formatClockTime(slotClock(slot), locale)}
+                        </span>
                       )}
                     </div>
                   );
@@ -429,28 +449,32 @@ function MedToday({ theme: _theme, onManage, timeZone }: MedTodayProps) {
               </div>
             );
           })}
-        {!scheduleQuery.isError && slots.length === 0 ? (
+        {scheduleQuery.data && slots.length === 0 ? (
           <p className="wl-subtle-text" style={{ padding: "4px 0" }}>
             No medications scheduled.
           </p>
         ) : null}
       </div>
-      <div className="wl-medfoot">
-        <span className="wl-medfoot__bar">
-          <span className="wl-medfoot__track">
-            <span className="wl-medfoot__fill" style={{ width: `${pct}%` }} />
+      {scheduleQuery.data && totalSched > 0 ? (
+        <div className="wl-medfoot">
+          <span className="wl-medfoot__bar">
+            <span className="wl-medfoot__track">
+              <span className="wl-medfoot__fill" style={{ width: `${pct}%` }} />
+            </span>
           </span>
-        </span>
-        <span className="wl-medfoot__ct">
-          <b>{takenCount}</b> of {totalSched} taken
-        </span>
-      </div>
+          <span className="wl-medfoot__ct">
+            <b>{takenCount}</b> of {totalSched} taken
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 /* ─── CheckinToday card ─── */
 interface CheckinTodayProps {
+  readState: "pending" | "error" | "ready";
+  onRetry: () => void;
   todayCheckins: readonly CheckinDto[];
   theme: Theme;
   streak: number;
@@ -460,6 +484,8 @@ interface CheckinTodayProps {
 }
 
 function CheckinToday({
+  readState,
+  onRetry,
   todayCheckins,
   theme,
   streak,
@@ -467,6 +493,23 @@ function CheckinToday({
   onSeed,
   onEdit
 }: CheckinTodayProps) {
+  if (readState !== "ready")
+    return (
+      <div className="wl-card wl-checkin">
+        <div className="wl-card__hd">
+          <span className="t">Today&apos;s mood</span>
+        </div>
+        <p role="status">
+          {readState === "pending" ? "Loading check-ins…" : "Could not load your check-ins."}
+        </p>
+        {readState === "error" ? (
+          <Button variant="link" onClick={onRetry}>
+            Try again
+          </Button>
+        ) : null}
+      </div>
+    );
+
   const latestCheckin = todayCheckins.length > 0 ? todayCheckins[0] : null;
 
   const StreakChip =
@@ -659,6 +702,8 @@ function CheckinToday({
 
 /* ─── Public component ─── */
 export interface WellnessTodayProps {
+  checkinsReadState?: "pending" | "error" | "ready";
+  onRetryCheckins?: () => void;
   checkins: readonly CheckinDto[];
   streak: number;
   theme: Theme;
@@ -689,6 +734,8 @@ export function todaysCheckins(checkins: readonly CheckinDto[], timeZone?: strin
 }
 
 export function WellnessToday({
+  checkinsReadState = "ready",
+  onRetryCheckins = () => {},
   checkins,
   streak,
   theme,
@@ -703,6 +750,8 @@ export function WellnessToday({
     <div className="wl-today">
       <MedToday theme={theme} onManage={onManage} timeZone={timeZone} />
       <CheckinToday
+        readState={checkinsReadState}
+        onRetry={onRetryCheckins}
         todayCheckins={todayCheckins}
         theme={theme}
         streak={streak}

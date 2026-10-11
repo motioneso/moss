@@ -44,7 +44,7 @@ while ((rule = rulePattern.exec(css)) !== null) {
   const body = rule[2] ?? "";
   if (!selector || selector.includes("@")) continue;
   const parts = selector.split(",").map((p) => p.trim());
-  if (parts.length === 1 && parts[0] === ":root") {
+  if (parts.includes(":root")) {
     // The @media block re-opens :root for durations only; keep the first.
     if (!root) root = parseDecls(body);
     continue;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronUp, Pin, Trash2, X } from "lucide-react";
 
@@ -22,7 +22,7 @@ import {
   formatDateTime as fmtDateTime,
   useUserLocale
 } from "../locale/locale-format";
-import { Button } from "@moss/ui";
+import { Button, DisclosureToggle, EmptyState, Field, FormLabel } from "@moss/ui";
 import { queryKeys } from "../api/query-keys";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
@@ -94,6 +94,7 @@ function CandidateActions(props: {
   const queryClient = useQueryClient();
   const [form, setForm] = useAcceptForm(item);
   const [showAcceptForm, setShowAcceptForm] = useState(false);
+  const summaryId = useId();
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ["memory", "dashboard"] });
@@ -173,15 +174,16 @@ function CandidateActions(props: {
 
       {showAcceptForm ? (
         <div className="memdash-drawer__form">
-          <label className="memdash-form-label">
-            Summary
+          <Field>
+            <FormLabel htmlFor={summaryId}>Summary</FormLabel>
             <textarea
+              id={summaryId}
               className="jds-textarea"
               value={form.summary}
               rows={3}
               onChange={(e) => setForm({ summary: e.target.value })}
             />
-          </label>
+          </Field>
           <label className="memdash-form-check">
             <input
               type="checkbox"
@@ -324,6 +326,7 @@ function EntityActions(props: { readonly item: MemoryDashboardItem; readonly onD
   const { toast, confirm } = useFeedback();
   const queryClient = useQueryClient();
   const [name, setName] = useState(item.title);
+  const nameId = useId();
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ["memory", "dashboard"] });
@@ -377,15 +380,16 @@ function EntityActions(props: { readonly item: MemoryDashboardItem; readonly onD
 
       {item.editableFields.includes("entityName") ? (
         <div className="memdash-drawer__form">
-          <label className="memdash-form-label">
-            Name
+          <Field>
+            <FormLabel htmlFor={nameId}>Name</FormLabel>
             <input
+              id={nameId}
               type="text"
               className="jds-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
-          </label>
+          </Field>
         </div>
       ) : null}
 
@@ -415,6 +419,7 @@ function DashboardItemRow(props: { readonly item: MemoryDashboardItem }) {
   const { item } = props;
   const locale = useUserLocale();
   const [open, setOpen] = useState(false);
+  const detailsId = useId();
 
   function renderActions() {
     if (!open) return null;
@@ -429,10 +434,10 @@ function DashboardItemRow(props: { readonly item: MemoryDashboardItem }) {
 
   return (
     <div className="memdash-item">
-      <button
-        type="button"
+      <DisclosureToggle
         className="memdash-item__header"
-        aria-expanded={open}
+        expanded={open}
+        controls={detailsId}
         onClick={() => setOpen((v) => !v)}
       >
         <span className="memdash-item__title">{item.title}</span>
@@ -450,11 +455,13 @@ function DashboardItemRow(props: { readonly item: MemoryDashboardItem }) {
         ) : (
           <ChevronDown size={14} aria-hidden="true" />
         )}
-      </button>
+      </DisclosureToggle>
       {item.summary && item.summary !== item.title ? (
         <p className="memdash-item__summary">{item.summary}</p>
       ) : null}
-      {renderActions()}
+      <div id={detailsId} hidden={!open}>
+        {renderActions()}
+      </div>
     </div>
   );
 }
@@ -463,32 +470,42 @@ function DashboardItemRow(props: { readonly item: MemoryDashboardItem }) {
 
 function DashboardList(props: { readonly status: MemoryDashboardStatusFilter }) {
   const { status } = props;
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.memory.dashboard({ status }),
     queryFn: () => getMemoryDashboard({ status }),
     retry: false
   });
 
   if (isLoading) {
-    return <p className="memdash-empty">Loading…</p>;
-  }
-
-  if (isError) {
-    return <p className="memdash-empty memdash-empty--error">Failed to load. Try again.</p>;
+    return (
+      <p className="memdash-empty" role="status">
+        Loading memories…
+      </p>
+    );
   }
 
   const items = data?.items ?? [];
 
-  if (items.length === 0) {
-    return <p className="memdash-empty">Nothing here.</p>;
-  }
-
   return (
-    <div className="memdash-list">
-      {items.map((item) => (
-        <DashboardItemRow key={item.id} item={item} />
-      ))}
-    </div>
+    <>
+      {isError ? (
+        <div className="set2-read-state" role="status">
+          <span>Could not load memories.</span>
+          <Button variant="quiet" size="sm" onClick={() => void refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
+      {items.length > 0 ? (
+        <div className="memdash-list">
+          {items.map((item) => (
+            <DashboardItemRow key={item.id} item={item} />
+          ))}
+        </div>
+      ) : !isError ? (
+        <EmptyState title="Nothing here." />
+      ) : null}
+    </>
   );
 }
 

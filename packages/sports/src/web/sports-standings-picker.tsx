@@ -1,3 +1,4 @@
+import { Button, Eyebrow } from "@moss/ui";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import type { CompetitionRef, SportsFollowDto } from "@moss/shared";
@@ -308,14 +309,15 @@ export function StandingsPicker(props: StandingsPickerProps): ReactElement {
     const label =
       row.kind === "competition" ? row.competition.label : row.kind === "back" ? "Back" : row.label;
     return (
-      <button
+      <Button
+        variant="quiet"
+        size="sm"
+        active={selected}
         ref={(element) => {
           if (element) rowRefs.current[index] = element;
         }}
-        type="button"
         role={row.kind === "competition" ? "menuitemradio" : "menuitem"}
         aria-checked={row.kind === "competition" ? selected : undefined}
-        className="sp-standings-picker__row"
         key={rowKey(row)}
         tabIndex={-1}
         onKeyDown={(event) => onRowKeyDown(event, index, row)}
@@ -327,16 +329,16 @@ export function StandingsPicker(props: StandingsPickerProps): ReactElement {
         {row.kind === "sport" || row.kind === "region" ? (
           <ChevronRight size={15} aria-hidden="true" />
         ) : null}
-      </button>
+      </Button>
     );
   };
 
   return (
     <span className="jds-menu sp-standings-picker">
-      <button
+      <Button
+        variant="field"
+        size="sm"
         ref={triggerRef}
-        type="button"
-        className="jds-menu__trigger sp-standings-picker__trigger"
         aria-label="Select standings league"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -345,7 +347,7 @@ export function StandingsPicker(props: StandingsPickerProps): ReactElement {
       >
         <span>{current?.label ?? "Select league"}</span>
         <ChevronDown size={14} aria-hidden="true" />
-      </button>
+      </Button>
       {open ? (
         <div
           ref={popupRef}
@@ -353,9 +355,9 @@ export function StandingsPicker(props: StandingsPickerProps): ReactElement {
           role="menu"
           aria-label="Standings leagues"
         >
-          <div className="sp-standings-picker__title jds-label">
+          <div className="sp-standings-picker__title">
             {backRow ? renderRow(backRow) : null}
-            <span>{viewTitle}</span>
+            <Eyebrow>{viewTitle}</Eyebrow>
           </div>
           {sections.map((section) => (
             <div
@@ -365,12 +367,14 @@ export function StandingsPicker(props: StandingsPickerProps): ReactElement {
               key={section.label}
             >
               {section.label ? (
-                <div className="sp-standings-picker__heading jds-eyebrow">{section.label}</div>
+                <Eyebrow as="div" className="sp-standings-picker__heading">
+                  {section.label}
+                </Eyebrow>
               ) : null}
               {section.rows.map(renderRow)}
             </div>
           ))}
-          {rows.length === 0 ? <span className="jds-hint">No leagues available.</span> : null}
+          {rows.length === 0 ? <span role="status">No leagues available.</span> : null}
         </div>
       ) : null}
     </span>

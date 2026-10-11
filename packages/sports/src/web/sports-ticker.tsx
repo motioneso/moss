@@ -1,3 +1,4 @@
+import { ButtonLink, Eyebrow, IconButton } from "@moss/ui";
 import {
   useEffect,
   useRef,
@@ -231,21 +232,17 @@ export function SportsTicker(props: {
           .sp-ticker__manage (like .sp-hero__kicker-comp), not a literal glyph — so the old sep
           span is gone. CSS uppercases "Followed", so the source text stays sentence-case. */}
       <div className="sp-ticker__head">
-        <h2 className="sp-ticker__label">Followed</h2>
-        <a className="sp-ticker__manage" href={SETTINGS_HREF}>
+        <Eyebrow as="h2" tone="accent" className="sp-ticker__label">
+          Followed
+        </Eyebrow>
+        <ButtonLink variant="link" href={SETTINGS_HREF}>
           Manage
-        </a>
+        </ButtonLink>
       </div>
       <div className="sp-ticker__row">
-        <button
-          type="button"
-          className="sp-ticker__nav"
-          aria-label="Scroll left"
-          hidden={atStart}
-          onClick={() => nudge(-1)}
-        >
+        <IconButton size="sm" aria-label="Scroll left" hidden={atStart} onClick={() => nudge(-1)}>
           <ChevronLeft size={16} aria-hidden="true" />
-        </button>
+        </IconButton>
         <div
           className="sp-ticker__scroll"
           ref={scrollRef}
@@ -269,15 +266,9 @@ export function SportsTicker(props: {
             />
           ))}
         </div>
-        <button
-          type="button"
-          className="sp-ticker__nav"
-          aria-label="Scroll right"
-          hidden={atEnd}
-          onClick={() => nudge(1)}
-        >
+        <IconButton size="sm" aria-label="Scroll right" hidden={atEnd} onClick={() => nudge(1)}>
           <ChevronRight size={16} aria-hidden="true" />
-        </button>
+        </IconButton>
       </div>
     </section>
   );

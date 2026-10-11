@@ -43,6 +43,14 @@ function renderCard(props: {
 describe("PlanApprovalCard", () => {
   it("renders the plan without unreliable cost or time estimates", () => {
     const renderer = renderCard({ plan, onBuildIt: () => {}, onNotYet: () => {} });
+    expect(
+      renderer.root
+        .findAllByType("button")
+        .every((button) => String(button.props.className).includes("jds-btn"))
+    ).toBe(true);
+    expect(renderer.root.findAllByProps({ className: "jds-card jds-card--raised" })).toHaveLength(
+      1
+    );
     const text = renderedText(renderer.toJSON());
     expect(text).toContain("What it does");
     expect(text).toContain(plan.whatItDoes);

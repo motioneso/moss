@@ -38,7 +38,7 @@ test("Today's news desk shows a story shared by several outlets only once (#2746
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
 
   // A weather lookup failure must not stop the page, or the rest of Today, from rendering.
   // The news desk is its own module widget behind its own error boundary and its own query,
