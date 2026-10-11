@@ -227,7 +227,7 @@ describe("native vault read report route", () => {
 
 describe.each(hooks)("%s native hook admission", (_name, source) => {
   it.each(["Read", "Glob", "Grep"])(
-    "reports %s before allowing, then a YOLO write asks",
+    "reports %s before allowing, then a YOLO write runs past the mark",
     async (toolName) => {
       const h = await harness();
       try {
@@ -244,18 +244,14 @@ describe.each(hooks)("%s native hook admission", (_name, source) => {
         expect(h.admissions).toEqual([
           { actor: "actor-a", thread: "thread-a", path: "native_vault_read" }
         ]);
-        const write = runClaudeNativeHook(
+        // The fixture's clean claim confirms on a tainted chat, so an allow proves the trusted run.
+        const write = await runClaudeNativeHook(
           source,
           { tool_name: "Write", tool_input: { file_path: join(h.root, "output.md") }, cwd: h.root },
           h
         );
-        await vi.waitFor(() =>
-          expect(h.records).toContainEqual(
-            expect.objectContaining({ kind: "action_request", outsideContentNotice: true })
-          )
-        );
-        h.confirmations.resolve("pending-a", "rejected");
-        expect((await write).permissionDecision).toBe("deny");
+        expect(write.permissionDecision).toBe("allow");
+        expect(h.records).not.toContainEqual(expect.objectContaining({ kind: "action_request" }));
       } finally {
         await h.close();
       }

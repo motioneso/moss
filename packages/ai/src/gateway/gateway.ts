@@ -481,8 +481,9 @@ export class AssistantToolGateway {
 
   /**
    * The single approval decision shared by live calls and the gate's dry run. In a tainted
-   * conversation only the user's own trust runs a write (#3338). `userTrusted` marks that run so
-   * it skips the clean-conversation claim it can no longer win.
+   * conversation only the user's own trust runs a write (#3338). Under YOLO a durable
+   * outside-content mark changes nothing (#3417). `userTrusted` marks such a run so it skips the
+   * clean-conversation claim it can no longer win.
    */
   private async planCall(
     found: ExecutableTool,
@@ -500,7 +501,8 @@ export class AssistantToolGateway {
       this.deps.resolveActiveModules,
       ctx.actorUserId
     );
-    const yolo = found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true;
+    const yoloOn = (await this.deps.yoloMode?.(ctx)) === true;
+    const yolo = found.tool.risk !== "read" && yoloOn;
     const yoloRuns =
       yolo &&
       !confirmOverride &&
@@ -522,16 +524,14 @@ export class AssistantToolGateway {
     // Read taint after every policy hook so content admitted meanwhile still counts.
     const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
     const marked = conversationTainted && (await isConversationMarked(this.deps.provenance, ctx));
-    const ask = () =>
-      plannedConfirm(marked, async () => (yolo ? yoloRuns : (await policy(false)) === "run"));
-    if (conversationTainted && (confirmWhenTainted || found.tool.risk === "outbound")) {
-      return ask();
-    }
     // The user's trust runs past a durable outside-content mark only. Any other taint asks.
     if (conversationTainted && !marked) return { kind: yolo ? "yolo-confirm" : "confirm" };
     const trusted = conversationTainted ? { userTrusted: true as const } : {};
     if (yolo) return yoloRuns ? { kind: "yolo-run", ...trusted } : { kind: "yolo-confirm" };
-    return (await policy(conversationTainted)) === "run" ? { kind: "auto-run", ...trusted } : ask();
+    // Under YOLO a marked conversation runs a confirmWhenTainted read as a clean one does.
+    return (await policy(conversationTainted && !yoloOn)) === "run"
+      ? { kind: "auto-run", ...trusted }
+      : plannedConfirm(marked, async () => (await policy(false)) === "run");
   }
 
   async requestNativeToolPermission(
