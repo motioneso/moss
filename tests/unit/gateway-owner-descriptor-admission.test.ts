@@ -7,7 +7,8 @@ import {
   admissionFixture,
   admissionModule,
   admissionTool,
-  deferred
+  deferred,
+  untrustedWrite
 } from "./helpers/gateway-admission-fixture.js";
 
 const outside = "Outside content after trusted owner descriptor listing";
@@ -17,7 +18,7 @@ const ownedTool = (overrides: Partial<ModuleAssistantToolManifest> = {}) =>
     descriptorOwnerUserId: "actor-a",
     ...overrides
   });
-const writeTool = () => admissionTool("settings.themeMode.set", { risk: "write" });
+const writeTool = () => untrustedWrite();
 
 describe("actor-owned descriptor admission", () => {
   it("keeps exact owner descriptors clean so an existing YOLO write can execute", async () => {

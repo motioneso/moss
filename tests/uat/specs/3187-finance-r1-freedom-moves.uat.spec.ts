@@ -324,9 +324,8 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   }).toPass({ timeout: 90_000, intervals: [3_000] });
   const fuelBefore = await readAssigned("Fuel");
 
-  // --- Chat: a $50 move under the limit still asks, then runs on approval -------------------
-  // ACP chats are marked as holding outside content at launch, so every write in chat asks,
-  // whatever the module's freedom step and limit (#3338). Under the limit, Approve runs the move.
+  // --- Chat: a $50 move is under the limit, so it runs on its own ---------------------------
+  // ACP chats hold outside content from launch. The user's freedom step still runs the move (#3338).
   const card = page.locator('[role="region"][aria-label="Action request"]');
   const ask = async (text: string) => {
     if (!(await composer.isVisible())) {
@@ -334,11 +333,12 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
     }
     await composer.fill(text);
     await composer.press("Enter");
-    // Reloading the page mid-turn drops the turn, so stay put until Moss stops thinking or asks.
-    const thinking = page.getByText("Thinking", { exact: true }).last();
-    await thinking.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
+    // Reloading the page mid-turn drops the turn, so stay put until Moss stops working or asks.
+    // A finished reply keeps its "Thinking" step summary, so the Stop button marks a live turn.
+    const stop = page.getByRole("button", { name: "Stop generating" });
+    await stop.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
     await expect(async () => {
-      const busy = await thinking.isVisible();
+      const busy = await stop.isVisible();
       const asking = await card.getByRole("button", { name: "Approve" }).last().isVisible();
       expect(busy && !asking, "Moss is still working").toBe(false);
     }).toPass({ timeout: 240_000, intervals: [2_000] });
@@ -346,14 +346,11 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   await ask(
     "Move $50 from Groceries to Fuel for this month's budget. Use the budget move tool and tell me the result."
   );
-  const approveSmallMove = card.getByRole("button", { name: "Approve" }).last();
-  await expect(approveSmallMove).toBeVisible({ timeout: 240_000 });
-  await crop(card.last(), "approval-card-50");
-  await approveSmallMove.click();
   await expect(async () => {
     expect(await readAssigned("Groceries")).toBe(45_000);
     expect(await readAssigned("Fuel")).toBe(fuelBefore + 5_000);
   }).toPass({ timeout: 240_000, intervals: [5_000] });
+  expect(await card.count(), "a move under the limit asks nothing").toBe(0);
 
   // --- Settings activity list shows the move, and Undo puts it back -------------------------
   await openSettings();
@@ -370,14 +367,14 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   expect(await readAssigned("Groceries"), "Undo restored Groceries").toBe(50_000);
   expect(await readAssigned("Fuel"), "Undo restored Fuel").toBe(fuelBefore);
 
-  // --- Chat: a $250 move is over the limit; Reject leaves the money where it was -------------
+  // --- Chat: a $150 move is over the limit; Reject leaves the money where it was -------------
   await openFinance();
   await ask(
-    "Move $250 from Groceries to Fuel for this month's budget. Use the budget move tool now."
+    "Move $150 from Groceries to Fuel for this month's budget. Use the budget move tool now."
   );
   const approveMove = card.getByRole("button", { name: "Approve" }).last();
   await expect(approveMove).toBeVisible({ timeout: 240_000 });
-  await crop(card.last(), "approval-card-250");
+  await crop(card.last(), "approval-card-150");
   await card.getByRole("button", { name: "Reject" }).last().click();
   expect(await readAssigned("Groceries"), "nothing moved without approval").toBe(50_000);
 

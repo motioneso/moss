@@ -626,7 +626,7 @@ scripts/check-design-tokens.ts,F0,active-disjoint-only,3154,F0 guard coverage ed
 scripts/check-migrated-sections.ts,F0,reserved,,Normative docs and centralized guard configuration
 scripts/check-ui-catalogue.ts,F0,reserved,,Normative docs and centralized guard configuration
 scripts/check-ui-classes.ts,F0,reserved,,Normative docs and centralized guard configuration
-tests/e2e/app-shell.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
+tests/e2e/app-shell.spec.ts,L6,scoped-test-transfer,,Parent-approved Notifications empty-state CI assertion only; retain account menu readiness and all notification mutations/counts
 tests/e2e/c1-park-press-design.spec.ts,C1,registered-new,,Exact path reservation
 tests/e2e/c2-park-press-design.spec.ts,C2,registered-new,,Exact path reservation
 tests/e2e/c3-park-press-design.spec.ts,C3,registered-new,,Exact path reservation
@@ -646,8 +646,10 @@ tests/e2e/p1-park-press-design.spec.ts,P1,registered-new,,Exact path reservation
 tests/e2e/p2-park-press-design.spec.ts,P2,registered-new,,Exact path reservation
 tests/e2e/p3-park-press-design.spec.ts,P3,registered-new,,Exact path reservation
 tests/e2e/p4-park-press-design.spec.ts,P4,registered-new,,Exact path reservation
+tests/e2e/sports-standings-picker-layout.spec.ts,L2,registered-new,,Approved bounded picker viewport and item hit-test regression with retained hierarchical selection and focus return
 tests/e2e/tasks.spec.ts,P1,approved-disjoint-correction,3154,Only task detail loading and focus regression assertions; preserve active quick-add tests
-tests/e2e/wellness.spec.ts,I0,scoped-test-transfer,,Parent-approved real shared confirmation and Today medication dialog assertion migration; preserve cancellation and outcomes
+tests/e2e/wellness-export-columns.spec.ts,L3,registered-new,,Measured print-layout regression for Wellness export medication tables
+tests/e2e/wellness.spec.ts,L3,scoped-test-transfer,,Parent-approved feeling-selection accessibility assertion alignment; preserve shared Today dialog and all save payload checks
 tests/e2e/workshop-design.spec.ts,P3,registered-new,,Implementation reservation before first edit; unused reservations are not deliverables
 tests/live/classifier-2984-r26-helpers.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
 tests/uat/specs/1089-1090-chat-drawer-private.uat.spec.ts,I0,scoped-test-transfer,,Parent-approved account menu readiness and item locator migration only; preserve all auth fixtures waits timeouts and behavior assertions
@@ -759,6 +761,7 @@ tests/unit/core-settings-design.test.tsx,C4,registered-new,,Implementation reser
 tests/unit/core-source-tray-design.test.tsx,C5,reserved,,Approved disjoint SourceTray nonmodal keyboard/name/trigger regression; no active chat CSS edits
 tests/unit/design-tokens-contrast.test.ts,F0,reserved,,Shared component/token behavior tests
 tests/unit/design-tokens-parity.test.ts,F0,reserved,,Shared component/token behavior tests
+tests/unit/email-settings-draft-policy.test.tsx,L6,reserved,,Confirmed-settings fixture update for approved unknown-read control gating; preserve policy assertions
 tests/unit/evening-planning-frame.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/evening-planning.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/evening-report-split.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
@@ -833,7 +836,7 @@ tests/unit/settings-released-pane.test.tsx,C4,reserved,,Reserved existing surfac
 tests/unit/settings-setup-link-navigation.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/settings-skills-pane.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/settings-sports-pane.test.tsx,L2,reserved,,Specific existing UI tests delegated by domain owner
-tests/unit/settings-sports-search-groups.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/settings-sports-search-groups.test.tsx,L2,reserved,,Transferred existing untouched Sports grouping regression from C4 for approved LN10 canonical-control assertions
 tests/unit/settings-sports-sources.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/settings-vault-chooser.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/settings-yolo-admin-group.test.tsx,C4,reserved,,Reserved existing surface UI test; not backend/integration test scope
@@ -841,6 +844,11 @@ tests/unit/sports-newsband.test.tsx,L2,reserved,,Specific existing UI tests dele
 tests/unit/sports-page.test.tsx,L2,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/sports-result-row-layout-css.test.ts,L2,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/sports-settings-follow-invalidates-overview.test.tsx,L2,reserved,,Specific existing UI tests delegated by domain owner
+tests/unit/sports-standings-picker.test.tsx,L2,reserved,,Approved LN10 retained Sports controls and settings presentation regression; preserve domain behavior
+tests/unit/sports-standings-warning.test.tsx,L2,reserved,,Approved LN10 retained Sports controls and settings presentation regression; preserve domain behavior
+tests/unit/sports-standings.test.tsx,L2,reserved,,Approved LN10 retained Sports controls and settings presentation regression; preserve domain behavior
+tests/unit/sports-ticker.test.tsx,L2,reserved,,Approved LN10 retained Sports controls and settings presentation regression; preserve domain behavior
+tests/unit/sports-today-widget.test.tsx,L2,reserved,,Approved LN10 retained Sports controls and settings presentation regression; preserve domain behavior
 tests/unit/theme-runtime-highlight.test.ts,F0,reserved,,Shared component/token behavior tests
 tests/unit/theme-runtime-nav.test.ts,F0,reserved,,Shared component/token behavior tests
 tests/unit/theme-runtime.test.ts,F0,reserved,,Shared component/token behavior tests
@@ -858,7 +866,7 @@ tests/unit/today-evening-loops-save.test.tsx,C3,reserved,,Reserved existing surf
 tests/unit/today-evening-mode.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/today-evening-reader.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/today-module-widgets.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
-tests/unit/today-quick-actions.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
+tests/unit/today-quick-actions.test.tsx,L3,reserved,,Temporary C3 transfer for native Input selector regression after shared Wellness check-in migration
 tests/unit/today-rail-preparation.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/today-states.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
 tests/unit/today-weather-row.test.tsx,C3,reserved,,Reserved existing surface UI test; not backend/integration test scope
@@ -877,3 +885,5 @@ tests/unit/wellness-manage-meds-modal.test.tsx,L3,reserved,,Specific existing UI
 tests/unit/wellness-med-builder-form.test.ts,L3,reserved,,Specific existing UI tests delegated by domain owner
 tests/unit/workflow-approval-card.test.tsx,C5,reserved,,Existing approval-card regression test assigned before edit
 tests/unit/workshop-project-pages.test.tsx,P3,reserved,,Exact planning report ownership
+tests/e2e/news-overview.spec.ts,L1,scoped-test-transfer,,Parent-approved shared empty-state accessibility assertions; preserve source settings links and unavailable states
+tests/integration/wellness-export-job.test.ts,L3,scoped-test-transfer,,Parent-approved Moss export provenance assertion only; preserve content/security/job assertions and do not run without isolated DB gate

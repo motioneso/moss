@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Tag } from "lucide-react";
 import { Badge } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
-import { Card } from "@moss/ui";
+import { Card, Eyebrow } from "@moss/ui";
 import type {
   NewsCustomTopicDto,
   NewsPersonalizationAvailabilityDto,
@@ -285,7 +285,7 @@ export function DescribeTopics(props: {
         <div className="nw-set__candidate">
           <Card sunken padding="lg">
             <div className="nw-set__add-head">
-              <h4 className="nw-set__eyebrow">{editingId ? "Edit topic" : "Add a topic"}</h4>
+              <Eyebrow as="h4">{editingId ? "Edit topic" : "Add a topic"}</Eyebrow>
               <Button variant="secondary" size="sm" aria-expanded={true} onClick={cancelEdit}>
                 Close
               </Button>

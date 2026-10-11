@@ -210,6 +210,7 @@ export class MemoryGraphDashboardRepository {
         WHERE owner_user_id = ${ownerUserId}::uuid
           AND conflict_group_id = ${existing.conflict_group_id}::uuid
           AND id <> ${factId}::uuid
+          AND status = 'conflicting'
       `.execute(scopedDb.db);
 
       if (siblings.rows.length === 1) {

@@ -148,7 +148,7 @@ export function InstanceModulesPane() {
         add-on, switching it off and on approves it for you. While it is off, it is hidden for
         everyone. Your personal module switch does not approve it. Other users still treat its
         descriptions as outside content. Tool results and forwarded errors still make later changes
-        ask.
+        ask, unless you allowed those changes to run without asking.
       </Note>
       {/* #1187 decision 5: the trust warning is only true when the inventory actually
           contains a module from outside the pinned registry — `external?.enabled` alone

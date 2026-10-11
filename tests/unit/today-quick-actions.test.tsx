@@ -264,9 +264,12 @@ describe("TodayQuickActions", () => {
         buttonByText(root, "Check in").props.onClick();
       });
       expect(textOf(root)).toContain("How are you feeling right now?");
-      const input = root.findByProps({ className: "wl-search__input" });
+      const input = root.find(
+        (node) => node.type === "input" && node.props["aria-label"] === "Search feelings"
+      );
       act(() => {
-        input.props.onFocus();
+        // React focus bubbles to the search group, which keeps its result buttons reachable.
+        root.findByProps({ className: "wl-search" }).props.onFocus();
         input.props.onChange({ target: { value: "a" } });
       });
       const results = root.findAllByProps({ className: "wl-search__item" });

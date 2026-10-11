@@ -38,12 +38,17 @@ async function signIn(page: Page) {
 async function openManageMedications(page: Page) {
   await page.goto(`${requireBaseURL()}/wellness`);
   await page.getByRole("button", { name: "Manage", exact: true }).click();
-  await expect(page.locator(".wl-modal")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Manage medications", exact: true })).toBeVisible();
 }
 
 async function closeManageMedications(page: Page) {
-  await page.locator(".wl-modal").getByRole("button", { name: "Done" }).click();
-  await expect(page.locator(".wl-modal")).toHaveCount(0);
+  await page
+    .getByRole("dialog", { name: "Manage medications", exact: true })
+    .getByRole("button", { name: "Done" })
+    .click();
+  await expect(page.getByRole("dialog", { name: "Manage medications", exact: true })).toHaveCount(
+    0
+  );
 }
 
 interface SavedMedication {
@@ -66,7 +71,7 @@ test("editing a saved medication changes it in place, not by adding a new one (#
   test.setTimeout(120_000);
   await signIn(page);
   await openManageMedications(page);
-  const modal = page.locator(".wl-modal");
+  const modal = page.getByRole("dialog", { name: "Manage medications", exact: true });
 
   // 1. Create one medication as "Every day".
   await modal.getByLabel("Medication name", { exact: true }).fill("UAT Edit Me");
