@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { GenerateChatInput } from "@moss/ai";
-import type { BriefingPlanContextV1, DayPlanDto } from "@moss/shared";
+import type { BriefingPlanContextV1, DayPlanDto, LocaleSettingsDto } from "@moss/shared";
 
 import { composeBriefing, type ComposeDeps } from "../../packages/briefings/src/compose.js";
 import { DAY_PLAN_SECTION_KEY, planSection } from "../../packages/briefings/src/plan-prose.js";
 import { definition, fakeScopedDb, makeFakeDeps, runInput } from "./briefings-compose.harness.js";
+
+const UTC_12: LocaleSettingsDto = { timezone: "UTC", region: "en-US", dateFormat: "12" };
 
 const TASKS = [
   { id: "t1", title: "File the quarterly report" },
@@ -38,7 +40,9 @@ describe("planSection", () => {
           commitments: []
         }
       }),
-      TASKS
+      TASKS,
+      undefined,
+      UTC_12
     );
     expect(section.key).toBe(DAY_PLAN_SECTION_KEY);
     expect(section.lines).toContain("Priority (saved last evening): File the quarterly report");
@@ -56,7 +60,9 @@ describe("planSection", () => {
           commitments: [{ taskId: "t1", decision: "commit" }]
         }
       }),
-      TASKS
+      TASKS,
+      undefined,
+      UTC_12
     );
     expect(section.lines).toContain("Capacity (saved last evening): light");
     expect(section.lines).toContain("Note (saved last evening): keep it small");
@@ -105,10 +111,12 @@ describe("planSection", () => {
           }
         ]
       }),
-      TASKS
+      TASKS,
+      undefined,
+      UTC_12
     );
     expect(section.lines).toContain(
-      'focus "Deep work" (position 0): committed 2026-06-13T09:00:00.000Z-2026-06-13T10:00:00.000Z'
+      'focus "Deep work" (position 0): committed Sat, Jun 13, 9:00 AM-10:00 AM'
     );
     expect(section.lines).toContain(
       'meeting "Maybe later" (position 1): proposed, not on the calendar yet'
@@ -127,15 +135,49 @@ describe("planSection", () => {
           commitments: []
         }
       }),
-      TASKS
+      TASKS,
+      undefined,
+      UTC_12
     );
     expect(section.lines).toContain("No task blocks were planned for today.");
   });
 
   it("yields an empty section for a null context", () => {
-    const section = planSection(null, TASKS);
+    const section = planSection(null, TASKS, undefined, UTC_12);
     expect(section.lines).toEqual([]);
     expect(section.count).toBe(0);
+  });
+
+  it("reads a committed window in the person's timezone and clock, never raw UTC (#3390)", () => {
+    const block = {
+      id: "b1",
+      kind: "focus" as const,
+      taskId: null,
+      title: "Standup prep",
+      position: 0,
+      actualPlacement: {
+        startsAt: "2026-10-11T17:15:00.000Z",
+        durationMinutes: 30,
+        calendarEventRef: null
+      },
+      pendingChange: null
+    };
+    const pacific12 = planSection(context({ blocks: [block] }), TASKS, undefined, {
+      timezone: "America/Los_Angeles",
+      region: "en-US",
+      dateFormat: "12"
+    });
+    expect(pacific12.lines).toEqual([
+      'focus "Standup prep" (position 0): committed Sun, Oct 11, 10:15 AM-10:45 AM'
+    ]);
+    const pacific24 = planSection(context({ blocks: [block] }), TASKS, undefined, {
+      timezone: "America/Los_Angeles",
+      region: "en-GB",
+      dateFormat: "24"
+    });
+    expect(pacific24.lines[0]).toContain("10:15");
+    expect(pacific24.lines[0]).toContain("10:45");
+    expect(pacific24.lines[0]).not.toMatch(/AM|PM|17:15|T17/);
   });
 
   it("sanitizes forged delimiters out of plan strings", () => {
@@ -149,7 +191,9 @@ describe("planSection", () => {
           commitments: []
         }
       }),
-      TASKS
+      TASKS,
+      undefined,
+      UTC_12
     );
     const joined = section.lines.join("\n");
     expect(joined).not.toContain("</external_source>");
