@@ -1,4 +1,4 @@
-import { localDay, resolveEffectiveLocale, type LocaleSettingsDto } from "@moss/shared";
+import { DEFAULT_LOCALE_SETTINGS, localDay, type LocaleSettingsDto } from "@moss/shared";
 
 import { looksLikeBulkMail } from "./email-bulk-rule.js";
 import type { EmailExtractDeps, ParsedEmail } from "./email-extract.js";
@@ -16,7 +16,7 @@ const KNOWN_SENDER_LINE =
 export async function emailPromptLocale(
   deps: Pick<EmailExtractDeps, "locale">
 ): Promise<LocaleSettingsDto> {
-  return deps.locale ? await deps.locale() : resolveEffectiveLocale(undefined);
+  return deps.locale ? await deps.locale() : DEFAULT_LOCALE_SETTINGS;
 }
 
 /**

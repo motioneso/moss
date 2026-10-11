@@ -10,6 +10,7 @@ import {
 } from "@moss/ai";
 import { withSavepoint, type DataContextDb } from "@moss/db";
 import {
+  DEFAULT_LOCALE_SETTINGS,
   LOCALE_PREFERENCE_KEY,
   resolveEffectiveLocale,
   type LocaleSettingsDto
@@ -111,7 +112,7 @@ export function buildEmailExtractDeps(
     locale: () =>
       (locale ??= withSavepoint(scopedDb, () =>
         preferences.get(scopedDb, LOCALE_PREFERENCE_KEY)
-      ).then(resolveEffectiveLocale, () => resolveEffectiveLocale(undefined))),
+      ).then(resolveEffectiveLocale, () => DEFAULT_LOCALE_SETTINGS)),
     runChat: async (
       prompt,
       signal,

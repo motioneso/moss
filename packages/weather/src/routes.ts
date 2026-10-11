@@ -13,22 +13,14 @@ interface WeatherRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly preferencesRepo: PreferencesPort;
   readonly logger: FastifyBaseLogger;
-  readonly resolveRequestTimeZone?: (
-    request: FastifyRequest,
-    accessContext: AccessContext
-  ) => Promise<string> | string;
   readonly fetchFn?: typeof fetch;
 }
 
 /** The person's saved locale timezone, or the shared default when nothing is saved (#3395). */
 async function resolveRouteTimeZone(
   dependencies: WeatherRoutesDependencies,
-  request: FastifyRequest,
   accessContext: AccessContext
 ): Promise<string> {
-  if (dependencies.resolveRequestTimeZone) {
-    return dependencies.resolveRequestTimeZone(request, accessContext);
-  }
   const stored = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
     dependencies.preferencesRepo.get(scopedDb, LOCALE_PREFERENCE_KEY)
   );
@@ -52,7 +44,7 @@ export function registerWeatherRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const timeZone = await resolveRouteTimeZone(dependencies, request, accessContext);
+        const timeZone = await resolveRouteTimeZone(dependencies, accessContext);
         const data = await service.getWeatherForUser(accessContext, request.ip, timeZone);
         return { data };
       } catch (error) {

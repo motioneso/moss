@@ -1,6 +1,4 @@
-import { describe, expect, it } from "vitest";
-
-import { DEFAULT_LOCALE_SETTINGS, localDay } from "@moss/shared";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   extractEmailSignalsBatch,
@@ -67,10 +65,16 @@ describe("what the model is told about dates", () => {
     expect(prompt).not.toContain("02:15");
   });
 
-  it("gives it today's date", async () => {
-    const prompt = await capturePrompt(email());
-    const today = localDay(new Date(), DEFAULT_LOCALE_SETTINGS.timezone);
-    expect(prompt).toContain(`Today: ${today}`);
+  it("gives it today's date in the default zone, not the machine's", async () => {
+    // 03:30 UTC on Oct 10 is still Oct 9 in Los Angeles.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-10T03:30:00Z"));
+    try {
+      const prompt = await capturePrompt(email());
+      expect(prompt).toContain("Today: 2026-10-09");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("leaves the arrival line out rather than sending a broken date", async () => {

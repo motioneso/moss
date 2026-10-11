@@ -158,6 +158,7 @@ export class ExternalModuleJobReconciler {
           ...(schedule.params === undefined ? {} : { params: schedule.params })
         };
         assertModuleJobPayload(queue, payload);
+        // The zone is fixed here; a later zone change applies on the next reconcile.
         await this.deps.boss.schedule(queue.name, schedule.cron, payload, {
           tz: schedule.tz ?? (await this.actorTimezone(actorUserId)),
           key

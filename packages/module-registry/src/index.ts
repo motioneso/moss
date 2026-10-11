@@ -2157,7 +2157,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           new BriefingsRepository().getOwnedRunById(scopedDb, runId),
         findTask: (scopedDb, taskId) => new TasksRepository().getById(scopedDb, taskId),
         findRun: (scopedDb, runId) => new BriefingsRepository().getOwnedRunById(scopedDb, runId),
-        resolveTimeZone: (_request, accessContext) =>
+        resolveTimeZone: (accessContext) =>
           resolveRequestTimeZoneForRoute(
             accessContext,
             deps.dataContext,
@@ -2587,13 +2587,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [wellnessModuleSqlMigrationDirectory],
     queueDefinitions: [...WELLNESS_EXPORT_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
-      const preferencesRepository = new PreferencesRepository();
       registerWellnessRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
-        resolveActiveModules: deps.resolveActiveModules,
-        resolveRequestTimeZone: (_request, accessContext) =>
-          resolveRequestTimeZoneForRoute(accessContext, deps.dataContext, preferencesRepository)
+        resolveActiveModules: deps.resolveActiveModules
       });
       registerWellnessExportRoutes(server, {
         boss: deps.boss,
@@ -2614,8 +2611,6 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         preferencesRepo: preferencesRepository,
         logger: createModuleLogger(server.log, "weather"),
-        resolveRequestTimeZone: (_request, accessContext) =>
-          resolveRequestTimeZoneForRoute(accessContext, deps.dataContext, preferencesRepository),
         fetchFn: deps.fetchFn
       });
     }

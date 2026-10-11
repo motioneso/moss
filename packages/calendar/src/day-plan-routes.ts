@@ -117,10 +117,8 @@ export interface DayPlanRoutesDependencies {
   readonly findSourceRun: (scopedDb: DataContextDb, runId: string) => Promise<unknown>;
   readonly findTask?: DayPlanTaskProjection;
   readonly findRun: DayPlanRunProjection;
-  readonly resolveTimeZone: (
-    request: FastifyRequest,
-    accessContext: AccessContext
-  ) => Promise<string>;
+  /** The person's saved timezone, or the shared default when nothing is saved. */
+  readonly resolveTimeZone: (accessContext: AccessContext) => Promise<string>;
   /** Absent means the deployment has no connector-backed calendar reads — preview then always reports "unavailable". */
   readonly sourceContext?: DayPlanSourceContextService;
 }
@@ -341,7 +339,7 @@ export function registerDayPlanRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const localDay = normalizeLocalDay(request.query.date);
         const timeZone = normalizeTimeZone(
-          request.query.timeZone ?? (await dependencies.resolveTimeZone(request, accessContext))
+          request.query.timeZone ?? (await dependencies.resolveTimeZone(accessContext))
         );
         const enriched = await dependencies.dataContext.withDataContext(
           accessContext,
@@ -393,7 +391,7 @@ export function registerDayPlanRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const localDay = normalizeLocalDay(body.date);
         const timeZone = normalizeTimeZone(
-          body.timeZone ?? (await dependencies.resolveTimeZone(request, accessContext))
+          body.timeZone ?? (await dependencies.resolveTimeZone(accessContext))
         );
         const sourceRunId = normalizeSourceRunId(body.sourceRunId ?? null);
         const plan = await dependencies.dataContext.withDataContext(

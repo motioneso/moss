@@ -276,7 +276,7 @@ export interface ProactiveMonitorInput {
   readonly ownerUserId: string;
   readonly sinceCursor: unknown;
   readonly now: string;
-  /** Same as `locale.timezone`. */
+  /** @deprecated Same as `locale.timezone`; read `locale` instead. */
   readonly timeZone: string;
   /** Format any time shown to the owner with this, never the server clock zone. */
   readonly locale: ProactiveMonitorLocale;

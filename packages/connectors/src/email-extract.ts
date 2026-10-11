@@ -1,7 +1,7 @@
 import type { GmailMessageFull, GmailPayloadPart } from "./google-api-client.js";
 import type { StructuredRunPriority, StructuredRunScope, StructuredTelemetry } from "@moss/ai";
 import { resolveMossEnv } from "@moss/db";
-import { resolveEffectiveLocale, type LocaleSettingsDto } from "@moss/shared";
+import { DEFAULT_LOCALE_SETTINGS, type LocaleSettingsDto } from "@moss/shared";
 
 import { looksLikeBulkMail } from "./email-bulk-rule.js";
 import { applyGate } from "./email-gate.js";
@@ -768,7 +768,7 @@ function buildBatchPrompt(
 
 export function partitionEmailExtractionBatches(
   messages: readonly ParsedEmail[],
-  locale: LocaleSettingsDto = resolveEffectiveLocale(undefined)
+  locale: LocaleSettingsDto = DEFAULT_LOCALE_SETTINGS
 ): ParsedEmail[][] {
   const batches: ParsedEmail[][] = [];
   let current: ParsedEmail[] = [];
