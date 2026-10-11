@@ -523,7 +523,7 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
                 <div className="vault__path">{linkedPath}</div>
                 <div className="vault__meta">
                   {sourceUnavailable
-                    ? "Couldn't check linked folder. This is the last known folder; try again to verify it."
+                    ? "Couldn't check linked folder"
                     : lastSync
                       ? lastSync.lastError
                         ? formatLastSync(lastSync.at, locale, lastSync.lastError)

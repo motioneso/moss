@@ -170,10 +170,7 @@ export function DataExport() {
       ) : null}
       {statusReadFailed ? (
         <div className="dexp__bar" role="alert">
-          <div className="dexp__note">
-            Couldn't check your export. Its current status is unknown; try again to check the same
-            export.
-          </div>
+          <div className="dexp__note">Couldn't check your export.</div>
           <Button
             size="sm"
             onClick={() => void statusQuery.refetch()}

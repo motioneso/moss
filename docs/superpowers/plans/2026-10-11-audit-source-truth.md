@@ -113,3 +113,8 @@ Expected successful exit: 0, preserving each command's actual exit code.
 Category: Fixed
 Title: Clear source and export outcomes
 Description: Linked folders and resumed data exports now show when a change is still pending or needs retry, with accurate archive scope.
+
+## Live verification (2026-10-11)
+
+- Provisioned real-UI UAT `tests/uat/specs/audit-source-truth.uat.spec.ts` passed on head 0dce0c634 (1 passed, 2.1m) in an isolated instance, with real service stop/pause and no intercepted responses. The run found and fixed a 390px overflow of the folder action row and an unsupported Compose `start --wait` call.
+- This supersedes the "unexecuted" status above for browser proof. Required CI remains the merge gate.
