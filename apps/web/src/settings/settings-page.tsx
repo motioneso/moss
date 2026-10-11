@@ -2,10 +2,12 @@ import "../styles/settings.css";
 import "../styles/settings-panes.css";
 import "../styles/settings-panes-2.css";
 import "../styles/settings-panes-3.css";
+import "../styles/settings-quiet-hours.css";
 import "../styles/settings-activity.css";
 
 import {
   Activity,
+  Bell,
   Boxes,
   Brain,
   ChevronDown,
@@ -79,7 +81,8 @@ type PersonalSectionId =
   | "appearance"
   | "activity"
   | "skills"
-  | "released";
+  | "released"
+  | "alerts";
 
 type AdminSectionId =
   | "people"
@@ -118,6 +121,9 @@ const SkillsPane = lazyPane(() =>
 );
 const ReleasedPane = lazyPane(() =>
   import("./settings-released-pane").then((module) => ({ default: module.ReleasedPane }))
+);
+const AlertsPane = lazyPane(() =>
+  import("./settings-alerts-pane").then((module) => ({ default: module.AlertsPane }))
 );
 
 function PrioritiesPane(_props: PaneProps) {
@@ -214,6 +220,13 @@ const PERSONAL_GROUPS = [
         label: "Activity",
         description: coreSettingDescription("activity"),
         Pane: ActivityPane
+      },
+      {
+        id: "alerts",
+        icon: Bell,
+        label: "Alerts & quiet hours",
+        description: coreSettingDescription("alerts"),
+        Pane: AlertsPane
       },
       {
         id: "released",
@@ -342,8 +355,6 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
     "fahrenheit",
     "celsius",
     "location",
-    "quiet hours",
-    "do not disturb",
     "sessions",
     "sign out",
     "export",
@@ -363,6 +374,7 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
     "connected accounts"
   ],
   assistant: ["model", "ai", "provider", "assistant name", "personality", "voice"],
+  alerts: ["email alerts", "notifications", "digest", "quiet hours", "do not disturb"],
   people: ["users", "invite", "roles", "admin", "members"],
   aiproviders: [
     "api key",

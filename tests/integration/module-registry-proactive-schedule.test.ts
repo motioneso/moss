@@ -13,6 +13,10 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 
 const { Client } = pg;
 
+function savedPreference(pref: ReturnType<typeof defaultProactiveMonitoringPreference>) {
+  return { raw: { ...pref }, preference: pref, hasLegacyEmailChoice: true };
+}
+
 describe("proactive-monitoring schedule key", () => {
   let boss: PgBoss;
 
@@ -59,12 +63,33 @@ describe("proactive-monitoring schedule key", () => {
     };
 
     const reconcile = buildReconcileProactiveSchedule(boss);
-    await expect(reconcile(ids.userA, pref)).resolves.not.toThrow();
+    await expect(reconcile(ids.userA, pref, savedPreference(pref))).resolves.not.toThrow();
 
     const rows = await scheduleRows();
     const taskRow = rows.find((row) => row.key === `${ids.userA}/tasks`);
     expect(taskRow).toBeDefined();
     expect(taskRow?.key.includes(":")).toBe(false);
+  });
+
+  it("schedules explicit automatic email alerts without enabling another legacy source", async () => {
+    const pref = { ...defaultProactiveMonitoringPreference(), automaticEmailAlerts: true };
+
+    await buildReconcileProactiveSchedule(boss)(ids.userA, pref, savedPreference(pref));
+
+    const rows = await scheduleRows();
+    expect(rows.some((row) => row.key === `${ids.userA}/email`)).toBe(true);
+    expect(rows.some((row) => row.key === `${ids.userA}/calendar`)).toBe(false);
+  });
+
+  it("schedules email when no preference record has ever been saved", async () => {
+    await buildReconcileProactiveSchedule(boss)(
+      ids.userA,
+      defaultProactiveMonitoringPreference(),
+      undefined
+    );
+
+    const rows = await scheduleRows();
+    expect(rows.some((row) => row.key === `${ids.userA}/email`)).toBe(true);
   });
 
   it("unschedules with the same slash-separated key when a source is disabled", async () => {
@@ -77,7 +102,7 @@ describe("proactive-monitoring schedule key", () => {
       }
     };
     const reconcile = buildReconcileProactiveSchedule(boss);
-    await reconcile(ids.userA, enabledPref);
+    await reconcile(ids.userA, enabledPref, savedPreference(enabledPref));
     expect((await scheduleRows()).some((row) => row.key === `${ids.userA}/tasks`)).toBe(true);
 
     const disabledPref = {
@@ -87,7 +112,9 @@ describe("proactive-monitoring schedule key", () => {
         tasks: { ...enabledPref.sources.tasks, enabled: false }
       }
     };
-    await expect(reconcile(ids.userA, disabledPref)).resolves.not.toThrow();
+    await expect(
+      reconcile(ids.userA, disabledPref, savedPreference(disabledPref))
+    ).resolves.not.toThrow();
     expect((await scheduleRows()).some((row) => row.key === `${ids.userA}/tasks`)).toBe(false);
   });
 });

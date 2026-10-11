@@ -71,7 +71,8 @@ test("attaching a file really uploads to the vault and the turn carries its id (
   const drawer = page.locator("aside.chatd");
   await expect(drawer).toBeVisible();
   // A fresh chat per run: a reopened chat resumes the scripted conversation at a later turn.
-  await drawer.getByRole("button", { name: "New chat" }).click();
+  await drawer.getByRole("button", { name: "Open conversations" }).click();
+  await drawer.getByRole("button", { name: "New side chat", exact: true }).click();
 
   // Drive the visually-hidden real <input type=file> directly — the paperclip button only
   // proxies a click to it, and a native picker can't be automated.

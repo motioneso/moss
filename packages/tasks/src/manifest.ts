@@ -808,6 +808,27 @@ export const tasksModuleManifest = {
   ],
   features: [
     {
+      id: "tasks.quick_capture",
+      description:
+        "Add a task from its title with Enter or Add task, using the focused list when one list is selected. Repeated submissions while saving send once; text typed during a successful save stays in the field.",
+      remediations: [
+        {
+          id: "tasks.quick_capture_retry",
+          description:
+            "Keep the title, correct the reported problem or choose an available list, then press Enter or Add task to retry.",
+          path: "/tasks"
+        }
+      ],
+      errors: [
+        {
+          code: "tasks.capture_failed",
+          class: "transient",
+          description:
+            "A failed quick add keeps the title and explains the failure. Correct the cause, then press Enter or Add task to try again."
+        }
+      ]
+    },
+    {
       id: "tasks.approval_effects",
       description:
         "Deleting a list keeps reassigned tasks but deletes its tags and assignments. Moving a task removes tags from other lists; a parent's subtasks follow it. Deleting a tag removes it from all tasks without deleting the tasks."

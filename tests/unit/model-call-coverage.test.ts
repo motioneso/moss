@@ -585,7 +585,7 @@ const EXPLICIT_RECORDING_FILES = [
   "packages/chat/src/live/constrained-structured-adapter.ts",
   "packages/chat/src/live/provider-probe.ts",
   "packages/chat/src/live/cli-check-turn.ts",
-  "packages/chat/src/live/chat-session-manager.ts",
+  "packages/chat/src/live/chat-session-turn.ts",
   "packages/memory/src/embedding-provider-config.ts",
   "packages/module-registry/src/chat-multiplexer.ts",
   "packages/module-registry/src/index.ts",

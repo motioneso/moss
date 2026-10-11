@@ -17,6 +17,7 @@ import { CardRepository } from "./card-repository.js";
 import { MonitorStateRepository } from "./monitor-state-repository.js";
 import { ProactiveMonitoringPreferencesRepository } from "./preferences-repository.js";
 import { ProactiveScanner } from "./scanner.js";
+import type { ProactiveQuietPolicy } from "./types.js";
 
 /** Metadata-only — no private content, prompts, or connector payloads. */
 export interface ProactiveScanSourceJobPayload extends ActorScopedJobPayload {
@@ -39,6 +40,9 @@ interface WorkerDependencies {
   readonly getLocalePreference: (
     scopedDb: Parameters<Parameters<DataContextRunner["withDataContext"]>[1]>[0]
   ) => Promise<{ timezone?: string } | null>;
+  readonly resolveQuietHours: (
+    scopedDb: Parameters<Parameters<DataContextRunner["withDataContext"]>[1]>[0]
+  ) => Promise<ProactiveQuietPolicy | null>;
   readonly providers: ReadonlyMap<ProactiveSource, ProactiveMonitorProvider>;
 }
 
@@ -58,7 +62,8 @@ export async function registerProactiveMonitoringWorkers(
     monitorStateRepository: monitorStateRepo,
     cardRepository,
     antiSpamPolicy: antiSpam,
-    getLocalePreference: deps.getLocalePreference
+    getLocalePreference: deps.getLocalePreference,
+    resolveQuietHours: deps.resolveQuietHours
   });
 
   const workerId = await registerDataContextWorker<ProactiveScanSourceJobPayload, void>(

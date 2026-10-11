@@ -556,7 +556,10 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
   });
 
   it("GET /api/chat/privacy returns the authenticated actor's current thread privacy state", async () => {
-    const getPrivacyState = vi.fn().mockResolvedValue({ incognito: true });
+    const getPrivacyState = vi
+      .fn()
+      .mockResolvedValueOnce({ incognito: true, threadId: "thread-a" })
+      .mockResolvedValueOnce({ incognito: true });
     const app = Fastify({ logger: false });
     registerChatLiveRoutes(app, {
       resolveAccessContext: async () => userAContext(),
@@ -572,8 +575,13 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
       const response = await app.inject({ method: "GET", url: "/api/chat/privacy" });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ incognito: true });
-      expect(getPrivacyState).toHaveBeenCalledWith(ids.userA, "drawer");
+      expect(response.json()).toEqual({ incognito: true, threadId: "thread-a" });
+      const withoutThread = await app.inject({ method: "GET", url: "/api/chat/privacy" });
+
+      expect(withoutThread.statusCode).toBe(200);
+      expect(withoutThread.json()).toEqual({ incognito: true });
+      expect(getPrivacyState).toHaveBeenNthCalledWith(1, ids.userA, "drawer");
+      expect(getPrivacyState).toHaveBeenNthCalledWith(2, ids.userA, "drawer");
     } finally {
       await app.close();
     }

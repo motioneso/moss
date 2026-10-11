@@ -19,6 +19,7 @@ export { createModuleLogger } from "./logger.js";
 // boundary (slice 3B) and any future module reuse one canonical DST-safe conversion.
 export {
   addLocalDays,
+  deferUntilQuietHoursEnd,
   isValidTimeZone,
   localDayKey,
   localDayRange,

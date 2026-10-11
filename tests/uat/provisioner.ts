@@ -18,11 +18,13 @@ import {
   removeClassifierFixtureContainer,
   startClassifierFixtureContainer
 } from "./fixtures/classifier-fixture-container.js";
+import { CLAUDE_TOKEN_REUSED_ENV } from "./claude-signin-handoff.js";
 import * as mcpFixture from "./classifier-mcp-fixture-container.js";
 import {
   REAL_CHAT_CONFIGURED_ENV,
-  installUatRealChatCodexAuth,
-  type UatRealChatCodexAuth
+  installUatRealChatAuth,
+  uatRealChatProvider,
+  type UatRealChatAuth
 } from "./real-chat-env.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID } from "./seed/admin.js";
 import { parseUatSeedLevel } from "./seed/level-validation.js";
@@ -606,6 +608,8 @@ async function waitForReady(url: string, timeoutMs = 120_000): Promise<void> {
 }
 
 export interface UatProvisionOptions {
+  /** A port reserved by devports for this isolated live run. */
+  readonly claimedWebPort?: number;
   readonly excludeChunks?: readonly string[];
   readonly withoutNewsJsonBinding?: boolean;
   // #1306 Task 22: opt-in, absent by default, same shape as the Codex credential copy's own
@@ -698,17 +702,17 @@ export async function provisionForUat(
   opts?: UatProvisionOptions,
   dependencies: {
     readonly listLiveSubnets?: typeof listLiveDockerSubnets;
-    readonly installRealChatCodexAuth?: typeof installUatRealChatCodexAuth;
+    readonly installRealChatAuth?: typeof installUatRealChatAuth;
   } = {}
 ): Promise<{ baseURL: string; projectName: string; teardown: () => Promise<void> }> {
   const overallStart = Date.now();
   // #1024/#1000: bounded by the reserved range itself (100 candidates) — never an unbounded
   // retry. Each failed-on-bind attempt removes its port from the pool; exhausting the pool means
   // the whole reserved range is hostile, which should fail loudly, not spin forever.
-  let remainingCandidates = Array.from(
-    { length: UAT_PORT_RANGE_SIZE },
-    (_, i) => UAT_PORT_RANGE_START + i
-  );
+  let remainingCandidates =
+    opts?.claimedWebPort === undefined
+      ? Array.from({ length: UAT_PORT_RANGE_SIZE }, (_, i) => UAT_PORT_RANGE_START + i)
+      : [opts.claimedWebPort];
   let remainingSubnetCandidates = [...UAT_SUBNET_CANDIDATES];
   let imageBuilt = false; // build once; a port-bind retry shouldn't rebuild the image
 
@@ -766,7 +770,7 @@ export async function provisionForUat(
 
     // #2732: set once `jarv1s` is up and the Codex credential copy (if any) has run — read by
     // teardownCompose below, so declared before it.
-    let realChatAuth: UatRealChatCodexAuth | undefined;
+    let realChatAuth: UatRealChatAuth | undefined;
 
     // #1306: the fixture container is removed FIRST — an outside container still attached to the
     // Compose network blocks `down -v` from removing that network, and the leak assertion that
@@ -853,16 +857,22 @@ export async function provisionForUat(
         await runCommand(step.command, step.args);
       }
       // #2732: after the plan loop, because it needs the now-running `jarv1s` container for its
-      // docker exec calls. A no-op unless the operator's own machine has a signed-in Codex CLI
-      // (see real-chat-env.ts); real chat stays opt-in without a separate on/off flag.
-      realChatAuth = (dependencies.installRealChatCodexAuth ?? installUatRealChatCodexAuth)(
+      // docker exec calls. Codex (default): a no-op unless the operator's own machine has a
+      // signed-in Codex CLI. Claude (#3361): selected explicitly; the spec signs in through Moss.
+      realChatAuth = (dependencies.installRealChatAuth ?? installUatRealChatAuth)(
         projectName,
         UAT_ADMIN_ID,
         (extra) => buildUatComposeArgs(projectName, extra)
       );
       if (realChatAuth !== undefined) {
         process.env[REAL_CHAT_CONFIGURED_ENV] = "1";
-        console.log(`[uat] host Codex login copied into ${projectName}; real chat is available`);
+        console.log(
+          uatRealChatProvider() !== "claude"
+            ? `[uat] host Codex login copied into ${projectName}; real chat is available`
+            : process.env[CLAUDE_TOKEN_REUSED_ENV] === "1"
+              ? `[uat] Claude sign-in selected for ${projectName}; the spec tries the saved sign-in first`
+              : `[uat] Claude sign-in selected for ${projectName}; the spec asks for a sign-in link`
+        );
       }
       // #1306: after the plan loop, because the Compose network it attaches to does not exist
       // until the first `up`; before the seed hook, so the fixture origin is already answering by

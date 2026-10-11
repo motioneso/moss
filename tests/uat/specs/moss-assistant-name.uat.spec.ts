@@ -109,12 +109,19 @@ test.describe
     const chatButton = page.getByRole("button", { name: `Chat with ${ASSISTANT_NAME}` });
     await expect(chatButton).toBeVisible();
     await expect(chatButton).toHaveAttribute("title", `Ask ${ASSISTANT_NAME}`);
+    const chatRouteResponse = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/ai/capability-route/chat"
+    );
     await chatButton.click();
+    const chatRoute = await chatRouteResponse;
+    expect(chatRoute.status()).toBe(200);
+    expect(await chatRoute.json()).toMatchObject({ route: { available: true } });
 
     // Drawer root: role="dialog" aria-label="Chat with {name}", plus its displayed name.
     const drawer = page.getByRole("dialog", { name: `Chat with ${ASSISTANT_NAME}` });
     await expect(drawer).toBeVisible();
     await expect(drawer.locator(".chatd__name")).toHaveText(ASSISTANT_NAME);
+    await expect(drawer.locator(".chatd__status")).toHaveText("Here when you need me");
 
     // Composer placeholder + aria-label.
     const composer = drawer.getByRole("textbox", { name: `Message ${ASSISTANT_NAME}` });

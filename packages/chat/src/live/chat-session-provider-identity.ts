@@ -1,13 +1,21 @@
 import type { ProviderKind } from "@moss/ai";
 
 import type { ChatPersistencePort } from "./chat-session-ports.js";
-import { normalizeChatSurface, surfaceSessionKey, type ChatSurface } from "./chat-surface.js";
+import {
+  DEFAULT_CHAT_SURFACE,
+  normalizeChatSurface,
+  surfaceSessionKey,
+  type ChatSurface
+} from "./chat-surface.js";
+import { getPinnedThreadState, getSelectedThreadState } from "./chat-thread-selection.js";
 import {
   ApiKeyLiveChatUnavailableError,
+  CHAT_CHANGED_WHILE_STARTING_MESSAGE,
   ChatProviderChangedError,
   CliChatUnavailableError,
   UnsupportedLegacyCliProviderError
 } from "./errors.js";
+import type { SessionUsageMeter } from "./chat-session-usage.js";
 import type { CliChatEngine } from "./types.js";
 
 export type ActiveChatProvider = Awaited<ReturnType<ChatPersistencePort["resolveActiveProvider"]>>;
@@ -27,6 +35,8 @@ export interface UserSession {
   readonly seededContextKeys: Set<string>;
   readonly mcpToken?: string;
   readonly startsToolClientPerTurn: boolean;
+  /** App-side count of what this provider session was fed and produced. */
+  readonly usage: SessionUsageMeter;
 }
 
 export function sameActiveChatProvider(
@@ -112,22 +122,35 @@ export async function dropSessionsForProvider(input: {
   }
 }
 
+export interface EnsureSessionOpts {
+  readonly forceReplay?: boolean;
+  /** Replace exactly this healthy session with a fresh one bound to the same conversation. */
+  readonly rollover?: UserSession;
+}
+
+export interface LaunchSessionOpts {
+  readonly forceReplay: boolean;
+  /** Bind the launch to this conversation, refusing if it is no longer selected. */
+  readonly pinThreadId?: string;
+}
+
 export async function ensureSessionForCurrentProvider(input: {
   readonly actorUserId: string;
   readonly userName: string;
-  readonly opts: { readonly forceReplay?: boolean } | undefined;
+  readonly opts: EnsureSessionOpts | undefined;
   readonly surface: ChatSurface;
   readonly sessionKey: string;
   readonly launching: Map<string, Promise<UserSession>>;
   readonly persistence: Pick<
     ChatPersistencePort,
-    "resolveActiveProvider" | "getCurrentThreadState"
+    "resolveActiveProvider" | "getCurrentThreadState" | "getMainThreadState"
   >;
   readonly sessions: ReadonlyMap<string, UserSession>;
   readonly pendingForcedReplay: Set<string>;
+  readonly waitForSelection: () => Promise<void>;
   readonly discardSession: (session: UserSession) => Promise<void>;
   readonly launchSession: (
-    opts: { readonly forceReplay: boolean },
+    opts: LaunchSessionOpts,
     providerIdentity: ActiveChatProvider
   ) => Promise<UserSession>;
 }): Promise<UserSession> {
@@ -150,32 +173,37 @@ export async function ensureSessionForCurrentProvider(input: {
 async function resolveSessionForCurrentProvider(input: {
   readonly actorUserId: string;
   readonly userName: string;
-  readonly opts: { readonly forceReplay?: boolean } | undefined;
+  readonly opts: EnsureSessionOpts | undefined;
   readonly surface: ChatSurface;
   readonly sessionKey: string;
   readonly persistence: Pick<
     ChatPersistencePort,
-    "resolveActiveProvider" | "getCurrentThreadState"
+    "resolveActiveProvider" | "getCurrentThreadState" | "getMainThreadState"
   >;
   readonly sessions: ReadonlyMap<string, UserSession>;
   readonly pendingForcedReplay: Set<string>;
+  readonly waitForSelection: () => Promise<void>;
   readonly discardSession: (session: UserSession) => Promise<void>;
   readonly launchSession: (
-    opts: { readonly forceReplay: boolean },
+    opts: LaunchSessionOpts,
     providerIdentity: ActiveChatProvider
   ) => Promise<UserSession>;
 }): Promise<UserSession> {
-  let forceReplay = input.opts?.forceReplay ?? input.pendingForcedReplay.delete(input.sessionKey);
+  let forceReplay = input.opts?.forceReplay ?? input.pendingForcedReplay.has(input.sessionKey);
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    await input.waitForSelection();
+    forceReplay ||= input.pendingForcedReplay.has(input.sessionKey);
     const providerIdentity = await input.persistence.resolveActiveProvider(input.actorUserId);
     const existing = input.sessions.get(input.sessionKey);
-    if (
-      existing &&
-      sameActiveChatProvider(existing.providerIdentity, providerIdentity) &&
-      (await sessionMatchesCurrentConversation(input, existing))
-    ) {
-      return existing;
-    }
+    const rollover = attempt === 0 ? input.opts?.rollover : undefined;
+    const sameProvider =
+      existing !== undefined && sameActiveChatProvider(existing.providerIdentity, providerIdentity);
+    // A rollover replaces only its exact session, unchanged provider, still-selected conversation.
+    const pinThreadId =
+      rollover && existing === rollover && sameProvider && rollover.threadId !== null
+        ? ((await rolloverStillSelected(input, rollover)) ?? undefined)
+        : undefined;
+    if (existing && (rollover ? pinThreadId === undefined : sameProvider)) return existing;
 
     if (existing) {
       await input.discardSession(existing);
@@ -184,40 +212,80 @@ async function resolveSessionForCurrentProvider(input: {
 
     let session: UserSession;
     try {
-      session = await input.launchSession({ forceReplay }, providerIdentity);
+      session = await input.launchSession(
+        pinThreadId ? { forceReplay: true, pinThreadId } : { forceReplay },
+        providerIdentity
+      );
     } catch (error) {
-      if (!(error instanceof ActiveProviderChangedDuringLaunchError)) throw error;
+      if (pinThreadId || !(error instanceof ActiveProviderChangedDuringLaunchError)) throw error;
       forceReplay = true;
       continue;
     }
     try {
       const providerAfterLaunch = await input.persistence.resolveActiveProvider(input.actorUserId);
+      const conversationMatches = pinThreadId
+        ? session.threadId === pinThreadId &&
+          (await rolloverStillSelected(input, session)) === pinThreadId
+        : await sessionMatchesCurrentConversation(
+            input,
+            session,
+            !forceReplay && !input.pendingForcedReplay.has(input.sessionKey)
+          );
       if (
         sameActiveChatProvider(session.providerIdentity, providerAfterLaunch) &&
-        (await sessionMatchesCurrentConversation(input, session))
-      )
+        conversationMatches &&
+        input.sessions.get(input.sessionKey) === session
+      ) {
+        input.pendingForcedReplay.delete(input.sessionKey);
         return session;
+      }
     } catch (error) {
       await input.discardSession(session);
       throw error;
     }
     await input.discardSession(session);
+    // A late rollover launch never retries into whatever conversation is selected now.
+    if (pinThreadId) break;
     forceReplay = true;
   }
 
-  throw new CliChatUnavailableError("Your chat changed while it was starting. Please try again.");
+  throw new CliChatUnavailableError(CHAT_CHANGED_WHILE_STARTING_MESSAGE);
+}
+
+/** The session's conversation id while it is still selected with the same privacy, else null. */
+async function rolloverStillSelected(
+  input: {
+    readonly actorUserId: string;
+    readonly surface: ChatSurface;
+    readonly persistence: Pick<ChatPersistencePort, "getCurrentThreadState" | "getMainThreadState">;
+  },
+  session: UserSession
+): Promise<string | null> {
+  if (session.threadId === null) return null;
+  const pinned = await getPinnedThreadState({
+    actorUserId: input.actorUserId,
+    surface: input.surface,
+    threadId: session.threadId,
+    persistence: input.persistence
+  });
+  return pinned && pinned.incognito === session.incognito ? pinned.id : null;
 }
 
 async function sessionMatchesCurrentConversation(
   input: {
     readonly actorUserId: string;
     readonly surface: ChatSurface;
-    readonly persistence: Pick<ChatPersistencePort, "getCurrentThreadState">;
+    readonly persistence: Pick<ChatPersistencePort, "getCurrentThreadState" | "getMainThreadState">;
   },
-  session: UserSession
+  session: UserSession,
+  preferMain: boolean
 ): Promise<boolean> {
-  if (!input.persistence.getCurrentThreadState) return true;
-  const current = await input.persistence.getCurrentThreadState(input.actorUserId, input.surface);
+  const current = await getSelectedThreadState({
+    actorUserId: input.actorUserId,
+    surface: input.surface,
+    useMain: preferMain && input.surface === DEFAULT_CHAT_SURFACE,
+    persistence: input.persistence
+  });
   // A stream pre-start can finish after a clear/resume removed the old session. Its frozen
   // origin remains correct for that engine, but it must never become the new conversation's engine.
   return (

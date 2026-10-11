@@ -244,6 +244,7 @@ import { resolveTimeZone, type ProactiveSource } from "@moss/shared";
 import {
   createEmailThreadProvider,
   emailModuleManifest,
+  createEmailMonitorProvider,
   emailModuleSqlMigrationDirectory,
   EmailRepository,
   registerEmailRoutes
@@ -337,7 +338,8 @@ import {
   getModuleBuild,
   updateModuleBuildStatus,
   INTEGRATIONS_FAMILY,
-  loadFamilyKeyring
+  loadFamilyKeyring,
+  resolveAlertsQuietPolicy
 } from "@moss/settings";
 import {
   TASKS_QUEUE_DEFINITIONS,
@@ -474,6 +476,7 @@ import {
 } from "@moss/usefulness-feedback";
 import {
   CardRepository,
+  isProactiveSourceEnabled,
   makeProactiveCardVerifier,
   proactiveMonitoringModuleManifest,
   proactiveMonitoringSqlMigrationDirectory,
@@ -760,6 +763,8 @@ export interface BuiltInRouteDependencies {
    */
   readonly hasPasswordCredential?: HasPasswordCredentialPort;
   readonly bootstrapConnectionString?: string;
+  /** The API's own app-role database address; unset when the caller injects its database. */
+  readonly appConnectionString?: string;
   readonly googleConnectionService?: GoogleConnectionService;
   readonly googleApiClient?: GoogleApiClient;
   readonly connectorsRepository?: ConnectorsRepository;
@@ -1633,14 +1638,14 @@ export function createNotificationPreferencePort(
 }
 
 export function buildReconcileProactiveSchedule(boss: PgBoss): ReconcileProactiveScheduleFn {
-  return async (actorUserId, pref) => {
+  return async (actorUserId, pref, saved) => {
     const allProviders = proactiveMonitorProvidersFor(getBuiltInModuleManifests());
     for (const { provider } of allProviders) {
       const source = provider.source as ProactiveSource;
       // "/" separator, NOT ":" — pg-boss v12's assertKey restricts schedule keys to
       // [\w.\-/] (see job-reconciler.ts's identical fix, #1147). One row per user+source.
       const scheduleKey = `${actorUserId}/${source}`;
-      if (pref.enabled && pref.sources[source]?.enabled) {
+      if (isProactiveSourceEnabled(pref, source, saved)) {
         const data: ProactiveScanSourceJobPayload = {
           actorUserId,
           source,
@@ -2382,7 +2387,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           : undefined,
         appMapService: deps.appMapService,
         platformDiagnostics: deps.platformDiagnostics,
-        listModuleManifests: deps.listModuleManifests
+        listModuleManifests: deps.listModuleManifests,
+        reminderArrivalConnectionString: deps.appConnectionString
       }),
     registerWorkers: (boss, deps) =>
       registerChatJobWorkers(boss, deps.dataContext, {
@@ -2393,6 +2399,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           candidatesRepository: new MemoryCandidatesRepository(),
           graphRepository: new MemoryGraphRepository()
         },
+        createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
+        probeConstrainedCli: deps.probeConstrainedCli,
         logger: deps.logger ? createModuleLogger(deps.logger, "chat") : undefined
       })
   },
@@ -3025,15 +3033,24 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [proactiveMonitoringSqlMigrationDirectory],
     queueDefinitions: [PROACTIVE_SCAN_SOURCE_QUEUE],
     registerRoutes: (server, deps) => {
-      const allProviders = proactiveMonitorProvidersFor(getBuiltInModuleManifests());
       const registeredSources = new Set<ProactiveSource>(
-        allProviders.map((p) => p.provider.source as ProactiveSource)
+        proactiveMonitorProvidersFor(getBuiltInModuleManifests()).map(
+          ({ provider }) => provider.source as ProactiveSource
+        )
       );
       registerProactiveMonitoringRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         boss: deps.boss,
-        registeredSources
+        resolveRegisteredSources: async (actorUserId) => {
+          const sources = new Set(registeredSources);
+          if (
+            !(await deps.resolveActiveModules(actorUserId)).some((module) => module.id === "email")
+          ) {
+            sources.delete("email");
+          }
+          return sources;
+        }
       });
     },
     registerWorkers: async (boss, deps) => {
@@ -3042,6 +3059,22 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         allProviders.map((p) => [p.provider.source as ProactiveSource, p.provider])
       );
       const preferencesRepository = new PreferencesRepository();
+      const featureGrants = buildFeatureGrantService({
+        connectorsRepository: new ConnectorsRepository(),
+        preferencesRepository
+      });
+      const resolveActiveModules = createActiveModulesResolver({
+        dataContext: deps.dataContext,
+        manifests: getBuiltInModuleManifests
+      });
+      providers.set(
+        "email",
+        createEmailMonitorProvider({
+          grantedAccountIds: featureGrants.grantedAccountIds,
+          isModuleActive: async (actorUserId) =>
+            (await resolveActiveModules(actorUserId)).some((manifest) => manifest.id === "email")
+        })
+      );
       return registerProactiveMonitoringWorkers(boss, {
         dataContext: deps.dataContext,
         getLocalePreference: async (scopedDb) => {
@@ -3049,6 +3082,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           if (!val || typeof val !== "object" || Array.isArray(val)) return null;
           return val as { timezone?: string };
         },
+        resolveQuietHours: resolveAlertsQuietPolicy,
         providers
       });
     }

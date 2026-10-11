@@ -30,7 +30,7 @@ import type {
   EngineLaunchOpts,
   TranscriptRecord
 } from "../../packages/chat/src/live/types.js";
-import type { ChatTurnOriginV1 } from "@moss/shared";
+import type { ChatClassifierGateOriginV1 } from "@moss/shared";
 
 const NOW = new Date("2026-10-02T12:00:00.000Z");
 
@@ -83,7 +83,7 @@ class FakeEngine implements CliChatEngine {
 interface HandledRecord {
   readonly userText: string;
   readonly assistantReply: string;
-  readonly origin: ChatTurnOriginV1;
+  readonly origin: ChatClassifierGateOriginV1;
 }
 
 class FakePersistence implements ChatPersistencePort {
@@ -119,7 +119,7 @@ class FakePersistence implements ChatPersistencePort {
     _actorUserId: string,
     userText: string,
     assistantReply: string,
-    origin: ChatTurnOriginV1
+    origin: ChatClassifierGateOriginV1
   ): Promise<{
     readonly userMessageId: string;
     readonly assistantMessageId: string;

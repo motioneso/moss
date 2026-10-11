@@ -6,14 +6,15 @@ import {
   type PriorityPreferencesRepository,
   type PrioritySource
 } from "@moss/priority";
-import type { ProactiveSource } from "@moss/shared";
+import { defaultProactiveMonitoringPreference, type ProactiveSource } from "@moss/shared";
 
 import type { AntiSpamPolicy } from "./anti-spam.js";
 import type { CardRepository } from "./card-repository.js";
 import type { MonitorStateRepository } from "./monitor-state-repository.js";
 import type { ProactiveMonitoringPreferencesRepository } from "./preferences-repository.js";
+import { isProactiveSourceEnabled } from "./preferences-repository.js";
 import { isAllowedSignalType, mapSignalType } from "./signal-mapper.js";
-import type { ResolvedMonitoringConfig } from "./types.js";
+import type { ProactiveQuietPolicy, ResolvedMonitoringConfig } from "./types.js";
 
 const SCAN_COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_SIGNALS = 20;
@@ -25,6 +26,9 @@ interface ScanDependencies {
   readonly cardRepository: CardRepository;
   readonly antiSpamPolicy: AntiSpamPolicy;
   readonly getLocalePreference: (scopedDb: DataContextDb) => Promise<{ timezone?: string } | null>;
+
+  /** The owner's saved quiet-hours schedule; null keeps the nested alert schedule. */
+  readonly resolveQuietHours: (scopedDb: DataContextDb) => Promise<ProactiveQuietPolicy | null>;
 }
 
 export type ScanReason = "source-sync" | "manual-refresh" | "scheduled-check";
@@ -54,12 +58,12 @@ export class ProactiveScanner {
     const nowIso = now.toISOString();
 
     // Load monitoring preference.
-    const pref = await this.deps.preferencesRepository.get(scopedDb);
-    if (!pref.enabled) {
+    const saved = await this.deps.preferencesRepository.getSaved(scopedDb);
+    const pref = saved?.preference ?? defaultProactiveMonitoringPreference();
+    if (source !== "email" && !pref.enabled) {
       return skip(source, "monitoring_disabled");
     }
-    const sourcePref = pref.sources[source];
-    if (!sourcePref?.enabled) {
+    if (!isProactiveSourceEnabled(pref, source, saved)) {
       return skip(source, "source_disabled");
     }
 
@@ -78,6 +82,7 @@ export class ProactiveScanner {
     const localePref = await this.deps.getLocalePreference(scopedDb);
     const timeZone =
       typeof localePref?.timezone === "string" && localePref.timezone ? localePref.timezone : "UTC";
+    const quiet = await this.deps.resolveQuietHours(scopedDb);
 
     // Load priority anchors for provider input.
     const priorityRawPref = await scopedDb.db
@@ -177,7 +182,8 @@ export class ProactiveScanner {
         signal.stableKey,
         pref,
         nowIso,
-        timeZone
+        timeZone,
+        quiet
       );
 
       if (!verdict.allow) {

@@ -9,6 +9,7 @@ import { actionHoldDurationMs } from "./action-result-record.js";
 import { isConversationTainted } from "./conversation-policy.js";
 import { awaitActionResolution, emitPendingActionRequest } from "./action-request-lifecycle.js";
 import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
+import { LAUNCH_REPLAY_REFUSAL } from "./session-tokens.js";
 import {
   CONTEXT_ADMISSION_UNAVAILABLE,
   recordContextAdmission,
@@ -36,6 +37,8 @@ export async function requestNativeToolPermission(
   request: NativeToolPermissionRequest
 ): Promise<NativeToolPermissionResponse> {
   const { actorUserId, chatSessionId, threadId } = deps.tokens.verify(token);
+  if (deps.tokens.isInLaunchReplay(token))
+    return { decision: "deny", reason: LAUNCH_REPLAY_REFUSAL };
   const toolName = safeNativeToolName(request.toolName);
   const outcomeTitle = nativePolicyOutcomeTitle(toolName);
   if (toolName.startsWith("mcp__jarvis__") && toolName.length > "mcp__jarvis__".length) {

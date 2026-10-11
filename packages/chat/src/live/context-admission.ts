@@ -70,6 +70,7 @@ async function recordAdmission(
 export function prepareTurnText(input: {
   readonly userText: string;
   readonly timeContext: string;
+  readonly mainReminders?: AdmittedContext | null;
   readonly passive: AdmittedContext | null;
   readonly crossTool: AdmittedContext | null;
   readonly notes: AdmittedContext | null;
@@ -80,6 +81,7 @@ export function prepareTurnText(input: {
   return Object.freeze({
     text: [
       input.timeContext,
+      input.mainReminders?.text,
       hidden,
       input.userText,
       input.attachmentManifest,

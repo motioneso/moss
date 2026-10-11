@@ -265,6 +265,12 @@ export const JULY_EXCLUDED_ROUTES: readonly JulyExcludedRoute[] = [
   },
 
   {
+    method: "GET",
+    path: "/api/me/proactive-monitoring-settings",
+    category: "external_effect",
+    julyPrefixes: ["settings.proactive."]
+  },
+  {
     method: "PATCH",
     path: "/api/tasks/:id",
     category: "external_effect",
@@ -353,6 +359,12 @@ export const JULY_EXCLUDED_ROUTES: readonly JulyExcludedRoute[] = [
     julyPrefixes: []
   },
   { method: "PUT", path: "/api/scratchpad", category: "module_promise", julyPrefixes: [] },
+  {
+    method: "POST",
+    path: "/api/me/quiet-hours/resolution",
+    category: "module_promise",
+    julyPrefixes: []
+  },
   {
     method: "POST",
     path: "/api/notes/sync",

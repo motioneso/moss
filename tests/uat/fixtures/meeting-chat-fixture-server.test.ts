@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  MEETING_FIXTURE_LATE_REPLY,
   MEETING_FIXTURE_MODEL,
   MEETING_FIXTURE_QUESTION,
   MEETING_FIXTURE_OLD,
   MEETING_FIXTURE_NEW,
   MEETING_FIXTURE_UNRELATED,
-  observeMeetingFixtureRequest
+  MEETING_FIXTURE_REPLY,
+  observeMeetingFixtureRequest,
+  startMeetingChatFixtureServer
 } from "./meeting-chat-fixture-server.js";
 
 describe("meeting chat third-party request observer", () => {
@@ -47,5 +50,99 @@ describe("meeting chat third-party request observer", () => {
   });
   it("ignores provider setup probes unrelated to the actual user turn", () => {
     expect(observeMeetingFixtureRequest("/v1/chat/completions", { messages: [] })).toBeNull();
+  });
+});
+
+describe("meeting chat third-party stand-in hold controls", () => {
+  let stop: (() => Promise<void>) | undefined;
+  afterEach(async () => {
+    await stop?.();
+    stop = undefined;
+  });
+
+  async function start() {
+    const server = await startMeetingChatFixtureServer(0);
+    stop = server.stop;
+    const base = `http://127.0.0.1:${server.port}`;
+    const completion = (question = MEETING_FIXTURE_QUESTION, signal?: AbortSignal) =>
+      fetch(`${base}/v1/chat/completions`, {
+        method: "POST",
+        signal,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: MEETING_FIXTURE_MODEL, messages: [{ content: question }] })
+      });
+    const held = async () =>
+      ((await (await fetch(`${base}/control/held`)).json()) as { held: boolean }).held;
+    return { base, completion, held };
+  }
+
+  it("holds the next meeting turn until released with a distinct late answer", async () => {
+    const { base, completion, held } = await start();
+    expect((await fetch(`${base}/control/hold`, { method: "POST" })).status).toBe(204);
+    expect(await held()).toBe(false);
+
+    let settled = false;
+    const pending = completion().then((response) => {
+      settled = true;
+      return response;
+    });
+    await expect.poll(held).toBe(true);
+    expect(settled).toBe(false);
+
+    const release = await fetch(`${base}/control/release?outcome=success`, { method: "POST" });
+    expect(release.status).toBe(204);
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      choices: [{ message: { content: MEETING_FIXTURE_LATE_REPLY } }]
+    });
+    expect(await held()).toBe(false);
+
+    const next = await completion();
+    expect(await next.json()).toMatchObject({
+      choices: [{ message: { content: MEETING_FIXTURE_REPLY } }]
+    });
+  });
+
+  it("fails a held turn with a provider error when released as a failure", async () => {
+    const { base, completion, held } = await start();
+    await fetch(`${base}/control/hold`, { method: "POST" });
+    const pending = completion();
+    await expect.poll(held).toBe(true);
+
+    expect(
+      (await fetch(`${base}/control/release?outcome=failure`, { method: "POST" })).status
+    ).toBe(204);
+    const response = await pending;
+    expect(response.status).toBe(500);
+    expect(JSON.stringify(await response.json())).not.toContain(MEETING_FIXTURE_LATE_REPLY);
+  });
+
+  it("forgets a held turn whose caller disconnected, so a release reports nothing held", async () => {
+    const { base, completion, held } = await start();
+    await fetch(`${base}/control/hold`, { method: "POST" });
+    const caller = new AbortController();
+    const pending = completion(MEETING_FIXTURE_QUESTION, caller.signal).catch(() => undefined);
+    await expect.poll(held).toBe(true);
+
+    caller.abort();
+    await pending;
+    await expect.poll(held).toBe(false);
+    expect(
+      (await fetch(`${base}/control/release?outcome=failure`, { method: "POST" })).status
+    ).toBe(409);
+  });
+
+  it("does not hold setup probes, and refuses a release with nothing held", async () => {
+    const { base, completion, held } = await start();
+    await fetch(`${base}/control/hold`, { method: "POST" });
+    expect((await completion("provider probe")).status).toBe(200);
+    expect(await held()).toBe(false);
+    expect(
+      (await fetch(`${base}/control/release?outcome=success`, { method: "POST" })).status
+    ).toBe(409);
+    expect(
+      (await fetch(`${base}/control/release?outcome=sideways`, { method: "POST" })).status
+    ).toBe(400);
   });
 });

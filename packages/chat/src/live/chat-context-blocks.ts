@@ -17,6 +17,17 @@ export function renderReplayBlock(
   ].join("\n");
 }
 
+/** #3311 — delivered reminders shown to the next Main turn as earlier assistant messages. */
+export function renderReminderContextBlock(bodies: readonly string[]): string {
+  if (bodies.length === 0) return "";
+  return [
+    "<conversation>",
+    "Earlier in this conversation you already sent these reminders. They were delivered; do not send them again.",
+    ...bodies.map((body) => `Assistant: ${neutralizeSeedFraming(body)}`),
+    "</conversation>"
+  ].join("\n");
+}
+
 export function renderSummaryBlock(summary: string): string {
   return `<prior-context>\n${neutralizeSeedFraming(summary)}\n</prior-context>`;
 }

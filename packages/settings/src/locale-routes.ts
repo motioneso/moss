@@ -11,7 +11,8 @@ import {
 } from "@moss/shared";
 import { HttpError } from "@moss/module-sdk";
 
-import type { ProfilePreferencesPort } from "./preferences-port.js";
+import type { QuietHoursPreferencesPort } from "./preferences-port.js";
+import { freezeQuietHoursBeforeLocaleWrite } from "./quiet-hours-writer.js";
 import { handleSettingsRouteError } from "./route-error.js";
 
 const LOCALE_PREFERENCE_KEY = "locale";
@@ -19,7 +20,7 @@ const LOCALE_PREFERENCE_KEY = "locale";
 interface LocaleRoutesDependencies {
   readonly dataContext: DataContextRunner;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
-  readonly preferencesRepository: ProfilePreferencesPort;
+  readonly preferencesRepository: QuietHoursPreferencesPort;
 }
 
 export function registerLocaleRoutes(
@@ -43,9 +44,10 @@ export function registerLocaleRoutes(
       const accessContext = await dependencies.resolveAccessContext(request);
       const body = request.body as PutLocaleSettingsRequest;
       const locale = sanitizeLocale(body.locale);
-      await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-        dependencies.preferencesRepository.upsert(scopedDb, LOCALE_PREFERENCE_KEY, locale)
-      );
+      await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+        await freezeQuietHoursBeforeLocaleWrite(scopedDb, dependencies.preferencesRepository);
+        await dependencies.preferencesRepository.upsert(scopedDb, LOCALE_PREFERENCE_KEY, locale);
+      });
       return { locale };
     } catch (error) {
       return handleSettingsRouteError(error, reply);

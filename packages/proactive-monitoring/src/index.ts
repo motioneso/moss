@@ -1,6 +1,7 @@
 export type {
   ProactiveMonitorStateRow,
   ProactiveCardRow,
+  ProactiveQuietPolicy,
   ResolvedMonitoringConfig
 } from "./types.js";
 export {
@@ -9,6 +10,11 @@ export {
 } from "./manifest.js";
 export {
   ProactiveMonitoringPreferencesRepository,
+  ProactivePreferenceRevisionConflictError,
+  isProactiveSourceEnabled,
+  parseProactiveMonitoringPreference,
+  resolveAutomaticEmailAlertsEnabled,
+  type SavedProactiveMonitoringPreference,
   validateProactiveMonitoringPreference,
   resolveSourcePreference
 } from "./preferences-repository.js";

@@ -16,6 +16,7 @@ import {
 const VALID_SOURCES = new Set<ProactiveSource>(["tasks", "calendar", "email", "notes"]);
 const PREF_KEYS = new Set([
   "version",
+  "automaticEmailAlerts",
   "enabled",
   "sources",
   "dailyCardCap",
@@ -25,38 +26,130 @@ const PREF_KEYS = new Set([
 const QUIET_HOURS_KEYS = new Set(["enabled", "startLocalTime", "endLocalTime"]);
 const SOURCE_PREF_KEYS = new Set(["enabled", "dailyCardCap"]);
 
+export class ProactivePreferenceRevisionConflictError extends Error {
+  constructor() {
+    super(`Preference "${PROACTIVE_MONITORING_PREFERENCE_KEY}" was modified concurrently`);
+    this.name = "ProactivePreferenceRevisionConflictError";
+  }
+}
+
+export interface SavedProactiveMonitoringPreference {
+  readonly raw: Readonly<Record<string, unknown>>;
+  readonly preference: ProactiveMonitoringPreferenceV1;
+  readonly hasLegacyEmailChoice: boolean;
+}
+
 export class ProactiveMonitoringPreferencesRepository {
   async get(scopedDb: DataContextDb): Promise<ProactiveMonitoringPreferenceV1> {
+    const saved = await this.getSaved(scopedDb);
+    return saved?.preference ?? defaultProactiveMonitoringPreference();
+  }
+
+  async getSaved(
+    scopedDb: DataContextDb
+  ): Promise<SavedProactiveMonitoringPreference | null | undefined> {
     assertDataContextDb(scopedDb);
     const row = await scopedDb.db
       .selectFrom("app.preferences")
       .select("value_json")
       .where("key", "=", PROACTIVE_MONITORING_PREFERENCE_KEY)
       .executeTakeFirst();
-    if (!row) return defaultProactiveMonitoringPreference();
+    if (!row) return undefined;
     try {
       return parse(row.value_json);
     } catch {
-      return defaultProactiveMonitoringPreference();
+      return null;
     }
   }
 
-  async upsert(scopedDb: DataContextDb, value: ProactiveMonitoringPreferenceV1): Promise<void> {
+  /**
+   * Read for a compare-and-set writer. forUpdate locks the row. `saved` is null when the stored
+   * record is malformed.
+   */
+  async getSavedWithRevision(
+    scopedDb: DataContextDb,
+    options: { readonly forUpdate?: boolean } = {}
+  ): Promise<
+    | { readonly saved: SavedProactiveMonitoringPreference | null; readonly revision: number }
+    | undefined
+  > {
+    assertDataContextDb(scopedDb);
+    let query = scopedDb.db
+      .selectFrom("app.preferences")
+      .select(["value_json", "revision"])
+      .where("key", "=", PROACTIVE_MONITORING_PREFERENCE_KEY);
+    if (options.forUpdate) query = query.forUpdate();
+    const row = await query.executeTakeFirst();
+    if (!row) return undefined;
+    let saved: SavedProactiveMonitoringPreference | null;
+    try {
+      saved = parse(row.value_json);
+    } catch {
+      saved = null;
+    }
+    return { saved, revision: row.revision };
+  }
+
+  /**
+   * Compare-and-set write. A null expectation inserts only when no row exists; otherwise the row
+   * must still be at `expectedRevision`. Either miss throws ProactivePreferenceRevisionConflictError.
+   * Keep in step with PreferencesRepository.upsertWithRevision in @moss/structured-state.
+   */
+  async upsertWithRevision(
+    scopedDb: DataContextDb,
+    value: Record<string, unknown>,
+    expectedRevision: number | null
+  ): Promise<SavedProactiveMonitoringPreference & { readonly revision: number }> {
+    assertDataContextDb(scopedDb);
+    const saved = parse(value);
+    const row =
+      expectedRevision === null
+        ? await scopedDb.db
+            .insertInto("app.preferences")
+            .values({
+              owner_user_id: sql<string>`app.current_actor_user_id()`,
+              key: PROACTIVE_MONITORING_PREFERENCE_KEY,
+              value_json: jsonb(value),
+              revision: 1,
+              updated_at: new Date()
+            })
+            .onConflict((oc) => oc.columns(["owner_user_id", "key"]).doNothing())
+            .returning("revision")
+            .executeTakeFirst()
+        : await scopedDb.db
+            .updateTable("app.preferences")
+            .set({
+              value_json: jsonb(value),
+              revision: expectedRevision + 1,
+              updated_at: new Date()
+            })
+            .where("key", "=", PROACTIVE_MONITORING_PREFERENCE_KEY)
+            .where("revision", "=", expectedRevision)
+            .returning("revision")
+            .executeTakeFirst();
+    if (!row) throw new ProactivePreferenceRevisionConflictError();
+    return { ...saved, revision: row.revision };
+  }
+
+  async initializeAutomaticEmailAlerts(
+    scopedDb: DataContextDb
+  ): Promise<SavedProactiveMonitoringPreference | null | undefined> {
     assertDataContextDb(scopedDb);
     await scopedDb.db
       .insertInto("app.preferences")
       .values({
         owner_user_id: sql<string>`app.current_actor_user_id()`,
         key: PROACTIVE_MONITORING_PREFERENCE_KEY,
-        value_json: jsonb(value),
+        value_json: jsonb({
+          version: 1,
+          automaticEmailAlerts: true,
+          updatedAt: new Date().toISOString()
+        }),
         updated_at: new Date()
       })
-      .onConflict((oc) =>
-        oc
-          .columns(["owner_user_id", "key"])
-          .doUpdateSet({ value_json: jsonb(value), updated_at: new Date() })
-      )
+      .onConflict((oc) => oc.columns(["owner_user_id", "key"]).doNothing())
       .execute();
+    return this.getSaved(scopedDb);
   }
 }
 
@@ -74,6 +167,9 @@ export function validateProactiveMonitoringPreference(
   }
   if (p.version !== 1) {
     throw new HttpError(400, "Invalid preference: version must be 1");
+  }
+  if (p.automaticEmailAlerts !== undefined && typeof p.automaticEmailAlerts !== "boolean") {
+    throw new HttpError(400, "Invalid preference: automaticEmailAlerts must be boolean");
   }
   if (typeof p.enabled !== "boolean") {
     throw new HttpError(400, "Invalid preference: enabled must be boolean");
@@ -132,13 +228,58 @@ export function validateProactiveMonitoringPreference(
   }
 }
 
-function parse(raw: unknown): ProactiveMonitoringPreferenceV1 {
+/** Parses a stored record the way the repository reads it. Null means the record is malformed. */
+export function parseProactiveMonitoringPreference(
+  raw: unknown
+): SavedProactiveMonitoringPreference | null {
+  try {
+    return parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function parse(raw: unknown): SavedProactiveMonitoringPreference {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("malformed preference");
   }
   const p = raw as Record<string, unknown>;
   if (p.version !== 1) throw new Error("malformed preference");
-  return p as unknown as ProactiveMonitoringPreferenceV1;
+  const defaults = defaultProactiveMonitoringPreference();
+  const sources = p.sources;
+  const quietHours = p.quietHours;
+  if (
+    sources !== undefined &&
+    (!sources || typeof sources !== "object" || Array.isArray(sources))
+  ) {
+    throw new Error("malformed preference");
+  }
+  if (
+    quietHours !== undefined &&
+    (!quietHours || typeof quietHours !== "object" || Array.isArray(quietHours))
+  ) {
+    throw new Error("malformed preference");
+  }
+  const effectiveSources = { ...defaults.sources } as Record<string, unknown>;
+  for (const [source, value] of Object.entries(sources ?? {})) {
+    effectiveSources[source] =
+      value && typeof value === "object" && !Array.isArray(value) && source in effectiveSources
+        ? { ...(effectiveSources[source] as Record<string, unknown>), ...value }
+        : value;
+  }
+  const preference = {
+    ...defaults,
+    ...p,
+    sources: effectiveSources,
+    quietHours: { ...defaults.quietHours, ...(quietHours ?? {}) }
+  };
+  validateProactiveMonitoringPreference(preference);
+  return {
+    raw: p,
+    preference,
+    hasLegacyEmailChoice:
+      "enabled" in p || (Boolean(sources) && "email" in (sources as Record<string, unknown>))
+  };
 }
 
 function isLocalTime(s: string): boolean {
@@ -150,4 +291,32 @@ export function resolveSourcePreference(
   source: ProactiveSource
 ): ProactiveSourcePreference {
   return pref.sources[source] ?? { enabled: false, dailyCardCap: 3 };
+}
+
+/**
+ * `undefined` means no stored record, while `null` is a malformed stored record.
+ * Legacy records preserve their master/source-off decisions until the user saves an
+ * explicit email choice.
+ */
+export function resolveAutomaticEmailAlertsEnabled(
+  saved: SavedProactiveMonitoringPreference | null | undefined
+): boolean {
+  if (saved === undefined) return true;
+  if (saved === null) return false;
+  if (typeof saved.preference.automaticEmailAlerts === "boolean") {
+    return saved.preference.automaticEmailAlerts;
+  }
+  return saved.hasLegacyEmailChoice
+    ? saved.preference.enabled && saved.preference.sources.email.enabled
+    : true;
+}
+
+export function isProactiveSourceEnabled(
+  preference: ProactiveMonitoringPreferenceV1,
+  source: ProactiveSource,
+  saved: SavedProactiveMonitoringPreference | null | undefined
+): boolean {
+  return source === "email"
+    ? resolveAutomaticEmailAlertsEnabled(saved)
+    : preference.enabled && Boolean(preference.sources[source]?.enabled);
 }

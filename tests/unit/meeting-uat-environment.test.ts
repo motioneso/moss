@@ -62,8 +62,8 @@ describe("bounded credential-free UAT group selection", () => {
       "model-fixtures"
     ]);
     const specs = Object.keys(MEETING_UAT_GROUPS).flatMap((group) => [...meetingUatSpecs(group)]);
-    expect(specs).toHaveLength(20);
-    expect(new Set(specs).size).toBe(20);
+    expect(specs).toHaveLength(21);
+    expect(new Set(specs).size).toBe(21);
     expect(specs).toContain("2956-activity-history.uat.spec.ts");
     expect(specs).not.toContain("2889-model-activity-log.uat.spec.ts");
     for (const spec of [

@@ -98,6 +98,13 @@ export const notificationsModuleManifest = {
   ],
   features: [
     {
+      id: "notifications.quiet_hours",
+      description:
+        "Normal notifications created during the person's saved quiet hours stay out of the " +
+        "in-app bell until that local daily window ends. Urgent notifications keep their " +
+        "existing immediate delivery behavior."
+    },
+    {
       id: "notifications.push",
       description:
         "Push notifications alert a registered browser or device, alongside the in-app bell. " +

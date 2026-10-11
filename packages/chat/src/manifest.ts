@@ -66,7 +66,15 @@ export const chatModuleManifest = {
       "sql/0277_chat_surface_immutable.sql",
       "sql/0291_chat_conversation_provenance.sql",
       "sql/0293_chat_automatic_action_reservations.sql",
-      "sql/0297_chat_action_history_permissions.sql"
+      "sql/0297_chat_action_history_permissions.sql",
+      "sql/0299_main_chat.sql",
+      "sql/0305_chat_summary_frontier.sql",
+      "sql/0306_chat_relative_reminders.sql",
+      "sql/0307_chat_summary_worker_publish.sql",
+      "sql/0308_chat_reminder_cancel.sql",
+      "sql/0309_chat_reminder_context_acknowledged.sql",
+      "sql/0310_chat_live_turns.sql",
+      "sql/0311_chat_local_clock_reminders.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -78,7 +86,8 @@ export const chatModuleManifest = {
       "app.chat_classifier_release_eligibility",
       "app.chat_classifier_shadow_reviews",
       "app.chat_conversation_provenance",
-      "app.chat_automatic_action_reservations"
+      "app.chat_automatic_action_reservations",
+      "app.chat_live_turns"
     ]
   },
   permissions: [
@@ -115,6 +124,194 @@ export const chatModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "chat.main_conversation",
+      description:
+        "Reopening Moss returns to your stable Main chat and saved history. The composer waits while Main is restored, " +
+        "and the next turn waits for an active conversation resume to finish. Explicit new and private chats keep their selection.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.resume_keeps_decisions",
+      description:
+        "Returning to the same chat after Moss restarts keeps earlier decisions. Older turns are condensed into a summary " +
+        "in the background, and the summary plus every newer turn is restored. Private chats are never condensed.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "conversation_too_long_to_resume",
+          class: "transient",
+          description:
+            "The conversation is too long to restore in full, so Moss is condensing it. Your history is kept. Try again shortly or start a new chat."
+        },
+        {
+          code: "conversation_could_not_condense",
+          class: "transient",
+          description:
+            "The conversation is too long to restore in full and Moss could not start condensing it. Your history is kept. Try again later or start a new chat."
+        },
+        {
+          code: "conversation_needs_summary_model",
+          class: "prerequisite",
+          remediationRef: "chat.add_summary_model",
+          description:
+            "The conversation is too long to restore in full and no AI model that can summarize is set up. Add one in Settings or start a new chat."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.add_summary_model",
+          description:
+            "Set up a model in Settings, AI providers, or ask an admin, then reopen the chat. Starting a new chat also works.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
+    },
+    {
+      id: "chat.automatic_session_handoff",
+      description:
+        "Moss counts what a chat's model session holds. Before a turn passes the budget, Moss starts a fresh session " +
+        "for the same chat and model from its summary and newer turns, once a summary is ready. Not in private chats.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat_changed_during_handoff",
+          class: "transient",
+          description:
+            "You switched chats while Moss was starting the fresh session, so the message was not sent. Moss says your chat changed while it was starting. Send it again."
+        },
+        {
+          code: "chat_model_changed_during_handoff",
+          class: "transient",
+          description:
+            "The chat's AI provider or model changed while Moss was starting the fresh session, so the message was not sent. Send it again."
+        }
+      ]
+    },
+    {
+      id: "chat.interrupted_reply_recovery",
+      description:
+        "If Moss restarts or its model stops mid-reply, reopening the chat keeps finished messages once and " +
+        "shows the unfinished question with an interrupted note. Moss never redoes it. " +
+        "Not in private chats or for messages with only attachments.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat_reply_interrupted",
+          class: "transient",
+          description:
+            "Moss was interrupted before finishing a reply. Anything it started may not have completed, so check first, then ask again."
+        }
+      ]
+    },
+    {
+      id: "chat.relative_reminders",
+      description:
+        "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder Moss posts once in Main, " +
+        "noting if late; its next reply knows it and frees the slot. Up to 20 at once, 30 days ahead. " +
+        "No deadline, repeats or private chats.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.clock_reminders",
+      description:
+        "In Main chat, 'remind me tomorrow at 9am to call Sam' saves a reminder for that time in your " +
+        "time zone, today, tonight or tomorrow only. Moss confirms it in your 12- or 24-hour clock and names the time zone. " +
+        "Repeats are not available.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "reminder_needs_am_pm",
+          class: "validation",
+          description:
+            "A bare hour like 'at 3' could be morning or afternoon, so Moss saves nothing. Say 3pm, 3am or 15:00."
+        },
+        {
+          code: "reminder_time_unclear",
+          class: "validation",
+          description:
+            "A request Moss cannot pin to one time, like 'tonight at 7am', 'at midnight', 'at 3ish' or 'at 3pm or 4pm', is refused and nothing is saved."
+        },
+        {
+          code: "reminder_day_unsupported",
+          class: "validation",
+          description:
+            "Weekdays, dates and repeats are refused and nothing is saved. Say today, tonight or tomorrow, or a time from now."
+        },
+        {
+          code: "reminder_time_passed",
+          class: "validation",
+          description:
+            "A time pinned to today that has already passed is refused. Say tomorrow. With no day word, a passed time means tomorrow."
+        },
+        {
+          code: "reminder_time_changes_with_clocks",
+          class: "validation",
+          description:
+            "On a daylight saving day, a time the clocks skip or show twice is refused and nothing is saved. Pick a time outside that hour."
+        },
+        {
+          code: "reminder_time_zone_wrong",
+          class: "prerequisite",
+          remediationRef: "chat.set_reminder_time_zone",
+          description:
+            "Clock times use the time zone in your profile. The confirmation names that zone. If it is not where you are, change the time zone in your profile."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.set_reminder_time_zone",
+          description:
+            "Set your time zone in Settings, Account & preferences, then cancel the reminder and set it again.",
+          path: "/settings?section=profile"
+        }
+      ]
+    },
+    {
+      id: "chat.reminder_deadline",
+      description:
+        "A clock reminder can carry a deadline: 'remind me at 3pm to call Sam, not after 4pm'. If Moss " +
+        "was offline at the due time, it posts once on return, marked late, but never after the deadline.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "reminder_deadline_invalid",
+          class: "validation",
+          description:
+            "A deadline must come after the reminder time and within 12 hours of it, and only clock-time reminders take one. Nothing is saved."
+        },
+        {
+          code: "reminder_skipped_after_deadline",
+          class: "transient",
+          description:
+            "Moss could not send a reminder before its deadline, usually because it was offline, so it was skipped and never posts. The list shows it as skipped."
+        }
+      ]
+    },
+    {
+      id: "chat.reminder_live_arrival",
+      description:
+        "A due chat reminder appears at once in the open Main chat, even while Moss is replying; both " +
+        "stay separate after a reload. Side, private and module chats never show it. If it does not " +
+        "appear, reopen Main or reload.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.reminder_list",
+      description:
+        "In Main chat, 'list my reminders' shows waiting chat reminders with time left or their clock " +
+        "time and deadline, then up to 10 recent ones: sent, sent late, cancelled, skipped past its " +
+        "deadline, or couldn't be sent. Not task reminders.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.reminder_cancel",
+      description:
+        "In Main chat, 'cancel the reminder to stretch' stops a waiting chat reminder so it never arrives. " +
+        "If already sent, Moss says so and frees its place under the limit of 20. " +
+        "If different reminders match, Moss names them and cancels none.",
+      featureFlagId: "chat.module"
+    },
     {
       id: "chat.pending_action_disclosure",
       description:
@@ -352,8 +549,8 @@ export const chatModuleManifest = {
     {
       id: "chat.thread_history",
       description:
-        "Keep previous conversations so you can go back to them: pick an older thread from the " +
-        "drawer history, start a new one anywhere, and see threads ordered by recent activity."
+        "Reopen your own Main chat and older side chats, or start a side chat, from Conversations, ordered by recent activity. " +
+        "A chat another person shared with you is listed as a side chat but does not open, and it never replaces your Main."
     }
   ],
   routes: [

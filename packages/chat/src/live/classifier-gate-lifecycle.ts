@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { ChatTurnOriginV1, SourceFreshnessV1 } from "@moss/shared";
+import type { ChatClassifierGateOriginV1, SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
 import type { ChatSurface } from "./chat-surface.js";
@@ -13,6 +13,7 @@ import type {
 import type { GateMode, GateOutcome, GateRequest } from "./classifier-gate.js";
 import type { UserSession } from "./chat-session-provider-identity.js";
 import type { TranscriptRecord } from "./types.js";
+import { getSelectedThreadState, usesMainThreadSelection } from "./chat-thread-selection.js";
 
 /**
  * Task 4.1 (#2901) — the handled-turn lifecycle, extracted from ChatSessionManager so that file
@@ -71,9 +72,9 @@ export async function tryGatedTurn(
   requestIncognito: boolean;
   requestThreadId: string | null;
 }> {
-  // Capture identity and privacy together BEFORE the gate-mode wait. A resume or new chat
-  // inside that wait cannot retarget this turn. Missing identity must stay null.
-  const threadState = await host.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
+  // Capture identity and privacy together BEFORE the gate-mode wait. A warm engine stays bound,
+  // an explicit resume/new chat follows current state, and only a cold drawer reconnect selects Main.
+  const threadState = await selectTurnThread(host, actorUserId, surface);
   const requestIncognito = threadState?.incognito ?? false;
   const requestThreadId = threadState?.id ?? null;
   const gate = host.deps.classifierGate;
@@ -147,8 +148,29 @@ export async function tryGatedTurn(
   };
 }
 
+/** The thread a turn lands in: a warm engine stays bound, a cold drawer reconnect selects Main. */
+export async function selectTurnThread(
+  host: GateLifecycleHost,
+  actorUserId: string,
+  surface: ChatSurface
+): Promise<{ readonly id: string | null; readonly incognito: boolean } | undefined> {
+  const sessionKey = surfaceSessionKey(actorUserId, surface);
+  const existingSession = host.sessions.get(sessionKey);
+  if (existingSession)
+    return { id: existingSession.threadId, incognito: existingSession.incognito };
+  return getSelectedThreadState({
+    actorUserId,
+    surface,
+    useMain: usesMainThreadSelection({
+      surface,
+      forceReplay: host.pendingForcedReplay.has(sessionKey)
+    }),
+    persistence: host.deps.persistence
+  });
+}
+
 /** Emits the same status the default path uses on Stop and persists nothing. */
-function cancelledTurn(
+export function cancelledTurn(
   host: GateLifecycleHost,
   actorUserId: string,
   surface: ChatSurface
@@ -176,7 +198,7 @@ async function persistGateOutcome(
   const reply = handled ? outcome.reply : outcome.message;
   const trace = outcome.trace;
   const attachments = opts?.attachments ?? [];
-  const origin: ChatTurnOriginV1 = {
+  const origin: ChatClassifierGateOriginV1 = {
     version: 1,
     kind: "classifier_gate",
     decisionId: randomUUID(),
@@ -264,7 +286,7 @@ async function persistGateOutcome(
  * Drops any live session for this actor + surface after a gate-handled turn and marks the key for a
  * forced replay, so the next default turn relaunches with the handled turn in normal history.
  */
-async function dropWarmSessionForGate(
+export async function dropWarmSessionForGate(
   host: GateLifecycleHost,
   actorUserId: string,
   surface: ChatSurface
