@@ -7,6 +7,7 @@ import { resolveNoteApprovalTarget } from "@moss/notes";
 import { MemoryForgetService } from "@moss/memory";
 import { TasksRepository } from "@moss/tasks";
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { DEFAULT_LOCALE_SETTINGS, formatLocaleDateTime } from "@moss/shared";
 import type { GoalApprovalSourceResolver } from "@moss/goals";
 
 /** Public owning-module readers only; every call retains the requesting actor's data scope. */
@@ -84,7 +85,10 @@ export function createApprovalSourceReferences(
     if (input.sourceKind === "calendar") {
       const row = await calendar.getById(db, input.sourceRef);
       return row?.owner_user_id === input.actorUserId
-        ? target(`${row.title}\n${new Date(row.starts_at).toISOString()}`, row)
+        ? target(
+            `${row.title}\n${formatLocaleDateTime(row.starts_at, input.locale ?? DEFAULT_LOCALE_SETTINGS)}`,
+            row
+          )
         : null;
     }
     if (input.sourceKind === "email") {

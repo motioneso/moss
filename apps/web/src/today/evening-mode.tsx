@@ -15,8 +15,8 @@ import { useAssistantName } from "../api/use-assistant-name.js";
 import { targetTimeFor } from "../briefings/briefing-settings-model.js";
 import {
   DEFAULT_LOCALE,
+  formatClockTime,
   formatDate,
-  formatTime,
   isValidTimeZone,
   zonedClockParts,
   zonedClockMinutes
@@ -29,6 +29,7 @@ import {
   EVENING_RECAP_HEADING,
   EVENING_RAIL_HEADING,
   EVENING_RECAP_KICKER,
+  clockText,
   eventCaptureText,
   joinClauses,
   PLAN_TOMORROW_LABEL
@@ -177,7 +178,7 @@ export function EveningReviewSection(props: {
   const hasSummary = Boolean(props.run?.summaryText.trim());
   const metaText = props.run
     ? shortDate(props.run.createdAt, props.locale)
-    : `Ready at ${targetTimeLabel(props.targetTime)}`;
+    : `Ready at ${targetTimeLabel(props.targetTime, props.locale)}`;
   const content = (
     <>
       {freshness ? <BriefingStaleBanner freshness={freshness} /> : null}
@@ -293,7 +294,7 @@ function doneNote(task: TaskDto, locale: LocaleSettingsDto): string | null {
   const description = task.description?.trim();
   if (description) return description;
   if (task.completedAt === null) return null;
-  return `Completed at ${timeLabel(task.completedAt, locale)} ${ampm(task.completedAt, locale)}`;
+  return `Completed at ${clockText(task.completedAt, locale)}`;
 }
 
 export function BriefingProse({ summaryText }: { readonly summaryText: string }) {
@@ -462,10 +463,7 @@ export function EveningTomorrowSection(props: {
           key={event.id}
           data-jarvis-capture-text={`Tomorrow: ${eventCaptureText(event, props.locale)}`}
         >
-          <strong>
-            {timeLabel(event.startsAt, props.locale)}
-            {ampm(event.startsAt, props.locale)} / Calendar
-          </strong>
+          <strong>{clockText(event.startsAt, props.locale, "")} / Calendar</strong>
           {event.title}
           <small>{[longDurationLabel(event), event.location].filter(Boolean).join(" · ")}</small>
         </div>
@@ -524,26 +522,12 @@ export function parseTargetMinutes(value: string): number | null {
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
 
-function targetTimeLabel(value: string): string {
+/** "Ready at" time: "7 PM" / "7:30 PM" for 12-hour, "19:00" for 24-hour. */
+function targetTimeLabel(value: string, locale: LocaleSettingsDto): string {
   const minutes = parseTargetMinutes(value) ?? 19 * 60;
-  const hour = Math.floor(minutes / 60);
-  const minute = minutes % 60;
-  const suffix = hour >= 12 ? "PM" : "AM";
-  const displayHour = hour % 12 || 12;
-  return minute === 0
-    ? `${displayHour} ${suffix}`
-    : `${displayHour}:${String(minute).padStart(2, "0")} ${suffix}`;
-}
-
-function timeLabel(iso: string, locale: LocaleSettingsDto): string {
-  return formatTime(iso, locale, { hour: "numeric", minute: "2-digit", hour12: true }).replace(
-    /\s?[AP]M$/i,
-    ""
-  );
-}
-
-function ampm(iso: string, locale: LocaleSettingsDto): string {
-  return /pm$/i.test(formatTime(iso, locale, { hour: "numeric", hour12: true })) ? "pm" : "am";
+  const clock = `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
+  const label = formatClockTime(clock, locale);
+  return locale.dateFormat === "24" ? label : label.replace(":00", "");
 }
 
 function shortDate(iso: string, locale: LocaleSettingsDto): string {

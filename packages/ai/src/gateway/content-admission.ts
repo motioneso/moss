@@ -106,3 +106,17 @@ export async function runAutomaticAction<T>(
     return { kind: "failed" };
   }
 }
+
+/**
+ * Runs a decision the user's trust has already granted past a durable outside-content mark. It
+ * skips the clean-conversation claim, which exists to refuse tainted conversations.
+ */
+export async function runTrustedAction<T>(
+  execute: () => Promise<T>
+): Promise<AutomaticExecution<T> | { readonly kind: "failed" }> {
+  try {
+    return { kind: "ran", value: await execute() };
+  } catch {
+    return { kind: "failed" };
+  }
+}

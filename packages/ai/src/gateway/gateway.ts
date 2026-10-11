@@ -1,4 +1,5 @@
 import { emitInputValidationFailure } from "./validation-failure.js";
+import { localeContext } from "./locale-context.js";
 import { randomUUID } from "node:crypto";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
@@ -6,6 +7,7 @@ import type {
   ModuleAssistantToolManifest,
   MossModuleManifest,
   ToolContext,
+  ToolLocale,
   ToolResult,
   ToolServices
 } from "@moss/module-sdk";
@@ -129,12 +131,8 @@ export interface AssistantToolGatewayDependencies {
     readonly ctx: ToolContext;
     readonly execute: () => Promise<ToolResult>;
   }) => Promise<ToolResult>;
-  /**
-   * Returns the user's configured IANA timezone (e.g. "America/Chicago"), or null if unknown.
-   * Injected by the composition root; used to populate ToolContext.localTimezone so tools that
-   * format user-visible date/time strings (e.g. calendar approval cards) use the correct timezone.
-   */
-  readonly resolveLocalTimezone?: (actorUserId: string) => Promise<string | null>;
+  /** The person's effective locale; fills ToolContext.locale and localTimezone for user-visible times. */
+  readonly resolveLocale?: (actorUserId: string) => Promise<ToolLocale | null>;
   /**
    * Returns which web search engine is active for this actor: "brave" (the web.search tool calls
    * the Brave API directly), "model-native" (the web.search tool runs one structured search
@@ -393,7 +391,7 @@ export class AssistantToolGateway {
     if (this.deps.tokens.isInLaunchReplay(token)) {
       return { failure: { ok: false, error: LAUNCH_REPLAY_REFUSAL }, reason: "refused" };
     }
-    const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
+    const locale = (await this.deps.resolveLocale?.(actorUserId)) ?? undefined;
     let progressTool: ExecutableTool | undefined;
     let progressAdmission: Promise<void> | undefined;
     const ctx: ToolContext = {
@@ -401,7 +399,7 @@ export class AssistantToolGateway {
       requestId: `mcp_${randomUUID()}`,
       chatSessionId,
       ...(threadId ? { threadId } : {}),
-      localTimezone,
+      ...localeContext(locale),
       // Only the MCP transport passes a sink; every other caller sends nowhere.
       ...(onProgress
         ? {
@@ -483,8 +481,9 @@ export class AssistantToolGateway {
 
   /**
    * The single approval decision shared by live calls and the gate's dry run. In a tainted
-   * conversation only the user's own trust runs a write (#3338). `userTrusted` marks that run so
-   * it skips the clean-conversation claim it can no longer win.
+   * conversation only the user's own trust runs a write (#3338). Under YOLO a durable
+   * outside-content mark changes nothing (#3417). `userTrusted` marks such a run so it skips the
+   * clean-conversation claim it can no longer win.
    */
   private async planCall(
     found: ExecutableTool,
@@ -502,7 +501,8 @@ export class AssistantToolGateway {
       this.deps.resolveActiveModules,
       ctx.actorUserId
     );
-    const yolo = found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true;
+    const yoloOn = (await this.deps.yoloMode?.(ctx)) === true;
+    const yolo = found.tool.risk !== "read" && yoloOn;
     const yoloRuns =
       yolo &&
       !confirmOverride &&
@@ -524,16 +524,14 @@ export class AssistantToolGateway {
     // Read taint after every policy hook so content admitted meanwhile still counts.
     const conversationTainted = await isConversationTainted(this.deps.provenance, ctx);
     const marked = conversationTainted && (await isConversationMarked(this.deps.provenance, ctx));
-    const ask = () =>
-      plannedConfirm(marked, async () => (yolo ? yoloRuns : (await policy(false)) === "run"));
-    if (conversationTainted && (confirmWhenTainted || found.tool.risk === "outbound")) {
-      return ask();
-    }
     // The user's trust runs past a durable outside-content mark only. Any other taint asks.
     if (conversationTainted && !marked) return { kind: yolo ? "yolo-confirm" : "confirm" };
     const trusted = conversationTainted ? { userTrusted: true as const } : {};
     if (yolo) return yoloRuns ? { kind: "yolo-run", ...trusted } : { kind: "yolo-confirm" };
-    return (await policy(conversationTainted)) === "run" ? { kind: "auto-run", ...trusted } : ask();
+    // Under YOLO a marked conversation runs a confirmWhenTainted read as a clean one does.
+    return (await policy(conversationTainted && !yoloOn)) === "run"
+      ? { kind: "auto-run", ...trusted }
+      : plannedConfirm(marked, async () => (await policy(false)) === "run");
   }
 
   async requestNativeToolPermission(
@@ -572,12 +570,12 @@ export class AssistantToolGateway {
     if (!declared) return { ok: false, error: `Tool not available: ${toolName}` };
     const requestId = `cross-tool_${randomUUID()}`;
     const access: AccessContext = { actorUserId, requestId };
-    const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
+    const locale = (await this.deps.resolveLocale?.(actorUserId)) ?? undefined;
     const ctx: ToolContext = {
       actorUserId,
       requestId,
       chatSessionId: bound?.chatSessionId ?? "",
-      localTimezone,
+      ...localeContext(locale),
       ...(bound?.threadId ? { threadId: bound.threadId } : {})
     };
     const prepared = await prepareToolCall(
@@ -604,7 +602,8 @@ export class AssistantToolGateway {
         data: renderAndCap(
           found.tool.outputSchema,
           result,
-          toolHasOutsideContent(found.tool) ? found.tool.name : undefined
+          toolHasOutsideContent(found.tool) ? found.tool.name : undefined,
+          ctx
         )
       };
     } catch {

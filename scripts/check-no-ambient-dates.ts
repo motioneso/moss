@@ -43,7 +43,7 @@ import { extname, join, relative } from "node:path";
  */
 
 const rootDirectory = process.cwd();
-const webScanRoots = [join(rootDirectory, "apps", "web", "src"), ...(await moduleWebRoots())];
+const webScanRoots = [join(rootDirectory, "apps", "web", "src"), ...(await moduleBrowserRoots())];
 // #877 finding 5: ambient-NOW day bucketing is checked across the web roots above PLUS every
 // server package's src tree (not just its web/ subdirectory).
 const ambientNowScanRoots = [...webScanRoots, ...(await modulePackageRoots())];
@@ -193,12 +193,13 @@ async function* walk(directory: string): AsyncGenerator<string> {
 }
 
 /**
- * #877 finding 1: every module package's `src/web` directory (its web contribution to the
- * shell via the module-web-registry — see docs/superpowers/specs/2026-07-04-module-web-registry.md).
+ * #877 finding 1: every module package's browser-rendered code: `src/web` (its web contribution to
+ * the shell via the module-web-registry — see docs/superpowers/specs/2026-07-04-module-web-registry.md)
+ * and `src/settings` (its settings panes), plus `@moss/settings-ui`, which those panes share.
  * Discovered dynamically (not hardcoded to `packages/sports`) so a future module's web/ tree is
  * covered automatically instead of needing a gate update per module.
  */
-async function moduleWebRoots(): Promise<string[]> {
+async function moduleBrowserRoots(): Promise<string[]> {
   const packagesDir = join(rootDirectory, "packages");
   const roots: string[] = [];
   let entries;
@@ -211,11 +212,14 @@ async function moduleWebRoots(): Promise<string[]> {
     if (!entry.isDirectory()) {
       continue;
     }
-    const webDir = join(packagesDir, entry.name, "src", "web");
-    if (await isDirectory(webDir)) {
-      roots.push(webDir);
+    for (const sub of ["web", "settings"]) {
+      const dir = join(packagesDir, entry.name, "src", sub);
+      if (await isDirectory(dir)) {
+        roots.push(dir);
+      }
     }
   }
+  roots.push(join(packagesDir, "settings-ui", "src"));
   return roots;
 }
 

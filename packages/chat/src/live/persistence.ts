@@ -9,7 +9,7 @@
  * episodic-embed job (unless the thread is incognito).
  */
 import type { AiConfiguredModelSafeRow, AiRepository, ProviderKind } from "@moss/ai";
-import { extractTimezone, resolveClockFormat, resolveEffectiveTimezone } from "../locale-utils.js";
+import { resolveClockFormat, resolveEffectiveTimezone } from "../locale-utils.js";
 import { sql, type Kysely } from "kysely";
 import {
   assertDataContextDb,
@@ -28,10 +28,11 @@ import type {
   ChatClassifierGateOriginV1,
   ChatTurnOriginV1,
   ChatTurnUsageDto,
+  LocaleSettingsDto,
   SourceFreshnessEntry,
   SourceFreshnessV1
 } from "@moss/shared";
-import { localDay } from "@moss/shared";
+import { LOCALE_PREFERENCE_KEY, localDay, resolveEffectiveLocale } from "@moss/shared";
 import { CHAT_ARCHIVE_ENABLED_PREF_KEY } from "@moss/settings";
 import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { PgBoss } from "pg-boss";
@@ -614,10 +615,9 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         );
         if (archiveEnabled === true) {
           const localeRaw = await this.localePreferences?.get(scopedDb, "locale");
-          const timezone = extractTimezone(localeRaw) ?? "UTC";
           const archivePayload: ArchiveDayJobPayload = {
             actorUserId,
-            localDate: localDay(capturedAt, timezone)
+            localDate: localDay(capturedAt, resolveEffectiveTimezone(localeRaw))
           };
           await sendJob(this.boss, CHAT_ARCHIVE_DAY_QUEUE, archivePayload);
         }
@@ -814,7 +814,13 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     actorUserId: string,
     surface?: ChatSurface,
     threadId?: string | null
-  ): Promise<{ threadTitle: string | null; localTimezone: string | null; incognito: boolean }> {
+  ): Promise<{
+    threadTitle: string | null;
+    localTimezone: string | null;
+    /** The person's effective locale; absent only from callers that predate #3394. */
+    locale?: LocaleSettingsDto;
+    incognito: boolean;
+  }> {
     const chatSurface = normalizeChatSurface(surface);
     return this.run(actorUserId, "get-thread-context", async (scopedDb) => {
       const [thread, localeRaw] = await Promise.all([
@@ -823,7 +829,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
           : threadId
             ? this.chat.getThreadById(scopedDb, threadId, chatSurface)
             : undefined,
-        this.localePreferences?.get(scopedDb, "locale") ?? null
+        this.localePreferences?.get(scopedDb, LOCALE_PREFERENCE_KEY) ?? null
       ]);
       if (
         threadId !== undefined &&
@@ -833,10 +839,11 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       }
       const title = thread?.title ?? null;
       // #2157: the prompt's time block must agree with the clock tool and Settings.
-      const localTimezone = resolveEffectiveTimezone(localeRaw);
+      const locale = resolveEffectiveLocale(localeRaw);
       return {
         threadTitle: title && title !== DEFAULT_CONVERSATION_TITLE ? title : null,
-        localTimezone,
+        localTimezone: locale.timezone,
+        locale,
         incognito: thread?.incognito ?? false
       };
     });

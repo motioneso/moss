@@ -511,6 +511,11 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     reservedQueueNames,
     isModuleEnabled: createIsModuleEnabled({ db: workerDb, getDiscoveryById }),
     listActiveUserIds,
+    resolveActorTimezone: (actorUserId) =>
+      resolveActorTimezone(dataContext, {
+        actorUserId,
+        requestId: "module-schedule:resolve-locale-tz"
+      }),
     registerWorker: async (module, queue) => {
       // Handler body extracted to external-module-job-handler.ts (JS-07
       // Step 0) so the queue path is integration-testable with real deps.

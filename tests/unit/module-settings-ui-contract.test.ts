@@ -17,6 +17,12 @@ describe("settings UI package contract", () => {
   });
 
   it("exports existing settings atom helpers", () => {
-    expect(formatTimestamp("not-a-date", "fallback")).toBe("fallback");
+    expect(
+      formatTimestamp("not-a-date", "fallback", {
+        timezone: "America/Los_Angeles",
+        region: "en-US",
+        dateFormat: "24"
+      })
+    ).toBe("fallback");
   });
 });

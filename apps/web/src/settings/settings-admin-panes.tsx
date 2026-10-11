@@ -46,6 +46,7 @@ import { getConnectorAccountHealth } from "./settings-connector-sync";
 import { useFeedback } from "./settings-feedback";
 import { readError, type PaneProps } from "./settings-types";
 import { MarkdownMessage } from "../chat/markdown-message";
+import { useUserLocale } from "../locale/locale-format";
 import {
   Avatar,
   Badge,
@@ -555,6 +556,7 @@ export function PeoplePane({ me }: PaneProps) {
 /* ---------------------------------------------------------- Connector oversight */
 
 export function OversightPane() {
+  const locale = useUserLocale();
   const accountsQuery = useQuery({
     queryKey: queryKeys.settings.adminConnectorAccounts,
     queryFn: listAdminConnectorAccounts,
@@ -584,7 +586,7 @@ export function OversightPane() {
               // otherwise healthy. The bounded error label shows only for partial/failed.
               const health = getConnectorAccountHealth(account);
               const lastFinished = account.lastSyncFinishedAt
-                ? formatTimestamp(account.lastSyncFinishedAt, account.lastSyncFinishedAt)
+                ? formatTimestamp(account.lastSyncFinishedAt, account.lastSyncFinishedAt, locale)
                 : null;
               const errorLabel =
                 (account.lastSyncStatus === "partial" || account.lastSyncStatus === "failed") &&

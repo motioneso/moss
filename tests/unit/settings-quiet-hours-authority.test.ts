@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { defaultProactiveMonitoringPreference } from "@moss/shared";
+
+import { AntiSpamPolicy } from "../../packages/proactive-monitoring/src/anti-spam.js";
 import {
   alertsQuietPolicy,
   classifyQuietHours,
@@ -128,10 +131,27 @@ describe("classifyQuietHours: migration table", () => {
     expect(result.effective).toEqual(profile);
   });
 
-  it("resolves an owner with no locale to UTC when comparing zones", () => {
-    const profile = { ...PROFILE_ON, timezone: "UTC" };
-    expect(classifyQuietHours(input({ profile, proactive: nested(NESTED_ON) })).status).toBe(
-      "carried"
+  it("resolves an owner with no locale to the Pacific default when comparing zones", () => {
+    const pacific = { ...PROFILE_ON, timezone: "America/Los_Angeles" };
+    expect(
+      classifyQuietHours(input({ profile: pacific, proactive: nested(NESTED_ON) })).status
+    ).toBe("carried");
+    const utc = { ...PROFILE_ON, timezone: "UTC" };
+    expect(classifyQuietHours(input({ profile: utc, proactive: nested(NESTED_ON) })).status).toBe(
+      "conflict"
+    );
+  });
+
+  it("defers no-locale alerts until the Pacific end, matching notifications", () => {
+    const result = classifyQuietHours(input({ profile: PROFILE_ON }));
+    const quiet = alertsQuietPolicy(result);
+    expect(quiet?.timeZone).toBe("America/Los_Angeles");
+    const policy = new AntiSpamPolicy({} as never);
+    const pref = defaultProactiveMonitoringPreference();
+
+    // 01:00 Pacific is inside 22:00 to 07:00, so the alert waits for 07:00 Pacific.
+    expect(policy.quietDeferral(pref, "2026-10-12T08:00:00.000Z", "UTC", quiet)).toBe(
+      "2026-10-12T14:00:00.000Z"
     );
   });
 
@@ -176,9 +196,9 @@ describe("classifyQuietHours: migration table", () => {
     expect(result.effective).toEqual(profile);
   });
 
-  it("resolves an invalid owner locale zone to UTC", () => {
+  it("resolves an invalid owner locale zone to the Pacific default", () => {
     const result = classifyQuietHours(input({ locale: { timezone: "Not/AZone" } }));
-    expect(result.ownerTimeZone).toBe("UTC");
+    expect(result.ownerTimeZone).toBe("America/Los_Angeles");
   });
 });
 

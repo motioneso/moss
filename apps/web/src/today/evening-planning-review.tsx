@@ -17,6 +17,7 @@ import { draftBlocksFor } from "./day-plan-review-model.js";
 import { ReviewRow } from "./day-plan-review.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import {
+  clockText,
   EVENING_REVIEW_BLOCKS_AUTO,
   EVENING_REVIEW_BLOCKS_PROPOSE,
   EVENING_REVIEW_CHANGES_AUTO,
@@ -31,8 +32,7 @@ import {
   EVENING_REVIEW_NOTES_HEADING,
   EVENING_REVIEW_PROSE_AUTO,
   EVENING_REVIEW_PROSE_PROPOSE,
-  EVENING_REVIEW_UNSCHEDULED_HEADING,
-  timeLabel
+  EVENING_REVIEW_UNSCHEDULED_HEADING
 } from "./today-labels.js";
 import { StepIntro } from "./evening-planning-sections.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
@@ -205,7 +205,7 @@ export function ReviewSection(props: {
                     },
                     props.summaries
                   )}\u201d`}
-                  {entry.startsAt ? ` at ${timeLabel(entry.startsAt, props.locale)}` : null}.
+                  {entry.startsAt ? ` at ${clockText(entry.startsAt, props.locale)}` : null}.
                 </p>
               ))}
               <p>The tasks themselves remain on your list.</p>
@@ -240,7 +240,7 @@ export function ReviewSection(props: {
                         ? `Remove ${title}.`
                         : `${pending.kind === "add" ? "Add" : "Move"} ${title} ${
                             pending.kind === "add" ? "at" : "to"
-                          } ${timeLabel(pending.startsAt, props.locale)}.`}
+                          } ${clockText(pending.startsAt, props.locale)}.`}
                     </p>
                   );
                 })

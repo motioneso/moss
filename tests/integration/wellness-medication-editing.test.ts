@@ -4,9 +4,9 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
-import { registerRequestTimeZoneHook } from "../../apps/api/src/server.js";
 import { registerWellnessRoutes } from "@moss/wellness";
 
+import { saveLocaleTimeZone } from "./locale-preference.js";
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -45,9 +45,9 @@ afterAll(async () => {
  * friendly 400.
  */
 describe("wellness medications: start dates, reminders, and editing a saved schedule", () => {
-  async function buildApp(actorUserId: string) {
+  async function buildApp(actorUserId: string, timeZone: string | null = "UTC") {
+    await saveLocaleTimeZone(dataContext, actorUserId, timeZone);
     const app = Fastify();
-    registerRequestTimeZoneHook(app);
     registerWellnessRoutes(app, {
       resolveAccessContext: async () => ({ actorUserId, requestId: "req:med-edit-test" }),
       dataContext
