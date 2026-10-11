@@ -435,11 +435,8 @@ export class AssistantToolGateway {
     // null = unrestricted (REST path tokens minted without an allowlist).
     if (allowedToolNames !== null && !allowedToolNames.has(toolName)) {
       return {
-        // #2942 — this session started before the tool appeared (e.g. an
-        // integration connected mid-conversation), so it is not in the
-        // allowlist captured at launch. Name the way out: a new chat picks up
-        // the current tool set. Returned as tool-result content, which the
-        // chat relays to the person.
+        // #2942: the tool appeared after this session captured its allowlist at launch, so
+        // name the way out. A new chat picks up the current tool set.
         failure: {
           ok: false,
           error: `Tool not in session allowlist: ${toolName}. It was added after this conversation started. Start a new chat to use it.`
