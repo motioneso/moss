@@ -15,6 +15,7 @@ import {
 function build(
   options: {
     yolo?: boolean;
+    marked?: boolean;
     threadId?: string | null;
     deps?: Partial<AssistantToolGatewayDependencies>;
   } = {}
@@ -26,6 +27,11 @@ function build(
   const audit = vi.fn(async () => undefined);
   const emit = vi.fn();
   const isTainted = vi.fn(async () => true);
+  // The durable store refuses the clean-conversation claim once a conversation is tainted.
+  const runAutomatic = vi.fn<NonNullable<ConversationProvenancePort["runAutomatic"]>>(
+    async (_actor, _thread, callback) =>
+      options.marked ? { kind: "confirm" } : { kind: "ran", value: await callback() }
+  );
   const gateway = new AssistantToolGateway({
     resolveActiveModules: async () => [],
     tokens,
@@ -42,8 +48,9 @@ function build(
     confirmTimeoutMs: 500,
     provenance: {
       isTainted,
+      ...(options.marked ? { isMarked: async () => true } : {}),
       recordAdmission: vi.fn(),
-      runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+      runAutomatic: runAutomatic as NonNullable<ConversationProvenancePort["runAutomatic"]>
     },
     yoloMode: async () => options.yolo ?? true,
     ...options.deps
@@ -54,7 +61,17 @@ function build(
     threadId: options.threadId === undefined ? "thread-a" : options.threadId,
     allowedToolNames: null
   });
-  return { gateway, token, createPending, resolveAction, audit, emit, confirmations, isTainted };
+  return {
+    gateway,
+    token,
+    createPending,
+    resolveAction,
+    audit,
+    emit,
+    confirmations,
+    isTainted,
+    runAutomatic
+  };
 }
 
 const request = {
@@ -126,6 +143,37 @@ describe("outside-agent conversation taint", () => {
       }
     }
   );
+
+  it.each([
+    { toolName: "Read", toolInput: { file_path: "/etc/hosts" } },
+    { toolName: "Write", toolInput: { file_path: "/workspace/project/file.txt" } },
+    { toolName: "Write", toolInput: { file_path: "/tmp/output.txt" } },
+    { toolName: "WebSearch", toolInput: { query: "public topic" } },
+    { toolName: "WebFetch", toolInput: { url: "https://example.com" } },
+    { toolName: "WebFetch", toolInput: { url: "http://localhost:9999" } }
+  ])("YOLO runs $toolName $toolInput past an outside-content mark", async (mutation) => {
+    const h = build({ marked: true });
+    expect(
+      await h.gateway.requestAcpBuiltInPermission(h.token, { ...request, ...mutation })
+    ).toMatchObject({ decision: "allow", asked: false });
+    expect(h.createPending).not.toHaveBeenCalled();
+    expect(h.runAutomatic).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { toolName: "Bash", toolInput: { command: "echo hello" } },
+    { toolName: "Write", kind: "delete", toolInput: { file_path: "/tmp/output.txt" } }
+  ])("YOLO still asks for $toolName $kind in a marked conversation", async (mutation) => {
+    const h = build({ marked: true });
+    await reject(h, h.gateway.requestAcpBuiltInPermission(h.token, { ...request, ...mutation }));
+  });
+
+  it("a marked conversation without YOLO keeps every card", async () => {
+    for (const mutation of mutations) {
+      const h = build({ marked: true, yolo: false });
+      await reject(h, h.gateway.requestAcpBuiltInPermission(h.token, { ...request, ...mutation }));
+    }
+  });
 
   it.each(unavailable)("requires a card when %s", async (_label, options) => {
     for (const mutation of mutations) {
@@ -222,6 +270,30 @@ describe("native conversation taint", () => {
           reason: "Allowed by YOLO."
         });
         expect(h.resolveAction).toHaveBeenCalledOnce();
+      } finally {
+        await rm(cwd, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.each([true, false])(
+    "an outside-content mark leaves file edits to YOLO (YOLO=%s)",
+    async (yolo) => {
+      const cwd = await mkdtemp(join(tmpdir(), "moss-taint-native-"));
+      try {
+        const h = build({ marked: true, yolo });
+        const pending = h.gateway.requestNativeToolPermission(h.token, {
+          toolName: "Write",
+          toolInput: { file_path: join(cwd, "file.txt") },
+          workingDirectory: cwd
+        });
+        if (!yolo) {
+          await reject(h, pending);
+          return;
+        }
+        expect(await pending).toMatchObject({ decision: "allow", reason: "Allowed by YOLO." });
+        expect(h.resolveAction).toHaveBeenCalledOnce();
+        expect(h.runAutomatic).not.toHaveBeenCalled();
       } finally {
         await rm(cwd, { recursive: true, force: true });
       }

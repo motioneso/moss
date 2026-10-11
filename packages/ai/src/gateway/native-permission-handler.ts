@@ -6,13 +6,14 @@ import type { ToolContext } from "@moss/module-sdk";
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AssistantToolGatewayDependencies } from "./gateway.js";
 import { actionHoldDurationMs } from "./action-result-record.js";
-import { isConversationTainted } from "./conversation-policy.js";
+import { isConversationMarked, isConversationTainted } from "./conversation-policy.js";
 import { awaitActionResolution, emitPendingActionRequest } from "./action-request-lifecycle.js";
 import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
 import {
   CONTEXT_ADMISSION_UNAVAILABLE,
   recordContextAdmission,
-  runAutomaticAction
+  runAutomaticAction,
+  runTrustedAction
 } from "./content-admission.js";
 import {
   approvalRefusalReason,
@@ -59,7 +60,7 @@ export async function requestNativeToolPermission(
     localTimezone: (await deps.resolveLocalTimezone?.(actorUserId)) ?? undefined
   };
 
-  const yoloGranted =
+  const yoloOn =
     (await nativeYoloCanAutoAllow(toolName, input, request.workingDirectory)) &&
     (await (async () => {
       try {
@@ -67,13 +68,15 @@ export async function requestNativeToolPermission(
       } catch {
         return false;
       }
-    })()) &&
-    !(await isConversationTainted(deps.provenance, ctx));
+    })());
+  // Under YOLO a durable outside-content mark no longer asks (#3417). Any other taint does.
+  const userTrusted = yoloOn && (await isConversationTainted(deps.provenance, ctx));
+  const yoloGranted = userTrusted ? await isConversationMarked(deps.provenance, ctx) : yoloOn;
 
   if (yoloGranted) {
     // Reserve the permission decision and create its pending record. A final grant is only
     // truthful after admission succeeds; the native operation itself remains unobserved.
-    const automatic = await runAutomaticAction(deps.provenance, ctx, () =>
+    const reserve = () =>
       deps.runner.withDataContext(access, async (scopedDb: DataContextDb) => {
         const pending = await deps.repository.createPendingAssistantAction(scopedDb, {
           chatThreadId: ctx.threadId,
@@ -88,8 +91,10 @@ export async function requestNativeToolPermission(
           requestId
         });
         return pending;
-      })
-    );
+      });
+    const automatic = userTrusted
+      ? await runTrustedAction(reserve)
+      : await runAutomaticAction(deps.provenance, ctx, reserve);
     if (automatic.kind === "failed")
       return { decision: "deny", reason: CONTEXT_ADMISSION_UNAVAILABLE };
     if (automatic.kind === "ran") {
