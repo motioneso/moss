@@ -9,6 +9,7 @@ import type { NewsHeadline, NewsOverviewResponse } from "@moss/shared";
 import { topicOption } from "../source/catalog.js";
 import { getNewsOverview } from "./news-client.js";
 import { newsQueryKeys } from "./query-keys.js";
+import { NewsStoryFeedbackReceipt } from "./story-feedback-menu.js";
 import {
   HeroCarousel,
   NewsMosaic,
@@ -38,9 +39,11 @@ function topicLabel(key: string): string {
 export function NewsPage() {
   const overviewQuery = useQuery({
     queryKey: newsQueryKeys.overview,
-    queryFn: () => getNewsOverview()
-    // No refetch interval: feeds move on the server's 10-minute dataset TTL, so polling
-    // faster than that only re-reads the cache. Default window-focus refetch is enough.
+    queryFn: () => getNewsOverview(),
+    // Align freshness with the server dataset TTL and override the app's disabled focus
+    // refetch. Returning to an aged mounted page reads again; invalidations still refresh it.
+    staleTime: 10 * 60_000,
+    refetchOnWindowFocus: true
   });
   const data = overviewQuery.data;
   const [topicFilter, setTopicFilter] = useState<TopicFilter>(null);
@@ -63,10 +66,6 @@ export function NewsPage() {
     );
   }
 
-  const hasStories =
-    data.sourceGroups.length > 0 ||
-    data.topStories.length > 0 ||
-    Boolean(data.rankedStories?.length);
   const activeTopics = data.activeTopics;
   // The chip row only offers topics the user actually follows — in top-front-page mode every
   // headline's topicKey is null, so topic chips would filter everything out and lie.
@@ -86,6 +85,7 @@ export function NewsPage() {
     matchesTopic(headline, filter)
   );
   const pool = rankedPool.filter((h) => !carouselIds.has(h.id));
+  const hasStories = topStories.length > 0 || groups.length > 0 || rankedPool.length > 0;
   // Compose once here so the mosaic and the rail's "In brief" tail share one plan — the tail was
   // moved out of the mosaic column into the rail (Ben 2026-07-09 /news).
   const plan = composeMosaic(pool);
@@ -93,6 +93,7 @@ export function NewsPage() {
   return (
     <div className="nw-wrap">
       <Masthead activeTopics={activeTopics} filter={filter} onFilter={setTopicFilter} />
+      <NewsStoryFeedbackReceipt />
       {overviewQuery.isError ? (
         <p className="nw-lede" role="status">
           Could not refresh news. Showing the last loaded front page.{" "}
@@ -120,7 +121,7 @@ export function NewsPage() {
           ) : null}
         </>
       ) : (
-        <EmptyState data={data} />
+        <EmptyState data={data} filter={filter} onClear={() => setTopicFilter(null)} />
       )}
     </div>
   );
@@ -183,16 +184,50 @@ function NewsLoading() {
 
 /* ---------------------------------------------------------------- Empty state */
 
-function EmptyState({ data }: { readonly data: NewsOverviewResponse }) {
+function EmptyState({
+  data,
+  filter,
+  onClear
+}: {
+  readonly data: NewsOverviewResponse;
+  readonly filter: TopicFilter;
+  readonly onClear: () => void;
+}) {
   const noSources = data.enabledSources.length === 0;
+  if (filter !== null) {
+    return (
+      <SharedEmptyState
+        title={<h2>No stories for {topicLabel(filter)}</h2>}
+        description={
+          data.degraded
+            ? "No matching stories in the loaded front page. Some sources are unavailable."
+            : "No matching stories in the loaded front page."
+        }
+      >
+        <Button variant="secondary" onClick={onClear}>
+          Show all stories
+        </Button>
+      </SharedEmptyState>
+    );
+  }
   return (
     <SharedEmptyState
       icon={<Newspaper size={28} aria-hidden="true" />}
-      title={<h2>{noSources ? "Choose your sources" : "Nothing on the wire"}</h2>}
+      title={
+        <h2>
+          {noSources
+            ? "Choose your sources"
+            : data.degraded
+              ? "News is unavailable"
+              : "Nothing on the wire"}
+        </h2>
+      }
       description={
         noSources
           ? "Pick the publications and topics you care about. This page becomes their combined front page."
-          : "Your sources didn't return any stories just now. Check back shortly, or adjust your sources and topics."
+          : data.degraded
+            ? "Your sources could not be updated. Try again shortly."
+            : "Your sources didn't return any stories just now. Check back shortly, or adjust your sources and topics."
       }
     >
       <ButtonLink href={SETTINGS_HREF} variant="secondary">

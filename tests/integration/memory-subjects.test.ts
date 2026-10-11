@@ -85,17 +85,24 @@ describe("memory fact subjects", () => {
           provenance: "confirmed",
           source
         });
+        // The stub embedding hashes text, so ranking varies with the random token.
+        // Keep every candidate and assert on naming, not on order.
         return {
-          bySamName: await service.recall(db, ids.userA, `Sam ${token}`),
+          bySamName: await service.recall(db, ids.userA, `Sam ${token}`, {
+            includeInactive: true,
+            includeLowConfidence: true,
+            limit: 100
+          }),
           core: await service.core(db, ids.userA)
         };
       }
     );
 
-    expect(result.bySamName.items[0]).toMatchObject({
-      text: "tea",
-      subjectName: `Sam ${token}`
-    });
+    const samFacts = result.bySamName.items.filter((item) => item.subjectName === `Sam ${token}`);
+    expect(samFacts).toEqual([expect.objectContaining({ text: "tea" })]);
+    const coffee = result.bySamName.items.find((item) => item.text === `coffee ${token}`);
+    expect(coffee).toBeDefined();
+    expect(coffee?.subjectName).toBeUndefined();
     const own = result.core.items.find((item) => item.text === `coffee ${token}`);
     expect(own).toBeDefined();
     expect(own?.subjectName).toBeUndefined();
