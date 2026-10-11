@@ -112,7 +112,10 @@ const RESTORED_RUN_ASSERTIONS: readonly (readonly [string, number])[] = [
     "      outcome.ran &&\n      outcome.unlocked &&\n      !outcome.failureShown &&\n      !outcome.asked &&\n      outcome.chatAnswers === 0",
     1
   ],
-  ["    handled,\n", 1],
+  [
+    '  expect(\n    handled,\n    "the gate ran the Sensitive tool itself and it completed: door unlocked, no card, no chat answer"\n  ).toBe(true);',
+    1
+  ],
   ['expect(above, "both classifier answers reach the Sensitive bar").toBe(true);', 1],
   [
     'expect(yoloBelow.asked || yoloBelow.chatAnswers > 0, "the chat model took over").toBe(true);',
