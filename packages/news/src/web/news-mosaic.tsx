@@ -1,3 +1,4 @@
+import { ButtonLink, IconButton } from "@moss/ui";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { NewsHeadline, NewsSourceGroup } from "@moss/shared";
@@ -113,15 +114,15 @@ function HeroSlide({ headline, active }: { readonly headline: NewsHeadline; acti
             </a>
           </h2>
           {headline.summary ? <p className="nw-hero__dek">{headline.summary}</p> : null}
-          <a
-            className="nw-more"
+          <ButtonLink
+            variant="link"
             href={headline.url}
             target="_blank"
             rel="noreferrer"
             tabIndex={active ? undefined : -1}
           >
             Continue reading<span aria-hidden="true"> →</span>
-          </a>
+          </ButtonLink>
         </div>
         {/* Feedback dots sit in the hero's top-right corner and show on hover (.nw-fbhost). */}
         {active ? <StoryFeedbackMenu headline={headline} surface="news" /> : null}
@@ -171,14 +172,12 @@ export function HeroCarousel({ headlines }: { readonly headlines: readonly NewsH
       </div>
       {count > 1 ? (
         <div className="nw-carousel__ctl">
-          <button
-            type="button"
-            className="nw-carousel__nav"
+          <IconButton
             aria-label="Previous story"
             onClick={() => setIndex((active - 1 + count) % count)}
           >
             <ChevronLeft size={16} aria-hidden="true" />
-          </button>
+          </IconButton>
           <div className="nw-carousel__dots">
             {slides.map((headline, i) => (
               <button
@@ -191,14 +190,9 @@ export function HeroCarousel({ headlines }: { readonly headlines: readonly NewsH
               />
             ))}
           </div>
-          <button
-            type="button"
-            className="nw-carousel__nav"
-            aria-label="Next story"
-            onClick={() => setIndex((active + 1) % count)}
-          >
+          <IconButton aria-label="Next story" onClick={() => setIndex((active + 1) % count)}>
             <ChevronRight size={16} aria-hidden="true" />
-          </button>
+          </IconButton>
         </div>
       ) : null}
     </section>
@@ -231,9 +225,9 @@ function MosaicArticle({
       <p className="nw-mosaic__artkicker">{kicker(headline)}</p>
       <h4 className="nw-mosaic__title">{headline.title}</h4>
       {headline.summary ? <p className="nw-mosaic__blurb">{headline.summary}</p> : null}
-      <a className="nw-more" href={headline.url} target="_blank" rel="noreferrer">
+      <ButtonLink variant="link" href={headline.url} target="_blank" rel="noreferrer">
         Continue reading →
-      </a>
+      </ButtonLink>
       <StoryFeedbackMenu headline={headline} surface="news" />
     </article>
   );
@@ -249,9 +243,9 @@ function FeatureArticle({ headline }: { readonly headline: NewsHeadline }) {
         <p className="nw-feature__kicker">{kicker(headline)}</p>
         <h3 className="nw-feature__title">{headline.title}</h3>
         {headline.summary ? <p className="nw-feature__blurb">{headline.summary}</p> : null}
-        <a className="nw-more" href={headline.url} target="_blank" rel="noreferrer">
+        <ButtonLink variant="link" href={headline.url} target="_blank" rel="noreferrer">
           Continue reading →
-        </a>
+        </ButtonLink>
       </div>
       <StoryFeedbackMenu headline={headline} surface="news" />
     </article>
@@ -316,7 +310,7 @@ const RAIL_ITEMS_CAP = 12;
 export function SourceRail({ groups }: { readonly groups: readonly NewsSourceGroup[] }) {
   if (groups.length === 0) return null;
   return (
-    <section className="nw-rail" aria-label="From your sources">
+    <section aria-label="From your sources">
       {/*
        * #1759: every module page links to its own settings page. News only offered that link
        * from its empty state, so a user who already had sources had no way back to change
@@ -326,9 +320,9 @@ export function SourceRail({ groups }: { readonly groups: readonly NewsSourceGro
        */}
       <div className="nw-rail__head">
         <p className="nw-kicker">From your sources</p>
-        <a className="nw-rail__manage" href="/settings?section=modules&module=news">
+        <ButtonLink variant="link" size="sm" href="/settings?section=modules&module=news">
           Manage
-        </a>
+        </ButtonLink>
       </div>
       {groups.map((group) => (
         <div className="nw-rail__group" key={group.sourceKey}>

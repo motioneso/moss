@@ -233,8 +233,14 @@ test("wellness page renders the new screen and a guided check-in can be saved", 
   // so the emotion-strip buttons on the page behind it are excluded.
   await dialog.locator(".wl-dial__seg", { hasText: "Happy" }).click();
 
-  // Step 2: pick a feeling word (Joy is a Happy feeling) from the feeling chips.
-  await dialog.getByRole("button", { name: "Joy", exact: true }).click();
+  // Step 2: pick a feeling word (Joy is a Happy feeling) from the native radio choices.
+  await dialog
+    .getByRole("radiogroup", { name: "Shade of Happy", exact: true })
+    .getByRole("radio", { name: "Joy", exact: true })
+    .click();
+  await expect(
+    dialog.getByText("Body sensations that come with “Joy.”", { exact: false })
+  ).toBeVisible();
 
   // No "Next" step — detail fields appear inline once both emotion and feeling are set.
   const [request] = await Promise.all([

@@ -3,7 +3,7 @@ import { act, createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { FollowedLeagueCard, FollowedTeamCard, FollowedTeamNews } from "@moss/shared";
 
@@ -77,6 +77,54 @@ describe("SportsTicker hook order", () => {
 });
 
 describe("SportsTicker", () => {
+  it("keeps shared scroll controls actionable and the Manage destination unchanged", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+    client.setQueryData(["settings", "locale"], {
+      locale: { timezone: "UTC", region: "en-US", dateFormat: "24" }
+    });
+    try {
+      await act(async () =>
+        root.render(
+          createElement(
+            QueryClientProvider,
+            { client },
+            createElement(SportsTicker, { followed: [card()] })
+          )
+        )
+      );
+      const strip = container.querySelector<HTMLElement>(".sp-ticker__scroll")!;
+      Object.defineProperties(strip, {
+        clientWidth: { value: 300 },
+        scrollWidth: { value: 900 },
+        scrollLeft: { value: 0, writable: true }
+      });
+      strip.scrollBy = vi.fn();
+      await act(async () => window.dispatchEvent(new Event("resize")));
+      const left = container.querySelector<HTMLButtonElement>('[aria-label="Scroll left"]')!;
+      const right = container.querySelector<HTMLButtonElement>('[aria-label="Scroll right"]')!;
+      expect(left.hidden).toBe(true);
+      expect(right.hidden).toBe(false);
+      expect(right.classList.contains("jds-iconbtn")).toBe(true);
+      await act(async () => right.click());
+      expect(strip.scrollBy).toHaveBeenLastCalledWith({ left: 240, behavior: "smooth" });
+      strip.scrollLeft = 600;
+      await act(async () => strip.dispatchEvent(new Event("scroll")));
+      expect(right.hidden).toBe(true);
+      expect(left.hidden).toBe(false);
+      await act(async () => left.click());
+      expect(strip.scrollBy).toHaveBeenLastCalledWith({ left: -240, behavior: "smooth" });
+      const manage = container.querySelector<HTMLAnchorElement>(".sp-ticker__head a")!;
+      expect(manage.classList.contains("jds-btn--link")).toBe(true);
+      expect(manage.getAttribute("href")).toBe("/settings?section=modules&module=sports");
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+      client.clear();
+    }
+  });
   it("renders a live team with the score in the footer strip and news in the body (#963)", () => {
     const html = render([
       card({

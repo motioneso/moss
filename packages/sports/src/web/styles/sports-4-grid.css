@@ -26,33 +26,16 @@
      inherited from .sp-ticker__head so the two halves stay one typographic unit. */
   margin: 0;
 }
-.sp-ticker__manage {
-  /* The "| MANAGE" half: a hairline divider + muted text, mirroring .sp-hero__kicker-comp —
-     but it stays an actionable link. The border-left IS the pipe (no glyph). Caps/tracking are
-     inherited now (Ben 2026-07-09 wants the hero-kicker look), superseding the 2026-07-08
-     "drop the caps" note from when this head used the plain sans section-head voice. */
-  padding-left: var(--space-2);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.sp-ticker__manage:hover {
-  text-decoration: underline;
-}
 .sp-ticker__row {
   display: flex;
   align-items: stretch;
   gap: var(--space-2);
 }
-.sp-ticker__nav {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.sp-ticker__row > .jds-iconbtn {
   align-self: center;
-  cursor: pointer;
-  padding: var(--space-1);
   flex: none;
 }
-.sp-ticker__nav[hidden] {
+.sp-ticker__row > .jds-iconbtn[hidden] {
   display: none;
 }
 .sp-ticker__scroll {
