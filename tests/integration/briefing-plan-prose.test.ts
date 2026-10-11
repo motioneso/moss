@@ -186,7 +186,9 @@ describe("briefing plan prose boundary", () => {
     expect(outcome?.run?.status).toBe("succeeded");
     const prompt = seen.join("\n");
     const block = dayPlanBlock(prompt);
-    expect(block).toContain("committed 2026-09-12T16:00:00.000Z-2026-09-12T17:00:00.000Z");
+    // Plan block times are written in the owner's time, never as raw UTC instants (#3390).
+    expect(block).toContain("committed Sun, Sep 13, 4:00 AM-5:00 AM");
+    expect(block).not.toContain("2026-09-12T16:00:00.000Z");
     expect(block).toContain("proposed, not on the calendar yet");
     expect(block).toContain("pending change: move");
     expect(block).toContain(`Correction (actor): ${CORRECTION_NOTE}`);
