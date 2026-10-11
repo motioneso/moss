@@ -30,6 +30,7 @@ describe("notification digest settings UI", () => {
     const view = readFileSync("apps/web/src/settings/settings-module-subviews.tsx", "utf8");
 
     expect(view).not.toContain("Intl.DateTimeFormat().resolvedOptions().timeZone");
-    expect(view).toContain('localTimezone ?? "UTC"');
+    expect(view).toContain("digestSaveTimezone(current.scheduleMetadata.timezone, personTimezone)");
+    expect(view).not.toContain('?? "UTC"');
   });
 });
