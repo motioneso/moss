@@ -397,13 +397,8 @@ function AccountMedToday({
         {isSaving ? <p role="status">Saving dose…</p> : null}
         {ambiguousPrnFailure ? (
           <div role="alert">
-            <p>
-              We could not confirm whether this as-needed dose saved. Your reason is still here.
-              Check saved doses before logging again to avoid a duplicate.
-            </p>
-            {prnCheckFailed ? (
-              <p>Could not check saved doses. Your reason and unresolved outcome are still here.</p>
-            ) : null}
+            <p>We could not confirm whether this as-needed dose saved.</p>
+            {prnCheckFailed ? <p>Could not check saved doses.</p> : null}
             <Button variant="link" disabled={checkingPrn} onClick={() => void recheckSavedDoses()}>
               Check saved doses
             </Button>

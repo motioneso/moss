@@ -149,13 +149,18 @@ function AccountExportModal({ open, onClose, userId }: Props & { userId: string 
 
   const startMutation = useMutation({
     mutationKey: ["wellness-export", "start", userId],
-    mutationFn: (selection: ExportDraft & { readonly from: string; readonly to: string }) =>
+    mutationFn: (selection: {
+      readonly draft: ExportDraft;
+      readonly from: string;
+      readonly to: string;
+    }) =>
       requestWellnessExport({
         from: selection.from,
         to: selection.to,
-        categories: [...selection.categories]
+        categories: [...selection.draft.categories]
       }),
-    onSuccess: (data, selection) => updateDraft({ ...selection, jobId: data.jobId }),
+    // Untouched dates stay null in the draft so they keep following the person's default range.
+    onSuccess: (data, selection) => updateDraft({ ...selection.draft, jobId: data.jobId }),
     onSettled: () => {
       starting.current = false;
     }
@@ -216,12 +221,9 @@ function AccountExportModal({ open, onClose, userId }: Props & { userId: string 
           </p>
 
           <Note variant="practical" className="wl-export-boundaries">
-            Dates include UTC calendar days, from 00:00 UTC through the end of the To day. These may
-            differ from your local days. Choose up to 366 days, including both dates.
+            UTC days, up to 366.
           </Note>
-          {!rangeValid ? (
-            <p role="alert">Choose an ordered date range of no more than 366 inclusive days.</p>
-          ) : null}
+          {!rangeValid ? <p role="alert">Choose a date range of up to 366 days.</p> : null}
           <div className="wl-field" style={{ marginBottom: 12 }}>
             <label htmlFor="wlexport-from" className="wl-field__label">
               From
@@ -301,7 +303,7 @@ function AccountExportModal({ open, onClose, userId }: Props & { userId: string 
             onClick={() => {
               if (!canGenerate || starting.current) return;
               starting.current = true;
-              startMutation.mutate({ ...draft, from, to, categories: [...categories] });
+              startMutation.mutate({ draft: { ...draft, categories: [...categories] }, from, to });
             }}
           >
             {isStarting ? "Starting…" : "Generate export"}

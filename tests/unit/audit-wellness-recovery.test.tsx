@@ -4,12 +4,16 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { localDay, type MedicationScheduleResponse } from "@moss/shared";
+import { DEFAULT_LOCALE_SETTINGS, localDay, type MedicationScheduleResponse } from "@moss/shared";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import * as api from "../../apps/web/src/api/client.js";
 import { requestWellnessExport } from "../../apps/web/src/api/wellness-export.js";
 import { MedToday } from "../../apps/web/src/wellness/wellness-today.js";
-import { WellnessExportModal } from "../../apps/web/src/wellness/export-modal.js";
+import {
+  defaultExportRange,
+  WellnessExportModal
+} from "../../apps/web/src/wellness/export-modal.js";
+import { exportDraftKey } from "../../apps/web/src/wellness/export-draft.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (original) => ({
   ...(await original<typeof api>()),
@@ -155,7 +159,7 @@ describe("Wellness dose recovery", () => {
       expect(host.querySelector('[role="alert"]')?.textContent).toContain("could not confirm")
     );
     expect(input.value).toBe("Fictional reason");
-    expect(host.textContent).toContain("avoid a duplicate");
+    expect(host.textContent).toContain("Check saved doses");
     await click(host, "Check saved doses");
     expect(api.getMedicationSchedule).toHaveBeenCalled();
     expect(api.logMedicationDose).toHaveBeenCalledTimes(1);
@@ -513,6 +517,34 @@ describe("Wellness export recovery", () => {
     await click(host, "Generate again");
     expect(host.querySelector<HTMLInputElement>("#wlexport-from")!.value).toBe("2026-09-01");
     expect(button(host, "Generate export").disabled).toBe(true);
+  });
+  it("keeps untouched dates following the default range after a generated job", async () => {
+    vi.mocked(requestWellnessExport).mockResolvedValueOnce({
+      jobId: "default-range",
+      status: "pending"
+    });
+    vi.mocked(api.getDataExportStatus).mockResolvedValue({
+      jobId: "default-range",
+      status: "expired"
+    });
+    const { host, client } = await mount(<WellnessExportModal open onClose={() => {}} />);
+    await selectExport(host);
+    await vi.waitFor(() => expect(host.textContent).toContain("This export has expired"));
+    expect(client.getQueryData(exportDraftKey("fictional-owner"))).toMatchObject({
+      from: null,
+      to: null
+    });
+    await click(host, "Generate again");
+    await act(async () => {
+      client.setQueryData(queryKeys.settings.locale, {
+        locale: { ...DEFAULT_LOCALE_SETTINGS, timezone: "Pacific/Kiritimati" }
+      });
+    });
+    const shifted = defaultExportRange("Pacific/Kiritimati");
+    await vi.waitFor(() =>
+      expect(host.querySelector<HTMLInputElement>("#wlexport-to")!.value).toBe(shifted.to)
+    );
+    expect(host.querySelector<HTMLInputElement>("#wlexport-from")!.value).toBe(shifted.from);
   });
   it("updates a ready export when its expiration time crosses while the modal remains open", async () => {
     vi.mocked(requestWellnessExport).mockResolvedValueOnce({
