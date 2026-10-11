@@ -369,7 +369,8 @@
 .nw-fbhost:hover > .nw-feedback,
 .nw-fbhost:focus-within > .nw-feedback,
 .nw-fbhost > .nw-feedback:has([aria-expanded="true"]),
-.nw-fbhost > .nw-feedback:has(.nw-feedback__form) {
+.nw-fbhost > .nw-feedback:has(.nw-feedback__form),
+.nw-fbhost > .nw-feedback:has(.nw-feedback__receipt) {
   opacity: 1;
 }
 @media (hover: none) {

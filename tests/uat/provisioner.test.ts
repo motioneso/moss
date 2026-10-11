@@ -60,6 +60,25 @@ describe("#1121 Task 4: chatScript arg-building", () => {
     expect(args).toContain("JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES=1");
   });
 
+  it("threads News fixture input only when provisioning provides its opt-in URL", async () => {
+    const baseUrl = "http://proj-newsfixture:4319";
+    const input = buildSeedHookInput(
+      "proj",
+      "admin+data",
+      { withNewsFeedbackFixture: true },
+      undefined,
+      undefined,
+      undefined,
+      baseUrl
+    );
+    expect(input.newsFeedbackFixtureBaseUrl).toBe(baseUrl);
+    await composeSeedHook(input);
+    expect(mocks.spawn.mock.calls[0]?.[1]).toContain(
+      `MOSS_UAT_NEWS_FEEDBACK_FIXTURE_BASE_URL=${baseUrl}`
+    );
+    expect(buildSeedHookInput("proj", "admin+data", {}).newsFeedbackFixtureBaseUrl).toBeUndefined();
+  });
+
   it("starts ESPN-only provisioning without seeding a Job Search provider", async () => {
     const input = buildSeedHookInput(
       "proj",
