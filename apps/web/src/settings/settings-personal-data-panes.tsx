@@ -517,11 +517,6 @@ function SourcesPane({ embedded, onFlowChange }: EmbeddedPaneProps = {}) {
                 <div className="vault__path vault__path--empty">
                   {sourceUnavailable ? "Couldn't check linked folder" : "Checking linked folder…"}
                 </div>
-                <div className="vault__meta">
-                  {sourceUnavailable
-                    ? "The current source is unknown. Try again before changing it."
-                    : "Waiting for the current notes source."}
-                </div>
               </>
             ) : linkedPath ? (
               <>

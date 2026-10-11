@@ -161,13 +161,8 @@ export function DataExport() {
   return (
     <Group
       title="Your data"
-      desc={`Your supported account records and owned Markdown notes from ${assistantName}, packaged as a portable archive.`}
+      desc={`Your records and notes from ${assistantName}, packaged as a portable archive.`}
     >
-      <div className="dexp__note">
-        The archive manifest lists file exclusions and any notes that couldn't be read. Linked
-        external folders, attachments, other non-note files and downloaded-module data aren't
-        included. Keep a separate copy of those files. This export has no supported restore flow.
-      </div>
       {jobId && statusQuery.isPending ? (
         <div className="dexp__bar" role="status">
           <div className="dexp__note">Checking your export…</div>
@@ -220,7 +215,7 @@ export function DataExport() {
             <div className="dexp__bar">
               <div className="dexp__note">
                 <FileArchive size={13} aria-hidden="true" />A single archive — structured JSON plus
-                supported owned Markdown originals. Review its manifest for omissions.
+                your Markdown notes.
               </div>
               <Button
                 size="sm"
@@ -257,7 +252,7 @@ export function DataExport() {
         <div className="dexp__bar">
           <div className="dexp__note">
             <ShieldCheck size={13} aria-hidden="true" />
-            Your archive is ready. Review the manifest for any notes that couldn't be included.
+            Your archive is ready.
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <ButtonLink
