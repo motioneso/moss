@@ -562,6 +562,7 @@ describe("app actions through the real gateway and app routes", () => {
     expect(JSON.stringify(result)).toContain("OTHER_THREAD_CONTENT_3071");
     const provenance = new ConversationProvenanceStore(runner);
     expect(await provenance.isTainted(ids.userA, threadId)).toBe(true);
+    expect(await provenance.isMarked(ids.userA, threadId)).toBe(true);
     await runner.withDataContext(access, (db) =>
       new AiRepository().setActionPolicy(
         db,
@@ -572,16 +573,24 @@ describe("app actions through the real gateway and app routes", () => {
     );
     callSpy.mockClear();
     mintSpy.mockClear();
-    for (const start of [
-      () => h.call({ method: "PUT", path: "/api/me/weather-unit", body: { unit: "imperial" } }),
-      () =>
-        h.call({
-          method: "GET",
-          path: "/api/me/weather-location/search",
-          query: { query: "Paris" }
-        }),
-      () => h.theme("light")
-    ]) {
+    // The app write and the outbound search run in a clean chat, so only the mark makes them ask
+    // and their cards name it. The ask-each-time theme write asks anyway, so its card does not (#3338).
+    for (const [start, outsideContentNotice] of [
+      [
+        () => h.call({ method: "PUT", path: "/api/me/weather-unit", body: { unit: "imperial" } }),
+        true
+      ],
+      [
+        () =>
+          h.call({
+            method: "GET",
+            path: "/api/me/weather-location/search",
+            query: { query: "Paris" }
+          }),
+        true
+      ],
+      [() => h.theme("light"), false]
+    ] as const) {
       h.events.length = 0;
       const pending = start();
       await vi.waitFor(
@@ -589,7 +598,7 @@ describe("app actions through the real gateway and app routes", () => {
         { timeout: 5_000 }
       );
       const card = h.events.find((event) => event.kind === "action_request")!;
-      expect(card.outsideContentNotice).toBe(true);
+      expect(card.outsideContentNotice).toBe(outsideContentNotice);
       expect(
         await h.gateway.resolveActionRequest(ids.userA, card.actionRequestId, "rejected")
       ).toBe("resolved");
