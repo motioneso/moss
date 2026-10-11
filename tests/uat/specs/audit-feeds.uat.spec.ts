@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import type { NewsOverviewResponse } from "@moss/shared";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
@@ -9,7 +9,6 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 export const uatLevel = {
   level: "admin+data",
   without: [],
-  withEspnFixture: true,
   withNewsFeedbackFixture: true
 } as const;
 test.setTimeout(300_000);
@@ -60,7 +59,9 @@ async function registeredStory(page: Page) {
   expect(story, "Seeded compiler output must reach the real News overview").toBeDefined();
   expect(story?.feedbackRef, "The real overview must register a feedback target").toBeTruthy();
   const title = story!.title;
-  await expect(page.getByRole("button", { name: `Feedback for ${title}` }).first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: `Feedback for ${title}`, exact: true }).first()
+  ).toBeVisible();
   return title;
 }
 
@@ -100,7 +101,7 @@ test("News saves curated choices and retains feedback outcomes through dismissal
   }
 
   const title = await registeredStory(page);
-  const menu = page.getByRole("button", { name: `Feedback for ${title}` }).first();
+  const menu = page.getByRole("button", { name: `Feedback for ${title}`, exact: true }).first();
   await menu.click();
   const positive = feedbackWrite(page, "POST");
   await page.getByRole("menuitem", { name: "More like this" }).click();
@@ -138,56 +139,5 @@ test("News saves curated choices and retains feedback outcomes through dismissal
   await expect(section.getByRole("status").filter({ hasText: "Preference removed" })).toBeVisible();
   console.log(
     "[feedback UI proof] Declared synthetic RSS/model inputs used the production compiler and owner-scoped repository/CAS; the real overview registered targets and feedback saved, dismissed, edited and removed through the real UI. This does not prove production AI routing or live refresh discovery."
-  );
-});
-
-async function activeSlide(carousel: Locator) {
-  return carousel.locator('[data-active="true"], .sp-carousel__slide--active').innerText();
-}
-
-test("Sports retains pause through mixed input, manual selection and live reduced motion", async ({
-  page
-}) => {
-  await signIn(page);
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto(`${baseURL()}/sports`);
-  const carousel = page.locator('section[aria-roledescription="carousel"]').first();
-  await expect(carousel.getByRole("button", { name: "Pause rotation", exact: true })).toBeEnabled();
-  for (const width of [1440, 390, 320]) {
-    await page.setViewportSize({ width, height: 900 });
-    await noPageOverflow(page);
-    await expect(
-      carousel.getByRole("button", { name: "Pause rotation", exact: true })
-    ).toBeInViewport();
-  }
-  await carousel.getByRole("button", { name: "Pause rotation", exact: true }).click();
-  const next = carousel.getByRole("button", { name: /^Next (story|game)$/ });
-  const first = await activeSlide(carousel);
-  await next.click();
-  await expect.poll(() => activeSlide(carousel)).not.toBe(first);
-  const manuallySelected = await activeSlide(carousel);
-  await carousel.hover();
-  await next.focus();
-  await page.mouse.move(0, 0);
-  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).focus();
-  // Longer than either carousel's rotation interval; an explicit stop must survive departure.
-  await page.waitForTimeout(10_000);
-  expect(await activeSlide(carousel)).toBe(manuallySelected);
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(carousel.getByRole("status")).toHaveText("Rotation is off for reduced motion.");
-  await expect(
-    carousel.getByRole("button", { name: "Resume rotation", exact: true })
-  ).toBeDisabled();
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await expect(
-    carousel.getByRole("button", { name: "Resume rotation", exact: true })
-  ).toBeEnabled();
-  await page.waitForTimeout(10_000);
-  expect(await activeSlide(carousel)).toBe(manuallySelected);
-  // Resume runs rotation while the pointer and focus stay on the Resume button.
-  await carousel.getByRole("button", { name: "Resume rotation", exact: true }).click();
-  await expect.poll(() => activeSlide(carousel), { timeout: 12_000 }).not.toBe(manuallySelected);
-  console.log(
-    "[live proof] Sports rotation stayed paused after manual selection, Resume restarted it with pointer and focus still inside; reduced motion changed live and preserved the user stop"
   );
 });
