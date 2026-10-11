@@ -37,6 +37,14 @@ describe("integrations live spec (#3279)", () => {
     );
   });
 
+  it("keeps the Home Assistant tools-enabled proof", async () => {
+    const text = await source();
+    expect(text, "discovery found tools").toContain("toHaveText(/^\\d+ of [1-9]\\d* on$/");
+    expect(text, "at least one tool on").toContain(
+      "expect(Number.parseInt(toolsOn, 10)).toBeGreaterThan(0);"
+    );
+  });
+
   it("checks credentials without echoing them into a failure report", async () => {
     const text = await source();
     expect(text, "toContain prints the credential on failure").not.toMatch(
@@ -55,7 +63,7 @@ describe("live chat model binding (#3279)", () => {
     ).toBe(true);
   });
 
-  it("refuses to bind without a copied Codex sign-in", () => {
+  it("refuses to bind without a configured chat sign-in", () => {
     expect(() => shouldBindCheapestModel({ LIVE_BIND_CHEAPEST_MODEL: "1" })).toThrow(
       /refusing to fake the model/
     );

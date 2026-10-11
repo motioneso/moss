@@ -93,6 +93,8 @@ async function startSideChat(page: Page) {
   await expect(page.getByRole("dialog").locator(".chatd-msg")).toHaveCount(0);
 }
 
+const MANY_TOOLS_NOTICE = "This app has a lot of tools, so they start off.";
+
 function toolsMeta(page: Page) {
   return page.locator(".intg-tools .jds-section-head__meta");
 }
@@ -129,8 +131,17 @@ test.describe("integrations live path (#2162)", () => {
     await page.getByRole("button", { name: "Connect", exact: true }).click();
 
     // Detail view: discovery really happened against the live HA MCP server.
-    await expect(toolsMeta(page)).toHaveText(/^\d+ of \d+ on$/, { timeout: 60_000 });
+    await expect(toolsMeta(page)).toHaveText(/^\d+ of [1-9]\d* on$/, { timeout: 60_000 });
     await expect(page.getByText("Connected").first()).toBeVisible();
+
+    // A server with many tools starts them all off. Switch one on through its real switch, the
+    // way a user opts in, so the enabled check below still holds.
+    if (await page.getByText(MANY_TOOLS_NOTICE, { exact: false }).isVisible()) {
+      const first = page.getByRole("checkbox", { name: /^Enable / }).first();
+      await first.locator("xpath=ancestor::label").click();
+      await expect(first).toBeChecked();
+      await expect(toolsMeta(page)).toHaveText(/^[1-9]\d* of \d+ on$/, { timeout: 15_000 });
+    }
     const toolsOn = (await toolsMeta(page).textContent()) ?? "";
     expect(Number.parseInt(toolsOn, 10)).toBeGreaterThan(0);
 
@@ -187,9 +198,9 @@ test.describe("integrations live path (#2162)", () => {
     await page.getByRole("button", { name: "Connect", exact: true }).click();
 
     // Radarr's spec converts to far more than 30 tools, so every tool starts off.
-    await expect(
-      page.getByText("This app has a lot of tools, so they start off.", { exact: false })
-    ).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(MANY_TOOLS_NOTICE, { exact: false })).toBeVisible({
+      timeout: 60_000
+    });
     // The tools count reads "N of M on" since #3033 dropped the "always ask" tally.
     await expect(toolsMeta(page)).toHaveText(/^0 of \d+ on$/);
 
