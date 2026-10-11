@@ -244,3 +244,14 @@ blocking	packages/ai/src/model-activity.ts	tests/uat/specs/2956-activity-history
 blocking	packages/ai/src/adapters/http-api.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
 blocking	packages/chat/src/live/cli-structured-adapter.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
 blocking	packages/shared/src/app-map-core.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
+
+# #3397 source authority and owned Markdown export truth.
+blocking	apps/web/src/settings/settings-personal-data-panes.tsx	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	apps/web/src/settings/settings-connections-pane.tsx	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	apps/web/src/settings/settings-profile-subviews.tsx	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	apps/web/src/settings/settings-vault-chooser.tsx	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	packages/settings/src/data-export-jobs.ts	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	packages/settings/src/data-export-vault.ts	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	packages/shared/src/notes-api.ts	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	apps/web/src/api/client.ts	tests/uat/specs/audit-source-truth.uat.spec.ts
+blocking	packages/vault/src/**	tests/uat/specs/audit-source-truth.uat.spec.ts

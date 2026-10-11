@@ -23,6 +23,7 @@ export function VaultChooser(props: {
   readonly current: string;
   readonly title?: string;
   readonly backLabel?: string;
+  readonly disabled?: boolean;
   readonly onCancel: () => void;
   readonly onChoose: (path: string) => void;
 }) {
@@ -179,8 +180,8 @@ export function VaultChooser(props: {
           </Button>
           <Button
             size="sm"
-            disabled={!path || loading || Boolean(displayError)}
-            onClick={() => (path ? props.onChoose(path) : undefined)}
+            disabled={props.disabled || !path || loading || Boolean(displayError)}
+            onClick={() => (path && !props.disabled ? props.onChoose(path) : undefined)}
             icon={<FolderCheck size={15} />}
           >
             Use this folder

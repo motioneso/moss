@@ -53,7 +53,7 @@ const INCLUDED: readonly { readonly icon: LucideIcon; readonly name: string }[] 
   { icon: Brain, name: "Memory — facts, patterns & corrections" },
   { icon: ListChecks, name: "Tasks & commitments" },
   { icon: CalendarDays, name: "Calendar cache" },
-  { icon: FileText, name: "Notes & vault index" },
+  { icon: FileText, name: "Owned Markdown notes" },
   { icon: MessagesSquare, name: "Conversations" },
   { icon: FileText, name: "Meetings — notes, transcripts & summaries" },
   { icon: SlidersHorizontal, name: "Settings & persona" }
@@ -114,9 +114,12 @@ export function DataExport() {
     }
   });
 
-  const status = statusQuery.data?.status;
+  const statusReadFailed = jobId !== null && statusQuery.isError;
+  const status = statusReadFailed ? undefined : statusQuery.data?.status;
+  const expiresAt = Date.parse(statusQuery.data?.expiresAt ?? "");
+  const timeExpired = status === "ready" && Number.isFinite(expiresAt) && expiresAt <= Date.now();
   const isInProgress = status === "pending" || status === "building";
-  const isReady = status === "ready";
+  const isReady = status === "ready" && !timeExpired;
   const isFailed = status === "failed";
 
   const reset = () => {
@@ -125,21 +128,66 @@ export function DataExport() {
   };
 
   useEffect(() => {
-    if (status === "expired") {
+    const expire = () => {
       reset();
+      toast("Your export expired. Prepare a new archive.", { tone: "drift" });
+    };
+    if (status === "expired" || timeExpired) {
+      expire();
       return;
     }
     const error = statusQuery.error;
     if (error instanceof ApiError && error.status === 404) {
       reset();
+      return;
     }
-  }, [status, statusQuery.error]);
+    if (status !== "ready" || !Number.isFinite(expiresAt)) return;
+
+    // Cleanup can lag the download deadline. Retire the link at expiresAt even while open;
+    // reschedule long waits within the browser timer limit and release the timer on navigation.
+    let timer: number | undefined;
+    const checkExpiry = () => {
+      const remaining = expiresAt - Date.now();
+      if (remaining <= 0) {
+        expire();
+      } else {
+        timer = window.setTimeout(checkExpiry, Math.min(remaining, 2_147_483_647));
+      }
+    };
+    checkExpiry();
+    return () => window.clearTimeout(timer);
+  }, [status, statusQuery.error, expiresAt, timeExpired, toast]);
 
   return (
     <Group
       title="Your data"
-      desc={`Everything ${assistantName} holds about you, packaged as a portable archive you can keep or take elsewhere.`}
+      desc={`Your supported account records and owned Markdown notes from ${assistantName}, packaged as a portable archive.`}
     >
+      <div className="dexp__note">
+        The archive manifest lists file exclusions and any notes that couldn't be read. Linked
+        external folders, attachments, other non-note files and downloaded-module data aren't
+        included. Keep a separate copy of those files. This export has no supported restore flow.
+      </div>
+      {jobId && statusQuery.isPending ? (
+        <div className="dexp__bar" role="status">
+          <div className="dexp__note">Checking your export…</div>
+        </div>
+      ) : null}
+      {statusReadFailed ? (
+        <div className="dexp__bar" role="alert">
+          <div className="dexp__note">
+            Couldn't check your export. Its current status is unknown; try again to check the same
+            export.
+          </div>
+          <Button
+            size="sm"
+            onClick={() => void statusQuery.refetch()}
+            disabled={statusQuery.isFetching}
+          >
+            {statusQuery.isFetching ? "Checking…" : "Try again"}
+          </Button>
+        </div>
+      ) : null}
       {!jobId || isFailed ? (
         <>
           <div className="dexp__inc">
@@ -172,7 +220,7 @@ export function DataExport() {
             <div className="dexp__bar">
               <div className="dexp__note">
                 <FileArchive size={13} aria-hidden="true" />A single archive — structured JSON plus
-                your original note files. Yours, in an open format.
+                supported owned Markdown originals. Review its manifest for omissions.
               </div>
               <Button
                 size="sm"
@@ -209,8 +257,7 @@ export function DataExport() {
         <div className="dexp__bar">
           <div className="dexp__note">
             <ShieldCheck size={13} aria-hidden="true" />
-            Your archive is ready. It was built on this server and never left it until you download
-            it.
+            Your archive is ready. Review the manifest for any notes that couldn't be included.
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <ButtonLink
