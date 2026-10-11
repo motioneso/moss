@@ -121,7 +121,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "priorities",
     label: "Priorities",
-    description: "Set goals and commitments the assistant should prioritize.",
+    description:
+      "Set goals and commitments the assistant should prioritize. Loading and failed reads are distinct from an empty list; Try again reloads unavailable priorities and failed writes retain their draft for another attempt.",
     path: "/settings?section=priorities",
     scope: "user"
   },
@@ -131,7 +132,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     description:
       "Review and configure assistant memory behaviour, and choose the People folder. Every " +
       "folder is chosen from the same list of available folders, and People notes live inside " +
-      "the chosen notes folder.",
+      "the chosen notes folder. The dashboard distinguishes a failed read from no memories and offers Try again; previously loaded rows remain visible after a failed refresh. People folder, match-candidate and People-list reads also show failures with Try again.",
     path: "/settings?section=memory",
     scope: "user"
   },
@@ -241,7 +242,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "people",
     label: "People & access",
-    description: "Manage instance users, access, and registration policy.",
+    description:
+      "Manage instance users, access, and registration policy. Failed member-list reads show an error with Try again rather than an empty instance; previously loaded members remain available during a failed refresh.",
     path: "/settings?section=people",
     scope: "admin"
   },
@@ -364,14 +366,16 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "oversight",
     label: "Connector oversight",
-    description: "Review connector health across the instance.",
+    description:
+      "Review connector health across the instance. Loading, failed reads and an empty result are distinct; Try again reloads the report and previously loaded records remain visible after a failed refresh.",
     path: "/settings?section=oversight",
     scope: "admin"
   },
   {
     id: "audit",
     label: "Audit & operations",
-    description: "Review instance audit and operational records.",
+    description:
+      "Review instance audit and operational records. Failed reads offer Try again and do not look like an empty log; previously loaded records remain visible after a failed refresh.",
     path: "/settings?section=audit",
     scope: "admin"
   },

@@ -1,3 +1,4 @@
+import { Button } from "@moss/ui";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Compass, HeartPulse, House, ListChecks, Settings } from "lucide-react";
 
@@ -49,6 +50,7 @@ export function SectionTourStep(props: { readonly onDone: () => void }) {
   return (
     <section className="onb-step" aria-labelledby="member-tour-title">
       <StepHeader
+        titleId="member-tour-title"
         eyebrow="Step 3 · Where to go"
         title="Here’s where to start."
         lede={personalize("A brief orientation to help you find your way around Moss.")}
@@ -73,9 +75,9 @@ export function SectionTourStep(props: { readonly onDone: () => void }) {
         Only the modules enabled for your account are shown. Others will appear as they are turned
         on.
       </FootNote>
-      <button className="onb-inline-skip" type="button" onClick={props.onDone}>
+      <Button variant="link" onClick={props.onDone}>
         Continue
-      </button>
+      </Button>
     </section>
   );
 }

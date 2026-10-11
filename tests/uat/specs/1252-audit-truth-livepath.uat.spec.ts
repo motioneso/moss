@@ -48,12 +48,12 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
 }
 
 async function openActivityPane(page: Page): Promise<void> {
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Activity", exact: true }).click();
 }
 

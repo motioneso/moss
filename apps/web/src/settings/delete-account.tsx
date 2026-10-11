@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LoaderCircle, TriangleAlert } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 
-import { Button, Dialog } from "@moss/ui";
+import { Button, Dialog, Field, FormLabel } from "@moss/ui";
 import type { MeResponse } from "@moss/shared";
 import { DELETE_MY_ACCOUNT_PHRASE } from "@moss/shared";
 
@@ -152,13 +152,14 @@ export function DeleteAccount({ me }: { readonly me: MeResponse }) {
             }
           >
             <div className="deldlg__body">
-              <label className="deldlg__field">
-                <span className="deldlg__label">
-                  Type your email — <code>{me.user.email}</code>
-                </span>
+              <Field>
+                <FormLabel htmlFor={`${titleId}-email`}>
+                  Type your email — {me.user.email}
+                </FormLabel>
                 <input
                   className="jds-input"
                   type="email"
+                  id={`${titleId}-email`}
                   value={confirmEmail}
                   onChange={(e) => setConfirmEmail(e.target.value)}
                   autoComplete="email"
@@ -166,36 +167,38 @@ export function DeleteAccount({ me }: { readonly me: MeResponse }) {
                   placeholder={me.user.email}
                   aria-label="Confirm your email"
                 />
-              </label>
+              </Field>
 
-              <label className="deldlg__field">
-                <span className="deldlg__label">
-                  Type the phrase <code>{DELETE_MY_ACCOUNT_PHRASE}</code>
-                </span>
+              <Field>
+                <FormLabel htmlFor={`${titleId}-phrase`}>
+                  Type the phrase {DELETE_MY_ACCOUNT_PHRASE}
+                </FormLabel>
                 <input
                   className="jds-input"
                   type="text"
+                  id={`${titleId}-phrase`}
                   value={confirmPhrase}
                   onChange={(e) => setConfirmPhrase(e.target.value)}
                   disabled={deleteMutation.isPending}
                   placeholder={DELETE_MY_ACCOUNT_PHRASE}
                   aria-label="Type the confirmation phrase"
                 />
-              </label>
+              </Field>
 
               {needsPassword ? (
-                <label className="deldlg__field">
-                  <span className="deldlg__label">Your password</span>
+                <Field>
+                  <FormLabel htmlFor={`${titleId}-password`}>Your password</FormLabel>
                   <input
                     className="jds-input"
                     type="password"
+                    id={`${titleId}-password`}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
                     disabled={deleteMutation.isPending}
                     aria-label="Your current password"
                   />
-                </label>
+                </Field>
               ) : null}
             </div>
 

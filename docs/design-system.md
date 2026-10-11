@@ -136,6 +136,11 @@ Page is bone paper, cards are warm white, one living accent (forest) plus decora
 - Red, amber and steel stay locked in every theme.
 - Tokens follow theme selection; they do not prove readable contrast on every ground. Custom
   palette warnings must describe the actual component pairs and never claim universal compliance.
+- Isolated theme previews/probes opt into `.jds-theme-scope`, which re-declares the exact root
+  tokens locally (including reduced motion). Apply the preview's own `data-theme` and
+  `data-color-mode` on that node; custom palettes use the light base, matching the shell, and
+  `applyThemeTokens` supplies their inline values. This resolves semantic aliases against the
+  draft instead of inheriting resolved colors from an outer theme. It does not validate contrast.
 - Check new UI in light, dark and at least one park theme.
 
 ## Spacing, radius, elevation

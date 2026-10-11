@@ -1,3 +1,4 @@
+import { Button, Eyebrow, Field, FormLabel, Segmented } from "@moss/ui";
 import { useMutation } from "@tanstack/react-query";
 import { LoaderCircle, LogIn, UserPlus } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
@@ -47,34 +48,29 @@ export function AuthScreen(props: AuthScreenProps) {
     <main className="auth-screen">
       <section className="auth-panel" aria-labelledby="auth-title">
         <div>
-          <p className="eyebrow">{assistantName()}</p>
+          <Eyebrow tone="accent">{assistantName()}</Eyebrow>
           <h1 id="auth-title">{mode === "sign-up" ? "Create owner account" : "Sign in"}</h1>
         </div>
 
         {!props.needsBootstrap ? (
-          <div className="segmented-control" aria-label="Auth mode">
-            <button
-              className={mode === "sign-in" ? "active" : ""}
-              type="button"
-              onClick={() => setMode("sign-in")}
-            >
-              Sign in
-            </button>
-            <button
-              className={mode === "sign-up" ? "active" : ""}
-              type="button"
-              onClick={() => setMode("sign-up")}
-            >
-              Create account
-            </button>
-          </div>
+          <Segmented
+            value={mode}
+            options={[
+              { value: "sign-in", label: "Sign in" },
+              { value: "sign-up", label: "Create account" }
+            ]}
+            onChange={setMode}
+            ariaLabel="Auth mode"
+          />
         ) : null}
 
         <form className="auth-form" onSubmit={handleSubmit}>
           {mode === "sign-up" ? (
-            <label>
-              Name
+            <Field>
+              <FormLabel htmlFor="auth-name">Name</FormLabel>
               <input
+                id="auth-name"
+                className="jds-input"
                 autoComplete="name"
                 minLength={1}
                 onChange={(event) => setName(event.target.value)}
@@ -82,12 +78,14 @@ export function AuthScreen(props: AuthScreenProps) {
                 type="text"
                 value={name}
               />
-            </label>
+            </Field>
           ) : null}
 
-          <label>
-            Email
+          <Field>
+            <FormLabel htmlFor="auth-email">Email</FormLabel>
             <input
+              id="auth-email"
+              className="jds-input"
               autoComplete="email"
               inputMode="email"
               onChange={(event) => setEmail(event.target.value)}
@@ -95,11 +93,13 @@ export function AuthScreen(props: AuthScreenProps) {
               type="email"
               value={email}
             />
-          </label>
+          </Field>
 
-          <label>
-            Password
+          <Field>
+            <FormLabel htmlFor="auth-password">Password</FormLabel>
             <input
+              id="auth-password"
+              className="jds-input"
               autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
               minLength={8}
               onChange={(event) => setPassword(event.target.value)}
@@ -107,11 +107,15 @@ export function AuthScreen(props: AuthScreenProps) {
               type="password"
               value={password}
             />
-          </label>
+          </Field>
 
-          {mutation.error ? <p className="form-error">{mutation.error.message}</p> : null}
+          {mutation.error ? (
+            <p className="form-error" role="alert">
+              {mutation.error.message}
+            </p>
+          ) : null}
 
-          <button className="primary-button" disabled={mutation.isPending} type="submit">
+          <Button block disabled={mutation.isPending} type="submit">
             {mutation.isPending ? (
               <LoaderCircle className="spin" size={18} aria-hidden="true" />
             ) : mode === "sign-up" ? (
@@ -120,7 +124,7 @@ export function AuthScreen(props: AuthScreenProps) {
               <LogIn size={18} aria-hidden="true" />
             )}
             {mode === "sign-up" ? "Create account" : "Sign in"}
-          </button>
+          </Button>
         </form>
       </section>
     </main>
