@@ -240,10 +240,11 @@ test.describe("integrations live path (#2162)", () => {
     await composer.press("Enter");
 
     // The model cannot guess which title belongs to that id: the exact title appearing proves
-    // the tool call went through Moss -> Radarr and back.
-    await expect(page.getByRole("dialog").getByText(probeMovie.title).first()).toBeVisible({
-      timeout: 300_000
-    });
+    // the tool call went through Moss -> Radarr and back. The drawer's hidden preview line repeats
+    // the reply, so only a visible copy counts.
+    await expect(
+      page.getByRole("dialog").getByText(probeMovie.title).filter({ visible: true }).first()
+    ).toBeVisible({ timeout: 300_000 });
     await expectCredentialAbsent(page, RADARR_KEY);
   });
 });

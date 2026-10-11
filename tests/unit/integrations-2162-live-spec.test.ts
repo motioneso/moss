@@ -45,6 +45,13 @@ describe("integrations live spec (#3279)", () => {
     );
   });
 
+  it("waits for the visible answer, not the hidden chat preview line", async () => {
+    const text = await source();
+    expect(text, "title wait skips hidden copies").toMatch(
+      /getByText\(probeMovie\.title\)\s*\.filter\(\{ visible: true \}\)\s*\.first\(\)/
+    );
+  });
+
   it("checks credentials without echoing them into a failure report", async () => {
     const text = await source();
     expect(text, "toContain prints the credential on failure").not.toMatch(
