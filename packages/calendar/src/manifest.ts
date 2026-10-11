@@ -118,7 +118,7 @@ export const calendarModuleManifest = {
       id: "calendar",
       label: "Calendar",
       description:
-        "View your connected events in Day, Week or Month in your timezone and 12/24-hour format, retaining the view. Month steps stay adjacent across month and year ends. On phones, Week and Month scroll horizontally; Day stays compact. Failed reads offer Retry; a failed refresh retains loaded events.",
+        "View events by Day, Week or Month in your timezone and hour format, keeping the view; month steps stay adjacent. Phones scroll Week and Month sideways; Day stays compact. Failed reads offer Retry; failed refreshes keep loaded events.",
       path: "/calendar",
       icon: "calendar-days",
       order: 35,
