@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AssistantToolGateway, SessionTokenRegistry } from "@moss/ai";
 import type { MossModuleManifest, ToolLocale } from "@moss/module-sdk";
 import { liveStreamResult, renderAndCap } from "../../packages/ai/src/gateway/output-validation.js";
@@ -149,6 +149,15 @@ describe("deterministic model tool timestamp references", () => {
   );
 
   describe("follows the person's clock, not the machine's", () => {
+    const machineZone = process.env.TZ;
+    beforeAll(() => {
+      process.env.TZ = "UTC";
+    });
+    afterAll(() => {
+      if (machineZone === undefined) delete process.env.TZ;
+      else process.env.TZ = machineZone;
+    });
+
     const afternoon = "2026-10-07T21:30:00Z";
     const withLocale = (locale: ToolLocale) =>
       unpack(
