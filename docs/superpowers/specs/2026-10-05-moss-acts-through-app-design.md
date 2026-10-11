@@ -286,7 +286,8 @@ put an approval card on every write, even under YOLO. In a tainted conversation:
 
 **YOLO ruling (Ben, 2026-10-11, #3417): "I don't want it to ask for approvals for pretty much
 everything when YOLO mode is on."** Under YOLO a durable outside-content mark changes no decision.
-A marked conversation runs exactly what YOLO runs in a clean one: integration tools (all `outbound`),
+A marked conversation runs what YOLO runs in a clean one, except ACP shell and destructive requests
+(below): integration tools (all `outbound`),
 outbound app GETs, and ordinary writes. Non-external first-party `outbound` tools and destructive
 tools still ask, as they do under YOLO in a clean conversation. Without YOLO the table above is
 unchanged.
@@ -298,7 +299,9 @@ runs past a durable outside-content mark only (`isMarked`). A missing or foreign
 unreadable provenance row, or another automatic run holding the conversation still asks.
 
 Without YOLO, outbound tools keep the floor because they send data to arbitrary destinations.
-Under YOLO the user has accepted that exposure (#3417): injected text in a marked conversation can
+Add-on module writes can still reach the hosts their manifest declares when a no-ask action group
+trusts them. Ben has not ruled on that non-YOLO exposure; it is raised for his decision on #3338.
+Under YOLO the user has accepted the exposure (#3417): injected text in a marked conversation can
 steer a connected tool, an outbound GET or an add-on module write (Finance to Plaid, Job search to
 its job boards) to send private data out without a card. Host pinning still limits module writes
 to hosts the user accepted at install.

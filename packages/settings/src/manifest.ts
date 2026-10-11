@@ -699,7 +699,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       id: "app.outsideContentApproval",
       description:
-        "Outside content makes writes ask unless the user trusted them by Auto-approve actions or a no-ask action group within its limit. Sending, deletion and over-limit calls still ask. App source and app-map reads add no outside content."
+        "With Auto-approve actions on, outside content changes no decision. Otherwise writes ask unless a no-ask action group trusts them; sending, deletion and over-limit calls ask. App source and app-map reads add no outside content."
     },
     {
       id: "app.ownerToolDescriptors",
@@ -714,7 +714,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       id: "app.callAction",
       description:
-        "Call app routes as you. Destructive actions ask. After outside content enters a chat, writes ask unless Auto-approve actions is on, and outbound reads always ask. Missing provenance also asks. Successful changes refresh screens.",
+        "Call app routes as you. Destructive actions ask. After outside content enters a chat, writes and outbound reads ask unless Auto-approve actions is on. Missing provenance also asks. Successful changes refresh screens.",
       errors: [
         {
           code: "context_admission_unavailable",
