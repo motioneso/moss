@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Chat reconnects after closing during startup.** Closing or reloading chat while it starts no longer leaves Moss stuck thinking. [PR #3445](https://github.com/motioneso/moss/pull/3445)
 - **Reliable dialog focus.** Dialogs keep keyboard focus usable when a focused control becomes unavailable. [PR #3401](https://github.com/motioneso/moss/pull/3401)
 - **Chat and approvals use your time zone and clock.** Times in chat answers, approval cards and approval messages now follow the time zone, region and 12- or 24-hour clock you chose in Settings. [PR #3437](https://github.com/motioneso/moss/pull/3437)
 - **Today shows times in your own time zone and clock style.** The Today page and chat suggestions now show every time in your saved time zone and use your 12-hour or 24-hour choice, and the greeting follows your own time of day. [PR #3425](https://github.com/motioneso/moss/pull/3425)
