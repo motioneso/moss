@@ -53,10 +53,27 @@ function sql(query: string): string {
   ).trim();
 }
 
+// The drawer keeps its last conversation; a fresh chat comes from the Conversations overlay.
+// Sending waits until the drawer's clear is acknowledged and the old replies have left.
+async function startSideChat(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Open conversations" }).click();
+  const cleared = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname === "/api/chat/clear" &&
+      url.searchParams.get("surface") === "drawer"
+    );
+  });
+  await page.getByRole("button", { name: "New side chat", exact: true }).click();
+  expect((await cleared).status()).toBe(204);
+  await expect(page.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")).toHaveCount(0);
+}
+
 async function askInNewChat(page: Page, message: string): Promise<void> {
   await page.goto("/today");
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
-  await page.getByRole("button", { name: "New chat" }).click();
+  await startSideChat(page);
   // The page shows no ready signal for the background protocol start; give it a bounded settle.
   await page.waitForTimeout(20_000);
   const composer = page.getByRole("textbox", { name: /^Message/ });
@@ -106,7 +123,8 @@ async function chatPictures(page: Page, name: string): Promise<void> {
     await page.setViewportSize(viewport);
     // Lets the chat drawer finish moving so the picture is steady.
     await page.waitForTimeout(2_000);
-    await page.screenshot({ path: `${R26.shotDir}/${name}-${size}.png` });
+    if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+      await page.screenshot({ path: `${R26.shotDir}/${name}-${size}.png` });
   }
   await page.setViewportSize({ width: 1440, height: 900 });
 }
@@ -136,14 +154,21 @@ test("7. setup for chat: one copy of the tools, YOLO off, a classifier model", a
 
   const models = (
     (await (await page.request.get("/api/ai/models")).json()) as {
-      models: readonly { id: string; capabilities: readonly string[]; tier: string }[];
+      models: readonly {
+        id: string;
+        providerModelId: string | null;
+        capabilities: readonly string[];
+        tier: string;
+      }[];
     }
   ).models;
-  // LIVE_R26_CLASSIFIER_MODEL_ID pins the classifier to one configured model (the rerun uses a
-  // small, fast API-key model); without it the first model that returns structured answers is used.
+  // LIVE_R26_CLASSIFIER_MODEL_ID pins the classifier to one configured model, by its id or its
+  // provider's model name; without it the first model that returns structured answers is used.
   const pinned = process.env.LIVE_R26_CLASSIFIER_MODEL_ID;
   const classifier = models.find((model) =>
-    pinned ? model.id === pinned : model.capabilities.includes("json")
+    pinned
+      ? model.id === pinned || model.providerModelId === pinned
+      : model.capabilities.includes("json")
   );
   expect(classifier, "a model that can return structured answers").toBeTruthy();
   const bound = await page.request.put("/api/ai/services/sorting/binding", {
@@ -254,8 +279,7 @@ test("10. a kept-out tool still works in chat and is never named in shadow recor
   await askUntilRan(page, LIGHT, "Turn the hallway light off with the hub tool.");
 
   // Every tool-name column, plus the outcome. The record keeps the message text by design, and this
-  // prompt names the kept-out tool, so the text column is left out. The classifier here is a
-  // small API-key model that answers well inside the 3-second gate limit.
+  // prompt names the kept-out tool, so the text column is left out.
   const rows = () =>
     sql(
       "select concat_ws('|', coalesce(module_id,'-'), coalesce(tool_name,'-'), " +
@@ -277,8 +301,8 @@ test("10. a kept-out tool still works in chat and is never named in shadow recor
   );
 });
 
-// Needs a classifier that answers inside the gate's fixed 3-second limit (#3036). The Codex
-// sign-in does not; the rerun pins a small API-key model through LIVE_R26_CLASSIFIER_MODEL_ID.
+// The gate's time limit follows the routing model's measured speed (#3365), so a slow sign-in
+// model gets a longer limit. Each turn logs the routing model's time per question.
 test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) => {
   test.setTimeout(1_200_000);
   await signIn(page);
@@ -287,7 +311,7 @@ test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) =>
   const classifier = sql(
     "select m.id || '|' || m.provider_model_id from app.ai_configured_models m " +
       (pinned
-        ? `where m.id = '${pinned}'`
+        ? `where m.id::text = '${pinned}' or m.provider_model_id = '${pinned}' limit 1`
         : "where m.capabilities @> array['json']::text[] limit 1")
   );
   const [modelId, providerModelId] = classifier.split("|");
@@ -358,7 +382,11 @@ test("11. YOLO handles a Sensitive tool only above its bar", async ({ page }) =>
       checks: checks(since)
     };
     const confidences = confidencesOf(result.checks);
-    console.log(`R2.6 YOLO ${label}:`, JSON.stringify({ message, ...result, confidences }));
+    const perQuestionMs = result.checks.map((line) => Number(line.split("|")[1]?.split(" ")[0]));
+    console.log(
+      `R2.6 YOLO ${label}:`,
+      JSON.stringify({ message, ...result, confidences, perQuestionMs })
+    );
     await chatPictures(page, `r26-19-yolo-${label}`);
     return { ...result, confidences };
   };
@@ -422,9 +450,10 @@ test("12. the shadow report screen lists the records", async ({ page }) => {
   // No crowding check here: the admin side menu's group labels are 10px on main, outside this work.
   for (const [size, viewport] of SIZES) {
     await page.setViewportSize(viewport);
-    await page.screenshot({
-      path: `${R26.shotDir}/r26-18-shadow-report-${size}.png`,
-      fullPage: true
-    });
+    if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+      await page.screenshot({
+        path: `${R26.shotDir}/r26-18-shadow-report-${size}.png`,
+        fullPage: true
+      });
   }
 });
