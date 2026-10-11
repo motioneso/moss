@@ -23,6 +23,7 @@ const baseInput = {
   ownerUserId: "00000000-0000-4000-8000-000000000001",
   sinceCursor: {},
   timeZone: "UTC",
+  locale: { timezone: "UTC", region: "en-US", dateFormat: "24" as const },
   maxSignals: 10,
   priorityAnchors: [] as { label: string; aliases: readonly string[] }[]
 };

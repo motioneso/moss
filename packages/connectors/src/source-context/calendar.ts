@@ -1,4 +1,9 @@
-import { resolveMossEnv, withSavepoint, type CalendarEvent, type DataContextDb } from "@moss/db";
+import { withSavepoint, type CalendarEvent, type DataContextDb } from "@moss/db";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  LOCALE_PREFERENCE_KEY,
+  resolveEffectiveLocale
+} from "@moss/shared";
 
 import type { ConnectorAccountSafeRow } from "../repository.js";
 import type { GoogleCalendarEvent } from "../google-api-client.js";
@@ -25,7 +30,6 @@ export const CALENDAR_DEFAULT_LOOKAHEAD_MS = 48 * 60 * 60 * 1000;
 export const CALENDAR_DEFAULT_LIMIT = 50;
 export const CALENDAR_MAX_LIMIT = 200;
 
-const DEFAULT_TIMEZONE = resolveMossEnv(process.env, "JARVIS_DEFAULT_TZ") ?? "America/New_York";
 const EARLY_LOCAL_HOUR = 9;
 const LATE_LOCAL_HOUR = 18;
 
@@ -61,6 +65,7 @@ export interface CalendarSourceContextDeps {
     ): Promise<CalendarEvent[]>;
   };
   readonly now?: () => Date;
+  /** Overrides the person's saved locale timezone for early/late flags. */
   readonly timeZone?: string;
   readonly logger?: SyncLogger;
 }
@@ -235,7 +240,6 @@ export async function listCalendarContext(
   input: ListCalendarContextInput
 ): Promise<CalendarContextResult> {
   const now = deps.now?.() ?? new Date();
-  const timeZone = deps.timeZone ?? DEFAULT_TIMEZONE;
   const windowStart = input.windowStart ? new Date(input.windowStart) : now;
   const windowEnd = input.windowEnd
     ? new Date(input.windowEnd)
@@ -365,6 +369,15 @@ export async function listCalendarContext(
 
   unflagged.sort((a, b) => (a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0));
   const capped = unflagged.slice(0, limit);
+  // A failed read inside its savepoint falls back to the default and cannot abort the caller.
+  const timeZone =
+    deps.timeZone ??
+    (await withSavepoint(scopedDb, () =>
+      deps.preferencesRepository.get(scopedDb, LOCALE_PREFERENCE_KEY)
+    ).then(
+      (stored) => resolveEffectiveLocale(stored).timezone,
+      () => DEFAULT_LOCALE_SETTINGS.timezone
+    ));
   const flags = classifyCalendarFlags(capped, timeZone);
   const items: CalendarContextItem[] = capped.map((item, index) => ({
     ...item,

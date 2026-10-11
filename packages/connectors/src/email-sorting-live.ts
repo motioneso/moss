@@ -1,4 +1,5 @@
 import { resolveMossEnv, type DataContextDb } from "@moss/db";
+import type { LocaleSettingsDto } from "@moss/shared";
 import { signInCodeDecision } from "@moss/shared/email-otp-rule";
 
 import {
@@ -54,6 +55,8 @@ export interface LiveEmailSortingInput {
   readonly userSentLast: boolean | "unknown";
   readonly knownSender: boolean;
   readonly now: Date;
+  /** The person's locale; the dates the model reads are in their timezone. */
+  readonly locale: LocaleSettingsDto;
   /** Budget for the sorting model's answer; defaults to the email model call budget. */
   readonly timeoutMs?: number;
 }
@@ -114,7 +117,8 @@ export async function sortEmailOnSortingModel(
         receivedAt: parsed.receivedAt,
         body: parsed.body
       },
-      input.now
+      input.now,
+      input.locale
     );
     let answer: Awaited<ReturnType<EmailSortingAsk>>;
     try {
@@ -209,6 +213,8 @@ export interface SortingModelPassInput {
   readonly userSentLast: (parsed: ParsedEmail) => Promise<boolean | "unknown">;
   readonly knownSender: (parsed: ParsedEmail) => boolean;
   readonly now: () => Date;
+  /** The person's locale; the dates the model reads are in their timezone. */
+  readonly locale: LocaleSettingsDto;
   /** Runs one database-touching step so its failure cannot abort the sync's transaction. */
   readonly guard: <T>(work: () => Promise<T>) => Promise<T>;
 }
@@ -261,7 +267,13 @@ export async function runSortingModelPass(
     const outcome = await input
       .guard(() =>
         sortEmailOnSortingModel(
-          { parsed, userSentLast, knownSender: input.knownSender(parsed), now: input.now() },
+          {
+            parsed,
+            userSentLast,
+            knownSender: input.knownSender(parsed),
+            now: input.now(),
+            locale: input.locale
+          },
           sorting.ask
         )
       )

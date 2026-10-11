@@ -9,7 +9,7 @@
  * episodic-embed job (unless the thread is incognito).
  */
 import type { AiConfiguredModelSafeRow, AiRepository, ProviderKind } from "@moss/ai";
-import { extractTimezone, resolveEffectiveTimezone } from "../locale-utils.js";
+import { resolveEffectiveTimezone } from "../locale-utils.js";
 import { sql, type Kysely } from "kysely";
 import {
   assertDataContextDb,
@@ -468,10 +468,9 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         );
         if (archiveEnabled === true) {
           const localeRaw = await this.localePreferences?.get(scopedDb, "locale");
-          const timezone = extractTimezone(localeRaw) ?? "UTC";
           const archivePayload: ArchiveDayJobPayload = {
             actorUserId,
-            localDate: localDay(capturedAt, timezone)
+            localDate: localDay(capturedAt, resolveEffectiveTimezone(localeRaw))
           };
           await sendJob(this.boss, CHAT_ARCHIVE_DAY_QUEUE, archivePayload);
         }
