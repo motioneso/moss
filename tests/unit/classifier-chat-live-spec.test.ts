@@ -87,6 +87,51 @@ const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
   ["expect((await report).ok()).toBe(true);", 1]
 ];
 
+// The reachable pre-#3388 runs, under the current marked-chat YOLO rule.
+const RESTORED_RUN_ASSERTIONS: readonly (readonly [string, number])[] = [
+  ["if (ran) await page.waitForTimeout(5_000);", 1],
+  [
+    "async function askUntilRan(page: Page, tool: string, message: string): Promise<number> {\n" +
+      "  const before = (await toolServerCalls(tool)).length;\n" +
+      "  for (let attempt = 1; attempt <= 2; attempt++) {",
+    1
+  ],
+  [".poll(async () => (await toolServerCalls(tool)).length - before, { timeout: 150_000 })", 1],
+  ["      .toBeGreaterThanOrEqual(1)\n      .then(() => true)", 1],
+  ["await expect(page.locator(ACTION_CARD)).toHaveCount(0);", 3],
+  ["const ran = await askUntilRan(\n    page,\n    LIGHT,", 1],
+  ["const ran = await askUntilRan(page, NOTIFY_TOOL, notify);", 1],
+  ['expect(ran, "the notification went out exactly once").toBe(1);', 1],
+  ["const devices = await askUntilRan(\n    page,\n    DEVICES,", 1],
+  ['await askUntilRan(page, LIGHT, "Turn the hallway light off with the hub tool.");', 1],
+  ["await setYolo(page, true);", 4],
+  ["await setYolo(page, false);", 4],
+  ['.poll(() => rows().some((row) => row.includes("|pending|")), { timeout: 120_000 })', 1],
+  ['await setGate(page, "on");\n  await setYolo(page, false);', 1],
+  [
+    "      outcome.ran &&\n      outcome.unlocked &&\n      !outcome.failureShown &&\n      !outcome.asked &&\n      outcome.chatAnswers === 0",
+    1
+  ],
+  [
+    '  expect(\n    handled,\n    "the gate ran the Sensitive tool itself and it completed: door unlocked, no card, no chat answer"\n  ).toBe(true);',
+    1
+  ],
+  ['expect(above, "both classifier answers reach the Sensitive bar").toBe(true);', 1],
+  [
+    'expect(yoloBelow.asked || yoloBelow.chatAnswers > 0, "the chat model took over").toBe(true);',
+    1
+  ],
+  ["      yoloBelow.confidences.some((value) => value < 0.95),", 1],
+  ["      outcome.gateExecuted\n", 1],
+  ["`where owner_user_id = '${ownerId}' and thread_id = '${threadId}' ` +", 1],
+  [
+    "\"and model_metadata->'origin'->>'kind' = 'classifier_gate' \" +\n" +
+      "              `and model_metadata->'origin'->>'toolName' = '${SLUG}.${DOOR}' ` +\n" +
+      "              \"and model_metadata->'origin'->>'outcome' = 'executed-success'\"",
+    1
+  ]
+];
+
 const KEPT_SETUP_ASSERTIONS: readonly (readonly [string, number])[] = [
   ['expect((await install.json()).installState).toBe("installed");', 1],
   ['expect((await login.json()).status).toBe("ready");', 1],
@@ -166,6 +211,9 @@ function problems({ chat, helpers, setup, config }: Sources): string[] {
   for (const [assertion, count] of KEPT_CHAT_ASSERTIONS) {
     if (countOf(chat, assertion) < count) found.push(`lost assertion: ${assertion}`);
   }
+  for (const [assertion, count] of RESTORED_RUN_ASSERTIONS) {
+    if (countOf(chat, assertion) < count) found.push(`lost restored run check: ${assertion}`);
+  }
   for (const [assertion, count] of KEPT_SETUP_ASSERTIONS) {
     if (countOf(setup, assertion) < count) found.push(`lost setup assertion: ${assertion}`);
   }
@@ -184,6 +232,12 @@ describe("classifier chat live journey (#3362)", () => {
       expect(next, `mutation did not apply: ${String(from)}`).not.toBe(all[file]);
       return problems({ ...all, [file]: next });
     };
+
+    it.each(RESTORED_RUN_ASSERTIONS)("lost restored run check: %s", async (assertion) => {
+      expect(await mutate("chat", assertion, "")).toContain(
+        `lost restored run check: ${assertion}`
+      );
+    });
 
     it("the removed New chat button", async () => {
       expect(
@@ -322,7 +376,7 @@ describe("classifier chat live journey (#3362)", () => {
       expect(
         await mutate(
           "chat",
-          '    expect(result.ran || result.unlocked, "nothing unlocked the door in a marked chat").toBe(false);\n',
+          '  expect(result.ran || result.unlocked, "nothing unlocked the door in a marked chat").toBe(false);\n',
           ""
         )
       ).toContain(
