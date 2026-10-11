@@ -366,14 +366,14 @@ test("Finance phase 3: freedom step, dollar limit, chat moves, activity and undo
   expect(await readAssigned("Groceries"), "Undo restored Groceries").toBe(50_000);
   expect(await readAssigned("Fuel"), "Undo restored Fuel").toBe(fuelBefore);
 
-  // --- Chat: a $250 move is over the limit; Reject leaves the money where it was -------------
+  // --- Chat: a $150 move is over the limit; Reject leaves the money where it was -------------
   await openFinance();
   await ask(
-    "Move $250 from Groceries to Fuel for this month's budget. Use the budget move tool now."
+    "Move $150 from Groceries to Fuel for this month's budget. Use the budget move tool now."
   );
   const approveMove = card.getByRole("button", { name: "Approve" }).last();
   await expect(approveMove).toBeVisible({ timeout: 240_000 });
-  await crop(card.last(), "approval-card-250");
+  await crop(card.last(), "approval-card-150");
   await card.getByRole("button", { name: "Reject" }).last().click();
   expect(await readAssigned("Groceries"), "nothing moved without approval").toBe(50_000);
 

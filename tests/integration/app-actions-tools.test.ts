@@ -540,8 +540,8 @@ describe("app actions through the real gateway and app routes", () => {
     ).toBe("dark");
   });
 
-  it("reading other-thread turns taints app writes, outbound GETs and dedicated writes", async () => {
-    // YOLO would run the writes in a tainted thread (#3338), so leave the user's trust off.
+  it("reading other-thread turns taints app writes, outbound GETs and untrusted dedicated writes", async () => {
+    // YOLO and a trusted family run in a tainted thread (#3338), so switch the user's trust off.
     const h = gateway({ yoloMode: false, autoApprove: false });
     const threadId = threadByActor.get(ids.userA)!;
     const other = await runner.withDataContext(access, async (db) => {
@@ -562,6 +562,14 @@ describe("app actions through the real gateway and app routes", () => {
     expect(JSON.stringify(result)).toContain("OTHER_THREAD_CONTENT_3071");
     const provenance = new ConversationProvenanceStore(runner);
     expect(await provenance.isTainted(ids.userA, threadId)).toBe(true);
+    await runner.withDataContext(access, (db) =>
+      new AiRepository().setActionPolicy(
+        db,
+        "settings",
+        "settings.preference-write",
+        "ask_each_time"
+      )
+    );
     callSpy.mockClear();
     mintSpy.mockClear();
     for (const start of [
@@ -589,6 +597,22 @@ describe("app actions through the real gateway and app routes", () => {
     }
     expect(callSpy).not.toHaveBeenCalled();
     expect(mintSpy).not.toHaveBeenCalled();
+
+    // The install grant is the user's own trust, so the same write runs once restored.
+    await runner.withDataContext(access, (db) =>
+      new AiRepository().setActionPolicy(
+        db,
+        "settings",
+        "settings.preference-write",
+        "trusted_auto"
+      )
+    );
+    h.events.length = 0;
+    expect(await h.theme("light")).toMatchObject({ ok: true });
+    expect(h.events.filter((event) => event.kind === "action_request")).toEqual([]);
+    expect(h.events).toContainEqual(
+      expect.objectContaining({ kind: "action_result", outcome: "executed", decidedBy: "policy" })
+    );
   });
 
   describe("pending memory suggestions (Ben, 2026-10-06)", () => {

@@ -452,4 +452,28 @@ describe("policy confirmation floor", () => {
       await resolvePolicy(h.tool, "example", true, lookup("trusted_auto"), false, false, true)
     ).toBe("confirm");
   });
+
+  it.each([false, true])(
+    "tainted trusted write runs within the user's per-call limit and asks above it (YOLO=%s)",
+    async (yolo) => {
+      const tool = {
+        isExternal: false,
+        requiresConfirmation: async (_db: unknown, input: Record<string, unknown>) =>
+          Number(input.amount) > 100
+      };
+      const small = build({ tainted: true, yolo, tool });
+      expect(
+        await small.gateway.callTool(small.token, small.tool.name, { amount: 50 })
+      ).toMatchObject({ ok: true });
+      expect(small.handler).toHaveBeenCalledOnce();
+      expect(small.createPending).not.toHaveBeenCalled();
+
+      const large = build({ tainted: true, yolo, tool });
+      await rejectPending(
+        large,
+        large.gateway.callTool(large.token, large.tool.name, { amount: 150 })
+      );
+      expect(large.handler).not.toHaveBeenCalled();
+    }
+  );
 });
