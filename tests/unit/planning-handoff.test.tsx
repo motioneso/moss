@@ -76,6 +76,7 @@ describe("saveStatusLine", () => {
       failed: 0,
       pending: 0,
       unknown: 0,
+      notApplied: 0,
       deniedReason: null,
       needsConfirm: false,
       ...overrides
@@ -87,6 +88,9 @@ describe("saveStatusLine", () => {
     expect(line({ mode: "auto", applied: 1 })).toBe("Tomorrow is ready.");
     expect(line({ mode: "auto", pending: 1 })).toContain("1 pending");
     expect(line({ mode: "auto", unknown: 1 })).toContain("1 need checking");
+    expect(line({ mode: "auto", applied: 1, notApplied: 2 })).toBe(
+      "Saved. Applied 1; 0 failed; 0 pending; 2 not applied."
+    );
     expect(line({ mode: "auto", deniedReason: "busy" })).toContain("busy");
     expect(line({ mode: "auto", needsConfirm: true })).toContain("Confirm");
   });

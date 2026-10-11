@@ -284,11 +284,10 @@ describe("task detail save boundary", () => {
       }
     }
   );
-  it("explains committed actions and asks before discarding main-field edits", async () => {
+  it("asks before discarding main-field edits", async () => {
     const close = vi.fn();
     await render(task.id, close);
     await eventually(() => expect(button("Save changes").disabled).toBe(false));
-    expect(container.textContent).toContain("Comments, tags and subtasks save immediately");
     type('[aria-label="Task title"]', "Unsaved title");
     act(() => button("Cancel").click());
     expect(close).not.toHaveBeenCalled();
@@ -331,7 +330,7 @@ describe("task detail save boundary", () => {
     expect(container.textContent).toContain("Discard unsaved changes?");
     expect(title.value).toBe("Escape must preserve this");
   });
-  it("explains that a partly saved new task remains when unsaved changes are discarded", async () => {
+  it("discarding after a partly saved new task leaves the saved parts alone", async () => {
     const close = vi.fn();
     api.createTask.mockResolvedValue({ task });
     api.breakdownTask.mockRejectedValue(new Error("Subtask unavailable"));
@@ -342,10 +341,7 @@ describe("task detail save boundary", () => {
     act(() => button("Add task").click());
     await eventually(() => expect(container.textContent).toContain("Could not save"));
     act(() => button("Cancel").click());
-    expect(container.textContent).toContain(
-      "The task and any comments, tags or subtasks already saved will remain."
-    );
-    expect(container.textContent).not.toContain("This draft will be discarded.");
+    expect(container.textContent).toContain("Discard unsaved changes?");
     act(() => button("Discard unsaved changes").click());
     expect(close).toHaveBeenCalledOnce();
     expect(api.createTask).toHaveBeenCalledOnce();

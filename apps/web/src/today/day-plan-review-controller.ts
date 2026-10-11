@@ -40,6 +40,9 @@ export interface DayPlanReviewInput {
   readonly morningDefinitionId: string | null;
 }
 
+/** Receives block ids whose calendar writes were sent. */
+export type WritesStarted = (blockIds: readonly string[]) => void;
+
 export function useDayPlanReview(input: DayPlanReviewInput) {
   const queryClient = useQueryClient();
   const [choices, setChoices] = useState<Readonly<Record<string, BlockChoice>>>({});
@@ -241,18 +244,26 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     [attempt, choiceFor, invalidateAfterWrite, revision, touchedIds]
   );
 
+  // `onStarted` receives the ids whose calendar writes may have run: a returned report, or a
+  // failure other than a 4xx rejection. A 4xx or a confirmation request writes nothing.
   const apply = useCallback(
-    async (blockIds: readonly string[]): Promise<boolean> => {
+    async (blockIds: readonly string[], onStarted?: WritesStarted): Promise<boolean> => {
       const plan = snapshotRef.current;
       if (!plan || blockIds.length === 0) return false;
       return (
         (await attempt(async () => {
           const key = selectionKey(plan.id, revisionRef.current, [...blockIds].sort().join(","));
-          const response = await applyDayPlan(plan.id, {
-            expectedRevision: revisionRef.current,
-            idempotencyKey: key,
-            selectedBlockIds: [...blockIds]
-          });
+          let response: Awaited<ReturnType<typeof applyDayPlan>>;
+          try {
+            response = await applyDayPlan(plan.id, {
+              expectedRevision: revisionRef.current,
+              idempotencyKey: key,
+              selectedBlockIds: [...blockIds]
+            });
+          } catch (error) {
+            if (!(error instanceof ApiError && error.status < 500)) onStarted?.(blockIds);
+            throw error;
+          }
           if (isConfirmationRequired(response)) {
             approvalRef.current = {
               operationId: response.operationId,
@@ -267,6 +278,7 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
           }
           approvalRef.current = null;
           setApproval(null);
+          onStarted?.(blockIds);
           storeReport(response, blockIds);
           invalidateAfterWrite();
           return true;
@@ -315,24 +327,27 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     return apply(list);
   }, [apply, choiceFor, runPreview, touchedIds]);
 
-  const acceptAllAdditions = useCallback(async (): Promise<boolean> => {
-    const plan = snapshotRef.current;
-    if (!plan) return false;
-    const selected = acceptAllSelectionFor(plan, choiceFor, touchedIds);
-    if (selected.length === 0 || !(await runPreview(selected))) return false;
-    const response = previewRef.current;
-    if (!response) return false;
-    const conflicted = new Set(response.conflicts.map((conflict) => conflict.blockId));
-    const list = response.eligibleBlockIds.filter((id) => !conflicted.has(id));
-    const applied = await apply(list);
-    // A 202 stages nothing usable for additions: drop it and ask for review.
-    if (approvalRef.current) {
-      dismissApproval();
-      setNotice(ACCEPT_ALL_NEEDS_REVIEW);
-      return true;
-    }
-    return applied;
-  }, [apply, choiceFor, dismissApproval, runPreview, touchedIds]);
+  const acceptAllAdditions = useCallback(
+    async (onStarted?: WritesStarted): Promise<boolean> => {
+      const plan = snapshotRef.current;
+      if (!plan) return false;
+      const selected = acceptAllSelectionFor(plan, choiceFor, touchedIds);
+      if (selected.length === 0 || !(await runPreview(selected))) return false;
+      const response = previewRef.current;
+      if (!response) return false;
+      const conflicted = new Set(response.conflicts.map((conflict) => conflict.blockId));
+      const list = response.eligibleBlockIds.filter((id) => !conflicted.has(id));
+      const applied = await apply(list, onStarted);
+      // A 202 stages nothing usable for additions: drop it and ask for review.
+      if (approvalRef.current) {
+        dismissApproval();
+        setNotice(ACCEPT_ALL_NEEDS_REVIEW);
+        return true;
+      }
+      return applied;
+    },
+    [apply, choiceFor, dismissApproval, runPreview, touchedIds]
+  );
 
   const retry = useCallback(async (): Promise<boolean> => {
     const plan = snapshotRef.current;

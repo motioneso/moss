@@ -234,6 +234,8 @@ export interface SaveStatusInput {
   readonly failed: number;
   readonly pending: number;
   readonly unknown: number;
+  /** Writes never started: held back by a preview conflict or unavailable calendar, or rejected. */
+  readonly notApplied: number;
   readonly deniedReason: string | null;
   readonly needsConfirm: boolean;
 }
@@ -243,8 +245,8 @@ export function saveStatusLine(input: SaveStatusInput): string {
   if (!input.saved) return "Not saved yet.";
   if (input.needsConfirm) return "Confirm the calendar changes to finish saving.";
   if (input.deniedReason !== null) return `The calendar refused the batch: ${input.deniedReason}`;
-  if (input.failed + input.pending + input.unknown > 0)
-    return `Saved. Applied ${input.applied}; ${input.failed} failed; ${input.pending} pending${input.unknown > 0 ? `; ${input.unknown} need checking` : ""}.`;
+  if (input.failed + input.pending + input.unknown + input.notApplied > 0)
+    return `Saved. Applied ${input.applied}; ${input.failed} failed; ${input.pending} pending${input.unknown > 0 ? `; ${input.unknown} need checking` : ""}${input.notApplied > 0 ? `; ${input.notApplied} not applied` : ""}.`;
   if (input.mode === "off") return "Saved. The calendar is off, so nothing was written to it.";
   if (input.mode === "suggest") return "Saved. The blocks are proposed for the morning.";
   return "Tomorrow is ready.";

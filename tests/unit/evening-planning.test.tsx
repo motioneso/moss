@@ -341,6 +341,7 @@ describe("useEveningPlanning", () => {
   const liveRoots: { unmount(): void }[] = [];
   let draftMode = "ok";
   let applyOutcome: "applied" | "failed" = "applied";
+  let previewMode: "available" | "conflict" | "unavailable" = "available";
   let policyNow: "off" | "suggest" | "auto" = "suggest";
   let savedPlan: DayPlanDto;
   let calls: { method: string; url: string; body: unknown }[] = [];
@@ -378,13 +379,25 @@ describe("useEveningPlanning", () => {
         return json({ plan: savedPlan });
       }
       if (href.endsWith("/preview") && method === "POST") {
+        const unavailable = previewMode === "unavailable";
         return json({
           revision: savedPlan.revision,
-          calendarAvailability: "available",
-          calendarAsOf: `${TMO}T00:00:00.000Z`,
+          calendarAvailability: unavailable ? "unavailable" : "available",
+          calendarAsOf: unavailable ? null : `${TMO}T00:00:00.000Z`,
           blocks: [],
-          eligibleBlockIds: ["b-p1", "b-p2"],
-          conflicts: []
+          eligibleBlockIds: unavailable ? [] : ["b-p1", "b-p2"],
+          conflicts:
+            previewMode === "conflict"
+              ? [
+                  {
+                    blockId: "b-p2",
+                    kind: "calendar_busy",
+                    withBlockId: null,
+                    detail: "Overlaps Standup",
+                    calendarEvent: null
+                  }
+                ]
+              : []
         });
       }
       if (href.endsWith("/apply") && method === "POST") {
@@ -502,6 +515,7 @@ describe("useEveningPlanning", () => {
     savedPlan = tomorrowPlan();
     draftMode = "ok";
     applyOutcome = "applied";
+    previewMode = "available";
     policyNow = "suggest";
     calls = [];
     stubFetch();
@@ -560,6 +574,28 @@ describe("useEveningPlanning", () => {
     expect(previews()).toBe(1);
     expect(applies()).toBe(1);
     expect(m.current().status).toBe("Tomorrow is ready.");
+  });
+  it("auto mode reports an addition held back by a preview conflict as not applied", async () => {
+    policyNow = "auto";
+    previewMode = "conflict";
+    const m = await mount(tomorrowPlan());
+    await act(async () => expect(await m.current().save()).toBe(true));
+    await m.rerender(savedPlan);
+    expect(applies()).toBe(1);
+    expect(calls.find((c) => c.url.endsWith("/apply"))?.body).toMatchObject({
+      selectedBlockIds: ["b-p1"]
+    });
+    expect(m.current().status).toBe("Saved. Applied 1; 0 failed; 0 pending; 1 not applied.");
+  });
+  it("auto mode reports every addition as not applied when the calendar is unavailable", async () => {
+    policyNow = "auto";
+    previewMode = "unavailable";
+    const m = await mount(tomorrowPlan());
+    await act(async () => expect(await m.current().save()).toBe(true));
+    await m.rerender(savedPlan);
+    expect(previews()).toBe(1);
+    expect(applies()).toBe(0);
+    expect(m.current().status).toBe("Saved. Applied 0; 0 failed; 0 pending; 2 not applied.");
   });
   it("switching auto to suggest keeps committed blocks and emits no removal", async () => {
     policyNow = "auto";
@@ -714,7 +750,7 @@ describe("useEveningPlanning", () => {
     await act(async () => expect(await m.current().save()).toBe(true));
     await m.rerender(savedPlan);
     expect(applies()).toBe(1);
-    expect(m.current().status).toBe("Saved. Applied 0; 1 failed; 2 pending.");
+    expect(m.current().status).toBe("Saved. Applied 0; 1 failed; 0 pending; 2 not applied.");
   });
   it("keeps a review-edited proposal time through the save", async () => {
     const m = await mount(tomorrowPlan());

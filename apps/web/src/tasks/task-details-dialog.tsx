@@ -464,11 +464,6 @@ export function TaskDetailsDialog(props: {
           {discardRequested ? (
             <div className="tasks-notice" role="alert">
               <p className="jds-hint">Discard unsaved changes?</p>
-              <p className="jds-hint">
-                {isNew && !createdRef.current
-                  ? "This draft will be discarded."
-                  : "The task and any comments, tags or subtasks already saved will remain."}
-              </p>
               <div className="tk-modal__save-actions">
                 <Button variant="secondary" onClick={() => setDiscardRequested(false)}>
                   Keep editing
@@ -526,12 +521,6 @@ export function TaskDetailsDialog(props: {
                 Retry task
               </Button>
             </div>
-          ) : null}
-          {!isNew ? (
-            <p className="jds-hint">
-              Title, notes and other details save with Save changes. Comments, tags and subtasks
-              save immediately.
-            </p>
           ) : null}
           <div className="tk-form" inert={saveMutation.isPending}>
             {/* Comment stream first — surface activity without scrolling. */}

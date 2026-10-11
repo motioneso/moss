@@ -90,7 +90,6 @@ test("planning audit journeys preserve goals, task dates, comments and month nav
       const opener = page.getByRole("button", { name: `Open ${title}` }).first();
       await opener.click();
       const dialog = page.getByRole("dialog", { name: "Task details" });
-      await expect(dialog).toContainText("Comments, tags and subtasks save immediately");
       const comment = `Saved ${method} comment ${run}`;
       const response = page.waitForResponse(
         (item) =>

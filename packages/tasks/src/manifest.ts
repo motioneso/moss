@@ -830,7 +830,7 @@ export const tasksModuleManifest = {
     {
       id: "tasks.details_save_boundary",
       description:
-        "Main fields save together. Comments, tags and subtasks on existing tasks save immediately, as the dialog explains. Discard retains already saved parts, including a partly created new task."
+        "Main fields save together. Comments, tags and subtasks on existing tasks save immediately. Discard retains already saved parts, including a partly created new task."
     },
     {
       id: "tasks.comment_focus",

@@ -17,7 +17,7 @@ import {
   effectivePending,
   localTimeToIso
 } from "./day-plan-review-model.js";
-import type { DayPlanReviewController } from "./day-plan-review-controller.js";
+import type { DayPlanReviewController, WritesStarted } from "./day-plan-review-controller.js";
 import {
   commitmentRowsFor,
   eveningIntentPatchFor,
@@ -62,8 +62,16 @@ export function useEveningPlanning(input: EveningPlanningInput) {
   const [pendingSave, setPendingSave] = useState<{
     moves: readonly string[];
     auto: boolean;
+    activation: number;
   } | null>(null);
   const [activationIds, setActivationIds] = useState<readonly string[]>([]);
+  // Calendar writes this activation sent, and whether its write run has ended.
+  const [writeRun, setWriteRun] = useState<{
+    activation: number;
+    started: readonly string[];
+    finished: boolean;
+  }>({ activation: 0, started: [], finished: true });
+  const activationRef = useRef(0);
   const activationBeforeRef = useRef<DayPlanReviewController["outcomes"]>({});
   const activationReportVersionRef = useRef(0);
   const activationApprovalRef = useRef<DayPlanReviewController["approval"]>(null);
@@ -124,11 +132,25 @@ export function useEveningPlanning(input: EveningPlanningInput) {
     if (!review || review.revision !== plan.revision) return;
     const pending = pendingSave;
     setPendingSave(null);
-    void (async () => {
-      if (pending.moves.length > 0) await review.apply(pending.moves);
-      else if (pending.auto) await review.acceptAllAdditions();
-    })();
+    void runWrites(pending.activation, async (started) => {
+      if (pending.moves.length > 0) await review.apply(pending.moves, started);
+      else if (pending.auto) await review.acceptAllAdditions(started);
+    });
   }, [pendingSave, plan, input]);
+
+  async function runWrites<T>(
+    activation: number,
+    work: (started: WritesStarted) => Promise<T>
+  ): Promise<T> {
+    const update = (change: (run: typeof writeRun) => typeof writeRun) =>
+      setWriteRun((run) => (run.activation === activation ? change(run) : run));
+    update((run) => ({ ...run, finished: false }));
+    try {
+      return await work((ids) => update((run) => ({ ...run, started: [...run.started, ...ids] })));
+    } finally {
+      update((run) => ({ ...run, finished: true }));
+    }
+  }
 
   async function save(): Promise<boolean> {
     const review = input.getReview();
@@ -194,8 +216,11 @@ export function useEveningPlanning(input: EveningPlanningInput) {
       activationBeforeRef.current = { ...(input.getReview()?.outcomes ?? {}) };
       activationReportVersionRef.current = input.getReview()?.reportVersion ?? 0;
       activationApprovalRef.current = input.getReview()?.approval ?? null;
+      const activation = ++activationRef.current;
+      const writes = moves.length > 0 || mode === "auto";
       setActivationIds([...additions, ...moves]);
-      setPendingSave(moves.length > 0 || mode === "auto" ? { moves, auto: mode === "auto" } : null);
+      setWriteRun({ activation, started: [], finished: !writes });
+      setPendingSave(writes ? { moves, auto: mode === "auto", activation } : null);
       return true;
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
@@ -215,12 +240,17 @@ export function useEveningPlanning(input: EveningPlanningInput) {
   async function confirmSave(): Promise<boolean> {
     const review = input.getReview();
     if (!review) return false;
-    const ok = await review.confirm();
+    const selection = review.approval?.selection ?? [];
+    const ok = await runWrites(activationRef.current, async (started) => {
+      started(selection);
+      const confirmed = await review.confirm();
+      if (confirmed && policyMode === "auto") await review.acceptAllAdditions(started);
+      return confirmed;
+    });
     if (!ok) {
       setStatusOverride("The confirmation expired. Review the changes and save again.");
       return false;
     }
-    if (policyMode === "auto") await review.acceptAllAdditions();
     return true;
   }
 
@@ -252,7 +282,7 @@ export function useEveningPlanning(input: EveningPlanningInput) {
   }
 
   const review = input.getReview();
-  const counts = { applied: 0, failed: 0, pending: 0, unknown: 0 };
+  const counts = { applied: 0, failed: 0, pending: 0, unknown: 0, notApplied: 0 };
   const activation = new Set(activationIds);
   const activationOutcomes = Object.fromEntries(
     Object.entries(review?.outcomes ?? {}).filter(
@@ -266,8 +296,9 @@ export function useEveningPlanning(input: EveningPlanningInput) {
     else if (item.outcome === "unknown") counts.unknown += 1;
     else counts.pending += 1;
   }
-  // Automatic scheduling (or explicit moves/removals) can still be in flight
-  // before any report arrives. A saved proposal alone is never a successful write.
+  // Automatic scheduling (or explicit moves/removals) is pending until its write run ends.
+  // After that, a sent write with no report needs checking and an unsent one was not applied.
+  // A saved proposal alone is never a successful write.
   const expectedWrites =
     policyMode === "auto"
       ? activationIds
@@ -275,7 +306,12 @@ export function useEveningPlanning(input: EveningPlanningInput) {
           const block = plan?.blocks.find((entry) => entry.id === id);
           return block?.pendingChange?.kind === "move" || block?.pendingChange?.kind === "remove";
         });
-  counts.pending += expectedWrites.filter((id) => activationOutcomes[id] === undefined).length;
+  for (const id of expectedWrites) {
+    if (activationOutcomes[id] !== undefined) continue;
+    if (!writeRun.finished) counts.pending += 1;
+    else if (writeRun.started.includes(id)) counts.unknown += 1;
+    else counts.notApplied += 1;
+  }
   const reviewNotice = review?.notice ?? null;
   const deniedReason =
     (review?.reportVersion ?? 0) > activationReportVersionRef.current &&
@@ -304,6 +340,7 @@ export function useEveningPlanning(input: EveningPlanningInput) {
         failed: counts.failed,
         pending: counts.pending,
         unknown: counts.unknown,
+        notApplied: counts.notApplied,
         deniedReason,
         needsConfirm: review?.approval != null && review.approval !== activationApprovalRef.current
       }),

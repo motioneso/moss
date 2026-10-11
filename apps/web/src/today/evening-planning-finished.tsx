@@ -85,7 +85,7 @@ export function EveningHandoffStep(props: {
             ? "You asked to keep the rest of the day deliberately light."
             : "You allowed room to follow through in the afternoon."
         }`
-      : "The saved plan has no task blocks. Your calendar commitments stay in place.";
+      : "The saved plan has no task blocks.";
   const detail = evening.status;
   return (
     <section className="evening-plan__section" id="evening-handoff" aria-label="Morning handoff">
