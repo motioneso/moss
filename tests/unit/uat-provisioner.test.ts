@@ -47,22 +47,22 @@ describe("provisionForUat setup failures (#2732)", () => {
   // exec`), so it cannot run until after the compose plan's "up jarv1s" step. These failures all
   // happen earlier, before any container exists — the copy must never be attempted.
   it("never attempts the Codex credential copy when the requested production subnet is refused", async () => {
-    const installRealChatCodexAuth = vi.fn();
+    const installRealChatAuth = vi.fn();
     process.env.UAT_DOCKER_SUBNET = "10.252.0.0/24";
 
     await expect(
       provisionForUat(
         "bare",
         { chatScript: "phase1-smoke" },
-        { listLiveSubnets: async () => [], installRealChatCodexAuth }
+        { listLiveSubnets: async () => [], installRealChatAuth }
       )
     ).rejects.toThrow(/10\.252\.0\.0\/24.*production/i);
 
-    expect(installRealChatCodexAuth).not.toHaveBeenCalled();
+    expect(installRealChatAuth).not.toHaveBeenCalled();
   });
 
   it("never attempts the Codex credential copy when live subnet discovery fails", async () => {
-    const installRealChatCodexAuth = vi.fn();
+    const installRealChatAuth = vi.fn();
 
     await expect(
       provisionForUat(
@@ -72,27 +72,27 @@ describe("provisionForUat setup failures (#2732)", () => {
           listLiveSubnets: async () => {
             throw new Error("malformed Docker inspect state");
           },
-          installRealChatCodexAuth
+          installRealChatAuth
         }
       )
     ).rejects.toThrow(/malformed Docker inspect state/i);
 
-    expect(installRealChatCodexAuth).not.toHaveBeenCalled();
+    expect(installRealChatAuth).not.toHaveBeenCalled();
   });
 
   it("never attempts the Codex credential copy when the UAT env file cannot be created", async () => {
-    const installRealChatCodexAuth = vi.fn();
+    const installRealChatAuth = vi.fn();
     process.env.TMPDIR = "/definitely-missing-uat-temp-root";
 
     await expect(
       provisionForUat(
         "bare",
         { chatScript: "phase1-smoke" },
-        { listLiveSubnets: async () => [], installRealChatCodexAuth }
+        { listLiveSubnets: async () => [], installRealChatAuth }
       )
     ).rejects.toThrow();
 
-    expect(installRealChatCodexAuth).not.toHaveBeenCalled();
+    expect(installRealChatAuth).not.toHaveBeenCalled();
   });
 });
 

@@ -94,6 +94,8 @@ export interface ChatPersistencePort {
       readonly usage?: ChatTurnUsageDto;
       /** #3311 — reserved reminder message ids this turn was shown; acknowledged with the save. */
       readonly acknowledgeReminderMessageIds?: readonly string[];
+      /** #3128 — live turn identity; the save clears its in-flight record. */
+      readonly turnId?: string;
     },
     surface?: ChatSurface
   ): Promise<
@@ -104,6 +106,23 @@ export interface ChatPersistencePort {
       }
     | undefined
   >;
+  /**
+   * #3128 — record a reply in flight just before the model receives it, so a restart can
+   * store the question and an interrupted note. Optional: embedders without recovery omit it.
+   */
+  beginLiveTurn?(
+    actorUserId: string,
+    turn: {
+      readonly turnId: string;
+      readonly threadId: string;
+      readonly userText: string;
+      readonly attachments?: readonly ChatAttachmentDto[];
+    }
+  ): Promise<void>;
+  /** #3128 — store an unsaved live turn that failed as its question plus the interrupted note. */
+  storeInterruptedLiveTurn?(actorUserId: string, threadId: string, turnId: string): Promise<void>;
+  /** #3128 — drop an unsaved live turn's record, as for a stopped or refused turn. */
+  discardLiveTurn?(actorUserId: string, turnId: string): Promise<void>;
   /**
    * #3311 — delivered reminders whose context is still pending in this exact Main chat, oldest
    * first and bounded. Optional: embedders without reminders omit it.
@@ -292,6 +311,12 @@ export interface ChatSessionManagerDeps {
   /** Refresh the session token's TTL on activity, so a live session's token never
    *  expires under the registry backstop (mirrors lastActivity / idle reaping). */
   readonly touchMcpToken?: (chatSessionId: string) => void;
+  /**
+   * #3335: mark a launch token as replaying until the replay has drained. The gateway refuses
+   * every tool and permission request on a marked token, because no user turn stands behind it.
+   */
+  readonly beginLaunchReplay?: (token: string) => void;
+  readonly endLaunchReplay?: (token: string) => void;
   /** Wait for origin-bound gateway notifications before completing their model/gate turn. */
   readonly flushActionRecords?: (chatSessionId: string) => Promise<void>;
   /**

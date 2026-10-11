@@ -179,7 +179,7 @@ test("tools connected mid-conversation stay out of the open chat (#2942)", async
       await signIn(page);
       if (!process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED) {
         throw new Error(
-          "no Codex sign-in was copied into this stack; refusing to fake the chat turn"
+          "no real chat model is set up for this stack; refusing to fake the chat turn"
         );
       }
       await bringUpRealChatModel(page);

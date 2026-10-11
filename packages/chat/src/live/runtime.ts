@@ -520,6 +520,9 @@ export interface CreateChatSessionRuntimeDeps {
     readonly revoke: (chatSessionId: string) => void;
     /** Refresh a session token's TTL on activity (defaults to no-op if omitted). */
     readonly touch?: (chatSessionId: string) => void;
+    /** #3335: refuse tool requests on a launch token until its replay has drained. */
+    readonly beginLaunchReplay?: (token: string) => void;
+    readonly endLaunchReplay?: (token: string) => void;
     /**
      * #2956: file a session's tool rows under its running turn. Wraps the
      * token registry's turn map; the manager sets it per turn and clears it
@@ -739,6 +742,8 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     mintMcpToken: deps.mcpTokenLifecycle?.mint,
     revokeMcpToken: deps.mcpTokenLifecycle?.revoke,
     touchMcpToken: deps.mcpTokenLifecycle?.touch,
+    beginLaunchReplay: deps.mcpTokenLifecycle?.beginLaunchReplay,
+    endLaunchReplay: deps.mcpTokenLifecycle?.endLaunchReplay,
     setCurrentTurnId: deps.mcpTokenLifecycle?.setCurrentTurn,
     clearCurrentTurnId: deps.mcpTokenLifecycle?.clearCurrentTurn,
     reconcileMcpTokens: deps.mcpTokenLifecycle?.reconcile,

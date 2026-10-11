@@ -85,11 +85,28 @@ async function sortedTools(page: Page): Promise<Map<string, IntegrationClassifie
   return new Map(detail.classifierTools.map((tool) => [tool.toolName, tool]));
 }
 
-/** One fresh real chat that asks for one tool call. Returns the drawer for screenshots. */
+// The drawer keeps its last conversation; a fresh chat comes from the Conversations overlay.
+// Sending waits until the drawer's clear is acknowledged and the old replies have left.
+async function startSideChat(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Open conversations" }).click();
+  const cleared = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "POST" &&
+      url.pathname === "/api/chat/clear" &&
+      url.searchParams.get("surface") === "drawer"
+    );
+  });
+  await page.getByRole("button", { name: "New side chat", exact: true }).click();
+  expect((await cleared).status()).toBe(204);
+  await expect(page.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble")).toHaveCount(0);
+}
+
+/** One fresh real chat that asks for one tool call. */
 async function askInNewChat(page: Page, message: string): Promise<void> {
   await page.goto(`${requireUatBaseURL()}/today`);
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
-  await page.getByRole("button", { name: "New chat" }).click();
+  await startSideChat(page);
   // The page shows no ready signal for the background protocol start; give it a bounded settle.
   await page.waitForTimeout(20_000);
   const composer = page.getByRole("textbox", { name: /^Message/ });
@@ -106,7 +123,7 @@ test("a sorted-safe connected tool runs with no card and a Sensitive one asks (#
   await test.step("sign in, real default model, connect the tool server with a reset tool", async () => {
     await signIn(page);
     if (!process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED) {
-      throw new Error("no Codex sign-in was copied into this stack; refusing to fake the model");
+      throw new Error("no real chat model is set up for this stack; refusing to fake the model");
     }
     await bringUpRealChatModel(page);
     fixture("/__control/tools", [
@@ -167,7 +184,8 @@ test("a sorted-safe connected tool runs with no card and a Sensitive one asks (#
     expect(ran, "the light call reached the service without a card").toBe(true);
     await page.waitForTimeout(5_000);
     await expect(page.locator(ACTION_CARD)).toHaveCount(0);
-    await page.screenshot({ path: `${SHOT_DIR}/2984-safe-runs-desktop.png` });
+    if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+      await page.screenshot({ path: `${SHOT_DIR}/2984-safe-runs-desktop.png` });
   });
 
   await test.step("YOLO off: the Sensitive reset tool asks and never reaches the service", async () => {
@@ -191,7 +209,8 @@ test("a sorted-safe connected tool runs with no card and a Sensitive one asks (#
           .catch(() => false);
       }
       expect(asked, `the reset tool asked first at ${name} width`).toBe(true);
-      await page.screenshot({ path: `${SHOT_DIR}/2984-sensitive-asks-${name}.png` });
+      if (process.env.MOSS_UAT_CAPTURE_OFF !== "1")
+        await page.screenshot({ path: `${SHOT_DIR}/2984-sensitive-asks-${name}.png` });
       expect(callsTo(RESET_TOOL)).toHaveLength(0);
     }
   });

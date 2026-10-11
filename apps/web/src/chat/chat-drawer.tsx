@@ -2,6 +2,7 @@ import { randomUuid, requestJson } from "@moss/module-web-sdk";
 import type { MeetingChatSelection, MeetingChatTurnResponse } from "@moss/shared";
 import { findOwnerMainThread, SideChatOverlay } from "./side-chat-overlay";
 import { loadChatDrafts, saveChatDrafts } from "./chat-draft-storage";
+import { shownMainThread } from "./drawer-main-landing";
 import { useChatTransition, type ChatTransition } from "./use-chat-transition";
 import { useInitialCallerDraft } from "./use-initial-caller-draft";
 import { useChatSelectionConfirmation } from "./use-chat-selection-confirmation";
@@ -59,7 +60,7 @@ export function ChatDrawer(props: {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly records: readonly TranscriptRecord[];
-  readonly clearRecords: () => void;
+  readonly clearRecords: (mainThreadId?: string) => void;
   readonly streamErrorCount: number;
   readonly selectionPending?: boolean;
   readonly isFounder: boolean;
@@ -131,7 +132,8 @@ export function ChatDrawer(props: {
       if (!transition.isCurrent(vars.transition)) return;
       selection.confirm(vars.threadId, vars.transition);
       callerDraft.bind(vars.threadId, vars.surface, vars.transition.generation, true);
-      props.clearRecords();
+      props.clearRecords(vars.threadId === mainThreadId ? vars.threadId : undefined);
+      if (vars.threadId === mainThreadId) setLiveThreadId(vars.threadId);
       privateModeDecidedLocally.current = true;
       setPrivateMode(false);
       setPrivateEnded(false);
@@ -637,8 +639,9 @@ export function ChatDrawer(props: {
     void (async () => {
       try {
         await endPrivateChat(initiatingSurface);
+        const landedOnMain = await shownMainThread(initiatingSurface, mainThreadId);
         if (!transition.isCurrent(change)) return;
-        props.clearRecords();
+        props.clearRecords(landedOnMain);
         setFallbackRecords([]);
       } catch (caught) {
         if (transition.isCurrent(change)) {
