@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Readable planning screens on phones.** Tasks and Calendar keep useful context when a request fails, and planning dialogs and Workshop conversations fit narrow screens more reliably. [PR #3347](https://github.com/motioneso/moss/pull/3347)
 - **Clearer settings and keyboard navigation.** Settings keep useful information when a load fails, phone navigation and dialogs behave more reliably, and theme previews show clearer readability warnings. [PR #3346](https://github.com/motioneso/moss/pull/3346)
 - **More reliable keyboard controls.** Dialogs, menus and settings controls are easier to read and use with a keyboard, and narrow pages fit better when a scrollbar is present. [PR #3344](https://github.com/motioneso/moss/pull/3344)
 - **Medication times follow your clock format.** Medication times on Today now follow your 12-hour or 24-hour time setting. [PR #3337](https://github.com/motioneso/moss/pull/3337)
