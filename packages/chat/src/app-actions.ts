@@ -315,7 +315,6 @@ export function createAppActionsService(deps: {
 
       // Fastify rejects a JSON content type with an empty body, so a bodyless call omits it.
       if (hasBody) headers["content-type"] = "application/json";
-      if (ctx.localTimezone) headers["x-timezone"] = ctx.localTimezone;
 
       const response = await deps.server.inject({
         method: input.method,

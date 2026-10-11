@@ -37,7 +37,7 @@ describe("isActorInQuietHours", () => {
     ).toBe(false);
   });
 
-  it("uses the person's own timezone, falling back to their locale, then UTC", async () => {
+  it("uses the person's own timezone, falling back to their locale, then the shared default", async () => {
     // 23:30 UTC is 19:30 in New York: outside a 22:00-07:00 window there, inside it in UTC.
     const noTimezone = { enabled: true, start: "22:00", end: "07:00", timezone: null };
     const now = new Date("2026-09-21T23:30:00Z");
@@ -45,6 +45,8 @@ describe("isActorInQuietHours", () => {
       await isActorInQuietHours(DB, port({ ...overnight, timezone: "America/New_York" }), now)
     ).toBe(false);
     expect(await isActorInQuietHours(DB, port(noTimezone, "America/New_York"), now)).toBe(false);
-    expect(await isActorInQuietHours(DB, port(noTimezone, null), now)).toBe(true);
+    // 08:00 UTC is 01:00 in Los Angeles, the default zone: inside the window there, outside it in UTC.
+    const lateNight = new Date("2026-09-22T08:00:00Z");
+    expect(await isActorInQuietHours(DB, port(noTimezone, null), lateNight)).toBe(true);
   });
 });

@@ -66,7 +66,7 @@ import {
   type ChatEngineFactory,
   type MossModuleManifest
 } from "@moss/module-registry";
-import { isValidTimeZone, parsePositiveIntEnv, type HostDiagnosticsInfo } from "@moss/shared";
+import { parsePositiveIntEnv, type HostDiagnosticsInfo } from "@moss/shared";
 import { createModuleLogger, CORE_VERSION } from "@moss/module-sdk";
 import { actAsRateLimitKey, installActAsActorLookup } from "@moss/module-sdk/server";
 // #917: /api/modules reads enablement through the public settings API; this is legitimate
@@ -103,14 +103,6 @@ import {
 import { registerPlatformRoutes } from "./platform-module-routes.js";
 import { handleBetterAuthRequest } from "./better-auth-adapter.js";
 import { registerModulePreferenceRoutes } from "./module-preferences.js";
-
-// `FastifyRequest.timeZone` is declared in `@moss/module-registry` (#801 Phase A),
-// not here: module-registry is the composition root that both the writer (this
-// file's onRequest hook) and every module-side reader (e.g. wellness routes)
-// already import, whereas this file is invisible to TS programs that don't include
-// apps/api. Ambient module augmentations only apply within the same compilation, so
-// the declaration lives where everyone touching `request.timeZone` is guaranteed to
-// reach it.
 
 export interface CreateApiServerOptions {
   readonly appDb?: Kysely<MossDatabase>;
@@ -293,8 +285,6 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     });
   server.addHook("preClose", async () => captureMaintenance.close());
   const AUTH_MAX = parsePositiveIntEnv(resolveMossEnv(process.env, "JARVIS_RL_AUTH_MAX"), 10);
-
-  registerRequestTimeZoneHook(server);
 
   // Security headers via @fastify/helmet.
   // This API serves JSON only, so CSP is maximally restrictive (default-src 'none').
@@ -851,16 +841,6 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
   });
 
   return server;
-}
-
-export function registerRequestTimeZoneHook(server: FastifyInstance): void {
-  server.addHook("onRequest", async (request) => {
-    const raw = request.headers["x-timezone"];
-    const value = Array.isArray(raw) ? raw[0] : raw;
-    if (typeof value === "string" && isValidTimeZone(value)) {
-      request.timeZone = value.trim();
-    }
-  });
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

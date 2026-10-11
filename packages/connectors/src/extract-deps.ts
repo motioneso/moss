@@ -8,7 +8,14 @@ import {
   type StructuredRunPriority,
   type StructuredTelemetry
 } from "@moss/ai";
-import type { DataContextDb } from "@moss/db";
+import { withSavepoint, type DataContextDb } from "@moss/db";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  LOCALE_PREFERENCE_KEY,
+  resolveEffectiveLocale,
+  type LocaleSettingsDto
+} from "@moss/shared";
+import { PreferencesRepository } from "@moss/structured-state";
 import { EmailExtractNeedsConfigurationError, type EmailExtractDeps } from "./email-extract.js";
 import { EMAIL_SORTING_SERVICE } from "./email-sorting.js";
 import type { EmailSortingService } from "./email-sorting-live.js";
@@ -23,6 +30,7 @@ export type BuildEmailExtractDepsOptions = Pick<
     info(data: Record<string, unknown>, message: string): void;
     warn(data: Record<string, unknown>, message: string): void;
   };
+  readonly preferences?: Pick<PreferencesRepository, "get">;
 };
 
 const EMAIL_SIGNALS_SCHEMA = {
@@ -95,8 +103,16 @@ export function buildEmailExtractDeps(
   aiCipher: AiSecretCipher,
   options: BuildEmailExtractDepsOptions = {}
 ): EmailExtractDeps {
+  const preferences = options.preferences ?? new PreferencesRepository();
+  let locale: Promise<LocaleSettingsDto> | undefined;
   return {
     sorting: buildEmailSortingService(scopedDb, aiRepo, aiCipher, options),
+    // Read once per deps. A failed read falls back to the default locale and, inside its
+    // savepoint, cannot abort the caller's transaction.
+    locale: () =>
+      (locale ??= withSavepoint(scopedDb, () =>
+        preferences.get(scopedDb, LOCALE_PREFERENCE_KEY)
+      ).then(resolveEffectiveLocale, () => DEFAULT_LOCALE_SETTINGS)),
     runChat: async (
       prompt,
       signal,

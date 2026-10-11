@@ -262,11 +262,24 @@ export interface ProactiveMonitorPriorityAnchor {
   readonly aliases: readonly string[];
 }
 
+/**
+ * The owner's effective locale, already resolved (saved values, or the platform default).
+ * Structurally equal to `LocaleSettingsDto` in @moss/shared, which depends on this package.
+ */
+export interface ProactiveMonitorLocale {
+  readonly timezone: string;
+  readonly region: string;
+  readonly dateFormat: "12" | "24";
+}
+
 export interface ProactiveMonitorInput {
   readonly ownerUserId: string;
   readonly sinceCursor: unknown;
   readonly now: string;
+  /** @deprecated Same as `locale.timezone`; read `locale` instead. */
   readonly timeZone: string;
+  /** Format any time shown to the owner with this, never the server clock zone. */
+  readonly locale: ProactiveMonitorLocale;
   readonly maxSignals: number;
   readonly priorityAnchors: readonly ProactiveMonitorPriorityAnchor[];
 }

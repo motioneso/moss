@@ -1,9 +1,11 @@
 import type { GmailMessageFull, GmailPayloadPart } from "./google-api-client.js";
 import type { StructuredRunPriority, StructuredRunScope, StructuredTelemetry } from "@moss/ai";
 import { resolveMossEnv } from "@moss/db";
+import { DEFAULT_LOCALE_SETTINGS, type LocaleSettingsDto } from "@moss/shared";
 
 import { looksLikeBulkMail } from "./email-bulk-rule.js";
 import { applyGate } from "./email-gate.js";
+import { emailPromptLocale, promptInput, senderAddress } from "./email-prompt-input.js";
 import type { EmailSortingService } from "./email-sorting-live.js";
 import {
   looksLikeOneTimeCodeEmail,
@@ -12,6 +14,7 @@ import {
 } from "@moss/shared/email-otp-rule";
 
 export { looksLikeBulkMail, type BulkMailInput } from "./email-bulk-rule.js";
+export { emailPromptLocale, senderAddress } from "./email-prompt-input.js";
 
 export {
   looksLikeOneTimeCodeEmail,
@@ -297,6 +300,8 @@ export interface EmailExtractDeps {
   ) => Promise<{ readonly text: string }>;
   /** #2805: the sorting model sync asks first. Absent means the general model sorts everything. */
   readonly sorting?: EmailSortingService;
+  /** The person's locale for the prompt's dates. Absent means the default locale. */
+  readonly locale?: () => Promise<LocaleSettingsDto>;
 }
 
 export interface EmailExtractOptions {
@@ -434,42 +439,8 @@ const EMAIL_TRIAGE_INSTRUCTIONS = [
   "Never repeat the code itself anywhere in your answer."
 ].join("\n");
 
-/** Calendar date as YYYY-MM-DD, or null when the value is missing or unreadable. */
-function calendarDate(value: string | Date): string | null {
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString().slice(0, 10);
-}
-
-/**
- * The email as the model sees it. The two date lines are load-bearing: without them the model has
- * no idea when the message arrived or what day it is, so it anchors a due date to whatever date the
- * body mentions. That is how a request to suggest interview times came back due on the date of the
- * interview window rather than the day the reply was owed (#2271 round 3). Dates only, no times -
- * enough to settle "tomorrow" or "within a day", and nothing extra to leak back into a stored field.
- */
-/** The bare, lower-cased address from a From header such as `Sarah Kim <Sarah@Kim.Example>`. */
-export function senderAddress(from: string): string {
-  const m = from.match(/<([^>]+)>/);
-  return (m ? m[1]! : from).trim().toLowerCase();
-}
-
-const KNOWN_SENDER_LINE =
-  "Sender: someone this user already deals with (in their People or previously replied to). Lean toward maybe_owed, but it is not proof.";
-
-function promptInput(parsed: ParsedEmail, knownSender = false, now: Date = new Date()): string {
-  const header = [`Subject: ${parsed.subject}`, `From: ${parsed.from}`];
-  if (knownSender) header.push(KNOWN_SENDER_LINE);
-  const received = calendarDate(parsed.receivedAt);
-  if (received !== null) header.push(`Received: ${received}`);
-  const today = calendarDate(now);
-  if (today !== null) header.push(`Today: ${today}`);
-  if (looksLikeBulkMail(parsed)) header.push("Bulk mail: yes (carries an unsubscribe link)");
-  return [...header, "", parsed.body].join("\n");
-}
-
-function buildPrompt(parsed: ParsedEmail, knownSender = false): string {
-  return [EMAIL_TRIAGE_INSTRUCTIONS, promptInput(parsed, knownSender)].join("\n\n");
+function buildPrompt(parsed: ParsedEmail, knownSender: boolean, locale: LocaleSettingsDto): string {
+  return [EMAIL_TRIAGE_INSTRUCTIONS, promptInput(parsed, knownSender, locale)].join("\n\n");
 }
 
 /**
@@ -778,6 +749,7 @@ export function sanitizeExtractResult(
 
 function buildBatchPrompt(
   messages: readonly ParsedEmail[],
+  locale: LocaleSettingsDto,
   knownSenders?: ReadonlySet<string>
 ): string {
   return [
@@ -788,13 +760,16 @@ function buildBatchPrompt(
     JSON.stringify(
       messages.map((message, index) => ({
         index,
-        email: promptInput(message, knownSenders?.has(senderAddress(message.from)) ?? false)
+        email: promptInput(message, knownSenders?.has(senderAddress(message.from)) ?? false, locale)
       }))
     )
   ].join("\n\n");
 }
 
-export function partitionEmailExtractionBatches(messages: readonly ParsedEmail[]): ParsedEmail[][] {
+export function partitionEmailExtractionBatches(
+  messages: readonly ParsedEmail[],
+  locale: LocaleSettingsDto = DEFAULT_LOCALE_SETTINGS
+): ParsedEmail[][] {
   const batches: ParsedEmail[][] = [];
   let current: ParsedEmail[] = [];
   for (const message of messages) {
@@ -802,7 +777,7 @@ export function partitionEmailExtractionBatches(messages: readonly ParsedEmail[]
     if (
       current.length > 0 &&
       (candidate.length > EMAIL_EXTRACT_BATCH_MAX_ITEMS ||
-        Buffer.byteLength(buildBatchPrompt(candidate), "utf8") >
+        Buffer.byteLength(buildBatchPrompt(candidate, locale), "utf8") >
           EMAIL_EXTRACT_BATCH_MAX_PROMPT_BYTES)
     ) {
       batches.push(current);
@@ -883,8 +858,9 @@ export async function extractEmailSignalsBatch(
     }
   });
   const extracted: EmailExtractResult[] = [];
+  const locale = await emailPromptLocale(deps);
 
-  for (const [batchIndex, batch] of partitionEmailExtractionBatches(toProcess).entries()) {
+  for (const [batchIndex, batch] of partitionEmailExtractionBatches(toProcess, locale).entries()) {
     const telemetry = options.telemetry?.(batchIndex, batch.length);
     try {
       if (batch.length === 1) {
@@ -892,7 +868,11 @@ export async function extractEmailSignalsBatch(
         const reply = await withTimeout(
           (signal) =>
             deps.runChat(
-              buildPrompt(message, options.knownSenders?.has(senderAddress(message.from)) ?? false),
+              buildPrompt(
+                message,
+                options.knownSenders?.has(senderAddress(message.from)) ?? false,
+                locale
+              ),
               signal,
               1,
               telemetry,
@@ -918,7 +898,7 @@ export async function extractEmailSignalsBatch(
       const reply = await withTimeout(
         (signal) =>
           deps.runChat(
-            buildBatchPrompt(batch, options.knownSenders),
+            buildBatchPrompt(batch, locale, options.knownSenders),
             signal,
             batch.length,
             telemetry,
@@ -984,7 +964,7 @@ export async function extractEmailSignals(
 
   const timeoutMs = options.callTimeoutMs ?? resolveEmailLlmTimeoutMs();
 
-  const prompt = buildPrompt(parsed, options.knownSender ?? false);
+  const prompt = buildPrompt(parsed, options.knownSender ?? false, await emailPromptLocale(deps));
   let result: EmailExtractResult;
   try {
     const reply = await withTimeout((signal) => deps.runChat(prompt, signal), timeoutMs);

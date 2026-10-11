@@ -24,6 +24,7 @@ import {
  * general model.
  */
 
+const PACIFIC = { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "24" } as const;
 const YES = 0.9;
 const NO = 0.1;
 const UNSURE = 0.5;
@@ -252,7 +253,8 @@ describe("buildEmailSortingState", () => {
   it("keeps the whole request under the provider byte cap", () => {
     const state = buildEmailSortingState(
       { subject: "s", from: "a@b.c", receivedAt: "2026-09-28T10:00:00Z", body: "é".repeat(30_000) },
-      new Date("2026-09-29T10:00:00Z")
+      new Date("2026-09-29T10:00:00Z"),
+      PACIFIC
     );
     const questions = Object.fromEntries(
       Object.entries(EMAIL_SORTING_QUESTIONS).map(([id, q]) => [id, { type: "noul", ...q }])
@@ -267,7 +269,8 @@ describe("buildEmailSortingState", () => {
   it("leaves a short body whole", () => {
     const state = buildEmailSortingState(
       { subject: "s", from: "a@b.c", receivedAt: "2026-09-28T10:00:00Z", body: "hello" },
-      new Date("2026-09-29T10:00:00Z")
+      new Date("2026-09-29T10:00:00Z"),
+      PACIFIC
     );
     expect(state.body).toBe("hello");
   });
@@ -327,7 +330,8 @@ describe("shadow comparison", () => {
         userSentLast: false
       },
       ask,
-      new Date("2026-09-29T00:00:00Z")
+      new Date("2026-09-29T00:00:00Z"),
+      PACIFIC
     );
     expect(ask).not.toHaveBeenCalled();
     expect(row.shadow).toEqual({ kind: "category", category: "sign_in_code" });
@@ -349,13 +353,15 @@ describe("shadow comparison", () => {
         ok: true,
         probabilities: { ...allNo, personal_sender: YES, asks_reply: YES }
       }),
-      new Date("2026-09-29T00:00:00Z")
+      new Date("2026-09-29T00:00:00Z"),
+      PACIFIC
     );
     expect(ok.shadow).toEqual({ kind: "category", category: "needs_reply" });
     const failed = await shadowSortEmail(
       message,
       async () => ({ ok: false, error: "provider_error" }),
-      new Date("2026-09-29T00:00:00Z")
+      new Date("2026-09-29T00:00:00Z"),
+      PACIFIC
     );
     expect(failed.shadow).toEqual({ kind: "failed", error: "provider_error" });
   });

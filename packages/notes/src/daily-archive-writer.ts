@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { DataContextDb } from "@moss/db";
-import { formatInZone, validateChatArchiveFolder } from "@moss/shared";
+import { formatLocaleTime, validateChatArchiveFolder, type LocaleSettingsDto } from "@moss/shared";
 
 import {
   assertInside,
@@ -40,7 +40,7 @@ export async function writeDailyChatArchive(
   localDate: string,
   folder: string,
   sessions: readonly ChatArchiveSession[],
-  timezone: string,
+  locale: LocaleSettingsDto,
   notesSync: NotesSyncToolService
 ): Promise<WriteDailyChatArchiveResult> {
   if (sessions.length === 0) {
@@ -76,7 +76,7 @@ export async function writeDailyChatArchive(
     );
   }
 
-  const content = renderMarkdown(sessions, timezone);
+  const content = renderMarkdown(sessions, locale);
   const file = join(root, targetRel);
   await mkdir(dirname(file), { recursive: true });
   assertInside(root, file);
@@ -99,10 +99,13 @@ async function isMossFileOrAbsent(root: string, rel: string): Promise<boolean> {
   return existing.split("\n", 1)[0] === ARCHIVE_MARKER;
 }
 
-function renderMarkdown(sessions: readonly ChatArchiveSession[], timezone: string): string {
+function renderMarkdown(
+  sessions: readonly ChatArchiveSession[],
+  locale: LocaleSettingsDto
+): string {
   const lines: string[] = [ARCHIVE_MARKER, ""];
   for (const session of sessions) {
-    lines.push(sessionHeading(session, timezone), "");
+    lines.push(sessionHeading(session, locale), "");
     for (const message of session.messages) {
       lines.push(`**${message.role}:** ${message.body}`, "");
     }
@@ -110,11 +113,9 @@ function renderMarkdown(sessions: readonly ChatArchiveSession[], timezone: strin
   return lines.join("\n");
 }
 
-function sessionHeading(session: ChatArchiveSession, timezone: string): string {
+function sessionHeading(session: ChatArchiveSession, locale: LocaleSettingsDto): string {
   const first = session.messages[0];
-  const time = first
-    ? formatInZone(first.createdAt, timezone, { hour: "numeric", minute: "2-digit" })
-    : session.threadId;
+  const time = first ? formatLocaleTime(first.createdAt, locale) : session.threadId;
   const title = session.title.trim();
   return title.length > 0 ? `## ${time} — ${title}` : `## ${time}`;
 }

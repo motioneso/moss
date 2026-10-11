@@ -318,12 +318,12 @@ describe("saved day-plan real API boundary", () => {
       (await read(ids.sessionB, `${query}&actorUserId=${ids.userA}&ownerUserId=${ids.userA}`)).plan
     ).toEqual(expectedB);
     expect((await read(ids.sessionA, "date=2026-09-12")).plan).toEqual(expectedAfterDelete);
-    expect((await read(ids.sessionA, "date=2026-09-12", { "x-timezone": "UTC" })).plan).toBeNull();
-    expect((await read(ids.sessionA, query, { "x-timezone": "Asia/Tokyo" })).plan).toEqual(
+    // A browser-reported zone never overrides the saved one.
+    expect((await read(ids.sessionA, "date=2026-09-12", { "x-timezone": "UTC" })).plan).toEqual(
       expectedAfterDelete
     );
-    // No stored locale for B: UTC fallback does not accidentally select B's LA plan.
-    expect((await read(ids.sessionB, "date=2026-09-12")).plan).toBeNull();
+    // No stored locale for B: the shared default zone (Los Angeles) applies, never UTC.
+    expect((await read(ids.sessionB, "date=2026-09-12")).plan).toEqual(expectedB);
     expect((await read(ids.sessionA, "date=2026-09-14")).plan).toBeNull();
 
     for (const invalid of [

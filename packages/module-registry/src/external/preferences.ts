@@ -15,7 +15,7 @@ import type {
   ExternalModulePreferenceDeclaration,
   ExternalModulePreferenceValue
 } from "@moss/module-sdk";
-import { extractTimezone } from "@moss/chat";
+import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale } from "@moss/shared";
 import { PreferencesRepository } from "@moss/structured-state";
 
 export function modulePreferenceKey(moduleId: string, key: string): string {
@@ -51,20 +51,18 @@ export async function writeModulePreferences(
  * (packages/ai/src/gateway/gateway.ts); this is the queued path's equivalent, so a meal
  * logged by a background job lands on the same calendar day as one logged in chat.
  *
- * Null when the user has never set a locale, or stored something this runtime cannot read as
- * a zone. Null is not UTC — it means no answer, and the caller decides what to do about that.
+ * A user with no locale saved, or one this runtime cannot read as a zone, gets the same
+ * default `GET /api/me/locale` reports (#3395).
  */
 export async function resolveActorTimezone(
   runner: DataContextRunner,
   access: AccessContext
-): Promise<string | null> {
+): Promise<string> {
   const repository = new PreferencesRepository();
   const raw = await runner.withDataContext(access, (scopedDb) =>
-    repository.get(scopedDb, "locale")
+    repository.get(scopedDb, LOCALE_PREFERENCE_KEY)
   );
-  // Parsed by the same helper the chat/gateway path uses rather than a second copy of the same
-  // checks, so the two paths cannot disagree about what a stored locale means.
-  return extractTimezone(raw);
+  return resolveEffectiveLocale(raw).timezone;
 }
 
 export async function resolveModulePreferences(

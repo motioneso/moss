@@ -345,7 +345,7 @@ describe("finance job reconciliation (#1146)", () => {
           jobKind: "finance.sync-sweep",
           manifestHash: module.manifestHash
         },
-        options: { tz: "UTC", key: `finance/finance.sync-sweep/${adminUserId}` }
+        options: { tz: "America/Los_Angeles", key: `finance/finance.sync-sweep/${adminUserId}` }
       }
     ]);
   });
