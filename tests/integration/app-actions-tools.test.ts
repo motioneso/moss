@@ -573,12 +573,12 @@ describe("app actions through the real gateway and app routes", () => {
     );
     callSpy.mockClear();
     mintSpy.mockClear();
-    // Ask-each-time writes ask in a clean chat too. Only the outbound search asks because of
-    // the outside-content mark, so only its card names it (#3338).
+    // The app write and the outbound search run in a clean chat, so only the mark makes them ask
+    // and their cards name it. The ask-each-time theme write asks anyway, so its card does not (#3338).
     for (const [start, outsideContentNotice] of [
       [
         () => h.call({ method: "PUT", path: "/api/me/weather-unit", body: { unit: "imperial" } }),
-        false
+        true
       ],
       [
         () =>
