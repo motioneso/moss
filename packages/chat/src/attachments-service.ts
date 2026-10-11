@@ -34,8 +34,8 @@ export const MAX_ATTACHMENTS_PER_TURN = 5;
 // Abuse bound on uploads that never get sent (spec §2); GC below reaps them after 24h.
 export const MAX_PENDING_ATTACHMENTS = 20;
 export const PENDING_ATTACHMENT_TTL_MS = 24 * 60 * 60 * 1000;
-// Text handed to the engine is capped tool-side; the gateway's renderAndCap would truncate
-// at 16k rendered chars anyway — capping here lets us append an honest truncation note.
+// Module consumers (job search, briefings) get at most this many characters, with a truncation
+// note. chat.readAttachment pages through the full text via readFullContent instead.
 export const ATTACHMENT_TEXT_CAP_CHARS = 15_000;
 
 export type AttachmentMimeKind = "image" | "pdf" | "docx" | "text";
@@ -245,7 +245,14 @@ export class ChatAttachmentsService {
     });
   }
 
+  /** Text is capped at ATTACHMENT_TEXT_CAP_CHARS for module consumers. */
   async readContent(access: AccessContext, id: string): Promise<AttachmentContent> {
+    const content = await this.readFullContent(access, id);
+    return content.kind === "text" ? { ...content, text: capText(content.text) } : content;
+  }
+
+  /** The full extracted text, uncapped. chat.readAttachment pages through it. */
+  async readFullContent(access: AccessContext, id: string): Promise<AttachmentContent> {
     if (!isAttachmentId(id)) return { kind: "missing" };
     return this.vaultRunner.withVaultContext(access, async (ctx) => {
       const meta = await readMetaInCtx(ctx, id);
@@ -266,7 +273,7 @@ export class ChatAttachmentsService {
       if (mimeKind === "docx") {
         return { kind: "text", meta, text: await extractDocxText(bytes) } as const;
       }
-      return { kind: "text", meta, text: capText(bytes.toString("utf8")) } as const;
+      return { kind: "text", meta, text: bytes.toString("utf8") } as const;
     });
   }
 
@@ -310,7 +317,7 @@ export async function extractPdfText(bytes: Buffer): Promise<string> {
     const parser = new PDFParse({ data: new Uint8Array(bytes) });
     try {
       const result = await parser.getText();
-      return capText(result.text);
+      return result.text;
     } finally {
       // Free pdf.js worker resources; destroy() may not exist on future majors.
       const destroy = (parser as { destroy?: () => Promise<void> }).destroy;
@@ -331,7 +338,7 @@ async function extractDocxText(bytes: Buffer): Promise<string> {
     // #1195 / #1193: raw text keeps resume content on the same capped, deterministic
     // attachment-manifest path as PDFs without preserving active document formatting.
     const result = await mammoth.extractRawText({ buffer: bytes });
-    return capText(result.value);
+    return result.value;
   } catch {
     return "[DOCX text extraction failed for this attachment]";
   }
