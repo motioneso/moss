@@ -1,10 +1,20 @@
+import { execFileSync } from "node:child_process";
+
 import { expect, test, type Page } from "@playwright/test";
 import { EMOTIONS, localDay, type CheckinDto, type MedicationScheduleResponse } from "@moss/shared";
+import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { requireUatProjectName } from "./real-chat-signin.js";
 
 // Task #3397. Real isolated UI/API/worker proof using fictional records only.
-// No route interception or response replacement. Network interruption uses actual browser offline mode.
+// No route interception or response replacement. The save failure stops this provisioned app service.
 export const uatLevel = { level: "admin+data", without: [] } as const;
+
+function controlApp(args: readonly string[]) {
+  execFileSync("docker", buildUatComposeArgs(requireUatProjectName(), [...args, "jarv1s"]), {
+    stdio: "inherit"
+  });
+}
 
 function baseURL() {
   const value = process.env.JARVIS_UAT_BASE_URL;
@@ -27,13 +37,12 @@ async function signIn(page: Page) {
 }
 
 test("Wellness keeps full chart inputs, older corrections, dose recovery and export identity", async ({
-  page,
-  context
+  page
 }) => {
   test.setTimeout(240_000);
   await signIn(page);
   const locale = await page.request.put(`${baseURL()}/api/me/locale`, {
-    data: { timezone: "UTC", region: "en-US", dateFormat: "24" }
+    data: { locale: { timezone: "UTC", region: "en-US", dateFormat: "24" } }
   });
   expect(locale.ok()).toBe(true);
   const seeded: CheckinDto[] = [];
@@ -101,12 +110,13 @@ test("Wellness keeps full chart inputs, older corrections, dose recovery and exp
   await page.reload();
   const dose = page.getByRole("button", { name: /^Fictional scheduled dose,/ });
   await expect(dose).toContainText("Pending");
-  await context.setOffline(true);
+  // Browser offline mode pauses the write instead of failing it, so stop the real service.
+  controlApp(["stop"]);
   try {
     await dose.click();
     await expect(page.getByRole("alert")).toContainText("Could not save");
   } finally {
-    await context.setOffline(false);
+    controlApp(["up", "-d", "--no-deps", "--no-recreate", "--wait"]);
   }
   await page.getByRole("button", { name: "Retry dose", exact: true }).click();
   await expect(dose).toContainText("Taken");
@@ -126,9 +136,13 @@ test("Wellness keeps full chart inputs, older corrections, dose recovery and exp
   await expect(exportDialog).toContainText("UTC");
   await exportDialog.getByLabel("From", { exact: true }).fill(today);
   await exportDialog.getByLabel("To", { exact: true }).fill(today);
-  for (const name of ["Medications & logs", "Therapy notes", "Insights"])
-    await exportDialog.getByLabel(name, { exact: true }).uncheck();
-  await exportDialog.getByRole("checkbox").last().check();
+  // The styled check hides its native input, so click the visible label like a person would.
+  for (const name of ["Medications & logs", "Therapy notes", "Insights"]) {
+    await exportDialog.locator("label.jds-check", { hasText: name }).click();
+    await expect(exportDialog.getByLabel(name, { exact: true })).not.toBeChecked();
+  }
+  await exportDialog.locator("label.jds-check").last().click();
+  await expect(exportDialog.getByRole("checkbox").last()).toBeChecked();
   await exportDialog.getByRole("button", { name: "Generate export", exact: true }).click();
   await expect(exportDialog.getByText(/Building your export|Your export is ready/)).toBeVisible();
   await exportDialog.getByRole("button", { name: "Close", exact: true }).click();
