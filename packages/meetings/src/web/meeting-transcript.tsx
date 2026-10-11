@@ -63,8 +63,10 @@ export function TranscriptTimeline({
       {snapshot.containsProvisional ? <p className="jds-hint">Still being finalised</p> : null}
       {snapshot.omittedSegments > 0 ? (
         <Note variant="practical">
-          {snapshot.omittedSegments} lines are outside this view’s limits. Search or follow a cited
-          timestamp to find the text.
+          {snapshot.omittedSegments} {snapshot.omittedSegments === 1 ? "line is" : "lines are"}{" "}
+          outside this view’s limits. Search checks only loaded timeline lines. Separate cited
+          excerpts aren’t searched. Cited timestamps can open retained text outside this view.
+          Meeting chat needs a ready configured model.
         </Note>
       ) : null}
       <div className="meetings-transcript-timeline" aria-label="Transcript timeline">
@@ -118,7 +120,9 @@ export function TranscriptTimeline({
           )
         )}
         {search && !rows.some((row) => row.kind === "segment") ? (
-          <p className="jds-hint">No transcript lines match.</p>
+          <p role="status" className="jds-hint">
+            No loaded timeline lines match.
+          </p>
         ) : null}
       </div>
     </>
@@ -200,15 +204,19 @@ export function MeetingTranscript({
       <SectionHead title="Transcript" rule />
       {search !== null ? (
         <Field>
-          <FormLabel htmlFor="meeting-transcript-search">Search transcript</FormLabel>
+          <FormLabel htmlFor="meeting-transcript-search">Search transcript timeline</FormLabel>
           <input
             autoFocus
             id="meeting-transcript-search"
             type="search"
             className="jds-input meetings-input"
+            aria-describedby="meeting-transcript-search-scope"
             value={search}
             onChange={(event) => onSearch?.(event.target.value)}
           />
+          <p id="meeting-transcript-search-scope" className="jds-hint">
+            Search checks only the loaded timeline lines. Separate cited excerpts aren’t searched.
+          </p>
           <Button variant="link" onClick={() => onSearch?.(null)}>
             Close search
           </Button>

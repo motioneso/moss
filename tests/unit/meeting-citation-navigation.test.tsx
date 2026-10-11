@@ -64,6 +64,7 @@ let renderer: ReactTestRenderer;
 let client: QueryClient;
 let latest: number;
 let latestReads: number;
+let evidenceReads: number;
 let denied: boolean;
 async function flush() {
   await vi.waitFor(
@@ -115,6 +116,7 @@ beforeEach(() => {
   denied = false;
   latest = 1;
   latestReads = 0;
+  evidenceReads = 0;
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
   client = new QueryClient({
@@ -153,7 +155,8 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({ artifacts: [], candidates: [], headVersion: 0, templates: [] })
         );
-      if (url.pathname.endsWith("/transcript/evidence"))
+      if (url.pathname.endsWith("/transcript/evidence")) {
+        evidenceReads += 1;
         return new Response(
           JSON.stringify({
             evidence: {
@@ -162,6 +165,7 @@ beforeEach(() => {
             }
           })
         );
+      }
       if (url.pathname.endsWith("/transcript")) {
         if (!url.searchParams.has("transcriptRevision")) latestReads += 1;
         return new Response(
@@ -203,6 +207,41 @@ describe("same-meeting citation navigation (real query lifecycle, unit HTTP fixt
     await openCitation(5);
     expect(transcriptText()).toContain("CEDAR");
   });
+  it("keeps exact cited evidence visible while searching only the loaded timeline", async () => {
+    latest = 2;
+    await mount();
+    await openCitation();
+    const requestsBeforeSearch = { latestReads, evidenceReads };
+    await act(async () => {
+      renderer.root.findByProps({ triggerLabel: "Meeting actions" }).props.onSelect("search");
+    });
+    await act(async () => {
+      renderer.root.findByProps({ id: "meeting-transcript-search" }).props.onChange({
+        target: { value: "ORCHID" }
+      });
+    });
+    expect(transcriptText()).toContain("Search transcript timeline");
+    expect(transcriptText()).toContain("Separate cited excerpts aren’t searched.");
+    expect(transcriptText()).toContain("No loaded timeline lines match.");
+    expect(transcriptText()).toContain("ORCHID");
+    expect(transcriptText()).not.toContain("MAPLE");
+    expect(renderer.root.findAllByProps({ id: "meeting-line-segment" })).toHaveLength(0);
+    expect(renderer.root.findByProps({ id: `meeting-reference-${meeting.id}` })).toBeDefined();
+    await act(async () => {
+      renderer.root.findByProps({ id: "meeting-transcript-search" }).props.onChange({
+        target: { value: "maple" }
+      });
+    });
+    expect(transcriptText()).toContain("MAPLE");
+    expect(transcriptText()).toContain("ORCHID");
+    expect(transcriptText()).not.toContain("No loaded timeline lines match.");
+    expect({ latestReads, evidenceReads }).toEqual(requestsBeforeSearch);
+    expect(
+      client.getQueryData<MeetingTranscriptSnapshotResponse>(meetingKeys.transcript(meeting.id))
+        ?.snapshot.transcriptRevision
+    ).toBe(2);
+  });
+
   it("reauthorizes cached title and notes when citation navigation discovers deletion", async () => {
     await mount();
     await act(async () =>

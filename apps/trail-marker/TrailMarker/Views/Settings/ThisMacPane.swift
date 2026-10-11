@@ -1,13 +1,13 @@
+import AppKit
 import SwiftUI
 
 /// Design guide §11 "This Mac".
 struct ThisMacPane: View {
     @ObservedObject var connection: ConnectionRuntime
-    let loginItem: LoginItemService
+    let loginItem: any LoginItemManaging
 
     @State private var deviceName: String = ""
-    @State private var startAtLogin = false
-    @State private var loginItemRequiresApproval = false
+    @State private var loginItemState = LoginItemState()
 
     var body: some View {
         Form {
@@ -18,13 +18,21 @@ struct ThisMacPane: View {
             }
 
             Section("Login item") {
-                Toggle("Start Trail Marker at login", isOn: $startAtLogin)
-                    .onChange(of: startAtLogin) { _, newValue in
-                        try? loginItem.setEnabled(newValue)
-                        refreshLoginItemStatus()
-                    }
+                Toggle("Start Trail Marker at login", isOn: Binding(
+                    get: { loginItemState.isEnabled },
+                    set: { loginItemState.setEnabled($0, using: loginItem) }
+                ))
 
-                if loginItemRequiresApproval {
+                Text(loginItemState.statusMessage)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let error = loginItemState.errorMessage {
+                    Text(error)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if loginItemState.showsSystemSettings {
                     Button("Open System Settings…") {
                         loginItem.openSystemSettings()
                     }
@@ -34,8 +42,11 @@ struct ThisMacPane: View {
         .formStyle(.grouped)
         .onAppear {
             deviceName = connection.displayName ?? ""
-            startAtLogin = loginItem.isRegistered
-            refreshLoginItemStatus()
+            loginItemState.refresh(using: loginItem)
+        }
+        // AppDelegate hosts this pane manually, so use the app signal rather than scenePhase.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            loginItemState.refresh(using: loginItem)
         }
     }
 
@@ -43,9 +54,5 @@ struct ThisMacPane: View {
         let trimmed = deviceName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         connection.rename(displayName: trimmed)
-    }
-
-    private func refreshLoginItemStatus() {
-        loginItemRequiresApproval = loginItem.requiresApproval
     }
 }
