@@ -221,7 +221,7 @@ describe("same-meeting citation navigation (real query lifecycle, unit HTTP fixt
       });
     });
     expect(transcriptText()).toContain("Search transcript timeline");
-    expect(transcriptText()).toContain("Separate cited excerpts aren’t searched.");
+    expect(transcriptText()).toContain("Searches shown lines only.");
     expect(transcriptText()).toContain("No loaded timeline lines match.");
     expect(transcriptText()).toContain("ORCHID");
     expect(transcriptText()).not.toContain("MAPLE");
