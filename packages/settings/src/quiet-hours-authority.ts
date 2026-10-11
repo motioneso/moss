@@ -2,7 +2,11 @@ import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import { parseProactiveMonitoringPreference } from "@moss/proactive-monitoring";
-import { PROACTIVE_MONITORING_PREFERENCE_KEY, type QuietHoursSettingsDto } from "@moss/shared";
+import {
+  PROACTIVE_MONITORING_PREFERENCE_KEY,
+  resolveEffectiveLocale,
+  type QuietHoursSettingsDto
+} from "@moss/shared";
 
 import {
   DEFAULT_QUIET_HOURS,
@@ -292,11 +296,9 @@ function readNested(value: unknown): Side {
   };
 }
 
+/** The owner's effective zone; a missing or invalid locale takes the platform default. */
 function resolveOwnerTimeZone(locale: unknown): string {
-  const timezone = isRecord(locale) ? locale.timezone : undefined;
-  return typeof timezone === "string" && timezone.length > 0 && isValidTimeZone(timezone)
-    ? timezone
-    : "UTC";
+  return resolveEffectiveLocale(locale).timezone;
 }
 
 function withoutMarker(value: unknown): unknown {
