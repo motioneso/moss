@@ -68,19 +68,25 @@ describe("calendar action disclosure", () => {
     expect(view?.fields).toContainEqual({ label: "Current start", value: "Oct 8, 2026, 2:00 AM" });
     expect(view?.fields).toContainEqual({ label: "Current end", value: "Oct 8, 2026, 3:00 AM" });
   });
-  it("discloses exact replacement times and versions target changes", async () => {
+  it("discloses replacement times in the person's zone and versions target changes", async () => {
     const input = {
       eventRef: ID,
       newStart: "2026-10-08T11:00:00Z",
       newEnd: "2026-10-08T12:00:00Z"
     };
-    const first = await calendarReschedulePresentation(database().db, input, ctx);
-    expect(first?.fields).toContainEqual({ label: "New start", value: input.newStart });
-    expect(first?.fields).toContainEqual({ label: "New end", value: input.newEnd });
+    const first = await calendarReschedulePresentation(database().db, input, losAngeles("24"));
+    expect(first?.fields).toContainEqual({ label: "New start", value: "Oct 8, 2026, 04:00" });
+    expect(first?.fields).toContainEqual({ label: "New end", value: "Oct 8, 2026, 05:00" });
+    const local = await calendarReschedulePresentation(
+      database().db,
+      { eventRef: ID, newStart: "2026-10-08T04:00", newEnd: "2026-10-08T05:00" },
+      losAngeles("24")
+    );
+    expect(local?.fields).toContainEqual({ label: "New start", value: "2026-10-08T04:00" });
     const changed = await calendarReschedulePresentation(
       database([{ ...event, title: "Changed" }]).db,
       input,
-      ctx
+      losAngeles("24")
     );
     expect(first?.version).not.toBe(changed?.version);
   });

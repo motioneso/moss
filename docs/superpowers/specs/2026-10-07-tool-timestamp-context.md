@@ -50,8 +50,8 @@ page or changes its counts. The additional reference block has its own hard 16,0
 cap measured on the serialized MCP text block, including its trust wrapper and wire escaping. Thus the model-result budget is explicitly
 the existing capped original plus at most 16,000 extra characters, not a claim that the combined
 result still fits the old original-only cap. References are limited to 512 retained candidates
-and a 4,096-node, 24-level-deep scan. `omittedCount` counts qualifying distinct timestamps not shown;
-`scanLimited` says when scanning stopped before the full structure was visited. Only values
+and a 4,096-node, 24-level-deep scan. The footer line `Omitted references: N` counts qualifying distinct timestamps not shown;
+`scan limited: yes` says when scanning stopped before the full structure was visited. Only values
 already visible in the capped original can be referenced. No values are read from a database
 again or persisted, and no source content is upgraded to trusted instructions.
 

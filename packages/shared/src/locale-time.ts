@@ -91,3 +91,12 @@ export function formatLocaleTime(
 ): string {
   return formatForPerson(input, locale, options ?? TIME_OPTS);
 }
+
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** A complete ISO instant in the person's locale; any other text is returned unchanged. */
+export function formatLocaleInstantText(value: string, locale: LocaleSettingsDto): string {
+  return ISO_INSTANT.test(value) && !Number.isNaN(Date.parse(value))
+    ? formatLocaleDateTime(value, locale)
+    : value;
+}

@@ -11,6 +11,7 @@ import {
 import {
   DEFAULT_LOCALE_SETTINGS,
   formatLocaleDateTime,
+  formatLocaleInstantText,
   type LocaleSettingsDto
 } from "@moss/shared";
 import { DEFAULT_TIMEZONE, resolveWindow, type FocusBlockInput } from "./focus-time.js";
@@ -72,13 +73,17 @@ function eventPresentation(kind: "delete" | "reschedule"): ToolApprovalPresentat
     )
       return null;
     if (kind === "delete" ? _eventRef !== undefined : _eventId !== undefined) return null;
+    const locale = personLocale(ctx);
+    // Old and new times read in the same zone; text that is not a full instant stays exact.
+    const instant = (value: unknown) =>
+      typeof value === "string" ? formatLocaleInstantText(value, locale) : null;
     const fields = presentApprovalFields(
       changes,
       kind === "delete"
         ? {}
         : {
-            newStart: { label: "New start", present: approvalText },
-            newEnd: { label: "New end", present: approvalText }
+            newStart: { label: "New start", present: instant },
+            newEnd: { label: "New end", present: instant }
           },
       kind === "delete" ? [] : ["newStart", "newEnd"]
     );
@@ -97,7 +102,6 @@ function eventPresentation(kind: "delete" | "reschedule"): ToolApprovalPresentat
     // An ambiguous provider reference must not pick an arbitrary account's same-named event.
     const event = rows.length === 1 ? rows[0] : null;
     if (!event?.title?.trim()) return null;
-    const locale = personLocale(ctx);
     return {
       target: event.title,
       fields: [

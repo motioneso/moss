@@ -1,9 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { dataContextBrand, type DataContextDb } from "@moss/db";
 import type { ToolContext } from "@moss/module-sdk";
+import { notificationReadPresentation } from "../../packages/notifications/src/approval-presentation.js";
 import { pushDeviceTarget } from "../../packages/notifications/src/chat-targets.js";
+import { sportsResolveTeamPresentation } from "../../packages/sports/src/approval-presentation.js";
 import { checkinPresentation } from "../../packages/wellness/src/approval-presentation.js";
 import { therapyNoteTarget } from "../../packages/wellness/src/chat-targets.js";
+
+vi.mock("../../packages/sports/src/chat-tools.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  sportsApprovalTeams: async () => ({
+    teams: [{ teamKey: "dal", name: "Dallas Cowboys", sourceTeamId: "team-1" }],
+    degraded: false
+  })
+}));
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const at = new Date("2026-10-01T14:30:00Z");
@@ -57,5 +67,30 @@ describe("approval card times use the person's locale", () => {
       "Device added Oct 1, 2026"
     );
     expect(await pushDeviceTarget(db, { id: ID })).toBe("Device added Oct 1, 2026");
+  });
+
+  it("shows when a notification arrived in the person's zone and hour format", async () => {
+    const db = database({ id: ID, title: "Launch ready", created_at: at });
+    const input = { params: { id: ID }, target: null, body: {} };
+    expect((await notificationReadPresentation(db, input, losAngeles("24")))?.fields).toEqual([
+      { label: "Received", value: "Oct 1, 2026, 07:30" }
+    ]);
+    expect((await notificationReadPresentation(db, input, losAngeles("12")))?.fields).toEqual([
+      { label: "Received", value: "Oct 1, 2026, 7:30 AM" }
+    ]);
+  });
+
+  it("shows when a team choice was saved in the person's zone", async () => {
+    const db = database({
+      id: ID,
+      competition_key: "nfl",
+      team_key: "dal",
+      source_team_id: null,
+      created_at: at
+    });
+    const input = { params: { id: ID }, target: null, body: { sourceTeamId: "team-1" } };
+    expect(
+      (await sportsResolveTeamPresentation(db, input, losAngeles("24")))?.fields
+    ).toContainEqual({ label: "Saved on", value: "Oct 1, 2026, 07:30" });
   });
 });
