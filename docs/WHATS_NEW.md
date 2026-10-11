@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Chat and approvals use your time zone and clock.** Times in chat answers, approval cards and approval messages now follow the time zone, region and 12- or 24-hour clock you chose in Settings. [PR #3437](https://github.com/motioneso/moss/pull/3437)
 - **Today shows times in your own time zone and clock style.** The Today page and chat suggestions now show every time in your saved time zone and use your 12-hour or 24-hour choice, and the greeting follows your own time of day. [PR #3425](https://github.com/motioneso/moss/pull/3425)
 - **Settings times follow your time zone.** Times and dates in Settings, such as last sync, last checked and saved stories, now show in your own time zone and 12 or 24-hour clock instead of your browser's. [PR #3434](https://github.com/motioneso/moss/pull/3434)
 - **Times follow your saved time zone everywhere in the background.** Reminders, quiet hours, medications, your day plan and what Moss tells the assistant now use the time zone you saved in Settings, or Pacific time if you have not picked one, and weather no longer guesses your city when no time zone or location is saved. [PR #3424](https://github.com/motioneso/moss/pull/3424)
