@@ -16,6 +16,11 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import {
+  CLAUDE_TOKEN_REUSED_ENV,
+  readSavedClaudeToken,
+  saveClaudeToken
+} from "./claude-signin-handoff.js";
 
 const HOST_CODEX_AUTH_FILE_ENV = "JARVIS_UAT_REAL_CHAT_CODEX_AUTH_FILE";
 
@@ -252,12 +257,21 @@ export function installUatRealChatAuth(
 }
 
 const CLAUDE_TOKEN_FILE = ".jarvis/cli-tokens/anthropic";
+const INSTANCE_CLAUDE_TOKEN = `/data/cli-auth/${CLAUDE_TOKEN_FILE}`;
+
+/** Same shape cli-runner's login adapter captures from setup-token (login-adapters.ts). */
+const CLAUDE_SETUP_TOKEN_RE = /^sk-ant-oat[A-Za-z0-9_-]{20,300}$/;
 
 /**
  * #3361: the Claude sign-in mints a long-lived setup token into the cli-auth volume, either in
  * the instance home or in the signing-in user's agent home (cli-runner provider-token-store).
  * Cleanup removes both copies and their temp files before `down -v`. Removing the file does not
  * revoke the token at Anthropic.
+ *
+ * #3387: the token is kept across runs in the box's sign-in folder (claude-signin-handoff.ts).
+ * A saved token is seeded into the instance home over stdin, where cli-runner reads it for the
+ * readiness check and chat, and CLAUDE_TOKEN_REUSED_ENV tells the spec it was. Cleanup first
+ * saves the instance copy when it differs from the seeded one, i.e. when this run minted it.
  */
 function prepareUatRealChatClaudeSignIn(
   projectName: string,
@@ -277,6 +291,57 @@ function prepareUatRealChatClaudeSignIn(
     throw new Error(`[uat real-chat] invalid cli-auth owner metadata for ${projectName}`);
   }
   const agentHome = `/data/cli-auth/agents/${actorUserId}`;
+
+  delete process.env[CLAUDE_TOKEN_REUSED_ENV];
+  let seeded: string | undefined;
+  const saved = readSavedClaudeToken();
+  if (saved !== undefined) {
+    const writeScript =
+      "const fs=require('node:fs');const f=process.argv[1];" +
+      "fs.mkdirSync(require('node:path').dirname(f),{recursive:true,mode:0o700});" +
+      "fs.writeFileSync(f+'.tmp',fs.readFileSync(0),{mode:0o600});fs.renameSync(f+'.tmp',f);";
+    try {
+      execDockerCompose(
+        buildComposeArgs,
+        ["exec", "-T", "--user", owner, "jarv1s", "node", "-e", writeScript, INSTANCE_CLAUDE_TOKEN],
+        Buffer.from(saved, "utf8")
+      );
+      seeded = saved;
+      process.env[CLAUDE_TOKEN_REUSED_ENV] = "1";
+      console.log(`[uat real-chat] saved Claude sign-in seeded into ${projectName}`);
+    } catch {
+      // Fixed message, no credential content. The spec falls back to asking for a link.
+      console.log(
+        `[uat real-chat] could not seed the saved Claude sign-in into ${projectName}; ` +
+          "the spec will ask for a link"
+      );
+    }
+  }
+
+  // Captured stdout only (execDockerCompose pipes every stream); a missing file just throws.
+  const keepMintedToken = (): void => {
+    let minted: string;
+    try {
+      minted = execDockerCompose(buildComposeArgs, [
+        "exec",
+        "-T",
+        "--user",
+        owner,
+        "jarv1s",
+        "cat",
+        INSTANCE_CLAUDE_TOKEN
+      ]);
+    } catch {
+      return;
+    }
+    if (minted === seeded || !CLAUDE_SETUP_TOKEN_RE.test(minted)) return;
+    try {
+      saveClaudeToken(minted);
+      console.log("[uat real-chat] new Claude sign-in saved for later runs");
+    } catch {
+      console.log("[uat real-chat] could not save the new Claude sign-in for later runs");
+    }
+  };
 
   const removeToken = (user: string, home: string): void => {
     execDockerCompose(buildComposeArgs, [
@@ -298,6 +363,7 @@ function prepareUatRealChatClaudeSignIn(
       if (removed) return;
       removed = true;
 
+      keepMintedToken();
       let failed = false;
       try {
         removeToken(owner, "/data/cli-auth");
