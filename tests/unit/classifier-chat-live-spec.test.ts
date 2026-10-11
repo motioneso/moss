@@ -72,8 +72,9 @@ const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
   ['expect(summary.checked, "shadow records reached the report").toBeGreaterThanOrEqual(1);', 1],
   ['.locator(".set-row__control")\n  ).toHaveText(String(summary.checked));', 1],
   ['console.log("R2.6 YOLO a clear ask reached the Sensitive bar:", above);', 1],
-  ['"the classifier decided the vague request"', 1],
-  ['"its confidence is under the Sensitive bar"', 1],
+  ["\"action_code in ('chat.tool_check', 'structured.worker')\";", 1],
+  ["`where ${gateCalls} and occurred_at > '${since}' order by occurred_at`", 1],
+  ["`from app.moss_model_activity_log where ${gateCalls} ` +", 1],
   ['expect(below.asked || below.chatAnswers > 0, "the chat model took over").toBe(true);', 1],
   ["expect(off.ok()).toBe(true);", 1],
   ["expect((await report).ok()).toBe(true);", 1]
