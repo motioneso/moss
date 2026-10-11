@@ -460,6 +460,73 @@ describe("memory deletion transaction and concurrent claim", () => {
     expect(await readFact(fact.id)).toMatchObject({ object_text: "concurrent replacement text" });
     expect(await searchStatus(fact.id)).toBe("active");
   });
+
+  it.each(["sibling fact", "conflict group", "sibling search document"] as const)(
+    "rolls back immediately when a rival holds the %s",
+    async (held) => {
+      const fact = await seedFact(ids.userA, "conflict side one");
+      const sibling = await seedFact(ids.userA, "conflict side two");
+      const groupId = await asActor(ids.userA, async (db) => {
+        const group = await sql<{
+          id: string;
+        }>`INSERT INTO app.memory_conflict_groups (owner_user_id) VALUES (${ids.userA}::uuid) RETURNING id`.execute(
+          db.db
+        );
+        await sql`UPDATE app.memory_facts SET status = 'conflicting', conflict_group_id = ${group.rows[0]!.id}::uuid WHERE id IN (${fact.id}::uuid, ${sibling.id}::uuid)`.execute(
+          db.db
+        );
+        return group.rows[0]!.id;
+      });
+      const target = await asActor(ids.userA, (db) => memory.target(db, ids.userA, fact.id));
+      const locked = deferred<void>();
+      const release = deferred<void>();
+      const rival = concurrentRunner.withDataContext({ actorUserId: ids.userA }, async (db) => {
+        const rows = {
+          "sibling fact": sql`SELECT id FROM app.memory_facts WHERE id = ${sibling.id}::uuid FOR UPDATE`,
+          "conflict group": sql`SELECT id FROM app.memory_conflict_groups WHERE id = ${groupId}::uuid FOR UPDATE`,
+          "sibling search document": sql`SELECT id FROM app.memory_search_documents WHERE target_id = ${sibling.id}::uuid FOR UPDATE`
+        };
+        await rows[held].execute(db.db);
+        locked.resolve();
+        await release.promise;
+      });
+      let deletion: Promise<boolean> | undefined;
+      try {
+        await locked.promise;
+        deletion = asActor(ids.userA, (db) =>
+          memory.forgetApproved(db, ids.userA, fact.id, target!.version)
+        );
+        let outcome: unknown;
+        deletion.catch((error: unknown) => {
+          outcome = error;
+        });
+        // The rival keeps its lock until after this assertion: waiting on it would fail the test.
+        await vi.waitFor(() => expect(outcome).toMatchObject({ code: "55P03" }), {
+          timeout: 5_000
+        });
+      } finally {
+        release.resolve();
+        await Promise.allSettled([rival, ...(deletion ? [deletion] : [])]);
+      }
+      expect(await readFact(fact.id)).toMatchObject({ object_text: fact.text });
+      expect(await searchStatus(fact.id)).toBe("active");
+      const siblingState = await asActor(ids.userA, (db) =>
+        sql<{
+          status: string;
+          conflict_group_id: string | null;
+        }>`SELECT status, conflict_group_id FROM app.memory_facts WHERE id = ${sibling.id}::uuid`.execute(
+          db.db
+        )
+      );
+      expect(siblingState.rows[0]).toEqual({ status: "conflicting", conflict_group_id: groupId });
+      const groupState = await asActor(ids.userA, (db) =>
+        sql<{
+          status: string;
+        }>`SELECT status FROM app.memory_conflict_groups WHERE id = ${groupId}::uuid`.execute(db.db)
+      );
+      expect(groupState.rows[0]?.status).toBe("open");
+    }
+  );
 });
 
 function asActor<T>(actor: string, work: (db: DataContextDb) => Promise<T>): Promise<T> {

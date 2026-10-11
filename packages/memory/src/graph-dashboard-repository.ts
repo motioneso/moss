@@ -204,41 +204,13 @@ export class MemoryGraphDashboardRepository {
     if (!existing) return { deleted: false };
 
     if (existing.conflict_group_id) {
-      const siblings = await sql<{ id: string }>`
-        SELECT id
-        FROM app.memory_facts
-        WHERE owner_user_id = ${ownerUserId}::uuid
-          AND conflict_group_id = ${existing.conflict_group_id}::uuid
-          AND id <> ${factId}::uuid
-          AND status = 'conflicting'
-      `.execute(scopedDb.db);
-
-      if (siblings.rows.length === 1) {
-        const sibling = siblings.rows[0];
-        if (sibling) {
-          await sql`
-            UPDATE app.memory_facts
-            SET conflict_group_id = NULL,
-                status = 'active',
-                updated_at = now()
-            WHERE owner_user_id = ${ownerUserId}::uuid
-              AND id = ${sibling.id}::uuid
-          `.execute(scopedDb.db);
-          await sql`
-            UPDATE app.memory_conflict_groups
-            SET status = 'resolved', resolved_at = now()
-            WHERE owner_user_id = ${ownerUserId}::uuid
-              AND id = ${existing.conflict_group_id}::uuid
-          `.execute(scopedDb.db);
-          await this.graphRepo.setSearchDocumentStatus(
-            scopedDb,
-            ownerUserId,
-            "fact",
-            sibling.id,
-            "active"
-          );
-        }
-      }
+      await this.releaseSoleConflictSibling(
+        scopedDb,
+        ownerUserId,
+        factId,
+        existing.conflict_group_id,
+        { nowait: false }
+      );
     }
 
     await this.graphRepo.deactivateSearchDocument(scopedDb, ownerUserId, "fact", factId);
@@ -249,6 +221,68 @@ export class MemoryGraphDashboardRepository {
       RETURNING id
     `.execute(scopedDb.db);
     return { deleted: result.rows.length > 0 };
+  }
+
+  /**
+   * Restores the sole remaining conflicting sibling of a forgotten fact to active, resolves
+   * its group and reactivates its search document. Callers that already hold the forgotten
+   * fact's lock pass nowait, so contention aborts the transaction instead of waiting.
+   */
+  async releaseSoleConflictSibling(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    factId: string,
+    conflictGroupId: string,
+    opts: { readonly nowait: boolean }
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    const lock = opts.nowait ? sql`FOR UPDATE NOWAIT` : sql``;
+    const siblings = await sql<{ id: string }>`
+      SELECT id
+      FROM app.memory_facts
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND conflict_group_id = ${conflictGroupId}::uuid
+        AND id <> ${factId}::uuid
+        AND status = 'conflicting'
+      ${lock}
+    `.execute(scopedDb.db);
+    const sibling = siblings.rows.length === 1 ? siblings.rows[0] : undefined;
+    if (!sibling) return;
+
+    if (opts.nowait) {
+      await sql`
+        SELECT id FROM app.memory_conflict_groups
+        WHERE owner_user_id = ${ownerUserId}::uuid AND id = ${conflictGroupId}::uuid
+        FOR UPDATE NOWAIT
+      `.execute(scopedDb.db);
+      await sql`
+        SELECT id FROM app.memory_search_documents
+        WHERE owner_user_id = ${ownerUserId}::uuid AND target_kind = 'fact'
+          AND target_id = ${sibling.id}::uuid
+        FOR UPDATE NOWAIT
+      `.execute(scopedDb.db);
+    }
+    await sql`
+      UPDATE app.memory_facts
+      SET conflict_group_id = NULL,
+          status = 'active',
+          updated_at = now()
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND id = ${sibling.id}::uuid
+    `.execute(scopedDb.db);
+    await sql`
+      UPDATE app.memory_conflict_groups
+      SET status = 'resolved', resolved_at = now()
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND id = ${conflictGroupId}::uuid
+    `.execute(scopedDb.db);
+    await this.graphRepo.setSearchDocumentStatus(
+      scopedDb,
+      ownerUserId,
+      "fact",
+      sibling.id,
+      "active"
+    );
   }
 }
 
