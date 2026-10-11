@@ -47,12 +47,12 @@ export class WeatherService {
 
   /**
    * A null request address skips IP geolocation, so a background caller falls back from the
-   * stored location straight to the time-zone city.
+   * stored location straight to the time-zone city. A null zone skips the city guess.
    */
   async getWeatherForUser(
     accessContext: AccessContext,
     requestIp: string | null,
-    timeZone: string
+    timeZone: string | null
   ): Promise<WeatherTodayDto | null> {
     const userId = accessContext.actorUserId;
     const resolvedLocation = await this.resolveLocation(accessContext, requestIp, timeZone);
@@ -95,7 +95,7 @@ export class WeatherService {
   private async resolveLocation(
     accessContext: AccessContext,
     requestIp: string | null,
-    timeZone: string
+    timeZone: string | null
   ): Promise<ResolvedLocation | null> {
     const raw = await this.dataContext.withDataContext(accessContext, (scopedDb) =>
       this.preferencesRepo.get(scopedDb, WEATHER_LOCATION_KEY)
@@ -126,7 +126,7 @@ export class WeatherService {
     }
 
     // Fall back to a static timezone->city table (no new outbound egress)
-    const cityFallback = lookupCityForTimeZone(timeZone);
+    const cityFallback = timeZone === null ? null : lookupCityForTimeZone(timeZone);
     if (cityFallback) {
       this.logger.info({ step: "timezone-fallback" }, "weather location resolved");
       return { location: cityFallback, source: "timezone-fallback" };

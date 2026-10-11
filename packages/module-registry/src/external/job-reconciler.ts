@@ -33,9 +33,15 @@ export class ExternalModuleJobReconciler {
   ) {}
 
   private async actorTimezone(actorUserId: string): Promise<string> {
-    return (
-      (await this.deps.resolveActorTimezone?.(actorUserId)) ?? DEFAULT_LOCALE_SETTINGS.timezone
-    );
+    try {
+      return (
+        (await this.deps.resolveActorTimezone?.(actorUserId)) ?? DEFAULT_LOCALE_SETTINGS.timezone
+      );
+    } catch (error) {
+      // One person's unreadable zone must not stop the module for everyone.
+      this.deps.logger?.warn({ err: error, actorUserId }, "actor timezone read failed");
+      return DEFAULT_LOCALE_SETTINGS.timezone;
+    }
   }
 
   async reconcileAll(): Promise<void> {

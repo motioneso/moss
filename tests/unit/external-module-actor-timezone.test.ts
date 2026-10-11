@@ -105,6 +105,14 @@ describe("ExternalModuleJobReconciler schedule zone (#3395)", () => {
     await expect(scheduledZones(moduleWithSchedule())).resolves.toEqual(["America/Los_Angeles"]);
   });
 
+  it("falls back to the shared default zone when reading the person's zone fails", async () => {
+    await expect(
+      scheduledZones(moduleWithSchedule(), async () => {
+        throw new Error("preferences unavailable");
+      })
+    ).resolves.toEqual(["America/Los_Angeles"]);
+  });
+
   it("keeps a zone the module declares on the schedule", async () => {
     await expect(
       scheduledZones(moduleWithSchedule("Asia/Tokyo"), async () => "Europe/London")

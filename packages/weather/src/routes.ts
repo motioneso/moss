@@ -16,15 +16,22 @@ interface WeatherRoutesDependencies {
   readonly fetchFn?: typeof fetch;
 }
 
-/** The person's saved locale timezone, or the shared default when nothing is saved (#3395). */
-async function resolveRouteTimeZone(
+/**
+ * The person's saved locale timezone, or null when none is saved. The zone only picks a fallback
+ * city, so the shared default zone must never stand in for one (#3395).
+ */
+async function savedTimeZone(
   dependencies: WeatherRoutesDependencies,
   accessContext: AccessContext
-): Promise<string> {
+): Promise<string | null> {
   const stored = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
     dependencies.preferencesRepo.get(scopedDb, LOCALE_PREFERENCE_KEY)
   );
-  return resolveEffectiveLocale(stored).timezone;
+  const saved =
+    stored !== null &&
+    typeof stored === "object" &&
+    typeof (stored as { timezone?: unknown }).timezone === "string";
+  return saved ? resolveEffectiveLocale(stored).timezone : null;
 }
 
 export function registerWeatherRoutes(
@@ -44,7 +51,7 @@ export function registerWeatherRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const timeZone = await resolveRouteTimeZone(dependencies, accessContext);
+        const timeZone = await savedTimeZone(dependencies, accessContext);
         const data = await service.getWeatherForUser(accessContext, request.ip, timeZone);
         return { data };
       } catch (error) {

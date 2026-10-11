@@ -356,8 +356,8 @@ describe("weather integration", () => {
       await srv.close();
     });
 
-    it("uses the shared default zone's city when nothing is saved and IP is loopback (#3395)", async () => {
-      const fakeFetch = vi.fn().mockResolvedValueOnce(makeOpenMeteoResponse(20, 19, 0));
+    it("returns null when no location or zone is saved and IP is loopback (#3395)", async () => {
+      const fakeFetch = vi.fn();
       const srv = createApiServer({
         appDb,
         boss,
@@ -373,9 +373,9 @@ describe("weather integration", () => {
         headers: { cookie, "x-timezone": "Europe/London" }
       });
       expect(res.statusCode).toBe(200);
-      expect(res.json<GetWeatherTodayResponse>().data?.location).toBe("Los Angeles, US");
-      // Loopback IP skips the IP lookup, so the only call is Open-Meteo.
-      expect(fakeFetch).toHaveBeenCalledTimes(1);
+      // The browser zone is ignored, and the default zone never invents a city.
+      expect(res.json<GetWeatherTodayResponse>().data).toBeNull();
+      expect(fakeFetch).not.toHaveBeenCalled();
 
       await srv.close();
     });

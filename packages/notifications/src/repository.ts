@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { sql, type SqlBool } from "kysely";
 
 import { assertDataContextDb, type DataContextDb, type Notification } from "@moss/db";
+import { DEFAULT_LOCALE_SETTINGS } from "@moss/shared";
 
 import { isSameOriginAppPath } from "./app-path.js";
 import { projectNotificationMetadata } from "./metadata.js";
@@ -189,7 +190,7 @@ export async function resolveTimezone(
 ): Promise<string> {
   if (explicitTz) return explicitTz;
   const localeTz = await port.getLocaleTimezone(scopedDb);
-  return localeTz ?? "UTC";
+  return localeTz ?? DEFAULT_LOCALE_SETTINGS.timezone;
 }
 
 /**
