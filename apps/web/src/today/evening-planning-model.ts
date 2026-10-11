@@ -233,6 +233,7 @@ export interface SaveStatusInput {
   readonly applied: number;
   readonly failed: number;
   readonly pending: number;
+  readonly unknown: number;
   readonly deniedReason: string | null;
   readonly needsConfirm: boolean;
 }
@@ -242,9 +243,9 @@ export function saveStatusLine(input: SaveStatusInput): string {
   if (!input.saved) return "Not saved yet.";
   if (input.needsConfirm) return "Confirm the calendar changes to finish saving.";
   if (input.deniedReason !== null) return `The calendar refused the batch: ${input.deniedReason}`;
+  if (input.failed + input.pending + input.unknown > 0)
+    return `Saved. Applied ${input.applied}; ${input.failed} failed; ${input.pending} pending${input.unknown > 0 ? `; ${input.unknown} need checking` : ""}.`;
   if (input.mode === "off") return "Saved. The calendar is off, so nothing was written to it.";
   if (input.mode === "suggest") return "Saved. The blocks are proposed for the morning.";
-  if (input.failed + input.pending > 0)
-    return `Saved. Applied ${input.applied}; ${input.failed} failed; ${input.pending} pending.`;
   return "Tomorrow is ready.";
 }

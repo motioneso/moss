@@ -119,13 +119,13 @@ export function DayPlanReview(props: DayPlanReviewProps) {
         block.actualPlacement?.startsAt != null
       )
   );
-  const saveDisabled = controller.busy || selectedCount === 0 || unavailableCalendar;
+  const saveDisabled = controller.busy || selectedCount === 0;
   const items = Object.values(controller.outcomes);
   const applied = items.filter((item) => item.outcome === "applied").length;
   const failed = items.filter((item) => item.outcome === "failed").length;
-  const pending = items.filter(
-    (item) => item.outcome === "pending" || item.outcome === "unknown"
-  ).length;
+  const pending = items.filter((item) => item.outcome === "pending").length;
+
+  const unknown = items.filter((item) => item.outcome === "unknown").length;
 
   return (
     <BriefingReportShell
@@ -189,7 +189,8 @@ export function DayPlanReview(props: DayPlanReviewProps) {
           ) : null}
           {unavailableCalendar ? (
             <p className="plan-review__hint" role="status">
-              The calendar is unavailable, so nothing can be applied until it returns.
+              The calendar is unavailable. Try Save changes again to recheck it; your choices are
+              kept.
             </p>
           ) : null}
           <div className="plan-review__changes">
@@ -240,8 +241,9 @@ export function DayPlanReview(props: DayPlanReviewProps) {
           {items.length > 0 ? (
             <div className="plan-review__status">
               <p role="status">
-                Applied {applied}; {failed} failed; {pending} pending.
-                {applied > 0 && failed + pending > 0
+                Applied {applied}; {failed} failed; {pending} pending
+                {unknown > 0 ? `; ${unknown} need checking` : ""}.
+                {applied > 0 && failed + pending + unknown > 0
                   ? " Partially applied; applied writes stand."
                   : null}
               </p>

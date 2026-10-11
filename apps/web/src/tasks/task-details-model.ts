@@ -1,3 +1,4 @@
+import { localDay } from "@moss/shared";
 import type {
   CreateTaskRequest,
   RecurrenceSpecDto,
@@ -62,9 +63,10 @@ export function formFromTask(task: TaskDto, timeZone: string): TaskDetailsFormSt
 
 export function buildTaskFields(
   form: TaskDetailsFormState,
-  defaultListId?: string
+  defaultListId?: string,
+  timeZone = "UTC"
 ): CreateTaskRequest & UpdateTaskRequest {
-  const dueAt = fromDateInputValue(form.dueAt);
+  const dueAt = fromDateInputValue(form.dueAt, timeZone);
 
   return {
     title: form.title.trim() || "Untitled task",
@@ -72,7 +74,7 @@ export function buildTaskFields(
     status: form.status,
     priority: form.priority ? Number(form.priority) : null,
     dueAt,
-    doAt: fromDateInputValue(form.doAt),
+    doAt: fromDateInputValue(form.doAt, timeZone),
     effort: form.effort || null,
     listId: form.listId || defaultListId || undefined,
     recurrence:
@@ -83,13 +85,9 @@ export function buildTaskFields(
           : {
               freq: form.repeat,
               interval: 1,
-              occurrence_date: recurrenceOccurrenceDate(dueAt)
+              occurrence_date: form.dueAt || localDay(new Date(), timeZone)
             }
   };
-}
-
-function recurrenceOccurrenceDate(dueAt: string | null): string {
-  return (dueAt ?? new Date().toISOString()).slice(0, 10);
 }
 
 export function normalizeTagName(value: string): string {

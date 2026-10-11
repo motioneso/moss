@@ -51,6 +51,7 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
   const [approval, setApproval] = useState<PendingApproval | null>(null);
   const [outcomes, setOutcomes] = useState<Readonly<Record<string, ApplyExecutionItemReport>>>({});
   const [operationId, setOperationId] = useState<string | null>(null);
+  const [reportVersion, setReportVersion] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const snapshotRef = useRef<DayPlanDto | null>(input.plan);
@@ -169,8 +170,12 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
   );
 
   const storeReport = useCallback((report: ApplyExecutionReport, selection: readonly string[]) => {
-    if (report.status === "denied" && report.denialReason)
-      setNotice(`The calendar refused the batch: ${report.denialReason}`);
+    setReportVersion((value) => value + 1);
+    setNotice(
+      report.status === "denied" && report.denialReason
+        ? `The calendar refused the batch: ${report.denialReason}`
+        : null
+    );
     setOperationId(report.operationId);
     const next: Record<string, ApplyExecutionItemReport> = {};
     for (const item of report.items) {
@@ -222,6 +227,13 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
           setStalePreview(false);
           revisionRef.current = response.revision;
           setRevision(response.revision);
+          if (response.calendarAvailability === "unavailable") {
+            setNotice(
+              "The calendar is unavailable. Your choices are kept; try again to recheck it."
+            );
+            return false;
+          }
+          setNotice(null);
           return true;
         }, "Preview failed.")) ?? false
       );
@@ -346,6 +358,7 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     preview,
     approval,
     outcomes,
+    reportVersion,
     notice,
     busy,
     choiceFor,

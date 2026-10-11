@@ -68,7 +68,7 @@ afterEach(() => {
   container.remove();
   vi.unstubAllGlobals();
 });
-async function render(taskId: string | null = task.id) {
+async function render(taskId: string | null = task.id, onClose: () => void = () => undefined) {
   await act(async () =>
     root.render(
       <StrictMode>
@@ -78,7 +78,7 @@ async function render(taskId: string | null = task.id) {
             taskId={taskId}
             currentUserLabel="Owner"
             lists={[]}
-            onClose={() => undefined}
+            onClose={onClose}
           />
         </QueryClientProvider>
       </StrictMode>
@@ -242,3 +242,210 @@ describe("task details truthful recovery", () => {
     expect(container.querySelector("#task-notes-input")).not.toBeNull();
   });
 });
+
+describe("task detail save boundary", () => {
+  it.each(["pointer", "Enter"] as const)(
+    "keeps actual task-dialog focus after a %s comment and returns Escape to its opener",
+    async (method) => {
+      api.addTaskActivity.mockResolvedValue({});
+      const opener = document.createElement("button");
+      opener.textContent = "Open task";
+      document.body.append(opener);
+      opener.focus();
+      try {
+        await render(task.id, () => root.render(null));
+        await eventually(() => expect(button("Save changes").disabled).toBe(false));
+        const comment = type('textarea[placeholder="Add a comment…"]', "Keep the posted note");
+        const post = button("Post comment");
+        act(() => {
+          if (method === "pointer") {
+            post.focus();
+            post.click();
+          } else {
+            comment.focus();
+            comment.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
+            );
+          }
+        });
+        await eventually(() => expect(comment.value).toBe(""));
+        expect(api.addTaskActivity).toHaveBeenCalledOnce();
+        const dialog = container.querySelector('[role="dialog"]')!;
+        expect(dialog.contains(document.activeElement)).toBe(true);
+        act(() =>
+          document.activeElement?.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })
+          )
+        );
+        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        await eventually(() => expect(document.activeElement).toBe(opener));
+      } finally {
+        opener.remove();
+      }
+    }
+  );
+  it("explains committed actions and asks before discarding main-field edits", async () => {
+    const close = vi.fn();
+    await render(task.id, close);
+    await eventually(() => expect(button("Save changes").disabled).toBe(false));
+    expect(container.textContent).toContain("Comments, tags and subtasks save immediately");
+    type('[aria-label="Task title"]', "Unsaved title");
+    act(() => button("Cancel").click());
+    expect(close).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Discard unsaved changes?");
+    act(() => button("Keep editing").click());
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Task title"]')?.value).toBe(
+      "Unsaved title"
+    );
+    act(() => button("Cancel").click());
+    act(() => button("Discard unsaved changes").click());
+    expect(close).toHaveBeenCalledOnce();
+    expect(api.updateTask).not.toHaveBeenCalled();
+  });
+  it("does not reinterpret a saved comment as a transaction to discard", async () => {
+    const close = vi.fn();
+    api.addTaskActivity.mockResolvedValue({});
+    await render(task.id, close);
+    await eventually(() => expect(button("Save changes").disabled).toBe(false));
+    type('textarea[placeholder="Add a comment…"]', "A saved comment");
+    act(() => button("Post comment").click());
+    await eventually(() =>
+      expect(
+        container.querySelector<HTMLTextAreaElement>('textarea[placeholder="Add a comment…"]')
+          ?.value
+      ).toBe("")
+    );
+    act(() => button("Cancel").click());
+    expect(close).toHaveBeenCalledOnce();
+    expect(container.textContent).not.toContain("Discard unsaved changes?");
+    expect(api.addTaskActivity).toHaveBeenCalledOnce();
+  });
+  it("routes Escape through the same discard decision without losing the draft", async () => {
+    const close = vi.fn();
+    await render(task.id, close);
+    await eventually(() => expect(button("Save changes").disabled).toBe(false));
+    const title = type('[aria-label="Task title"]', "Escape must preserve this");
+    title.focus();
+    act(() => title.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(close).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Discard unsaved changes?");
+    expect(title.value).toBe("Escape must preserve this");
+  });
+  it("explains that a partly saved new task remains when unsaved changes are discarded", async () => {
+    const close = vi.fn();
+    api.createTask.mockResolvedValue({ task });
+    api.breakdownTask.mockRejectedValue(new Error("Subtask unavailable"));
+    await render(null, close);
+    type('[aria-label="Task title"]', task.title);
+    act(() => container.querySelector<HTMLButtonElement>(".tk-sub__add")!.click());
+    type('input[placeholder="Subtask"]', "A child still to save");
+    act(() => button("Add task").click());
+    await eventually(() => expect(container.textContent).toContain("Could not save"));
+    act(() => button("Cancel").click());
+    expect(container.textContent).toContain(
+      "The task and any comments, tags or subtasks already saved will remain."
+    );
+    expect(container.textContent).not.toContain("This draft will be discarded.");
+    act(() => button("Discard unsaved changes").click());
+    expect(close).toHaveBeenCalledOnce();
+    expect(api.createTask).toHaveBeenCalledOnce();
+    expect(api.breakdownTask).toHaveBeenCalledOnce();
+    expect(api.updateTask).not.toHaveBeenCalled();
+  });
+});
+
+it("refreshes list metadata as soon as the implicit first task is created", async () => {
+  api.createTask.mockResolvedValue({ task });
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  await render(null);
+  type('[aria-label="Task title"]', task.title);
+  act(() => button("Add task").click());
+  await eventually(() => expect(api.createTask).toHaveBeenCalledOnce());
+  await eventually(() =>
+    expect(invalidate.mock.calls.map((call) => call[0]?.queryKey)).toContainEqual(
+      queryKeys.tasks.lists
+    )
+  );
+});
+
+it.each(["comment", "tag", "subtask"] as const)(
+  "main save cannot bypass a pending %s write",
+  async (kind) => {
+    let rejectWrite!: (error: Error) => void;
+    const pending = new Promise((_, reject) => {
+      rejectWrite = reject;
+    });
+    const write =
+      kind === "comment"
+        ? api.addTaskActivity
+        : kind === "tag"
+          ? api.assignTaskTag
+          : api.breakdownTask;
+    write.mockReturnValue(pending);
+    api.updateTask.mockResolvedValue({ task });
+    const close = vi.fn();
+    await render(task.id, close);
+    await eventually(() => expect(button("Save changes").disabled).toBe(false));
+    const field = type(
+      kind === "comment"
+        ? 'textarea[placeholder="Add a comment…"]'
+        : kind === "tag"
+          ? 'input[aria-label="Add a tag"]'
+          : 'input[placeholder="Add a subtask and press Enter"]',
+      "Keep pending input"
+    );
+    if (kind === "comment") act(() => button("Post comment").click());
+    else enter(field);
+    await eventually(() => expect(button("Cancel").disabled).toBe(true));
+    act(() => button("Save changes").click());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(close).not.toHaveBeenCalled();
+    expect(api.updateTask).not.toHaveBeenCalled();
+    expect(button("Save changes").disabled).toBe(true);
+    await act(async () => rejectWrite(new Error("Unavailable")));
+    await eventually(() => expect(button("Save changes").disabled).toBe(false));
+    expect(field.value).toBe("Keep pending input");
+    expect(close).not.toHaveBeenCalled();
+  }
+);
+
+it.each(["none", "due", "reminder"] as const)(
+  "delayed locale preserves untouched dates and genuine %s edits",
+  async (edited) => {
+    const zonedTask = {
+      ...task,
+      dueAt: "2026-10-11T22:00:00.000Z",
+      doAt: "2026-10-11T19:00:00.000Z"
+    };
+    api.getTask.mockResolvedValue({ task: zonedTask });
+    api.updateTask.mockResolvedValue({ task: zonedTask });
+    await render();
+    await eventually(() => expect(button("Save changes").disabled).toBe(false));
+    type('[aria-label="Task title"]', "My title edit stays");
+    if (edited === "due") type("#task-due-input", "2026-10-13");
+    if (edited === "reminder") type("#task-reminder-input", "2026-10-13");
+    await act(async () =>
+      client.setQueryData(queryKeys.settings.locale, {
+        locale: { timezone: "Pacific/Kiritimati", region: "en-US", dateFormat: "24" }
+      })
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(container.querySelector<HTMLInputElement>("#task-due-input")?.value).toBe(
+      edited === "due" ? "2026-10-13" : "2026-10-12"
+    );
+    expect(container.querySelector<HTMLInputElement>("#task-reminder-input")?.value).toBe(
+      edited === "reminder" ? "2026-10-13" : "2026-10-12"
+    );
+    act(() => button("Save changes").click());
+    await eventually(() => expect(api.updateTask).toHaveBeenCalledOnce());
+    expect(api.updateTask.mock.calls[0]?.[1]).toMatchObject({
+      title: "My title edit stays",
+      dueAt: edited === "due" ? "2026-10-12T22:00:00.000Z" : zonedTask.dueAt,
+      doAt: edited === "reminder" ? "2026-10-12T22:00:00.000Z" : zonedTask.doAt
+    });
+  }
+);

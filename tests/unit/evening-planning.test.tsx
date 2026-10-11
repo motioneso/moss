@@ -12,7 +12,6 @@ import {
   effortMinutes,
   eveningIntentPatchFor,
   proposeTomorrowBlocks,
-  saveStatusLine,
   tomorrowPlanMissing
 } from "../../apps/web/src/today/evening-planning-model.js";
 import {
@@ -338,32 +337,10 @@ describe("tomorrowPlanMissing", () => {
   });
 });
 
-describe("saveStatusLine", () => {
-  const line = (overrides: object) =>
-    saveStatusLine({
-      mode: "suggest",
-      saved: true,
-      applied: 0,
-      failed: 0,
-      pending: 0,
-      deniedReason: null,
-      needsConfirm: false,
-      ...overrides
-    });
-  it("names each outcome without claiming readiness early", () => {
-    expect(line({ saved: false })).toBe("Not saved yet.");
-    expect(line({})).toBe("Saved. The blocks are proposed for the morning.");
-    expect(line({ mode: "off" })).toContain("nothing was written");
-    expect(line({ mode: "auto", applied: 1 })).toBe("Tomorrow is ready.");
-    expect(line({ mode: "auto", pending: 1 })).toContain("1 pending");
-    expect(line({ mode: "auto", deniedReason: "busy" })).toContain("busy");
-    expect(line({ mode: "auto", needsConfirm: true })).toContain("Confirm");
-  });
-});
-
 describe("useEveningPlanning", () => {
   const liveRoots: { unmount(): void }[] = [];
   let draftMode = "ok";
+  let applyOutcome: "applied" | "failed" = "applied";
   let policyNow: "off" | "suggest" | "auto" = "suggest";
   let savedPlan: DayPlanDto;
   let calls: { method: string; url: string; body: unknown }[] = [];
@@ -419,7 +396,7 @@ describe("useEveningPlanning", () => {
           items: selected.map((blockId) => ({
             itemId: `item-${blockId}`,
             blockId,
-            outcome: "applied",
+            outcome: applyOutcome,
             result: null
           }))
         });
@@ -524,6 +501,7 @@ describe("useEveningPlanning", () => {
   beforeEach(() => {
     savedPlan = tomorrowPlan();
     draftMode = "ok";
+    applyOutcome = "applied";
     policyNow = "suggest";
     calls = [];
     stubFetch();
@@ -622,6 +600,55 @@ describe("useEveningPlanning", () => {
     expect(ok).toBe(true);
     expect(m.current().status).toBe("Saved. The blocks are proposed for the morning.");
   });
+  it.each(["applied", "failed", "unknown"] as const)(
+    "old %s move outcome cannot settle a new activation",
+    async (outcome) => {
+      policyNow = "auto";
+      savedPlan.blocks = [
+        block("b-cal", {
+          taskId: "t-cal",
+          actualPlacement: {
+            startsAt: `${TMO}T14:00:00.000Z`,
+            durationMinutes: 60,
+            calendarEventRef: "ev-0"
+          },
+          pendingChange: { kind: "move", startsAt: `${TMO}T15:00:00.000Z`, durationMinutes: 60 }
+        })
+      ];
+      const stub = {
+        revision: 5,
+        choiceFor: defaultChoiceFor,
+        touchedIds: ["b-cal"],
+        outcomes: {
+          "b-cal": { itemId: "old-operation-item", blockId: "b-cal", outcome, result: null }
+        },
+        notice: null,
+        approval: null,
+        expectOwnWrite: vi.fn(),
+        apply: vi.fn(() => new Promise(() => undefined)),
+        confirm: vi.fn(),
+        acceptAllAdditions: vi.fn(),
+        dismissApproval: vi.fn()
+      } as unknown as DayPlanReviewController;
+      const m = await mount(savedPlan, { stub });
+      await act(async () => {
+        await m.current().save();
+      });
+      expect(stub.apply).toHaveBeenCalledOnce();
+      expect(m.current().status).toContain("1 pending");
+      expect(m.current().status).not.toBe("Tomorrow is ready.");
+      stub.outcomes = {
+        "b-cal": {
+          itemId: "new-operation-item",
+          blockId: "b-cal",
+          outcome: "applied",
+          result: null
+        }
+      };
+      await m.rerender(savedPlan);
+      expect(m.current().status).toBe("Tomorrow is ready.");
+    }
+  );
   it("marks its own draft save so the review does not call it a stale plan", async () => {
     const expectOwnWrite = vi.fn();
     const stub = {
@@ -679,33 +706,15 @@ describe("useEveningPlanning", () => {
     expect(rows.some((row) => row.taskId === "t2")).toBe(false);
     expect(rows.filter((row) => row.taskId === "t1").length).toBe(1);
   });
-  it("a failed move blocks the ready line", async () => {
+  it("a failed move from this activation blocks the ready line", async () => {
     policyNow = "auto";
-    const stub = {
-      revision: 5,
-      choiceFor: (block: DayPlanBlockDto) =>
-        block.id === "b-cal"
-          ? { placement: "move", startsAt: `${TMO}T15:00:00.000Z` }
-          : defaultChoiceFor(block),
-      touchedIds: ["b-cal"],
-      outcomes: {
-        "b-cal": { itemId: "item-b-cal", blockId: "b-cal", outcome: "failed", result: null }
-      },
-      notice: null,
-      approval: null,
-      expectOwnWrite: vi.fn(),
-      apply: vi.fn(),
-      confirm: vi.fn(),
-      acceptAllAdditions: vi.fn(),
-      dismissApproval: vi.fn()
-    } as unknown as DayPlanReviewController;
-    const m = await mount(tomorrowPlan(), { stub });
-    let ok = false;
-    await act(async () => {
-      ok = await m.current().save();
-    });
-    expect(ok).toBe(true);
-    expect(m.current().status).toBe("Saved. Applied 0; 1 failed; 0 pending.");
+    applyOutcome = "failed";
+    const m = await mount(tomorrowPlan());
+    await act(async () => m.review().setPlacement("b-cal", "move", `${TMO}T15:00:00.000Z`));
+    await act(async () => expect(await m.current().save()).toBe(true));
+    await m.rerender(savedPlan);
+    expect(applies()).toBe(1);
+    expect(m.current().status).toBe("Saved. Applied 0; 1 failed; 2 pending.");
   });
   it("keeps a review-edited proposal time through the save", async () => {
     const m = await mount(tomorrowPlan());

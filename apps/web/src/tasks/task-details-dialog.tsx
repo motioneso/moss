@@ -96,6 +96,18 @@ export function TaskDetailsDialog(props: {
   const [tagDraft, setTagDraft] = useState("");
   const [subDraft, setSubDraft] = useState("");
   const [comment, setComment] = useState("");
+  const [discardRequested, setDiscardRequested] = useState(false);
+  const dateEditsRef = useRef({ dueAt: false, doAt: false });
+  const mainSavePendingRef = useRef(false);
+  const immediateWritesRef = useRef(0);
+  const startImmediateWrite = (start: () => void) => {
+    if (mainSavePendingRef.current) return;
+    immediateWritesRef.current += 1;
+    start();
+  };
+  const finishImmediateWrite = () => {
+    immediateWritesRef.current -= 1;
+  };
   // Progress of a new-task save, so a retry after a partial failure resumes instead of
   // creating the parent again or re-adding the parts that already landed.
   const createdRef = useRef<{
@@ -157,6 +169,7 @@ export function TaskDetailsDialog(props: {
   useEffect(() => {
     if (!props.open) {
       seededRef.current = null;
+      dateEditsRef.current = { dueAt: false, doAt: false };
       return;
     }
     const key = isNew ? "new" : `${props.taskId}:${task ? "loaded" : "pending"}`;
@@ -166,15 +179,27 @@ export function TaskDetailsDialog(props: {
       // cached copy shown first cannot be saved back over fresher values.
       if (!isNew && task && (seeded.task !== task || seeded.timeZone !== locale.timezone)) {
         const before = seeded.task ? formFromTask(seeded.task, seeded.timeZone) : null;
+        const after = formFromTask(task, locale.timezone);
         setForm((f) =>
-          before && JSON.stringify(f) === JSON.stringify(before)
-            ? formFromTask(task, locale.timezone)
+          before
+            ? (Object.fromEntries(
+                Object.entries(f).map(([name, value]) => [
+                  name,
+                  !(name === "dueAt" && dateEditsRef.current.dueAt) &&
+                  !(name === "doAt" && dateEditsRef.current.doAt) &&
+                  JSON.stringify(value) ===
+                    JSON.stringify(before[name as keyof TaskDetailsFormState])
+                    ? after[name as keyof TaskDetailsFormState]
+                    : value
+                ])
+              ) as unknown as TaskDetailsFormState)
             : f
         );
         seededRef.current = { key, task, timeZone: locale.timezone };
       }
       return;
     }
+    dateEditsRef.current = { dueAt: false, doAt: false };
     if (isNew) {
       setForm(blankTaskDetailsForm(props.defaultListId, props.defaultTitle));
       setNewTags([]);
@@ -191,6 +216,7 @@ export function TaskDetailsDialog(props: {
     setTagDraft("");
     setSubDraft("");
     setComment("");
+    setDiscardRequested(false);
   }, [
     props.open,
     isNew,
@@ -204,6 +230,7 @@ export function TaskDetailsDialog(props: {
   const invalidateLists = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.lists }),
       props.taskId
         ? queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(props.taskId) })
         : Promise.resolve()
@@ -211,7 +238,22 @@ export function TaskDetailsDialog(props: {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const fields = buildTaskFields(form, props.defaultListId);
+      const draftFields = buildTaskFields(form, props.defaultListId, locale.timezone);
+      const baselineTask = seededRef.current?.task;
+      const baseline = !isNew && baselineTask ? formFromTask(baselineTask, locale.timezone) : null;
+      // Untouched timestamps keep their exact saved instant, including after
+      // a delayed locale read; genuinely edited dates use the selected local day.
+      const fields = {
+        ...draftFields,
+        dueAt:
+          baseline && !dateEditsRef.current.dueAt && form.dueAt === baseline.dueAt
+            ? baselineTask!.dueAt
+            : draftFields.dueAt,
+        doAt:
+          baseline && !dateEditsRef.current.doAt && form.doAt === baseline.doAt
+            ? baselineTask!.doAt
+            : draftFields.doAt
+      };
       if (isNew) {
         if (!createdRef.current) {
           const created = await createTask(fields);
@@ -221,6 +263,8 @@ export function TaskDetailsDialog(props: {
             subtasksDone: false,
             tagsDone: new Set()
           };
+          // The API can create Personal implicitly before any child writes finish.
+          await invalidateLists();
         }
         const progress = createdRef.current;
         const subs = cleanSubtasks(newSubs);
@@ -246,11 +290,15 @@ export function TaskDetailsDialog(props: {
     },
     onSuccess: async () => {
       await invalidateLists();
-      props.onClose();
+      if (immediateWritesRef.current === 0) props.onClose();
+    },
+    onSettled: () => {
+      mainSavePendingRef.current = false;
     }
   });
 
   const toggleSubMutation = useMutation({
+    onSettled: finishImmediateWrite,
     mutationFn: (vars: { readonly id: string; readonly status: TaskApiStatus }) =>
       updateTask(vars.id, { status: vars.status }),
     onSuccess: async () => {
@@ -260,6 +308,7 @@ export function TaskDetailsDialog(props: {
   });
 
   const addSubMutation = useMutation({
+    onSettled: finishImmediateWrite,
     mutationFn: (text: string) => breakdownTask(requireTaskId(), { steps: [text] }),
     onSuccess: async () => {
       setSubDraft("");
@@ -269,6 +318,7 @@ export function TaskDetailsDialog(props: {
   });
 
   const assignTagMutation = useMutation({
+    onSettled: finishImmediateWrite,
     mutationFn: async (name: string) => {
       const existing = (listTagsQuery.data?.tags ?? []).find(
         (t) => t.name.toLowerCase() === name.toLowerCase()
@@ -286,11 +336,13 @@ export function TaskDetailsDialog(props: {
   });
 
   const unassignTagMutation = useMutation({
+    onSettled: finishImmediateWrite,
     mutationFn: (tagId: string) => unassignTaskTag(requireTaskId(), tagId),
     onSuccess: invalidateLists
   });
 
   const commentMutation = useMutation({
+    onSettled: finishImmediateWrite,
     mutationFn: (body: string) =>
       addTaskActivity(requireTaskId(), { activityType: "comment", body }),
     onSuccess: async () => {
@@ -322,7 +374,7 @@ export function TaskDetailsDialog(props: {
       setNewTags((t) => (t.includes(name) ? t : [...t, name]));
       setTagDraft("");
     } else if (tagsListId) {
-      assignTagMutation.mutate(name);
+      startImmediateWrite(() => assignTagMutation.mutate(name));
     }
   };
 
@@ -330,19 +382,43 @@ export function TaskDetailsDialog(props: {
     const name = normalizeTagName(rawName);
     if (!name) return;
     if (isNew) setNewTags((t) => (t.includes(name) ? t : [...t, name]));
-    else if (tagsListId) assignTagMutation.mutate(name);
+    else if (tagsListId) startImmediateWrite(() => assignTagMutation.mutate(name));
   };
 
   const addExistingSubtask = () => {
     const text = subDraft.trim();
-    if (text) addSubMutation.mutate(text);
+    if (text) startImmediateWrite(() => addSubMutation.mutate(text));
+  };
+
+  const immediateWritePending =
+    toggleSubMutation.isPending ||
+    addSubMutation.isPending ||
+    assignTagMutation.isPending ||
+    unassignTagMutation.isPending ||
+    commentMutation.isPending;
+  const saving = saveMutation.isPending || immediateWritePending;
+  const baseline = isNew
+    ? blankTaskDetailsForm(props.defaultListId, props.defaultTitle)
+    : seededRef.current?.task
+      ? formFromTask(seededRef.current.task, seededRef.current.timeZone)
+      : form;
+  const hasUnsavedChanges =
+    JSON.stringify(form) !== JSON.stringify(baseline) ||
+    Boolean(comment.trim() || tagDraft.trim() || subDraft.trim()) ||
+    (isNew && (newTags.length > 0 || newSubs.some((sub) => sub.trim())));
+  const requestClose = () => {
+    if (saving || mainSavePendingRef.current || immediateWritesRef.current > 0) return;
+    if (hasUnsavedChanges) setDiscardRequested(true);
+    else props.onClose();
   };
 
   return (
     <Dialog
       className="tk-modal"
       aria-labelledby={headingId}
-      onClose={props.onClose}
+      onClose={requestClose}
+      dismissOnEscape={!saving}
+      dismissOnBackdrop={!saving}
       initialFocusRef={titleRef}
       title={
         <div className="tk-modal__head">
@@ -354,13 +430,18 @@ export function TaskDetailsDialog(props: {
               className="tk-modal__titlein"
               ref={titleRef}
               value={form.title}
-              disabled={!isNew && !task}
+              disabled={saveMutation.isPending || (!isNew && !task)}
               placeholder="What needs doing?"
               aria-label="Task title"
               onChange={(event) => setForm((f) => ({ ...f, title: event.target.value }))}
             />
           </div>
-          <button className="tk-modal__x" onClick={props.onClose} aria-label="Close">
+          <button
+            className="tk-modal__x"
+            onClick={requestClose}
+            disabled={saving}
+            aria-label="Close"
+          >
             <X size={18} aria-hidden="true" />
           </button>
         </div>
@@ -370,7 +451,9 @@ export function TaskDetailsDialog(props: {
           {!isNew && task ? (
             <TaskStatusControl
               status={form.status}
-              onChange={(status) => setForm((f) => ({ ...f, status }))}
+              onChange={(status) => {
+                if (!mainSavePendingRef.current) setForm((f) => ({ ...f, status }));
+              }}
             />
           ) : null}
           {saveMutation.isError ? (
@@ -378,14 +461,36 @@ export function TaskDetailsDialog(props: {
               Could not save. Your changes are still here; try again.
             </p>
           ) : null}
+          {discardRequested ? (
+            <div className="tasks-notice" role="alert">
+              <p className="jds-hint">Discard unsaved changes?</p>
+              <p className="jds-hint">
+                {isNew && !createdRef.current
+                  ? "This draft will be discarded."
+                  : "The task and any comments, tags or subtasks already saved will remain."}
+              </p>
+              <div className="tk-modal__save-actions">
+                <Button variant="secondary" onClick={() => setDiscardRequested(false)}>
+                  Keep editing
+                </Button>
+                <Button variant="danger" disabled={saving} onClick={props.onClose}>
+                  Discard unsaved changes
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <div className="tk-modal__save-actions">
-            <Button variant="quiet" onClick={props.onClose}>
+            <Button variant="quiet" disabled={saving} onClick={requestClose}>
               Cancel
             </Button>
             <Button
               variant="primary"
-              disabled={saveMutation.isPending || (!isNew && !task)}
-              onClick={() => saveMutation.mutate()}
+              disabled={saving || (!isNew && !task)}
+              onClick={() => {
+                if (mainSavePendingRef.current || immediateWritesRef.current > 0) return;
+                mainSavePendingRef.current = true;
+                saveMutation.mutate();
+              }}
             >
               {isNew ? "Add task" : "Save changes"}
             </Button>
@@ -422,7 +527,13 @@ export function TaskDetailsDialog(props: {
               </Button>
             </div>
           ) : null}
-          <div className="tk-form">
+          {!isNew ? (
+            <p className="jds-hint">
+              Title, notes and other details save with Save changes. Comments, tags and subtasks
+              save immediately.
+            </p>
+          ) : null}
+          <div className="tk-form" inert={saveMutation.isPending}>
             {/* Comment stream first — surface activity without scrolling. */}
             {!isNew ? (
               <div className="tk-field--full">
@@ -432,7 +543,7 @@ export function TaskDetailsDialog(props: {
                     entries={activity}
                     currentUserLabel={props.currentUserLabel}
                     draft={comment}
-                    pending={commentMutation.isPending}
+                    pending={saving}
                     loading={activityQuery.isPending}
                     loadError={activityQuery.isError}
                     saveError={commentMutation.isError}
@@ -440,7 +551,7 @@ export function TaskDetailsDialog(props: {
                     onDraft={setComment}
                     onPost={() => {
                       const body = comment.trim();
-                      if (body) commentMutation.mutate(body);
+                      if (body) startImmediateWrite(() => commentMutation.mutate(body));
                     }}
                   />
                 </Field>
@@ -504,7 +615,10 @@ export function TaskDetailsDialog(props: {
                 type="date"
                 className="jds-input"
                 value={form.dueAt}
-                onChange={(event) => setForm((f) => ({ ...f, dueAt: event.target.value }))}
+                onChange={(event) => {
+                  dateEditsRef.current.dueAt = true;
+                  setForm((f) => ({ ...f, dueAt: event.target.value }));
+                }}
               />
             </Field>
             <Field>
@@ -514,7 +628,10 @@ export function TaskDetailsDialog(props: {
                 type="date"
                 className="jds-input"
                 value={form.doAt}
-                onChange={(event) => setForm((f) => ({ ...f, doAt: event.target.value }))}
+                onChange={(event) => {
+                  dateEditsRef.current.doAt = true;
+                  setForm((f) => ({ ...f, doAt: event.target.value }));
+                }}
               />
             </Field>
 
@@ -562,7 +679,9 @@ export function TaskDetailsDialog(props: {
                   onCommitDraft={commitTagDraft}
                   onAddSuggestion={addTagName}
                   onRemoveNewTag={(name) => setNewTags((t) => t.filter((x) => x !== name))}
-                  onUnassignTag={(tagId) => unassignTagMutation.mutate(tagId)}
+                  onUnassignTag={(tagId) =>
+                    startImmediateWrite(() => unassignTagMutation.mutate(tagId))
+                  }
                 />
                 {listTagsQuery.isError ? (
                   <div className="tasks-notice" role="alert">
@@ -618,7 +737,9 @@ export function TaskDetailsDialog(props: {
                   }
                   onNewSubRemove={(index) => setNewSubs((s) => s.filter((_, i) => i !== index))}
                   onNewSubAdd={() => setNewSubs((s) => [...s, ""])}
-                  onToggleExisting={(id, status) => toggleSubMutation.mutate({ id, status })}
+                  onToggleExisting={(id, status) =>
+                    startImmediateWrite(() => toggleSubMutation.mutate({ id, status }))
+                  }
                   onDraft={setSubDraft}
                   onAddExisting={addExistingSubtask}
                 />

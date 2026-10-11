@@ -1,5 +1,7 @@
 import { localDay, type TaskApiStatus, type TaskDto, type TaskEffort } from "@moss/shared";
 
+import { localTimeToIso } from "../locale/wall-time.js";
+
 export const statusLabels: Record<TaskApiStatus, string> = {
   todo: "Open",
   suggested: "Suggested",
@@ -23,12 +25,14 @@ export function toDateInputValue(value: string | null, timeZone?: string): strin
   return localDay(value, timeZone);
 }
 
-export function fromDateInputValue(value: string): string | null {
+export function fromDateInputValue(value: string, timeZone = "UTC"): string | null {
   if (!value) {
     return null;
   }
 
-  return new Date(`${value}T12:00:00.000Z`).toISOString();
+  // Date controls express a day in the saved zone. UTC noon crosses into the
+  // next day at UTC+12/+14; local noon preserves that day through display/reopen.
+  return localTimeToIso(value, "12:00", timeZone);
 }
 
 export const effortLabels: Record<TaskEffort, string> = {

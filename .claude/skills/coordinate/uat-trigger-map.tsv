@@ -245,6 +245,18 @@ blocking	packages/ai/src/adapters/http-api.ts	tests/uat/specs/2956-activity-hist
 blocking	packages/chat/src/live/cli-structured-adapter.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
 blocking	packages/shared/src/app-map-core.ts	tests/uat/specs/2956-activity-history.uat.spec.ts
 
+# #3397 bounded planning journeys and route/client goal contract.
+blocking	apps/web/src/tasks/**	tests/uat/specs/audit-planning.uat.spec.ts
+blocking	apps/web/src/calendar/calendar-page.tsx	tests/uat/specs/audit-planning.uat.spec.ts
+blocking	apps/web/src/calendar/day-plan-preview.tsx	tests/uat/specs/audit-planning.uat.spec.ts
+blocking	apps/web/src/today/brief-task-row.tsx	tests/uat/specs/audit-planning.uat.spec.ts
+blocking	apps/web/src/today/today-page.tsx	tests/uat/specs/audit-planning.uat.spec.ts
+blocking	apps/web/src/today/evening-planning*.tsx	tests/uat/specs/audit-planning.uat.spec.ts
+blocking	apps/web/src/today/planning-handoff*.ts	tests/uat/specs/audit-planning.uat.spec.ts
+blocking	apps/web/src/api/client.ts	tests/uat/specs/audit-planning.uat.spec.ts
+blocking	apps/web/src/locale/wall-time.ts	tests/uat/specs/audit-planning.uat.spec.ts
+blocking	packages/tasks/src/manifest.ts	tests/uat/specs/audit-planning.uat.spec.ts
+blocking	packages/calendar/src/manifest.ts	tests/uat/specs/audit-planning.uat.spec.ts
 # #3397 shared modal focus recovery through real task comments.
 blocking	packages/ui/src/use-dialog-lifecycle.ts	tests/uat/specs/audit-modal-focus.uat.spec.ts
 blocking	tests/unit/audit-modal-focus-recovery.test.tsx	tests/uat/specs/audit-modal-focus.uat.spec.ts

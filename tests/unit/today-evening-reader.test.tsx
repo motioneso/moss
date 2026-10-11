@@ -106,7 +106,7 @@ async function renderEveningToday(): Promise<void> {
     [queryKeys.briefings.definitions, { definitions: [definition] }],
     [queryKeys.briefings.runs(definition.id), { runs: [run] }],
     [queryKeys.briefings.run(definition.id, run.id), readyDetail(run)],
-    [queryKeys.goals.list, { items: [] }],
+    [queryKeys.goals.list, []],
     [queryKeys.settings.persona, { persona: { assistantName: "Moss", personaText: "" } }]
   ]);
   const container = document.createElement("div");

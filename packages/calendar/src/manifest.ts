@@ -118,7 +118,7 @@ export const calendarModuleManifest = {
       id: "calendar",
       label: "Calendar",
       description:
-        "View your connected events in Day, Week or Month in your timezone and 12/24-hour format, retaining the view. On phones, Week and Month scroll horizontally; Day stays compact. Failed reads offer Retry; a failed refresh retains loaded events.",
+        "View your connected events in Day, Week or Month in your timezone and 12/24-hour format, retaining the view. Month steps stay adjacent across month and year ends. On phones, Week and Month scroll horizontally; Day stays compact. Failed reads offer Retry; a failed refresh retains loaded events.",
       path: "/calendar",
       icon: "calendar-days",
       order: 35,
@@ -553,6 +553,32 @@ export const calendarModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "calendar.preview_recovery",
+      description:
+        "An unavailable task-block preview retains selected choices and leaves Save changes available to recheck. No calendar apply follows that unavailable preview.",
+      errors: [
+        {
+          code: "calendar.preview_unavailable",
+          class: "transient",
+          description:
+            "The preview could not read calendar availability. Selected changes stay in the review and are not applied. Press Save changes to recheck."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_preview_retry",
+          description:
+            "Press Save changes again in task-block review to recheck calendar availability while keeping your choices.",
+          path: "/today"
+        }
+      ]
+    },
+    {
+      id: "calendar.month_navigation",
+      description:
+        "Previous and Next in Month select the adjacent month without carrying an overflowing day into another month. Day and Week retain their one-day and seven-day steps."
+    },
     {
       id: "calendar.chat_app_actions",
       description:
