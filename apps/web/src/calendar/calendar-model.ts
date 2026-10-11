@@ -1,4 +1,12 @@
-import type { CalendarEventDto } from "@moss/shared";
+import {
+  formatLocaleDate,
+  formatLocaleTime,
+  localDay,
+  type CalendarEventDto,
+  type LocaleSettingsDto
+} from "@moss/shared";
+
+import { zonedClockMinutes } from "../locale/locale-format.js";
 
 export type CalendarView = "day" | "week" | "month";
 
@@ -45,18 +53,55 @@ export const MONTH_NAMES = [
   "December"
 ] as const;
 
-export function fmtTime(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  const ap = h < 12 ? "AM" : "PM";
-  const h12 = ((h + 11) % 12) + 1;
-  return h12 + (m ? ":" + String(m).padStart(2, "0") : "") + " " + ap;
+// Calendar days are plain dates held as UTC-midnight `Date`s and read with UTC getters,
+// so day math never depends on the browser's zone. Instants become plain dates and
+// clock minutes in the person's saved timezone.
+
+export function plainDate(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month, day));
 }
 
-export function fmtHour(h: number): string {
-  const ap = h < 12 ? "AM" : "PM";
-  const h12 = ((h + 11) % 12) + 1;
-  return h12 + " " + ap;
+export function addDays(date: Date, days: number): Date {
+  return plainDate(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days);
+}
+
+function plainDateFromKey(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number);
+  return plainDate(y ?? 1970, (m ?? 1) - 1, d ?? 1);
+}
+
+/** The plain date an instant falls on in `timeZone`. */
+export function plainDateOf(instant: Date, timeZone: string): Date {
+  return plainDateFromKey(localDay(instant, timeZone));
+}
+
+export function todayIn(timeZone: string): Date {
+  return plainDateOf(new Date(), timeZone);
+}
+
+function clockMinutes(instant: Date, timeZone: string): number {
+  return zonedClockMinutes(instant, timeZone) ?? 0;
+}
+
+// Wall-clock values carry no zone, so they format in UTC on a fixed day.
+function clockInstant(min: number): number {
+  return Date.UTC(2000, 0, 1, Math.floor(min / 60), min % 60);
+}
+
+const WALL_CLOCK = "UTC";
+
+export function fmtTime(min: number, locale: LocaleSettingsDto): string {
+  const wall = { ...locale, timezone: WALL_CLOCK };
+  return locale.dateFormat === "12" && min % 60 === 0
+    ? formatLocaleTime(clockInstant(min), wall, { hour: "numeric" })
+    : formatLocaleTime(clockInstant(min), wall);
+}
+
+export function fmtHour(h: number, locale: LocaleSettingsDto): string {
+  const wall = { ...locale, timezone: WALL_CLOCK };
+  return locale.dateFormat === "12"
+    ? formatLocaleTime(clockInstant(h * 60), wall, { hour: "numeric" })
+    : formatLocaleTime(clockInstant(h * 60), wall, { hour: "2-digit", minute: "2-digit" });
 }
 
 export function fmtDur(mins: number): string {
@@ -66,47 +111,41 @@ export function fmtDur(mins: number): string {
   return h + " hr" + (m ? " " + m + " min" : "");
 }
 
-export function fmtDateLabel(date: Date): string {
-  return DOW_LONG[date.getDay()] + ", " + MONTH_NAMES[date.getMonth()] + " " + date.getDate();
-}
-
-export function isToday(date: Date): boolean {
-  const now = new Date();
-  return (
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
+export function fmtDateLabel(date: Date, locale: LocaleSettingsDto): string {
+  return formatLocaleDate(
+    date,
+    { ...locale, timezone: WALL_CLOCK },
+    { weekday: "long", month: "long", day: "numeric" }
   );
 }
 
-export function nowMin(): number {
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes();
+export function isToday(date: Date, timeZone: string): boolean {
+  return dayKey(date) === localDay(new Date(), timeZone);
 }
 
+export function nowMin(timeZone: string): number {
+  return clockMinutes(new Date(), timeZone);
+}
+
+/** `YYYY-MM-DD` key of a plain date. */
 export function dayKey(date: Date): string {
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${m}-${d}`;
 }
 
-export function dtoToViewEvent(dto: CalendarEventDto): CalendarViewEvent | null {
+export function dtoToViewEvent(dto: CalendarEventDto, timeZone: string): CalendarViewEvent | null {
   const startsAt = new Date(dto.startsAt);
   if (Number.isNaN(startsAt.getTime())) return null;
   const endsAt = new Date(dto.endsAt);
-  const startMin = startsAt.getHours() * 60 + startsAt.getMinutes();
-  const endMin = Number.isNaN(endsAt.getTime())
-    ? startMin + 60
-    : endsAt.getHours() * 60 + endsAt.getMinutes();
+  const startMin = clockMinutes(startsAt, timeZone);
+  const endMin = Number.isNaN(endsAt.getTime()) ? startMin + 60 : clockMinutes(endsAt, timeZone);
 
-  // `date` is the calendar day an event belongs to — it drives day grouping
-  // (groupEventsByDay → dayKey, read with LOCAL components) and the peek's date
-  // label. All-day events are synced as UTC-midnight (connectors sync-jobs.ts), so
-  // reading that instant with local components shifts them into the previous day in
-  // western timezones. Anchor all-day events to a local Date built from their UTC
-  // date-only components so every local-component consumer buckets them correctly;
-  // timed events keep the local day of their start instant.
+  // All-day events sync as UTC midnights (connectors sync-jobs.ts), so their UTC date
+  // is already the plain date. Timed events take the person's day of their start.
   const date = dto.allDay
-    ? new Date(startsAt.getUTCFullYear(), startsAt.getUTCMonth(), startsAt.getUTCDate())
-    : startsAt;
+    ? plainDate(startsAt.getUTCFullYear(), startsAt.getUTCMonth(), startsAt.getUTCDate())
+    : plainDateOf(startsAt, timeZone);
 
   return {
     id: dto.id,
@@ -138,15 +177,16 @@ function addToBucket(
   }
 }
 
-// Buckets each event on every local day it covers. All-day ends are exclusive.
-// Timed events crossing midnight get one clipped segment per day; segments keep
-// the event id and true start/end instants.
+// Buckets each event on every day it covers in the person's timezone. All-day ends
+// are exclusive. Timed events crossing midnight get one clipped segment per day;
+// segments keep the event id and true start/end instants.
 export function groupEventsByDay(
-  events: readonly CalendarViewEvent[]
+  events: readonly CalendarViewEvent[],
+  timeZone: string
 ): Map<string, CalendarViewEvent[]> {
   const map = new Map<string, CalendarViewEvent[]>();
   for (const e of events) {
-    const first = new Date(e.date.getFullYear(), e.date.getMonth(), e.date.getDate());
+    const first = e.date;
     const endMs = e.endsAt.getTime();
     if (Number.isNaN(endMs) || endMs <= e.startsAt.getTime()) {
       addToBucket(map, first, e);
@@ -154,7 +194,7 @@ export function groupEventsByDay(
     }
 
     if (e.allDay) {
-      const end = new Date(
+      const end = plainDate(
         e.endsAt.getUTCFullYear(),
         e.endsAt.getUTCMonth(),
         e.endsAt.getUTCDate()
@@ -162,26 +202,19 @@ export function groupEventsByDay(
       let day = first;
       do {
         addToBucket(map, day, day === first ? e : { ...e, date: day });
-        day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+        day = addDays(day, 1);
       } while (day < end);
       continue;
     }
 
-    const lastMidnight = new Date(e.endsAt.getFullYear(), e.endsAt.getMonth(), e.endsAt.getDate());
-    const last =
-      e.endMin === 0 && lastMidnight > first
-        ? new Date(lastMidnight.getFullYear(), lastMidnight.getMonth(), lastMidnight.getDate() - 1)
-        : lastMidnight;
+    const lastMidnight = plainDateOf(e.endsAt, timeZone);
+    const last = e.endMin === 0 && lastMidnight > first ? addDays(lastMidnight, -1) : lastMidnight;
     if (last <= first) {
-      // A timed event ending exactly at local midnight runs to the end of its day.
+      // A timed event ending exactly at midnight runs to the end of its day.
       addToBucket(map, first, e.endMin === 0 ? { ...e, endMin: 1440 } : e);
       continue;
     }
-    for (
-      let day = first;
-      day <= last;
-      day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)
-    ) {
+    for (let day = first; day <= last; day = addDays(day, 1)) {
       const isFirst = day.getTime() === first.getTime();
       const isLast = day.getTime() === last.getTime();
       addToBucket(map, day, {
@@ -196,68 +229,67 @@ export function groupEventsByDay(
 }
 
 export function buildWeekDays(cursor: Date, workWeek: boolean): Date[] {
-  const dow = cursor.getDay();
+  const dow = cursor.getUTCDay();
   const days: Date[] = [];
   const start = workWeek ? 1 : 0;
   const end = workWeek ? 6 : 7;
   for (let i = start; i < end; i++) {
-    const d = new Date(cursor);
-    d.setDate(cursor.getDate() - dow + i);
-    days.push(d);
+    days.push(addDays(cursor, i - dow));
   }
   return days;
 }
 
 export function buildMonthCells(cursor: Date): Date[] {
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const firstDow = new Date(year, month, 1).getDay();
+  const year = cursor.getUTCFullYear();
+  const month = cursor.getUTCMonth();
+  const firstDow = plainDate(year, month, 1).getUTCDay();
   const cells: Date[] = [];
   for (let i = -firstDow; i < 42 - firstDow; i++) {
-    cells.push(new Date(year, month, 1 + i));
+    cells.push(plainDate(year, month, 1 + i));
   }
   const lastWeek = cells.slice(35);
-  if (lastWeek.every((d) => d.getMonth() !== month)) {
+  if (lastWeek.every((d) => d.getUTCMonth() !== month)) {
     return cells.slice(0, 35);
   }
   return cells;
 }
 
 export function navigateCursor(cursor: Date, view: CalendarView, dir: -1 | 1): Date {
-  const d = new Date(cursor);
-  if (view === "day") {
-    d.setDate(d.getDate() + dir);
-  } else if (view === "week") {
-    d.setDate(d.getDate() + dir * 7);
-  } else {
-    d.setMonth(d.getMonth() + dir);
-  }
-  return d;
+  if (view === "day") return addDays(cursor, dir);
+  if (view === "week") return addDays(cursor, dir * 7);
+  const y = cursor.getUTCFullYear();
+  const m = cursor.getUTCMonth() + dir;
+  const lastDay = plainDate(y, m + 1, 0).getUTCDate();
+  return plainDate(y, m, Math.min(cursor.getUTCDate(), lastDay));
 }
 
 export function rangeLabel(cursor: Date, view: CalendarView, days: Date[]): string {
   if (view === "day") {
     return (
-      DOW_LONG[cursor.getDay()] + ", " + MONTH_NAMES[cursor.getMonth()] + " " + cursor.getDate()
+      DOW_LONG[cursor.getUTCDay()] +
+      ", " +
+      MONTH_NAMES[cursor.getUTCMonth()] +
+      " " +
+      cursor.getUTCDate()
     );
   }
   if (view === "week" && days.length >= 2) {
     const a = days[0]!;
     const b = days[days.length - 1]!;
-    if (a.getMonth() === b.getMonth()) {
-      return MONTH_NAMES[a.getMonth()] + " " + a.getDate() + " – " + b.getDate();
+    if (a.getUTCMonth() === b.getUTCMonth()) {
+      return MONTH_NAMES[a.getUTCMonth()] + " " + a.getUTCDate() + " – " + b.getUTCDate();
     }
     return (
-      (MONTH_NAMES[a.getMonth()] ?? "").slice(0, 3) +
+      (MONTH_NAMES[a.getUTCMonth()] ?? "").slice(0, 3) +
       " " +
-      a.getDate() +
+      a.getUTCDate() +
       " – " +
-      (MONTH_NAMES[b.getMonth()] ?? "").slice(0, 3) +
+      (MONTH_NAMES[b.getUTCMonth()] ?? "").slice(0, 3) +
       " " +
-      b.getDate()
+      b.getUTCDate()
     );
   }
-  return MONTH_NAMES[cursor.getMonth()] + " " + cursor.getFullYear();
+  return MONTH_NAMES[cursor.getUTCMonth()] + " " + cursor.getUTCFullYear();
 }
 
 export function packDay(evs: CalendarViewEvent[]): CalendarViewEvent[] {
@@ -321,43 +353,46 @@ export function loadPersistedView(): CalendarView {
   return v === "week" || v === "month" ? v : "day";
 }
 
-export function loadPersistedCursor(): Date {
+/** The saved plain date, or null so the page can start on today in the person's zone. */
+export function loadPersistedCursor(): Date | null {
   const s = migrateLegacyKey("jarvis.cal.cursor", "moss.cal.cursor");
   if (s) {
     const d = new Date(s);
-    if (!Number.isNaN(d.getTime())) return d;
+    if (!Number.isNaN(d.getTime())) {
+      return plainDate(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    }
   }
-  return new Date();
+  return null;
 }
 
 export function loadPersistedWorkWeek(): boolean {
   return migrateLegacyKey("jarvis.cal.workweek", "moss.cal.workweek") === "1";
 }
 
-const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
-
 // Real first date, plus the real last date when the event spans several days.
-export function dateRangeLabel(event: CalendarViewEvent): string {
+export function dateRangeLabel(event: CalendarViewEvent, locale: LocaleSettingsDto): string {
   if (event.allDay) {
-    const first = new Date(
+    const first = plainDate(
       event.startsAt.getUTCFullYear(),
       event.startsAt.getUTCMonth(),
       event.startsAt.getUTCDate()
     );
     // All-day end is exclusive and UTC-midnight anchored.
-    const last = new Date(
+    const last = plainDate(
       event.endsAt.getUTCFullYear(),
       event.endsAt.getUTCMonth(),
       event.endsAt.getUTCDate() - 1
     );
-    return last > first ? fmtDateLabel(first) + " – " + fmtDateLabel(last) : fmtDateLabel(first);
+    return last > first
+      ? fmtDateLabel(first, locale) + " – " + fmtDateLabel(last, locale)
+      : fmtDateLabel(first, locale);
   }
-  const first = event.startsAt;
-  const endsAtMidnight = minutesOfDay(event.endsAt) === 0 && event.endsAt > first;
-  const last = endsAtMidnight
-    ? new Date(event.endsAt.getFullYear(), event.endsAt.getMonth(), event.endsAt.getDate() - 1)
-    : event.endsAt;
-  return dayKey(last) === dayKey(first) || last < first
-    ? fmtDateLabel(first)
-    : fmtDateLabel(first) + " – " + fmtDateLabel(last);
+  const first = plainDateOf(event.startsAt, locale.timezone);
+  const endsAtMidnight =
+    clockMinutes(event.endsAt, locale.timezone) === 0 && event.endsAt > event.startsAt;
+  const endDay = plainDateOf(event.endsAt, locale.timezone);
+  const last = endsAtMidnight ? addDays(endDay, -1) : endDay;
+  return last <= first
+    ? fmtDateLabel(first, locale)
+    : fmtDateLabel(first, locale) + " – " + fmtDateLabel(last, locale);
 }
