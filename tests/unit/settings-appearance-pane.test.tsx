@@ -1,10 +1,11 @@
+// @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import type { AestheticThemeTokens } from "@moss/shared";
+import type { AestheticThemeTokens, PutCustomThemeRequest } from "@moss/shared";
 import { ColorBox } from "@moss/ui";
 import {
   AppearancePane,
@@ -12,10 +13,19 @@ import {
   saveThemeDraft,
   slugifyThemeId,
   themeColorError,
-  tokensToCssVars
+  tokensToCssVars,
+  readBuiltInTokens
 } from "../../apps/web/src/settings/settings-appearance-pane.js";
 import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
-import { PREVIEW_PARTS, ThemePreview } from "../../apps/web/src/settings/settings-theme-preview.js";
+import {
+  PREVIEW_PARTS,
+  ThemePreview,
+  ThemeReadability,
+  ReadabilityList,
+  THEME_READABILITY_PAIRS,
+  readRenderedThemeChecks,
+  readabilityContrastRatio
+} from "../../apps/web/src/settings/settings-theme-preview.js";
 import { parsePalette } from "../../apps/web/src/theme/theme-runtime.js";
 
 function renderAppearancePane(): string {
@@ -195,6 +205,134 @@ describe("page header editing (#3019)", () => {
     const block = /\.theme-pv,[^{]*\{([^}]*)\}/.exec(css)?.[1] ?? "";
     for (const name of ["bg", "fg", "muted", "line", "hover"]) {
       expect(block).toContain(`--header-${name}: initial;`);
+    }
+  });
+});
+
+describe("semantic theme readability", () => {
+  it("samples exact semantic foregrounds and grounds in an isolated custom light base", () => {
+    const html = renderToString(
+      createElement(ThemeReadability, { themeId: "draft-test", style: tokensToCssVars(tokens) })
+    );
+    expect(html).toContain('class="theme-readability-samples jds-theme-scope"');
+    expect(html).toContain('data-color-mode="light"');
+    expect(html).toContain('data-theme="draft-test"');
+    expect(html).toContain('aria-hidden="true"');
+    for (const pair of THEME_READABILITY_PAIRS) {
+      expect(html).toContain(`data-theme-contrast-sample="${pair.id}"`);
+      expect(html).toContain(
+        `color:var(${pair.foreground});background-color:var(${pair.background})`
+      );
+    }
+    expect(THEME_READABILITY_PAIRS.find((pair) => pair.id === "faint-page")).toMatchObject({
+      foreground: "--text-faint",
+      background: "--paper"
+    });
+    expect(THEME_READABILITY_PAIRS.find((pair) => pair.id === "primary-label")).toMatchObject({
+      foreground: "--text-on-accent",
+      background: "--btn-primary-bg"
+    });
+  });
+
+  // jsdom does not resolve inherited CSS variables. These fixtures exercise the
+  // browser-computed-color boundary; real cascade/outer-dark isolation is browser QA.
+  it.each([
+    { name: "Forest light", foreground: "rgb(106, 99, 80)", background: "rgb(242, 238, 228)" },
+    { name: "Forest dark", foreground: "rgb(154, 149, 137)", background: "rgb(50, 46, 37)" },
+    {
+      name: "custom dark paper on light semantic base",
+      foreground: "rgb(106, 99, 80)",
+      background: "rgb(28, 26, 22)"
+    }
+  ])("reports the returned rendered pair for $name", ({ foreground, background }) => {
+    const root = document.createElement("div");
+    root.innerHTML = THEME_READABILITY_PAIRS.map(
+      (pair) => `<span data-theme-contrast-sample="${pair.id}"></span>`
+    ).join("");
+    const readStyle = vi.fn(() => ({ color: foreground, backgroundColor: background }));
+    const checks = readRenderedThemeChecks(root, readStyle);
+    expect(readStyle).toHaveBeenCalledTimes(THEME_READABILITY_PAIRS.length);
+    const ratio = readabilityContrastRatio(foreground, background)!;
+    expect(
+      checks.every(
+        (check) =>
+          check.foreground === foreground &&
+          check.background === background &&
+          check.ratio === ratio
+      )
+    ).toBe(true);
+    const html = renderToString(createElement(ReadabilityList, { checks }));
+    expect(html).toContain(`data-foreground="${foreground}"`);
+    expect(html).toContain(`data-background="${background}"`);
+    expect(html).toContain(`${ratio.toFixed(2)} to 1`);
+    expect(html).toContain("do not cover");
+    expect(html).toContain("Warnings do not block saving");
+    if (ratio < 4.5) expect(html).toContain("You can still save this palette.");
+  });
+
+  it("does not invent passing contrast for transparent or unsupported colors", () => {
+    expect(readabilityContrastRatio("rgba(255, 255, 255, 0.5)", "#000000")).toBeNull();
+    expect(readabilityContrastRatio("#ffffff", "rgba(0, 0, 0, 0.5)")).toBeNull();
+    expect(readabilityContrastRatio("var(--text)", "#ffffff")).toBeNull();
+    expect(readabilityContrastRatio("color(srgb 1 1 1)", "color(srgb 0 0 0)")).toBe(21);
+    const html = renderToString(
+      createElement(ReadabilityList, {
+        checks: [
+          {
+            id: "unsupported",
+            label: "Unmeasured sample",
+            foreground: "var(--text)",
+            background: "#ffffff",
+            ratio: null,
+            floor: 4.5
+          }
+        ]
+      })
+    );
+    expect(html).toContain("Not measured");
+    expect(html).toContain("could not be measured reliably");
+    expect(html).not.toContain("Meets 4.5");
+  });
+
+  it("keeps low-contrast palette saving unchanged", async () => {
+    const low = { ...tokens, ink: tokens.paper, accent: tokens.paper };
+    const put = vi.fn(async (id: string, body: PutCustomThemeRequest) => ({
+      theme: { id, name: body.name ?? "", builtIn: false as const, tokens: low }
+    }));
+    const activate = vi.fn(async (body: { id: string }) => ({
+      builtIn: [],
+      custom: [],
+      activeId: body.id,
+      mode: "light" as const
+    }));
+    await saveThemeDraft(
+      { id: "low-contrast", name: "My palette", tokens: low },
+      {
+        putCustomTheme: put,
+        setActiveTheme: activate
+      }
+    );
+    expect(put).toHaveBeenCalledWith("low-contrast", { name: "My palette", tokens: low });
+    expect(activate).toHaveBeenCalledWith({ id: "low-contrast" });
+  });
+});
+
+describe("built-in palette probe isolation", () => {
+  it.each(["light", "dark"] as const)("uses an explicit %s scope and removes the probe", (mode) => {
+    const original = window.getComputedStyle.bind(window);
+    const measure = vi.spyOn(window, "getComputedStyle").mockImplementation((node) => {
+      expect(node.classList.contains("jds-theme-scope")).toBe(true);
+      expect(node.getAttribute("data-theme")).toBe("teal");
+      expect(node.getAttribute("data-color-mode")).toBe(mode);
+      expect(node.isConnected).toBe(true);
+      return original(node);
+    });
+    try {
+      readBuiltInTokens("teal", mode);
+      expect(measure).toHaveBeenCalledOnce();
+      expect(document.querySelector(".jds-theme-scope")).toBeNull();
+    } finally {
+      measure.mockRestore();
     }
   });
 });

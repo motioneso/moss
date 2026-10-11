@@ -36,7 +36,7 @@ The two boot/app body minimum widths now respect the scrollbar-reduced viewport.
 | F-05 | Legacy global control/type rules are scoped to preserve shared controls. |
 | F-06 | Current extraction and typography/material guidance reconciled. Historical design choices are not silently replaced. |
 | F-07 | App/shared/module token scope and explicit cross-file inputs enforced; negative scope/comment tests added. Not a universal module-local class-existence checker. |
-| F-08 | Named-theme selector/ground and focus pairs tested. The custom-theme Settings readout remains a separate core followup; arbitrary palettes are not automatically corrected or guaranteed compliant. |
+| F-08 | Named-theme selector/ground and focus pairs tested. The core batch below supplies actual custom-theme readouts; arbitrary palettes are not automatically corrected or guaranteed compliant. |
 | F-09 | Flat shared material and reduced-motion contracts repaired; rendered consumer motion remains a separate check. |
 | F-10 | Editorial SectionHead/RowIndex contracts documented and preserved. |
 | F-11 | Menu roving focus, trigger association and tooltip descriptions/Escape covered. Native browser Tab/Shift+Tab within a modal were exercised. |
@@ -98,10 +98,85 @@ and 1440 px it measured 375/375 and 1425/1425; primary controls remained visible
 These observations establish fixture layout and interaction only, not live data,
 server authorization, provider behavior or assistive-technology acceptance.
 
+## Core retained-screen batch
+
+This dependent batch implements the C1-C5 repairs and their existing-route recovery
+metadata. It also supplies the opt-in semantic token scope required to measure a
+custom palette in isolation from the active outer theme. Palette values and the
+existing Save policy are unchanged; a failing pair is a nonblocking warning, not
+an automatic palette modification or a compliance guarantee.
+
+| Finding | Result |
+| --- | --- |
+| CORE-01 | Memory has authored, responsive rows and named controls. Active #3084 FactActions import/export/delete call remains untouched. |
+| CORE-03 | Memory, People, members, oversight and audit distinguish failed reads from empty results and expose recovery while retaining confirmed rows. |
+| CORE-04 | Auth and onboarding use the approved shared control/type contracts. |
+| CORE-05 | Onboarding step labels point to actual heading IDs. |
+| CORE-06 | Onboarding/Today dialogs use shared lifecycle; the source tray deliberately remains nonmodal with focus entry, Escape, return and associated trigger. |
+| CORE-07 | Account actions use shared Menu; the phone navigation uses modal lifecycle, a named close control and actual expanded/controls state. Closed phone navigation is hidden from focus; desktop resize releases modal state. |
+| CORE-08 | Plan and workflow approval presentation uses shared controls while preserving pending and repeated-click guards. |
+| CORE-09 | Today semantic band text and wrapped action spacing repaired without changing the approved composition. |
+| CORE-10 | Missing local form/action layout hooks implemented. |
+| CORE-11 | Activity uses canonical Settings heading anatomy. |
+| CORE-12 | Theme deletion and encryption-key actions use authored confirmations with existing consequence/cancel semantics. |
+| CORE-13 | Offline fallback uses the retained shared visual identity. |
+| CORE-14 | Merged Finance module-owned Settings link is migrated. Conversations/Alerts from active #3154 are still held, not recreated or claimed complete. |
+| CORE-15 | Owned core underfloor text repaired; no claim of exhaustive whole-app rendered typography validation. |
+| CORE-16 | Priority settings use shared controls and distinguish read/write recovery. |
+| F-08 C4 | Nine readability readouts measure actual computed semantic foreground/ground pairs. Built-in duplicates and draft previews explicitly isolate their own palette/mode; warnings describe limited coverage. |
+
+Focused tests cover failed-read retries, retained drafts, destructive cancellation,
+mobile open/close/scrim/Escape/reopen, account navigation focus, responsive modal
+release and separate nonmodal source trays. Independent review includes stale
+closure/measurement and multiple-message source-tray probes. Source-faithful
+browser measurements verified all nine readability results against rendered
+colors and independently recalculated contrast, including a failing dark-palette
+pair and a changed custom light palette. No theme Save was issued in browser proof. SourceTray was
+rechecked under the real app StrictMode after the shared replay fix: Enter focuses
+Close source, Tab remains free, Escape and Close restore the opener without closing
+parent Chat, and a visible outside pointer click preserves the chosen textarea focus.
+Location and Skills explicitly name genuine mixed control groups; OpenCode directly
+associates its model label and hint with its select. The active Location branch patch
+remains apply-compatible.
+
+This batch adds no routes or authority. Core declarations describe the repaired
+recovery controls in the same batch. The active Memory and host chat patches were
+apply-checked for compatibility; no other branch was edited or imported wholesale.
+Final command counts and remaining browser cases are recorded in its draft body.
+
+### Core CI assertion follow-through
+
+The first core draft head exposed browser acceptance tests still waiting on the
+removed account-menu styling class and button roles for items now correctly
+represented as menuitems. The account readiness waits now target the named Account
+menu button, including unread-count suffixes. Contextually verified Settings,
+Notifications and Log out assertions use menuitem roles. Authentication fixtures,
+waits, timeouts and navigation outcomes are preserved, with closed/open and
+unread-count runtime coverage added.
+
+Directly affected Auth name assertions follow the actual canonical eyebrow inside
+the auth panel, retaining exact saved/default-name expectations. Encryption-key
+replacement acceptance now exercises the authored confirmation: safe initial
+Cancel focus, cancellation without a request, then one explicit confirmation and
+the original ready outcome. Today medication tests retain Escape, Done, backdrop
+and opener-return checks using the intended initial focus and shared backdrop.
+These are repaired assertion contracts, not successful first-run CI claims.
+
+The ten approval focus-ring contrast cases also now parse exact selector membership
+in comma-separated CSS rule headers, preserving every token pair and the 3:1
+threshold. The final corrected core slice passes 177 tests across 18 unit files.
+This assertion-only follow-through does not alter production behavior.
+
+The active scheduled work's three affected sign-in specs and the attachment
+fixture patch remain apply-compatible. Its assistant-name patch already conflicts
+with current main's newer model fixture before this migration; the locator-only
+changes are disjoint and do not import or revert that pending branch.
+
 ## Explicit outstanding gates
 
-- Consumer batches, including the actual custom-theme readout and remaining Sports
-  controls, must receive their own source/test/browser review and same-PR metadata.
+- Later planning, lifestyle and Meetings/Finance batches must receive their own
+  source/test/browser review and same-PR metadata. The final bounded module-local
+  class guard remains a separate dependent followup.
 - Active PR-owned Conversations/Alerts changes are not imported or rewritten by
   this foundation batch. Relevant disjoint patch compatibility is recorded in the
   freshness handoff; overlapping future changes still need reconciliation.

@@ -36,7 +36,7 @@ import {
 } from "./settings-activity-line.js";
 import { actionLabel, moduleLabel, outcomeNote } from "./settings-activity-labels.js";
 import type { PaneProps } from "./settings-types.js";
-import { Badge, Select } from "./settings-ui.js";
+import { Badge, PaneHead, Select } from "./settings-ui.js";
 
 type DateRange = "today" | "7d" | "30d" | "90d";
 
@@ -502,14 +502,11 @@ export function ActivityPane({ me }: PaneProps) {
   };
 
   return (
-    <div className="settings-section">
-      <header className="settings-section__header">
-        <h2 className="settings-section__title">Activity</h2>
-        <p className="settings-section__desc">
-          What {assistantName} did for you, which model did it, and how it went. Only you can see
-          these details.
-        </p>
-      </header>
+    <div>
+      <PaneHead
+        title="Activity"
+        desc={`What ${assistantName} did for you, which model did it, and how it went. Only you can see these details.`}
+      />
 
       <div className="act-filters">
         <div className="act-filters__group" role="group" aria-label="Time range">

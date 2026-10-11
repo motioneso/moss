@@ -19,6 +19,7 @@ export function ApiKeyOptOutStep(props: { readonly onSkipStep: () => void }) {
   return (
     <section className="onb-step" aria-labelledby="member-apikey-title">
       <StepHeader
+        titleId="member-apikey-title"
         eyebrow="Step 1 · Your assistant"
         title={personalize("Moss is ready to use.")}
         lede={
