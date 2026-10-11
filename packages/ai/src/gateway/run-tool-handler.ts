@@ -91,7 +91,8 @@ export async function runToolHandler(
           result,
           // Only explicitly trusted user-authored results are exempt. Outside and unmarked
           // results share the same trust-boundary wrapping as their admission policy.
-          toolHasOutsideContent(found.tool) ? found.tool.name : undefined
+          toolHasOutsideContent(found.tool) ? found.tool.name : undefined,
+          ctx
         ),
         structuredData: sanitized.data,
         // #1133 — media (image bytes) bypasses renderAndCap on purpose: sanitize's schema

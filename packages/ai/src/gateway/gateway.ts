@@ -602,7 +602,8 @@ export class AssistantToolGateway {
         data: renderAndCap(
           found.tool.outputSchema,
           result,
-          toolHasOutsideContent(found.tool) ? found.tool.name : undefined
+          toolHasOutsideContent(found.tool) ? found.tool.name : undefined,
+          ctx
         )
       };
     } catch {
