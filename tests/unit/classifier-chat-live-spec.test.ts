@@ -25,7 +25,7 @@ async function sources(): Promise<Sources> {
 // Every behavioural assertion the chat spec must keep, verbatim, with its count.
 const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
   ["await expect(composer).toBeEnabled();", 1],
-  ["await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toBeVisible();", 1],
+  ["await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(0);", 1],
   ["await askUntilCard(", 7],
   [".toBeVisible({ timeout: 180_000 })", 1],
   ["expect((await toolServerCalls(tool)).length).toBe(before);", 1],
@@ -291,15 +291,15 @@ describe("classifier chat live journey (#3362)", () => {
       ).toContain("the live config keeps traces under the capture opt-out");
     });
 
-    it("the marked-chat notice check dropped from an ask", async () => {
+    it("the no-notice check dropped from an ask", async () => {
       expect(
         await mutate(
           "chat",
-          "      await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toBeVisible();\n",
+          "      await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(0);\n",
           ""
         )
       ).toContain(
-        "lost assertion: await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toBeVisible();"
+        "lost assertion: await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(0);"
       );
     });
 

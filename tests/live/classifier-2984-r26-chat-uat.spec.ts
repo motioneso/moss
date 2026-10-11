@@ -103,7 +103,8 @@ async function askUntilCard(page: Page, tool: string, message: string): Promise<
       .catch(() => false);
     expect((await toolServerCalls(tool)).length).toBe(before);
     if (asked) {
-      await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toBeVisible();
+      // A connected tool asks in a fresh chat too, so the card names no outside content.
+      await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toHaveCount(0);
       return;
     }
   }
