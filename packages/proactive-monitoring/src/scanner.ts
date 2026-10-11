@@ -15,7 +15,7 @@ import type { MonitorStateRepository } from "./monitor-state-repository.js";
 import type { ProactiveMonitoringPreferencesRepository } from "./preferences-repository.js";
 import { isProactiveSourceEnabled } from "./preferences-repository.js";
 import { isAllowedSignalType, mapSignalType } from "./signal-mapper.js";
-import type { ProactiveQuietPolicy, ResolvedMonitoringConfig } from "./types.js";
+import type { ProactiveCardRow, ProactiveQuietPolicy, ResolvedMonitoringConfig } from "./types.js";
 
 const SCAN_COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_SIGNALS = 20;
@@ -52,7 +52,8 @@ export class ProactiveScanner {
   private readonly emailFindingPolicy: EmailFindingPolicy;
 
   constructor(private readonly deps: ScanDependencies) {
-    this.emailFindingPolicy = deps.emailFindingPolicy ?? new EmailFindingPolicy();
+    this.emailFindingPolicy =
+      deps.emailFindingPolicy ?? new EmailFindingPolicy(deps.cardRepository);
   }
 
   async scan(
@@ -184,7 +185,7 @@ export class ProactiveScanner {
       if (!signal) continue;
 
       let deferredUntil: string | null;
-      let existing: unknown;
+      let existing: ProactiveCardRow | undefined;
       if (source === "email") {
         // Email findings are charged once, on selection. A charged finding only refreshes its
         // live card; once dismissed it never resurfaces and never charges again.

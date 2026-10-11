@@ -1,11 +1,8 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 import pg from "pg";
 
-import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
+import { createDatabase, DataContextRunner, runSqlMigrations, type MossDatabase } from "@moss/db";
 import type { ProactiveMonitorProvider } from "@moss/module-sdk";
 import {
   AntiSpamPolicy,
@@ -421,13 +418,17 @@ describe("migration carry-forward (#3146)", () => {
        VALUES ($1, 'email', '{"checkedAt":"legacy-cursor"}', $2)`,
       [ids.userA, at(0).toISOString()]
     );
-    const migration = await readFile(
-      join(proactiveMonitoringSqlMigrationDirectory, "0311_proactive_email_finding_charges.sql"),
-      "utf8"
-    );
-    const carryForward = migration.slice(migration.indexOf("INSERT INTO"));
-    await bootstrap.query(carryForward);
-    await bootstrap.query(carryForward);
+    // Return the database to its pre-0311 shape, then upgrade through the real runner and the
+    // non-bypass migration owner, as an existing install would.
+    await bootstrap.query(`DROP TABLE app.proactive_email_finding_charges;
+      DELETE FROM app.schema_migrations WHERE version = '0311'`);
+    const upgrade = () =>
+      runSqlMigrations({
+        connectionString: connectionStrings.migration,
+        migrationsDirectory: proactiveMonitoringSqlMigrationDirectory
+      });
+    expect((await upgrade()).applied.map((item) => item.version)).toEqual(["0311"]);
+    expect((await upgrade()).applied).toEqual([]);
 
     expect(await charges()).toEqual(["legacy-active", "legacy-dismissed"]);
 

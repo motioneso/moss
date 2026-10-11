@@ -3,6 +3,7 @@ import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import { defaultProactiveMonitoringPreference } from "@moss/shared";
 
 import { localMidnight } from "./anti-spam.js";
+import { CardRepository } from "./card-repository.js";
 import {
   resolveAutomaticEmailAlertsEnabled,
   resolveSourcePreference,
@@ -44,18 +45,19 @@ interface BudgetRow {
   readonly already: boolean;
   readonly email_today: string;
   readonly email_last_hour: string;
-  readonly other_active_today: string;
 }
 
 /**
- * The single selection point for unsolicited email findings, shared by every consumer that
- * surfaces one (cards today, chat delivery later), so a finding is charged once.
+ * The single selection point for unsolicited email findings. Every consumer that surfaces one
+ * selects through it, so a finding is charged once.
  *
  * An allowed unsolicited selection writes its charge in the caller's transaction. A per-owner
  * transaction lock serialises concurrent scans, so the cap check and the charge are atomic.
  * Charges never refill on dismissal and are counted on the selection day in the owner's zone.
  */
 export class EmailFindingPolicy {
+  constructor(private readonly cards = new CardRepository()) {}
+
   async select(scopedDb: DataContextDb, input: EmailFindingInput): Promise<EmailFindingSelection> {
     assertDataContextDb(scopedDb);
     if (input.kind === "requested") return { selected: true, charged: false };
@@ -80,19 +82,22 @@ export class EmailFindingPolicy {
             AND charged_at >= ${dayStart}::timestamptz) AS email_today,
         (SELECT COUNT(*) FROM app.proactive_email_finding_charges
           WHERE owner_user_id = ${input.ownerUserId}::uuid
-            AND charged_at >= (${input.nowIso}::timestamptz - interval '1 hour')) AS email_last_hour,
-        (SELECT COUNT(*) FROM app.proactive_cards
-          WHERE owner_user_id = ${input.ownerUserId}::uuid
-            AND source <> 'email'
-            AND status = 'active'
-            AND COALESCE(deferred_until, created_at) >= ${dayStart}::timestamptz) AS other_active_today
+            AND charged_at >= (${input.nowIso}::timestamptz - interval '1 hour')) AS email_last_hour
     `.execute(scopedDb.db);
     const row = result.rows[0];
     if (!row) throw new Error("email budget query returned no row");
     if (row.already) return { selected: false, reason: "already_selected" };
 
+    // Other sources keep their legacy rule: active cards today, so dismissal refills them.
+    const active = await this.cards.getActiveCounts(
+      scopedDb,
+      input.ownerUserId,
+      "email",
+      input.nowIso,
+      dayStart
+    );
     const emailToday = Number(row.email_today);
-    if (emailToday + Number(row.other_active_today) >= pref.dailyCardCap) {
+    if (emailToday + active.totalToday - active.sourceToday >= pref.dailyCardCap) {
       return { selected: false, reason: "global_daily_cap" };
     }
     if (emailToday >= resolveSourcePreference(pref, "email").dailyCardCap) {
