@@ -23,7 +23,9 @@ import {
   runBriefingDefinitionRouteSchema,
   updateBriefingDefinitionRouteSchema,
   localDay,
+  LOCALE_PREFERENCE_KEY,
   readPlanContext,
+  resolveEffectiveLocale,
   type BriefingCadence,
   type BriefingDefinitionDto,
   type BriefingPlanContextV1,
@@ -52,7 +54,12 @@ import {
   RUN_NOT_AVAILABLE_ERROR
 } from "./run-status.js";
 import { projectPlanContext, type DayPlanReadPort } from "./plan-context.js";
-import { reconcileOwnedSchedules, reconcileSchedule, timezoneFor } from "./schedule.js";
+import {
+  defaultScheduleMetadataFor,
+  reconcileOwnedSchedules,
+  reconcileSchedule,
+  timezoneFor
+} from "./schedule.js";
 import { CATCH_UP_HANDLED_KINDS, deriveBriefingFeedbackItems } from "./feedback-targets.js";
 import { displaySummaryText } from "./run-display.js";
 
@@ -73,6 +80,10 @@ export interface BriefingsRoutesDependencies {
     UsefulnessFeedbackRepository,
     "upsertTarget" | "listActiveDismissedRefs" | "listActiveRefs"
   >;
+  /** Reads the owner's saved locale; schedules and new definitions follow its timezone (#3390). */
+  readonly localePreferences?: {
+    get(scopedDb: DataContextDb, key: string): Promise<unknown>;
+  };
 }
 
 interface DefinitionParams {
@@ -115,13 +126,14 @@ export function registerBriefingsRoutes(
         // definitions (RLS-scoped via the repository). reconcileOwnedSchedules already
         // swallows + logs per-definition errors; guard the whole call too.
         void dependencies.dataContext
-          .withDataContext(accessContext, (scopedDb) =>
+          .withDataContext(accessContext, async (scopedDb) =>
             reconcileOwnedSchedules(
               dependencies.boss,
               scopedDb,
               repository,
               accessContext.actorUserId,
-              request.log
+              request.log,
+              await readOwnerTimeZone(dependencies, scopedDb)
             )
           )
           .catch((error) => {
@@ -159,14 +171,23 @@ export function registerBriefingsRoutes(
           dependencies.listModuleManifests(),
           dependencies.listExternalBriefingToolNames?.() ?? []
         );
-        const definition = await dependencies.dataContext.withDataContext(
+        const { definition, ownerTimeZone } = await dependencies.dataContext.withDataContext(
           accessContext,
-          (scopedDb) => repository.createDefinition(scopedDb, input)
+          async (scopedDb) => {
+            const ownerTimeZone = await readOwnerTimeZone(dependencies, scopedDb);
+            return {
+              definition: await repository.createDefinition(
+                scopedDb,
+                withOwnerTimeZone(input, ownerTimeZone)
+              ),
+              ownerTimeZone
+            };
+          }
         );
 
         // Reconcile OUTSIDE the data-context callback (pg-boss is not RLS-scoped).
         // Failure-isolated: a reconcile failure is logged and never fails the mutation.
-        await reconcileScheduleSafely(dependencies.boss, definition, request.log);
+        await reconcileScheduleSafely(dependencies.boss, definition, request.log, ownerTimeZone);
 
         return reply.code(201).send({ definition: serializeDefinition(definition) });
       } catch (error) {
@@ -186,9 +207,12 @@ export function registerBriefingsRoutes(
           dependencies.listModuleManifests(),
           dependencies.listExternalBriefingToolNames?.() ?? []
         );
-        const definition = await dependencies.dataContext.withDataContext(
+        const { definition, ownerTimeZone } = await dependencies.dataContext.withDataContext(
           accessContext,
-          (scopedDb) => repository.updateDefinition(scopedDb, request.params.id, input)
+          async (scopedDb) => ({
+            definition: await repository.updateDefinition(scopedDb, request.params.id, input),
+            ownerTimeZone: await readOwnerTimeZone(dependencies, scopedDb)
+          })
         );
 
         if (!definition) {
@@ -197,7 +221,7 @@ export function registerBriefingsRoutes(
 
         // Reconcile the schedule for the updated definition (cadence/tz/enabled may have
         // changed). Failure-isolated — never fails the mutation.
-        await reconcileScheduleSafely(dependencies.boss, definition, request.log);
+        await reconcileScheduleSafely(dependencies.boss, definition, request.log, ownerTimeZone);
 
         return { definition: serializeDefinition(definition) };
       } catch (error) {
@@ -473,12 +497,15 @@ async function readRunPlanState(
       current: null
     };
   }
-  const timeZone = stored?.timeZone ?? timezoneFor(scheduleMetadata);
-  const day = stored?.localDay ?? localDay(runCreatedAt, timeZone);
   try {
-    const plan = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-      port.getForDay(scopedDb, { localDay: day, timeZone })
-    );
+    const plan = await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+      const timeZone =
+        stored?.timeZone ??
+        (await readOwnerTimeZone(dependencies, scopedDb)) ??
+        timezoneFor(scheduleMetadata);
+      const day = stored?.localDay ?? localDay(runCreatedAt, timeZone);
+      return port.getForDay(scopedDb, { localDay: day, timeZone });
+    });
     const current = plan ? projectPlanContext(plan) : null;
     return {
       ...comparePlanState({ stored, currentAvailable: true, current }),
@@ -502,13 +529,41 @@ async function readRunPlanState(
   }
 }
 
+/** The owner's locale timezone, or undefined when no locale source is wired. */
+async function readOwnerTimeZone(
+  dependencies: Pick<BriefingsRoutesDependencies, "localePreferences">,
+  scopedDb: DataContextDb
+): Promise<string | undefined> {
+  if (!dependencies.localePreferences) return undefined;
+  return resolveEffectiveLocale(
+    await dependencies.localePreferences.get(scopedDb, LOCALE_PREFERENCE_KEY)
+  ).timezone;
+}
+
+/** Fill the owner's timezone into a new definition's schedule when the caller left it out. */
+function withOwnerTimeZone(
+  input: CreateBriefingDefinitionInput,
+  ownerTimeZone: string | undefined
+): CreateBriefingDefinitionInput {
+  if (!ownerTimeZone) return input;
+  if (!input.scheduleMetadata) {
+    return {
+      ...input,
+      scheduleMetadata: defaultScheduleMetadataFor(input.briefingType ?? "morning", ownerTimeZone)
+    };
+  }
+  if (input.scheduleMetadata.timezone !== undefined) return input;
+  return { ...input, scheduleMetadata: { ...input.scheduleMetadata, timezone: ownerTimeZone } };
+}
+
 async function reconcileScheduleSafely(
   boss: PgBoss,
   definition: BriefingDefinition,
-  logger: Pick<FastifyRequest, "log">["log"]
+  logger: Pick<FastifyRequest, "log">["log"],
+  ownerTimeZone?: string
 ): Promise<void> {
   try {
-    await reconcileSchedule(boss, definition);
+    await reconcileSchedule(boss, definition, ownerTimeZone);
   } catch (error) {
     const e = error instanceof Error ? error : new Error(String(error));
     logger.error(

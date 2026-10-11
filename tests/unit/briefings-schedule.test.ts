@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { BriefingDefinition } from "@moss/db";
+import { DEFAULT_LOCALE_SETTINGS } from "@moss/shared";
 
 import { BRIEFINGS_RUN_QUEUE } from "../../packages/briefings/src/manifest.js";
 import {
   cronExprFor,
   defaultScheduleMetadataFor,
+  reconcileOwnedSchedules,
   reconcileSchedule,
   timezoneFor
 } from "../../packages/briefings/src/schedule.js";
@@ -46,20 +48,28 @@ describe("timezoneFor", () => {
 });
 
 describe("defaultScheduleMetadataFor", () => {
-  it("defaults morning to 07:00 UTC", () => {
-    expect(defaultScheduleMetadataFor("morning")).toEqual({ targetTime: "07:00", timezone: "UTC" });
-  });
-
-  it("defaults evening to 19:00 UTC", () => {
-    expect(defaultScheduleMetadataFor("evening")).toEqual({ targetTime: "19:00", timezone: "UTC" });
-  });
-
-  it("defaults weekly_review to 09:00 UTC on Sunday", () => {
-    expect(defaultScheduleMetadataFor("weekly_review")).toEqual({
+  it("uses the owner's timezone (#3390)", () => {
+    expect(defaultScheduleMetadataFor("morning", "America/Los_Angeles")).toEqual({
+      targetTime: "07:00",
+      timezone: "America/Los_Angeles"
+    });
+    expect(defaultScheduleMetadataFor("evening", "Europe/Paris")).toEqual({
+      targetTime: "19:00",
+      timezone: "Europe/Paris"
+    });
+    expect(defaultScheduleMetadataFor("weekly_review", "Asia/Tokyo")).toEqual({
       targetTime: "09:00",
-      timezone: "UTC",
+      timezone: "Asia/Tokyo",
       dayOfWeek: 0
     });
+  });
+
+  it("falls back to the app's default locale timezone, never UTC (#3390)", () => {
+    expect(defaultScheduleMetadataFor("morning")).toEqual({
+      targetTime: "07:00",
+      timezone: DEFAULT_LOCALE_SETTINGS.timezone
+    });
+    expect(DEFAULT_LOCALE_SETTINGS.timezone).not.toBe("UTC");
   });
 });
 
@@ -142,6 +152,17 @@ describe("reconcileSchedule", () => {
     expect(scheduleCalls[0]!.options).toEqual({ tz: "America/New_York", key: "def-1" });
   });
 
+  it("schedules in the owner's timezone over the stored one (#3390)", async () => {
+    const { boss, scheduleCalls } = fakeBoss();
+    await reconcileSchedule(
+      boss as never,
+      definition({ schedule_metadata: { targetTime: "07:00", timezone: "UTC" } }),
+      "America/Los_Angeles"
+    );
+    expect(scheduleCalls[0]!.cron).toBe("0 7 * * *");
+    expect(scheduleCalls[0]!.options).toEqual({ tz: "America/Los_Angeles", key: "def-1" });
+  });
+
   it("unschedules when cadence is manual", async () => {
     const { boss, scheduleCalls, unscheduleCalls } = fakeBoss();
     await reconcileSchedule(boss as never, definition({ cadence: "manual" }));
@@ -154,5 +175,31 @@ describe("reconcileSchedule", () => {
     await reconcileSchedule(boss as never, definition({ enabled: false }));
     expect(scheduleCalls).toHaveLength(0);
     expect(unscheduleCalls).toEqual([{ name: BRIEFINGS_RUN_QUEUE, key: "def-1" }]);
+  });
+});
+
+describe("reconcileOwnedSchedules", () => {
+  it("moves every owned briefing to the owner's timezone (#3390)", async () => {
+    const { boss, scheduleCalls } = fakeBoss();
+    const stored = { targetTime: "07:00", timezone: "UTC" };
+    const repository = {
+      listDefinitions: async () => [
+        definition({ id: "def-1", schedule_metadata: stored }),
+        definition({ id: "def-2", schedule_metadata: stored }),
+        definition({ id: "def-shared", owner_user_id: "someone-else", schedule_metadata: stored })
+      ]
+    };
+    await reconcileOwnedSchedules(
+      boss as never,
+      {} as never,
+      repository as never,
+      "owner-1",
+      undefined,
+      "America/Los_Angeles"
+    );
+    expect(scheduleCalls.map((call) => [call.options])).toEqual([
+      [{ tz: "America/Los_Angeles", key: "def-1" }],
+      [{ tz: "America/Los_Angeles", key: "def-2" }]
+    ]);
   });
 });
