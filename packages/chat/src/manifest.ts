@@ -116,6 +116,12 @@ export const chatModuleManifest = {
   ],
   features: [
     {
+      id: "chat.stream_reconnect",
+      description:
+        "Closing or reloading chat while it starts releases the disconnected stream, so reopening chat keeps receiving replies.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.time_context",
       description:
         "Chat tool results include references giving each timestamp's date and time in the person's time zone, region and 12/24-hour choice. " +
