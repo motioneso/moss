@@ -6,10 +6,15 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 export const uatLevel = { level: "admin+data", without: [] } as const;
 
-// Park Press check 6, reduced motion. Playwright's reducedMotion: "reduce" emulates the OS
-// "reduce motion" setting inside Chromium (prefers-reduced-motion: reduce). It is browser
+// Park Press check 6, reduced motion. The reducedMotion: "reduce" context option emulates the
+// OS "reduce motion" setting inside Chromium (prefers-reduced-motion: reduce). It is browser
 // emulation, not a real OS setting. Real seeded data, real routes, no Moss response is altered.
-test.use({ trace: "off", screenshot: "off", video: "off", reducedMotion: "reduce" });
+test.use({
+  trace: "off",
+  screenshot: "off",
+  video: "off",
+  contextOptions: { reducedMotion: "reduce" }
+});
 
 interface MotionReport {
   readonly elements: number;
