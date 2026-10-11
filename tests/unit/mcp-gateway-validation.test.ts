@@ -307,6 +307,7 @@ describe("gateway tool output sanitization", () => {
     });
     const tokens = new SessionTokenRegistry();
     const gateway = new AssistantToolGateway({
+      provenance: { isTainted: async () => false, recordAdmission: async () => {} },
       resolveActiveModules: async () => [
         {
           id: "tasks",
@@ -325,7 +326,12 @@ describe("gateway tool output sanitization", () => {
       notifier: { emit: () => {} },
       confirmTimeoutMs: 1000
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      actorUserId: "u1",
+      threadId: "clean-thread",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     for (const toolName of listFamilyTools) {
       const res = await gateway.callTool(
@@ -357,6 +363,8 @@ describe("gateway tool output sanitization", () => {
               description: "Safe output.",
               permissionId: "example.view",
               risk: "read",
+              content: "user_authored",
+              isExternal: false,
               outputSchema: {
                 type: "object",
                 properties: { visible: { type: "string" } },
@@ -376,7 +384,12 @@ describe("gateway tool output sanitization", () => {
       notifier: { emit: () => {} },
       confirmTimeoutMs: 1000
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      actorUserId: "u1",
+      threadId: "clean-thread",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const res = await gateway.callTool(token, "example.safe", {});
 
@@ -408,6 +421,8 @@ describe("gateway tool output sanitization", () => {
               description: "Nested safe output.",
               permissionId: "example.view",
               risk: "read",
+              content: "user_authored",
+              isExternal: false,
               outputSchema: {
                 type: "object",
                 properties: {
@@ -453,7 +468,12 @@ describe("gateway tool output sanitization", () => {
       notifier: { emit: () => {} },
       confirmTimeoutMs: 1000
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      actorUserId: "u1",
+      threadId: "clean-thread",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const res = await gateway.callTool(token, "example.nested-safe", {});
 
@@ -486,6 +506,8 @@ describe("gateway tool output sanitization", () => {
               description: "Scalar object leak probe.",
               permissionId: "example.view",
               risk: "read",
+              content: "user_authored",
+              isExternal: false,
               outputSchema: {
                 type: "object",
                 properties: { visible: { type: "string" } },
@@ -503,7 +525,12 @@ describe("gateway tool output sanitization", () => {
       notifier: { emit: () => {} },
       confirmTimeoutMs: 1000
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      actorUserId: "u1",
+      threadId: "clean-thread",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const res = await gateway.callTool(token, "example.scalar-object-leak", {});
 
@@ -530,6 +557,8 @@ describe("gateway tool output sanitization", () => {
               description: "Nullable scalar object leak probe.",
               permissionId: "example.view",
               risk: "read",
+              content: "user_authored",
+              isExternal: false,
               outputSchema: {
                 type: "object",
                 properties: { visible: { anyOf: [{ type: "string" }, { type: "null" }] } },
@@ -547,7 +576,12 @@ describe("gateway tool output sanitization", () => {
       notifier: { emit: () => {} },
       confirmTimeoutMs: 1000
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      actorUserId: "u1",
+      threadId: "clean-thread",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const res = await gateway.callTool(token, "example.nullable-scalar-object-leak", {});
 
@@ -574,6 +608,8 @@ describe("gateway tool output sanitization", () => {
               description: "Invalid output.",
               permissionId: "example.view",
               risk: "read",
+              content: "user_authored",
+              isExternal: false,
               outputSchema: {
                 type: "object",
                 properties: { visible: { type: "string" } },
@@ -591,7 +627,12 @@ describe("gateway tool output sanitization", () => {
       notifier: { emit: () => {} },
       confirmTimeoutMs: 1000
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      actorUserId: "u1",
+      threadId: "clean-thread",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const res = await gateway.callTool(token, "example.invalid-output", {});
 
@@ -615,6 +656,8 @@ describe("gateway tool output sanitization", () => {
               description: "Large output.",
               permissionId: "example.view",
               risk: "read",
+              content: "user_authored",
+              isExternal: false,
               outputSchema: {
                 type: "object",
                 properties: { visible: { type: "string" } },
@@ -632,7 +675,12 @@ describe("gateway tool output sanitization", () => {
       notifier: { emit: () => {} },
       confirmTimeoutMs: 1000
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint({
+      actorUserId: "u1",
+      threadId: "clean-thread",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
 
     const res = await gateway.callTool(token, "example.large-output", {});
 

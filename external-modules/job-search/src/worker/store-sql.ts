@@ -671,11 +671,12 @@ export function createSqlStore(db: SqlDb, kv: SqlKv): JobSearchStore {
       return result.rows.length > 0;
     },
 
-    async setMatchState(matchId: string, state: Match["state"]): Promise<void> {
-      await db.query("UPDATE app.job_search_matches SET state = $2 WHERE id = $1", [
-        matchId,
-        state
-      ]);
+    async setMatchState(matchId: string, state: Match["state"]): Promise<boolean> {
+      const result = await db.query(
+        "UPDATE app.job_search_matches SET state = $2 WHERE id = $1 RETURNING id",
+        [matchId, state]
+      );
+      return result.rows.length > 0;
     },
 
     async getMatch(matchId: string): Promise<Match | null> {

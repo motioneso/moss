@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./chat-action-outcome": "./src/chat-action-outcome.ts",
     "./email-otp-rule": "./src/email-otp-rule.ts"
   },
   "scripts": {

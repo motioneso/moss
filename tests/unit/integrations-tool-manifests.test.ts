@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import type { DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextRunner } from "@moss/db";
 import {
+  convertOpenApiSpec,
   createIntegrationsCipher,
   createIntegrationsActiveModulesResolver,
-  createResolverCache
+  createResolverCache,
+  mapMcpTool
 } from "@moss/integrations";
 import type { ConnectionRow } from "@moss/integrations";
 import type { DiscoveredTool } from "@moss/integrations";
@@ -54,6 +56,75 @@ function fakeDataContext(): DataContextRunner {
 }
 
 describe("createIntegrationsActiveModulesResolver", () => {
+  it.each(["actor-1", "stored-owner", "other-owner", undefined])(
+    "preserves stored connection owner evidence %s without inferring authority from discovery",
+    async (ownerUserId) => {
+      const discovered = {
+        ...tool("read_widgets", "Widgets"),
+        descriptorOwnerUserId: "actor-1",
+        ownerUserId: "actor-1",
+        isExternal: false,
+        externalContent: false
+      };
+      const resolver = createIntegrationsActiveModulesResolver(async () => [], {
+        dataContext: fakeDataContext(),
+        cipher: createIntegrationsCipher(),
+        logger: { warn: () => {} },
+        resolverCache: createResolverCache(),
+        repository: {
+          listConnections: async () => [connection({ ownerUserId, discoveredTools: [discovered] })]
+        } as never
+      });
+
+      const [module] = await resolver("actor-1");
+
+      expect(module?.assistantTools?.[0]?.descriptorOwnerUserId).toBe(ownerUserId);
+      expect(module?.assistantTools?.[0]).toMatchObject({
+        isExternal: true,
+        externalContent: true,
+        description: discovered.description,
+        inputSchema: discovered.inputSchema
+      });
+      expect(module?.assistantTools?.[0]).not.toHaveProperty("ownerUserId");
+    }
+  );
+
+  it("keeps stored owner stamps in the actor-scoped resolver cache without transferring them", async () => {
+    const rows = new Map([
+      ["actor-a", connection({ ownerUserId: "actor-a", discoveredTools: [tool("read_a", "")] })],
+      ["actor-b", connection({ ownerUserId: "actor-b", discoveredTools: [tool("read_b", "")] })]
+    ]);
+    const listConnections = vi.fn(async (scopedDb: { actorUserId: string }) => {
+      const row = rows.get(scopedDb.actorUserId);
+      return row ? [row] : [];
+    });
+    const resolver = createIntegrationsActiveModulesResolver(async () => [], {
+      dataContext: {
+        withDataContext: async (ctx: AccessContext, work: (scopedDb: unknown) => unknown) =>
+          work({ actorUserId: ctx.actorUserId })
+      } as unknown as DataContextRunner,
+      cipher: createIntegrationsCipher(),
+      logger: { warn: () => {} },
+      resolverCache: createResolverCache(),
+      repository: { listConnections } as never
+    });
+
+    const firstA = await resolver("actor-a");
+    const firstB = await resolver("actor-b");
+    expect(firstA[0]?.assistantTools?.[0]).toMatchObject({
+      name: "connection.read_a",
+      descriptorOwnerUserId: "actor-a"
+    });
+    expect(firstB[0]?.assistantTools?.[0]).toMatchObject({
+      name: "connection.read_b",
+      descriptorOwnerUserId: "actor-b"
+    });
+    expect(await resolver("actor-a")).toEqual(firstA);
+    expect(await resolver("actor-b")).toEqual(firstB);
+    expect(listConnections).toHaveBeenCalledTimes(2);
+    expect(await resolver("actor-with-no-connection")).toEqual([]);
+  });
+
   it("appends synthetic modules for enabled connections without touching the base list", async () => {
     const warnings: { connection: unknown; tool: unknown }[] = [];
     const logger = {
@@ -144,5 +215,42 @@ describe("createIntegrationsActiveModulesResolver", () => {
     });
 
     expect(await resolver("actor-1")).toEqual([]);
+  });
+});
+
+describe("integration discovery ownership boundary", () => {
+  it("does not accept a descriptor owner stamp from MCP discovery", () => {
+    const remote = {
+      name: "read_widgets",
+      description: "Read widgets",
+      inputSchema: { type: "object", properties: {} },
+      descriptorOwnerUserId: "forged-owner",
+      annotations: { descriptorOwnerUserId: "forged-owner", readOnlyHint: true }
+    };
+
+    const discovered = mapMcpTool(remote);
+
+    expect(discovered).not.toHaveProperty("descriptorOwnerUserId");
+    expect(discovered.readOnly).toBe(true);
+  });
+
+  it("does not accept a descriptor owner stamp from OpenAPI discovery", () => {
+    const discovered = convertOpenApiSpec({
+      openapi: "3.0.0",
+      descriptorOwnerUserId: "forged-owner",
+      paths: {
+        "/widgets": {
+          get: {
+            operationId: "read_widgets",
+            summary: "Read widgets",
+            descriptorOwnerUserId: "forged-owner"
+          }
+        }
+      }
+    });
+
+    expect(discovered).toHaveLength(1);
+    expect(discovered[0]).not.toHaveProperty("descriptorOwnerUserId");
+    expect(discovered[0]?.readOnly).toBe(true);
   });
 });

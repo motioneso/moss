@@ -24,7 +24,15 @@ export {
   renderAndCap
 } from "./output-validation.js";
 export type {
+  AdmissionPath,
+  AutomaticExecution,
+  ConversationProvenancePort,
   ActiveModulesResolver,
+  CallCardDetails,
+  PerCallResolution,
+  PerCallResolver,
+  PerCallExecutor,
+  PerCallServices,
   SessionNotifier,
   GatewaySessionRecord,
   GatewayToolResponse,
@@ -60,3 +68,4 @@ export {
   type SelfOperationExclusionCategory,
   type SelfOperationManifestInput
 } from "./self-operation.js";
+export { reportActionRecordFailure } from "./action-record-diagnostics.js";

@@ -2,6 +2,7 @@ import { useSignOutGuard } from "./use-sign-out-guard";
 import { hasSessionUnsavedChanges } from "@moss/module-web-sdk";
 import { SignOutConfirmation } from "./sign-out-confirmation";
 import { randomUuid, validMeetingChatInput, type OpenMeetingChatInput } from "@moss/module-web-sdk";
+import { meetingIdOnRoute } from "./meeting-route-context";
 import { MeetingChatDrawer } from "../chat/meeting-chat-drawer";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Menu, MessageSquare } from "lucide-react";
@@ -19,9 +20,11 @@ import { useLocation, useNavigate } from "react-router";
 import { listNotifications, listThemes, sendChatTurn, signOut } from "../api/client";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { buildShellNavigation, resolvePageHeading, webRoutes } from "../app-route-metadata";
+import { ModulePersistentControls } from "./module-persistent-controls";
 import { ModuleSettingsButton } from "./module-settings-button";
 import { useUserLocale } from "../locale/locale-format";
-import { queryKeys, resolveQueryKeyToken } from "../api/query-keys";
+import { queryKeys } from "../api/query-keys";
+import { useActionQueryRefresh } from "../chat/use-action-query-refresh";
 import { ChatDrawer } from "../chat/chat-drawer";
 import {
   AssistantSurfaceHostProvider,
@@ -64,7 +67,9 @@ const KNOWN_MODULES_WITH_SETTINGS = new Set(["calendar", "news", "sports", "task
 export function hasModuleSettings(moduleId: string, modules: readonly ModuleDto[] = []): boolean {
   if (KNOWN_MODULES_WITH_SETTINGS.has(moduleId)) return true;
   return modules.some(
-    (m) => m.id === moduleId && Array.isArray(m.settings) && m.settings.length > 0
+    (m) =>
+      m.id === moduleId &&
+      (Boolean(m.settingsPath) || (Array.isArray(m.settings) && m.settings.length > 0))
   );
 }
 
@@ -105,18 +110,59 @@ export function AppShell(props: AppShellProps) {
       return next;
     });
   };
-  const [meetingSelection, setMeetingSelection] = useState<
-    (OpenMeetingChatInput & { selectionId: string }) | null
+  const [explicitMeetingSelection, setMeetingSelection] = useState<
+    (OpenMeetingChatInput & { selectionId: string; route: string; actor: string }) | null
   >(null);
-  const openMeetingChat = useCallback((input: OpenMeetingChatInput) => {
-    if (!validMeetingChatInput(input)) return;
-    setMeetingSelection({ ...input, selectionId: randomUuid() });
-    setChatOpen(true);
-    setModuleDraft(undefined);
-  }, []);
+  const routeMeetingId = meetingIdOnRoute(location.pathname, location.search);
+  const [dismissedMeetingId, setDismissedMeetingId] = useState<string | null>(null);
+  const routeSelection = useMemo(
+    () =>
+      routeMeetingId
+        ? {
+            meetingId: routeMeetingId,
+            title: "About this meeting",
+            selectionId: randomUuid()
+          }
+        : null,
+    [routeMeetingId, props.me.user.id]
+  );
+  const routeIdentity = `${location.pathname}:${routeMeetingId ?? ""}`;
+  const meetingSelection =
+    explicitMeetingSelection?.route === routeIdentity &&
+    explicitMeetingSelection.actor === props.me.user.id
+      ? explicitMeetingSelection
+      : dismissedMeetingId === routeMeetingId
+        ? null
+        : routeSelection;
+  useEffect(() => {
+    setMeetingSelection(null);
+    setDismissedMeetingId(null);
+  }, [routeMeetingId, props.me.user.id]);
+  const openMeetingChat = useCallback(
+    (input: OpenMeetingChatInput) => {
+      if (!validMeetingChatInput(input)) return;
+      setDismissedMeetingId(null);
+      setMeetingSelection({
+        ...input,
+        selectionId: randomUuid(),
+        route: routeIdentity,
+        actor: props.me.user.id
+      });
+      setChatOpen(true);
+      setModuleDraft(undefined);
+    },
+    [routeIdentity, props.me.user.id]
+  );
+  const currentMeetingSelection = useRef(meetingSelection);
+  currentMeetingSelection.current = meetingSelection;
   const clearMeetingChat = useCallback(
     (meetingId: string) => {
-      if (meetingSelection?.meetingId !== meetingId) return;
+      if (
+        currentMeetingSelection.current !== meetingSelection ||
+        meetingSelection?.meetingId !== meetingId
+      )
+        return;
+      setDismissedMeetingId(meetingId);
       setMeetingSelection(null);
       setChatOpen(false);
     },
@@ -127,11 +173,15 @@ export function AppShell(props: AppShellProps) {
   const [moduleDraft, setModuleDraft] = useState<string | undefined>(undefined);
   const [focusActionRequestId, setFocusActionRequestId] = useState<string | null>(null);
   const embeddedComposerRef = useRef<((draft: string) => void) | null>(null);
-  const openChatWith = useCallback((prompt: string) => {
-    setMeetingSelection(null);
-    setChatOpen(true);
-    void sendChatTurn(prompt);
-  }, []);
+  const openChatWith = useCallback(
+    (prompt: string) => {
+      setDismissedMeetingId(routeMeetingId);
+      setMeetingSelection(null);
+      setChatOpen(true);
+      void sendChatTurn(prompt);
+    },
+    [routeMeetingId]
+  );
   const openChat = useCallback(() => {
     setMeetingSelection(null);
     setChatOpen(true);
@@ -139,16 +189,20 @@ export function AppShell(props: AppShellProps) {
   // #916 — open the drawer with a module-authored draft the user edits + submits (NEVER auto-sent;
   // contrast openChatWith, which sends). Direct setState in an event handler is correct here — this
   // is NOT a render-phase updater, so it is not the StrictMode double-fire trap #368 warned about.
-  const openAssistantWithDraft = useCallback((draft: string) => {
-    setMeetingSelection(null);
-    const embeddedComposer = embeddedComposerRef.current;
-    if (embeddedComposer) {
-      embeddedComposer(draft);
-      return;
-    }
-    setModuleDraft(draft);
-    setChatOpen(true);
-  }, []);
+  const openAssistantWithDraft = useCallback(
+    (draft: string) => {
+      setDismissedMeetingId(routeMeetingId);
+      setMeetingSelection(null);
+      const embeddedComposer = embeddedComposerRef.current;
+      if (embeddedComposer) {
+        embeddedComposer(draft);
+        return;
+      }
+      setModuleDraft(draft);
+      setChatOpen(true);
+    },
+    [routeMeetingId]
+  );
   // #1284 — which module surface (if any) currently owns the shell's one chat stream. A module
   // claims one via assistantSurface.setSurfaceKey (handle.ts's module-level store, #1196/#1232's
   // "one external route mounts at a time" is what makes a single subscribable value sufficient
@@ -255,26 +309,7 @@ export function AppShell(props: AppShellProps) {
         ) ?? null
     );
   }, [records]);
-  // #1310: generic, declaration-driven cache invalidation. A tool's manifest entry
-  // declares which frontend query-key tokens its write affects; this effect resolves
-  // each token via resolveQueryKeyToken (fail-closed) and invalidates only that key —
-  // never a blanket invalidation, and never anything theme-specific hardcoded here.
-  const invalidatedActionRequestIds = useRef(new Set<string>());
-  useEffect(() => {
-    for (const record of records) {
-      if (record.kind !== "action_result" || record.outcome !== "executed") continue;
-      if (!record.affectsQueryKeys || record.affectsQueryKeys.length === 0) continue;
-      const actionRequestId = record.actionRequestId;
-      if (!actionRequestId || invalidatedActionRequestIds.current.has(actionRequestId)) continue;
-      invalidatedActionRequestIds.current.add(actionRequestId);
-      for (const token of record.affectsQueryKeys) {
-        const queryKey = resolveQueryKeyToken(token);
-        if (queryKey) {
-          void queryClient.invalidateQueries({ queryKey: [...queryKey] });
-        }
-      }
-    }
-  }, [records, queryClient]);
+  useActionQueryRefresh(records, props.modules, props.modulesLoading);
   const openActionRequest = useCallback((actionRequestId: string) => {
     setMeetingSelection(null);
     setFocusActionRequestId(actionRequestId);
@@ -407,6 +442,10 @@ export function AppShell(props: AppShellProps) {
       <MeetingChatDrawer
         key={meetingSelection.selectionId}
         selection={meetingSelection}
+        onRemoveContext={() => {
+          setDismissedMeetingId(meetingSelection.meetingId);
+          setMeetingSelection(null);
+        }}
         docked={dockChat}
         expanded={expanded}
         onToggleExpanded={dockChat && !phoneWindow ? () => setChatExpanded((v) => !v) : undefined}
@@ -475,6 +514,8 @@ export function AppShell(props: AppShellProps) {
           <header className="topbar" hidden={expanded}>
             <button
               aria-label="Open navigation"
+              aria-controls="moss-main-navigation"
+              aria-expanded={mobileNavOpen}
               className="icon-button mobile-only"
               ref={openNavButtonRef}
               title="Open navigation"
@@ -489,9 +530,11 @@ export function AppShell(props: AppShellProps) {
               subtitle={subtitle}
               showSettingsButton={showSettingsButton}
               moduleId={activeModuleId}
+              modules={props.modules}
             />
 
             <div className="topbar-actions">
+              <ModulePersistentControls disabledModuleIds={props.disabledModuleIds ?? []} />
               <TrailMoreButton />
               <button
                 aria-label={assistantName ? `Chat with ${assistantName}` : "Open chat"}
@@ -500,8 +543,8 @@ export function AppShell(props: AppShellProps) {
                 title={assistantName ? `Ask ${assistantName}` : "Open chat"}
                 type="button"
                 onClick={() => {
-                  setMeetingSelection(null);
-                  setChatOpen((open) => !open);
+                  if (chatOpen) setChatOpen(false);
+                  else openChat();
                 }}
               >
                 <MessageSquare size={19} aria-hidden="true" />
@@ -585,6 +628,7 @@ function TopbarTitles(props: {
   readonly subtitle: string;
   readonly showSettingsButton: boolean;
   readonly moduleId: string | null;
+  readonly modules: readonly ModuleDto[];
 }) {
   const trail = usePageTrailDisplay();
   if (!trail) {
@@ -593,7 +637,11 @@ function TopbarTitles(props: {
         <div className="topbar-title-row">
           <span className="topbar-title">{props.title}</span>
           {props.showSettingsButton && props.moduleId ? (
-            <ModuleSettingsButton moduleId={props.moduleId} moduleName={props.title} />
+            <ModuleSettingsButton
+              moduleId={props.moduleId}
+              moduleName={props.title}
+              modules={props.modules}
+            />
           ) : null}
         </div>
         {props.subtitle ? <span className="topbar-subtitle">{props.subtitle}</span> : null}
@@ -610,7 +658,11 @@ function TopbarTitles(props: {
         onRename={trail.onRename}
         trailing={
           props.showSettingsButton && props.moduleId ? (
-            <ModuleSettingsButton moduleId={props.moduleId} moduleName={trail.name} />
+            <ModuleSettingsButton
+              moduleId={props.moduleId}
+              moduleName={trail.name}
+              modules={props.modules}
+            />
           ) : null
         }
       />

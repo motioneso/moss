@@ -59,6 +59,7 @@ function routedGate(): {
 
 const REQUEST = {
   actorUserId: ACTOR,
+  threadId: "thread-1",
   message: "hi",
   hasAttachment: false,
   incognito: false,
@@ -97,6 +98,7 @@ describe("classifier gate wiring through registerChatRoutes (#2901)", () => {
 
     expect(mint).toHaveBeenCalledTimes(1);
     const [identity, options] = mint.mock.calls[0]!;
+    expect(identity.threadId).toBe("thread-1");
     expect(identity.allowedToolNames).not.toBeNull();
     expect(identity.allowedToolNames?.size).toBe(0);
     expect(options?.ttlMs).toBe(GATE_TOKEN_TTL_MS);

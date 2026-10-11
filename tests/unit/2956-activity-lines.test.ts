@@ -1,3 +1,4 @@
+import { meetingsModuleManifest } from "@moss/meetings";
 import { describe, expect, it } from "vitest";
 
 import type { ActionAuditLogEntryDto, ActivityLineDto } from "@moss/shared";
@@ -61,9 +62,12 @@ function audit(overrides: Partial<ActionAuditLogEntryDto> = {}): ActionAuditLogE
 describe("activity titles (#2956 slice C)", () => {
   it("names each action code in fixed words, never stored text", () => {
     expect(activityTitle("chat.answer", "chat")).toBe("Answered a chat message");
-    expect(activityTitle("chat.tool_check", "choices")).toBe("Jev guessed which tool to use");
+    expect(activityTitle("chat.tool_check", "clef-flash")).toBe(
+      "clef-flash guessed which tool to use"
+    );
     expect(activityTitle("embed.notes", "embed")).toBe("Indexed notes for search");
     expect(activityTitle("transcribe.voice_note", "transcribe")).toBe("Transcribed a voice note");
+    expect(activityTitle("transcribe.meeting", "transcribe")).toBe("Transcribed a meeting clip");
     expect(activityTitle("module.build", "build")).toBe("Built a module draft");
     expect(activityTitle("probe.reachable", "probe")).toBe("Checked that a model is reachable");
   });
@@ -91,9 +95,27 @@ describe("activity sub-lines (#2956 slice C)", () => {
 
   it("falls back to bare facts once the detail has expired", () => {
     const entry = line({ factCounts: { tools: 2, jev_agreed: true } });
-    expect(activitySubline(entry)).toBe("Used 2 tools. Jev agreed.");
+    expect(activitySubline(entry)).toBe("Used 2 tools. The classifier agreed.");
     const bare = line({ factCounts: null });
     expect(activitySubline(bare)).toBe("Answered.");
+  });
+
+  it("never says Jev for a non-TypeSafe decision model", () => {
+    const title = activityTitle("chat.tool_check", "clef-flash");
+    expect(title).toBe("clef-flash guessed which tool to use");
+    expect(title).not.toContain("Jev");
+    const sub = activitySubline(
+      line({
+        actionCode: "chat.tool_check",
+        modelName: "clef-flash",
+        factCounts: { confidence: 0.8, jev_agreed: false }
+      })
+    );
+    expect(sub).not.toContain("Jev");
+    expect(sub).toContain("Chat disagreed.");
+    expect(activityBadges(line({ factCounts: { jev_agreed: false } }))).toEqual([
+      { text: "Classifier disagreed", tone: "amber" }
+    ]);
   });
 
   it("names a failed bare line without raw provider text", () => {
@@ -136,7 +158,7 @@ describe("activity badges (#2956 slice C)", () => {
       { text: "1 step failed", tone: "amber" }
     ]);
     expect(activityBadges(line({ factCounts: { tools: 2, jev_agreed: false } }))).toEqual([
-      { text: "Jev disagreed", tone: "amber" }
+      { text: "Classifier disagreed", tone: "amber" }
     ]);
     expect(activityBadges(line({ ownerUserId: null }))).toEqual([
       { text: "System", tone: "steel" }
@@ -208,4 +230,13 @@ describe("activity grouping (#2956 slice C)", () => {
     const rows = groupActivity([old, fresh], []);
     expect(rows.map((row) => (row.kind === "line" ? row.line.id : "?"))).toEqual(["fresh", "old"]);
   });
+});
+
+it("names meeting-summary validation using its app-map title", () => {
+  const title = activityTitle("meetings.summary.validation", "selected-summary-model");
+  expect(title).toBe("Checked a meeting summary");
+  expect(
+    meetingsModuleManifest.features.find((feature) => feature.id === "meetings.summary.validation")
+      ?.description
+  ).toBe(title);
 });

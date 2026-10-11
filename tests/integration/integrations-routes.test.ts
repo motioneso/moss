@@ -1,3 +1,5 @@
+import { ChatRepository } from "../../packages/chat/src/repository.js";
+import { ConversationProvenanceStore } from "../../packages/chat/src/conversation-provenance.js";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -376,6 +378,7 @@ describe("integrations REST routes", () => {
         resolveActiveModules,
         repository: new AiRepository(),
         runner: dataContext,
+        provenance: new ConversationProvenanceStore(dataContext),
         tokens,
         confirmations: new ConfirmationRegistry(),
         notifier: { emit: () => {} },
@@ -393,7 +396,11 @@ describe("integrations REST routes", () => {
       const toolsForB = await gateway.listToolsForActor(ids.userB);
       expect(toolsForB.some((t) => t.name === toolName)).toBe(false);
 
+      const thread = await dataContext.withDataContext({ actorUserId: ids.userA }, (db) =>
+        new ChatRepository().openNewThread(db, { title: "Clean integration conversation" })
+      );
       const tokenA = tokens.mint({
+        threadId: thread.id,
         actorUserId: ids.userA,
         chatSessionId: "s-integrations-gateway",
         allowedToolNames: null

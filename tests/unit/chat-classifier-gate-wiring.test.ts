@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { ClassifierDeps } from "@moss/ai";
+import { installModelActivityRecorder, type ModelActivityEntry } from "@moss/ai";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 import type { MossModuleManifest } from "@moss/module-sdk";
 
@@ -23,6 +24,7 @@ const calendarTool = {
   description: "List events",
   permissionId: "calendar.view",
   risk: "read",
+  isExternal: false,
   inputSchema: {
     type: "object",
     properties: { window: { type: "string", enum: ["today", "tomorrow"] } },
@@ -43,6 +45,7 @@ const switchTool = {
   description: "Set a switch",
   permissionId: "home.control",
   risk: "write",
+  isExternal: false,
   inputSchema: {
     type: "object",
     properties: { device: { type: "string" }, state: { type: "string", enum: ["on", "off"] } },
@@ -88,7 +91,11 @@ function makeFactory(
   const factory = createClassifierGatePortsFactory({
     resolveActiveModules: async () => overrides.manifests?.() ?? [manifest],
     dataContext,
-    gateway: { callToolForGate } as never,
+    gateway: {
+      callToolForGate,
+      recordContextForSession: vi.fn(async () => {}),
+      admitToolDescriptorsForSession: vi.fn(async () => {})
+    } as never,
     classifierDeps: {
       repository: {
         resolveSortingModel: vi.fn(async () => null),
@@ -181,5 +188,37 @@ describe("createClassifierGatePortsFactory", () => {
     const { factory } = makeFactory();
     const ports = factory("actor-1", "jst_gate");
     expect(await ports.classifier.resolve()).toBeNull();
+  });
+
+  it("files a timed-out check as a failed tool-check line on the attempt's turn", () => {
+    const { factory } = makeFactory();
+    const ports = factory("actor-1", "jst_gate");
+    const entries: ModelActivityEntry[] = [];
+    installModelActivityRecorder((entry) => entries.push(entry));
+    try {
+      ports.noteTimeout?.({
+        actorUserId: "actor-1",
+        modelName: "m",
+        turnId: "turn-1",
+        parentId: "line-9",
+        latencyMs: 3000
+      });
+    } finally {
+      installModelActivityRecorder(null);
+    }
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      kind: "structured",
+      action: "choices",
+      outcome: "error",
+      modelName: "m",
+      result: "failed",
+      actionCode: "chat.tool_check",
+      ownerUserId: "actor-1",
+      turnId: "turn-1",
+      parentId: "line-9",
+      durationMs: 3000,
+      failureCode: "timeout"
+    });
   });
 });

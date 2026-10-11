@@ -1,3 +1,4 @@
+import { ButtonLink, Eyebrow, IconButton } from "@moss/ui";
 import {
   useEffect,
   useRef,
@@ -173,6 +174,13 @@ export function SportsTicker(props: {
     return () => window.removeEventListener("resize", updateEdges);
   }, [props.followed]);
 
+  // Pointer drag-to-scroll (mrb7mwhv): the strip is wide editorial cards now, so click-and-drag
+  // is the natural gesture across the row. The arrows STAY (Ben's ask) as the discoverable
+  // affordance for anyone who doesn't think to drag. A 4px movement threshold latches `moved`
+  // so a drag that ends over a story link doesn't also fire that link's click (onClickCapture
+  // swallows it) — dragging never accidentally opens a story. Touch is left to native scroll.
+  const dragRef = useRef<{ startX: number; startLeft: number; moved: boolean } | null>(null);
+
   if (props.followed.length === 0) return null;
   const ordered = orderFollowedCards(props.followed, Date.now());
 
@@ -181,13 +189,6 @@ export function SportsTicker(props: {
     if (!el) return;
     el.scrollBy({ left: direction * Math.round(el.clientWidth * 0.8), behavior: "smooth" });
   }
-
-  // Pointer drag-to-scroll (mrb7mwhv): the strip is wide editorial cards now, so click-and-drag
-  // is the natural gesture across the row. The arrows STAY (Ben's ask) as the discoverable
-  // affordance for anyone who doesn't think to drag. A 4px movement threshold latches `moved`
-  // so a drag that ends over a story link doesn't also fire that link's click (onClickCapture
-  // swallows it) — dragging never accidentally opens a story. Touch is left to native scroll.
-  const dragRef = useRef<{ startX: number; startLeft: number; moved: boolean } | null>(null);
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
     const el = scrollRef.current;
@@ -231,21 +232,17 @@ export function SportsTicker(props: {
           .sp-ticker__manage (like .sp-hero__kicker-comp), not a literal glyph — so the old sep
           span is gone. CSS uppercases "Followed", so the source text stays sentence-case. */}
       <div className="sp-ticker__head">
-        <h2 className="sp-ticker__label">Followed</h2>
-        <a className="sp-ticker__manage" href={SETTINGS_HREF}>
+        <Eyebrow as="h2" tone="accent" className="sp-ticker__label">
+          Followed
+        </Eyebrow>
+        <ButtonLink variant="link" href={SETTINGS_HREF}>
           Manage
-        </a>
+        </ButtonLink>
       </div>
       <div className="sp-ticker__row">
-        <button
-          type="button"
-          className="sp-ticker__nav"
-          aria-label="Scroll left"
-          hidden={atStart}
-          onClick={() => nudge(-1)}
-        >
+        <IconButton size="sm" aria-label="Scroll left" hidden={atStart} onClick={() => nudge(-1)}>
           <ChevronLeft size={16} aria-hidden="true" />
-        </button>
+        </IconButton>
         <div
           className="sp-ticker__scroll"
           ref={scrollRef}
@@ -269,15 +266,9 @@ export function SportsTicker(props: {
             />
           ))}
         </div>
-        <button
-          type="button"
-          className="sp-ticker__nav"
-          aria-label="Scroll right"
-          hidden={atEnd}
-          onClick={() => nudge(1)}
-        >
+        <IconButton size="sm" aria-label="Scroll right" hidden={atEnd} onClick={() => nudge(1)}>
           <ChevronRight size={16} aria-hidden="true" />
-        </button>
+        </IconButton>
       </div>
     </section>
   );

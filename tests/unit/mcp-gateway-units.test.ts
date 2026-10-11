@@ -12,6 +12,7 @@ import {
   renderAndCap,
   resolvePolicy,
   SessionTokenRegistry,
+  type ConversationProvenancePort,
   type ActionPolicyLookup
 } from "@moss/ai";
 import type {
@@ -20,6 +21,19 @@ import type {
   ToolContext,
   ToolResult
 } from "@moss/module-sdk";
+
+// These fixtures exercise existing policy rules with explicitly clean provenance.
+const cleanProvenance: ConversationProvenancePort = {
+  isTainted: async () => false,
+  recordAdmission: async () => {},
+  runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+};
+const cleanThreadIdentity = (chatSessionId: string) => ({
+  actorUserId: "u1",
+  chatSessionId,
+  threadId: "clean-thread",
+  allowedToolNames: null
+});
 
 describe("module-sdk tool contract", () => {
   it("lets a module declare a tool with an execute handler", async () => {
@@ -98,7 +112,8 @@ describe("session token registry", () => {
     expect(registry.verify(token)).toEqual({
       actorUserId: "u1",
       chatSessionId: "s1",
-      allowedToolNames: null
+      allowedToolNames: null,
+      threadId: null
     });
 
     registry.revoke(token);
@@ -215,8 +230,10 @@ describe("native Claude tool permission bridge", () => {
     const emitted: unknown[] = [];
     const created: unknown[] = [];
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
           created.push(input);
           return { id: "native-action-1" };
@@ -231,7 +248,7 @@ describe("native Claude tool permission bridge", () => {
       notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
       confirmTimeoutMs: 1000
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("s1"));
 
     const pending = gateway.requestNativeToolPermission(token, {
       toolName: "Bash",
@@ -275,8 +292,10 @@ describe("native Claude tool permission bridge", () => {
     const tokens = new SessionTokenRegistry();
     const emitted: unknown[] = [];
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "native-action-timeout" })
       } as never,
       runner: {
@@ -288,7 +307,7 @@ describe("native Claude tool permission bridge", () => {
       notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
       confirmTimeoutMs: 5
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("s1"));
 
     await expect(
       gateway.requestNativeToolPermission(token, {
@@ -298,7 +317,7 @@ describe("native Claude tool permission bridge", () => {
     ).resolves.toEqual({
       decision: "deny",
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
     expect(emitted.at(-1)).toMatchObject({
       kind: "action_result",
@@ -316,8 +335,10 @@ describe("native Claude tool permission bridge", () => {
     const emitted: unknown[] = [];
     const created: unknown[] = [];
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
           created.push(input);
           return { id: "native-action-x" };
@@ -332,7 +353,7 @@ describe("native Claude tool permission bridge", () => {
       notifier: { emit: (_chatSessionId, record) => emitted.push(record) },
       confirmTimeoutMs: 5
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("s1"));
 
     await expect(
       gateway.requestNativeToolPermission(token, {
@@ -352,8 +373,10 @@ describe("native Claude tool permission bridge", () => {
     // the allowlist stays minimal; anything unlisted keeps the confirm path (here: timeout→deny).
     const tokens = new SessionTokenRegistry();
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "native-action-grep" })
       } as never,
       runner: {
@@ -365,14 +388,14 @@ describe("native Claude tool permission bridge", () => {
       notifier: { emit: () => undefined },
       confirmTimeoutMs: 5
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("s1"));
 
     await expect(
       gateway.requestNativeToolPermission(token, { toolName: "Grep", toolInput: {} })
     ).resolves.toEqual({
       decision: "deny",
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
   });
 
@@ -388,8 +411,10 @@ describe("native Claude tool permission bridge", () => {
     const resolved: unknown[] = [];
     let createPendingCalled = false;
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async (_db: unknown, input: unknown) => {
           createPendingCalled = true;
           created.push(input);
@@ -410,7 +435,7 @@ describe("native Claude tool permission bridge", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
 
     const result = await gateway.requestNativeToolPermission(token, {
       toolName,
@@ -441,8 +466,10 @@ describe("native Claude tool permission bridge", () => {
       const confirmations = new ConfirmationRegistry();
       const emitted: unknown[] = [];
       const gateway = new AssistantToolGateway({
+        provenance: cleanProvenance,
         resolveActiveModules: async () => [],
         repository: {
+          expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
           createPendingAssistantAction: async () => ({ id: "pending_gated" }),
           insertActionAuditLog: async () => {}
         } as never,
@@ -456,7 +483,7 @@ describe("native Claude tool permission bridge", () => {
         confirmTimeoutMs: 50,
         yoloMode: async () => true
       });
-      const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+      const token = tokens.mint(cleanThreadIdentity("c1"));
 
       const pending = gateway.requestNativeToolPermission(token, {
         toolName,
@@ -494,8 +521,10 @@ describe("native Claude tool permission bridge", () => {
     const confirmations = new ConfirmationRegistry();
     const emitted: unknown[] = [];
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "pending_config" }),
         insertActionAuditLog: async () => {}
       } as never,
@@ -509,7 +538,7 @@ describe("native Claude tool permission bridge", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
 
     const pending = gateway.requestNativeToolPermission(token, {
       toolName: "Write",
@@ -534,8 +563,10 @@ describe("native Claude tool permission bridge", () => {
     const emitted: Array<{ kind: string; actionRequestId?: string }> = [];
     let actionNumber = 0;
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: `pending_path_${++actionNumber}` }),
         insertActionAuditLog: async () => {}
       } as never,
@@ -549,7 +580,7 @@ describe("native Claude tool permission bridge", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
 
     const expectGated = async (filePath: string) => {
       const pending = gateway.requestNativeToolPermission(token, {
@@ -585,8 +616,10 @@ describe("native Claude tool permission bridge", () => {
     const confirmations = new ConfirmationRegistry();
     const emitted: unknown[] = [];
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "pending_1" }),
         insertActionAuditLog: async () => {}
       } as never,
@@ -600,7 +633,7 @@ describe("native Claude tool permission bridge", () => {
       confirmTimeoutMs: 50,
       yoloMode
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
 
     const pending = gateway.requestNativeToolPermission(token, {
       toolName: "Write",
@@ -683,8 +716,10 @@ describe("gateway audit outcome truth (#1252)", () => {
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [manifestWithTool(toolOverrides)],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         insertActionAuditLog: async (
           _db: unknown,
           input: { outcome: string; errorClass: string | null }
@@ -702,7 +737,7 @@ describe("gateway audit outcome truth (#1252)", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
     const response = await gateway.callTool(token, "acme.write", {});
     await vi.waitFor(() => expect(audits).toHaveLength(1));
     return { audit: audits[0]!, response };
@@ -722,20 +757,19 @@ describe("gateway audit outcome truth (#1252)", () => {
     }
   );
 
-  it("leaves the model-visible envelope byte-identical to pre-change rendering when auditing a module-reported error (#1252)", async () => {
+  it("preserves the outside-content rendering when auditing a module-reported error (#1252)", async () => {
     const data = { status: "error", message: "insufficient funds" };
     const { audit, response } = await runYoloAndCaptureAuditAndResponse({
       execute: async (): Promise<ToolResult> => ({ data })
     });
     expect(audit).toEqual({ outcome: "failed", errorClass: "module_reported" });
     // The audit row now reflects the module-reported error, but callTool's actual return value —
-    // what the model sees — must be exactly what runHandler would have produced without this
-    // change: an ok:true envelope rendering the handler's payload verbatim, computed here via the
+    // what the model sees — retains its normal outside-content envelope, computed here via the
     // same renderAndCap the gateway calls internally, so this fails if detection ever starts
     // altering (rather than just observing) the response.
     expect(response).toEqual({
       ok: true,
-      data: renderAndCap(undefined, { data }),
+      data: renderAndCap(undefined, { data }, "acme.write"),
       structuredData: data
     });
   });
@@ -756,12 +790,14 @@ describe("gateway audit outcome truth (#1252)", () => {
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [
         manifestWithTool({
           execute: async (): Promise<ToolResult> => ({ data: { status: "error" } })
         })
       ],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         insertActionAuditLog: async () => {}
       } as never,
       runner: {
@@ -778,7 +814,7 @@ describe("gateway audit outcome truth (#1252)", () => {
       confirmTimeoutMs: 50,
       yoloMode: async () => true
     });
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
     await gateway.callTool(token, "acme.write", {});
 
     const actionResult = notified.find((record) => record.outcome !== undefined);
@@ -827,6 +863,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
     const confirmations = new ConfirmationRegistry();
     let actionRequested = false;
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [
         {
           id: "danger_module",
@@ -847,6 +884,9 @@ describe("unattended mode security gate in callTool (#2419)", () => {
           assistantTools: [
             {
               name: "danger.nuke",
+              actionLabel: "Delete requested item",
+              approvalContent: "user_authored",
+              approvalPresentation: async () => ({ target: "Requested item", fields: [] }),
               description: "Nuke",
               permissionId: "danger.nuke",
               actionFamilyId: "danger_family",
@@ -858,6 +898,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
         }
       ],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "act_1" }),
         resolveAssistantAction: async () => ({ id: "act_1", status: "confirmed" }),
         insertActionAuditLog: async () => {}
@@ -879,7 +920,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
       yoloMode: async () => true
     });
 
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
     const response = await gateway.callTool(token, "danger.nuke", {});
 
     expect(actionRequested).toBe(true);
@@ -887,7 +928,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
       ok: false,
       denied: true,
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
   });
 
@@ -896,6 +937,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
     const confirmations = new ConfirmationRegistry();
     let actionRequested = false;
     const gateway = new AssistantToolGateway({
+      provenance: cleanProvenance,
       resolveActiveModules: async () => [
         {
           id: "plain_module",
@@ -907,6 +949,9 @@ describe("unattended mode security gate in callTool (#2419)", () => {
           assistantTools: [
             {
               name: "plain.write",
+              actionLabel: "Write requested value",
+              approvalContent: "user_authored",
+              approvalPresentation: async () => ({ target: "Requested item", fields: [] }),
               description: "Write without family",
               permissionId: "plain.write",
               risk: "write",
@@ -916,6 +961,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
         }
       ],
       repository: {
+        expireAssistantAction: async (_db: unknown, id: string) => ({ id, status: "timed_out" }),
         createPendingAssistantAction: async () => ({ id: "act_2" }),
         resolveAssistantAction: async () => ({ id: "act_2", status: "confirmed" }),
         insertActionAuditLog: async () => {}
@@ -937,7 +983,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
       yoloMode: async () => true
     });
 
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const token = tokens.mint(cleanThreadIdentity("c1"));
     const response = await gateway.callTool(token, "plain.write", {});
 
     expect(actionRequested).toBe(true);
@@ -945,7 +991,7 @@ describe("unattended mode security gate in callTool (#2419)", () => {
       ok: false,
       denied: true,
       reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+        "Approval timed out, so this action was not done. Do not try it again; let the user know."
     });
   });
 });

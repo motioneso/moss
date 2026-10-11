@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import type { TaskDto } from "@moss/shared";
+
 import {
   buildTaskFields,
-  blankTaskDetailsForm
+  blankTaskDetailsForm,
+  formFromTask
 } from "../../apps/web/src/tasks/task-details-model.js";
 import { toDateInputValue } from "../../apps/web/src/tasks/task-format.js";
 
@@ -30,8 +33,7 @@ describe("task details model", () => {
         priority: "4",
         dueAt: "2026-07-01",
         effort: "medium",
-        repeat: "weekly",
-        repeatEnd: "2026-08-01"
+        repeat: "weekly"
       },
       "list-fallback"
     );
@@ -63,4 +65,44 @@ describe("task details model", () => {
     expect(fields.listId).toBe("default-list");
     expect(fields.recurrence).toBeNull();
   });
+
+  it("seeds the repeat choice from the stored recurrence and keeps it when unchanged", () => {
+    const recurrence = { freq: "weekly", interval: 2, occurrence_date: "2026-07-01" } as const;
+    const form = formFromTask(
+      { ...storedTask(), dueAt: "2026-07-01T00:00:00.000Z", recurrence },
+      "UTC"
+    );
+
+    expect(form.repeat).toBe("weekly");
+    expect(buildTaskFields(form).recurrence).toEqual(recurrence);
+    expect(buildTaskFields({ ...form, repeat: "monthly" }).recurrence).toMatchObject({
+      freq: "monthly",
+      interval: 1
+    });
+    expect(buildTaskFields({ ...form, repeat: "never" }).recurrence).toBeNull();
+  });
 });
+
+function storedTask(): TaskDto {
+  return {
+    id: "t1",
+    ownerUserId: "u1",
+    listId: "l1",
+    parentTaskId: null,
+    title: "Stored",
+    description: null,
+    status: "todo",
+    priority: null,
+    position: 0,
+    dueAt: null,
+    doAt: null,
+    effort: null,
+    source: "manual",
+    sourceRef: null,
+    completedAt: null,
+    createdAt: null,
+    updatedAt: null,
+    tags: [],
+    suggestionMetadata: null
+  };
+}

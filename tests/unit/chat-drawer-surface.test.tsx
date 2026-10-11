@@ -399,6 +399,107 @@ describe("ChatDrawer surface routing (#1533)", () => {
     expect(clearChat).toHaveBeenCalledWith({ surface: moduleSurface });
   });
 
+  it("waits for New Chat to finish before clearing the stream and ignores repeat clicks", async () => {
+    let finish!: () => void;
+    vi.mocked(clearChat).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clearRecords = vi.fn();
+    const renderer = await mountWithClient(client, moduleSurface, clearRecords);
+    const button = findByAriaLabel(renderer, "New chat")!;
+    await act(async () => {
+      button.props.onClick();
+      button.props.onClick();
+    });
+    expect(clearChat).toHaveBeenCalledTimes(1);
+    expect(clearRecords).not.toHaveBeenCalled();
+    expect(renderer.root.findByType("textarea").props.disabled).toBe(true);
+    await act(async () => {
+      finish();
+    });
+    expect(clearRecords).toHaveBeenCalledTimes(1);
+    expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
+  });
+
+  it("does not clear a new surface when an earlier New Chat request finishes", async () => {
+    let finish!: () => void;
+    vi.mocked(clearChat).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clearRecords = vi.fn();
+    const renderer = await mountWithClient(client, moduleSurface, clearRecords);
+    await act(async () => {
+      findByAriaLabel(renderer, "New chat")!.props.onClick();
+    });
+    await flipSurface(renderer, client, moduleSurfaceB, clearRecords);
+    await act(async () => {
+      finish();
+    });
+    expect(clearRecords).not.toHaveBeenCalled();
+    expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
+  });
+
+  it("unblocks the composer when New Chat fails during a send", async () => {
+    let finishSend!: (value: Awaited<ReturnType<typeof sendChatTurn>>) => void;
+    vi.mocked(sendChatTurn).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSend = resolve;
+        })
+    );
+    vi.mocked(clearChat).mockRejectedValueOnce(new Error("Could not switch"));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clearRecords = vi.fn();
+    const renderer = await mountWithClient(client, moduleSurface, clearRecords);
+    await typeAndSend(renderer, "first");
+    await act(async () => {
+      findByAriaLabel(renderer, "New chat")!.props.onClick();
+    });
+    expect(clearRecords).not.toHaveBeenCalled();
+    expect(JSON.stringify(renderer.toJSON())).toContain("Could not switch");
+    await act(async () => {
+      finishSend({
+        userMessageId: "old-user",
+        assistantMessageId: "old-reply",
+        reply: "old",
+        sourceFreshness: null
+      });
+    });
+    await typeAndSend(renderer, "second");
+    expect(sendChatTurn).toHaveBeenCalledTimes(2);
+  });
+
+  it("waits for private close before clearing and reconnecting the transcript", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clearRecords = vi.fn();
+    const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, clearRecords);
+    await clickMenuItem(renderer, "Start private chat", true);
+    clearRecords.mockClear();
+    let finish!: () => void;
+    vi.mocked(endPrivateChat).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    await clickMenuItem(renderer, "Start private chat");
+    expect(clearRecords).not.toHaveBeenCalled();
+    expect(renderer.root.findByType("textarea").props.disabled).toBe(true);
+    await act(async () => {
+      finish();
+    });
+    expect(clearRecords).toHaveBeenCalledTimes(1);
+    expect(renderer.root.findByType("textarea").props.disabled).toBeFalsy();
+  });
+
   it("shows the private-chat control and sends on the default drawer surface", async () => {
     const renderer = await renderDrawer(DEFAULT_CHAT_SURFACE);
     expect(await menuItem(renderer, "Start private chat")).not.toBeNull();

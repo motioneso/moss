@@ -76,6 +76,7 @@ import {
   Row,
   Switch
 } from "./settings-ui";
+import { ModuleOwnPageLink } from "./settings-module-own-page-link";
 import { VaultChooser } from "./settings-vault-chooser";
 import { useChatControls } from "../shell/chat-controls-context";
 import { type ConnectorAccountDto, type PutNotesSourceRequest } from "@moss/shared";
@@ -554,7 +555,13 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
   // null and "Configure" lands back on the list.
   // #1759: same rule for user-fillable credentials, so Finance — credentials, no switches —
   // resolves instead of bouncing back to the list.
+  const modulesQuery = useQuery({ queryKey: queryKeys.modules, queryFn: getModules, retry: false });
+  // #3184: a module that declares its own settings page is listed here as a link to it. The
+  // host never renders that module's switches or credential slots.
+  const ownSettingsPath = (moduleId: string): string | null =>
+    modulesQuery.data?.modules.find((module) => module.id === moduleId)?.settingsPath ?? null;
   const hasOwnSettingsPage = (moduleId: string): boolean =>
+    ownSettingsPath(moduleId) !== null ||
     myQuery.data?.modules.some(
       (module) => module.id === moduleId && (module.hasPreferences || module.hasUserCredentials)
     ) === true;
@@ -564,7 +571,6 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
       Boolean(findModuleSettingsEntrySurface(moduleId, MODULE_SETTINGS_SURFACES)) ||
       hasOwnSettingsPage(moduleId)
   );
-  const modulesQuery = useQuery({ queryKey: queryKeys.modules, queryFn: getModules, retry: false });
   const toggleMutation = useMutation({
     mutationFn: (input: { id: string; disabled: boolean }) =>
       setMyModuleDisabled(input.id, input.disabled),
@@ -597,6 +603,17 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
     // else that got here did so by declaring preferences, which the host renders generically.
     if (!findModuleSettingsEntrySurface(view.moduleId, MODULE_SETTINGS_SURFACES)) {
       const target = myQuery.data?.modules.find((module) => module.id === view.moduleId);
+      const ownPath = ownSettingsPath(view.moduleId);
+      if (ownPath) {
+        return (
+          <ModuleOwnPageLink
+            moduleName={target?.name ?? view.moduleId}
+            settingsPath={ownPath}
+            onBack={closeModule}
+            onNavigate={onNavigate}
+          />
+        );
+      }
       return (
         <ModulePreferencesSettings
           moduleId={view.moduleId}
@@ -617,8 +634,11 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
     );
   }
 
-  const modules = visibleConfigurableModules(myQuery.data?.modules ?? [], (module) =>
-    hasImplementedModuleSettings(module, MODULE_SETTINGS_SURFACES)
+  const modules = visibleConfigurableModules(
+    myQuery.data?.modules ?? [],
+    (module) =>
+      ownSettingsPath(module.id) !== null ||
+      hasImplementedModuleSettings(module, MODULE_SETTINGS_SURFACES)
   );
   const byName = (a: (typeof modules)[number], b: (typeof modules)[number]) =>
     a.name.localeCompare(b.name);
@@ -644,6 +664,7 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
       findModuleSettingsEntrySurface(module.id, MODULE_SETTINGS_SURFACES);
     const cat = CAT_BY_ID[module.id];
     const path = pathFor(module.id);
+    const ownPath = ownSettingsPath(module.id);
 
     const badge = locked ? <Badge tone="neutral">Unavailable</Badge> : null;
 
@@ -657,6 +678,17 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
       );
     } else if (!available) {
       action = <span className="modrow__disabled">Switch on to set up</span>;
+    } else if (ownPath) {
+      action = (
+        <button
+          type="button"
+          className="modrow__link"
+          aria-label={`Open ${module.name} settings`}
+          onClick={() => onNavigate(ownPath)}
+        >
+          Open <ArrowUpRight size={14} aria-hidden="true" />
+        </button>
+      );
     } else if (config) {
       action = (
         <button

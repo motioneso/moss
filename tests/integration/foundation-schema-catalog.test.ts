@@ -598,7 +598,24 @@ describe("MVP foundation schema catalog", () => {
         { version: "0280", name: "0280_meeting_history.sql" },
         { version: "0281", name: "0281_memory_screen_source_kind.sql" },
         { version: "0282", name: "0282_backtrack_segments.sql" },
-        { version: "0283", name: "0283_meeting_account_export.sql" }
+        { version: "0283", name: "0283_meeting_account_export.sql" },
+        { version: "0284", name: "0284_meeting_capture.sql" },
+        { version: "0287", name: "0287_companion_recording_capabilities.sql" },
+        { version: "0288", name: "0288_meeting_recording_connections.sql" },
+        { version: "0289", name: "0289_ai_read_action_approval.sql" },
+        { version: "0291", name: "0291_chat_conversation_provenance.sql" },
+        { version: "0292", name: "0292_meeting_minimal.sql" },
+        { version: "0293", name: "0293_chat_automatic_action_reservations.sql" },
+        { version: "0294", name: "0294_external_module_descriptor_approval.sql" },
+        { version: "0295", name: "0295_meeting_capture_start_limits.sql" },
+        { version: "0296", name: "0296_ai_action_origin_and_timeout.sql" },
+        { version: "0297", name: "0297_chat_action_history_permissions.sql" },
+        { version: "0298", name: "0298_ai_action_outcome_delivery.sql" },
+        { version: "0300", name: "0300_goals_id_defaults.sql" },
+        { version: "0301", name: "0301_superseded_by_set_null_on_delete.sql" },
+        { version: "0302", name: "0302_module_kv_worker_export_select.sql" },
+        { version: "0303", name: "0303_upgrade_check_worker_functions.sql" },
+        { version: "0304", name: "0304_module_enablement_worker_user_select.sql" }
       ]);
     } finally {
       await client.end();
@@ -767,6 +784,59 @@ describe("chat_messages UPDATE grant revoked + policy narrowed (#134)", () => {
         `SELECT has_table_privilege('jarvis_app_runtime', 'app.chat_messages', 'update') AS has_privilege`
       );
       expect(result.rows[0]?.has_privilege).toBe(false);
+    } finally {
+      await client.end();
+    }
+  });
+
+  it("never grants app DELETE or a synthetic-row deletion policy on chat messages", async () => {
+    const client = new Client({ connectionString: connectionStrings.app });
+    await client.connect();
+    try {
+      const privilege = await client.query<{ role: string; has_privilege: boolean }>(
+        `SELECT current_user AS role,
+                has_table_privilege(current_user, 'app.chat_messages', 'DELETE') AS has_privilege`
+      );
+      expect(privilege.rows).toEqual([{ role: "jarvis_app_runtime", has_privilege: false }]);
+      const policy = await client.query<{ policyname: string }>(
+        `SELECT policyname FROM pg_policies
+         WHERE schemaname = 'app'
+           AND tablename = 'chat_messages'
+           AND policyname = 'chat_messages_action_history_delete'`
+      );
+      expect(policy.rows).toEqual([]);
+    } finally {
+      await client.end();
+    }
+  });
+
+  it("limits app UPDATE to action metadata columns without restoring the former table grant", async () => {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    try {
+      const columns = [
+        "tool_metadata",
+        "updated_at",
+        "body",
+        "role",
+        "status",
+        "model_metadata",
+        "id",
+        "thread_id",
+        "owner_user_id",
+        "created_at"
+      ];
+      const result = await client.query<{ column_name: string; allowed: boolean }>(
+        `SELECT column_name, has_column_privilege('jarvis_app_runtime', 'app.chat_messages', column_name, 'UPDATE') AS allowed
+         FROM unnest($1::text[]) WITH ORDINALITY AS column_list(column_name, position) ORDER BY position`,
+        [columns]
+      );
+      expect(result.rows).toEqual(
+        columns.map((column_name) => ({
+          column_name,
+          allowed: column_name === "tool_metadata" || column_name === "updated_at"
+        }))
+      );
     } finally {
       await client.end();
     }

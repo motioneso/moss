@@ -34,6 +34,11 @@ docs/superpowers/design/
 # System" project in Claude Design. They are the target the code is measured against, so they have
 # to stay byte-identical to the source — a format pass rewrote all seven of them once already.
 docs/superpowers/specs/job-search-mockup/
+# Finance R1 mockups: pages rendered by build.tsx and a frozen copy of the shipped CSS.
+docs/superpowers/specs/finance-redesign/*.html
+docs/superpowers/specs/finance-redesign/moss-ui.css
+docs/superpowers/specs/finance-redesign/moss-ui.phone.css
+docs/superpowers/specs/finance-redesign/p6.phone.css
 
 # #1326: unit-test fixtures mkdtemp() a ".tmp-*" directory directly in the repo root
 # (external-worker-runtime, external-module-invocation-budget, module-sdk-worker); a
@@ -52,8 +57,14 @@ docs/superpowers/mockups/integrations-redesign/
 # Theme editor mockups (#3000): static pages, stylesheet and fonts, frozen for review.
 docs/superpowers/mockups/theme-editor-park-press/
 
+# Preserve the historical Meetings critique without reformatting its original review.
+docs/superpowers/mockups/meetings-minimal/critique.md
+
 # Settings redesign mockup (#2927), frozen as approved.
 docs/superpowers/specs/assets/2026-10-02-settings-redesign/
 
 # Activity history mockup, frozen for review.
 docs/superpowers/specs/assets/2026-10-03-activity-history/
+
+# Preserve the historical Meetings critique without reformatting its original review.
+docs/superpowers/mockups/meetings-minimal/critique.md

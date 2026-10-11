@@ -188,7 +188,7 @@ export function assertMetadataOnlyPayload(payload: unknown): void {
  * delegating to boss.send(). Use this everywhere instead of raw boss.send().
  */
 export async function sendJob<T extends ActorScopedJobPayload>(
-  boss: PgBoss,
+  boss: Pick<PgBoss, "send">,
   queue: string,
   payload: T,
   options?: SendOptions

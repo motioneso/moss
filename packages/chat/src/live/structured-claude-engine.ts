@@ -540,7 +540,9 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     if (opts.mcpToken && opts.mcpServerUrl) {
       const mcpConfigPath = await this.writeClaudeMcpConfig(opts);
       const settingsPath = await writeClaudeOneShotPermissionHook(this.io, {
-        neutralDir: opts.neutralDir
+        neutralDir: opts.neutralDir,
+        mcpToken: opts.mcpToken,
+        mcpServerUrl: opts.mcpServerUrl
       });
       parts.push(`--mcp-config ${shellQuote(mcpConfigPath)}`);
       parts.push(`--settings ${shellQuote(settingsPath)}`);
@@ -555,8 +557,8 @@ export class ClaudePrintChatEngine implements CliChatEngine {
       // drops every mcp__jarvis__* tool, so chat could talk but never act (measured 2026-09-05 in
       // a live container: 0 Moss tools with the flag, 101 without). Native tools stay closed off
       // by the fail-closed PreToolUse hook from writeClaudeOneShotPermissionHook, which denies
-      // everything except mcp__jarvis__*, ToolSearch, safe vault reads and session-workspace
-      // writes, so removing the flag does not re-open the #1071/F1 native-tool hole.
+      // everything except gateway-backed MCP tools, ToolSearch, reported vault reads and
+      // workspace writes authorized by the native permission gateway.
     } else if (opts.nativeSearch) {
       parts.push(`--tools "${CLAUDE_WEB_SEARCH_TOOL}"`);
       parts.push(`--allowedTools "${CLAUDE_WEB_SEARCH_TOOL}"`);

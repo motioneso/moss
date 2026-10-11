@@ -236,6 +236,24 @@ describe("plaid adapter request/response mapping (#1146)", () => {
     });
   });
 
+  it("institutionGet asks the institutions endpoint by id and maps the name", async () => {
+    const { requests, fetch } = fakeFetch([
+      {
+        status: 200,
+        body: { institution: { institution_id: "ins_1", name: " Sandbox First Bank " } }
+      },
+      { status: 200, body: { institution: { institution_id: "ins_2", name: "" } } }
+    ]);
+    const plaid = createPlaid(fetch, "sandbox", CREDS);
+    expect(await plaid.institutionGet("ins_1")).toEqual({ name: "Sandbox First Bank" });
+    expect(requests[0]!.url).toBe("https://sandbox.plaid.com/institutions/get_by_id");
+    expect(decodedBody(requests[0]!)).toMatchObject({
+      institution_id: "ins_1",
+      country_codes: expect.arrayContaining(["US", "CA", "GB"])
+    });
+    expect(await plaid.institutionGet("ins_2")).toEqual({ name: null });
+  });
+
   it("transactionsSync passes cursor + fixed count and maps pages", async () => {
     const tx = {
       transaction_id: "tx-1",
@@ -324,6 +342,32 @@ describe("plaid adapter error mapping (#1146)", () => {
     expect(plaidError.message).not.toContain("SECRET-DETAIL");
   });
 
+  it("keeps Plaid's type, message and request id as detail for diagnosis (#3161)", async () => {
+    const { fetch } = fakeFetch([
+      {
+        status: 400,
+        body: {
+          error_type: "INVALID_REQUEST",
+          error_code: "INVALID_PRODUCT",
+          error_message: "client is not authorized to access: balance",
+          request_id: "req9",
+          access_token: "must-not-be-kept"
+        }
+      }
+    ]);
+    const plaid = createPlaid(fetch, "sandbox", CREDS);
+    const error = (await plaid.accountsBalanceGet("access-sandbox-2").then(
+      () => null,
+      (e: unknown) => e
+    )) as PlaidError;
+    expect(error.detail).toEqual({
+      type: "INVALID_REQUEST",
+      message: "client is not authorized to access: balance",
+      requestId: "req9"
+    });
+    expect(error.message).toBe("INVALID_PRODUCT");
+  });
+
   it("falls back to http_<status> when the error body carries no code", async () => {
     const { fetch } = fakeFetch([{ status: 502, body: { oops: true } }]);
     const plaid = createPlaid(fetch, "sandbox", CREDS);
@@ -334,5 +378,56 @@ describe("plaid adapter error mapping (#1146)", () => {
     expect(error).toBeInstanceOf(PlaidError);
     expect((error as PlaidError).code).toBe("http_502");
     expect((error as PlaidError).httpStatus).toBe(502);
+  });
+});
+
+describe("PlaidError detail scrubbing (#3161)", () => {
+  it("removes tokens, long digit runs and our own credentials from saved text", async () => {
+    const { fetch } = fakeFetch([
+      {
+        status: 400,
+        body: {
+          error_code: "INVALID_REQUEST",
+          error_type: "INVALID_REQUEST",
+          error_message: `bad access-sandbox-abc-123 acct 123456789 key ${CREDS.secret} ${"x".repeat(600)}`,
+          request_id: "req-1"
+        }
+      }
+    ]);
+    const plaid = createPlaid(fetch, "sandbox", CREDS);
+    const error = await plaid.accountsGet("access-sandbox-tok").then(
+      () => null,
+      (e: unknown) => e as PlaidError
+    );
+    const message = error?.detail.message ?? "";
+    expect(message).not.toContain("access-sandbox-abc-123");
+    expect(message).not.toContain("123456789");
+    expect(message).not.toContain(CREDS.secret);
+    expect(message).toContain("[redacted]");
+    expect(message.endsWith("...[truncated]")).toBe(true);
+  });
+
+  it("does not trust a provider error code that is not upper snake case", async () => {
+    const { fetch } = fakeFetch([
+      { status: 400, body: { error_code: `oops ${CREDS.secret}`, error_message: "x" } }
+    ]);
+    const plaid = createPlaid(fetch, "sandbox", CREDS);
+    const error = await plaid.accountsGet("t").then(
+      () => null,
+      (e: unknown) => e as PlaidError
+    );
+    expect(error?.code).toBe("http_400");
+  });
+
+  it("removes account numbers written with separators", async () => {
+    const { fetch } = fakeFetch([
+      { status: 400, body: { error_code: "X_Y", error_message: "acct 1234-5678-9012 bad" } }
+    ]);
+    const plaid = createPlaid(fetch, "sandbox", CREDS);
+    const error = await plaid.accountsGet("t").then(
+      () => null,
+      (e: unknown) => e as PlaidError
+    );
+    expect(error?.detail.message).not.toMatch(/\d{4}/);
   });
 });

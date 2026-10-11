@@ -91,14 +91,12 @@ async function buildClaudeCommand(
   if (opts.mcpToken && opts.mcpServerUrl) {
     const mcpConfigPath = await writeClaudeMcpConfig(ctx.io, opts);
     parts.push(`--mcp-config ${shellQuote(mcpConfigPath)}`);
-    if (!opts.workspaceWrite) {
-      const settingsPath = await writeClaudePermissionHook(ctx.io, {
-        neutralDir: opts.neutralDir,
-        mcpToken: opts.mcpToken,
-        mcpServerUrl: opts.mcpServerUrl
-      });
-      parts.push(`--settings ${shellQuote(settingsPath)}`);
-    }
+    const settingsPath = await writeClaudePermissionHook(ctx.io, {
+      neutralDir: opts.neutralDir,
+      mcpToken: opts.mcpToken,
+      mcpServerUrl: opts.mcpServerUrl
+    });
+    parts.push(`--settings ${shellQuote(settingsPath)}`);
     const allowedTools = opts.workspaceWrite
       ? ["mcp__jarvis__*", "Read", "Glob", "Grep", "Write", "Edit"].join(" ")
       : ["mcp__jarvis__*", ...vaultReadOnlyToolPatterns()].join(" ");

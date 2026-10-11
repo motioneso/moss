@@ -234,11 +234,6 @@ export function DataExport() {
 
 /* ----------------------------------------------------------- Mac companion */
 
-/** The address a person types into Trail Marker: where they are reading this page. */
-function connectAddress(): string {
-  return typeof window === "undefined" ? "this site's address" : window.location.origin;
-}
-
 /**
  * Explains the Mac companion and where a linked Mac shows up. It deliberately does not
  * list linked Macs, because they already appear under Active sessions below and one list
@@ -257,11 +252,11 @@ export function MacCompanion() {
       />
       <Row
         name="How to connect"
-        desc={`Open Trail Marker, enter ${connectAddress()}, and choose Connect in Browser. Approve the request when this site asks, and the Mac appears under Active sessions below.`}
+        desc="Open Trail Marker and choose Connect in Browser. Approve the request in Moss, and the Mac appears under Active sessions below."
       />
       <Row
         name="How linking works"
-        desc="The Mac opens a page in your browser and asks for your approval. Approve it and the Mac gets a key of its own — never your password and never your browser session. That key lets it read which focus block you have on, report which app is in front while one is on, and receive a nudge decision. Nothing else."
+        desc="Approve the connection once in this browser. A supported Mac can record meetings when you choose Start. It can read which focus block you have on, report the foreground app during focus, and receive nudge decisions. Focus, Backtrack and Meetings share this connection, while Backtrack keeps its separate consent settings. The Mac never receives your password or browser session."
       />
       <Row
         name="Where a linked Mac appears"

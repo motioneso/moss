@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 export interface SessionIdentity {
   readonly actorUserId: string;
   readonly chatSessionId: string;
+  /** Captured at launch, never resolved from the actor's current thread at tool time. */
+  readonly threadId: string | null;
   /**
    * When non-null, only tools whose names appear in this set may be called
    * via this session token.  null = unrestricted (REST and non-MCP paths).
@@ -88,12 +90,17 @@ export class SessionTokenRegistry {
     this.ttlMs = options.ttlMs ?? DEFAULT_TOKEN_TTL_MS;
   }
 
-  mint(identity: SessionIdentity, options: MintTokenOptions = {}): string {
+  mint(
+    identity: Omit<SessionIdentity, "threadId"> & { readonly threadId?: string | null },
+    options: MintTokenOptions = {}
+  ): string {
     // Opportunistically purge anything already expired (one token per user → cheap).
     this.sweepExpired();
     const token = `jst_${randomUUID()}`;
     this.tokens.set(token, {
-      identity,
+      // Snapshot identity primitives. The gate intentionally grows its allowlist Set by one
+      // tool; retain that Set, but callers cannot retarget an already minted conversation.
+      identity: Object.freeze({ ...identity, threadId: identity.threadId ?? null }),
       expiresAt: this.clock.now() + (options.ttlMs ?? this.ttlMs),
       fixedExpiry: options.fixedExpiry ?? false,
       toolsListObserved: false,

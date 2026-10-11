@@ -72,8 +72,8 @@ Why these rules exist: `references/incidents.md` (read on demand, not up front).
   observed-passing e2e test — that is what keeps the live-path gate from becoming merge-time rework.
 - **`audit-grounding`** — `pnpm audit:preflight` before any audit/review, including QA's.
 - **`relay`** — context self-handoff, for build agents AND for you.
-- **`herdr-handoff`** (spawn), **`herdr-pane-message`** (talk), **`start`/`wrap-up`** (the stock
-  lifecycle the coordinated variants derive from).
+- **`herdr-handoff`** (spawn), **`herdr-pane-message`** (talk), **`wrap-up`** (the stock close-out
+  the coordinated variant derives from).
 
 Templates: `.claude/skills/coordinate/templates/{manifest,handoff}.md`.
 
@@ -500,8 +500,23 @@ When an agent reports **done** (PR open + its own green evidence — which you d
    unaffected either way — Ben's explicit sign-off stays a separate, non-bypassable gate.
 
    Then GitHub bookkeeping (source of truth): close the issue, check epic exit-criteria, move the
-   board item to Done, close the milestone if complete (field IDs: `start` skill's GitHub
-   reference). Add the merge to Ben's standing digest.
+   board item to Done, close the milestone if complete. Add the merge to Ben's standing digest.
+
+   The live board is project 2 (projects 1 and 3 are archived). IDs for moving an item:
+
+   ```
+   project node id : PVT_kwHOADqkaM4BarLA   (number 2, owner motioneso)
+   Status field id : PVTSSF_lAHOADqkaM4BarLAzhVhA6I
+   options         : Backlog=f75ad846  Ready=61e4505c  In progress=47fc9ee4
+                     In review=df73e18b  Done=98236657
+   ```
+
+   ```bash
+   # --limit defaults low and short-reads silently; pass one above the item count
+   gh project item-list 2 --owner motioneso --format json --limit 800   # match content.number
+   gh project item-edit --project-id PVT_kwHOADqkaM4BarLA --id <ITEM_ID> \
+     --field-id PVTSSF_lAHOADqkaM4BarLAzhVhA6I --single-select-option-id <OPTION_ID>
+   ```
 
 6. **Reap — but prove the work landed first.** Before removing anything, confirm the lane's commits
    are actually on `main` (`git log origin/main --oneline | grep <sha>`, or the merged PR). Only

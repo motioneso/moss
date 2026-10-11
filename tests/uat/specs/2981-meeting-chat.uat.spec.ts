@@ -1,3 +1,4 @@
+import { meetingRow, openMeetingChat } from "./meeting-minimal-ui.js";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
@@ -15,6 +16,7 @@ import {
   MEETING_FIXTURE_OLD,
   MEETING_FIXTURE_NEW,
   MEETING_FIXTURE_UNRELATED,
+  MEETING_FIXTURE_NOTES,
   MEETING_FIXTURE_PORT,
   type MeetingFixtureObservation
 } from "../fixtures/meeting-chat-fixture-server.js";
@@ -56,7 +58,7 @@ async function sendQuestion(page: Page): Promise<MeetingChatTurnResponse> {
 // request to a disclosed local third-party stand-in → answer/citation UI. No Moss responses
 // are intercepted, replayed or edited. Synthetic retained text enters through its real POST.
 // This does not prove hosted-model quality, audio capture, ASR, or a real provider credential.
-test("Ask Moss sends only selected latest transcript and opens exact revision evidence (#2981)", async ({
+test("Normal docked chat follows the meeting route, answers notes-only questions and opens exact revision evidence (#2981)", async ({
   page
 }) => {
   test.setTimeout(180_000);
@@ -197,11 +199,11 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
     const selected = await createMeeting(title, MEETING_FIXTURE_OLD);
     await createMeeting(`Other synthetic meeting ${randomUUID()}`, MEETING_FIXTURE_UNRELATED);
     await page.getByRole("link", { name: "Meetings", exact: true }).click();
-    await page.getByRole("button", { name: "View meeting history", exact: true }).click();
-    await page.getByRole("button", { name: title, exact: true }).click();
-    await page.getByRole("button", { name: "Ask Moss", exact: true }).click();
+    await meetingRow(page, title).click();
+    await openMeetingChat(page);
+    await expect(page.locator(".chatd--docked")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Clear meeting selection", exact: true })
+      page.getByRole("button", { name: "Remove meeting context", exact: true })
     ).toBeVisible();
 
     await test.step("Encoded turn routes retain the meeting selection boundary", async () => {
@@ -255,7 +257,7 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
         await page.waitForTimeout(5500);
         await expect(composer).toHaveValue(draft);
         await expect(
-          page.getByRole("button", { name: "Clear meeting selection", exact: true })
+          page.getByRole("button", { name: "Remove meeting context", exact: true })
         ).toBeVisible();
         await expect(
           page.locator(".chatd-bubble").filter({ hasText: "The synthetic decision is recorded" })
@@ -426,9 +428,9 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
         });
         // Load the selected meeting afresh so the pill reads current admin policy.
         await page.goto(`/meetings?id=${selected.id}`);
-        await page.getByRole("button", { name: "Ask Moss", exact: true }).click();
+        await openMeetingChat(page);
         await expect(
-          page.getByRole("button", { name: "Clear meeting selection", exact: true })
+          page.getByRole("button", { name: "Remove meeting context", exact: true })
         ).toBeVisible();
         await expect(page.locator(".chatd-model--locked")).toHaveText(
           "Synthetic meeting UAT fallback model"
@@ -477,21 +479,83 @@ test("Ask Moss sends only selected latest transcript and opens exact revision ev
       .click();
     expect((await dereference).status()).toBe(200);
     await expect(page).toHaveURL(new RegExp(`segmentRevision=1`));
-    await page.getByRole("tab", { name: /^Transcript/ }).click();
-    const evidenceRegion = page.getByRole("region", { name: "Transcript evidence", exact: true });
+    const evidenceRegion = page.locator(`#meeting-reference-${selected.id}`);
     await expect(evidenceRegion).toContainText(MEETING_FIXTURE_OLD);
-    await evidenceRegion.getByText("Source details", { exact: true }).click();
-    await expect(evidenceRegion).toContainText("Transcript revision 1");
-    await expect(
-      page.getByRole("region", { name: "Retained transcript", exact: true })
-    ).toContainText(MEETING_FIXTURE_NEW);
+    await expect(evidenceRegion).toContainText("Earlier text at 0:01");
+    await expect(evidenceRegion).toBeFocused();
+    await expect(page.getByRole("region", { name: "Transcript", exact: true })).toContainText(
+      MEETING_FIXTURE_NEW
+    );
     const url = new URL(page.url());
     expect(url.searchParams.get("id")).toBe(selected.id);
     expect(url.searchParams.get("segmentId")).toBe(segmentId);
     expect(url.searchParams.get("startCharacter")).toBe("0");
     expect(url.searchParams.get("endCharacter")).toBe(String(MEETING_FIXTURE_OLD.length));
+    await test.step("A route-selected meeting with notes only sends notes and no invented transcript citation", async () => {
+      const notesTitle = `Synthetic notes-only meeting ${randomUUID()}`;
+      const created = await page.request.post("/api/meetings/records", {
+        data: { requestKey: randomUUID(), title: notesTitle }
+      });
+      expect(created.status()).toBe(201);
+      const notesMeetingId = (await created.json()).meeting.id as string;
+      ids.push(notesMeetingId);
+      const saved = await page.request.put(`/api/meetings/records/${notesMeetingId}/notes`, {
+        data: {
+          requestKey: randomUUID(),
+          expectedRevision: 0,
+          personalNotes: MEETING_FIXTURE_NOTES
+        }
+      });
+      expect(saved.status()).toBe(200);
+      await page.goto("/meetings");
+      await meetingRow(page, notesTitle).click();
+      await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toHaveValue(
+        MEETING_FIXTURE_NOTES
+      );
+      await openMeetingChat(page);
+      const answer = await sendQuestion(page);
+      expect(answer.meetingContext).toMatchObject({
+        meetingId: notesMeetingId,
+        transcriptRevision: 0,
+        cursor: 0,
+        throughMs: null,
+        notesRevision: 1,
+        notesCharacters: MEETING_FIXTURE_NOTES.length,
+        notesTruncated: false
+      });
+      expect(answer.answerProvenanceCitedIds).toEqual([]);
+      expect(answer.answerProvenance).toEqual([]);
+      await expect(
+        page
+          .locator(".chatd-bubble")
+          .filter({ hasText: "The synthetic decision is recorded in the personal notes." })
+      ).toHaveCount(1);
+      const observations = await fixtureEvidence(fixtureName);
+      expect(observations).toHaveLength(4);
+      expect(observations[3]).toEqual({
+        path: "/v1/chat/completions",
+        model: MEETING_FIXTURE_MODEL,
+        hasTools: false,
+        hasNativeSearch: false,
+        hasOld: false,
+        hasNew: false,
+        hasUnrelated: false,
+        hasExternalSource: true,
+        hasNotes: true
+      });
+      await page.getByRole("button", { name: "Remove meeting context", exact: true }).click();
+      await expect(
+        page.getByRole("button", { name: "Remove meeting context", exact: true })
+      ).toHaveCount(0);
+      await expect(page.getByRole("textbox", { name: /^Message/ })).toBeVisible();
+      await page.getByRole("button", { name: "Meetings", exact: true }).click();
+      await meetingRow(page, title).click();
+      await expect(
+        page.getByRole("button", { name: "Remove meeting context", exact: true })
+      ).toBeVisible();
+    });
     console.log(
-      "MEETINGS_CHAT_UAT real UI/API; 6 encoded turn selection rejections before any provider request; disclosed local HTTP provider; 3 observed requests; selected model for 2 requests, configured default only after admin disabled overrides; no tools/search; selected latest text only; disabled pinned model and enabled unpinned override rejected with no provider calls; locked default-model pill recovery with retained preference; immutable revision-1 citation opened"
+      "MEETINGS_CHAT_UAT real UI/API; 6 encoded turn selection rejections before any provider request; disclosed local HTTP provider; 4 observed requests; selected model for transcript and notes-only requests, configured default only after admin disabled overrides; no tools/search; selected latest text only; disabled pinned model and enabled unpinned override rejected with no provider calls; locked default-model pill recovery with retained preference; immutable revision-1 citation opened; route context removable and notes-only question has no timestamp citations"
     );
   } finally {
     // The provisioner destroys the isolated DB too; restoring settings makes failures diagnosable.

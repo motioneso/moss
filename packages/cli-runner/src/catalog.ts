@@ -84,6 +84,8 @@ const RAW_CATALOG: Record<RpcProviderKind, CatalogEntry> = {
       pkg: "@anthropic-ai/claude-code",
       // PINNED 2026-09-24: EXACT published version (`npm view`). Claude models from
       // claude-opus-5-5 on need CLI 2.1.280 or newer; 2.1.183 rejected them with a 400.
+      // A bump must also update constrained-claude-profile.ts hashes/version and its native proof;
+      // constrained-claude-catalog-pin.test.ts prevents silently breaking subscription summaries.
       version: "2.1.282",
       // COMMITTED full-tree-sha512 lockfile; install runs `npm ci --ignore-scripts`.
       lockfile: "packages/cli-runner/recipes/anthropic/npm-shrinkwrap.json",

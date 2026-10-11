@@ -47,6 +47,7 @@ describe("gateway summaryFor() actionLabel priority", () => {
     description: "acme.write (1 field(s))",
     permissionId: "acme.write",
     risk: "write" as const,
+    isExternal: true,
     execute: async () => ({ data: { ok: true } }),
     ...overrides
   });

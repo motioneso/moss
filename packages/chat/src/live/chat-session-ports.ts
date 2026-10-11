@@ -4,7 +4,7 @@
  * names are re-exported from chat-session-manager.ts so existing import paths keep working.
  */
 
-import type { ProviderKind } from "@moss/ai";
+import type { ConversationProvenancePort, ProviderKind } from "@moss/ai";
 import type {
   AiAuthMethod,
   AnswerProvenanceMetadataV1,
@@ -50,7 +50,7 @@ export interface ChatPersistencePort {
   /** Prior stored turns split into recent verbatim turns + older rolling summary. */
   listPriorTurns(
     actorUserId: string,
-    opts?: { readonly forceReplay?: boolean },
+    opts?: { readonly forceReplay?: boolean; readonly threadId?: string | null },
     surface?: ChatSurface
   ): Promise<{
     recent: readonly { role: "user" | "assistant"; content: string }[];
@@ -63,6 +63,8 @@ export interface ChatPersistencePort {
     assistantReply: string,
     executed: { provider: ProviderKind; model: string },
     opts?: {
+      /** Captured conversation; null refuses persistence, omitted keeps legacy lookup. */
+      readonly threadId?: string | null;
       readonly invokedToolNames?: ReadonlySet<string>;
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
       /** #1133 — display metadata for files sent with this turn (user-message tool_metadata). */
@@ -111,12 +113,26 @@ export interface ChatPersistencePort {
     actorUserId: string,
     surface?: ChatSurface
   ): Promise<{ readonly id: string; readonly incognito: boolean } | undefined>;
+  /** Exact owner-scoped lookup; never substitutes the active conversation. */
+  getOwnedThreadState?(
+    actorUserId: string,
+    threadId: string
+  ): Promise<
+    { readonly id: string; readonly surface: ChatSurface; readonly incognito: boolean } | undefined
+  >;
+  /** True only after saving or confirming an identical owned nonprivate terminal record. */
+  persistActionRecord?(
+    actorUserId: string,
+    threadId: string,
+    record: TranscriptRecord
+  ): Promise<boolean>;
   listIncognitoThreadStates?(): Promise<readonly PrivateThreadState[]>;
   deleteThread?(actorUserId: string, threadId: string, surface?: ChatSurface): Promise<void>;
   /** Return the current thread title and the user's persisted timezone (null if unset). */
   getThreadContext(
     actorUserId: string,
-    surface?: ChatSurface
+    surface?: ChatSurface,
+    threadId?: string | null
   ): Promise<{ threadTitle: string | null; localTimezone: string | null; incognito: boolean }>;
   /**
    * Make threadId the current thread for actorUserId (for resume). Returns true if
@@ -155,6 +171,8 @@ export interface Clock {
  * along, because a handled read/write is a real module action with a real result.
  */
 export interface HandledTurnOptions {
+  /** Captured conversation; null refuses persistence, omitted keeps legacy lookup. */
+  readonly threadId?: string | null;
   readonly sourceFreshness?: SourceFreshnessV1 | null;
   readonly attachments?: readonly ChatAttachmentDto[];
   readonly actionResults?: readonly ActionResultMetadata[];
@@ -175,6 +193,7 @@ export interface ChatSessionManagerDeps {
     }
   ) => CliChatEngine | Promise<CliChatEngine>;
   readonly persistence: ChatPersistencePort;
+  readonly conversationProvenance?: Pick<ConversationProvenancePort, "recordAdmission">;
   /**
    * Task 4.1 (#2901) — the classifier gate lifecycle seam. When present, `runTurn` reads its admin
    * mode first; `off`/`shadow` do nothing (shadow wiring is 3.5), and `on` may handle the turn
@@ -208,12 +227,15 @@ export interface ChatSessionManagerDeps {
   readonly idleWatchdogMs?: number;
   readonly mintMcpToken?: (
     actorUserId: string,
-    chatSessionId: string
+    chatSessionId: string,
+    threadId: string | null
   ) => Promise<{ token: string; mcpServerUrl: string }>;
   readonly revokeMcpToken?: (chatSessionId: string) => void;
   /** Refresh the session token's TTL on activity, so a live session's token never
    *  expires under the registry backstop (mirrors lastActivity / idle reaping). */
   readonly touchMcpToken?: (chatSessionId: string) => void;
+  /** Wait for origin-bound gateway notifications before completing their model/gate turn. */
+  readonly flushActionRecords?: (chatSessionId: string) => Promise<void>;
   /**
    * #2956: file this session's tool rows under the running turn. Set when a
    * turn starts, cleared in the same finally that releases the turn. Absent

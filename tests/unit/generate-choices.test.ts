@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataContextDb } from "@moss/db";
 
 import {
+  GATE_TIMEOUT_ABORT_REASON,
   installModelActivityRecorder,
   type ModelActivityEntry
 } from "../../packages/ai/src/model-activity.js";
@@ -498,6 +499,70 @@ describe("generateChoices", () => {
       }
     });
 
+    it("files nothing when the gate deadline aborts the post — the gate owns the line — #3064", async () => {
+      const entries: ModelActivityEntry[] = [];
+      installModelActivityRecorder((entry) => entries.push(entry));
+      try {
+        const controller = new AbortController();
+        controller.abort(GATE_TIMEOUT_ABORT_REASON);
+        const abortError = new Error("aborted");
+        abortError.name = "AbortError";
+        const deps = makeDeps({
+          fetch: vi.fn().mockRejectedValue(abortError) as unknown as typeof fetch
+        });
+        expect(
+          await generateChoices(
+            scopedDb,
+            makeInput({
+              signal: controller.signal,
+              activity: {
+                actionCode: "chat.tool_check",
+                ownerUserId: "user-1",
+                turnId: "turn-1"
+              }
+            }),
+            deps
+          )
+        ).toEqual({ ok: false, error: "aborted" });
+        expect(entries).toHaveLength(0);
+      } finally {
+        installModelActivityRecorder(null);
+      }
+    });
+
+    it("files nothing when the gate deadline aborts model resolution — #3064", async () => {
+      const entries: ModelActivityEntry[] = [];
+      installModelActivityRecorder((entry) => entries.push(entry));
+      try {
+        const controller = new AbortController();
+        const deps = makeDeps({
+          repository: {
+            resolveModelForService: vi.fn(async () => {
+              controller.abort(GATE_TIMEOUT_ABORT_REASON);
+              throw new Error("db wedged");
+            })
+          }
+        });
+        await expect(
+          generateChoices(
+            scopedDb,
+            makeInput({
+              signal: controller.signal,
+              activity: {
+                actionCode: "chat.tool_check",
+                ownerUserId: "user-1",
+                turnId: "turn-1"
+              }
+            }),
+            deps
+          )
+        ).rejects.toThrow("db wedged");
+        expect(entries).toHaveLength(0);
+      } finally {
+        installModelActivityRecorder(null);
+      }
+    });
+
     it("records nothing when no call is made (not supported), and never the state text", async () => {
       const entries: ModelActivityEntry[] = [];
       installModelActivityRecorder((entry) => entries.push(entry));
@@ -601,5 +666,112 @@ describe("generateChoices activity lines", () => {
     } finally {
       installModelActivityRecorder(null);
     }
+  });
+});
+
+const CLOUDFLARE_ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
+const CLOUDFLARE_BASE_URL = `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai`;
+
+function cloudflareDeps(
+  overrides: {
+    readonly modelId?: string;
+    readonly fetch?: typeof fetch;
+    readonly logger?: GenerateChoicesDeps["logger"];
+  } = {}
+): GenerateChoicesDeps {
+  return makeDeps({
+    repository: {
+      resolveModelForService: vi.fn(async () => ({
+        model: {
+          ...(model as object),
+          provider_model_id: overrides.modelId ?? "clef-flash"
+        } as never,
+        reason: "matched-active-model" as const
+      })),
+      selectProviderWithCredential: vi.fn(
+        async () => ({ ...(provider as object), base_url: CLOUDFLARE_BASE_URL }) as never
+      )
+    },
+    fetch: overrides.fetch,
+    logger: overrides.logger
+  });
+}
+
+describe("generateChoices Cloudflare dialect (#3057)", () => {
+  it("posts to the Cloudflare run path with the model id in the URL and body", async () => {
+    const { fetchMock } = okFetch({ success: true, result: validResponse });
+    const deps = cloudflareDeps({ fetch: fetchMock as unknown as typeof fetch });
+
+    await generateChoices(scopedDb, makeInput(), deps);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(`${CLOUDFLARE_BASE_URL}/run/@cf/cloudflare/clef-flash`);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toMatchObject({ model: "clef-flash" });
+  });
+
+  it("unwraps a Cloudflare reply to the same answers and token counts as a Jev reply", async () => {
+    const { deps } = okFetch(validResponse);
+    const jev = await generateChoices(scopedDb, makeInput(), deps);
+
+    const { fetchMock } = okFetch({
+      success: true,
+      result: validResponse,
+      errors: [],
+      messages: []
+    });
+    const clef = await generateChoices(
+      scopedDb,
+      makeInput(),
+      cloudflareDeps({ fetch: fetchMock as unknown as typeof fetch })
+    );
+
+    expect(clef).toEqual(jev);
+    expect(clef).toEqual({
+      ok: true,
+      answers: {
+        alignment: {
+          choice: "focused",
+          confidence: 0.8,
+          probabilities: { focused: 0.8, necessary_detour: 0.15, distracted: 0.05 }
+        }
+      },
+      usage: { inputTokens: 12, outputTokens: 3 }
+    });
+  });
+
+  it("reports success:false as provider_error, not invalid_response", async () => {
+    const warn = vi.fn();
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(200, { success: false, errors: [{ code: 7000 }], messages: [] })
+    );
+    const deps = cloudflareDeps({
+      fetch: fetchMock as unknown as typeof fetch,
+      logger: { info: vi.fn(), warn }
+    });
+
+    expect(await generateChoices(scopedDb, makeInput(), deps)).toEqual({
+      ok: false,
+      error: "provider_error"
+    });
+    expect(warn).toHaveBeenCalledWith(
+      { service: "module.focus-judgment", code: "cloudflare_error" },
+      "ai.generateChoices provider error"
+    );
+  });
+
+  it("refuses a model id outside the fixed list without sending a request", async () => {
+    const fetchMock = vi.fn();
+    const deps = cloudflareDeps({
+      modelId: "../x",
+      fetch: fetchMock as unknown as typeof fetch
+    });
+
+    expect(await generateChoices(scopedDb, makeInput(), deps)).toEqual({
+      ok: false,
+      error: "provider_error"
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

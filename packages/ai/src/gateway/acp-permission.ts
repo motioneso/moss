@@ -1,3 +1,5 @@
+import { freezeSnapshot } from "./per-call-resolution.js";
+import { exactArgumentText } from "./pending-presentation.js";
 /**
  * Outside-agent built-in permission asks (#2380, spec 6.3/6.4).
  *
@@ -30,10 +32,18 @@ import type { ActionAuditAgentSummary, ActionAuditInputSummary } from "@moss/sha
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository } from "../repository.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
+import { isConversationTainted } from "./conversation-policy.js";
+import {
+  CONTEXT_ADMISSION_UNAVAILABLE,
+  recordContextAdmission,
+  runAutomaticAction
+} from "./content-admission.js";
 import { actionResultRecord } from "./action-result-record.js";
-import { APPROVAL_REFUSED_REASON } from "./native-tool-guard.js";
+import { awaitActionResolution, emitPendingActionRequest } from "./action-request-lifecycle.js";
+import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
+import { APPROVAL_REFUSED_REASON, approvalRefusalReason } from "./native-tool-guard.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
-import type { SessionNotifier } from "./types.js";
+import type { AdmissionPath, ConversationProvenancePort, SessionNotifier } from "./types.js";
 
 /**
  * One built-in tool ask from the outside agent (ACP `session/request_permission`).
@@ -67,13 +77,21 @@ export interface AcpBuiltInPermissionResponse {
 
 /** Narrow view of the gateway dependencies this ask needs. */
 export interface AcpPermissionGatewayDeps {
-  readonly repository: Pick<AiRepository, "createPendingAssistantAction" | "insertActionAuditLog">;
+  readonly repository: Pick<
+    AiRepository,
+    | "createPendingAssistantAction"
+    | "insertActionAuditLog"
+    | "getAssistantAction"
+    | "resolveAssistantAction"
+    | "expireAssistantAction"
+  >;
   readonly runner: DataContextRunner;
   readonly tokens: SessionTokenRegistry;
   readonly confirmations: ConfirmationRegistry;
   readonly notifier: SessionNotifier;
   readonly confirmTimeoutMs: number;
   readonly yoloMode?: (ctx: ToolContext) => Promise<boolean>;
+  readonly provenance?: ConversationProvenancePort;
 }
 
 const ACP_TOOL_MODULE_ID = "acp-builtin";
@@ -81,8 +99,6 @@ const ACP_TOOL_MODULE_NAME = "Agent Built-in Tools";
 /** Bounds on what the saved record carries about a request: identifiers only. */
 const MAX_SUMMARY_PATHS = 5;
 const MAX_SUMMARY_PATH_LENGTH = 200;
-/** The card shows the agent's own description at most this long. */
-const MAX_CARD_TEXT = 200;
 
 type AcpAuditMode = "auto" | "yolo" | "confirmed" | "rejected" | "cancelled" | "timeout";
 type AcpActionKind = "write" | "outbound" | "destructive";
@@ -134,28 +150,25 @@ function acpAgentSummary(
 /**
  * What the person reads on the card: the real name, then the thing decided
  * on — the paths for a file tool, the address for a fetch, the command for a
- * shell run (it rides the live stream only, never the row). Anything else
- * shows the agent's own description, labelled as such.
+ * shell run (it rides the live stream only, never the row). Otherwise show
+ * the exact input rather than trusting the agent's description. No display truncation.
  */
 export function acpCardText(request: AcpBuiltInRequest): string {
   const lead = `The agent wants to use ${request.toolName ?? "an unnamed tool"}`;
   const family = acpRequestFamily(request);
   if (family === "read" || family === "write") {
     const paths = extractAcpPaths(request);
-    if (paths.length > 0) return `${lead}: ${paths.join(", ").slice(0, MAX_CARD_TEXT)}`;
+    if (paths.length > 0) return `${lead}: ${paths.join(", ")}`;
   }
   if (family === "web") {
     const address = extractAcpWebAddress(request);
-    if (address !== null) return `${lead}: ${address.slice(0, MAX_CARD_TEXT)}`;
+    if (address !== null) return `${lead}: ${address}`;
   }
   if (family === "shell") {
     const command = extractAcpCommand(request);
-    if (command !== null) return `${lead}: ${command.slice(0, MAX_CARD_TEXT)}`;
+    if (command !== null) return `${lead}: ${command}`;
   }
-  const title = request.title.trim();
-  return title === ""
-    ? `${lead}.`
-    : `${lead} (its own description: "${title.slice(0, MAX_CARD_TEXT)}").`;
+  return `${lead}:\n${JSON.stringify(request.rawInput, null, 2)}`;
 }
 
 /**
@@ -227,8 +240,10 @@ export async function requestAcpBuiltInPermission(
   token: string,
   request: AcpBuiltInPermissionRequest
 ): Promise<AcpBuiltInPermissionResponse> {
-  const { actorUserId, chatSessionId } = deps.tokens.verify(token);
-  const input = request.toolInput;
+  const { actorUserId, chatSessionId, threadId } = deps.tokens.verify(token);
+  const input = freezeSnapshot(request.toolInput);
+  if (exactArgumentText(input) === null)
+    return { decision: "deny", reason: "Complete native tool details are unavailable." };
   const requestId = `acp_${randomUUID()}`;
   const access: AccessContext = { actorUserId, requestId };
   // #2956: the ask below can pend on approval past the turn's end; the turn is
@@ -243,7 +258,7 @@ export async function requestAcpBuiltInPermission(
     rawInput: input,
     toolName: request.toolName,
     kind: request.kind ?? null,
-    locations: request.locations ?? null
+    locations: request.locations ? freezeSnapshot(request.locations) : null
   };
   const actionKind = acpActionKind(builtIn);
   const summarize = (decision: ActionAuditAgentSummary["decision"], reason: string | null) => ({
@@ -252,33 +267,119 @@ export async function requestAcpBuiltInPermission(
   });
 
   const startedAt = Date.now();
+  const family = acpRequestFamily(builtIn);
+  const outcomeTitle = nativePolicyOutcomeTitle(builtIn.toolName);
+  const ctx: ToolContext = {
+    actorUserId,
+    requestId,
+    chatSessionId,
+    ...(threadId ? { threadId } : {})
+  };
+  const admissionPath: AdmissionPath | undefined =
+    family === "read"
+      ? "outside_agent_read"
+      : family === "web"
+        ? "outside_agent_web"
+        : family === "shell"
+          ? "outside_agent_shell"
+          : undefined;
+  let admissionDenied = false;
+  const admitAllowed = async (): Promise<boolean> => {
+    if (!admissionPath) return true;
+    try {
+      await recordContextAdmission(deps.provenance, ctx, admissionPath);
+      return true;
+    } catch {
+      admissionDenied = true;
+      return false;
+    }
+  };
+  const classification = classifyAcpPermission(builtIn, folders);
+  const conversationTainted = await isConversationTainted(deps.provenance, {
+    actorUserId,
+    ...(threadId ? { threadId } : {})
+  });
+  const taintRequiresApproval =
+    conversationTainted &&
+    (family === "write" ||
+      family === "shell" ||
+      family === "web" ||
+      classification.verdict === "ask");
   // Reuse the effective actor setting on every eligible ask; never override hard denials.
   if (
-    classifyAcpPermission(builtIn, folders).verdict === "ask" &&
-    (await deps.yoloMode?.({ actorUserId, requestId, chatSessionId })) === true
+    !taintRequiresApproval &&
+    classification.verdict === "ask" &&
+    (await deps.yoloMode?.({
+      actorUserId,
+      requestId,
+      chatSessionId,
+      ...(threadId ? { threadId } : {})
+    })) === true &&
+    !(await isConversationTainted(deps.provenance, {
+      actorUserId,
+      ...(threadId ? { threadId } : {})
+    }))
   ) {
-    await writeAcpAuditLine(deps, access, chatSessionId, {
-      toolName: builtIn.toolName ?? "(unnamed)",
-      actionKind,
-      mode: "yolo",
-      outcome: "success",
-      errorClass: null,
-      durationMs: Date.now() - startedAt,
-      inputSummary: summarize("allowed", "yolo"),
-      ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
+    const auditPermission = (admitted: boolean) =>
+      writeAcpAuditLine(deps, access, chatSessionId, {
+        toolName: builtIn.toolName ?? "(unnamed)",
+        actionKind,
+        mode: "yolo",
+        outcome: admitted ? "success" : "failed",
+        errorClass: admitted ? null : "content_admission",
+        durationMs: Date.now() - startedAt,
+        inputSummary: summarize(
+          admitted ? "allowed" : "refused",
+          admitted ? "yolo" : CONTEXT_ADMISSION_UNAVAILABLE
+        ),
+        ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
+      });
+    const automatic = await runAutomaticAction(deps.provenance, ctx, async () => {
+      // Pure write permission has no result-admission path; keep its decision audit guarded.
+      // Reads/web/shell acquire durable taint before their final audit and allow delivery.
+      if (!admissionPath) await auditPermission(true);
     });
-    return {
-      decision: "allow",
-      reason: "Allowed by YOLO mode.",
-      asked: false,
-      holdDurationMs: null
-    };
+    if (automatic.kind === "failed")
+      return {
+        decision: "deny",
+        reason: CONTEXT_ADMISSION_UNAVAILABLE,
+        asked: false,
+        holdDurationMs: null
+      };
+    if (automatic.kind === "ran") {
+      const admitted = await admitAllowed();
+      if (admissionPath) await auditPermission(admitted);
+      if (!admitted)
+        deps.notifier.emit(
+          chatSessionId,
+          actionResultRecord({
+            actionRequestId: builtIn.toolCallId,
+            ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
+            toolName: builtIn.toolName ?? "(unnamed)",
+            outcome: "denied",
+            decidedBy: "policy",
+            ...(outcomeTitle ? { summary: outcomeTitle } : {}),
+            holdDurationMs: null,
+            reason: CONTEXT_ADMISSION_UNAVAILABLE
+          })
+        );
+      return {
+        decision: admitted ? "allow" : "deny",
+        reason: admissionDenied ? CONTEXT_ADMISSION_UNAVAILABLE : "Allowed by YOLO mode.",
+        asked: false,
+        holdDurationMs: null
+      };
+    }
   }
   let humanHoldDurationMs: number | null = null;
-  const result = await decideAcpPermission(builtIn, folders, async () => {
+  let modelRefusalReason = APPROVAL_REFUSED_REASON;
+  const ask = async (): Promise<"allow" | "deny"> => {
     const toolName = builtIn.toolName ?? "";
     const action = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       deps.repository.createPendingAssistantAction(scopedDb, {
+        chatThreadId: ctx.threadId,
+        chatSessionId: ctx.chatSessionId,
+        expiresAt: new Date(Date.now() + deps.confirmTimeoutMs),
         toolModuleId: ACP_TOOL_MODULE_ID,
         toolModuleName: ACP_TOOL_MODULE_NAME,
         toolName,
@@ -289,23 +390,30 @@ export async function requestAcpBuiltInPermission(
       })
     );
 
-    const pendingResolution = deps.confirmations.awaitResolution(
+    const pendingResolution = awaitActionResolution(
+      deps,
+      access,
       action.id,
-      deps.confirmTimeoutMs,
       request.sessionId,
       request.turnId
     );
 
-    deps.notifier.emit(chatSessionId, {
+    emitPendingActionRequest(deps, actorUserId, chatSessionId, action, {
       kind: "action_request",
+      nativePermission: true,
       actionRequestId: action.id,
+      ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
       toolName,
+      outsideContentNotice: await isConversationTainted(deps.provenance, ctx),
       summary: acpCardText(builtIn)
     });
     const holdStartedAt = Date.now();
 
     try {
-      const outcome = await pendingResolution;
+      const resolution = await pendingResolution;
+      const outcome =
+        resolution === "confirmed" && !(await admitAllowed()) ? "admission_failed" : resolution;
+      if (resolution !== "confirmed") modelRefusalReason = approvalRefusalReason(resolution);
       const holdDurationMs = Math.max(0, Date.now() - holdStartedAt);
       humanHoldDurationMs = holdDurationMs;
       deps.notifier.emit(
@@ -314,6 +422,7 @@ export async function requestAcpBuiltInPermission(
           outcome === "confirmed"
             ? {
                 actionRequestId: action.id,
+                ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
                 toolName,
                 outcome: "allowed",
                 decidedBy: "person",
@@ -321,21 +430,29 @@ export async function requestAcpBuiltInPermission(
               }
             : {
                 actionRequestId: action.id,
+                ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
                 toolName,
                 outcome: "denied",
+                ...(outcome === "admission_failed" && outcomeTitle
+                  ? { summary: outcomeTitle }
+                  : {}),
                 decidedBy:
-                  outcome === "timeout"
-                    ? "timeout"
-                    : outcome === "cancelled"
-                      ? "cancelled"
-                      : "person",
+                  outcome === "admission_failed"
+                    ? "policy"
+                    : outcome === "timeout"
+                      ? "timeout"
+                      : outcome === "cancelled"
+                        ? "cancelled"
+                        : "person",
                 holdDurationMs,
                 reason:
-                  outcome === "timeout"
-                    ? "Action timed out."
-                    : outcome === "cancelled"
-                      ? "Action cancelled."
-                      : APPROVAL_REFUSED_REASON
+                  outcome === "admission_failed"
+                    ? CONTEXT_ADMISSION_UNAVAILABLE
+                    : outcome === "timeout"
+                      ? "Action timed out."
+                      : outcome === "cancelled"
+                        ? "Action cancelled."
+                        : "You declined this action."
               }
         )
       );
@@ -343,7 +460,7 @@ export async function requestAcpBuiltInPermission(
         toolName,
         actionKind,
         mode:
-          outcome === "confirmed"
+          resolution === "confirmed"
             ? "confirmed"
             : outcome === "timeout"
               ? "timeout"
@@ -360,7 +477,36 @@ export async function requestAcpBuiltInPermission(
     } finally {
       deps.confirmations.markDone(action.id);
     }
-  });
+  };
+  // The folder policy may ordinarily allow a local write. A tainted conversation raises that
+  // floor to the same approval callback; it never overrides an existing hard denial.
+  let result: Awaited<ReturnType<typeof decideAcpPermission>>;
+  if (classification.verdict === "allow" && (family === "write" || family === "web")) {
+    const automatic = taintRequiresApproval
+      ? { kind: "confirm" as const }
+      : await runAutomaticAction(deps.provenance, ctx, async () => true);
+    if (automatic.kind === "failed")
+      return {
+        decision: "deny",
+        reason: CONTEXT_ADMISSION_UNAVAILABLE,
+        asked: false,
+        holdDurationMs: null
+      };
+    result =
+      automatic.kind === "confirm"
+        ? { decision: await ask(), asked: true, reason: null }
+        : { decision: "allow", asked: false, reason: null };
+  } else {
+    result = await decideAcpPermission(builtIn, folders, ask);
+  }
+  if (result.decision === "allow" && !result.asked && !(await admitAllowed())) {
+    return {
+      decision: "deny",
+      reason: CONTEXT_ADMISSION_UNAVAILABLE,
+      asked: false,
+      holdDurationMs: null
+    };
+  }
 
   const holdDurationMs = result.asked ? humanHoldDurationMs : null;
   if (!result.asked && result.decision === "deny") {
@@ -368,9 +514,11 @@ export async function requestAcpBuiltInPermission(
       chatSessionId,
       actionResultRecord({
         actionRequestId: builtIn.toolCallId,
+        ...(ctx.threadId ? { originThreadId: ctx.threadId } : {}),
         toolName: builtIn.toolName ?? "(unnamed)",
         outcome: "denied",
         decidedBy: "policy",
+        ...(outcomeTitle ? { summary: outcomeTitle } : {}),
         holdDurationMs: null,
         ...(result.reason ? { reason: result.reason } : {})
       })
@@ -398,13 +546,15 @@ export async function requestAcpBuiltInPermission(
   }
   return {
     decision: result.decision === "allow" ? "allow" : "deny",
-    reason: result.asked
-      ? result.decision === "allow"
-        ? "Approved by user."
-        : APPROVAL_REFUSED_REASON
-      : result.decision === "allow"
-        ? "Allowed by policy."
-        : APPROVAL_REFUSED_REASON,
+    reason: admissionDenied
+      ? CONTEXT_ADMISSION_UNAVAILABLE
+      : result.asked
+        ? result.decision === "allow"
+          ? "Approved by user."
+          : modelRefusalReason
+        : result.decision === "allow"
+          ? "Allowed by policy."
+          : APPROVAL_REFUSED_REASON,
     asked: result.asked,
     holdDurationMs
   };

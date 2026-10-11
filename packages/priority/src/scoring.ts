@@ -221,7 +221,9 @@ export function rankPriorityCandidates(input: PriorityScoreInput): PriorityResul
         title: candidate.title,
         score,
         band: toBand(score),
-        reasons: reasons.slice(0, 4)
+        reasons: reasons.slice(0, 4),
+        // #2609: carry the caller's identity through untouched. Only present when set.
+        ...(candidate.key !== undefined ? { key: candidate.key } : {})
       }
     };
   });

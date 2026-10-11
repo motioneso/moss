@@ -7,6 +7,7 @@ export const MEETING_FIXTURE_QUESTION = "What is the synthetic meeting decision?
 export const MEETING_FIXTURE_OLD = "SYNTHETIC_DECISION_ORCHID";
 export const MEETING_FIXTURE_NEW = "SYNTHETIC_DECISION_MAPLE";
 export const MEETING_FIXTURE_UNRELATED = "SYNTHETIC_OTHER_MEETING_SECRET";
+export const MEETING_FIXTURE_NOTES = "SYNTHETIC_NOTES_DECISION_CEDAR";
 export const MEETING_FIXTURE_REPLY = "The synthetic decision is recorded in the transcript. [[S1]]";
 export const MEETING_FIXTURE_PORT = 8084;
 
@@ -19,6 +20,7 @@ export interface MeetingFixtureObservation {
   readonly hasNew: boolean;
   readonly hasUnrelated: boolean;
   readonly hasExternalSource: boolean;
+  readonly hasNotes?: true;
 }
 
 export function observeMeetingFixtureRequest(
@@ -39,7 +41,8 @@ export function observeMeetingFixtureRequest(
     hasOld: text.includes(MEETING_FIXTURE_OLD),
     hasNew: text.includes(MEETING_FIXTURE_NEW),
     hasUnrelated: text.includes(MEETING_FIXTURE_UNRELATED),
-    hasExternalSource: text.includes("external_source")
+    hasExternalSource: text.includes("external_source"),
+    ...(text.includes(MEETING_FIXTURE_NOTES) ? { hasNotes: true as const } : {})
   };
 }
 
@@ -71,7 +74,16 @@ export async function startMeetingChatFixtureServer(port = MEETING_FIXTURE_PORT)
         const observation = observeMeetingFixtureRequest(path, body);
         if (observation) observations.push(observation);
         send(200, {
-          choices: [{ message: { role: "assistant", content: MEETING_FIXTURE_REPLY } }],
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: observation?.hasNotes
+                  ? "The synthetic decision is recorded in the personal notes."
+                  : MEETING_FIXTURE_REPLY
+              }
+            }
+          ],
           usage: { prompt_tokens: 32, completion_tokens: 16 }
         });
       } catch {

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["Switch my theme to UAT Midnight Fern."],
+      "calls": [
+        {
+          "tool": "app.findAction",
+          "arguments": { "query": "Switch your theme" }
+        },
+        {
+          "tool": "app.callAction",
+          "arguments": {
+            "method": "PUT",
+            "path": "/api/me/themes/active",
+            "body": { "id": "uat-3065-midnight-fern" }
+          }
+        }
+      ],
+      "reply": "Your theme is now UAT Midnight Fern."
+    }
+  ]
+}

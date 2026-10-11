@@ -13,6 +13,7 @@ import {
   type AiServiceBinding,
   type ClassifierGateMode
 } from "@moss/shared";
+import { isTypesafeDecisionBaseUrl } from "@moss/shared";
 
 import {
   deleteAiServiceBinding,
@@ -35,6 +36,18 @@ export const SYSTEM_ONE_SORTING_NOTE =
   "Trail Marker's app and window titles go to TypeSafe. It also answers News, Sports and email " +
   "sorting questions with a yes or no, so each email's subject, sender, dates and text go there " +
   "too. Your main model still handles other sorting work.";
+
+/**
+ * #3057: the same disclosure for a decision model that is not TypeSafe (Cloudflare's Clef, or a
+ * compatible service). It names the provider the admin actually chose.
+ */
+export function decisionModelSortingNote(providerName: string): string {
+  return (
+    `Trail Marker's app and window titles go to ${providerName}. It also answers News, Sports ` +
+    "and email sorting questions with a yes or no, so each email's subject, sender, dates and " +
+    "text go there too. Your main model still handles other sorting work."
+  );
+}
 
 // Task 1.3 (#2892), approving mockup docs/superpowers/mockups/classifier-gate/settings-row.html.
 // Ruling 1 (Ben, 2026-10-01): the admin-wide switch must say plainly that when the gate is on,
@@ -142,6 +155,12 @@ export function SortingModelRow(props: {
   const eligible = eligibleSortingModels(props.models);
   const boundId = props.binding?.kind === "model" ? props.binding.modelId : null;
   const bound = boundId ? (eligible.find((model) => model.id === boundId) ?? null) : null;
+  const boundProvider = bound
+    ? (props.providers.find((provider) => provider.id === bound.providerConfigId) ?? null)
+    : null;
+  const boundIsTypeSafe =
+    bound?.providerKind === "system-one" &&
+    isTypesafeDecisionBaseUrl(boundProvider?.baseUrl ?? null);
   const unavailableName =
     boundId && !bound
       ? (props.models.find((model) => model.id === boundId)?.displayName ?? "Unavailable model")
@@ -181,7 +200,11 @@ export function SortingModelRow(props: {
         </div>
         <div className="rt__desc">{CLASSIFIER_HELP}</div>
         {bound?.providerKind === "system-one" ? (
-          <div className="rt__desc">{SYSTEM_ONE_SORTING_NOTE}</div>
+          <div className="rt__desc">
+            {boundIsTypeSafe
+              ? SYSTEM_ONE_SORTING_NOTE
+              : decisionModelSortingNote(bound.providerDisplayName)}
+          </div>
         ) : boundId ? (
           <div className="rt__desc">
             {SORTING_DISCLOSURE} {TRAIL_MARKER_DISCLOSURE}

@@ -91,8 +91,6 @@ export interface AcceptMemoryCandidateBody {
     readonly entityName?: string;
     readonly entitySummary?: string | null;
   };
-  readonly resolveConflictWithFactId?: string | null;
-  readonly supersedeFactIds?: readonly string[];
 }
 
 export interface PatchMemoryFactBody {
@@ -168,6 +166,12 @@ export async function patchMemoryEntity(id: string, body: PatchMemoryEntityBody)
 
 export async function deleteMemoryEntity(id: string): Promise<void> {
   await requestJson<unknown>(`/api/memory/graph/entities/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function deleteMemoryFact(id: string): Promise<void> {
+  await requestJson<unknown>(`/api/memory/graph/facts/${encodeURIComponent(id)}`, {
     method: "DELETE"
   });
 }

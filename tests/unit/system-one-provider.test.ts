@@ -104,4 +104,94 @@ describe("System One provider plumbing", () => {
     });
     expect(JSON.stringify(result)).not.toContain("sk-secret");
   });
+
+  it("says the service does not list its models when the model list is a 404", async () => {
+    const result = await testProviderCredential({
+      providerKind: "system-one",
+      authMethod: "api_key",
+      baseUrl: null,
+      credential: { apiKey: "sk-secret" },
+      fetch: (async () => new Response("{}", { status: 404 })) as typeof fetch
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      providerKind: "system-one",
+      message:
+        "This service does not list its models, so the key could not be checked. Add a model by hand, then try it."
+    });
+    expect(result.message).not.toBe("Provider rejected the credential.");
+  });
+});
+
+// #3057: a Cloudflare decision model has no models list, so Test sends one fixed probe through the
+// same address the sender uses and passes on a 2xx with `success: true`.
+describe("Cloudflare decision-model Test (#3057)", () => {
+  const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${"0123456789abcdef0123456789abcdef"}/ai`;
+  const probeUrl = `${baseUrl}/run/@cf/cloudflare/clef-flash`;
+
+  it("sends the one-question probe to clef-flash and passes on success", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fakeFetch = async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ success: true, result: { answers: {} } }), {
+        status: 200
+      });
+    };
+
+    const result = await testProviderCredential({
+      providerKind: "system-one",
+      authMethod: "api_key",
+      baseUrl,
+      credential: { apiKey: "cf-token" },
+      fetch: fakeFetch as typeof fetch
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      providerKind: "system-one",
+      message: "Provider credential is valid."
+    });
+    expect(calls[0]?.url).toBe(probeUrl);
+    expect(calls[0]?.init?.method).toBe("POST");
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    expect(body.model).toBe("clef-flash");
+    expect(body.questions).toMatchObject({ reachable: { type: "noul" } });
+    expect(JSON.stringify(body)).not.toContain("cf-token");
+  });
+
+  it("treats a Cloudflare success:false answer as a failed test", async () => {
+    const result = await testProviderCredential({
+      providerKind: "system-one",
+      authMethod: "api_key",
+      baseUrl,
+      credential: { apiKey: "cf-token" },
+      fetch: (async () =>
+        new Response(JSON.stringify({ success: false, errors: [{ code: 7000 }] }), {
+          status: 200
+        })) as typeof fetch
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      providerKind: "system-one",
+      message: "Provider test failed."
+    });
+  });
+
+  it("reports a rejected Cloudflare token as a rejected credential", async () => {
+    const result = await testProviderCredential({
+      providerKind: "system-one",
+      authMethod: "api_key",
+      baseUrl,
+      credential: { apiKey: "cf-token" },
+      fetch: (async () => new Response("{}", { status: 403 })) as typeof fetch
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      providerKind: "system-one",
+      message: "Provider rejected the credential."
+    });
+  });
 });

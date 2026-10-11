@@ -100,10 +100,54 @@ describe("personalized News page", () => {
     expect(html).not.toContain("Choose your sources");
   });
 
+  it("matches a chip key against the display labels carried by headlines (#3227)", () => {
+    const world = story("w", { topicKey: null, topicLabel: "World", topicLabels: ["World"] });
+    const us = story("u", { topicKey: null, topicLabel: "U.S.", topicLabels: ["U.S."] });
+    expect(matchesTopic(world, "world")).toBe(true);
+    expect(matchesTopic(us, "us")).toBe(true);
+    expect(matchesTopic(world, "us")).toBe(false);
+  });
+
   it("uses null for All so a custom topic literally named All remains filterable", () => {
     const candidate = story("all", { topicLabel: "All", topicLabels: ["All"] });
     expect(matchesTopic(candidate, null)).toBe(true);
     expect(matchesTopic(candidate, "All")).toBe(true);
     expect(matchesTopic(candidate, "AI")).toBe(false);
+  });
+});
+
+describe("News empty states", () => {
+  it.each([
+    { enabledSources: [], title: "Choose your sources" },
+    {
+      enabledSources: [{ sourceKey: "bbc", label: "BBC News" }],
+      title: "Nothing on the wire"
+    }
+  ])("retains a level-two heading for $title", ({ enabledSources, title }) => {
+    const html = renderNews({
+      topStories: [],
+      sourceGroups: [],
+      activeTopics: [],
+      enabledSources,
+      degraded: false
+    });
+    expect(html).toContain(`<h2>${title}</h2>`);
+    expect(html).toContain("jds-empty__title");
+    expect(html).toContain('href="/settings?section=modules&amp;module=news"');
+    expect(html).toContain("Choose sources");
+  });
+});
+
+describe("News cold load", () => {
+  it("keeps page identity and a status sentence without placeholder stories", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const html = renderToString(
+      <QueryClientProvider client={client}>
+        <NewsPage />
+      </QueryClientProvider>
+    );
+    expect(html).toContain("Your front page");
+    expect(html).toContain("Loading news");
+    expect(html).not.toContain("nw-skel");
   });
 });

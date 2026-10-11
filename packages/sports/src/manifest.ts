@@ -1,3 +1,14 @@
+import {
+  sportsPublicReadPresentation,
+  sportsFollowPresentation,
+  sportsUnfollowPresentation,
+  sportsFollowRoutePresentation,
+  sportsResolveTeamPresentation,
+  sportsRemovalPresentation,
+  sportsCoveragePresentation,
+  sportsStandingsPresentation,
+  sportsSourcePresentation
+} from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest, ModuleAiRequirementManifest } from "@moss/module-sdk";
@@ -29,6 +40,7 @@ import {
 } from "@moss/shared";
 
 import { sportsFollowedFactsTodayExecute } from "./briefing-tool.js";
+import { sportsFollowTarget, sportsSourceTarget } from "./chat-targets.js";
 import { collectSportsSourcesExportSection } from "./data-lifecycle.js";
 import {
   sportsFollowTeamExecute,
@@ -125,6 +137,16 @@ export const sportsModuleManifest = {
   },
   features: [
     {
+      id: "sports.approval_effects",
+      description:
+        "Sports approvals disclose source removal's coverage and photo loss, and unfollow's coverage removal. ESPN coverage replaces the whole list; an empty list turns headlines off."
+    },
+    {
+      id: "sports.chat_app_actions",
+      description:
+        "App actions manage follows, coverage and standings with verified team and publisher names. Unresolved teams need a selection in Sports first. Source discovery, feed authorization and retention-touching reads remain blocked."
+    },
+    {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.sports",
       description: "Ranked your sports stories"
@@ -199,7 +221,8 @@ export const sportsModuleManifest = {
     {
       id: "sports",
       label: "Sports",
-      description: "Follow scores, schedules, and standings for selected teams.",
+      description:
+        "Follow selected teams, scores, schedules and standings. Initial loading and read failures are distinct from a quiet day; failed reads offer Retry.",
       path: "/sports",
       icon: "trophy",
       order: 35,
@@ -243,46 +266,75 @@ export const sportsModuleManifest = {
       actions: ["create", "update", "delete"]
     }
   ],
+  // #3065: provider retrieval stays outside; overview also syncs custom sources. Source
+  // confirmation changes persistent fetch authority and keeps its explicit-approval boundary.
   routes: [
     {
       method: "GET",
       path: "/api/sports/catalog",
+      chat: { access: "read", content: "outside" },
       responseSchema: sportsCatalogResponseSchema,
       permissionId: "sports.view"
     },
     {
       method: "GET",
       path: "/api/sports/leagues/:competitionKey/teams",
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Look up sports teams",
+        presentation: sportsPublicReadPresentation("teams")
+      },
       responseSchema: sportsLeagueTeamsResponseSchema,
       permissionId: "sports.view"
     },
     {
       method: "GET",
       path: "/api/sports/teams/search",
+      // The query filters fixed catalog rosters locally; it is not sent to the provider.
+      chat: { access: "read", content: "outside" },
       responseSchema: sportsTeamSearchResponseSchema,
       permissionId: "sports.view"
     },
     {
       method: "GET",
       path: "/api/sports/overview",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: sportsOverviewResponseSchema,
       permissionId: "sports.view"
     },
     {
       method: "GET",
       path: "/api/sports/standings",
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Look up sports standings",
+        presentation: sportsPublicReadPresentation("standings")
+      },
       responseSchema: sportsStandingsResponseSchema,
       permissionId: "sports.view"
     },
     {
       method: "GET",
       path: "/api/sports/standings-preferences",
+      // lastViewed.viewLabel comes from provider standings, even when stored as a preference.
+      chat: { access: "read", content: "outside" },
       responseSchema: sportsStandingsPreferencesResponseSchema,
       permissionId: "sports.view"
     },
     {
       method: "PUT",
       path: "/api/sports/standings-preferences",
+      // lastViewed.viewLabel comes from provider standings, even when stored as a preference.
+      chat: {
+        access: "write",
+        title: "Change standings preferences",
+        presentation: sportsStandingsPresentation,
+        content: "outside"
+      },
       requestSchema: updateSportsStandingsPreferencesSchema.body,
       responseSchema: updateSportsStandingsPreferencesSchema.response,
       permissionId: "sports.follow"
@@ -290,12 +342,20 @@ export const sportsModuleManifest = {
     {
       method: "GET",
       path: "/api/sports/follows",
+      chat: { access: "read", content: "outside" },
       responseSchema: sportsFollowsResponseSchema,
       permissionId: "sports.view"
     },
     {
       method: "POST",
       path: "/api/sports/follows",
+      // Roster validation only fetches a fixed catalog URL; the team key is matched locally.
+      chat: {
+        access: "write",
+        title: "Follow sports team or competition",
+        presentation: sportsFollowRoutePresentation,
+        content: "outside"
+      },
       requestSchema: createSportsFollowRequestSchema,
       responseSchema: createSportsFollowResponseSchema,
       permissionId: "sports.follow"
@@ -303,6 +363,13 @@ export const sportsModuleManifest = {
     {
       method: "POST",
       path: "/api/sports/follows/:id/team",
+      // The saved catalog competition selects a public roster; sourceTeamId stays local.
+      chat: {
+        access: "write",
+        title: "Identify followed sports team",
+        presentation: sportsResolveTeamPresentation,
+        content: "outside"
+      },
       requestSchema: resolveSportsFollowTeamRequestSchema,
       responseSchema: resolveSportsFollowTeamResponseSchema,
       permissionId: "sports.follow"
@@ -310,18 +377,32 @@ export const sportsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/sports/follows/:id",
+      chat: {
+        access: "destructive",
+        title: "Unfollow sports team or competition",
+        content: "user_authored",
+        target: sportsFollowTarget,
+        presentation: sportsRemovalPresentation("follow")
+      },
       responseSchema: deleteSportsFollowResponseSchema,
       permissionId: "sports.follow"
     },
     {
       method: "GET",
       path: "/api/sports/sources",
+      chat: { access: "read", content: "outside", coveredBy: "sports.listSources" },
       responseSchema: sportsNewsSourcesResponseSchema,
       permissionId: "sports.view"
     },
     {
       method: "PUT",
       path: "/api/sports/sources/espn/coverage",
+      chat: {
+        access: "write",
+        title: "Change ESPN sports coverage",
+        presentation: sportsCoveragePresentation,
+        content: "user_authored"
+      },
       requestSchema: updateSportsEspnCoverageSchema.body,
       responseSchema: updateSportsEspnCoverageSchema,
       permissionId: "sports.sources"
@@ -329,6 +410,7 @@ export const sportsModuleManifest = {
     {
       method: "POST",
       path: "/api/sports/sources/preview",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: previewSportsSourceSchema.body,
       responseSchema: previewSportsSourceSchema,
       permissionId: "sports.sources"
@@ -336,6 +418,7 @@ export const sportsModuleManifest = {
     {
       method: "POST",
       path: "/api/sports/sources",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: confirmSportsSourceSchema.body,
       responseSchema: confirmSportsSourceSchema,
       permissionId: "sports.sources"
@@ -343,6 +426,7 @@ export const sportsModuleManifest = {
     {
       method: "POST",
       path: "/api/sports/sources/:id/assignments/preview",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: previewSportsSourceAssignmentsSchema.body,
       responseSchema: previewSportsSourceAssignmentsSchema,
       permissionId: "sports.sources"
@@ -350,6 +434,7 @@ export const sportsModuleManifest = {
     {
       method: "PATCH",
       path: "/api/sports/sources/:id/assignments",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: updateSportsSourceAssignmentsSchema.body,
       responseSchema: updateSportsSourceAssignmentsSchema,
       permissionId: "sports.sources"
@@ -357,18 +442,21 @@ export const sportsModuleManifest = {
     {
       method: "POST",
       path: "/api/sports/sources/:id/retry",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: retrySportsSourceSchema,
       permissionId: "sports.sources"
     },
     {
       method: "POST",
       path: "/api/sports/sources/:id/rebuild/preview",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: previewSportsSourceRecipeSchema,
       permissionId: "sports.sources"
     },
     {
       method: "PATCH",
       path: "/api/sports/sources/:id/rebuild",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: updateSportsSourceRecipeSchema.body,
       responseSchema: updateSportsSourceRecipeSchema,
       permissionId: "sports.sources"
@@ -376,23 +464,46 @@ export const sportsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/sports/sources/:id",
+      chat: {
+        access: "destructive",
+        title: "Remove sports news source",
+        content: "outside",
+        target: sportsSourceTarget,
+        presentation: sportsRemovalPresentation("source")
+      },
       responseSchema: deleteSportsCustomSourceSchema,
       permissionId: "sports.sources"
     },
     {
       method: "DELETE",
       path: "/api/sports/sources/:id/photos",
+      chat: {
+        access: "destructive",
+        title: "Forget sports source photo instructions",
+        content: "outside",
+        target: sportsSourceTarget,
+        presentation: sportsRemovalPresentation("photo-instructions")
+      },
       responseSchema: deleteSportsSourcePhotosSchema,
       permissionId: "sports.sources"
     },
     {
       method: "GET",
       path: "/api/sports/sources/:sourceId/icon",
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Load sports news source icon",
+        presentation: sportsPublicReadPresentation("icon")
+      },
       permissionId: "sports.view"
     },
     {
       method: "GET",
       path: "/api/sports/headlines/:headlineId/photo",
+      // Reading or serving cached bytes updates vault lastServedAt and extends photo retention.
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       permissionId: "sports.view"
     }
   ],
@@ -419,6 +530,7 @@ export const sportsModuleManifest = {
         "List compact, non-sensitive facts about the actor's followed teams/competitions playing today (one short line per follow). Read-only; briefing-oriented, not a live scores/schedule browser.",
       permissionId: "sports.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {
@@ -434,6 +546,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.followTeam",
+      actionLabel: "Follow sports team or competition",
+      approvalPresentation: sportsFollowPresentation,
       description:
         "Follow a team or a whole competition (e.g. 'the Yankees' or 'the Premier League'). Resolve the name to a catalog competitionKey, plus a teamKey for a single team, through the sports catalog or search, then call this with those keys.",
       permissionId: "sports.follow",
@@ -466,11 +580,14 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.unfollowTeam",
+      actionLabel: "Unfollow sports team or competition",
+      approvalPresentation: sportsUnfollowPresentation,
       description:
         "Stop following a team or competition previously followed. Requires the same competitionKey (and teamKey if a specific team) used to follow it.",
       permissionId: "sports.follow",
       actionFamilyId: "sports_follows",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -502,6 +619,7 @@ export const sportsModuleManifest = {
         "List the active actor's bounded public sports sources, assignments, health, timestamps, and safe recovery status. Never returns recipes or opaque parameters.",
       permissionId: "sports.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: sportsListSourcesExecute
     },
@@ -511,12 +629,15 @@ export const sportsModuleManifest = {
         "Preview and safely verify one public unauthenticated sports publisher and optional followed targets before confirmation. Returned headline samples are external publisher content.",
       permissionId: "sports.sources",
       risk: "read",
+      content: "outside",
       externalContent: true,
       inputSchema: previewSportsSourceSchema.body,
       execute: sportsPreviewSourceExecute
     },
     {
       name: "sports.confirmSource",
+      actionLabel: "Add sports news source",
+      approvalPresentation: sportsSourcePresentation("new-source"),
       description:
         "Confirm a sports source from its actor-bound preview using the exact displayed publisher, hosts, targets, and authorization acknowledgement.",
       permissionId: "sports.sources",
@@ -533,6 +654,7 @@ export const sportsModuleManifest = {
         "Preview an exact replacement assignment set for one sports source. Added target samples are external publisher content.",
       permissionId: "sports.sources",
       risk: "read",
+      content: "outside",
       externalContent: true,
       inputSchema: {
         type: "object",
@@ -547,6 +669,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.confirmSourceAssignments",
+      actionLabel: "Change sports source coverage",
+      approvalPresentation: sportsSourcePresentation("assignment-replacement"),
       description:
         "Confirm the exact actor-bound sports source assignment replacement shown by the preview.",
       permissionId: "sports.sources",
@@ -568,6 +692,7 @@ export const sportsModuleManifest = {
         "Preview a bounded safe rebuild of one saved sports source recipe without changing it. Samples are external publisher content.",
       permissionId: "sports.sources",
       risk: "read",
+      content: "outside",
       externalContent: true,
       inputSchema: {
         type: "object",
@@ -579,6 +704,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.confirmSourceRecipe",
+      actionLabel: "Change sports source instructions",
+      approvalPresentation: sportsSourcePresentation("recipe-rebuild"),
       description:
         "Confirm the exact actor-bound sports source recipe rebuild shown by the preview.",
       permissionId: "sports.sources",
@@ -596,6 +723,8 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.retrySource",
+      actionLabel: "Retry sports news source",
+      approvalPresentation: sportsSourcePresentation("retry"),
       description:
         "Retry every verified target for one actor-owned sports source through pinned safe fetch with no browser.",
       permissionId: "sports.sources",
@@ -613,10 +742,13 @@ export const sportsModuleManifest = {
     },
     {
       name: "sports.removeSource",
+      actionLabel: "Remove sports news source",
+      approvalPresentation: sportsSourcePresentation("remove"),
       description: "Remove one actor-owned sports source and its assignments.",
       permissionId: "sports.sources",
       actionFamilyId: "sports.sources",
       risk: "destructive",
+      content: "user_authored",
       selfOperationGrant: "confirm_always",
       inputSchema: {
         type: "object",

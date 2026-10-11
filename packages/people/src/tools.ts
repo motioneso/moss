@@ -1,3 +1,8 @@
+import {
+  peopleMatchPresentation,
+  peopleMergePresentation,
+  peopleSplitPresentation
+} from "./approval-presentation.js";
 import { assertDataContextDb } from "@moss/db";
 import type { ModuleAssistantToolManifest, ToolExecute } from "@moss/module-sdk";
 import { PeopleRepository } from "./repository.js";
@@ -87,6 +92,7 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
     description: "Find a person by name or email address. Returns the matched person or null.",
     permissionId: "people:read",
     risk: "read",
+    content: "outside",
     inputSchema: {
       type: "object",
       required: ["query"],
@@ -103,6 +109,7 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
       "Each link includes a citationToken for source attribution.",
     permissionId: "people:read",
     risk: "read",
+    content: "outside",
     inputSchema: {
       type: "object",
       required: ["personId"],
@@ -117,6 +124,7 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
     description: "List recently seen people.",
     permissionId: "people:read",
     risk: "read",
+    content: "outside",
     inputSchema: {
       type: "object",
       properties: {
@@ -127,12 +135,15 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
   },
   {
     name: "people.acceptMatch",
+    actionLabel: "Accept People match",
+    approvalPresentation: peopleMatchPresentation(true),
     description:
       "Accept a match candidate (link_identity or create_person kind). " +
       "For merge_people or split_identity candidates, use people.merge or people.splitIdentity instead.",
     permissionId: "people:write",
     actionFamilyId: "people_review",
     risk: "write",
+    content: "user_authored",
     executionPolicy: "auto",
     selfOperationGrant: "granted_at_install",
     inputSchema: {
@@ -146,10 +157,13 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
   },
   {
     name: "people.rejectMatch",
+    actionLabel: "Reject People match",
+    approvalPresentation: peopleMatchPresentation(false),
     description: "Reject a match candidate.",
     permissionId: "people:write",
     actionFamilyId: "people_review",
     risk: "write",
+    content: "user_authored",
     executionPolicy: "auto",
     selfOperationGrant: "granted_at_install",
     inputSchema: {
@@ -163,6 +177,8 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
   },
   {
     name: "people.merge",
+    actionLabel: "Merge people",
+    approvalPresentation: peopleMergePresentation,
     description:
       "Merge two people records into one. The secondary person is archived and all its " +
       "identities and links are re-linked to the primary. This action is irreversible.",
@@ -182,6 +198,8 @@ export const PEOPLE_TOOLS: ModuleAssistantToolManifest[] = [
   },
   {
     name: "people.splitIdentity",
+    actionLabel: "Separate a person identity",
+    approvalPresentation: peopleSplitPresentation,
     description:
       "Move an identity from its current person to a different person (or a new one). " +
       "Use when two identities were incorrectly merged. This action is irreversible.",

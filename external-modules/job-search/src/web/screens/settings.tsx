@@ -275,9 +275,14 @@ function watchedBoardsMeta(rows: PortalRow[]): string {
   return `${enabledLabel} · ${needsAttention} need${needsAttention === 1 ? "s" : ""} attention`;
 }
 
+const TOGGLE_RECONCILE_ATTEMPTS = 5;
+const TOGGLE_RECONCILE_MS = 1000;
+const TOGGLE_FAILED_NOTICE = "Couldn\u2019t change that job board. Try again in a moment.";
+
 export function SettingsScreen(props: { profile: Profile }): ReactNodeLike {
   const { profile } = props;
   const [portals, setPortals] = useState<PortalsState>({ status: "loading" });
+  const [toggleNotice, setToggleNotice] = useState<string | null>(null);
 
   function refetchPortals(): void {
     fetchPortals(profile.profileId)
@@ -293,9 +298,28 @@ export function SettingsScreen(props: { profile: Profile }): ReactNodeLike {
     // render instead of just when the profile changes.
   }, [profile.profileId]);
 
+  // runQueue resolves once the job is accepted, before it runs. Reread until the stored value
+  // matches the requested one, keeping the optimistic value in between.
+  function reconcileToggle(sourceId: string, enabled: boolean, attempt: number): void {
+    fetchPortals(profile.profileId)
+      .then((rows) => {
+        const stored = rows.find((row) => row.sourceId === sourceId);
+        if (!stored || stored.enabled === enabled) {
+          setPortals({ status: "ready", rows });
+          return;
+        }
+        if (attempt < TOGGLE_RECONCILE_ATTEMPTS) {
+          setTimeout(() => reconcileToggle(sourceId, enabled, attempt + 1), TOGGLE_RECONCILE_MS);
+          return;
+        }
+        setPortals({ status: "ready", rows });
+        setToggleNotice(TOGGLE_FAILED_NOTICE);
+      })
+      .catch(() => setPortals({ status: "error" }));
+  }
+
   function handleToggle(sourceId: string, enabled: boolean): void {
-    // Optimistic: flip the row immediately, then reconcile against the next portal.list once the
-    // queued job has had a chance to land — runQueue only ever reports "queued", never "done".
+    setToggleNotice(null);
     setPortals((current) =>
       current.status === "ready"
         ? {
@@ -309,8 +333,18 @@ export function SettingsScreen(props: { profile: Profile }): ReactNodeLike {
       sourceId,
       enabled
     })
-      .then(refetchPortals)
-      .catch(refetchPortals);
+      .then((outcome) => {
+        if (outcome.kind === "queued") {
+          reconcileToggle(sourceId, enabled, 0);
+          return;
+        }
+        setToggleNotice(TOGGLE_FAILED_NOTICE);
+        refetchPortals();
+      })
+      .catch(() => {
+        setToggleNotice(TOGGLE_FAILED_NOTICE);
+        refetchPortals();
+      });
   }
 
   let portalsBody: ReactNodeLike;
@@ -360,6 +394,11 @@ export function SettingsScreen(props: { profile: Profile }): ReactNodeLike {
           {sectionMeta !== null ? <span className="jds-eyebrow">{sectionMeta}</span> : null}
         </SectionHead>
         {portalsBody}
+        {toggleNotice !== null ? (
+          <p className="jds-hint" role="status">
+            {toggleNotice}
+          </p>
+        ) : null}
       </section>
 
       <div className="jsm-monitor__foot">

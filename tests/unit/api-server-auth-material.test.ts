@@ -13,6 +13,10 @@ describe("hasAuthMaterial", () => {
     expect(hasAuthMaterial(request({ authorization: undefined, cookie: "sid=abc" }))).toBe(true);
   });
 
+  it("counts an act-as grant header as auth material (#3065)", () => {
+    expect(hasAuthMaterial(request({ "x-moss-act-as": "grant-value" }))).toBe(true);
+  });
+
   it("treats missing or blank auth headers as anonymous", () => {
     expect(hasAuthMaterial(request({ authorization: undefined, cookie: undefined }))).toBe(false);
     expect(hasAuthMaterial(request({ authorization: "   ", cookie: "" }))).toBe(false);

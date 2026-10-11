@@ -1,4 +1,8 @@
+import { checkinPresentation, therapyNoteRemovalPresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
+
+import { assertDataContextDb } from "@moss/db";
+import { PreferencesRepository } from "@moss/structured-state";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
@@ -23,6 +27,11 @@ import {
   wellnessInsightsRouteSchema
 } from "@moss/shared";
 
+import {
+  resolveEffectiveWellnessConsent,
+  WELLNESS_AI_CONSENT_PREFERENCE_KEY
+} from "./ai-consent.js";
+import { therapyNoteTarget } from "./chat-targets.js";
 import { collectWellnessExportSection } from "./data-lifecycle.js";
 import { wellnessFocusSignal } from "./focus-signal.js";
 import { WELLNESS_EXPORT_QUEUE } from "./export-job.js";
@@ -77,7 +86,7 @@ export const wellnessModuleManifest = {
       id: "wellness.ai-consent",
       label: "Wellness",
       description:
-        "Allow or block your assistant from reading your mood check-ins and medication adherence counts, so it can reference them in briefings and answer questions about them.",
+        "Allow assistant access to mood check-ins and medication adherence for briefings and questions. Unknown choices stay unavailable; read failures offer Retry separately from save errors. Failed refreshes retain the confirmed choice.",
       path: "/settings?section=modules&module=wellness",
       scope: "user",
       order: 40,
@@ -115,16 +124,32 @@ export const wellnessModuleManifest = {
       actions: ["delete"]
     }
   ],
+  chatDefaults: { consent: WELLNESS_AI_CONSENT_PREFERENCE_KEY },
+  aiConsent: {
+    key: WELLNESS_AI_CONSENT_PREFERENCE_KEY,
+    async isGranted(scopedDb) {
+      assertDataContextDb(scopedDb);
+      // The normal route guard still requires an active module; active users default to consent.
+      return resolveEffectiveWellnessConsent(
+        scopedDb,
+        new PreferencesRepository(),
+        undefined,
+        true
+      );
+    }
+  },
   routes: [
     {
       method: "GET",
       path: "/api/wellness/ai-consent",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: wellnessAiConsentResponseSchema,
       permissionId: "wellness.view"
     },
     {
       method: "PUT",
       path: "/api/wellness/ai-consent",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       requestSchema: putWellnessAiConsentRequestSchema,
       responseSchema: wellnessAiConsentResponseSchema,
       permissionId: "wellness.update"
@@ -132,6 +157,12 @@ export const wellnessModuleManifest = {
     {
       method: "POST",
       path: "/api/wellness/checkins",
+      chat: {
+        access: "write",
+        title: "Log mood check-in",
+        presentation: checkinPresentation(false),
+        content: "outside"
+      },
       requestSchema: createCheckinRequestSchema,
       responseSchema: createCheckinResponseSchema,
       permissionId: "wellness.create"
@@ -139,12 +170,19 @@ export const wellnessModuleManifest = {
     {
       method: "GET",
       path: "/api/wellness/checkins",
+      chat: { access: "read", content: "outside" },
       responseSchema: listCheckinsResponseSchema,
       permissionId: "wellness.view"
     },
     {
       method: "PATCH",
       path: "/api/wellness/checkins/:id",
+      chat: {
+        access: "write",
+        title: "Update mood check-in",
+        presentation: checkinPresentation(true),
+        content: "outside"
+      },
       requestSchema: updateCheckinRouteSchema.body,
       responseSchema: updateCheckinRouteSchema.response[200],
       permissionId: "wellness.update"
@@ -152,12 +190,14 @@ export const wellnessModuleManifest = {
     {
       method: "GET",
       path: "/api/wellness/medications",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listMedicationsResponseSchema,
       permissionId: "wellness.view"
     },
     {
       method: "POST",
       path: "/api/wellness/medications",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       requestSchema: createMedicationRequestSchema,
       responseSchema: medicationResponseSchema,
       permissionId: "wellness.create"
@@ -165,6 +205,7 @@ export const wellnessModuleManifest = {
     {
       method: "PATCH",
       path: "/api/wellness/medications/:id",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       requestSchema: updateMedicationRequestSchema,
       responseSchema: medicationResponseSchema,
       permissionId: "wellness.update"
@@ -172,12 +213,14 @@ export const wellnessModuleManifest = {
     {
       method: "GET",
       path: "/api/wellness/medications/schedule",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: medicationScheduleResponseSchema,
       permissionId: "wellness.view"
     },
     {
       method: "POST",
       path: "/api/wellness/medications/:id/logs",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       requestSchema: createMedicationLogRequestSchema,
       responseSchema: createMedicationLogResponseSchema,
       permissionId: "wellness.create"
@@ -185,18 +228,21 @@ export const wellnessModuleManifest = {
     {
       method: "GET",
       path: "/api/wellness/insights",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: wellnessInsightsRouteSchema.response[200],
       permissionId: "wellness.view"
     },
     {
       method: "GET",
       path: "/api/wellness/therapy-notes",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: listTherapyNotesRouteSchema.response[200],
       permissionId: "wellness.view"
     },
     {
       method: "POST",
       path: "/api/wellness/therapy-notes",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       requestSchema: createTherapyNoteRouteSchema.body,
       responseSchema: createTherapyNoteRouteSchema.response[201],
       permissionId: "wellness.create"
@@ -204,18 +250,27 @@ export const wellnessModuleManifest = {
     {
       method: "DELETE",
       path: "/api/wellness/therapy-notes/:id",
+      chat: {
+        access: "destructive",
+        title: "Delete therapy note",
+        content: "user_authored",
+        target: therapyNoteTarget,
+        presentation: therapyNoteRemovalPresentation
+      },
       responseSchema: deleteTherapyNoteRouteSchema.response[200],
       permissionId: "wellness.delete"
     },
     {
       method: "GET",
       path: "/api/wellness/medications/logs",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
       responseSchema: medicationAdherenceSummaryRouteSchema.response[200],
       permissionId: "wellness.view"
     },
     {
       method: "POST",
       path: "/api/wellness/export",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: wellnessExportRequestSchema,
       permissionId: "wellness.view"
     }
@@ -243,6 +298,7 @@ export const wellnessModuleManifest = {
         "List the actor's recent feelings check-ins (most recent first): timestamp, core feeling, secondary feeling, intensity, and free-text note (may be null). Read-only.",
       permissionId: "wellness.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: wellnessRecentCheckInsExecute
     },
@@ -252,6 +308,7 @@ export const wellnessModuleManifest = {
         "Summarize the actor's medication adherence over the last 7 days as counts (scheduled, taken, skipped, PRN) and an adherence rate. Returns counts only, never a medication list. Read-only.",
       permissionId: "wellness.view",
       risk: "read",
+      content: "user_authored",
       inputSchema: { type: "object", properties: {} },
       execute: wellnessMedicationAdherenceExecute
     }
@@ -282,10 +339,14 @@ export const wellnessModuleManifest = {
   },
   features: [
     {
+      id: "wellness.chat_app_actions",
+      description:
+        "App actions require effective Wellness AI consent for check-ins and derived insights. Therapy-note deletion asks with a timestamp-only preview. Raw medication details and therapy-note text remain unavailable."
+    },
+    {
       id: "wellness.mood_checkins",
       description:
-        "Log a daily mood check-in with emotion, energy and a short note; Wellness keeps the history " +
-        "and charts past check-ins. Insights summarise trends once there are enough check-ins."
+        "Log emotion, energy and a note; review history and insights. Failed reads offer Retry and retain known data. The mood average covers the previous 14 calendar days. Trends offer keyboard day selection and daily values alongside the chart."
     },
     {
       id: "wellness.medication_tracking",
@@ -296,8 +357,7 @@ export const wellnessModuleManifest = {
     {
       id: "wellness.therapy_notes",
       description:
-        "Keep therapy notes that stay private: the assistant never reads them, and the data " +
-        "export includes them with everything else."
+        "Keep private therapy notes the assistant cannot read; include them in your export. Failed exports and failed status checks offer Retry without discarding the export selection."
     }
   ]
 } satisfies MossModuleManifest;

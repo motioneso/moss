@@ -2,11 +2,12 @@ import XCTest
 @testable import TrailMarker
 
 final class ObservationStatementTests: XCTestCase {
-    private let originalSentence =
-        "These permissions prepare future capabilities. Trail Marker is not observing your activity."
-
-    func testWithFocusOffItKeepsTheOriginalWording() {
-        XCTAssertEqual(ObservationStatement.current(focusEnabled: false), originalSentence)
+    func testWithFocusOffItExplainsFeatureChoiceAndNeverPromisesNoObservation() {
+        let text = ObservationStatement.current(focusEnabled: false)
+        XCTAssertTrue(text.contains("features you choose"))
+        XCTAssertTrue(text.contains("does not start a meeting recording"))
+        XCTAssertFalse(text.contains("future capabilities"))
+        XCTAssertFalse(text.contains("is not observing"), "Backtrack may be enabled independently of Focus")
     }
 
     func testWithFocusOnItSaysWhatIsSentAndNeverTheOldSentence() {
@@ -30,5 +31,15 @@ final class ObservationStatementTests: XCTestCase {
     func testAccessibilityIsDescribedByWhatItIsNowFor() {
         XCTAssertFalse(ObservationStatement.accessibilityScope.contains("future shortcuts"))
         XCTAssertTrue(ObservationStatement.accessibilityScope.contains("window in front"))
+    }
+
+    func testScreenPermissionCopyNamesCurrentUsesAndSeparateSystemAudioRequest() {
+        let text = ObservationStatement.screenRecordingScope
+        XCTAssertTrue(text.contains("Backtrack"))
+        XCTAssertTrue(text.contains("screen-aware Focus"))
+        XCTAssertTrue(text.contains("Meeting computer audio"))
+        XCTAssertTrue(text.contains("separate system-audio access"))
+        XCTAssertTrue(text.contains("when you press Start"))
+        XCTAssertFalse(text.contains("future"))
     }
 }

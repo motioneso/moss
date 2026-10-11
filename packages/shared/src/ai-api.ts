@@ -1,3 +1,4 @@
+import { aiActionPresentationSchema } from "./ai-action-presentation-schema.js";
 import {
   errorResponseSchema,
   idParamsSchema,
@@ -264,12 +265,12 @@ const nullableAiAssistantToolBlockedReasonSchema = {
 
 const aiAssistantActionRiskSchema = {
   type: "string",
-  enum: ["write", "outbound", "destructive"]
+  enum: ["read", "write", "outbound", "destructive"]
 } as const;
 
 const aiAssistantActionStatusSchema = {
   type: "string",
-  enum: ["pending", "confirmed", "rejected", "cancelled"]
+  enum: ["pending", "confirmed", "rejected", "cancelled", "timed_out"]
 } as const;
 
 const resolveAiAssistantActionStatusSchema = {
@@ -324,6 +325,8 @@ const aiAssistantActionSchema = {
     "updatedAt"
   ],
   properties: {
+    approvalAvailable: { type: "boolean" },
+    presentation: aiActionPresentationSchema,
     id: { type: "string" },
     ownerUserId: { type: "string" },
     toolModuleId: { type: "string" },
@@ -954,8 +957,16 @@ export const invokeAiAssistantToolRouteSchema = {
 } as const;
 
 export const listAiAssistantActionsRouteSchema = {
+  querystring: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      threadId: { type: "string", format: "uuid" }
+    }
+  },
   response: {
     200: listAiAssistantActionsResponseSchema,
+    400: errorResponseSchema,
     401: errorResponseSchema
   }
 } as const;

@@ -57,3 +57,5 @@ export * from "./persistent-runtime-pool.js";
 // per-call-fresh-io pattern `createRealEngineFactory` in `runtime.ts` uses), so cli-runner needs
 // the concrete runtime class, not just the pool that wraps it.
 export * from "./claude-persistent-runtime.js";
+
+export { probeConstrainedClaudeProvider } from "./constrained-claude-profile.js";

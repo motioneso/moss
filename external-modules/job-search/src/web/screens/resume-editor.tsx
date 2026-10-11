@@ -482,8 +482,8 @@ function ResumeEditor(props: {
           <div className="jds-dialog__head">
             <div className="jds-dialog__title">Replace résumé?</div>
             <div className="jds-dialog__desc">
-              Postings not yet read will be cleared and re-read against the new résumé. Anything
-              already scored stays exactly as it is.
+              Roles you have not saved or passed are scored again against the new résumé, so their
+              Fit scores will change. Saved and passed roles keep the score they have.
             </div>
           </div>
           <div className="jds-dialog__foot">

@@ -379,6 +379,7 @@ function formatRecordTime(dateOrStr: Date | string): string {
  * readNew exposes the completed response as a normal transcript record.
  */
 export class AcpChatEngine implements CliChatEngine {
+  readonly admitsOutsideContentWithoutPermission = true;
   readonly provider: ProviderKind;
   readonly startsToolClientPerTurn = false;
   // The runner purges this session's private working folder as the owning account when it

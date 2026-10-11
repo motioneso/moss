@@ -21,6 +21,9 @@ struct ConnectionPane: View {
                         StatusLabel(state: connection.state)
                     }
                     LabeledContent("Last successful contact", value: lastContactText)
+                    if let diagnostic = connection.lastDiagnostic {
+                        Text(diagnostic).font(.callout).foregroundStyle(.secondary)
+                    }
                 }
 
                 Section {
@@ -29,7 +32,7 @@ struct ConnectionPane: View {
                             performPrimaryAction()
                         }
                         Spacer()
-                        Button("Log Out…", role: .destructive) {
+                        Button("Unlink…", role: .destructive) {
                             showingLogOutConfirmation = true
                         }
                     }
@@ -48,14 +51,14 @@ struct ConnectionPane: View {
         }
         .formStyle(.grouped)
         .confirmationDialog(
-            "Log out of this Moss account?", isPresented: $showingLogOutConfirmation, titleVisibility: .visible
+            "Unlink this Mac from Moss?", isPresented: $showingLogOutConfirmation, titleVisibility: .visible
         ) {
-            Button("Log Out", role: .destructive) {
+            Button("Unlink", role: .destructive) {
                 connection.send(.userLogout)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Trail Marker will remove this Mac's credential and try to notify Moss.")
+            Text("Recording stops now. Trail Marker removes this Mac’s saved link only after Moss confirms Unlink.")
         }
     }
 
@@ -65,7 +68,7 @@ struct ConnectionPane: View {
             connection.send(.userDisconnect)
         case .disconnected:
             connection.send(.userConnect)
-        case .reconnecting:
+        case .reconnecting, .unlinking:
             connection.send(.userRetry)
         case .signInRequired, .notLinked:
             onSetUp()
@@ -102,6 +105,7 @@ struct StatusLabel: View {
         case .disconnected: return "pause.circle.fill"
         case .reconnecting: return "arrow.triangle.2.circlepath"
         case .signInRequired: return "key.fill"
+        case .unlinking: return "arrow.triangle.2.circlepath"
         case .notLinked: return "link.circle"
         }
     }
@@ -112,6 +116,7 @@ struct StatusLabel: View {
         case .disconnected: return Color(nsColor: .secondaryLabelColor)
         case .reconnecting: return Color(nsColor: .systemOrange)
         case .signInRequired: return Color(nsColor: .systemRed)
+        case .unlinking: return Color(nsColor: .systemOrange)
         case .notLinked: return Color(nsColor: .tertiaryLabelColor)
         }
     }

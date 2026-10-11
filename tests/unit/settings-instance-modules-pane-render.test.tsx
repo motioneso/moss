@@ -155,6 +155,16 @@ describe("InstanceModulesPane external-modules group (#1084)", () => {
     expect(html).toContain("Acme Undeclared");
   });
 
+  it("explains actor-scoped current-installation approval without trusting results", () => {
+    const html = renderWithQuery(seedClient());
+    expect(html).toContain("approves its tool descriptions for your chats");
+    expect(html).toContain("switching it off and on approves it for you");
+    expect(html).toContain("While it is off, it is hidden for everyone");
+    expect(html).toContain("Your personal module switch does not approve it");
+    expect(html).toContain("Other users still treat its descriptions as outside content");
+    expect(html).toContain("Tool results and forwarded errors still make later changes ask");
+  });
+
   it("renders the #918 admin credentials section for that module (not silently dropped)", () => {
     const html = renderWithQuery(seedClient());
     const occurrences = html.split("Acme API Key").length - 1;

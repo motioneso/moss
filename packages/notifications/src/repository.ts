@@ -6,6 +6,9 @@ import { assertDataContextDb, type DataContextDb, type Notification } from "@mos
 
 import { isSameOriginAppPath } from "./app-path.js";
 import { projectNotificationMetadata } from "./metadata.js";
+import { shouldPushImmediately, type NotificationSensitivity } from "./sensitivity.js";
+
+export const DIGEST_BATCH_SIZE = 50;
 
 export interface NotificationWithReadState extends Notification {
   readonly read_at: Date | null;
@@ -68,6 +71,7 @@ export interface QuietHoursPort {
 
 export interface NotificationPreferencePort {
   isModuleEnabled(scopedDb: DataContextDb, moduleId: string): Promise<boolean>;
+  getSensitivity?(scopedDb: DataContextDb): Promise<NotificationSensitivity>;
 }
 
 /**
@@ -367,10 +371,15 @@ export class NotificationsRepository {
     // acting actor (see CreateNotificationInput docblock), so it is never null here.
     // Enqueued through scopedDb: same transaction as the row above (finding 7).
     if (this.pushQueuePort && row.recipient_user_id) {
-      if (deferredUntil) {
-        await this.pushQueuePort.enqueueSummary(scopedDb, row.recipient_user_id, deferredUntil);
-      } else {
-        await this.pushQueuePort.enqueueDeliver(scopedDb, row.id, row.recipient_user_id);
+      // The sensitivity level gates both the immediate push and the end-of-quiet-hours summary.
+      const sensitivity =
+        (await this.notificationPreferencePort?.getSensitivity?.(scopedDb)) ?? "balanced";
+      if (shouldPushImmediately(sensitivity, urgency)) {
+        if (deferredUntil) {
+          await this.pushQueuePort.enqueueSummary(scopedDb, row.recipient_user_id, deferredUntil);
+        } else {
+          await this.pushQueuePort.enqueueDeliver(scopedDb, row.id, row.recipient_user_id);
+        }
       }
     }
 
@@ -496,18 +505,26 @@ export class NotificationsRepository {
 
   async listDigestEligible(
     scopedDb: DataContextDb,
-    input: { since: Date | null; limit?: number }
+    input: { since: Date | null; sinceId?: string | null; limit?: number }
   ): Promise<NotificationWithReadState[]> {
     assertDataContextDb(scopedDb);
 
+    // A row becomes digestible when it is created, re-fired (updated_at) or released from
+    // quiet hours (deferred_until), whichever is latest. Ordering and the watermark use that
+    // time so rows past the batch limit, deferred rows and re-fires are not skipped.
+    const visibleAt = sql<Date>`date_trunc('milliseconds', greatest(notifications.created_at, coalesce(notifications.updated_at, notifications.created_at), coalesce(notifications.deferred_until, notifications.created_at)))`;
     let query = this.visibleRowsQuery(scopedDb).where("reads.notification_id", "is", null);
     if (input.since) {
-      query = query.where("notifications.created_at", ">", input.since);
+      query = query.where(
+        input.sinceId
+          ? sql<SqlBool>`(${visibleAt} > ${input.since} or (${visibleAt} = ${input.since} and notifications.id > ${input.sinceId}))`
+          : sql<SqlBool>`${visibleAt} > ${input.since}`
+      );
     }
     return query
-      .orderBy("notifications.created_at", "asc")
+      .orderBy(visibleAt, "asc")
       .orderBy("notifications.id")
-      .limit(input.limit ?? 50)
+      .limit(input.limit ?? DIGEST_BATCH_SIZE)
       .execute();
   }
 

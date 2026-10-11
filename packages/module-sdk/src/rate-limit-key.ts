@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 
+import { actAsRateLimitKey } from "./act-as.js";
+
 // Better Auth session-token cookie names. The `__Secure-` prefix is added automatically
 // when the cookie is issued over TLS (which the app does behind JARVIS_TRUST_PROXY), so a
 // browser user's request carries the prefixed form. Both must be recognized or a TLS user
@@ -45,6 +47,10 @@ interface RateLimitKeyPolicy {
  * Internal: callers use the exported {@link sessionRateLimitKey} / {@link mcpSessionRateLimitKey}.
  */
 function credentialOrIpRateLimitKey(request: FastifyRequest, policy: RateLimitKeyPolicy): string {
+  // #3065: an in-process act-as call comes from loopback; key it on the grant's actor.
+  const actAs = actAsRateLimitKey(request);
+  if (actAs) return actAs;
+
   const authorization = request.headers.authorization ?? "";
   if (authorization.startsWith("Bearer ")) {
     const token = authorization.slice("Bearer ".length).trim();

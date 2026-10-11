@@ -1,3 +1,4 @@
+import { backtrackDeletionPresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -88,9 +89,7 @@ export const backtrackModuleManifest: MossModuleManifest = {
     {
       id: "backtrack.delete_history",
       description:
-        "Settings > Modules > Backtrack deletes stored history for the last hour, today, a chosen " +
-        "day or everything, each after asking first. It is permanent and works with no Mac " +
-        "linked, even if storage is off.",
+        "Delete stored Backtrack history in Settings or chat. Approval names either all history or the selected time range and explains permanent deletion. Works with no Mac linked, even when storage is off.",
       errors: []
     }
   ],
@@ -120,9 +119,29 @@ export const backtrackModuleManifest: MossModuleManifest = {
     }
   ],
   routes: [
-    { method: "GET", path: "/api/backtrack/status", permissionId: "backtrack.manage" },
-    { method: "PUT", path: "/api/backtrack/preferences", permissionId: "backtrack.manage" },
-    { method: "DELETE", path: "/api/backtrack/segments", permissionId: "backtrack.manage" }
+    {
+      method: "GET",
+      path: "/api/backtrack/status",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "backtrack.manage"
+    },
+    {
+      method: "PUT",
+      path: "/api/backtrack/preferences",
+      chat: { access: "blocked", blockedBecause: "data_scope_consent" },
+      permissionId: "backtrack.manage"
+    },
+    {
+      method: "DELETE",
+      path: "/api/backtrack/segments",
+      chat: {
+        access: "destructive",
+        title: "Delete Backtrack history",
+        presentation: backtrackDeletionPresentation,
+        content: "user_authored"
+      },
+      permissionId: "backtrack.manage"
+    }
   ],
   jobs: [
     { queueName: BACKTRACK_INDEX_QUEUE, metadataOnly: true },

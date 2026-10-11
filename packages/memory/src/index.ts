@@ -100,6 +100,11 @@ export type { MemoryGraphRouteDependencies } from "./graph-routes.js";
 export { registerMemoryDashboardRoutes } from "./dashboard-routes.js";
 export type { MemoryDashboardRouteDependencies } from "./dashboard-routes.js";
 export { memoryForgetExecute, memoryRecallExecute, memoryRememberExecute } from "./graph-tools.js";
+export {
+  MemoryForgetService,
+  type MemoryForgetTarget,
+  type MemoryForgetToolService
+} from "./forget-service.js";
 export { createMemoryFactSignature, normalizeMemoryFactContent } from "./fact-signature.js";
 export type {
   AcceptMemoryCandidateRequest,
@@ -122,3 +127,8 @@ export type {
   NewMemorySuppression
 } from "./suppressions-repository.js";
 export { ChatMemorySuppressionsRepository } from "./suppressions-repository.js";
+
+export {
+  configureMemoryApprovalReferences,
+  type MemoryApprovalSourceResolver
+} from "./action-presentations.js";

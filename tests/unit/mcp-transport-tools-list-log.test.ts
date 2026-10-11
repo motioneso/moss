@@ -21,7 +21,7 @@ describe("registerMcpTransportRoute — #2164 r21 tools/list observation log", (
     registerMcpTransportRoute(app, {
       tokens,
       gateway: {
-        listToolsForActor: async () => [
+        listToolsForSession: async () => [
           { name: "tool_a", description: "a", inputSchema: { type: "object" } }
         ]
       } as never

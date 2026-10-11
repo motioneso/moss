@@ -30,19 +30,33 @@ export interface AgencyPrefLookup {
  * `sortedSafe` is the connected tool's `runsWithoutAsking` result for this call (#2984, spec 8.3),
  * also computed by the caller. It runs an external tool unless a confirmation override applies,
  * so a first-party outbound tool still confirms.
+ * A composition-owned per-call resolver has already authorized an ordinary app write when
+ * `perCallResolved` is true; it needs no mutable action-family tier. All confirmation floors
+ * above that ordinary-write rule still apply.
+ *
+ * A tainted conversation (#3338) keeps only the user's own trust: a promoted family still runs,
+ * and its `confirmOverride` limit still applies. Moss's own ratings (`sortedSafe`, per-call app
+ * writes) ask, as do outbound tools and any `confirmWhenTainted` call.
  */
 export async function resolvePolicy(
   tool: ModuleAssistantToolManifest,
   moduleId: string,
   confirmOverride: boolean,
   lookup: ActionPolicyLookup,
-  sortedSafe = false
+  sortedSafe = false,
+  perCallResolved = false,
+  conversationTainted = false,
+  confirmWhenTainted = false
 ): Promise<PolicyDecision> {
+  if (conversationTainted && confirmWhenTainted) return "confirm";
   if (tool.risk === "read") return "run";
   if (tool.risk === "destructive") return "confirm";
-  if (sortedSafe && tool.isExternal === true) return confirmOverride ? "confirm" : "run";
+  if (sortedSafe && tool.isExternal === true && !conversationTainted) {
+    return confirmOverride ? "confirm" : "run";
+  }
   if (tool.risk === "outbound") return "confirm";
   if (confirmOverride) return "confirm";
+  if (perCallResolved) return conversationTainted ? "confirm" : "run";
 
   const familyId = tool.actionFamilyId;
   if (!familyId) {
@@ -68,18 +82,26 @@ export async function resolvePolicy(
  * Whether unattended mode may run this tool with no card: only when a person
  * could have promoted the tool's family to run automatically (#2418, #2419).
  * Reads off the family's allowed tiers, never the stored tier, and fails closed —
- * destructive tools, outbound tools, missing family, non-auto tool, or an unreadable
- * manifest means the card.
+ * installed-module tools whose family allows only always_confirm, destructive tools, outbound tools, a declared family that is missing or unreadable, or a non-auto tool
+ * means the card. An external tool that declares no family runs. A server-resolved ordinary app write needs no family promotion;
+ * its route-level authorization has already been checked before reaching this helper.
  */
 export async function familyAllowsAutoRun(
   tool: ModuleAssistantToolManifest,
   moduleId: string,
-  lookup: ActionPolicyLookup
+  lookup: ActionPolicyLookup,
+  perCallResolved = false
 ): Promise<boolean> {
   if (tool.risk === "destructive") return false;
-  if (tool.isExternal === true) return true;
-  if (tool.risk === "outbound") return false;
   const familyId = tool.actionFamilyId;
+  if (tool.isExternal === true) {
+    if (!familyId) return true;
+    const external = await lookup.getFamilyManifest(moduleId, familyId);
+    // A declared family that cannot be read means ask, never run.
+    return external?.allowedTiers.includes("trusted_auto") ?? false;
+  }
+  if (tool.risk === "outbound") return false;
+  if (perCallResolved) return true;
   if (!familyId || tool.executionPolicy !== "auto") return false;
   const manifest = await lookup.getFamilyManifest(moduleId, familyId);
   return manifest?.allowedTiers.includes("trusted_auto") ?? false;

@@ -1,3 +1,10 @@
+import {
+  admissionForActor,
+  admitToContext,
+  admitOutsideAgentLaunch,
+  submitAdmittedContext,
+  type AdmittedContext
+} from "./context-admission.js";
 import { resolveMossEnv } from "@moss/db";
 
 import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js";
@@ -53,6 +60,8 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     await deps.persistence.openNewConversation(actorUserId, undefined, surface);
     threadState = await deps.persistence.getCurrentThreadState(actorUserId, surface);
   }
+  // Bind once, before persona or tool-menu awaits can overlap a conversation switch.
+  const threadId = threadState?.id ?? null;
   const persona =
     typeof deps.persona === "string"
       ? deps.persona
@@ -64,7 +73,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     baseDir: deps.neutralBase,
     persona
   });
-  const mcpConfig = await deps.mintMcpToken?.(actorUserId, sessionKey);
+  const mcpConfig = await deps.mintMcpToken?.(actorUserId, sessionKey, threadId);
   if (!sequenceBySession.has(sessionKey)) sequenceBySession.set(sessionKey, 0);
   const nextSequence = () => {
     const next = (sequenceBySession.get(sessionKey) ?? 0) + 1;
@@ -75,7 +84,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     providerConfigId,
     acpAgentId,
     ...(acpModel ? { acpModel } : {}),
-    ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {}),
+    ...(threadId ? { conversationId: threadId, userId: actorUserId } : {}),
     ...(mcpConfig?.token && deps.acpPermissionDeciderForToken
       ? { acpPermissionDecider: deps.acpPermissionDeciderForToken(mcpConfig.token) }
       : {}),
@@ -89,16 +98,34 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     engine,
     revokeMcpToken: deps.revokeMcpToken
   });
-  // Rebuild replay from live state for every launch; recall precedes conversation replay.
-  const recallResult = deps.recall ? await deps.recall.recall(actorUserId) : null;
-  const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
-  const seedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : 1500;
-  const memorySeed = recallResult
-    ? renderMemorySeedBlock(recallResult.episodicChunks, recallResult.facts, seedBudget)
-    : "";
+  let memorySeed: AdmittedContext | null;
+  try {
+    if (engine.admitsOutsideContentWithoutPermission) {
+      await admitOutsideAgentLaunch(
+        admissionForActor(deps.conversationProvenance, actorUserId),
+        threadId
+      );
+    }
+    // Rebuild replay from live state for every launch; recall precedes conversation replay.
+    const recallResult = deps.recall ? await deps.recall.recall(actorUserId) : null;
+    const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
+    const seedBudget = seedBudgetEnv ? parseInt(seedBudgetEnv, 10) : 1500;
+    memorySeed = await admitToContext(
+      admissionForActor(deps.conversationProvenance, actorUserId),
+      threadId,
+      "launch_memory_seed",
+      recallResult
+        ? renderMemorySeedBlock(recallResult.episodicChunks, recallResult.facts, seedBudget)
+        : ""
+    );
+  } catch (error) {
+    deps.revokeMcpToken?.(sessionKey);
+    await engine.kill().catch(() => undefined);
+    throw error;
+  }
   const { recent: recentTurns, oldSummary } = await deps.persistence.listPriorTurns(
     actorUserId,
-    { forceReplay: opts?.forceReplay },
+    { forceReplay: opts?.forceReplay, threadId },
     surface
   );
   if (threadState?.incognito && surface !== DEFAULT_CHAT_SURFACE) {
@@ -108,7 +135,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
     throw new CliChatUnavailableError("private session unavailable");
   }
   const replayParts: string[] = [];
-  if (memorySeed) replayParts.push(memorySeed);
+  if (memorySeed) replayParts.push(memorySeed.text);
   if (oldSummary) replayParts.push(renderSummaryBlock(oldSummary));
   if (recentTurns.length > 0) replayParts.push(renderReplayBlock(recentTurns));
   const replayBatch = replayParts.length > 0 ? replayParts.join("\n\n") : undefined;
@@ -144,6 +171,7 @@ export async function launchChatSession(args: LaunchChatSessionArgs): Promise<Us
   const session: UserSession = {
     actorUserId,
     surface,
+    threadId,
     engine,
     provider,
     model,
@@ -172,6 +200,7 @@ export interface SeedChatContextArgs {
   readonly userName: string;
   readonly seed: string;
   readonly idempotencyKey?: string;
+  readonly admissionPath?: "seed_route" | "evening_seed";
   readonly surface?: string;
   readonly deps: ChatSessionManagerDeps;
   readonly ensureSession: (
@@ -197,7 +226,14 @@ export async function seedChatContext(args: SeedChatContextArgs): Promise<void> 
   const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
   const session = await ensureSession(actorUserId, userName, undefined, chatSurface);
   if (idempotencyKey && session.seededContextKeys.has(idempotencyKey)) return;
-  await session.engine.submit(seed);
+  const admitted = await admitToContext(
+    admissionForActor(deps.conversationProvenance, actorUserId),
+    session.threadId,
+    args.admissionPath ?? "seed_route",
+    seed
+  );
+  if (!admitted) return;
+  await submitAdmittedContext(session.engine, admitted);
   session.transcriptOffset = await drainEngine(session.engine, session.transcriptOffset, pollMs);
   if (idempotencyKey) session.seededContextKeys.add(idempotencyKey);
   session.lastActivity = deps.clock.now();

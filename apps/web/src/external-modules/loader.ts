@@ -16,6 +16,8 @@ export interface ExternalWebContributionProps {
   readonly hostActions: ExternalModuleHostActionsV1;
   /** #1196 — optional only so a v1.1 module bundle can fail closed on an older host. */
   readonly assistantSurface?: AssistantSurfaceHandleV1;
+  /** Counts chat writes that changed this module's data; a change tells the module to reload. */
+  readonly refreshKey?: number;
 }
 
 /** Contract v2: the default export of an external module's web entrypoint. */

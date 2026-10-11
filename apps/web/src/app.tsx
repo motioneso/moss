@@ -412,7 +412,7 @@ function ExternalModuleMount(props: {
   readonly isDraft: boolean;
 }) {
   const { openAssistantWithDraft, openChat } = useChatControls();
-  const { subscribeRecords, seedComposer } = useAssistantSurfaceHost();
+  const { subscribeRecords, seedComposer, records } = useAssistantSurfaceHost();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
@@ -472,7 +472,23 @@ function ExternalModuleMount(props: {
     return () => assistantSurface.setSurfaceKey(null);
   }, [assistantSurface]);
   const Component = props.Component;
-  const page = <Component hostActions={hostActions} assistantSurface={assistantSurface} />;
+  const refreshKey = useMemo(
+    () =>
+      records.filter(
+        (record) =>
+          record.kind === "action_result" &&
+          record.outcome === "executed" &&
+          (record.affectsModules ?? []).includes(props.moduleId)
+      ).length,
+    [records, props.moduleId]
+  );
+  const page = (
+    <Component
+      hostActions={hostActions}
+      assistantSurface={assistantSurface}
+      refreshKey={refreshKey}
+    />
+  );
   if (!props.isDraft) return page;
   // #1756: a running draft gets the banner + its page, with the chat drawer docked beside it —
   // AppShell keys the docking off this same module's ModuleDto.draft, matched by the route.

@@ -188,6 +188,35 @@ describe("module enablement endpoints", () => {
   });
 
   describe("real server route-enablement guard is wired", () => {
+    it("fails boot for an injected route without a chat policy", async () => {
+      const probe = createApiServer({
+        appDb,
+        boss,
+        logger: false,
+        __testExtraGuardedRoutes: {
+          manifests: [
+            {
+              id: "__chat_policy_probe__",
+              name: "Chat policy probe",
+              version: "0.1.0",
+              publisher: "test",
+              lifecycle: "optional",
+              compatibility: { jarv1s: ">=0.0.0" },
+              routes: [{ method: "GET", path: "/api/__chat_policy_probe__" }]
+            }
+          ],
+          routes: [{ method: "GET", url: "/api/__chat_policy_probe__" }]
+        }
+      });
+      try {
+        await expect(probe.ready()).rejects.toThrow(
+          /GET \/api\/__chat_policy_probe__.*no chat access/
+        );
+      } finally {
+        await probe.close();
+      }
+    });
+
     it("404s a route owned by an inactive (synthetic) module — proving the guard is registered", async () => {
       const probeDb = createDatabase({
         connectionString: connectionStrings.app,
@@ -212,7 +241,14 @@ describe("module enablement endpoints", () => {
               lifecycle: "optional",
               compatibility: { jarv1s: ">=0.0.0" },
               availability: { defaultEnabled: true, required: false, supportsUserDisable: true },
-              routes: [{ method: "GET", path: "/api/__probe__/ping", permissionId: "probe.view" }]
+              routes: [
+                {
+                  method: "GET",
+                  path: "/api/__probe__/ping",
+                  permissionId: "probe.view",
+                  chat: { access: "read", content: "user_authored" }
+                }
+              ]
             }
           ],
           routes: [{ method: "GET", url: "/api/__probe__/ping" }]

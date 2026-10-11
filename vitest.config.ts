@@ -43,6 +43,12 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./packages/acp/src/index.ts", import.meta.url))
       },
       {
+        find: "@moss/meetings/web/persistent-controls",
+        replacement: fileURLToPath(
+          new URL("./packages/meetings/src/web/persistent-controls.tsx", import.meta.url)
+        )
+      },
+      {
         find: "@moss/meetings/web",
         replacement: fileURLToPath(
           new URL("./packages/meetings/src/web/index.tsx", import.meta.url)
@@ -319,6 +325,12 @@ export default defineConfig({
         )
       },
       {
+        find: "@moss/shared/chat-action-outcome",
+        replacement: fileURLToPath(
+          new URL("./packages/shared/src/chat-action-outcome.ts", import.meta.url)
+        )
+      },
+      {
         find: "@moss/shared",
         replacement: fileURLToPath(new URL("./packages/shared/src/index.ts", import.meta.url))
       },
@@ -436,6 +448,9 @@ export default defineConfig({
       "packages/chat/src/live/*.test.ts",
       "packages/chat/src/*.test.ts",
       "packages/calendar/src/*.test.ts",
+      "packages/settings/src/app-action-tools.test.ts",
+      "packages/ai/src/gateway/per-call-resolver.test.ts",
+      "packages/ai/src/gateway/policy.test.ts",
       "packages/focus-judgment/src/*.test.ts",
       "packages/ai/src/structured/*.test.ts"
     ],

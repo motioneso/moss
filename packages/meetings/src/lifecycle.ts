@@ -63,17 +63,21 @@ function identifier(value: string): void {
 }
 
 function sources(selection: MeetingCaptureSelection): readonly string[] {
-  return selection.mode === "microphone-only"
-    ? [selection.microphone.sourceId]
-    : [selection.microphone.sourceId, selection.outputSourceId];
+  return [
+    ...(selection.microphone ? [selection.microphone.sourceId] : []),
+    ...(selection.mode === "microphone-only" ? [] : [selection.outputSourceId])
+  ];
 }
 
 function checkSelection(selection: MeetingCaptureSelection): void {
-  identifier(selection.microphone.sourceId);
-  identifier(selection.microphone.deviceId);
+  if (selection.microphone) {
+    identifier(selection.microphone.sourceId);
+    identifier(selection.microphone.deviceId);
+  } else if (selection.mode !== "computer-audio" || selection.microphone !== null)
+    throw new Error("An explicit capture source is required");
   if (selection.mode === "microphone-only") return;
   identifier(selection.outputSourceId);
-  if (selection.outputSourceId === selection.microphone.sourceId)
+  if (selection.outputSourceId === selection.microphone?.sourceId)
     throw new Error("Sources must differ");
   if (selection.mode === "selected-app") {
     identifier(selection.appProcessTreeId);
@@ -92,8 +96,9 @@ function checkReadiness(selection: MeetingCaptureSelection, readiness: MeetingRe
   if (
     !readiness.permissionsGranted ||
     !readiness.processingReady ||
-    !readiness.noticeAcknowledged ||
-    !usable.includes(readiness.microphone) ||
+    (selection.microphone
+      ? !usable.includes(readiness.microphone)
+      : readiness.microphone !== "not-captured") ||
     (selection.mode === "microphone-only"
       ? readiness.output !== "not-captured"
       : !usable.includes(readiness.output))

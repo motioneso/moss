@@ -1,3 +1,4 @@
+import type { AdmittedContext } from "./context-admission.js";
 import { neutralizeSeedFraming } from "./prompt-safety.js";
 import { estimateTokens } from "./recall-seed.js";
 
@@ -39,9 +40,9 @@ export function renderNotesContextBlock(
 }
 
 export function combineHiddenContextBlocks(
-  passiveBlock: string,
-  crossToolBlock: string,
-  notesBlock?: string
+  passiveBlock: AdmittedContext | null,
+  crossToolBlock: AdmittedContext | null,
+  notesBlock?: AdmittedContext | null
 ): string {
   const combinedCap = 2000;
   // Priority order (highest first): passive (facts) > cross-tool > notes — facts and cross-tool
@@ -49,8 +50,10 @@ export function combineHiddenContextBlocks(
   // total exceeds the cap, blocks are dropped lowest-priority first (notes, then cross-tool)
   // until what remains fits. A sole passive block keeps main's cap exemption; a sole cross-tool
   // or notes block is dropped when it exceeds the cap.
-  const kept = [passiveBlock, crossToolBlock, notesBlock ?? ""].filter((block) => block.length > 0);
-  while (sumTokens(kept) > combinedCap && (kept.length > 1 || passiveBlock.length === 0)) {
+  const kept = [passiveBlock, crossToolBlock, notesBlock]
+    .filter((block): block is AdmittedContext => block != null)
+    .map((block) => block.text);
+  while (sumTokens(kept) > combinedCap && (kept.length > 1 || passiveBlock == null)) {
     kept.pop();
   }
   return kept.join("\n\n");

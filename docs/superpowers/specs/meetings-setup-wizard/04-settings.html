@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Settings · Moss mockup</title>
+    <link rel="stylesheet" href="moss-ui.css" />
+    <link rel="stylesheet" href="tokens.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+        font-size: var(--text-md);
+        line-height: var(--leading-normal);
+      }
+      p,
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+      }
+      button,
+      a,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+      .meeting-columns {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        gap: var(--space-7);
+      }
+      @media (max-width: 720px) {
+        .meeting-columns {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header
+      style="
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-4) var(--space-6);
+        border-bottom: 1px solid var(--border);
+      "
+    >
+      <strong style="font-family: var(--font-display); font-size: var(--text-xl)">moss</strong
+      ><span class="jds-hint">Settings / Meetings</span
+      ><span style="margin-left: auto"
+        ><a href="02-ready.html" class="jds-btn jds-btn--quiet">Done</a></span
+      >
+    </header>
+    <main
+      style="display: flex; flex-direction: column; gap: var(--space-7); padding: var(--space-6)"
+    >
+      <div class="jds-section-head"><h1 class="jds-section-head__title">Meetings</h1></div>
+      <section style="display: flex; flex-direction: column; gap: var(--space-7)">
+        <div
+          style="
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--space-3);
+            padding-bottom: var(--space-5);
+            border-bottom: 1px solid var(--border);
+          "
+        >
+          <strong>MacBook Air</strong><span class="jds-badge jds-badge--forest">Linked</span>
+        </div>
+        <div style="max-width: 420px">
+          <div class="jds-field">
+            <label class="jds-label" for="audio-source">Audio source</label
+            ><span class="jds-selectwrap"
+              ><select class="jds-select" id="audio-source">
+                <option value="computer-audio" selected="">Microphone + system audio</option>
+                <option value="microphone-only">Microphone only</option></select
+              ><span class="jds-selectwrap__chev"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-chevron-down"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6"></path></svg></span
+            ></span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: var(--space-3); max-width: 580px">
+          <label class="jds-switch"
+            ><input
+              type="checkbox"
+              aria-label="Summarize automatically after Stop"
+              checked=""
+            /><span class="jds-switch__track"><span class="jds-switch__thumb"></span></span
+            ><span class="jds-switch__label">Summarize automatically after Stop</span></label
+          >
+          <p class="jds-hint">
+            Send the finalized transcript and notes to your default model after Stop. Turn this off
+            to use Rewrite summary only when you choose.
+          </p>
+        </div>
+        <div><button type="button" class="jds-btn jds-btn--quiet">Unlink Mac</button></div>
+      </section>
+    </main>
+  </body>
+</html>

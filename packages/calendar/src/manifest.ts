@@ -26,6 +26,16 @@ import {
 } from "@moss/shared";
 
 import { requiresCalendarConfirmation } from "./confirmation-policy.js";
+import {
+  createDayPlanPresentation,
+  saveDayPlanPresentation,
+  dayPlanDraftPresentation
+} from "./day-plan-approval-presentation.js";
+import {
+  calendarCreatePresentation,
+  calendarDeletePresentation,
+  calendarReschedulePresentation
+} from "./approval-presentation.js";
 import { CALENDAR_CLASSIFIER_WINDOWS } from "./classifier-window.js";
 import { dayPlanDraftExecute, summarizeDayPlanDraft } from "./day-plan-chat-tool.js";
 import { resolveCalendarEventRef } from "./event-resolver.js";
@@ -107,7 +117,8 @@ export const calendarModuleManifest = {
     {
       id: "calendar",
       label: "Calendar",
-      description: "View the active actor's connected calendar events.",
+      description:
+        "View your connected events in Day, Week or Month, retaining the selected view. On phones, Week and Month scroll horizontally with readable columns; Day stays compact. Failed reads offer Retry and a failed refresh retains loaded events.",
       path: "/calendar",
       icon: "calendar-days",
       order: 35,
@@ -118,7 +129,8 @@ export const calendarModuleManifest = {
     {
       id: "calendar.module-settings",
       label: "Calendar",
-      description: "Choose calendar briefing and scheduling preferences.",
+      description:
+        "Choose calendar briefing and scheduling preferences. Unknown settings stay unavailable with load-error Retry. Failed refreshes retain confirmed values; failed saves keep the previous choices.",
       path: "/settings?section=modules&module=calendar",
       scope: "user",
       order: 35,
@@ -193,12 +205,18 @@ export const calendarModuleManifest = {
     {
       method: "GET",
       path: "/api/calendar/day-plan",
+      chat: { access: "read" },
       responseSchema: getDayPlanResponseSchema,
       permissionId: "calendar.view"
     },
     {
       method: "POST",
       path: "/api/calendar/day-plans",
+      chat: {
+        access: "write",
+        title: "Create day-plan draft",
+        presentation: createDayPlanPresentation
+      },
       requestSchema: createDayPlanRequestSchema,
       responseSchema: createDayPlanResponseSchema,
       permissionId: "calendar.manage"
@@ -206,6 +224,11 @@ export const calendarModuleManifest = {
     {
       method: "PATCH",
       path: "/api/calendar/day-plans/:id/draft",
+      chat: {
+        access: "write",
+        title: "Save day-plan draft",
+        presentation: saveDayPlanPresentation
+      },
       requestSchema: saveDayPlanRequestSchema,
       responseSchema: saveDayPlanResponseSchema,
       permissionId: "calendar.manage"
@@ -213,6 +236,8 @@ export const calendarModuleManifest = {
     {
       method: "POST",
       path: "/api/calendar/day-plans/:id/preview",
+      // Preview consults live connector-backed calendar context.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: previewDayPlanRequestSchema,
       responseSchema: previewDayPlanResponseSchema,
       permissionId: "calendar.view"
@@ -220,6 +245,7 @@ export const calendarModuleManifest = {
     {
       method: "POST",
       path: "/api/calendar/day-plans/:id/apply",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: applyDayPlanRequestSchema,
       responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
@@ -227,12 +253,14 @@ export const calendarModuleManifest = {
     {
       method: "GET",
       path: "/api/calendar/day-plans/:id/operations/:operationId",
+      chat: { access: "read" },
       responseSchema: dayPlanApplyStatusResponseSchema,
       permissionId: "calendar.view"
     },
     {
       method: "POST",
       path: "/api/calendar/day-plans/:id/operations/:operationId/retry",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: retryDayPlanApplyRequestSchema,
       responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
@@ -240,6 +268,7 @@ export const calendarModuleManifest = {
     {
       method: "POST",
       path: "/api/calendar/day-plans/:id/operations/:operationId/recover",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: recoverDayPlanApplyRequestSchema,
       responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
@@ -247,6 +276,8 @@ export const calendarModuleManifest = {
     {
       method: "POST",
       path: "/api/calendar/day-plans/:id/operations/:operationId/confirm",
+      // This resolves a pending assistant approval before executing calendar changes.
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: confirmDayPlanApplyRequestSchema,
       responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
@@ -254,24 +285,29 @@ export const calendarModuleManifest = {
     {
       method: "GET",
       path: "/api/calendar/events",
+      chat: { access: "read", coveredBy: "calendar.listVisibleEvents" },
       responseSchema: listCalendarEventsResponseSchema,
       permissionId: "calendar.view"
     },
     {
       method: "GET",
       path: "/api/calendar/events/:id",
+      chat: { access: "read" },
       responseSchema: getCalendarEventResponseSchema,
       permissionId: "calendar.view"
     },
     {
       method: "GET",
       path: "/api/calendar/briefing-settings",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: getCalendarBriefingSettingsResponseSchema,
       permissionId: "calendar.manage"
     },
     {
       method: "PATCH",
       path: "/api/calendar/briefing-settings",
+      // timeBlockMode can promote calendar_writeback to trusted_auto.
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: updateCalendarBriefingSettingsRequestSchema,
       responseSchema: getCalendarBriefingSettingsResponseSchema,
       permissionId: "calendar.manage"
@@ -311,6 +347,7 @@ export const calendarModuleManifest = {
         "cache only on transient provider failures, with source and gap metadata.",
       permissionId: "calendar.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {
@@ -348,6 +385,9 @@ export const calendarModuleManifest = {
     },
     {
       name: "calendar.createEvent",
+      actionLabel: "Create calendar event",
+      approvalPresentation: calendarCreatePresentation,
+      approvalContent: "user_authored",
       description:
         "Create a calendar event on the user's primary Google Calendar at a time you name (or a " +
         "part of the day, e.g. tomorrow morning), conflict-checked live against their availability. " +
@@ -395,6 +435,8 @@ export const calendarModuleManifest = {
     },
     {
       name: "calendar.deleteEvent",
+      actionLabel: "Delete calendar event",
+      approvalPresentation: calendarDeletePresentation,
       description:
         "Delete a single calendar event the user owns. Asks for confirmation by default, unless the " +
         "user has allowed automatic calendar deletions in settings. On approval (or automatically, " +
@@ -434,6 +476,8 @@ export const calendarModuleManifest = {
     },
     {
       name: "calendar.rescheduleEvent",
+      actionLabel: "Reschedule calendar event",
+      approvalPresentation: calendarReschedulePresentation,
       description:
         "Move a single calendar event the user owns to a new start/end time, keeping the same " +
         "event id (never delete-then-create). Refuses outright, regardless of settings, if the " +
@@ -472,6 +516,8 @@ export const calendarModuleManifest = {
     },
     {
       name: "calendar.dayPlanDraft",
+      actionLabel: "Save day-plan draft",
+      approvalPresentation: dayPlanDraftPresentation,
       description:
         "Save the evening interview's typed intent and untimed task additions to the " +
         "actor's day-plan draft for tomorrow. Additions land as dateless proposals that " +
@@ -507,6 +553,11 @@ export const calendarModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "calendar.chat_app_actions",
+      description:
+        "App actions read calendar data and create or edit day-plan drafts. Provider writes, plan execution and settings that expand automatic authority stay unavailable through generic actions."
+    },
     {
       id: "calendar.saved_day_plan_read",
       description:
@@ -557,9 +608,14 @@ export const calendarModuleManifest = {
       ]
     },
     {
+      id: "calendar.draft_removal_disclosure",
+      description:
+        "Draft approval separates list changes from an empty block list. Every omitted block is identified; if its task is gone and it has no title, its kind and position identify it without exposing internal IDs."
+    },
+    {
       id: "calendar.saved_day_plan_draft",
       description:
-        "Save evening intent and draft blocks. Only this proposal changes; saves may fail if plan changed, task unavailable, or placed block omitted without pending removal. Drafts are not previewed, approved, scheduled, or written to a calendar.",
+        "Save evening intent and draft blocks. Approval lists every omitted block that the replacement removes from the draft. Placed blocks require pending removal. Draft saves never schedule or write calendar events.",
       errors: [
         {
           code: "day_plan_invalid",
@@ -589,9 +645,8 @@ export const calendarModuleManifest = {
     {
       id: "calendar.saved_day_plan_apply",
       description:
-        "Apply reserved blocks: reserves the reviewed selection and writes additions at " +
-        "once. A batch with moves or removals answers 202 for confirmation first, unless " +
-        "automatic calendar changes are turned on.",
+        "Apply reserved blocks: reviewed additions write at once; moves and removals ask first " +
+        "unless automatic changes are on. Scheduled planning books only its own blocks.",
       errors: [
         {
           code: "day_plan_invalid",

@@ -283,8 +283,14 @@ describe("scanner skip paths", () => {
 describe("scanner card outcomes", () => {
   const NOW = new Date("2026-09-01T12:00:00.000Z");
 
-  function rankedHigh(title: string, band: "critical" | "high" | "normal" | "low" = "high") {
-    return { source: "calendar", title, score: 90, band, reasons: ["soon"] };
+  // The scanner keys candidates by position, so a mocked result needs the key of the
+  // signal it stands for — "1" reaches nothing here, which is how the Foreign signal reads.
+  function rankedHigh(
+    title: string,
+    band: "critical" | "high" | "normal" | "low" = "high",
+    key = "0"
+  ) {
+    return { source: "calendar", title, score: 90, band, reasons: ["soon"], key };
   }
 
   it("creates a card for a new high-priority signal and moves the cursor", async () => {
@@ -379,7 +385,7 @@ describe("scanner card outcomes", () => {
     };
     vi.mocked(rankPriorityCandidates).mockReturnValue([
       rankedHigh("Allowed"),
-      rankedHigh("Foreign")
+      rankedHigh("Foreign", "high", "1")
     ] as never);
     const provider = providerReturning([allowed, foreign]);
     const result = await scanner.scan(
@@ -426,13 +432,14 @@ describe("scanner keeps users apart", () => {
   it("never lets one user's signals reach another user", async () => {
     const { scanner, cardRepo, stateRepo } = harness(enabledPref("calendar"));
     vi.mocked(rankPriorityCandidates).mockImplementation(((args: unknown) => {
-      const input = args as { candidates: { title: string }[] };
+      const input = args as { candidates: { title: string; key?: string }[] };
       return input.candidates.map((c) => ({
         source: "calendar",
         title: c.title,
         score: 95,
         band: "critical",
-        reasons: []
+        reasons: [],
+        ...(c.key !== undefined ? { key: c.key } : {})
       }));
     }) as never);
 

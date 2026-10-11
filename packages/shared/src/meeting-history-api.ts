@@ -25,7 +25,7 @@ export interface MeetingHistoryItem {
   readonly updatedAt: string;
   readonly hasNotes: boolean;
   readonly notesRevision: number;
-  readonly capture: { readonly status: "unavailable" };
+  readonly capture: { readonly status: "unavailable"; readonly durationMs?: number | null };
   readonly transcript: {
     readonly status: "none" | "retained";
     readonly revision: number;
@@ -38,6 +38,7 @@ export interface MeetingHistoryItem {
     readonly omittedSourceCount: number;
   };
   readonly summary: {
+    readonly overview?: string | null;
     readonly status: "none" | "available" | "stale";
     readonly version: number | null;
     readonly origin: "generated" | "manual" | null;

@@ -30,11 +30,17 @@ export interface CrossToolEvidenceItem {
   readonly relevance: "high" | "medium" | "low";
 }
 
+export interface CrossToolTurnBinding {
+  readonly threadId: string | null;
+  readonly chatSessionId: string;
+}
+
 export interface CrossToolReadRunner {
   runReadTool(
     actorUserId: string,
     toolName: string,
-    input: unknown
+    input: unknown,
+    binding?: CrossToolTurnBinding
   ): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }>;
 }
 
@@ -367,12 +373,13 @@ export async function collectCrossToolContext(
   plan: CrossToolReasoningPlan,
   reader: CrossToolReadRunner,
   localNowIso: string,
-  timezone = "UTC"
+  timezone = "UTC",
+  binding?: CrossToolTurnBinding
 ): Promise<string> {
   if (!plan.shouldRun || plan.sources.length === 0) return "";
 
   const allItems = await withDeadline(
-    runSourcesWithConcurrencyLimit(actorUserId, plan, reader, localNowIso, timezone),
+    runSourcesWithConcurrencyLimit(actorUserId, plan, reader, localNowIso, timezone, binding),
     TOTAL_TIMEOUT_MS
   ).catch(() => [] as CrossToolEvidenceItem[]);
 
@@ -389,12 +396,13 @@ export async function collectCrossToolContextAndItems(
   plan: CrossToolReasoningPlan,
   reader: CrossToolReadRunner,
   localNowIso: string,
-  timezone = "UTC"
+  timezone = "UTC",
+  binding?: CrossToolTurnBinding
 ): Promise<{ block: string; items: CrossToolEvidenceItem[] }> {
   if (!plan.shouldRun || plan.sources.length === 0) return { block: "", items: [] };
 
   const allItems = await withDeadline(
-    runSourcesWithConcurrencyLimit(actorUserId, plan, reader, localNowIso, timezone),
+    runSourcesWithConcurrencyLimit(actorUserId, plan, reader, localNowIso, timezone, binding),
     TOTAL_TIMEOUT_MS
   ).catch(() => [] as CrossToolEvidenceItem[]);
 
@@ -414,7 +422,8 @@ async function runSourcesWithConcurrencyLimit(
   plan: CrossToolReasoningPlan,
   reader: CrossToolReadRunner,
   localNowIso: string,
-  timezone = "UTC"
+  timezone = "UTC",
+  binding?: CrossToolTurnBinding
 ): Promise<CrossToolEvidenceItem[]> {
   const results: CrossToolEvidenceItem[] = [];
   const queue = [...plan.sources];
@@ -424,7 +433,7 @@ async function runSourcesWithConcurrencyLimit(
 
   const runOne = (source: CrossToolSource) => {
     const p = withDeadline(
-      fetchSource(actorUserId, source, plan.query, reader, localNowIso, timezone),
+      fetchSource(actorUserId, source, plan.query, reader, localNowIso, timezone, binding),
       PER_SOURCE_TIMEOUT_MS
     ).catch(() => [] as CrossToolEvidenceItem[]);
     inFlight.add(p);
@@ -461,14 +470,15 @@ async function fetchSource(
   query: string,
   reader: CrossToolReadRunner,
   localNowIso: string,
-  timezone = "UTC"
+  timezone = "UTC",
+  binding?: CrossToolTurnBinding
 ): Promise<CrossToolEvidenceItem[]> {
   const tools = SOURCE_TOOLS[source];
   const items: CrossToolEvidenceItem[] = [];
 
   for (const toolName of tools) {
     const input = buildToolInput(toolName, query, localNowIso);
-    const result = await reader.runReadTool(actorUserId, toolName, input);
+    const result = await reader.runReadTool(actorUserId, toolName, input, binding);
     if (!result.ok || !result.data) continue;
 
     let normalized: CrossToolEvidenceItem[] = [];

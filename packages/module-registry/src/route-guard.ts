@@ -60,6 +60,12 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   routeKey("POST", "/api/companion/heartbeat"),
   routeKey("PATCH", "/api/companion/device"),
   routeKey("POST", "/api/companion/logout"),
+  // Legacy recording attempt/decide endpoints authenticate, then return 410; linking is the only approval.
+  routeKey("POST", "/api/companion/recording-capability/attempt"),
+  routeKey("POST", "/api/companion/recording-capability/status"),
+  routeKey("GET", "/api/companion/recording-capabilities"),
+  routeKey("POST", "/api/companion/recording-capability/decide"),
+  routeKey("POST", "/api/companion/recording-capability/revoke"),
   // #2570 Trail Marker focus judgment: what block is on, judging one observation, and correcting a
   // judgment. Platform routes for the same reason as the device ones above: they authenticate the
   // linked Mac with its companion credential, which a guarded (module) route cannot accept, and

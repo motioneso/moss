@@ -131,18 +131,21 @@ export const connectorsModuleManifest = {
     {
       method: "GET",
       path: "/api/connectors/providers",
+      chat: { access: "read" },
       responseSchema: listConnectorProvidersResponseSchema,
       permissionId: "connectors.view"
     },
     {
       method: "GET",
       path: "/api/connectors/accounts",
+      chat: { access: "read" },
       responseSchema: listConnectorAccountsResponseSchema,
       permissionId: "connectors.view"
     },
     {
       method: "POST",
       path: "/api/connectors/accounts",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       requestSchema: createConnectorAccountRequestSchema,
       responseSchema: createConnectorAccountResponseSchema,
       permissionId: "connectors.manage"
@@ -150,6 +153,7 @@ export const connectorsModuleManifest = {
     {
       method: "PATCH",
       path: "/api/connectors/accounts/:id",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       requestSchema: updateConnectorAccountRequestSchema,
       responseSchema: updateConnectorAccountResponseSchema,
       permissionId: "connectors.manage"
@@ -157,18 +161,21 @@ export const connectorsModuleManifest = {
     {
       method: "POST",
       path: "/api/connectors/accounts/:id/revoke",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: revokeConnectorAccountResponseSchema,
       permissionId: "connectors.manage"
     },
     {
       method: "GET",
       path: "/api/connectors/accounts/:id/feature-grants",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       responseSchema: featureGrantsResponseSchema,
       permissionId: "connectors.manage"
     },
     {
       method: "PUT",
       path: "/api/connectors/accounts/:id/feature-grants",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: updateFeatureGrantsRequestSchema,
       responseSchema: featureGrantsResponseSchema,
       permissionId: "connectors.manage"
@@ -176,28 +183,33 @@ export const connectorsModuleManifest = {
     {
       method: "GET",
       path: "/api/admin/connectors/accounts",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       responseSchema: listAdminConnectorAccountsResponseSchema,
       permissionId: "connectors.admin"
     },
     {
       method: "POST",
       path: "/api/connectors/google/authorize",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "connectors.manage"
     },
     {
       method: "POST",
       path: "/api/connectors/google/complete",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "connectors.manage"
     },
     {
       method: "POST",
       path: "/api/connectors/google/sync",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: googleSyncResponseSchema,
       permissionId: "connectors.manage"
     },
     {
       method: "POST",
       path: "/api/connectors/email-refresh",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: requestEmailRefreshRequestSchema,
       responseSchema: requestEmailRefreshResponseSchema,
       permissionId: "connectors.manage"
@@ -205,17 +217,20 @@ export const connectorsModuleManifest = {
     {
       method: "GET",
       path: "/api/connectors/email-refresh/:refreshId",
+      chat: { access: "read" },
       responseSchema: emailRefreshStatusResponseSchema,
       permissionId: "connectors.view"
     },
     {
       method: "POST",
       path: "/api/connectors/imap/connect",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "connectors.manage"
     },
     {
       method: "POST",
       path: "/api/connectors/imap/test-connection",
+      chat: { access: "blocked", blockedBecause: "secrets" },
       permissionId: "connectors.manage"
     }
   ],
@@ -226,6 +241,7 @@ export const connectorsModuleManifest = {
         "Explain, step by step, how the user connects their Google account (Gmail + Calendar). Read-only guidance; the user completes the secret-entry steps in Settings.",
       permissionId: "connectors.view",
       risk: "read",
+      content: "user_authored",
       inputSchema: { type: "object", additionalProperties: false, properties: {} },
       outputSchema: {
         type: "object",
@@ -253,6 +269,7 @@ export const connectorsModuleManifest = {
         "Search the user's live Gmail through the Jarv1s Google connector. Returns bounded message metadata and snippets, not full bodies.",
       permissionId: "connectors.view",
       risk: "read",
+      content: "outside",
       inputSchema: gmailSearchLiveInputSchema,
       outputSchema: gmailSearchLiveResponseSchema,
       externalContent: true,
@@ -264,6 +281,7 @@ export const connectorsModuleManifest = {
         "Fetch one live Gmail message by id through the Jarv1s Google connector. Returns capped plain-text body content.",
       permissionId: "connectors.view",
       risk: "read",
+      content: "outside",
       inputSchema: gmailGetLiveMessageInputSchema,
       outputSchema: gmailGetLiveMessageResponseSchema,
       externalContent: true,
@@ -275,6 +293,7 @@ export const connectorsModuleManifest = {
         "List live primary-calendar events through the Jarv1s Google connector for a bounded time window.",
       permissionId: "connectors.view",
       risk: "read",
+      content: "outside",
       inputSchema: calendarListLiveEventsInputSchema,
       outputSchema: calendarListLiveEventsResponseSchema,
       externalContent: true,

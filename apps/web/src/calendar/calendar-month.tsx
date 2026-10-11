@@ -22,7 +22,7 @@ export function CalendarMonth({ cursor, eventsByDay, onPickDay, onPick }: Calend
   const rowCount = cells.length / 7;
 
   return (
-    <div className="cal-month">
+    <div className="cal-month" style={{ minWidth: 7 * 144, minHeight: 42 + rowCount * 112 }}>
       <div className="cal-month__head">
         {DOW_SHORT.map((d) => (
           <div key={d} className="cal-month__dow">
@@ -61,7 +61,11 @@ export function CalendarMonth({ cursor, eventsByDay, onPickDay, onPick }: Calend
                   key={e.id}
                   block={e.kind === "block"}
                   color={e.kind === "block" ? "var(--accent-fg)" : "var(--steel)"}
-                  time={!e.allDay ? fmtTime(e.startMin).replace(":00", "") : undefined}
+                  time={
+                    !e.allDay && dayKey(e.startsAt) === dayKey(e.date)
+                      ? fmtTime(e.startMin).replace(":00", "")
+                      : undefined
+                  }
                   title={e.title}
                   onClick={() => onPick(e)}
                 />

@@ -60,6 +60,12 @@ export interface BriefingsRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
   readonly listModuleManifests: () => readonly MossModuleManifest[];
+  /** Briefing tool names declared by external (JSON-manifest) modules. */
+  readonly listExternalBriefingToolNames?: () => readonly string[];
+  /** Same modules, with a display name, for the settings switches. */
+  readonly listExternalBriefingSources?: (
+    access: AccessContext
+  ) => Promise<readonly { readonly toolName: string; readonly label: string }[]>;
   readonly boss: PgBoss;
   readonly dayPlanRead?: DayPlanReadPort;
   readonly repository?: BriefingsRepository;
@@ -130,7 +136,12 @@ export function registerBriefingsRoutes(
             );
           });
 
-        return { definitions: definitions.map(serializeDefinition) };
+        return {
+          definitions: definitions.map(serializeDefinition),
+          externalSources: [
+            ...((await dependencies.listExternalBriefingSources?.(accessContext)) ?? [])
+          ]
+        };
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -143,7 +154,11 @@ export function registerBriefingsRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const input = parseCreateDefinitionBody(request.body, dependencies.listModuleManifests());
+        const input = parseCreateDefinitionBody(
+          request.body,
+          dependencies.listModuleManifests(),
+          dependencies.listExternalBriefingToolNames?.() ?? []
+        );
         const definition = await dependencies.dataContext.withDataContext(
           accessContext,
           (scopedDb) => repository.createDefinition(scopedDb, input)
@@ -166,7 +181,11 @@ export function registerBriefingsRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const input = parseUpdateDefinitionBody(request.body, dependencies.listModuleManifests());
+        const input = parseUpdateDefinitionBody(
+          request.body,
+          dependencies.listModuleManifests(),
+          dependencies.listExternalBriefingToolNames?.() ?? []
+        );
         const definition = await dependencies.dataContext.withDataContext(
           accessContext,
           (scopedDb) => repository.updateDefinition(scopedDb, request.params.id, input)
@@ -287,17 +306,20 @@ export function registerBriefingsRoutes(
                   metadata: { briefingType: run.briefing_type }
                 });
               }
-              for (const item of serializedRuns.flatMap((run) => run.feedbackItems)) {
-                await dependencies.feedbackRepository.upsertTarget(scopedDb, {
-                  ownerUserId: accessContext.actorUserId,
-                  targetKind: "briefing_item",
-                  targetRef: item.feedbackItemId,
-                  surface: "briefing",
-                  sourceKind: item.sourceKind,
-                  sourceLabel: item.sourceLabel,
-                  priorityBand: item.priorityBand,
-                  metadata: item.metadata
-                });
+              for (const run of serializedRuns) {
+                for (const item of run.feedbackItems) {
+                  await dependencies.feedbackRepository.upsertTarget(scopedDb, {
+                    ownerUserId: accessContext.actorUserId,
+                    targetKind: "briefing_item",
+                    targetRef: item.feedbackItemId,
+                    surface: "briefing",
+                    sourceKind: item.sourceKind,
+                    sourceLabel: item.sourceLabel,
+                    priorityBand: item.priorityBand,
+                    // Read the text from its owning record when an approval is requested.
+                    metadata: { ...item.metadata, briefingRunId: run.id }
+                  });
+                }
               }
               await upsertCatchUpTargets(
                 dependencies,
@@ -526,7 +548,8 @@ function validateScheduleMetadata(
 
 function parseCreateDefinitionBody(
   body: unknown,
-  moduleManifests: readonly MossModuleManifest[]
+  moduleManifests: readonly MossModuleManifest[],
+  externalBriefingToolNames: readonly string[]
 ): CreateBriefingDefinitionInput {
   const value = requireObject(body);
   const briefingType = optionalBriefingType(value.briefingType) ?? "morning";
@@ -539,7 +562,8 @@ function parseCreateDefinitionBody(
   const selectedToolNames = requiredReadToolNames(
     rawToolNames,
     "selectedToolNames",
-    moduleManifests
+    moduleManifests,
+    externalBriefingToolNames
   );
 
   const cadence = optionalBriefingCadence(value.cadence) ?? "manual";
@@ -558,13 +582,19 @@ function parseCreateDefinitionBody(
 
 function parseUpdateDefinitionBody(
   body: unknown,
-  moduleManifests: readonly MossModuleManifest[]
+  moduleManifests: readonly MossModuleManifest[],
+  externalBriefingToolNames: readonly string[]
 ): UpdateBriefingDefinitionRequest {
   const value = requireObject(body);
   const selectedToolNames =
     value.selectedToolNames === undefined
       ? undefined
-      : requiredReadToolNames(value.selectedToolNames, "selectedToolNames", moduleManifests);
+      : requiredReadToolNames(
+          value.selectedToolNames,
+          "selectedToolNames",
+          moduleManifests,
+          externalBriefingToolNames
+        );
 
   const cadence = optionalBriefingCadence(value.cadence);
   const scheduleMetadata = optionalJsonObject(value.scheduleMetadata, "scheduleMetadata");
@@ -595,7 +625,8 @@ function parseRunDefinitionBody(body: unknown): RunBriefingDefinitionRequest {
 function requiredReadToolNames(
   value: unknown,
   fieldName: string,
-  moduleManifests: readonly MossModuleManifest[]
+  moduleManifests: readonly MossModuleManifest[],
+  externalBriefingToolNames: readonly string[]
 ): string[] {
   // An explicit empty list selects no tools. Anything that is not an array
   // (false, null, a lone value that fails membership below) is still 400.
@@ -610,7 +641,7 @@ function requiredReadToolNames(
     ...new Set(value.map((item, index) => requiredArrayString(item, fieldName, index)))
   ];
 
-  const VIRTUAL_SOURCES = new Set(["vault", "chats"]);
+  const VIRTUAL_SOURCES = new Set(["vault", "chats", ...externalBriefingToolNames]);
   if (
     selectedToolNames.some(
       (name) => !VIRTUAL_SOURCES.has(name) && toolsByName.get(name)?.risk !== "read"
@@ -843,14 +874,15 @@ async function upsertCatchUpTargets(
   runs: readonly BriefingRun[]
 ): Promise<void> {
   if (!dependencies.feedbackRepository) return;
-  const refs = new Set(
-    runs.flatMap((run) =>
-      storedCatchUpEntries(
-        (run.source_metadata.structuredPayload as { catchUp?: unknown } | undefined)?.catchUp
-      ).map((entry) => entry.id)
-    )
-  );
-  for (const ref of refs) {
+  const refs = new Map<string, string>();
+  for (const run of runs) {
+    for (const entry of storedCatchUpEntries(
+      (run.source_metadata.structuredPayload as { catchUp?: unknown } | undefined)?.catchUp
+    )) {
+      if (!refs.has(entry.id)) refs.set(entry.id, run.id);
+    }
+  }
+  for (const [ref, runId] of refs) {
     await dependencies.feedbackRepository.upsertTarget(scopedDb, {
       ownerUserId: actorUserId,
       targetKind: "briefing_item",
@@ -858,7 +890,7 @@ async function upsertCatchUpTargets(
       surface: "briefing",
       sourceKind: "email",
       sourceLabel: "Catch-up",
-      metadata: { catchUp: true }
+      metadata: { catchUp: true, briefingRunId: runId }
     });
   }
 }

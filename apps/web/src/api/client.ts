@@ -46,6 +46,7 @@ import type {
   DeleteWebSearchKeyResponse,
   GetLocaleSettingsResponse,
   GetNotificationDigestPreferenceResponse,
+  GetNotificationSensitivityResponse,
   ListNotificationPreferencesResponse,
   GetQuietHoursSettingsResponse,
   GetAiSummaryResponse,
@@ -79,6 +80,8 @@ import type {
   PutNotificationPreferenceResponse,
   PutNotificationDigestPreferenceRequest,
   PutNotificationDigestPreferenceResponse,
+  PutNotificationSensitivityRequest,
+  PutNotificationSensitivityResponse,
   PushConfigResponse,
   RegisterPushSubscriptionRequest,
   RegisterPushSubscriptionResponse,
@@ -338,6 +341,19 @@ export async function putQuietHoursSettings(
 
 export async function getNotificationPreferences(): Promise<ListNotificationPreferencesResponse> {
   return requestJson<ListNotificationPreferencesResponse>("/api/me/notification-preferences");
+}
+
+export async function getNotificationSensitivity(): Promise<GetNotificationSensitivityResponse> {
+  return requestJson<GetNotificationSensitivityResponse>("/api/me/notification-sensitivity");
+}
+
+export async function putNotificationSensitivity(
+  body: PutNotificationSensitivityRequest
+): Promise<PutNotificationSensitivityResponse> {
+  return requestJson<PutNotificationSensitivityResponse>("/api/me/notification-sensitivity", {
+    method: "PUT",
+    body
+  });
 }
 
 export async function getNotificationDigestPreference(): Promise<GetNotificationDigestPreferenceResponse> {
@@ -1292,9 +1308,13 @@ export async function listAiModels(): Promise<ListAiConfiguredModelsResponse> {
   return requestJson<ListAiConfiguredModelsResponse>("/api/ai/models");
 }
 
-// #1253 — fetch pending action requests for re-hydration on page reload
-export async function listPendingActionRequests(): Promise<{ actions: AiAssistantActionDto[] }> {
-  return requestJson<{ actions: AiAssistantActionDto[] }>("/api/ai/assistant-actions");
+// Pending chat cards belong only to the persisted thread that originally requested them.
+export async function listPendingActionRequests(
+  threadId: string
+): Promise<{ actions: AiAssistantActionDto[] }> {
+  return requestJson<{ actions: AiAssistantActionDto[] }>(
+    `/api/ai/assistant-actions?threadId=${encodeURIComponent(threadId)}`
+  );
 }
 
 export async function createAiModel(

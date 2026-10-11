@@ -365,7 +365,10 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
       "--settings '/tmp/jarvis-neutral/.jarvis-claude-settings.json'"
     );
     expect(launchLineAt()).not.toContain("jst_abc");
-    expect(io.writes["/tmp/jarvis-neutral/.jarvis-claude-permission-token"]).toBeUndefined();
+    expect(io.writes["/tmp/jarvis-neutral/.jarvis-claude-permission-token"]).toBe("jst_abc\n");
+    expect(io.writes["/tmp/jarvis-neutral/.jarvis-claude-settings.json"]).toContain(
+      "/internal/vault-read-report"
+    );
   });
 
   it("DENY: no vault patterns are granted when no vault is mounted (no roots configured)", async () => {

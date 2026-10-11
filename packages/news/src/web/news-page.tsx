@@ -3,8 +3,10 @@ import "./styles/news-2.css";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Newspaper } from "lucide-react";
+import { Button, ButtonLink, EmptyState as SharedEmptyState, SectionHead } from "@moss/ui";
 import type { NewsHeadline, NewsOverviewResponse } from "@moss/shared";
 
+import { topicOption } from "../source/catalog.js";
 import { getNewsOverview } from "./news-client.js";
 import { newsQueryKeys } from "./query-keys.js";
 import {
@@ -20,25 +22,18 @@ const SETTINGS_HREF = "/settings?section=modules&module=news";
 
 type TopicFilter = string | null;
 
+// Chips carry a topic key ("us") while headlines carry display labels ("U.S."), so a
+// filter matches the raw value or its display label, ignoring case.
 export function matchesTopic(headline: NewsHeadline, filter: TopicFilter): boolean {
-  return (
-    filter === null ||
-    headline.topicLabels?.includes(filter) === true ||
-    headline.topicKey === filter ||
-    headline.topicLabel === filter
-  );
+  if (filter === null) return true;
+  const wanted = new Set([filter, topicLabel(filter)].map((v) => v.toLowerCase()));
+  const candidates = [...(headline.topicLabels ?? []), headline.topicKey, headline.topicLabel];
+  return candidates.some((value) => value != null && wanted.has(value.toLowerCase()));
 }
 
-const TOPIC_LABELS: Readonly<Record<string, string>> = {
-  world: "World",
-  us: "U.S.",
-  politics: "Politics",
-  business: "Business",
-  technology: "Technology",
-  science: "Science",
-  health: "Health",
-  culture: "Culture"
-};
+function topicLabel(key: string): string {
+  return topicOption(key)?.label ?? key;
+}
 
 export function NewsPage() {
   const overviewQuery = useQuery({
@@ -56,10 +51,13 @@ export function NewsPage() {
         <Masthead activeTopics={[]} filter={null} onFilter={setTopicFilter} />
         {overviewQuery.isError ? (
           <p className="nw-lede" role="status">
-            News is unavailable right now.
+            News is unavailable right now.{" "}
+            <Button variant="link" onClick={() => void overviewQuery.refetch()}>
+              Try again
+            </Button>
           </p>
         ) : (
-          <NewsSkeleton />
+          <NewsLoading />
         )}
       </div>
     );
@@ -95,6 +93,14 @@ export function NewsPage() {
   return (
     <div className="nw-wrap">
       <Masthead activeTopics={activeTopics} filter={filter} onFilter={setTopicFilter} />
+      {overviewQuery.isError ? (
+        <p className="nw-lede" role="status">
+          Could not refresh news. Showing the last loaded front page.{" "}
+          <Button variant="link" onClick={() => void overviewQuery.refetch()}>
+            Try again
+          </Button>
+        </p>
+      ) : null}
       {hasStories ? (
         <>
           <HeroCarousel headlines={topStories} />
@@ -122,8 +128,7 @@ export function NewsPage() {
 
 /* ---------------------------------------------------------------- Masthead */
 
-// Broadsheet masthead in the sports idiom (hairline-boxed section bar) — but where sports'
-// nav is an inert preview, these chips are functional topic filters over the loaded page.
+// Editorial page identity with functional topic filters over the loaded page.
 // "All" + one chip per followed topic; hidden entirely in top-front-page mode (no topics).
 function Masthead(props: {
   activeTopics: readonly string[];
@@ -132,26 +137,29 @@ function Masthead(props: {
 }) {
   return (
     <header className="nw-mast">
+      <SectionHead title="Your front page" titleAs="h1" />
       {props.activeTopics.length > 0 ? (
         <nav className="nw-mast__nav" aria-label="Filter by topic">
-          <button
-            type="button"
-            className="nw-mast__chip"
+          <Button
+            variant="chip"
+            size="sm"
+            active={props.filter === null}
             aria-pressed={props.filter === null}
             onClick={() => props.onFilter(null)}
           >
             All
-          </button>
+          </Button>
           {props.activeTopics.map((topicKey) => (
-            <button
+            <Button
               key={topicKey}
-              type="button"
-              className="nw-mast__chip"
+              variant="chip"
+              size="sm"
+              active={props.filter === topicKey}
               aria-pressed={props.filter === topicKey}
               onClick={() => props.onFilter(topicKey)}
             >
-              {TOPIC_LABELS[topicKey] ?? topicKey}
-            </button>
+              {topicLabel(topicKey)}
+            </Button>
           ))}
         </nav>
       ) : (
@@ -165,14 +173,11 @@ function Masthead(props: {
 
 /* ---------------------------------------------------------------- Skeleton */
 
-// Cold-load placeholder matching the shapes it stands in for (hero, then grid) so nothing
-// jumps around once real data lands — same idiom as sports' skeleton.
-function NewsSkeleton() {
+function NewsLoading() {
   return (
-    <div className="nw-skeleton" role="status" aria-label="Loading news">
-      <div className="nw-skel nw-skel--hero" aria-hidden="true" />
-      <div className="nw-skel nw-skel--grid" aria-hidden="true" />
-    </div>
+    <p className="nw-lede" role="status">
+      Loading news…
+    </p>
   );
 }
 
@@ -181,23 +186,18 @@ function NewsSkeleton() {
 function EmptyState({ data }: { readonly data: NewsOverviewResponse }) {
   const noSources = data.enabledSources.length === 0;
   return (
-    <section className="nw-empty" aria-label="No news to show">
-      <div className="nw-empty__inner">
-        <span className="nw-empty__mark">
-          <Newspaper size={28} aria-hidden="true" />
-        </span>
-        <h2 className="nw-empty__title">
-          {noSources ? "Choose your sources" : "Nothing on the wire"}
-        </h2>
-        <p className="nw-empty__lede">
-          {noSources
-            ? "Pick the publications and topics you care about — this page becomes their combined front page."
-            : "Your sources didn't return any stories just now. Check back shortly, or adjust your sources and topics."}
-        </p>
-        <a className="nw-empty__btn" href={SETTINGS_HREF}>
-          Choose sources
-        </a>
-      </div>
-    </section>
+    <SharedEmptyState
+      icon={<Newspaper size={28} aria-hidden="true" />}
+      title={<h2>{noSources ? "Choose your sources" : "Nothing on the wire"}</h2>}
+      description={
+        noSources
+          ? "Pick the publications and topics you care about. This page becomes their combined front page."
+          : "Your sources didn't return any stories just now. Check back shortly, or adjust your sources and topics."
+      }
+    >
+      <ButtonLink href={SETTINGS_HREF} variant="secondary">
+        Choose sources
+      </ButtonLink>
+    </SharedEmptyState>
   );
 }

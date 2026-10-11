@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Network
+import Security
 
 /// Executes the effects a `ConnectionMachine` returns: real heartbeat requests, real timers,
 /// the Keychain, and the two system signals (wake, network path change) that feed back in as
@@ -11,6 +12,7 @@ final class ConnectionRuntime: ObservableObject {
     @Published private(set) var state: ConnectionState = .notLinked
     @Published private(set) var identity: LinkedIdentity?
     @Published private(set) var lastDiagnostic: String?
+    @Published private(set) var recordingProofRevision = 0
     /// Bumped every time a link ends (log out, revoked). Focus resets itself on each change, so a
     /// relink in the same run, possibly as another account, starts from nothing (#2643).
     @Published private(set) var linkEndCount = 0
@@ -18,8 +20,11 @@ final class ConnectionRuntime: ObservableObject {
     /// Nil until a Moss that stores Backtrack has answered (and after the link ends).
     @Published private(set) var backtrackState: BacktrackState?
 
+    /// Synchronous admission/teardown barrier installed by the app host, before identity effects.
+    var beforeLifecycleChange: ((ConnectionEvent) -> Bool)?
+
     private var machine = ConnectionMachine()
-    private let keychain: KeychainStore
+    private let keychain: CompanionCredentialStore
     private let preferences: PreferencesStore
     private let transportFactory: (InstanceURL) -> CompanionTransport
     private let appVersion: String
@@ -34,7 +39,7 @@ final class ConnectionRuntime: ObservableObject {
     private var lastPathSatisfied: Bool?
 
     init(
-        keychain: KeychainStore = KeychainStore(),
+        keychain: CompanionCredentialStore = KeychainStore(),
         preferences: PreferencesStore = PreferencesStore(),
         appVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0",
         osVersion: String = ProcessInfo.processInfo.operatingSystemVersionString,
@@ -62,11 +67,18 @@ final class ConnectionRuntime: ObservableObject {
             client = CompanionClient(instance: identity.instance, transport: transportFactory(identity.instance))
         }
         let hasCredential = identity.map { keychain.read(for: $0) != nil } ?? false
-        apply(machine.handle(.launched(hasCredential: hasCredential, enabled: preferences.connectionEnabled), now: Date()))
+        if preferences.unlinkPending, identity != nil {
+            // Preserve logout-only intent across relaunch, even when Keychain is locked.
+            apply(machine.handle(.launched(hasCredential: true, enabled: false), now: Date()))
+            send(.userLogout)
+        } else {
+            apply(machine.handle(.launched(hasCredential: hasCredential, enabled: preferences.connectionEnabled), now: Date()))
+        }
         observeSystemEvents()
     }
 
     func send(_ event: ConnectionEvent) {
+        guard beforeLifecycleChange?(event) ?? true else { return }
         apply(machine.handle(event, now: Date()))
     }
 
@@ -89,6 +101,7 @@ final class ConnectionRuntime: ObservableObject {
             case .storeCredential(let credential, let newIdentity):
                 if let previous = identity, previous != newIdentity {
                     keychain.delete(for: previous)
+                    keychain.deleteRecordingProof(for: previous)
                 }
                 identity = newIdentity
                 preferences.linkedIdentity = newIdentity
@@ -99,15 +112,21 @@ final class ConnectionRuntime: ObservableObject {
             case .clearCredential:
                 if let identity {
                     keychain.delete(for: identity)
+                    keychain.deleteRecordingProof(for: identity)
                 }
                 preferences.linkedIdentity = nil
                 identity = nil
                 client = nil
             case .revokeRemotely(let generation):
                 startRevokeTask(generation: generation)
+            case .scheduleRevoke(let delay, let generation):
+                startRevokeTask(generation: generation, after: delay)
+            case .persistUnlinkPending(let pending):
+                preferences.unlinkPending = pending
+                if !pending { preferences.unlinkConfirmed = false; lastDiagnostic = nil }
             case .clearLocalData(let keepInstance):
                 if keepInstance {
-                    if let identity { keychain.delete(for: identity) }
+                    if let identity { keychain.delete(for: identity); keychain.deleteRecordingProof(for: identity) }
                     preferences.clearAccountData()
                 } else {
                     preferences.clearAll()
@@ -115,8 +134,8 @@ final class ConnectionRuntime: ObservableObject {
                 backtrackState = nil
                 linkEndCount += 1
             case .showLogoutUnconfirmed:
-                lastDiagnostic = "Server-side revocation couldn't be confirmed while offline. "
-                    + "This Mac may still be listed in Moss under Active sessions; you can sign it out there."
+                lastDiagnostic = "Not unlinked yet. Capture is stopped. Trail Marker will retry while open. "
+                    + "Check the connection or unlink this Mac in Moss Settings, Meetings."
             }
         }
     }
@@ -157,20 +176,31 @@ final class ConnectionRuntime: ObservableObject {
         }
     }
 
-    private func startRevokeTask(generation: Int) {
-        guard let identity, let client, let credential = keychain.read(for: identity) else { return }
+    private func startRevokeTask(generation: Int, after delay: TimeInterval = 0) {
         tasks[generation]?.cancel()
         tasks[generation] = Task { [weak self] in
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+            guard let self, !Task.isCancelled, generation == self.machine.generation,
+                  self.state == .unlinking else { return }
             do {
-                try await client.logout(credential: credential)
-            } catch let error as CompanionError {
-                if Task.isCancelled { return }
-                // Already revoked on the server, so there is nothing left to confirm.
-                if error == .credentialInvalid { return }
-                await self?.handle(.heartbeatFailed(error, generation: generation))
+                guard let identity = self.identity, let client = self.client else { throw CompanionError.credentialInvalid }
+                if !self.preferences.unlinkConfirmed {
+                    guard let credential = self.keychain.read(for: identity) else { throw CompanionError.credentialInvalid }
+                    try await client.logout(credential: credential)
+                    guard !Task.isCancelled, generation == self.machine.generation, self.identity == identity else { return }
+                    // A 401 alone does not prove the device row was deleted. Only successful
+                    // canonical logout authorizes deleting tm1 and the independent proof.
+                    self.preferences.unlinkConfirmed = true
+                }
+                guard self.keychain.deleteRecordingProof(for: identity), self.keychain.delete(for: identity) else {
+                    throw KeychainError.osStatus(errSecInteractionNotAllowed)
+                }
+                await self.handle(.logoutSucceeded(generation: generation))
             } catch {
-                if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
-                await self?.handle(.heartbeatFailed(.unreachable, generation: generation))
+                guard !Task.isCancelled, generation == self.machine.generation else { return }
+                await self.handle(.logoutFailed(generation: generation))
             }
         }
     }
@@ -185,6 +215,7 @@ final class ConnectionRuntime: ObservableObject {
     }
 
     private func handle(_ event: ConnectionEvent) async {
+        guard beforeLifecycleChange?(event) ?? true else { return }
         apply(machine.handle(event, now: Date()))
     }
 
@@ -205,10 +236,51 @@ final class ConnectionRuntime: ObservableObject {
     func requestClient() -> (CompanionClient, String)? {
         switch state {
         case .connected, .reconnecting: break
-        case .disconnected, .notLinked, .signInRequired: return nil
+        case .disconnected, .notLinked, .signInRequired, .unlinking: return nil
         }
         guard let identity, let credential = keychain.read(for: identity) else { return nil }
         return (CompanionClient(instance: identity.instance, transport: transportFactory(identity.instance)), credential)
+    }
+
+    func recordingCredentials() -> (identity: LinkedIdentity, companion: String, proof: String)? {
+        guard let identity, let (_, companion) = requestClient(),
+              let proof = keychain.readRecordingProof(for: identity) else { return nil }
+        return (identity, companion, proof)
+    }
+
+    func storeRecordingProof(_ proof: String, for approvedIdentity: LinkedIdentity) throws {
+        guard identity == approvedIdentity, proof.count == 43 else { throw MeetingHostError.authorizationExpired }
+        try keychain.storeRecordingProof(proof, for: approvedIdentity)
+        keychain.deletePendingRecordingProof(for: approvedIdentity)
+        recordingProofRevision += 1
+    }
+
+    /// Called only after bootstrap itself rejects the saved proof. Do not publish a revision
+    /// that would retry rejected authority automatically; explicit relinking is required.
+    func discardRejectedRecordingProof() {
+        if let identity { keychain.deleteRecordingProof(for: identity) }
+    }
+
+    /// Reconcile only a proof already offered by an older build. This read cannot create
+    /// an approval: missing or unapproved authority requires explicit unlink and relink.
+    func refreshRecordingCapability() async throws -> String {
+        guard let expectedIdentity = identity, let (client, credential) = requestClient() else {
+            throw MeetingHostError.authorizationExpired
+        }
+        if keychain.readRecordingProof(for: expectedIdentity) != nil { return "approved" }
+        guard let pending = keychain.readPendingRecordingProof(for: expectedIdentity),
+              let attemptId = pending.attemptId else { return "relink_required" }
+        let reply = try await client.recordingCapabilityStatus(credential: credential, attemptId: attemptId)
+        guard identity == expectedIdentity, !Task.isCancelled, requestClient() != nil else { return "cancelled" }
+        if reply.status == "approved" {
+            guard reply.policyVersion == 1, (reply.revision ?? 0) > 0 else { throw MeetingHostError.invalidResponse }
+            try storeRecordingProof(pending.proof, for: expectedIdentity)
+            return "approved"
+        }
+        if reply.status == "expired" || reply.status == "denied" {
+            keychain.deletePendingRecordingProof(for: expectedIdentity)
+        }
+        return "relink_required"
     }
 
     // MARK: - Settings-pane actions
@@ -225,7 +297,7 @@ final class ConnectionRuntime: ObservableObject {
     func rename(displayName: String) {
         switch state {
         case .connected, .reconnecting: break
-        case .disconnected, .notLinked, .signInRequired: return
+        case .disconnected, .notLinked, .signInRequired, .unlinking: return
         }
         guard let identity, let client, let credential = keychain.read(for: identity) else { return }
         renameTask?.cancel()

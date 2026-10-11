@@ -81,7 +81,7 @@
   color: var(--text-faint);
 }
 .wl-hdetail__lbl {
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
 }

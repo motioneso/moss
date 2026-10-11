@@ -26,6 +26,8 @@ import { configureNewsChatTools } from "../../packages/news/src/chat-tools.js";
 import { createPreviewStore } from "../../packages/news/src/discovery/preview-store.js";
 import { newsModuleManifest } from "../../packages/news/src/manifest.js";
 import { NewsPersonalizationRepository } from "../../packages/news/src/personalization-repository.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
+import { parseToolOutputText } from "./fixtures/tool-output.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -59,15 +61,7 @@ export function parseToolText(result: unknown): Record<string, unknown> {
   const text = (result as { data?: { text?: string } }).data?.text;
   if (typeof text !== "string")
     throw new Error(`tool result has no text: ${JSON.stringify(result)}`);
-  const inner = text
-    .replace(/^<tool_result[^>]*>\n/, "")
-    .replace(/\n<\/tool_result>$/, "")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
-  return JSON.parse(inner) as Record<string, unknown>;
+  return parseToolOutputText(text);
 }
 
 export type PreviewPayload = {
@@ -147,8 +141,14 @@ export class NewsChatToolsHarness {
     ]);
   }
 
-  makeGateway(options: { diagnostics?: PlatformDiagnosticsService; boss?: PgBoss | null } = {}) {
+  async makeGateway(
+    options: { diagnostics?: PlatformDiagnosticsService; boss?: PgBoss | null } = {}
+  ) {
     this.configureChatTools(options.boss ?? null);
+    const conversations = await createCleanConversationFixture(this.appContext, [
+      ids.userA,
+      ids.userB
+    ]);
     const tokens = new SessionTokenRegistry();
     const emitted: GatewaySessionRecord[] = [];
     const gateway = new AssistantToolGateway({
@@ -157,7 +157,7 @@ export class NewsChatToolsHarness {
         ...(options.diagnostics ? [settingsModuleManifest] : [])
       ],
       repository: new AiRepository(),
-      runner: new DataContextRunner(this.appDb),
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations: new ConfirmationRegistry(),
       notifier: { emit: (_session, record) => emitted.push(record) },
@@ -168,7 +168,11 @@ export class NewsChatToolsHarness {
       toolServices: { writeOnly: { secret: "never passed to read tools" } }
     });
     const mint = (actorUserId: string, chatSessionId: string) =>
-      tokens.mint({ actorUserId, chatSessionId, allowedToolNames: null });
+      tokens.mint({
+        ...conversations.bindingFor(actorUserId),
+        chatSessionId,
+        allowedToolNames: null
+      });
     return { gateway, emitted, mint };
   }
 

@@ -1,13 +1,19 @@
 import {
   askClassifierChoice,
   extractClassifierValues,
+  recordSystemOneActivity,
   resolveClassifier,
   type ActiveModulesResolver,
   type AssistantToolGateway,
   type ClassifierDeps
 } from "@moss/ai";
 import type { DataContextDb, DataContextRunner } from "@moss/db";
-import type { MossModuleManifest, ToolContext } from "@moss/module-sdk";
+import {
+  normalizeClassifierCandidates,
+  type ModuleAssistantToolManifest,
+  type MossModuleManifest,
+  type ToolContext
+} from "@moss/module-sdk";
 import { MODULE_WORKER_SERVICE_KEY } from "@moss/shared";
 
 import type { ClassifierGatePorts, GateTool } from "./classifier-gate.js";
@@ -29,6 +35,12 @@ export type ClassifierGateAttemptPorts = {
   readonly loadCandidates: ClassifierGatePorts["loadCandidates"];
   readonly isReleased: ClassifierGatePorts["isReleased"];
   readonly gateway: ClassifierGatePorts["gateway"];
+  /**
+   * #3064: always wired by the production factory — the gate's single timeout line.
+   * Optional, mirroring the engine port, so doubles that only build the menu and
+   * gateway keep compiling.
+   */
+  readonly noteTimeout?: ClassifierGatePorts["noteTimeout"];
 };
 
 export type ClassifierGatePortsFactory = (
@@ -38,10 +50,30 @@ export type ClassifierGatePortsFactory = (
   correlationId?: string
 ) => ClassifierGateAttemptPorts;
 
+/**
+ * #3064: the gate's single timeout line, shared by the engine wiring and the shadow
+ * runner so both file it the same way.
+ */
+export function fileClassifierTimeoutLine(
+  activity: Parameters<NonNullable<ClassifierGatePorts["noteTimeout"]>>[0]
+): void {
+  recordSystemOneActivity(activity.modelName, "error", {
+    actionCode: "chat.tool_check",
+    ownerUserId: activity.actorUserId,
+    ...(activity.turnId ? { turnId: activity.turnId } : {}),
+    ...(activity.parentId ? { parentId: activity.parentId } : {}),
+    durationMs: activity.latencyMs,
+    failureCode: "timeout"
+  });
+}
+
 export interface ClassifierGatePortsFactoryDeps {
   readonly resolveActiveModules: ActiveModulesResolver;
   readonly dataContext: DataContextRunner;
-  readonly gateway: Pick<AssistantToolGateway, "callToolForGate">;
+  readonly gateway: Pick<
+    AssistantToolGateway,
+    "callToolForGate" | "recordContextForSession" | "admitToolDescriptorsForSession"
+  >;
   readonly classifierDeps: ClassifierDeps;
   /** The human-readable area label shown to the classifier; defaults to the manifest name. */
   readonly moduleDescription?: (manifest: MossModuleManifest) => string;
@@ -161,15 +193,19 @@ export function createClassifierGatePortsFactory(
         listedIds.clear();
         const manifests = await deps.resolveActiveModules(actorUserId);
         const tools: GateTool[] = [];
+        const descriptors: ModuleAssistantToolManifest[] = [];
         for (const manifest of manifests) {
           for (const tool of manifest.assistantTools ?? []) {
             if (!isClassifierCapable(tool)) continue;
+            // Preserve host-only ownership until the token-bound admission check, before projection.
+            descriptors.push(tool);
             byName.set(tool.name, tool);
             const gateTool = asGateTool(manifest, tool, describe(manifest));
             listedIds.add(`${gateTool.moduleId}.${gateTool.name}`);
             tools.push(gateTool);
           }
         }
+        await deps.gateway.admitToolDescriptorsForSession(token, actorUserId, descriptors);
         return tools;
       },
       loadCandidates: async (tool, signal) => {
@@ -183,12 +219,21 @@ export function createClassifierGatePortsFactory(
           // #2907 QA N1: never the live gate token. Use the attempt's non-secret correlation id.
           chatSessionId: correlationId ?? nextRequestId()
         };
-        return scoped((db) => manifestTool.classifier!.candidates!(db, ctx, { signal }));
+        const raw = await scoped((db) => manifestTool.classifier!.candidates!(db, ctx, { signal }));
+        const normalized = normalizeClassifierCandidates(raw);
+        if (!normalized.ok) throw new Error("invalid classifier candidates");
+        if (normalized.candidates.length > 0) {
+          // Admission acquires its own actor-scoped connection, after the hook released its own.
+          await deps.gateway.recordContextForSession(token, "classifier_candidates");
+        }
+        return normalized.candidates;
       },
       // Synchronous by contract. A tool is released when this attempt listed it: a module tool by
       // its author's classifier declaration, a connected tool by the declaration its synthetic
       // manifest carries only while the tool is eligible (spec 8.5).
       isReleased: (tool) => listedIds.has(`${tool.moduleId}.${tool.name}`),
+      // #3064: the gate owns the single timeout line; file it here with the turn.
+      noteTimeout: (activity) => fileClassifierTimeoutLine(activity),
       gateway: {
         call: (toolName: string, input: Record<string, unknown>, mode: "execute" | "dry-run") =>
           deps.gateway.callToolForGate(token, toolName, input, mode)

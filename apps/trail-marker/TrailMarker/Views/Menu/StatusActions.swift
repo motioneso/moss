@@ -48,7 +48,7 @@ final class StatusActions {
             connection.send(.userDisconnect)
         case .disconnected:
             connection.send(.userConnect)
-        case .reconnecting:
+        case .reconnecting, .unlinking:
             connection.send(.userRetry)
         case .signInRequired, .notLinked:
             // The old credential is gone; signing in means linking again through the browser.
@@ -59,9 +59,9 @@ final class StatusActions {
     /// Log Out asks for confirmation (guide §9); Pause (disconnect) does not (§7 "not destructive").
     private func confirmLogOut() {
         let alert = NSAlert()
-        alert.messageText = "Log out of this Moss account?"
-        alert.informativeText = "Trail Marker will remove this Mac's credential and try to notify Moss."
-        alert.addButton(withTitle: "Log Out")
+        alert.messageText = "Unlink this Mac from Moss?"
+        alert.informativeText = "Recording stops now. Trail Marker removes this Mac’s saved link only after Moss confirms Unlink."
+        alert.addButton(withTitle: "Unlink")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true
 

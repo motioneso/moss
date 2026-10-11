@@ -6,6 +6,8 @@ enum ConnectionEvent: Equatable {
     case userDisconnect
     case userRetry
     case userLogout
+    case logoutSucceeded(generation: Int)
+    case logoutFailed(generation: Int)
     case userQuit
     case heartbeatSucceeded(at: Date, generation: Int)
     case heartbeatFailed(CompanionError, generation: Int)
@@ -24,6 +26,8 @@ enum ConnectionEffect: Equatable {
     case storeCredential(String, LinkedIdentity)
     case clearCredential
     case revokeRemotely(generation: Int)
+    case scheduleRevoke(after: TimeInterval, generation: Int)
+    case persistUnlinkPending(Bool)
     case showLogoutUnconfirmed
     /// The link ended: forget this account's settings and reset everything that was running for
     /// it (#2643). `keepInstance` is true when Moss revoked this Mac, so Sign In can link the same
@@ -41,6 +45,7 @@ enum ConnectionEffect: Equatable {
 struct ConnectionMachine {
     private(set) var state: ConnectionState
     private(set) var generation: Int
+    private var logoutFailures = 0
 
     static let steadyHeartbeatInterval: TimeInterval = 60
     static let maxBackoff: TimeInterval = 300
@@ -67,6 +72,17 @@ struct ConnectionMachine {
 
         case .userLogout:
             return handleUserLogout()
+
+        case .logoutSucceeded(let eventGeneration):
+            guard eventGeneration == generation, state == .unlinking else { return [] }
+            state = .notLinked
+            return [.clearCredential, .persistUnlinkPending(false), .clearLocalData(keepInstance: false)]
+
+        case .logoutFailed(let eventGeneration):
+            guard eventGeneration == generation, state == .unlinking else { return [] }
+            logoutFailures = min(logoutFailures + 1, 7)
+            let delay = min(Self.maxBackoff, Self.baseBackoff * pow(2, Double(logoutFailures - 1)))
+            return [.showLogoutUnconfirmed, .scheduleRevoke(after: delay, generation: generation)]
 
         case .userQuit:
             return [.cancelAll]
@@ -121,13 +137,17 @@ struct ConnectionMachine {
             generation += 1
             state = .disconnected
             return [.persistEnabled(false), .cancelAll]
-        case .notLinked, .disconnected:
+        case .notLinked, .disconnected, .unlinking:
             return []
         }
     }
 
     private mutating func handleUserRetry() -> [ConnectionEffect] {
         switch state {
+        case .unlinking:
+            generation += 1
+            logoutFailures = 0
+            return [.cancelAll, .revokeRemotely(generation: generation)]
         case .reconnecting(_, let lastContact):
             generation += 1
             state = .reconnecting(attempt: 0, lastContact: lastContact)
@@ -141,19 +161,18 @@ struct ConnectionMachine {
         }
     }
 
-    /// Log Out works while paused too (#2643): before, it was ignored there, so a paused Mac
-    /// could not be logged out and kept every setting. Revoking on the server is the person's own
-    /// explicit request, so it is sent even from paused.
+    /// Unlink pauses all work immediately, including when already paused. Only confirmed
+    /// server logout may clear the saved credential; retry preserves the same identity.
     private mutating func handleUserLogout() -> [ConnectionEffect] {
         switch state {
         case .connected, .reconnecting, .signInRequired, .disconnected:
-            let attemptGeneration = generation
             generation += 1
-            state = .notLinked
-            return [
-                .cancelAll, .revokeRemotely(generation: attemptGeneration), .clearCredential,
-                .clearLocalData(keepInstance: false)
-            ]
+            logoutFailures = 0
+            state = .unlinking
+            return [.persistUnlinkPending(true), .persistEnabled(false), .cancelAll,
+                    .revokeRemotely(generation: generation)]
+        case .unlinking:
+            return handleUserRetry()
         case .notLinked:
             return []
         }
@@ -167,7 +186,7 @@ struct ConnectionMachine {
         case .connected, .reconnecting:
             state = .connected(lastContact: at)
             return [.scheduleHeartbeat(after: Self.steadyHeartbeatInterval, generation: generation)]
-        case .notLinked, .disconnected, .signInRequired:
+        case .notLinked, .disconnected, .signInRequired, .unlinking:
             return []
         }
     }
@@ -176,13 +195,6 @@ struct ConnectionMachine {
         _ error: CompanionError,
         generation eventGeneration: Int
     ) -> [ConnectionEffect] {
-        // The one exception to generation-matching: a straggling reply to a logout's best-effort
-        // revocation always surfaces, however stale, because nothing else produces a failure
-        // while Not linked.
-        if case .notLinked = state {
-            return [.showLogoutUnconfirmed]
-        }
-
         guard eventGeneration == generation else { return [] }
 
         let attempt: Int
@@ -195,7 +207,7 @@ struct ConnectionMachine {
             // A failed check while Connected is the moment it stops being Connected.
             attempt = 0
             lastContact = contact
-        case .disconnected, .signInRequired, .notLinked:
+        case .disconnected, .signInRequired, .notLinked, .unlinking:
             return []
         }
 
@@ -227,7 +239,7 @@ struct ConnectionMachine {
         switch state {
         case .connected, .reconnecting:
             return [.sendHeartbeat(generation: generation)]
-        case .notLinked, .disconnected, .signInRequired:
+        case .notLinked, .disconnected, .signInRequired, .unlinking:
             return []
         }
     }
@@ -237,7 +249,7 @@ struct ConnectionMachine {
         case .reconnecting(_, let lastContact):
             state = .reconnecting(attempt: 0, lastContact: lastContact)
             return [.cancelAll, .sendHeartbeat(generation: generation)]
-        case .connected, .disconnected, .notLinked, .signInRequired:
+        case .connected, .disconnected, .notLinked, .signInRequired, .unlinking:
             return []
         }
     }
@@ -250,7 +262,7 @@ struct ConnectionMachine {
         generation eventGeneration: Int,
         now: Date
     ) -> [ConnectionEffect] {
-        guard eventGeneration == generation else { return [] }
+        guard eventGeneration == generation, state != .unlinking else { return [] }
         generation += 1
         state = .connected(lastContact: now)
         return [
@@ -261,7 +273,7 @@ struct ConnectionMachine {
     }
 
     private mutating func handleLinkCancelled(generation eventGeneration: Int) -> [ConnectionEffect] {
-        guard eventGeneration == generation else { return [] }
+        guard eventGeneration == generation, state != .unlinking else { return [] }
         generation += 1
         return [.cancelAll]
     }
@@ -272,7 +284,7 @@ struct ConnectionMachine {
             return lastContact
         case .reconnecting(_, let lastContact):
             return lastContact
-        case .notLinked, .disconnected, .signInRequired:
+        case .notLinked, .disconnected, .signInRequired, .unlinking:
             return nil
         }
     }

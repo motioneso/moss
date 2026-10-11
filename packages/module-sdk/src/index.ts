@@ -47,6 +47,9 @@ export {
   type RegisteredModuleDiagnosticProvider
 } from "./diagnostics.js";
 export * from "./module-params.js";
+export * from "./route-chat.js";
+export * from "./action-presentation.js";
+import type { ToolApprovalPresentation } from "./action-presentation.js";
 export type { VaultIngestRootProvider } from "./vault-ingest-provider.js";
 
 import type {
@@ -55,6 +58,7 @@ import type {
 } from "./external-module.js";
 
 import type { ModuleWorkflowDefinition } from "./workflow.js";
+import type { ChatContentClass, ModuleAiConsent, RouteChatPolicy } from "./route-chat.js";
 
 import type { ModuleDiagnosticProvider } from "./diagnostics.js";
 
@@ -81,11 +85,18 @@ export type ModuleAssistantToolSelfOperationGrant =
   | "confirm_always"
   | "user_promotable";
 
+/**
+ * Tags a family for the freedom presets. `routine` families run on their own from step 2;
+ * `new` families ask until step 3. An untagged family is never touched by a preset.
+ */
+export type ModuleActionFamilyFreedom = "routine" | "new";
+
 export interface ModuleAssistantActionFamilyManifest {
   readonly id: string;
   readonly label: string;
   readonly description: string;
-  readonly defaultTier: "ask_each_time" | "always_confirm";
+  readonly freedom?: ModuleActionFamilyFreedom;
+  readonly defaultTier: MossActionPermissionTier;
   readonly allowedTiers: readonly MossActionPermissionTier[];
 }
 
@@ -99,6 +110,8 @@ export interface ToolContext {
   readonly actorUserId: string;
   readonly requestId: string;
   readonly chatSessionId: string;
+  /** Conversation captured when the server minted the token; absent is fail-closed. */
+  readonly threadId?: string;
   /** IANA timezone string from the user's locale settings (e.g. "America/Chicago"). Absent when the gateway has no locale available (falls back to UTC at call site). */
   readonly localTimezone?: string;
   /** Partial output while the tool runs. Set only by the MCP transport; absent elsewhere. */
@@ -454,6 +467,8 @@ export interface ModuleRouteManifest {
   readonly responseSchema?: JsonSchema;
   readonly permissionId?: string;
   readonly featureFlagId?: string;
+  /** #3065: whether and how Moss may call this route from chat. Built-in modules only. */
+  readonly chat?: RouteChatPolicy;
 }
 
 export interface ModuleJobManifest {
@@ -602,6 +617,12 @@ export interface ModuleAssistantToolManifest {
   readonly inputSchema?: JsonSchema;
   /** Set only by the trusted registry boundary; never accepted from an external manifest. */
   readonly isExternal?: boolean;
+  /**
+   * Host-only attribution for personally connected/approved tool descriptors. Never accepted
+   * from external module JSON. Exempts listing only when it matches the verified chat actor;
+   * it does not change result/error provenance, execution policy or external input validation.
+   */
+  readonly descriptorOwnerUserId?: string;
   readonly outputSchema?: JsonSchema;
   readonly featureFlagId?: string;
   readonly execute?: ToolExecute;
@@ -631,6 +652,10 @@ export interface ModuleAssistantToolManifest {
    * recipient/subject + composed body without persisting the body.
    */
   readonly preview?: ToolPreview;
+  /** Complete, live-only human disclosure. Missing/failed hooks cannot authorize a card. */
+  readonly approvalPresentation?: ToolApprovalPresentation;
+  /** Content rendered by the approval hook; defaults to outside, independently of results. */
+  readonly approvalContent?: ChatContentClass;
   /**
    * Names of composition-layer services this tool's execute requires in the 4th
    * `services` argument (e.g. ["calendarWrite"]). Declaration only — the module does
@@ -638,12 +663,20 @@ export interface ModuleAssistantToolManifest {
    * gateway's toolServices; a build-time/test assertion checks every declared key is present.
    */
   readonly requiresServices?: readonly string[];
+  /** Host-only: refuse before an approval card unless the per-call binding is fully wired. */
+  readonly requiresPerCallResolution?: true;
   /**
    * When true, the tool output contains untrusted external content (e.g. web search snippets,
    * fetched page text) that should be wrapped in a `<tool_result>` trust boundary before
    * reaching the model. Internal tools whose output Jarvis controls must leave this unset.
    */
   readonly externalContent?: boolean;
+  /**
+   * #3065: whether the result carries only the user's own record or may carry outside text.
+   * Required on built-in read tools (`assertReadToolContentDeclared`); default "outside". External
+   * tools never carry it, because the registry copies their fields one by one.
+   */
+  readonly content?: ChatContentClass;
   /**
    * When true, this tool's own HttpError text is shown to the user and assistant. Opt in only
    * when its messages never include a path, a file name, anything the user typed, or user data.
@@ -717,6 +750,12 @@ export interface MossModuleManifest {
    * so `JsonMossModuleManifest` deliberately has no equivalent field.
    */
   readonly workflows?: readonly ModuleWorkflowDefinition[];
+  /** #3065: route `chat` fields every route inherits unless it declares its own. */
+  readonly chatDefaults?: Partial<RouteChatPolicy>;
+  /** #3065: the module's AI consent switch; every route must name its key in `consent`. */
+  readonly aiConsent?: ModuleAiConsent;
+  /** #3065: refresh tokens for a module whose query keys do not start with its id. */
+  readonly chatRefreshTokens?: readonly string[];
 }
 
 /** Declarative, untrusted module guidance embedded only inside core-owned onboarding framing. */
@@ -740,6 +779,10 @@ export {
   type ExternalModuleClassifierDeclaration,
   type ExternalModuleDatabaseDeclaration,
   type ExternalModuleIntegerPreference,
+  type ExternalModuleAppMapDeclaration,
+  type ExternalModuleAppMapFeature,
+  type ExternalModuleAppMapScreen,
+  type ExternalModuleAppMapSetting,
   type ExternalModuleNavigationEntry,
   type ExternalModulePreferenceDeclaration,
   type ExternalModulePreferenceValue,

@@ -1,3 +1,8 @@
+import {
+  workshopCreatePresentation,
+  workshopProjectPresentation
+} from "./approval-presentation.js";
+import { workshopProjectTarget } from "./chat-targets.js";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   workshopBuildModuleInputSchema,
@@ -84,6 +89,11 @@ export const workshopModuleManifest = {
   ],
   features: [
     {
+      id: "workshop.chat_app_actions",
+      description:
+        "App actions read, rename and delete owned projects. Deletion asks first. Creation uses the dedicated privacy-checked handoff; generating project replies stays in Workshop."
+    },
+    {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.workshop",
       description: "Replied to a Workshop project"
@@ -91,14 +101,18 @@ export const workshopModuleManifest = {
     {
       id: "workshop.projects",
       description:
-        "Admins can save private projects and messages; other admins cannot access them. " +
-        "Creating a project starts no planning or build. The Workshop assistant replies to each " +
-        "message, marked awaiting delivery only if that reply fails.",
+        "Admins save private projects and messages, hidden from other admins. Creation starts no planning or build. Only failed replies are marked awaiting delivery. Delete opens a focused Keep it/Delete confirmation; failure stays for retry.",
       remediations: [
         {
           id: "workshop.projects.retry",
           description:
             "Reconnect and reload the project, then retry the saved request. Unsent text stays in the window.",
+          path: "/workshop"
+        },
+        {
+          id: "workshop.projects.resend",
+          description:
+            "When the notice says Moss did not reply, send the message again from the box below the conversation.",
           path: "/workshop"
         },
         {
@@ -108,7 +122,8 @@ export const workshopModuleManifest = {
         },
         {
           id: "workshop.projects.delete_retry",
-          description: "Open the More menu and choose Delete project again.",
+          description:
+            "Retry Delete in the open confirmation, or choose Keep it to leave the project unchanged.",
           path: "/workshop"
         }
       ],
@@ -116,13 +131,20 @@ export const workshopModuleManifest = {
         {
           code: "workshop.projects.load_failed",
           class: "transient",
-          description: "The saved projects or messages could not be loaded."
+          description:
+            "The saved projects or messages could not be loaded. An already loaded transcript remains visible after a failed refresh."
         },
         {
           code: "workshop.projects.save_failed",
           class: "transient",
           description:
             "Saving could not be confirmed. Retrying the same request does not duplicate it."
+        },
+        {
+          code: "workshop.projects.reply_failed",
+          class: "transient",
+          description:
+            "Moss did not reply within about 90 seconds. The message stays saved, marked awaiting delivery. Sending it again fixes it."
         },
         {
           code: "workshop.projects.rename_failed",
@@ -171,6 +193,8 @@ export const workshopModuleManifest = {
   assistantTools: [
     {
       name: "workshop.buildModule",
+      actionLabel: "Save a private Workshop project",
+      approvalPresentation: workshopCreatePresentation,
       description:
         "Save a private Workshop project from the user's explicit request and return its link. " +
         "This only saves the request; it does not plan, build, install, or enqueue work. " +
@@ -194,6 +218,11 @@ export const workshopModuleManifest = {
     {
       method: "POST",
       path: "/api/workshop/projects",
+      chat: {
+        access: "blocked",
+        blockedBecause: "module_promise",
+        coveredBy: "workshop.buildModule"
+      },
       permissionId: "workshop.view",
       requestSchema: createWorkshopProjectInputSchema,
       responseSchema: createWorkshopProjectResponseSchema
@@ -201,18 +230,25 @@ export const workshopModuleManifest = {
     {
       method: "GET",
       path: "/api/workshop/projects",
+      chat: { access: "read" },
       permissionId: "workshop.view",
       responseSchema: listWorkshopProjectsResponseSchema
     },
     {
       method: "GET",
       path: "/api/workshop/projects/:projectId",
+      chat: { access: "read" },
       permissionId: "workshop.view",
       responseSchema: getWorkshopProjectResponseSchema
     },
     {
       method: "PATCH",
       path: "/api/workshop/projects/:projectId",
+      chat: {
+        access: "write",
+        title: "Rename a Workshop project",
+        presentation: workshopProjectPresentation(false)
+      },
       permissionId: "workshop.view",
       requestSchema: renameWorkshopProjectInputSchema,
       responseSchema: renameWorkshopProjectResponseSchema
@@ -220,18 +256,27 @@ export const workshopModuleManifest = {
     {
       method: "DELETE",
       path: "/api/workshop/projects/:projectId",
+      chat: {
+        access: "destructive",
+        title: "Delete a Workshop project and its messages",
+        content: "user_authored",
+        target: workshopProjectTarget,
+        presentation: workshopProjectPresentation(true)
+      },
       permissionId: "workshop.view",
       responseSchema: deleteWorkshopProjectResponseSchema
     },
     {
       method: "GET",
       path: "/api/workshop/projects/:projectId/messages",
+      chat: { access: "read" },
       permissionId: "workshop.view",
       responseSchema: listWorkshopMessagesResponseSchema
     },
     {
       method: "POST",
       path: "/api/workshop/projects/:projectId/messages",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       permissionId: "workshop.view",
       requestSchema: createWorkshopMessageInputSchema,
       responseSchema: createWorkshopMessageResponseSchema

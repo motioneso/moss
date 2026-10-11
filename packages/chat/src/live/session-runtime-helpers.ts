@@ -207,8 +207,11 @@ export function injectActionResultRecord(
     options.actionResults.push({
       kind: "action_result",
       text: (record.text ?? "").slice(0, 200),
+      ...(record.actionRequestId ? { actionRequestId: record.actionRequestId } : {}),
       ...(record.toolName ? { toolName: record.toolName.slice(0, 120) } : {}),
-      outcome: record.outcome
+      ...(record.summary ? { summary: record.summary.slice(0, 200) } : {}),
+      outcome: record.outcome,
+      ...(record.decidedBy ? { decidedBy: record.decidedBy } : {})
     });
   }
 
@@ -249,8 +252,15 @@ export function injectActionResultRecord(
           sequence: approvalSequence
         });
   if (mappedRecord) {
-    if (options.turnRecords) upsertActivityRecord(options.turnRecords, mappedRecord);
-    options.emit(mappedRecord);
+    const approvalRecord = {
+      ...mappedRecord,
+      ...(record.actionRequestId ? { actionRequestId: record.actionRequestId } : {}),
+      ...(record.summary ? { summary: record.summary } : {}),
+      outcome: record.outcome,
+      ...(record.decidedBy ? { decidedBy: record.decidedBy } : {})
+    };
+    if (options.turnRecords) upsertActivityRecord(options.turnRecords, approvalRecord);
+    options.emit(approvalRecord);
   }
 }
 
@@ -557,4 +567,68 @@ export async function healAndRelaunchSession(
     text: "Chat session was lost — reconnecting…"
   });
   return host.ensureSession(actorUserId, userName, undefined, dead.surface);
+}
+
+/** Called only under the manager's maintenance mutex; preserve launching sessions during reconciliation. */
+export async function reconcileChatSessions(
+  liveKeys: Set<string>,
+  input: {
+    readonly launching: ReadonlyMap<string, unknown>;
+    readonly sessions: Map<string, UserSession>;
+    readonly deps: ChatSessionManagerDeps;
+    readonly clearPrivateDetachTimer: (key: string) => void;
+  }
+): Promise<void> {
+  // Treat in-flight launches as live for the entire launch window (§5.4).
+  const effectiveLive = new Set(liveKeys);
+  for (const key of input.launching.keys()) effectiveLive.add(key);
+
+  input.deps.reconcileMcpTokens?.(effectiveLive);
+
+  for (const [sessionKey, session] of input.sessions) {
+    if (!effectiveLive.has(sessionKey)) {
+      if (session.incognito) {
+        const thread = await input.deps.persistence.getCurrentThreadState?.(
+          session.actorUserId,
+          session.surface
+        );
+        await cleanupPrivateSession(
+          session.actorUserId,
+          session.surface,
+          thread?.incognito ? thread.id : undefined,
+          session,
+          input.deps,
+          input.sessions,
+          input.clearPrivateDetachTimer
+        );
+      } else {
+        try {
+          if (input.deps.killSession) {
+            await input.deps.killSession(sessionKey);
+          } else {
+            await session.engine.kill();
+          }
+        } catch {
+          /* best-effort stale kill */
+        }
+        input.sessions.delete(sessionKey);
+        input.deps.revokeMcpToken?.(sessionKey);
+      }
+    }
+  }
+
+  const known = new Set<string>(input.sessions.keys());
+  for (const key of input.launching.keys()) known.add(key);
+  for (const id of input.deps.listMcpTokenSessionIds?.() ?? []) known.add(id);
+  for (const liveKey of effectiveLive) {
+    if (!known.has(liveKey)) {
+      await input.deps.killSession?.(liveKey);
+    }
+  }
+  await sweepOrphanedPrivateThreads(
+    effectiveLive,
+    input.deps,
+    input.sessions,
+    input.clearPrivateDetachTimer
+  );
 }

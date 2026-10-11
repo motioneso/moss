@@ -1,6 +1,8 @@
 import { HttpError } from "@moss/module-sdk";
 import {
   STORY_FEEDBACK_REASON_MAX_LENGTH,
+  RECORD_ONLY_FEEDBACK_OPTIONS,
+  type CreateUsefulnessFeedbackSignalRequest,
   type CreateUsefulnessFeedbackRequest,
   type FeedbackStatus,
   type FeedbackSurface,
@@ -91,6 +93,23 @@ export function parseCreateBody(body: unknown): CreateUsefulnessFeedbackRequest 
     kind,
     ...(reason === null ? {} : { reason })
   };
+}
+
+export function parseSignalBody(body: unknown): CreateUsefulnessFeedbackSignalRequest {
+  const input = parseCreateBody(body);
+  const options = Object.hasOwn(RECORD_ONLY_FEEDBACK_OPTIONS, input.targetKind)
+    ? RECORD_ONLY_FEEDBACK_OPTIONS[input.targetKind as keyof typeof RECORD_ONLY_FEEDBACK_OPTIONS]
+    : undefined;
+  // Reject before dedup: recording an effectful UI action here would cause the later UI tap to
+  // return the signal without performing its intended cleanup, memory action or feed refresh.
+  if (
+    !options ||
+    !options.surfaces.some((surface) => surface === input.surface) ||
+    !options.kinds.some((kind) => kind === input.kind)
+  ) {
+    throw new HttpError(400, "Feedback target/action pair is not record-only");
+  }
+  return input as CreateUsefulnessFeedbackSignalRequest;
 }
 
 /** The reason body of the edit route. Only a reason may be sent. */

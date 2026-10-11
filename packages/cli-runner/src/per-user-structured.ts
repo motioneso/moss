@@ -206,14 +206,28 @@ export async function signalGroupAs(
   await new Promise<void>((resolve, reject) => {
     const stopper = spawn(command, args, {
       stdio: "ignore",
+      detached: true,
       env: {
         ...buildSanitizedCliEnv(process.env),
         STRUCTURED_STOP_PID: String(pid),
         STRUCTURED_STOP_SIGNAL: signal
       }
     });
-    stopper.once("error", reject);
+    const timer = setTimeout(() => {
+      // The stopper can itself hang before/after switching uid. Signal only its fresh group.
+      try {
+        if (stopper.pid) process.kill(-stopper.pid, "SIGKILL");
+      } catch {
+        /* The caller must treat a timeout as unconfirmed termination. */
+      }
+      reject(new Error("structured stop helper timed out"));
+    }, 1000);
+    stopper.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
     stopper.once("exit", (code) => {
+      clearTimeout(timer);
       if (code === 0) resolve();
       else reject(new Error(`stop command for pid ${pid} exited with code ${String(code)}`));
     });

@@ -250,8 +250,16 @@ clocks.
 
 1. While a call is held for approval, the tool server sends MCP progress notifications every 20 s
    so the client's clock resets. The hold can then run the full 150 s.
-2. If the hold expires or is denied, the tool reply says so in words the agent will not retry on:
-   "This action was not approved, so it was not done. Do not try it again; let the user know." (the sentence the restored code carries; the spec's earlier shorter form was a paraphrase, aligned 2026-09-07 on Reviewer's task 5 finding)
+2. A held approval reports its actual outcome, with separate person-facing and model-facing copy.
+   A rejection tells the person "You declined this action."; its tool reply says "The user declined
+   this action, so it was not done. Do not try it again; acknowledge the user's decision."
+   Expiry displays "Action timed out." and tells the model "Approval timed out, so this action was
+   not done. Do not try it again; let the user know." Cancellation displays "Action cancelled."
+   and tells the model "The approval request was cancelled, so this action was not done. Do not try
+   it again; let the user know." Every model reply keeps the no-retry instruction that prevents the
+   original repeated-call failure; only an explicit rejection is attributed to the person's
+   decision. Policy refusals without a human decision retain the generic "not approved" tool
+   reply. Agent instructions never appear in the person-facing approval outcome.
 3. The gateway's approval request is also surfaced through ACP's `session/request_permission`
    handler, so the person sees one card whichever path raised it. The gateway remains the
    enforcement point; the protocol message is a second way to show the same card, never a second
@@ -401,8 +409,8 @@ and the two are reconciled in the plan, not here.
   shared-login sentence, and a provider whose adapter cannot honour a model choice says so beside
   its model list. The "Not logged in" state is driven by the adapter's `initialize` check.
 - **App map.** The `aiproviders` entry in `packages/shared/src/app-map-core.ts` is updated in the
-  build PR for the `workshop` binding, the login-check wording and the "not approved, ask the user"
-  error; Workshop and chat behaviour changes go in their owning manifests' `features`.
+  build PR for the `workshop` binding, the login-check wording and the distinct approval outcomes
+  in section 7; Workshop and chat behaviour changes go in their owning manifests' `features`.
 - **Workshop hook (slice 3).** The Workshop already answers each saved message in a project. The
   ACP adapter replaces the answering engine behind that path; the message model, project folder
   and artifact panel stay as they are, plus the panel work named in section 13.

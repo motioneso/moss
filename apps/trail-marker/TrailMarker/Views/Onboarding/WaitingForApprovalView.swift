@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Design guide §8 step 2. Never implies the app is frozen — visible progress, and two
-/// explicit ways out: Cancel returns to the editable URL state, Open Browser Again re-opens
-/// the same approval link.
+/// explicit ways out: Cancel returns to the editable URL state, Copy approval link continues
+/// the connection in the browser the user already chose.
 struct WaitingForApprovalView: View {
     @ObservedObject var viewModel: OnboardingViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -22,7 +22,7 @@ struct WaitingForApprovalView: View {
             VStack(spacing: TrailMarkerTokens.Spacing.compact) {
                 Text("Waiting for browser approval")
                     .font(.title2.weight(.semibold))
-                Text("Approve \(viewModel.deviceName) in the browser window Trail Marker just opened.")
+                Text("Approve \(viewModel.deviceName) in Moss. Copy the approval link into the browser you are using.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -33,8 +33,8 @@ struct WaitingForApprovalView: View {
                 Button("Cancel") {
                     viewModel.cancelWaiting()
                 }
-                Button("Open Browser Again") {
-                    viewModel.openApprovalPage()
+                Button("Copy approval link") {
+                    viewModel.copyApprovalLink()
                 }
                 .buttonStyle(.bordered)
             }

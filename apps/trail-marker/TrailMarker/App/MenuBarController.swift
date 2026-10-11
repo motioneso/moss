@@ -10,8 +10,8 @@ final class MenuBarController: NSObject {
     private let popover = NSPopover()
     private let actions: StatusActions
     private var cancellables = Set<AnyCancellable>()
-    /// A small gold dot over the template mark while a feature is recording (Backtrack, spec §4:
-    /// it is never on silently). A subview, so the mark itself keeps its template tinting.
+    /// A meeting session takes precedence with a red dot, including while paused. Otherwise
+    /// Backtrack keeps its gold recording dot. The mark retains macOS template tinting.
     private let recordingDot = NSView()
 
     init(
@@ -20,7 +20,8 @@ final class MenuBarController: NSObject {
         onShowLastJudgment: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
         onOpenOnboarding: @escaping () -> Void,
-        feature: FeatureSwitchState? = nil
+        feature: FeatureSwitchState? = nil,
+        meetings: MeetingCaptureHost? = nil
     ) {
         let feature = feature ?? FeatureSwitchState()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -47,9 +48,14 @@ final class MenuBarController: NSObject {
             recordingDot.autoresizingMask = [.minXMargin, .minYMargin]
             button.addSubview(recordingDot)
         }
-        feature.$showsRecordingDot
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] on in self?.recordingDot.isHidden = !on }
+        let meetingActive = meetings.map { $0.$recordingPresentation.map(\.showsRedDot).removeDuplicates().eraseToAnyPublisher() }
+            ?? Just(false).eraseToAnyPublisher()
+        feature.$showsRecordingDot.combineLatest(meetingActive)
+            .sink { [weak self] backtrack, meeting in
+                self?.recordingDot.layer?.backgroundColor = meeting ? NSColor.systemRed.cgColor : NSColor(TrailMarkerTokens.Color.gold).cgColor
+                self?.recordingDot.isHidden = !(backtrack || meeting)
+                self?.statusItem.button?.setAccessibilityLabel(meeting ? "Trail Marker, meeting recording session active" : "Trail Marker")
+            }
             .store(in: &cancellables)
 
         keepToolTipInSync(with: focus)

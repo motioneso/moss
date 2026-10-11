@@ -58,8 +58,7 @@ export const emailModuleManifest = {
       id: "email.module-settings",
       label: "Email",
       description:
-        "Choose which email signals show up in briefings, how email turns into tasks, and " +
-        "whether your assistant drafts or auto-sends replies.",
+        "Choose briefing signals, task extraction and draft/send preferences. Unknown choices stay unavailable until read successfully; read failures offer Retry separately from save failures. Failed refreshes preserve confirmed choices.",
       path: "/settings?section=modules&module=email",
       scope: "user",
       order: 40,
@@ -68,6 +67,11 @@ export const emailModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "email.chat_app_actions",
+      description:
+        "App actions read cached mail and its settings. Auto-send and automatic task-creation controls stay in Email settings; chat cannot grant itself those powers."
+    },
     {
       id: "email.skip-sign-in-code-emails",
       description:
@@ -155,24 +159,28 @@ export const emailModuleManifest = {
     {
       method: "GET",
       path: "/api/email/messages",
+      chat: { access: "read", coveredBy: "email.listVisibleMessages" },
       responseSchema: listEmailMessagesResponseSchema,
       permissionId: "email.view"
     },
     {
       method: "GET",
       path: "/api/email/messages/:id",
+      chat: { access: "read" },
       responseSchema: getEmailMessageResponseSchema,
       permissionId: "email.view"
     },
     {
       method: "GET",
       path: "/api/email/briefing-settings",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: getEmailBriefingSettingsResponseSchema,
       permissionId: "email.manage"
     },
     {
       method: "PATCH",
       path: "/api/email/briefing-settings",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: updateEmailBriefingSettingsRequestSchema,
       responseSchema: getEmailBriefingSettingsResponseSchema,
       permissionId: "email.manage"
@@ -180,12 +188,14 @@ export const emailModuleManifest = {
     {
       method: "GET",
       path: "/api/email/task-creation-mode",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: emailTaskCreationModeResponseSchema,
       permissionId: "email.manage"
     },
     {
       method: "PUT",
       path: "/api/email/task-creation-mode",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       requestSchema: updateEmailTaskCreationModeRequestSchema,
       responseSchema: emailTaskCreationModeResponseSchema,
       permissionId: "email.manage"
@@ -211,6 +221,7 @@ export const emailModuleManifest = {
         "failures, with source and gap metadata.",
       permissionId: "email.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {}

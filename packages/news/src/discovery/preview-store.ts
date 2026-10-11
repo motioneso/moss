@@ -36,6 +36,7 @@ export function createPreviewStore(
 ): {
   put(preview: PendingSourcePreview): string;
   take(ownerUserId: string, confirmationId: string): PendingSourcePreview | null;
+  peek(ownerUserId: string, confirmationId: string): PendingSourcePreview | null;
 } {
   const ttlMs = opts.ttlMs ?? 10 * 60 * 1_000;
   const maxPerOwner = opts.maxPerOwner ?? 10;
@@ -58,6 +59,12 @@ export function createPreviewStore(
       const id = randomUUID();
       entries.set(id, preview);
       return id;
+    },
+    peek(ownerUserId, confirmationId) {
+      const preview = entries.get(confirmationId);
+      if (!preview || preview.ownerUserId !== ownerUserId || now() - preview.createdAt > ttlMs)
+        return null;
+      return structuredClone(preview);
     },
     take(ownerUserId, confirmationId) {
       const preview = entries.get(confirmationId);

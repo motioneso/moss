@@ -6,7 +6,7 @@ import Foundation
 enum ObservationStatement {
     static func current(focusEnabled: Bool, watchEntireDesktop: Bool = false) -> String {
         guard focusEnabled else {
-            return "These permissions prepare future capabilities. Trail Marker is not observing your activity."
+            return "Permissions enable only the features you choose. Linking this Mac or granting access does not start a meeting recording."
         }
         let scope = watchEntireDesktop ? "for the entire desktop" : "for the apps you have allowed"
         return "While a Moss calendar block is on, Trail Marker tells Moss the name of the app in front "
@@ -22,4 +22,9 @@ enum ObservationStatement {
     static let accessibilityScope =
         "Lets Trail Marker read the title of the window in front, for the apps you allow (or the entire "
             + "desktop, if you choose that), while a Moss block is on."
+
+    /// The existing Screen Recording grant is not a preflight for a Core Audio process tap.
+    static let screenRecordingScope =
+        "Allows screen reading for Backtrack and screen-aware Focus when you enable them. "
+            + "Meeting computer audio uses separate system-audio access, which macOS may request when you press Start."
 }

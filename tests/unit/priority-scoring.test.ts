@@ -432,4 +432,39 @@ describe("priority scoring", () => {
     expect(results[0]!.title).toBe("Alpha");
     expect(results[1]!.title).toBe("Beta");
   });
+
+  it("carries each candidate key through to its own result — #2609", () => {
+    const candidates: PriorityCandidate[] = [
+      { source: "calendar", title: "Standup", textForAnchorMatch: ["standup"], key: "mon" },
+      { source: "calendar", title: "Standup", textForAnchorMatch: ["standup"], key: "tue" }
+    ];
+
+    const results = rankPriorityCandidates({
+      model: DEFAULT_MODEL,
+      candidates,
+      now: NOW,
+      timeZone: TZ,
+      focusReadiness: []
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results.map((result) => result.key).sort()).toEqual(["mon", "tue"]);
+  });
+
+  it("leaves the key off results whose candidate set none — #2609", () => {
+    const candidates: PriorityCandidate[] = [
+      { source: "calendar", title: "Standup", textForAnchorMatch: ["standup"] }
+    ];
+
+    const results = rankPriorityCandidates({
+      model: DEFAULT_MODEL,
+      candidates,
+      now: NOW,
+      timeZone: TZ,
+      focusReadiness: []
+    });
+
+    expect(results).toHaveLength(1);
+    expect("key" in results[0]!).toBe(false);
+  });
 });

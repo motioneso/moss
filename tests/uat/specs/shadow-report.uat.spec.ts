@@ -5,6 +5,7 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { buildUatComposeArgs } from "../provisioner.js";
 import {
   requireShadowReportProject,
+  SHADOW_REPORT_MODEL_TOOL,
   SHADOW_REPORT_MODEL_IDENTITY
 } from "../fixtures/shadow-report-connection.js";
 import {
@@ -61,7 +62,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible();
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
@@ -75,8 +76,8 @@ async function signIn(page: Page): Promise<void> {
 }
 
 async function openAssistantAndAiSettings(page: Page): Promise<void> {
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "AI providers" }).click();
 }
@@ -117,7 +118,12 @@ async function openChat(page: Page): Promise<Locator> {
   return drawer;
 }
 
-async function sendMessage(page: Page, drawer: Locator, message: string): Promise<number> {
+async function sendMessage(
+  page: Page,
+  drawer: Locator,
+  message: string,
+  approveFixtureLightInProject?: string
+): Promise<number> {
   const turnResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
@@ -127,6 +133,32 @@ async function sendMessage(page: Page, drawer: Locator, message: string): Promis
   const composer = drawer.getByLabel("Message Moss");
   await composer.fill(message);
   await composer.press("Enter");
+  if (approveFixtureLightInProject) {
+    // Outside descriptors and ACP launch are admission paths. This one known synthetic write
+    // must ask; no unrelated tool or production device is approved by this test.
+    const card = drawer.getByRole("region", { name: "Action request" });
+    await expect(card.getByText(SHADOW_REPORT_MODEL_TOOL, { exact: true })).toBeVisible({
+      timeout: 60_000
+    });
+    await expect(
+      card.getByText("Moss read something from outside your account before asking this.")
+    ).toBeVisible();
+    const disclosedArguments = await card.locator(".action-request-arguments").textContent();
+    expect(disclosedArguments).not.toBeNull();
+    expect(JSON.parse(disclosedArguments!)).toEqual({ name: "Kitchen light", on: true });
+    expect(await fixtureLightEvidence(approveFixtureLightInProject)).toEqual({
+      calls: 0,
+      totalCalls: 0,
+      kitchenOn: false
+    });
+    const resolved = page.waitForResponse(
+      (response) =>
+        /\/api\/chat\/action-requests\/[^/]+\/resolve$/.test(new URL(response.url()).pathname) &&
+        response.request().method() === "POST"
+    );
+    await card.getByRole("button", { name: "Approve", exact: true }).click();
+    expect((await resolved).status()).toBe(204);
+  }
   return (await turnResponse).status();
 }
 
@@ -181,7 +213,9 @@ test("the shadow report counts real shadow records and lists the disagreement (#
   // is intentionally unobserved after #3037, so it cannot prove a genuine disagreement.
   await page.goto(requireBaseURL());
   drawer = await openChat(page);
-  expect(await sendMessage(page, drawer, "uatmiss turn on the fixture Kitchen light")).toBe(200);
+  expect(
+    await sendMessage(page, drawer, "uatmiss turn on the fixture Kitchen light", project)
+  ).toBe(200);
   await expect(drawer.getByText("The fixture light is on.").last()).toBeVisible({
     timeout: 60_000
   });

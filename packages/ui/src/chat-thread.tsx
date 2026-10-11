@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { BrandMark } from "./brand-mark.js";
+import { actionApprovalOutcome, actionOutcomeText } from "@moss/shared/chat-action-outcome";
 
 import type {
   ChatRecordKind,
@@ -23,7 +24,14 @@ import type {
  * nothing else.
  */
 
-export type ThreadRenderRecord = (record: TranscriptRecord, index: number) => ReactNode;
+export interface ThreadRecordContext {
+  readonly approvalOutcomeShown?: boolean;
+}
+export type ThreadRenderRecord = (
+  record: TranscriptRecord,
+  index: number,
+  context: ThreadRecordContext
+) => ReactNode;
 
 export function Thread(props: {
   readonly records: readonly TranscriptRecord[];
@@ -47,7 +55,12 @@ export function Thread(props: {
         if (item.type === "status") {
           return <StatusLine key={index} record={item.record} />;
         }
-        return <Fragment key={index}>{renderRecord(item.record, index)}</Fragment>;
+        const key = item.record.actionRequestId
+          ? `${item.record.kind}-${item.record.actionRequestId}`
+          : index;
+        return (
+          <Fragment key={key}>{renderRecord(item.record, index, item.context ?? {})}</Fragment>
+        );
       })}
     </div>
   );
@@ -67,7 +80,11 @@ const ACTIVITY_KINDS: ReadonlySet<ChatRecordKind> = new Set<ChatRecordKind>([
 ]);
 
 type RenderItem =
-  | { readonly type: "record"; readonly record: TranscriptRecord }
+  | {
+      readonly type: "record";
+      readonly record: TranscriptRecord;
+      readonly context?: ThreadRecordContext;
+    }
   | { readonly type: "status"; readonly record: TranscriptRecord }
   | {
       readonly type: "activity";
@@ -89,6 +106,23 @@ export function groupRecords(
 ): RenderItem[] {
   const items: RenderItem[] = [];
   let buffer: TranscriptRecord[] = [];
+  const requests = new Set(
+    records
+      .filter((record) => record.kind === "action_request")
+      .map((record) => record.actionRequestId)
+      .filter(Boolean)
+  );
+  const decisions = new Map(
+    records
+      .filter(
+        (record) =>
+          record.kind === "action_result" &&
+          record.actionRequestId &&
+          (actionApprovalOutcome(record) ||
+            (record.decidedBy === "policy" && record.outcome === "denied"))
+      )
+      .map((record) => [record.actionRequestId, record])
+  );
 
   const flush = (inProgress: boolean) => {
     if (buffer.length > 0) {
@@ -105,7 +139,25 @@ export function groupRecords(
     } else if (record.kind === "action_request" || record.kind === "action_result") {
       // Action notifications stay standalone, but their related activity remains one turn fold.
       // Keep collecting around the notification instead of flushing the fold at this boundary.
-      items.push({ type: "record", record });
+      const decision =
+        record.kind === "action_request" ? decisions.get(record.actionRequestId) : undefined;
+      items.push({
+        type: "record",
+        ...(record.kind === "action_result" &&
+        record.actionRequestId &&
+        requests.has(record.actionRequestId)
+          ? { context: { approvalOutcomeShown: true } }
+          : {}),
+        record: decision
+          ? {
+              ...record,
+              summary: decision.summary,
+              outcome: decision.outcome,
+              decidedBy: decision.decidedBy,
+              reason: decision.reason
+            }
+          : record
+      });
     } else {
       flush(false);
       items.push({ type: "record", record });
@@ -222,7 +274,11 @@ function ThreadMarkdown({ text }: { readonly text: string }) {
  * (approval cards, provenance, feedback, attachments) — anything fancier than the turns below
  * falls through to a quiet line rather than rendering blank.
  */
-function defaultRenderRecord(record: TranscriptRecord): ReactNode {
+function defaultRenderRecord(
+  record: TranscriptRecord,
+  _index: number,
+  context: ThreadRecordContext
+): ReactNode {
   if (record.kind === "user") {
     return (
       <div className="chatd-msg chatd-msg--me">
@@ -245,6 +301,15 @@ function defaultRenderRecord(record: TranscriptRecord): ReactNode {
   }
   if (record.kind === "error") {
     return <p className="form-error">{record.text}</p>;
+  }
+  if (record.kind === "action_result" || record.kind === "action_request") {
+    if (context.approvalOutcomeShown) return null;
+    const outcome = actionOutcomeText(record);
+    return outcome ? (
+      <p className="chatd-status" role="status">
+        {outcome}
+      </p>
+    ) : null;
   }
   return (
     <div className="chatd-peek__line" role="status">

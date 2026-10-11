@@ -65,6 +65,7 @@ export interface ClassifierGateWiringDeps {
       identity: {
         actorUserId: string;
         chatSessionId: string;
+        threadId: string | null;
         allowedToolNames: Set<string> | null;
       },
       options?: GateTokenMintOptions
@@ -125,13 +126,14 @@ export function buildClassifierGateRunner(deps: ClassifierGateWiringDeps): Class
     readMode: deps.readMode,
     ...(deps.createPorts ? { createPorts: deps.createPorts } : {}),
     tokens: {
-      mint: (actorUserId, correlationId, options) => {
+      mint: (actorUserId, correlationId, threadId, options) => {
         // Tool limit: the gate token always carries an allowlist, never unrestricted. It starts
         // empty and `permit` adds the one dispatched tool.
         const allowed = new Set<string>();
         const token = deps.tokens.mint(
           {
             actorUserId,
+            threadId,
             chatSessionId: classifierGateSessionId(correlationId),
             allowedToolNames: allowed
           },
@@ -168,7 +170,12 @@ export interface GateTokenCallbacks {
    * Mints a short-lived gate token through the composition root's real token registry. `options`
    * carries the gate token's own TTL and fixed-expiry flag when the wiring sets them.
    */
-  mint(actorUserId: string, correlationId: string, options?: GateTokenMintOptions): string;
+  mint(
+    actorUserId: string,
+    correlationId: string,
+    threadId: string | null,
+    options?: GateTokenMintOptions
+  ): string;
   /**
    * #2956: files this attempt's tool rows under the chat turn. Called with the
    * request's turn id (or nothing) right after mint; the production revoke
@@ -227,7 +234,12 @@ export function createClassifierGateRunner(deps: ClassifierGateRunnerDeps): Clas
     mode: (actorUserId) => deps.readMode(actorUserId),
     async evaluate(request) {
       const correlationId = newCorrelationId();
-      const token = deps.tokens.mint(request.actorUserId, correlationId, deps.tokens.tokenOptions);
+      const token = deps.tokens.mint(
+        request.actorUserId,
+        correlationId,
+        request.threadId,
+        deps.tokens.tokenOptions
+      );
       // #2956: the gate executes tools under its own session id, so the turn is
       // registered under that id too. Cleared by the revoke below.
       deps.tokens.noteTurn?.(correlationId, request.turnId);

@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { parsePositiveIntEnv } from "@moss/shared";
+import {
+  decisionModelDialect,
+  isCloudflareDecisionBaseUrl,
+  parsePositiveIntEnv
+} from "@moss/shared";
 
 import {
   resolveMossEnv,
@@ -50,7 +54,7 @@ import {
   updateAiProviderConfigRouteSchema,
   type AiAssistantToolBlockedReason,
   type AiAssistantActionDto,
-  type AiAssistantActionStatus,
+  type AiAssistantActionPresentation,
   type AiAssistantToolDto,
   type AiAssistantToolInvocationDto,
   type AiAuthMethod,
@@ -149,7 +153,14 @@ export interface AiRoutesDependencies {
     actorUserId: string,
     actionRequestId: string,
     status: "confirmed" | "rejected" | "cancelled"
-  ) => Promise<"resolved" | "expired" | "not_found">;
+  ) => Promise<"resolved" | "expired" | "unavailable" | "not_found">;
+  /** Full owner-bound disclosure exists only while its original live waiter remains available. */
+  readonly getActionRequestPresentation?: (
+    actorUserId: string,
+    actionRequestId: string
+  ) => AiAssistantActionPresentation | undefined;
+  /** Re-arm or settle persisted request deadlines for this owner after a restart. */
+  readonly recoverActionRequests?: (actorUserId: string) => Promise<void>;
   // #1888 — injected by the composition root: approving a module build starts it, which needs
   // the job queue. packages/ai owns the rule (ownership check, status transition) but not the
   // queue, so the wiring is handed in the same way resolveActionRequest is. Absent means the
@@ -205,6 +216,7 @@ export function registerAiRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const body = parseCreateProviderBody(request.body);
         const authMethod = body.authMethod ?? "api_key";
+        assertDecisionModelBaseUrl(body.providerKind, body.baseUrl ?? null);
         const encryptedCredential =
           authMethod === "cli"
             ? secretCipher.encryptJson({ cli: true })
@@ -316,6 +328,10 @@ export function registerAiRoutes(
             if (!existing) return undefined;
             const providerKind = body.providerKind ?? existing.provider_kind;
             const authMethod = body.authMethod ?? existing.auth_method;
+            assertDecisionModelBaseUrl(
+              providerKind,
+              body.baseUrl !== undefined ? body.baseUrl : existing.base_url
+            );
             // A kind change cannot inherit an agent from the old protocol family. Select the
             // established CLI for the new family unless the admin explicitly chose an agent.
             const priorAgentId =
@@ -730,17 +746,39 @@ export function registerAiRoutes(
     }
   );
 
-  server.get(
+  server.get<{ Querystring: { readonly threadId?: string } }>(
     "/api/ai/assistant-actions",
     { schema: listAiAssistantActionsRouteSchema },
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
+        if (request.query.threadId) {
+          await dependencies.recoverActionRequests?.(accessContext.actorUserId);
+        }
         const actions = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repository.listAssistantActions(scopedDb)
+          repository.listAssistantActions(scopedDb, request.query.threadId)
         );
 
-        return { actions: actions.map(serializeAssistantAction) };
+        // Metadata-only requests remain declineable, but only a retained owner-bound live
+        // disclosure may expose Approve. Never reconstruct disclosure from inputSummary.
+        const visibleActions = request.query.threadId
+          ? actions.filter((action) => action.status === "pending")
+          : actions;
+        return {
+          actions: visibleActions.map((action) => {
+            const dto = serializeAssistantAction(action);
+            if (!request.query.threadId) return dto;
+            const presentation = dependencies.getActionRequestPresentation?.(
+              accessContext.actorUserId,
+              action.id
+            );
+            return {
+              ...dto,
+              approvalAvailable: presentation !== undefined,
+              ...(presentation ? { presentation } : {})
+            };
+          })
+        };
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -762,6 +800,12 @@ export function registerAiRoutes(
           request.params.id,
           body.status
         );
+        if (outcome === "unavailable") {
+          return reply.code(409).send({
+            code: "approval_unavailable",
+            error: "Details for this request aren’t available. Ask Moss again if you still want it."
+          });
+        }
         if (outcome === "expired") {
           return reply.code(409).send({ error: "This request expired — ask again." });
         }
@@ -920,7 +964,7 @@ export function registerAiRoutes(
 
         if (tool.risk !== "read") {
           const pendingTool = tool as AiAssistantToolDto & {
-            readonly risk: "write" | "outbound" | "destructive";
+            readonly risk: "read" | "write" | "outbound" | "destructive";
           };
           const action = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
             repository.createPendingAssistantAction(scopedDb, {
@@ -1015,6 +1059,22 @@ function cleanCredentialPayload(payload: Record<string, unknown>): Record<string
   return typeof payload.apiKey === "string"
     ? { ...payload, apiKey: payload.apiKey.trim() }
     : payload;
+}
+
+/**
+ * #3057: a Cloudflare decision-model address must be the exact account-ai shape. The account id
+ * becomes a URL path segment, so a loose value could steer the request to another host or path.
+ * Any non-Cloudflare address (including a blank one) is the standard dialect and is left alone.
+ */
+function assertDecisionModelBaseUrl(providerKind: AiProviderKind, baseUrl: string | null): void {
+  if (providerKind !== "system-one") return;
+  if (decisionModelDialect(baseUrl) !== "cloudflare") return;
+  if (!isCloudflareDecisionBaseUrl(baseUrl ?? "")) {
+    throw new HttpError(
+      400,
+      "A Cloudflare decision model address must use a 32-character account id."
+    );
+  }
 }
 
 function parseCreateProviderBody(body: unknown): CreateAiProviderConfigRequest {
@@ -1157,7 +1217,7 @@ function parsePutAdminChatModelOverrideBody(body: unknown): PutAdminChatModelOve
 
 function requiredResolvableAssistantActionStatus(
   value: unknown
-): Exclude<AiAssistantActionStatus, "pending"> {
+): ResolveAiAssistantActionRequest["status"] {
   if (value === "confirmed" || value === "rejected" || value === "cancelled") {
     return value;
   }

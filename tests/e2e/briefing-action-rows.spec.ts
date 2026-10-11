@@ -9,6 +9,7 @@ import {
   mockApi,
   type MockApiState
 } from "./mock-api.js";
+import { mockApi as mockChatApi } from "./mock-chat-model.js";
 import { myModulesResponse } from "./mock-modules.js";
 import { sportsOverviewFixture } from "./mock-sports-api.js";
 import {
@@ -140,7 +141,7 @@ test("morning and evening prose and action rows render accept dismiss view reply
       ]
     }
   };
-  await mockApi(page, state);
+  await mockChatApi(page, state);
   await page.route("**/api/calendar/day-plan*", (route) =>
     route.fulfill({
       status: 200,
@@ -207,6 +208,7 @@ test("morning and evening prose and action rows render accept dismiss view reply
       actionRequestId: "draft-reply-action-1",
       toolName: "email.draftReply",
       summary: "Draft reply to Alex?",
+      outcomeTitle: "Draft reply to Alex?",
       preview: {
         to: "alex@example.test",
         subject: "Re: Launch decision",

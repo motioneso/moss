@@ -26,9 +26,32 @@ export function createMeetingChatData(deps: {
       },
       async snapshot(access, meetingId, query) {
         if (!(await enabled(access))) return null;
-        return deps.dataContext.withDataContext(access, (db) =>
-          transcripts.retrieve(db, meetingId, { query, maxSegments: 8, maxCharacters: 12_000 })
-        );
+        return deps.dataContext.withDataContext(access, async (db) => {
+          const meeting = await records.get(db, meetingId, { forUpdate: true });
+          if (!meeting) return null;
+          const transcript = await transcripts.retrieve(db, meetingId, {
+            query,
+            maxSegments: 8,
+            maxCharacters: 12_000
+          });
+          return {
+            ...(transcript ?? {
+              ownerUserId: access.actorUserId,
+              meetingId,
+              transcriptRevision: 0,
+              cursor: 0,
+              cutoffMs: 0,
+              maxSegments: 8,
+              maxCharacters: 12_000,
+              segments: [],
+              throughMs: null,
+              containsProvisional: false,
+              omittedSegments: 0
+            }),
+            personalNotes: meeting.personalNotes,
+            notesRevision: meeting.notesRevision
+          };
+        });
       },
       async evidence(access, evidence) {
         if (!(await enabled(access))) return null;
@@ -42,8 +65,8 @@ export function createMeetingChatData(deps: {
     ): Promise<T> {
       if (!(await enabled(access))) throw new MeetingContextUnavailableError();
       return deps.dataContext.withDataContext(access, async (db) => {
-        // Public transcript read holds the meeting FOR SHARE through this transaction.
-        if (!(await transcripts.snapshot(db, meetingId, { maxSegments: 1, maxCharacters: 1 })))
+        // Hold the owner-visible record lock even before a first transcript exists.
+        if (!(await records.get(db, meetingId, { forUpdate: true })))
           throw new MeetingContextUnavailableError();
         return work(db);
       });

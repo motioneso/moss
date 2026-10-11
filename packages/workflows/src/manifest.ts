@@ -74,12 +74,28 @@ export const workflowsModuleManifest = {
   // (packages/module-registry/src/route-guard.ts) — and no test would ever see the endpoint,
   // because the failure happens before any route is reachable.
   routes: [
-    { method: "GET", path: "/api/workflows/runs", permissionId: "workflows.view" },
-    { method: "GET", path: "/api/workflows/runs/:id", permissionId: "workflows.view" },
-    { method: "POST", path: "/api/workflows/runs/:id/cancel", permissionId: "workflows.manage" },
+    {
+      method: "GET",
+      path: "/api/workflows/runs",
+      chat: { access: "read" },
+      permissionId: "workflows.view"
+    },
+    {
+      method: "GET",
+      path: "/api/workflows/runs/:id",
+      chat: { access: "read" },
+      permissionId: "workflows.view"
+    },
+    {
+      method: "POST",
+      path: "/api/workflows/runs/:id/cancel",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "workflows.manage"
+    },
     {
       method: "POST",
       path: "/api/workflows/approvals/:id/resolve",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "workflows.manage"
     }
   ],

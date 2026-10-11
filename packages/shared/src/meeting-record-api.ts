@@ -81,3 +81,24 @@ export const putMeetingNotesSchema = {
     }
   }
 } as const;
+export interface PutMeetingTitleInput {
+  readonly meetingId: string;
+  readonly title: string;
+  readonly expectedTitle: string;
+}
+export type PutMeetingTitleResult =
+  | { readonly status: "saved"; readonly meeting: MeetingRecord }
+  | { readonly status: "conflict"; readonly meeting: MeetingRecord }
+  | { readonly status: "not-found" };
+export const putMeetingTitleSchema = {
+  params: meetingParams,
+  body: {
+    type: "object",
+    additionalProperties: false,
+    required: ["title", "expectedTitle"],
+    properties: {
+      title: { type: "string", minLength: 1, maxLength: 240 },
+      expectedTitle: { type: "string", minLength: 1, maxLength: 240 }
+    }
+  }
+} as const;

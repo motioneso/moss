@@ -1,3 +1,8 @@
+import {
+  scratchpadAppendRoutePresentation,
+  scratchpadSettingsPresentation,
+  scratchpadAppendPresentation
+} from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -29,15 +34,51 @@ export const scratchpadModuleManifest = {
     ownedTables: ["app.scratchpads"]
   },
   routes: [
-    { method: "GET", path: "/api/scratchpad", permissionId: "scratchpad.read" },
-    { method: "PUT", path: "/api/scratchpad", permissionId: "scratchpad.write" },
-    { method: "POST", path: "/api/scratchpad/append", permissionId: "scratchpad.write" },
-    { method: "PATCH", path: "/api/scratchpad/settings", permissionId: "scratchpad.write" }
+    {
+      method: "GET",
+      path: "/api/scratchpad",
+      chat: { access: "read", content: "outside", coveredBy: "scratchpad.read" },
+      permissionId: "scratchpad.read"
+    },
+    {
+      method: "PUT",
+      path: "/api/scratchpad",
+      chat: { access: "blocked", blockedBecause: "module_promise" },
+      permissionId: "scratchpad.write"
+    },
+    {
+      method: "POST",
+      path: "/api/scratchpad/append",
+      chat: {
+        access: "write",
+        title: "Append to scratchpad",
+        content: "outside",
+        presentation: scratchpadAppendRoutePresentation,
+        coveredBy: "scratchpad.append"
+      },
+      permissionId: "scratchpad.write"
+    },
+    {
+      method: "PATCH",
+      path: "/api/scratchpad/settings",
+      chat: {
+        access: "write",
+        title: "Update scratchpad settings",
+        presentation: scratchpadSettingsPresentation,
+        content: "user_authored"
+      },
+      permissionId: "scratchpad.write"
+    }
   ],
   // #2236 slice 1: storage, the API, and the two assistant tools only. No screen yet - the
   // scratchpad UI is a later slice - so `navigation` and `settings` stay absent on purpose,
   // matching the notifications module's precedent for a module with no screen yet.
   features: [
+    {
+      id: "scratchpad.chat_app_actions",
+      description:
+        "App actions read and append Scratchpad text and change its local settings. Replacing the whole Scratchpad remains blocked; returned note text is outside content."
+    },
     {
       id: "scratchpad.assistant_read_append",
       description:
@@ -120,14 +161,18 @@ export const scratchpadModuleManifest = {
       description: "Read the user's scratchpad text.",
       permissionId: "scratchpad.read",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: scratchpadReadExecute
     },
     {
       name: "scratchpad.append",
+      actionLabel: "Append to scratchpad",
+      approvalPresentation: scratchpadAppendPresentation,
       description: "Append a line to the user's scratchpad. Never replaces existing text.",
       permissionId: "scratchpad.write",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "scratchpad_changes",
       selfOperationGrant: "granted_at_install",

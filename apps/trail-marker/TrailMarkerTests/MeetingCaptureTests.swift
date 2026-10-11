@@ -3,7 +3,7 @@ import XCTest
 
 final class MeetingCaptureTests: XCTestCase {
     private let ready = MeetingNativeReadiness(permissionsGranted: true, processingReady: true,
-                                              noticeAcknowledged: true, meetingDeviceAuthorized: true)
+                                              meetingDeviceAuthorized: true)
     private let mic = MeetingNativeSelection(microphoneDeviceID: 42, output: nil)
     private final class Device: MeetingAudioCapturing {
         var receiver: MeetingAudioReceiving?
@@ -163,9 +163,9 @@ final class MeetingCaptureTests: XCTestCase {
     func testReadinessScopeAndDeadlineFailuresDoNotOpenDevices() throws {
         var calls = 0
         let runtime = MeetingCaptureRuntime { _ in calls += 1; return [:] }
-        let denied = MeetingNativeReadiness(permissionsGranted: false, processingReady: true,
-                                           noticeAcknowledged: true, meetingDeviceAuthorized: true)
-        XCTAssertThrowsError(try runtime.prepare(selection: mic, readiness: denied, at: 0))
+        for denied in deniedReadiness {
+            XCTAssertThrowsError(try runtime.prepare(selection: mic, readiness: denied, at: 0))
+        }
         XCTAssertThrowsError(try runtime.prepare(selection: MeetingNativeSelection(microphoneDeviceID: 0, output: nil), readiness: ready, at: 0))
         XCTAssertThrowsError(try runtime.prepare(selection: MeetingNativeSelection(microphoneDeviceID: 1, output: .selectedProcesses([])), readiness: ready, at: 0))
         XCTAssertEqual(calls, 0)
@@ -174,6 +174,32 @@ final class MeetingCaptureTests: XCTestCase {
         try machine.start(readiness: ready, at: 0)
         XCTAssertThrowsError(try machine.stop(at: 1, finalizationNanoseconds: 60_000_000_001))
         XCTAssertThrowsError(try machine.stop(at: UInt64.max, finalizationNanoseconds: 1))
+    }
+
+    private var deniedReadiness: [MeetingNativeReadiness] {
+        [
+            .init(permissionsGranted: false, processingReady: true, meetingDeviceAuthorized: true),
+            .init(permissionsGranted: true, processingReady: false, meetingDeviceAuthorized: true),
+            .init(permissionsGranted: true, processingReady: true, meetingDeviceAuthorized: false)
+        ]
+    }
+
+    func testStartAndResumeRecheckEveryRemainingReadinessRequirement() throws {
+        for denied in deniedReadiness {
+            let device = Device()
+            var factories = 0
+            let runtime = MeetingCaptureRuntime { _ in factories += 1; return [.microphone: device] }
+            try runtime.prepare(selection: mic, readiness: ready, at: 0)
+            XCTAssertThrowsError(try runtime.start(readiness: denied, at: 1))
+            XCTAssertEqual(factories, 0)
+            try runtime.start(readiness: ready, at: 2)
+            try runtime.pause(at: 3)
+            XCTAssertThrowsError(try runtime.resume(selection: mic, readiness: denied, permitRetainedAudio: true, at: 4))
+            XCTAssertEqual(factories, 1, "A denied Resume must not create another input")
+            XCTAssertEqual(device.starts, 1)
+            XCTAssertEqual(runtime.snapshot.state, .paused)
+            try runtime.terminate(at: 5)
+        }
     }
     func testDefaultDeadlineCannotTurnExpiredUnsentAudioIntoSuccessfulDrain() throws {
         let device = Device()
@@ -206,6 +232,313 @@ final class MeetingCaptureTests: XCTestCase {
         XCTAssertEqual(gaps, [MeetingAudioGap(source: .microphone, epoch: 1,
             startNanoseconds: 10, endNanoseconds: 20, reason: .paused)])
         try runtime.stop(at: 20)
+    }
+
+    func testRealChunkDispatchWaitsThenRetriesIdenticalAudioWithAppendedCallbacks() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        for second in 0..<4 { device.emit(at: UInt64(second) * 1_000_000_000, count: 8000) }
+        XCTAssertFalse(try runtime.dispatchNextChunk(at: 4_000_000_000, targetDurationNanoseconds: 5_000_000_000) { _ in XCTFail("Too short") })
+        device.emit(at: 4_000_000_000, count: 8000)
+        var packets: [MeetingAudioPacket] = []
+        XCTAssertTrue(try runtime.dispatchNextChunk(at: 5_000_000_000, targetDurationNanoseconds: 5_000_000_000) { packets.append($0) })
+        device.emit(at: 5_000_000_000, count: 8000)
+        runtime.completeSend(source: .microphone, epoch: 1, sequence: 0, received: false)
+        XCTAssertTrue(try runtime.dispatchNextChunk(at: 6_000_000_000, targetDurationNanoseconds: 5_000_000_000) { packets.append($0) })
+        XCTAssertEqual(packets[0], packets[1])
+        XCTAssertEqual(packets[0].samples.count, 40_000)
+        runtime.completeSend(source: .microphone, epoch: 1, sequence: 0, received: true)
+        try runtime.stop(at: 6_000_000_000)
+        XCTAssertTrue(try runtime.dispatchNextChunk(at: 6_000_000_000, targetDurationNanoseconds: 5_000_000_000) { packets.append($0) })
+        XCTAssertEqual(packets.last?.sequence, 5)
+        XCTAssertEqual(packets.last?.samples.count, 8000)
+    }
+
+    func testResumeDeclinesOldAudioPermanentlyIncludingLaterStop() throws {
+        let first = Device(), second = Device()
+        var factories = 0
+        let runtime = MeetingCaptureRuntime { _ in
+            factories += 1
+            return [.microphone: factories == 1 ? first : second]
+        }
+        try start(runtime)
+        first.emit(at: 0)
+        try runtime.pause(at: 1_000_000)
+        try runtime.resume(selection: mic, readiness: ready, permitRetainedAudio: false, at: 2_000_000)
+        try runtime.stop(at: 3_000_000)
+        XCTAssertFalse(try runtime.dispatchNextChunk(at: 3_000_000) { _ in XCTFail("Declined retention") })
+        XCTAssertTrue(try runtime.service(at: 3_000_000).contains { $0.reason == .retentionDeclined })
+    }
+
+    func testTerminateIsImmediateNoFlushBarrierEvenWhenCleanupFails() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        device.emit(at: 0)
+        device.failStop = true
+        XCTAssertThrowsError(try runtime.terminate(at: 1_000_000))
+        XCTAssertEqual(runtime.snapshot.state, .finished)
+        device.emit(at: 1_000_000)
+        XCTAssertFalse(try runtime.dispatchNext(at: 2_000_000) { _ in XCTFail("Termination never flushes") })
+        XCTAssertThrowsError(try runtime.reset(at: 2_000_000))
+        device.failStop = false
+        try runtime.terminate(at: 2_000_000)
+        try runtime.reset(at: 2_000_000)
+        XCTAssertEqual(runtime.snapshot.state, .idle)
+    }
+
+    func testResetFencesOldReceiptsAndRequiresExplicitStart() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        device.emit(at: 0)
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { _ in })
+        try runtime.terminate(at: 1_000_000)
+        try runtime.reset(at: 1_000_000)
+        XCTAssertThrowsError(try runtime.start(readiness: ready, at: 1_000_000))
+        try runtime.prepare(selection: mic, readiness: ready, at: 1_000_000)
+        try runtime.start(readiness: ready, at: 1_000_000)
+        XCTAssertEqual(runtime.snapshot.epoch, 2)
+        device.emit(at: 1_000_000)
+        XCTAssertTrue(try runtime.dispatchNext(at: 2_000_000) { _ in })
+        runtime.completeSend(source: .microphone, epoch: 1, sequence: 0, received: true)
+        XCTAssertFalse(try runtime.dispatchNext(at: 2_000_000) { _ in XCTFail("Still in flight") })
+        runtime.completeSend(source: .microphone, epoch: 2, sequence: 0, received: false)
+        XCTAssertTrue(try runtime.dispatchNext(at: 2_000_000) { _ in })
+        try runtime.terminate(at: 2_000_000)
+    }
+
+    func testDelayedServerStopUsesEarlierCutoffWithoutReversingControlClock() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        device.emit(at: 0)
+        _ = try runtime.service(at: 2_000_000)
+        try runtime.stop(at: 3_000_000, captureCutoffNanoseconds: 500_000)
+        var sent: MeetingAudioPacket?
+        XCTAssertTrue(try runtime.dispatchNextChunk(at: 3_000_000) { sent = $0 })
+        XCTAssertEqual(sent?.samples.count, 4)
+        XCTAssertEqual(runtime.snapshot.stopCutoffNanoseconds, 500_000)
+        try runtime.tightenStopCutoff(to: 1_000_000)
+        XCTAssertEqual(runtime.snapshot.stopCutoffNanoseconds, 500_000)
+    }
+
+    func testTightenedCutoffNeverRetriesChangedBytesUnderOfferedIdentity() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        device.emit(at: 0)
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { _ in })
+        runtime.completeSend(source: .microphone, epoch: 1, sequence: 0, received: false)
+        try runtime.stop(at: 2_000_000)
+        try runtime.tightenStopCutoff(to: 500_000)
+        XCTAssertFalse(try runtime.dispatchNextChunk(at: 2_000_000) { _ in XCTFail("Changed retry body") })
+        XCTAssertTrue(try runtime.service(at: 2_000_000).contains { $0.reason == .cutoffChanged })
+    }
+
+    func testUncertainOutputScopeDiscardsQueuedAudioBeforeStopCanFlushIt() throws {
+        let microphone = Device(), output = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: microphone, .output: output] }
+        try start(runtime, selection: MeetingNativeSelection(microphoneDeviceID: 42, output: .excludingProcesses([7])))
+        microphone.emit(at: 0)
+        output.emit(at: 0)
+        output.receiver?.fail(.invalidSelection)
+        let gaps = try runtime.service(at: 1_000_000)
+        XCTAssertEqual(runtime.snapshot.state, .paused)
+        XCTAssertTrue(gaps.contains { $0.reason == .captureFailure(.invalidSelection) })
+        try runtime.stop(at: 1_000_000)
+        XCTAssertFalse(try runtime.dispatchNextChunk(at: 1_000_000) { _ in XCTFail("Uncertain capture scope") })
+    }
+
+    func testChunkCannotBeAdmittedAheadOfAcknowledgedServerClock() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        device.emit(at: 0)
+        try runtime.stop(at: 2_000_000)
+        XCTAssertFalse(try runtime.dispatchNextChunk(at: 2_000_000, latestEndNanoseconds: 999_999) { _ in
+            XCTFail("Server has not acknowledged the packet end")
+        })
+        XCTAssertTrue(try runtime.dispatchNextChunk(at: 2_000_000, latestEndNanoseconds: 1_000_000) { packet in
+            XCTAssertEqual(packet.sequence, 0)
+            XCTAssertEqual(packet.samples.count, 8)
+        })
+    }
+
+    func testOutputDispatchDoesNotWaitForSlowMicrophoneReceipt() throws {
+        let microphone = Device(), output = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: microphone, .output: output] }
+        try start(runtime, selection: MeetingNativeSelection(microphoneDeviceID: 42, output: .selectedProcesses([7])))
+        microphone.emit(at: 0)
+        output.emit(at: 0)
+        var first: MeetingAudioPacket?
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { first = $0 })
+        XCTAssertEqual(first?.source, .microphone)
+        // No microphone receipt has arrived. Output has its own admission and request slot.
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { XCTAssertEqual($0.source, .output) })
+        runtime.completeSend(source: .output, epoch: 1, sequence: 0, received: true)
+        output.emit(at: 1_000_000)
+        XCTAssertTrue(try runtime.dispatchNext(at: 2_000_000) { XCTAssertEqual($0.source, .output) })
+        XCTAssertEqual(runtime.snapshot.state, .recording)
+        try runtime.stop(at: 2_000_000)
+    }
+
+    func testFairSourceSelectionAvoidsStarvationOnSameChunkRetry() throws {
+        let microphone = Device(), output = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: microphone, .output: output] }
+        try start(runtime, selection: MeetingNativeSelection(microphoneDeviceID: 42, output: .selectedProcesses([7])))
+        microphone.emit(at: 0)
+        output.emit(at: 0)
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { XCTAssertEqual($0.source, .microphone) })
+        runtime.completeSend(source: .microphone, epoch: 1, sequence: 0, received: false)
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { XCTAssertEqual($0.source, .output) })
+        runtime.completeSend(source: .output, epoch: 1, sequence: 0, received: true)
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { XCTAssertEqual($0.source, .microphone) })
+        try runtime.stop(at: 1_000_000)
+    }
+
+    func testTerminalTranscriptionFailureDoesNotPauseEitherDevice() throws {
+        let microphone = Device(), output = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: microphone, .output: output] }
+        try start(runtime, selection: MeetingNativeSelection(microphoneDeviceID: 42, output: .selectedProcesses([7])))
+        microphone.emit(at: 0)
+        output.emit(at: 0)
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { _ in })
+        let receipt = MeetingCaptureReceipt(requestKey: "chunk", status: "failed", code: "processing_failed", retryable: false)
+        runtime.completeSend(source: .microphone, epoch: 1, sequence: 0, received: receipt.releasesAudio(matching: "chunk"))
+        XCTAssertEqual(runtime.snapshot.state, .recording)
+        XCTAssertEqual(microphone.stops, 0)
+        XCTAssertEqual(output.stops, 0)
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { XCTAssertEqual($0.source, .output) })
+        try runtime.stop(at: 1_000_000)
+    }
+
+    func testRuntimeOriginatedPauseFreezesReportedCaptureDuration() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        var duration = MeetingRecordingDuration()
+        try start(runtime)
+        duration.start(at: 0)
+        device.receiver?.fail(.bufferFull)
+        _ = try runtime.service(at: 1_000_000_000)
+        XCTAssertEqual(runtime.snapshot.state, .paused)
+        duration.observeCaptureState(runtime.snapshot.state, at: 1_000_000_000)
+        XCTAssertEqual(duration.milliseconds(at: 50_000_000_000), 1000)
+        try runtime.stop(at: 50_000_000_000)
+    }
+
+    func testExplicitResumeRetainsOnlyAudioBeforeAcknowledgedPauseCutoff() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        device.emit(at: 0)
+        try runtime.pause(at: 2_000_000, captureCutoffNanoseconds: 500_000)
+        XCTAssertFalse(try runtime.dispatchNextChunk(at: 2_000_000) { _ in XCTFail("Pause forbids retained sends") })
+        try runtime.resume(selection: mic, readiness: ready, permitRetainedAudio: true, at: 3_000_000)
+        XCTAssertTrue(try runtime.dispatchNextChunk(at: 3_000_000) { packet in
+            XCTAssertEqual(packet.epoch, 1)
+            XCTAssertEqual(packet.samples.count, 4)
+            XCTAssertEqual(packet.endNanoseconds, 500_000)
+        })
+        try runtime.stop(at: 3_000_000)
+    }
+
+    func testLaterPauseAcknowledgmentCannotWidenOrRewriteOfferedAudio() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        device.emit(at: 0)
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { _ in })
+        runtime.completeSend(source: .microphone, epoch: 1, sequence: 0, received: false)
+        try runtime.pause(at: 2_000_000)
+        runtime.tightenPauseCutoff(to: 500_000)
+        runtime.tightenPauseCutoff(to: 1_000_000)
+        try runtime.resume(selection: mic, readiness: ready, permitRetainedAudio: true, at: 3_000_000)
+        XCTAssertFalse(try runtime.dispatchNextChunk(at: 3_000_000) { _ in XCTFail("Never alter an already offered request") })
+        XCTAssertTrue(try runtime.service(at: 3_000_000).contains { $0.reason == .cutoffChanged })
+        try runtime.stop(at: 3_000_000)
+    }
+
+    func testUnknownReceiptExpiryRetiresOnlyItsSourceAndRequiresExplicitResume() throws {
+        let microphone = Device(), output = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: microphone, .output: output] }
+        try start(runtime, selection: MeetingNativeSelection(microphoneDeviceID: 42, output: .selectedProcesses([7])))
+        microphone.emit(at: 0)
+        microphone.emit(at: 1_000_000)
+        output.emit(at: 1_000_000)
+        XCTAssertTrue(try runtime.dispatchNext(at: 2_000_000) { XCTAssertEqual($0.source, .microphone) })
+        let gaps = try runtime.service(at: 60_000_000_000)
+        XCTAssertEqual(runtime.snapshot.state, .paused)
+        XCTAssertTrue(gaps.contains { $0.source == .microphone && $0.reason == .expired })
+        XCTAssertTrue(gaps.contains { $0.source == .microphone && $0.reason == .retentionDeclined })
+        XCTAssertFalse(try runtime.dispatchNext(at: 60_000_000_000) { _ in XCTFail("No send without explicit Resume") })
+        try runtime.stop(at: 60_000_000_000)
+        XCTAssertTrue(try runtime.dispatchNext(at: 60_000_000_000) { XCTAssertEqual($0.source, .output) })
+    }
+
+    func testQueuedSourceDoesNotSendDuringScopeRevalidation() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        device.emit(at: 0)
+        device.receiver?.setScopeVerificationPending(true)
+        XCTAssertFalse(try runtime.dispatchNext(at: 1_000_000) { _ in XCTFail("Unverified source") })
+        device.receiver?.setScopeVerificationPending(false)
+        XCTAssertTrue(try runtime.dispatchNext(at: 1_000_000) { _ in })
+        try runtime.stop(at: 1_000_000)
+    }
+
+    func testScopeChangeAfterPacketSelectionBlocksActualRequestInitiation() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        device.emit(at: 0)
+        var requested = false
+        XCTAssertTrue(try runtime.dispatchNextChunkWithAdmission(at: 1_000_000, targetDurationNanoseconds: 1_000_000) { _, admission in
+            admission.setScopeVerificationPending(true)
+            XCTAssertFalse(admission.withSendAdmission { requested = true })
+            admission.fail(.invalidSelection)
+            admission.setScopeVerificationPending(false)
+            XCTAssertFalse(admission.withSendAdmission { requested = true })
+        })
+        XCTAssertFalse(requested)
+        _ = try runtime.service(at: 1_000_000)
+        XCTAssertEqual(runtime.snapshot.state, .paused)
+        try runtime.stop(at: 1_000_000)
+    }
+
+    func testClosedPreLimitAudioCanDrainAfterExplicitResume() throws {
+        let device = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: device] }
+        try start(runtime)
+        device.emit(at: 0)
+        device.receiver?.fail(.bufferFull)
+        _ = try runtime.service(at: 1_000_000)
+        XCTAssertEqual(runtime.snapshot.state, .paused)
+        try runtime.resume(selection: mic, readiness: ready, permitRetainedAudio: true, at: 2_000_000)
+        var initiated = false
+        XCTAssertTrue(try runtime.dispatchNextChunkWithAdmission(at: 2_000_000) { packet, admission in
+            XCTAssertEqual(packet.epoch, 1)
+            XCTAssertTrue(admission.withSendAdmission { initiated = true })
+        })
+        XCTAssertTrue(initiated)
+        try runtime.stop(at: 2_000_000)
+    }
+
+    func testOutputHealthWaitsForValidCallbackAndAcceptsLegitimateSilence() throws {
+        let microphone = Device(), output = Device()
+        let runtime = MeetingCaptureRuntime { _ in [.microphone: microphone, .output: output] }
+        try start(runtime, selection: MeetingNativeSelection(microphoneDeviceID: 42, output: .selectedProcesses([7])))
+        XCTAssertTrue(runtime.isAwaitingOutputAudio)
+        microphone.emit(at: 0)
+        XCTAssertTrue(runtime.isAwaitingOutputAudio, "Microphone callbacks do not prove output flow")
+        output.receiver?.receive(sampleTime: 0, hostTimeNanoseconds: 0, sampleRate: 8000, frameCount: 8, sampleAt: { _ in 0 })
+        XCTAssertFalse(runtime.isAwaitingOutputAudio, "Zero-valued valid samples are legitimate silence")
+        XCTAssertEqual(runtime.snapshot.state, .recording)
+        try runtime.pause(at: 1_000_000)
+        XCTAssertFalse(runtime.isAwaitingOutputAudio)
+        try runtime.stop(at: 1_000_000)
     }
 
 }

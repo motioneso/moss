@@ -46,6 +46,7 @@ export function createSportsPreviewStore(
   opts: { ttlMs?: number; maxPerOwner?: number; now?: () => number } = {}
 ): {
   put(preview: PendingSportsSourcePreview): string;
+  peek(ownerUserId: string, confirmationId: string): PendingSportsSourcePreview | null;
   take(ownerUserId: string, confirmationId: string): PendingSportsSourcePreview | null;
 } {
   const ttlMs = opts.ttlMs ?? 10 * 60 * 1_000;
@@ -69,6 +70,12 @@ export function createSportsPreviewStore(
       const id = randomUUID();
       entries.set(id, preview);
       return id;
+    },
+    peek(ownerUserId, confirmationId) {
+      const preview = entries.get(confirmationId);
+      return preview && preview.ownerUserId === ownerUserId && now() - preview.createdAt <= ttlMs
+        ? preview
+        : null;
     },
     take(ownerUserId, confirmationId) {
       const preview = entries.get(confirmationId);

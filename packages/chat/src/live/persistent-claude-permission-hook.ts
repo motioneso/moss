@@ -34,6 +34,94 @@ export function deriveClaudePermissionUrl(mcpServerUrl: string): string {
   return url.toString();
 }
 
+export function deriveClaudeVaultReadReportUrl(mcpServerUrl: string): string {
+  const url = new URL(mcpServerUrl);
+  url.pathname = "/internal/vault-read-report";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+// Included verbatim in both generated scripts, so the read-before-report guard cannot drift.
+const VAULT_READ_REPORT_SOURCE = `function readSessionToken() {
+  let token;
+  try {
+    token = fs.readFileSync(process.env.JARVIS_PERM_TOKEN_FILE ?? "", "utf8").trim();
+  } catch {
+    decide("deny", "missing session token");
+  }
+  if (!/^jst_[A-Za-z0-9-]+$/.test(token)) {
+    decide("deny", "invalid session token");
+  }
+  return token;
+}
+
+async function reportVaultRead(toolName, toolInput, cwd) {
+  const token = readSessionToken();
+  try {
+    const response = await fetch(process.env.JARVIS_VAULT_READ_REPORT_URL ?? "", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer " + token },
+      body: JSON.stringify({ toolName, toolInput, cwd }),
+      signal: AbortSignal.timeout(10_000),
+      redirect: "error"
+    });
+    // Only the report route's completed-admission response authorizes the read.
+    if (response.status !== 204) throw new Error("admission_failed");
+  } catch {
+    decide("deny", "Vault read admission failed closed.");
+  }
+}
+`;
+
+const PERMISSION_REQUEST_SOURCE = `function postPermission(payload, token) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(GATEWAY);
+    const body = JSON.stringify(payload);
+    const client = url.protocol === "https:" ? https : http;
+    const req = client.request(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(body),
+          authorization: "Bearer " + token
+        }
+      },
+      (res) => {
+        let responseBody = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          responseBody += chunk;
+        });
+        res.on("end", () => {
+          clearTimeout(timer);
+          if ((res.statusCode ?? 500) < 200 || (res.statusCode ?? 500) >= 300) {
+            reject(new Error("http_" + (res.statusCode ?? 0)));
+            return;
+          }
+          try {
+            resolve(JSON.parse(responseBody));
+          } catch {
+            reject(new Error("bad_json"));
+          }
+        });
+      }
+    );
+    const timer = setTimeout(() => {
+      req.destroy(new Error("timeout"));
+    }, INTERNAL_DEADLINE_MS);
+    req.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    req.write(body);
+    req.end();
+  });
+}
+`;
+
 export async function writeClaudePermissionHook(
   io: Pick<TmuxIo, "run" | "writeFile">,
   opts: ClaudePermissionHookOpts
@@ -48,6 +136,7 @@ export async function writeClaudePermissionHook(
     // #1158: explicit deadline (was implicit 150s default == server confirm window → dead race).
     `JARVIS_PERM_DEADLINE_S=${HOOK_INTERNAL_DEADLINE_S}`,
     `JARVIS_PERM_URL=${shellQuote(permissionUrl)}`,
+    `JARVIS_VAULT_READ_REPORT_URL=${shellQuote(deriveClaudeVaultReadReportUrl(opts.mcpServerUrl))}`,
     `JARVIS_PERM_TOKEN_FILE=${shellQuote(tokenPath)}`,
     ...vaultRootsEnvEntry(),
     "node",
@@ -231,53 +320,9 @@ function stdinText() {
   });
 }
 
-function postPermission(payload, token) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(GATEWAY);
-    const body = JSON.stringify(payload);
-    const client = url.protocol === "https:" ? https : http;
-    const req = client.request(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "content-length": Buffer.byteLength(body),
-          authorization: "Bearer " + token
-        }
-      },
-      (res) => {
-        let responseBody = "";
-        res.setEncoding("utf8");
-        res.on("data", (chunk) => {
-          responseBody += chunk;
-        });
-        res.on("end", () => {
-          clearTimeout(timer);
-          if ((res.statusCode ?? 500) < 200 || (res.statusCode ?? 500) >= 300) {
-            reject(new Error("http_" + (res.statusCode ?? 0)));
-            return;
-          }
-          try {
-            resolve(JSON.parse(responseBody));
-          } catch {
-            reject(new Error("bad_json"));
-          }
-        });
-      }
-    );
-    const timer = setTimeout(() => {
-      req.destroy(new Error("timeout"));
-    }, INTERNAL_DEADLINE_MS);
-    req.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    req.write(body);
-    req.end();
-  });
-}
+${PERMISSION_REQUEST_SOURCE}
 
+${VAULT_READ_REPORT_SOURCE}
 async function main() {
   let event;
   try {
@@ -293,7 +338,8 @@ async function main() {
       : {};
 
   if (safeVaultRead(tool, input)) {
-    decide("allow", "pre-approved read-only vault path");
+    await reportVaultRead(tool, input, event?.cwd);
+    decide("allow", "recorded read-only vault path");
   }
 
   let token = "";
@@ -322,9 +368,7 @@ async function main() {
 void main();
 `;
 
-export interface ClaudeOneShotPermissionHookOpts {
-  readonly neutralDir: string;
-}
+export type ClaudeOneShotPermissionHookOpts = ClaudePermissionHookOpts;
 
 export async function writeClaudeOneShotPermissionHook(
   io: Pick<TmuxIo, "run" | "writeFile">,
@@ -334,7 +378,12 @@ export async function writeClaudeOneShotPermissionHook(
 
   const settingsPath = join(opts.neutralDir, CLAUDE_PERMISSION_SETTINGS_FILENAME);
   const hookPath = join(opts.neutralDir, CLAUDE_PERMISSION_HOOK_FILENAME);
+  const tokenPath = join(opts.neutralDir, CLAUDE_PERMISSION_TOKEN_FILENAME);
   const command = [
+    `JARVIS_PERM_DEADLINE_S=${HOOK_INTERNAL_DEADLINE_S}`,
+    `JARVIS_PERM_URL=${shellQuote(deriveClaudePermissionUrl(opts.mcpServerUrl))}`,
+    `JARVIS_PERM_TOKEN_FILE=${shellQuote(tokenPath)}`,
+    `JARVIS_VAULT_READ_REPORT_URL=${shellQuote(deriveClaudeVaultReadReportUrl(opts.mcpServerUrl))}`,
     "JARVIS_SESSION_ROOT=" + shellQuote(opts.neutralDir),
     ...vaultRootsEnvEntry(),
     "node",
@@ -346,7 +395,7 @@ export async function writeClaudeOneShotPermissionHook(
         PreToolUse: [
           {
             matcher: "*",
-            hooks: [{ type: "command", command }]
+            hooks: [{ type: "command", command, timeout: HOOK_TIMEOUT_SECONDS }]
           }
         ]
       }
@@ -355,13 +404,14 @@ export async function writeClaudeOneShotPermissionHook(
     2
   );
 
+  await io.writeFile(tokenPath, `${opts.mcpToken}\n`);
   await io.writeFile(hookPath, CLAUDE_ONE_SHOT_PERMISSION_HOOK_SOURCE);
   await io.writeFile(settingsPath, settings);
 
-  for (const path of [hookPath, settingsPath]) {
+  for (const path of [tokenPath, hookPath, settingsPath]) {
     const chmod = await io.run("chmod", ["600", path]);
     if (chmod.code !== 0) {
-      await io.run("rm", ["-f", hookPath, settingsPath]);
+      await io.run("rm", ["-f", tokenPath, hookPath, settingsPath]);
       throw new Error(
         ("Could not lock down Claude one-shot permission hook file: " + (chmod.stderr ?? "")).trim()
       );
@@ -372,8 +422,12 @@ export async function writeClaudeOneShotPermissionHook(
 }
 
 export const CLAUDE_ONE_SHOT_PERMISSION_HOOK_SOURCE = `import fs from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import path from "node:path";
 
+const GATEWAY = process.env.JARVIS_PERM_URL ?? "";
+const INTERNAL_DEADLINE_MS = Number(process.env.JARVIS_PERM_DEADLINE_S ?? "170") * 1000;
 const ROOT_PATTERN = /^\\/[\\w.-][\\w./-]*$/;
 
 // #1361: once an MCP server exposes enough tools, the CLI stops sending their schemas up front and
@@ -529,6 +583,8 @@ function stdinText() {
   });
 }
 
+${PERMISSION_REQUEST_SOURCE}
+${VAULT_READ_REPORT_SOURCE}
 async function main() {
   let event;
   try {
@@ -550,10 +606,17 @@ async function main() {
     decide("allow", "tool-schema discovery, no data access and no side effects");
   }
   if (safeVaultRead(tool, input)) {
-    decide("allow", "pre-approved read-only vault path");
+    await reportVaultRead(tool, input, event?.cwd);
+    decide("allow", "recorded read-only vault path");
   }
   if (safeWorkspaceWrite(tool, input)) {
-    decide("allow", "pre-approved session workspace write");
+    const token = readSessionToken();
+    try {
+      const response = await postPermission({ tool_name: tool, tool_input: input, cwd: event?.cwd }, token);
+      decide(response?.decision === "allow" ? "allow" : "deny", response?.reason || "Native permission denied.");
+    } catch {
+      decide("deny", "Permission gateway failed closed.");
+    }
   }
   decide(
     "deny",

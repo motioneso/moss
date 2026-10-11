@@ -1,0 +1,83 @@
+name: Meeting link revocation proof
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/meeting-link-revocation.yml"
+      - "apps/api/src/companion-recording-routes.ts"
+      - "apps/web/src/companion/**"
+      - "apps/web/src/settings/settings-profile-subviews.tsx"
+      - "packages/auth/**"
+      - "packages/db/**"
+      - "packages/meetings/**"
+      - "packages/shared/**"
+      - "tests/integration/meeting-link-revocation*.ts"
+      - "tests/integration/test-database.ts"
+      - "tests/unit/recording-capabilities.test.ts"
+      - "tests/unit/companion-recording-web.test.tsx"
+      - "tests/unit/trail-marker-approval-copy.test.tsx"
+      - "tests/unit/meeting-proof-runtime-reporter.test.ts"
+      - "scripts/check-meeting-single-link-controls.py"
+      - "scripts/test-meeting-link-revocation-controls.ts"
+      - "scripts/meeting-proof-runtime-reporter.ts"
+      - "scripts/run-gate.sh"
+      - "scripts/test-integration.ts"
+      - "vitest.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meeting-link-revocation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  revocation:
+    name: Verify real auth revocation and guard-removal controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate proof anchors and failure recognition without a database
+        run: node --import tsx scripts/test-meeting-link-revocation-controls.ts --check
+      - name: Run synthetic real-auth positives and negative controls through canonical gate
+        timeout-minutes: 25
+        run: |
+          scripts/run-gate.sh start --gate test:meeting-link-revocation-controls
+          scripts/run-gate.sh wait --follow
+      - name: Verify single-link behavioral guard-removal controls
+        run: python3 scripts/check-meeting-single-link-controls.py --unit
+      - name: Record bounded proof evidence
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          for path in Path("/tmp/jarv1s-gate").glob("*.log"):
+              print(f"Bounded meeting-link proof from {path.name}")
+              lines = re.sub(r"\x1b\[[0-9;]*m", "", path.read_text(errors="replace")).splitlines()
+              for line in [line for line in lines if re.search(r"^### |\[meeting-link-revocation\]|^Error:", line)][-100:]:
+                  print(line[:1000])
+          print("Synthetic in-process routes and real isolated auth/SQL. No real audio provider, native permissions, or owner credentials. This is not live-dev UI acceptance.")
+          PY
+      - name: Stop the isolated gate
+        if: always()
+        timeout-minutes: 3
+        run: scripts/run-gate.sh stop || true

@@ -1,4 +1,9 @@
 import { assertDataContextDb } from "@moss/db";
+import {
+  presentApprovalFields,
+  type ToolApprovalPresentation,
+  type RouteApprovalPresentation
+} from "@moss/module-sdk";
 import type { ToolExecute, ToolResult } from "@moss/module-sdk";
 
 import { ClassifierShadowRepository } from "./classifier-shadow-repository.js";
@@ -29,4 +34,14 @@ export const chatDeleteClassifierShadowRecordsExecute: ToolExecute = async (
   assertDataContextDb(scopedDb);
   const deleted = await shadowRepository.deleteForOwner(scopedDb);
   return { data: { deleted } };
+};
+
+export const shadowDeletePresentation: ToolApprovalPresentation = async (_db, input) => {
+  const fields = presentApprovalFields(input, {});
+  return fields ? { target: "All your tool-picking trial records", fields } : null;
+};
+export const shadowDeleteRoutePresentation: RouteApprovalPresentation = async (_db, input) => {
+  if (Object.keys(input.params).length || Object.keys(input.query ?? {}).length) return null;
+  const fields = presentApprovalFields(input.body, {});
+  return fields ? { target: "All your tool-picking trial records", fields } : null;
 };

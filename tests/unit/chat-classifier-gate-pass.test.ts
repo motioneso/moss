@@ -87,6 +87,7 @@ function rig() {
 
 const REQUEST = {
   actorUserId: ACTOR,
+  threadId: "thread-1",
   message: "What is on today?",
   mode: "on" as const,
   turnId: "t1"

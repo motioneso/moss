@@ -38,6 +38,12 @@ export interface PriorityCandidate {
   readonly signalType?: string;
   readonly relevanceReasons?: readonly string[];
   readonly textForAnchorMatch: readonly string[];
+  /**
+   * #2609: opaque caller identity carried through ranking untouched, so results can be
+   * matched back to their exact candidate. Titles are not unique (recurring events share
+   * them), so matching by title can cross wires between same-title candidates.
+   */
+  readonly key?: string;
 }
 
 export interface FocusSignalInput {
@@ -60,6 +66,8 @@ export interface PriorityResult {
   readonly score: number;
   readonly band: "critical" | "high" | "normal" | "low";
   readonly reasons: readonly string[];
+  /** The candidate's `key`, when it set one. Absent otherwise. */
+  readonly key?: string;
 }
 
 export class CandidateLimitError extends Error {

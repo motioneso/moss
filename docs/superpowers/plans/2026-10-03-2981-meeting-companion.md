@@ -7,6 +7,8 @@ Baseline: `12ff22bf0af2125f75eaf3b2b48363d95311fd1b`.
 Current migration numbering: see the [package migration note](../../../packages/meetings/README.md#migration-numbering).
 The numbered checkpoint descriptions below retain their historical evidence.
 
+The current next step is the approved [6 October reliability and connection repair](2026-10-06-2981-capture-reliability-and-connection.md). Owner hardware testing failed after the synthetic checkpoint; do not treat the older green runs below as native acceptance.
+
 ## Verified seams and decisions
 
 - Shared wire contracts are exported from `packages/shared/src/index.ts:20–27`;
@@ -278,3 +280,48 @@ consent, Teams/Zoom compatibility, timestamps and device release.
 Primary API references: [Apple process taps](https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps),
 [Apple microphone consent](<https://developer.apple.com/documentation/avfoundation/avcapturedevice/requestaccess(for:completionhandler:)>),
 [Microsoft process loopback](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/).
+
+## Mac capture implementation checkpoint (5 October 2026)
+
+Continuation branch: `feat/2981-native-meeting-capture`, based on main
+`144110ee99f375498d05109631399afb1a842d4d`, then fast-forwarded over the docs-only
+main update `60505036c35f52630840edec744c89508d07eee5`. The previous implementation PR #2982 is merged;
+this is a separate draft PR and no merge or deployment is authorized.
+
+The bounded milestone wires approved browser capture controls to Trail Marker's native runtime,
+then bounded separate-track clips to the configured timestamped ASR port and retained transcript
+revisions. It adds source-only authorization and permission code, without activating a real grant,
+requesting actual OS permission, recording workplace audio or using real provider credentials.
+
+The bridge uses an identity-only pending challenge under the existing device credential, separate
+cookie-and-origin approval for the exact owner/device/meeting, then a short-lived native-only
+meeting grant. Pending challenges contain a proposed opaque meeting UUID without a meeting
+foreign key or preapproval content read. Audio/control operations use the new grant only; it is
+bound to the browser session and device and checked again around processing. The protocol is
+platform neutral; Windows host/distribution remains a separate architecture decision.
+
+Capture choices remain explicit. Native preflight does not open an audio input. Microphone consent
+comes from an explicit native preparation action; system-audio consent can occur only at explicit
+Record. The native indicator and local Pause/Stop coexist with Backtrack; no screenshot capture is
+coupled to meetings. Pause All, logout, account changes and quit use a synchronous cleanup barrier.
+Failed cleanup retains handles and visible blocked status for retry.
+
+The ring uses bounded, preallocated source storage; callbacks never wait for its mutex. Stable
+coalesced chunks preserve retry identity, with separate contiguous wire sequences. Stop truncates
+at an immutable conservative clock-mapped cutoff and requires native stopped acknowledgement
+before final flushing. Delayed initial status responses are bounded rather than treated as an
+accurate clock. Gaps, failed processing and interrupted leases have bounded persistent metadata.
+
+The AI-owned port uses the existing transcription capability resolver, configured model and
+server-held credential. Each epoch binds its selected route. A changed route fails closed; no
+provider fallback or CLI engine is introduced. Actual provider fetch initiation is serialized with
+capture admission, and provider awaits stay outside database transactions. Synthetic negative
+controls must demonstrate that removing route, credential-rotation and dispatch protections makes
+the corresponding tests fail.
+
+Required evidence: full applicable static checks, focused unit/component suites, owner/admin and
+revocation database tests on job-isolated Postgres, exact-commit hosted Mac Release compilation and
+synthetic XCTest. Browser/API fixture acceptance must disclose generated native inventory/audio
+and its HTTP ASR stand-in. Actual macOS consent, capture scope, Teams/Zoom, output-device changes,
+latency and device release remain owner-run proof; Windows and diarization are not implemented.
+No green fixture run should be described as real recording or make this draft ready to merge.

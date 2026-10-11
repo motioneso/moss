@@ -36,7 +36,9 @@ describe("surface session keys", () => {
 function makeDeps(engineFactory: ChatSessionManagerDeps["engineFactory"]) {
   return {
     engineFactory,
+    conversationProvenance: { recordAdmission: vi.fn().mockResolvedValue(undefined) },
     persistence: {
+      getCurrentThreadState: vi.fn().mockResolvedValue({ id: "thread-a", incognito: false }),
       resolveActiveProvider: vi
         .fn()
         .mockResolvedValue({ provider: "anthropic" as const, model: "sonnet" }),

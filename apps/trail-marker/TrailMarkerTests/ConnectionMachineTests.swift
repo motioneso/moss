@@ -134,8 +134,11 @@ final class ConnectionMachineTests: XCTestCase {
         var machine = ConnectionMachine(state: .disconnected, generation: 3)
         let effects = machine.handle(.userLogout, now: now)
 
+        XCTAssertEqual(machine.state, .unlinking)
+        XCTAssertEqual(effects, [.persistUnlinkPending(true), .persistEnabled(false), .cancelAll, .revokeRemotely(generation: 4)])
+        let confirmed = machine.handle(.logoutSucceeded(generation: 4), now: now)
         XCTAssertEqual(machine.state, .notLinked)
-        XCTAssertEqual(effects, [.cancelAll, .revokeRemotely(generation: 3), .clearCredential, .clearLocalData(keepInstance: false)])
+        XCTAssertEqual(confirmed, [.clearCredential, .persistUnlinkPending(false), .clearLocalData(keepInstance: false)])
     }
 
     /// A blocked account may be unblocked, so the link and its settings are kept.
@@ -149,11 +152,12 @@ final class ConnectionMachineTests: XCTestCase {
         var machine = ConnectionMachine(state: .connected(lastContact: now), generation: 5)
         let effects = machine.handle(.userLogout, now: now)
 
-        XCTAssertEqual(machine.state, .notLinked)
-        XCTAssertEqual(effects, [.cancelAll, .revokeRemotely(generation: 5), .clearCredential, .clearLocalData(keepInstance: false)])
-
-        let laterEffects = machine.handle(.heartbeatFailed(.unreachable, generation: 5), now: now)
-        XCTAssertEqual(laterEffects, [.showLogoutUnconfirmed])
+        XCTAssertEqual(machine.state, .unlinking)
+        XCTAssertEqual(effects, [.persistUnlinkPending(true), .persistEnabled(false), .cancelAll, .revokeRemotely(generation: 6)])
+        XCTAssertEqual(machine.handle(.heartbeatFailed(.unreachable, generation: 5), now: now), [])
+        let laterEffects = machine.handle(.logoutFailed(generation: 6), now: now)
+        XCTAssertEqual(machine.state, .unlinking)
+        XCTAssertEqual(laterEffects, [.showLogoutUnconfirmed, .scheduleRevoke(after: 5, generation: 6)])
     }
 
     func testUserQuitCancelsWithoutTouchingThePersistedEnabledFlag() {

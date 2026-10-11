@@ -18,10 +18,11 @@ import { parseSharedKey } from "../../domain/index.js";
 import type { ItemRecord, SharedAccountMeta } from "../../domain/index.js";
 import type { WorkerPorts } from "../ports.js";
 import type { ToolFactory } from "../registry.js";
-import { readString } from "../validate.js";
+import { readActiveUserIds, readString } from "../validate.js";
 
 type AccountView = {
   accountId: string;
+  itemId: string;
   name: string;
   mask: string | null;
   type: string;
@@ -33,6 +34,20 @@ type AccountView = {
   updatedAt: string;
   // FIN-04 (#1149): the web share toggle renders off this flag.
   sharedToHousehold: boolean;
+};
+
+/**
+ * One connected bank (Plaid item) for the Accounts screen. `message` is the
+ * stored Plaid display message from the last failure (#3161), null when the
+ * bank is healthy or no message was stored.
+ */
+export type BankView = {
+  itemId: string;
+  institutionId: string | null;
+  institutionName: string | null;
+  status: ItemRecord["status"];
+  lastSyncAt: string | null;
+  message: string | null;
 };
 
 // Household view of someone else's account: the mirror meta allowlist minus
@@ -53,7 +68,8 @@ type SharedAccountView = {
 
 async function listSharedAccounts(
   ports: WorkerPorts,
-  actorUserId: string
+  actorUserId: string,
+  activeUserIds: ReadonlySet<string>
 ): Promise<SharedAccountView[]> {
   const shared: SharedAccountView[] = [];
   for (const key of await ports.mirror.list()) {
@@ -62,6 +78,8 @@ async function listSharedAccounts(
     // mirror is a disposable projection, not a place to throw from a read.
     if (!parsed || parsed.suffix !== "meta") continue;
     if (parsed.ownerUserId === actorUserId) continue;
+    // Deleted/deactivated owners leave mirror residue; never surface it.
+    if (!activeUserIds.has(parsed.ownerUserId)) continue;
     const stored = (await ports.mirror.get(key)) as SharedAccountMeta | null;
     if (!stored || typeof stored.accountId !== "string" || typeof stored.name !== "string") {
       continue;
@@ -123,6 +141,7 @@ export const accountsListHandler: ToolFactory = (ports) => async (input) => {
     const item = await loadItem(account.itemId);
     own.push({
       accountId: account.accountId,
+      itemId: account.itemId,
       name: account.name,
       mask: account.mask,
       type: account.type,
@@ -140,13 +159,29 @@ export const accountsListHandler: ToolFactory = (ports) => async (input) => {
   // store.listAccounts() order is storage-dependent; pin a stable order.
   own.sort((a, b) => (a.accountId < b.accountId ? -1 : a.accountId > b.accountId ? 1 : 0));
 
+  // One entry per bank that holds an own account, ordered by itemId. An
+  // orphaned account (no item record) reports status "error" like its row.
+  const banks: BankView[] = [...new Set(own.map((account) => account.itemId))]
+    .sort()
+    .map((itemId) => {
+      const item = itemCache.get(itemId) ?? null;
+      return {
+        itemId,
+        institutionId: item?.institutionId ?? null,
+        institutionName: item?.institutionName ?? null,
+        status: item?.status ?? "error",
+        lastSyncAt: item?.lastSyncAt ?? null,
+        message: item?.lastErrorDetail?.message ?? null
+      };
+    });
+
   const accounts: (AccountView | SharedAccountView)[] = [
     ...own,
-    ...(await listSharedAccounts(ports, actorUserId))
+    ...(await listSharedAccounts(ports, actorUserId, readActiveUserIds(input)))
   ];
   // nextStep keys off OWN accounts: a member seeing only shared accounts
   // still hasn't connected a bank of their own.
   return own.length === 0
-    ? { accounts, nextStep: "connect a bank with finance.connect.start" }
-    : { accounts };
+    ? { accounts, banks, nextStep: "connect a bank with finance.connect.start" }
+    : { accounts, banks };
 };

@@ -1,9 +1,30 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { ChatSurface } from "@moss/shared";
-import { sendChatTurn, switchChatProvider } from "../../apps/web/src/api/client.js";
+import {
+  listPendingActionRequests,
+  sendChatTurn,
+  switchChatProvider
+} from "../../apps/web/src/api/client.js";
 import { moduleChatSurface } from "../../apps/web/src/shell/chat-surface-key.js";
 
 afterEach(() => vi.unstubAllGlobals());
+
+it("scopes pending action hydration to an encoded thread id", async () => {
+  const fetchMock = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify({ actions: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    })
+  );
+  vi.stubGlobal("fetch", fetchMock);
+
+  await listPendingActionRequests("thread/1?other=value");
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/ai/assistant-actions?threadId=thread%2F1%3Fother%3Dvalue",
+    expect.anything()
+  );
+});
 
 it("sends chat turns without page context", async () => {
   const fetchMock = vi.fn().mockResolvedValue(

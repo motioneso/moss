@@ -10,7 +10,13 @@ import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { AiRepository, createRealTmuxIo, type Multiplexer, type ProviderKind } from "@moss/ai";
+import {
+  AiRepository,
+  createRealTmuxIo,
+  type ConversationProvenancePort,
+  type Multiplexer,
+  type ProviderKind
+} from "@moss/ai";
 import type { AcpPermissionDecider } from "@moss/acp";
 import { resolveEffectiveTimezone } from "../locale-utils.js";
 import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "./chat-surface.js";
@@ -39,7 +45,7 @@ import type { ClassifierGateRunner } from "./classifier-gate-runner.js";
 import type { ClassifierGateShadowRunner } from "./classifier-gate-shadow.js";
 import { PassiveContextRetriever, type PassiveMemoryGraphRecallPort } from "./passive-retrieval.js";
 import { NotesContextRetriever } from "./notes-retrieval.js";
-import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
+import type { CrossToolReadRunner, CrossToolTurnBinding } from "./cross-tool-reasoning.js";
 import { ChatPriorityModelAdapter } from "./priority-model-adapter.js";
 
 import { resolveChatHome } from "./chat-home.js";
@@ -99,11 +105,21 @@ export const MOSS_PERSONA_TOOL_GUIDANCE = [
 /** App-map tool-call instructions — drawer surface only (#1259: a module surface has no app map). */
 export const MOSS_PERSONA_APP_MAP = [
   "Treat Moss app structure, behavior, settings, and errors as closed-world facts.",
-  "Before answering about the Moss app, call app.getMapSlice; when the question concerns the current screen, also call chat.getCurrentView.",
-  "Use only facts returned by successful map or current-view tool calls. If the map has no matching declaration, say: I don't know from the current app map.",
+  "Before answering a question about the Moss app, call app.getMapSlice; when the question concerns the current screen, also call chat.getCurrentView.",
+  "When describing the app, use only facts returned by successful map or current-view tool calls. If the map has no matching declaration for such a question, say: I don't know from the current app map.",
   "For a prerequisite error, resolve its remediationRef through app.getMapSlice and name that declared fix.",
   "For every non-prerequisite error, classify it honestly and never invent a settings fix.",
   "If the visible snapshot lacks a needed detail, ask the user to paste the exact text; never request or initiate a screenshot."
+].join("\n");
+
+/** App-action instructions — drawer surface only, alongside the app map. */
+export const MOSS_PERSONA_APP_ACTIONS = [
+  "When the user asks you to change, set, switch, turn on or off, rename, mark, accept, create, or otherwise do something in the app, do it yourself with app actions.",
+  'A standalone request about how the app shows, sorts, formats, or defaults something (units, views, themes, layouts, languages, time or date formats) is a settings change, even when worded as "show", "display", "use", "make", "default to", or "I want". A unit or format request tied to a question in the same message changes only that one reply and saves nothing. If unclear, ask which they mean. Only a request explicitly about your own replies changes how you reply.',
+  'First call app.findAction with plain words for the feature, such as "theme", "weather units", or "tasks view". If nothing fits, search again with other words before you conclude no action exists.',
+  "Then call app.callAction with the returned method and path. Fill path parameters, build the body from the inputShape, map the user's words onto the values it allows, and read a list route first when you need an id.",
+  'If app.findAction or app.callAction is not listed yet, load both with ToolSearch using the query "findAction callAction".',
+  "The app map limits what you claim about the app; it never stops you from looking for an action. Never tell the user to do it themselves or click it while an action exists. If the action is blocked, say why."
 ].join("\n");
 
 /** Tool-result injection defense — every surface. */
@@ -119,7 +135,7 @@ export const MOSS_PERSONA_INTEGRATION_RESULT_TRUST =
 
 function composeMossPersona(surface: ChatSurface): string {
   const parts = [MOSS_PERSONA_BASE, MOSS_PERSONA_NOTES_SEARCH, MOSS_PERSONA_TOOL_GUIDANCE];
-  if (surface === DEFAULT_CHAT_SURFACE) parts.push(MOSS_PERSONA_APP_MAP);
+  if (surface === DEFAULT_CHAT_SURFACE) parts.push(MOSS_PERSONA_APP_MAP, MOSS_PERSONA_APP_ACTIONS);
   parts.push(MOSS_PERSONA_TOOL_RESULT_DEFENSE, MOSS_PERSONA_INTEGRATION_RESULT_TRUST);
   return parts.join("\n");
 }
@@ -138,6 +154,7 @@ export type ChatEngineFactory = (
     /** B4: set only by a structured caller (`CliStructuredAdapter`). See
      *  `ChatEngineSelectionOpts.needsStructuredOutput` in structured-engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
+    readonly constrainedStructured?: boolean;
     readonly acpPermissionDecider?: AcpPermissionDecider;
     readonly nextSequence?: () => number;
   }
@@ -230,6 +247,7 @@ export function createRealEngineFactory(
       homeBase,
       executionMode: engineOpts?.executionMode,
       needsStructuredOutput: engineOpts?.needsStructuredOutput,
+      constrainedStructured: engineOpts?.constrainedStructured,
       // #1557 Phase 1: read from `chat.persistent_runtime.enabled` by the caller
       // (`chat-multiplexer.ts`'s `resolveChatEngineFactory`, the host-dev boot path). The
       // cli-runner RPC root (`engine-host.ts`) never reaches this factory — it calls
@@ -298,7 +316,8 @@ function createRpcEngineFactory(opts: {
       engineOpts?.executionMode,
       opts.readPersistentRuntimeConfig,
       engineOpts?.needsStructuredOutput,
-      engineOpts?.userId
+      engineOpts?.userId,
+      engineOpts?.constrainedStructured
     );
   };
   return { factory, connection };
@@ -460,6 +479,7 @@ export function unavailableEngineFactory(reason: string): ChatEngineFactory {
 export const realEngineFactory: ChatEngineFactory = createRealEngineFactory();
 
 export interface CreateChatSessionRuntimeDeps {
+  readonly flushActionRecords?: (chatSessionId: string) => Promise<void>;
   readonly rootDb?: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
   /** Override the engine factory (tests inject a fake); defaults to the real tmux engine. */
@@ -494,7 +514,8 @@ export interface CreateChatSessionRuntimeDeps {
   readonly mcpTokenLifecycle?: {
     readonly mint: (
       actorUserId: string,
-      chatSessionId: string
+      chatSessionId: string,
+      threadId: string | null
     ) => Promise<{ token: string; mcpServerUrl: string }>;
     readonly revoke: (chatSessionId: string) => void;
     /** Refresh a session token's TTL on activity (defaults to no-op if omitted). */
@@ -557,11 +578,13 @@ export interface CreateChatSessionRuntimeDeps {
     readonly readPersistentRuntimeConfig?: () => Promise<PersistentRuntimeLaunchConfig>;
   };
   /** Optional gateway for cross-tool pre-turn context fan-out. Structural — real AssistantToolGateway satisfies this. */
+  readonly conversationProvenance?: Pick<ConversationProvenancePort, "recordAdmission">;
   readonly crossToolGateway?: {
     runReadToolForActor(
       actorUserId: string,
       toolName: string,
-      rawInput: unknown
+      rawInput: unknown,
+      binding?: CrossToolTurnBinding
     ): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }>;
   };
   readonly connectorSyncAt?: (
@@ -703,8 +726,10 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     engineFactory(provider, sessionKey, options);
 
   manager = new ChatSessionManager({
+    flushActionRecords: deps.flushActionRecords,
     engineFactory: managerEngineFactory,
     persistence,
+    conversationProvenance: deps.conversationProvenance,
     personaFs: createRealPersonaFs(),
     clock: { now: () => Date.now() },
     idleMs: deps.idleMs ?? DEFAULT_IDLE_MS,
@@ -874,12 +899,13 @@ function buildCrossToolReadAdapter(gateway: {
   runReadToolForActor(
     actorUserId: string,
     toolName: string,
-    rawInput: unknown
+    rawInput: unknown,
+    binding?: CrossToolTurnBinding
   ): Promise<{ ok: boolean; data?: Record<string, unknown>; error?: string }>;
 }): CrossToolReadRunner {
   return {
-    runReadTool: (actorUserId, toolName, input) =>
-      gateway.runReadToolForActor(actorUserId, toolName, input)
+    runReadTool: (actorUserId, toolName, input, binding) =>
+      gateway.runReadToolForActor(actorUserId, toolName, input, binding)
   };
 }
 

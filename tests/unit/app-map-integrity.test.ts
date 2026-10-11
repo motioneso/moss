@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { webRoutes } from "../../apps/web/src/app-route-metadata.js";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
-import { CORE_APP_SCREENS, CORE_APP_SETTINGS } from "@moss/shared";
+import { CORE_APP_ERRORS, CORE_APP_SCREENS, CORE_APP_SETTINGS } from "@moss/shared";
 import { buildAppMap } from "../../scripts/build-app-map.js";
 
 describe("app-map integrity and truthfulness", () => {
@@ -13,6 +13,87 @@ describe("app-map integrity and truthfulness", () => {
     version: "test",
     buildId: "test",
     narrative: ""
+  });
+
+  it("distinguishes corrective input failures from unavailable approval details", () => {
+    const feature = getBuiltInModuleManifests()
+      .find((module) => module.id === "chat")
+      ?.features?.find((entry) => entry.id === "chat.pending_action_disclosure");
+    expect(feature?.errors).toContainEqual(
+      expect.objectContaining({
+        code: "invalid_input",
+        class: "validation"
+      })
+    );
+    expect(feature?.errors).toContainEqual(
+      expect.objectContaining({ code: "approval_unavailable", class: "prerequisite" })
+    );
+    expect(feature?.errors?.find((entry) => entry.code === "invalid_input")?.description).toContain(
+      "Correct the fields"
+    );
+  });
+
+  it("distinguishes linked setup fixes from unexpected preparation failures", () => {
+    const feature = getBuiltInModuleManifests()
+      .find((module) => module.id === "chat")
+      ?.features?.find((entry) => entry.id === "chat.pending_action_disclosure");
+    const setup = feature?.errors?.find((entry) => entry.code === "approval_setup_required");
+    expect(setup).toMatchObject({
+      class: "prerequisite",
+      remediationRef: "chat.configure_action_source"
+    });
+    expect(
+      feature?.remediations?.find((entry) => entry.id === setup?.remediationRef)
+    ).toMatchObject({ path: "/settings?section=sources" });
+    const unexpected = feature?.errors?.find(
+      (entry) => entry.code === "approval_preparation_failed"
+    );
+    expect(unexpected).toMatchObject({ class: "transient" });
+    expect(unexpected?.description).toContain("Try again");
+    expect(unexpected?.remediationRef).toBeUndefined();
+    expect(unexpected?.description).not.toContain("Settings");
+    const fresh = feature?.remediations?.find((entry) => entry.id === "chat.request_fresh_action");
+    expect(fresh?.description).toContain("ask Moss to find the action again");
+    expect(fresh?.description).not.toContain("app screen");
+    const notes = getBuiltInModuleManifests()
+      .find((module) => module.id === "notes")
+      ?.features?.find((entry) => entry.id === "notes.approval_prerequisites");
+    expect(notes?.errors).toContainEqual(
+      expect.objectContaining({ class: "prerequisite", remediationRef: "notes.configure_folder" })
+    );
+    expect(notes?.remediations).toContainEqual(
+      expect.objectContaining({ id: "notes.configure_folder", path: "/settings?section=sources" })
+    );
+  });
+
+  it("makes the deletion exception visible beside the note trust setting", () => {
+    const notes = getBuiltInModuleManifests().find((module) => module.id === "notes");
+    expect(
+      notes?.assistantActionFamilies?.find((family) => family.id === "note_changes")?.description
+    ).toContain("Deleting a note always asks for approval.");
+  });
+
+  it("describes exact server disclosure, raw permission exceptions and quiet outcomes", () => {
+    const provider = CORE_APP_SETTINGS.find((screen) => screen.id === "assistant");
+    for (const text of [
+      "server-owned action title",
+      "full resolved target",
+      "exact requested changes as readable label and value rows",
+      "deleting a saved memory or a note uses red",
+      "permanent with no trash or undo",
+      "clear keyboard focus outline",
+      "exact path or command",
+      "complete validated arguments without truncation",
+      "Approve is unavailable and Reject remains available",
+      "without a selected-box outline"
+    ])
+      expect(provider?.description).toContain(text);
+    expect(provider?.description).not.toContain("a reloaded pending card keeps its saved summary");
+    const outcome = CORE_APP_ERRORS.find((error) => error.code === "core.ai.action_not_approved");
+    for (const text of ["You declined", "Timed out", "Cancelled"]) {
+      expect(outcome?.description).toContain(`"${text}"`);
+    }
+    expect(outcome?.description).toContain("separate from the visible message");
   });
 
   it("every app map screen has a truthful route in webRoutes", () => {

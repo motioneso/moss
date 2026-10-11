@@ -14,6 +14,8 @@ final class PreferencesStore {
     }
 
     private enum Key {
+        static let unlinkPending = "unlinkPending"
+        static let unlinkConfirmed = "unlinkConfirmed"
         static let linkedIdentity = "linkedIdentity"
         static let connectionEnabled = "connectionEnabled"
         static let displayName = "displayName"
@@ -177,10 +179,20 @@ final class PreferencesStore {
         }
     }
 
+    var unlinkPending: Bool {
+        get { defaults.bool(forKey: Key.unlinkPending) }
+        set { defaults.set(newValue, forKey: Key.unlinkPending) }
+    }
+    /// A confirmed remote logout can still need local Keychain cleanup after a denied delete.
+    var unlinkConfirmed: Bool {
+        get { defaults.bool(forKey: Key.unlinkConfirmed) }
+        set { defaults.set(newValue, forKey: Key.unlinkConfirmed) }
+    }
+
     /// Used by Log Out and by the "clear state between test runs" README step.
     func clearAll() {
         for key in [
-            Key.linkedIdentity, Key.connectionEnabled,
+            Key.linkedIdentity, Key.connectionEnabled, Key.unlinkPending, Key.unlinkConfirmed,
             Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown
         ] {
             defaults.removeObject(forKey: key)

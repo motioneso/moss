@@ -360,6 +360,7 @@ interface FakeServerOpts {
    * but whose provider CLI wedged, so no response ever returns and the socket stays open.
    */
   readonly swallowRequests?: boolean;
+  readonly onReceived?: (method: string) => void;
   /** Per-request handler → the `result` to return (or a thrown {code,message} for an err frame). */
   readonly onRequest?: (req: { method: string; id: number; params: unknown }) => unknown;
 }
@@ -420,6 +421,7 @@ function startFakeServer(
 
         // Post-handshake: answer the request — unless the test wants the request SWALLOWED (no
         // response ever sent), modelling the #445 hang the per-call deadline exists to break.
+        opts.onReceived?.(frame.method);
         if (opts.swallowRequests) {
           callIndex += 1;
           continue;
@@ -776,6 +778,34 @@ describe("RpcConnection hello + id-matching + bootId (in-process socket)", () =>
     const err = await conn.submit("u1", submitParams("x")).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(CliChatUnavailableError);
     expect((err as Error).message).toMatch(/submit timed out after 60ms/);
+  });
+
+  it("bounds a hung constrained probe and removes its RPC waiter without provider/auth calls", async () => {
+    const socketPath = tmpSocket();
+    const received: string[] = [];
+    servers.push(
+      await startFakeServer(socketPath, "s", {
+        swallowRequests: true,
+        onReceived: (method) => received.push(method)
+      })
+    );
+    const conn = new TestConn({ socketPath, rpcSecret: "s", callTimeoutMs: 0 });
+    conns.push(conn);
+    await conn.ensureConnected();
+    const pending = (conn as unknown as { pending: Map<number, unknown> }).pending;
+    const started = Date.now();
+    const result = conn
+      .probeProvider({ provider: "anthropic", constrainedStructured: true }, "actor", {
+        timeoutMs: 60
+      })
+      .catch((error: unknown) => error);
+    await vi.waitFor(() => expect(pending.size).toBe(1), { interval: 5 });
+    expect(await result).toMatchObject({
+      message: "cli-runner probeProvider timed out after 60ms"
+    });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(pending.size).toBe(0);
+    expect(received).toEqual(["probeProvider"]);
   });
 
   it("does NOT time out when callTimeoutMs is 0 (deadline disabled — opt-out seam)", async () => {

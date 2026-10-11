@@ -1,0 +1,23 @@
+.meeting-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  width: 100%;
+  min-width: 0;
+}
+.meeting-settings-macs {
+  display: grid;
+  gap: var(--space-5);
+}
+.meeting-settings-mac {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+}
+.meeting-settings-audio {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 420px;
+}

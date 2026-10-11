@@ -1,3 +1,5 @@
+import { ButtonLink, Eyebrow, Select } from "@moss/ui";
+import { buildViews, type StandingsView } from "../standings-views.js";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -24,67 +26,6 @@ import type { FollowedTeamIndex } from "../news-ranking.js";
 import { isFollowed } from "./sports-news.js";
 import { formatDate, formatTime, useUserLocale } from "./locale.js";
 import { TrophyIcon } from "./sports-parts.js";
-
-// A pickable standings view: either the whole league ("All"), a whole conference, or a single
-// division/group. `conference` buckets the option under an <optgroup>; null renders it top-level.
-interface StandingsView {
-  readonly key: string;
-  readonly label: string;
-  readonly conference: string | null;
-  readonly sections: readonly StandingsSection[];
-}
-
-// US leagues nest divisions under conferences (AFC/NFC → AFC East…); soccer group stages are flat.
-// "All" first, then per conference a whole-conference option followed by its divisions; flat tables
-// collapse to "All" + one option per group. Works when `conference` is absent (older payloads).
-function buildViews(sections: readonly StandingsSection[]): StandingsView[] {
-  if (sections.length === 0) return [];
-  const all: StandingsView = { key: "all", label: "All", conference: null, sections };
-  const hasConference = sections.some((section) => section.conference);
-  if (!hasConference) {
-    if (sections.length === 1) return [all];
-    return [
-      all,
-      ...sections.map((section, index) => ({
-        key: `sec:${index}`,
-        label: section.label ?? `Group ${index + 1}`,
-        conference: null,
-        sections: [section]
-      }))
-    ];
-  }
-  const order: string[] = [];
-  const byConference = new Map<string, { section: StandingsSection; index: number }[]>();
-  sections.forEach((section, index) => {
-    const conference = section.conference ?? "";
-    if (!byConference.has(conference)) {
-      byConference.set(conference, []);
-      order.push(conference);
-    }
-    byConference.get(conference)?.push({ section, index });
-  });
-  const views: StandingsView[] = [all];
-  for (const conference of order) {
-    const members = byConference.get(conference) ?? [];
-    if (conference) {
-      views.push({
-        key: `conf:${conference}`,
-        label: conference,
-        conference,
-        sections: members.map((m) => m.section)
-      });
-    }
-    for (const { section, index } of members) {
-      views.push({
-        key: `sec:${index}`,
-        label: section.label ?? `Group ${index + 1}`,
-        conference: conference || null,
-        sections: [section]
-      });
-    }
-  }
-  return views;
-}
 
 // Default view: US leagues with conferences open on "your" division (the section holding the
 // viewer's followed team), falling back to the first division alphabetically. Everything else —
@@ -378,10 +319,10 @@ export function StandingsRail(props: {
       aria-label="Standings"
     >
       <div className="sp-standings__hd">
-        <span className="sp-standings__title">
+        <Eyebrow as="h2" tone="muted" className="sp-standings__title">
           <TrophyIcon />
           Standings
-        </span>
+        </Eyebrow>
         <span className="sp-standings__nav">
           {activeKey ? (
             <StandingsPicker
@@ -407,9 +348,11 @@ export function StandingsRail(props: {
           </p>
         ) : null}
         {!activeKey ? (
-          <p className="sp-standings__empty">
+          <p>
             No standings leagues selected.{" "}
-            <a href="/settings?section=modules&module=sports">Choose leagues in Settings.</a>
+            <ButtonLink variant="link" href="/settings?section=modules&module=sports">
+              Choose leagues in Settings.
+            </ButtonLink>
           </p>
         ) : knockout ? (
           <KnockoutFixtures fixtures={fixtures} />
@@ -427,9 +370,7 @@ export function StandingsRail(props: {
             ))}
           </>
         ) : (
-          <p className="sp-standings__empty">
-            {lazy.isLoading ? "Loading standings…" : "No standings available."}
-          </p>
+          <p>{lazy.isLoading ? "Loading standings…" : "No standings available."}</p>
         )}
         {legendNotes.length > 0 ? (
           <ul className="sp-legend" aria-label="Qualification key">
@@ -491,14 +432,13 @@ function ViewSelect(props: {
   }
   flushRun();
   return (
-    <select
-      className="sp-standings__select"
+    <Select
       aria-label="Select standings view"
       value={props.value}
       onChange={(event) => props.onChange(event.currentTarget.value)}
     >
       {nodes}
-    </select>
+    </Select>
   );
 }
 
@@ -509,7 +449,7 @@ function ViewSelect(props: {
 function KnockoutFixtures(props: { fixtures: readonly GameSummary[] }) {
   const locale = useUserLocale();
   return (
-    <div className="sp-knock">
+    <div>
       <p className="sp-knock__kicker">Knockout stage</p>
       <ul className="sp-knock__list" aria-label="Current round fixtures">
         {props.fixtures.map((game) => {

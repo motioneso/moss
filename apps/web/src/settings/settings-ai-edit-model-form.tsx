@@ -12,7 +12,8 @@ import {
   AI_MODEL_CAPABILITIES,
   type AiConfiguredModelDto,
   type AiModelCapability,
-  type AiModelTier
+  type AiModelTier,
+  type AiProviderKind
 } from "@moss/shared";
 
 const ALL_CAPABILITIES: readonly AiModelCapability[] = AI_MODEL_CAPABILITIES;
@@ -171,10 +172,14 @@ export function EditModelForm(props: {
  */
 export function AddModelForm(props: {
   readonly providerConfigId: string;
+  readonly providerKind: AiProviderKind;
   readonly onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useFeedback();
+  // #3057: a decision model answers named questions, not chat, so a hand-added row defaults to the
+  // json capability and the economy tier instead of the chat/interactive default for other kinds.
+  const isDecisionModel = props.providerKind === "system-one";
 
   const addMutation = useMutation({
     mutationFn: (values: ModelFormValues) =>
@@ -195,8 +200,8 @@ export function AddModelForm(props: {
       initial={{
         providerModelId: "",
         displayName: "",
-        tier: "interactive",
-        capabilities: ["chat"]
+        tier: isDecisionModel ? "economy" : "interactive",
+        capabilities: isDecisionModel ? ["json"] : ["chat"]
       }}
       submitLabel="Add model"
       pendingLabel="Adding…"

@@ -1,6 +1,7 @@
 // Node-free shared types for external module discovery (#917). Kept out of node.ts so
 // the browser entry (index.ts) and the pure reconcile step can import them too.
 import type {
+  ExternalModuleAppMapDeclaration,
   ExternalModuleNavigationEntry,
   ExternalModulePreferenceDeclaration,
   JsonMossModuleManifest
@@ -31,6 +32,9 @@ export interface ExternalModuleStateInput {
   readonly id: string;
   readonly status: "enabled" | "disabled" | "draft";
   readonly packageHash: string | null;
+  /** Missing on historical/metadata-only callers: never establishes descriptor trust. */
+  readonly manifestHash?: string;
+  readonly descriptorApprovedByUserId?: string | null;
   readonly disabledReason: string | null;
   readonly ownerUserId: string | null;
 }
@@ -48,6 +52,10 @@ export interface ReconciledExternalModule {
   readonly drifted: boolean;
   readonly disabledReason: string | null;
   readonly ownerUserId: string | null;
+  /** Host runtime metadata only; public serializers must not include it. */
+  readonly descriptorApprovedByUserId?: string | null;
+  readonly manifestHash?: string;
+  readonly packageHash?: string;
   /** Web contribution declared by the manifest, or null when the module has no web surface (#918). */
   readonly web: { readonly entrypoint: string; readonly contractVersion: number } | null;
   // #1019: nav-menu entries this module contributes; always present, defaults to [] for a
@@ -58,6 +66,10 @@ export interface ReconciledExternalModule {
   // The host owns both the rendering and the storage — see the preferences routes in
   // apps/api/src/routes/module-preferences.ts.
   readonly preferences: readonly ExternalModulePreferenceDeclaration[];
+  /** #3184: module-relative path of the module's own settings page; absent when it has none. */
+  readonly settingsPath?: string;
+  /** #3168: entries for Moss's app map, module-relative; absent when the module declares none. */
+  readonly appMap?: ExternalModuleAppMapDeclaration;
 }
 
 export interface ExternalReconcileResult {

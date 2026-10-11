@@ -174,7 +174,13 @@ export function readActivity(value: unknown): ChatActivityEventDto[] {
             text: record.text,
             ...(typeof record.id === "string" ? { id: record.id } : {}),
             ...(typeof record.sequence === "number" ? { sequence: record.sequence } : {}),
+            ...(typeof record.actionRequestId === "string"
+              ? { actionRequestId: record.actionRequestId }
+              : {}),
             ...(typeof record.toolName === "string" ? { toolName: record.toolName } : {}),
+            ...(typeof record.summary === "string"
+              ? { summary: record.summary.slice(0, 200) }
+              : {}),
             ...(outcome ? { outcome } : {}),
             ...(typeof record.toolCallId === "string" ? { toolCallId: record.toolCallId } : {}),
             ...(typeof record.durationMs === "number" ? { durationMs: record.durationMs } : {}),

@@ -1,3 +1,4 @@
+import { Button, SectionHead } from "@moss/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { LocaleSettingsDto, WellnessEmotionCore } from "@moss/shared";
@@ -114,18 +115,16 @@ export function WellnessTherapyNotes({ theme = "light" }: Props) {
   const add = () => {
     const t = draft.trim();
     if (!t) return;
-    // Mutate outside a setState updater — never inside one (StrictMode double-fire trap)
-    addMutation.mutate(t);
-    setDraft("");
+    // Mutate outside a setState updater — never inside one (StrictMode double-fire trap).
+    // The draft clears only once the note is stored, so a failed save keeps the text.
+    addMutation.mutate(t, { onSuccess: () => setDraft("") });
   };
 
   const notes = notesQuery.data?.notes ?? [];
 
   return (
     <section className="wl-sec">
-      <div className="wl-sec__head">
-        <div className="wl-sec__title">For your next session</div>
-      </div>
+      <SectionHead number="05" title="For your next session" />
       <div className="wl-therapy">
         <p className="wl-therapy__intro">
           Things you want to bring up in therapy — jot them when they&apos;re fresh, and
@@ -137,6 +136,7 @@ export function WellnessTherapyNotes({ theme = "light" }: Props) {
           </span>
           <textarea
             rows={1}
+            aria-label="Note for your next session"
             placeholder="Something to talk through…"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -156,12 +156,27 @@ export function WellnessTherapyNotes({ theme = "light" }: Props) {
             </button>
           </span>
         </div>
+        {addMutation.isError ? (
+          <div className="wl-modal__note wl-modal__note--error" role="alert">
+            Couldn&apos;t save that note. It&apos;s still in the box, so try again.
+          </div>
+        ) : null}
         <div className="wl-tnotes">
+          {notesQuery.isPending ? (
+            <p className="wl-subtle-text" role="status">
+              Loading session notes…
+            </p>
+          ) : null}
           {notesQuery.isError ? (
             <div className="wl-tdone">
-              <span className="wl-subtle-text">Couldn&apos;t load notes — try refreshing.</span>
+              <span className="wl-subtle-text" role="status">
+                Couldn&apos;t load notes.{" "}
+                <Button variant="link" onClick={() => void notesQuery.refetch()}>
+                  Try again
+                </Button>
+              </span>
             </div>
-          ) : notes.length === 0 ? (
+          ) : notesQuery.data && notes.length === 0 ? (
             <div className="wl-tdone">
               <span className="ic">
                 <CheckSmallIcon />

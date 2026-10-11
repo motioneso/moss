@@ -1,4 +1,14 @@
-import { createMeetingOutputRuntime } from "./meeting-output-runtime.js";
+import { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
+export { createConstrainedCliReadinessProbe } from "./constrained-cli-readiness.js";
+import {
+  createMeetingCaptureRuntime,
+  type MeetingCaptureAuthorization
+} from "./meeting-capture-runtime.js";
+import { createApprovalSourceReferences } from "./approval-source-references.js";
+import {
+  createMeetingOutputRuntime,
+  type ConstrainedCliReadiness
+} from "./meeting-output-runtime.js";
 import {
   createMeetingNoteIndexPort,
   withMeetingExportAvailability
@@ -13,14 +23,20 @@ import { fileURLToPath } from "node:url";
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from "fastify";
 import { sql, type Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
+import type { ActAsGrantRegistry } from "@moss/module-sdk/server";
 
 import {
   meetingsModuleManifest,
   meetingsModuleSqlMigrationDirectory,
+  registerMeetingCaptureRoutes,
   registerMeetingRecordRoutes,
   registerMeetingOutputRoutes,
   registerMeetingExportRoutes,
-  MeetingExportService
+  MeetingExportService,
+  MEETING_STOP_SUMMARY_QUEUES,
+  MEETING_CAPTURE_MAINTENANCE_QUEUES,
+  createMeetingStopSummaryScheduler,
+  registerMeetingStopSummaryWorker
 } from "@moss/meetings";
 import {
   backtrackModuleManifest,
@@ -99,6 +115,7 @@ import {
   MemoryRepository,
   type MemoryRetriever,
   memoryModuleManifest,
+  configureMemoryApprovalReferences,
   memorySqlMigrationDirectory,
   installEmbeddingActivityRecorder,
   registerMemoryDashboardRoutes,
@@ -156,6 +173,8 @@ import {
   isCurrentClassifierReviewed,
   createChatFeedbackTargetVerifier,
   createCliStructuredAdapterFactory,
+  createConstrainedCliStructuredAdapterFactory,
+  selectEngineFactory,
   createAcpOneShotEngineFactory,
   registerChatJobWorkers,
   registerChatRoutes,
@@ -250,7 +269,8 @@ import type {
   JsonMossModuleManifest,
   RegisteredFocusSignal,
   RegisteredModuleDiagnosticProvider,
-  RegisteredProactiveMonitorProvider
+  RegisteredProactiveMonitorProvider,
+  RouteCatalogHolder
 } from "@moss/module-sdk";
 import {
   NotificationsRepository,
@@ -267,6 +287,8 @@ import {
   type PushSummaryJobPayload,
   type NotificationPreferencePort,
   runNotificationDigestCompose,
+  NOTIFICATION_SENSITIVITY_PREFERENCE_KEY,
+  sensitivityFromRaw,
   notificationsModuleManifest,
   notificationsModuleSqlMigrationDirectory,
   registerNotificationsRoutes,
@@ -329,6 +351,7 @@ import {
 } from "@moss/tasks";
 import {
   goalsModuleManifest,
+  configureGoalApprovalReferences,
   goalsModuleSqlMigrationDirectory,
   registerGoalsRoutes,
   registerGoalsMemorySyncWorker,
@@ -439,6 +462,7 @@ import {
 } from "@moss/scratchpad";
 import {
   FeedbackTargetVerifierRegistry,
+  configureUsefulnessFeedbackPresentation,
   buildStoryTargetContext,
   createStoryFeedbackTargetVerifier,
   createStoryRelevancePolicy,
@@ -528,6 +552,8 @@ export * from "./external/validate.js";
 export * from "./external/types.js";
 export * from "./external/reconcile.js";
 export * from "./external/preferences.js";
+export * from "./external/app-map.js";
+import type { ExternalAppMapItems } from "./external/app-map.js";
 
 import { createActiveModulesResolver } from "./active-modules-resolver.js";
 
@@ -548,6 +574,28 @@ export {
   type RouteKey,
   type RouteModuleIndex
 } from "./route-guard.js";
+export {
+  CHAT_BLOCKED_PATH_RULES,
+  DESTRUCTIVE_WORD_POST_ALLOWLIST,
+  JULY_EXCLUDED_ROUTES,
+  JULY_PREFIXES_WITHOUT_ROUTES,
+  assertReadToolContentDeclared,
+  assertRouteChatClassification,
+  buildRouteCatalog,
+  createRouteCatalogHolder,
+  findUnmappedJulyPrefixes,
+  matchChatBlockedPathRule,
+  type CapturedRouteSchema,
+  type CatalogRoute,
+  type ChatBlockedPathRule,
+  type DestructiveWordPostAllowed,
+  type JulyExcludedRoute,
+  type JulyPrefixWithoutRoutes,
+  type JulyRuleForWalk,
+  type RouteCatalog,
+  type RouteChatAssertionOptions,
+  type RouteChatRuleTables
+} from "./route-catalog.js";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -565,6 +613,8 @@ function findWorkspaceRoot(startDir: string): string {
 const APP_MAP_ARTIFACT_PATH = join(findWorkspaceRoot(MODULE_DIR), "dist", "app-map.json");
 
 export interface BuiltInRouteDependencies {
+  /** Dedicated session/device identity for explicit meeting recorder approval. */
+  readonly meetingCaptureAuthorization?: MeetingCaptureAuthorization;
   // Raw root handle forwarded to settings' BootstrapHelper (pre-session bootstrap status).
   // Documented Kysely< exemption — see packages/settings/src/bootstrap.ts. This is the
   // ONLY root-handle escape hatch in the route layer; module admin checks run through
@@ -575,12 +625,22 @@ export interface BuiltInRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly listConfiguredAuthProviders: () => readonly AuthProviderStatusDto[];
   readonly listModuleManifests: () => readonly MossModuleManifest[];
+  /** Briefing tool names declared by external modules; lets briefings select them. */
+  readonly listExternalBriefingToolNames?: () => readonly string[];
+  readonly listExternalBriefingSources?: (
+    access: AccessContext
+  ) => Promise<readonly { readonly toolName: string; readonly label: string }[]>;
+  /** #3065: filled by the server's onReady once every route is registered; forwarded to chat. */
+  readonly routeCatalog?: RouteCatalogHolder;
+  readonly actAsGrants?: ActAsGrantRegistry;
   /**
    * Async, actor-filtered resolver (the enablement SEAM). Used by the tool surfaces
    * (MCP gateway + AI REST tools) and the route guard. Distinct from
    * listModuleManifests (the full registered set used by briefings + /api/modules).
    */
   readonly resolveActiveModules: ActiveModulesResolver;
+  /** #3168: installed modules' app-map entries for one actor; see createAppMapReadService. */
+  readonly resolveExternalAppMap?: (actorUserId: string) => Promise<ExternalAppMapItems>;
   readonly dataContext: DataContextRunner;
   readonly boss: PgBoss;
   /**
@@ -666,6 +726,13 @@ export interface BuiltInRouteDependencies {
   readonly getResolveActionRequestFn?: () =>
     | AssistantToolGateway["resolveActionRequest"]
     | undefined;
+  /** Per-server live waiter lookup for origin-scoped chat-card hydration. */
+  readonly getActionRequestPresentationFn?: () =>
+    | AssistantToolGateway["getActionRequestPresentation"]
+    | undefined;
+  readonly getRecoverActionRequestsFn?: () =>
+    | AssistantToolGateway["recoverActionRequests"]
+    | undefined;
   /**
    * #1554 task #6 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
    * same late-bound "adopt" seam as {@link adoptChatRpcConnection}/
@@ -704,6 +771,13 @@ export interface BuiltInRouteDependencies {
   readonly hostDiagnostics?: HostDiagnosticsProvider;
   readonly personaPreview?: (input: PersonaPreviewInput) => Promise<string>;
   readonly createCliStructuredAdapter?: ReturnType<typeof createCliStructuredAdapterFactory>;
+  readonly createConstrainedCliStructuredAdapter?: ReturnType<
+    typeof createConstrainedCliStructuredAdapterFactory
+  >;
+  readonly probeConstrainedCli?: (
+    actorUserId: string,
+    signal?: AbortSignal
+  ) => Promise<ConstrainedCliReadiness>;
   /**
    * Bounded, live onboarding probes (Phase 2). Built inside registerBuiltInApiRoutes (sync,
    * no boot-time probing) and forwarded to the settings module so it keeps no @moss/ai /
@@ -780,6 +854,8 @@ export interface BuiltInRouteDependencies {
 }
 
 export interface BuiltInWorkerDependencies {
+  readonly createConstrainedCliStructuredAdapter?: BuiltInRouteDependencies["createConstrainedCliStructuredAdapter"];
+  readonly probeConstrainedCli?: BuiltInRouteDependencies["probeConstrainedCli"];
   readonly rootDb: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
   readonly focusSignals?: BuiltInRouteDependencies["focusSignals"];
@@ -813,6 +889,31 @@ export interface BuiltInWorkerDependencies {
   readonly invokeExternalBriefing?: ExternalBriefingInvoker;
 }
 
+/**
+ * Worker transport composition stays beside the API's recorded adapter construction.
+ * The constrained adapter records every settled call through the worker-installed recorder.
+ * Own one RPC connection, with no in-process or alternative-model fallback.
+ */
+export function createWorkerMeetingSummaryCli(env: NodeJS.ProcessEnv = process.env): {
+  readonly dependencies: Pick<
+    BuiltInWorkerDependencies,
+    "createConstrainedCliStructuredAdapter" | "probeConstrainedCli"
+  >;
+  close(): void;
+} {
+  // Only select the RPC branch. An unconfigured host keeps API-key summaries available.
+  const runtime = env.JARVIS_CLI_RUNNER_SOCKET?.trim() ? selectEngineFactory({ env }) : undefined;
+  return {
+    dependencies: {
+      createConstrainedCliStructuredAdapter: runtime
+        ? createConstrainedCliStructuredAdapterFactory(runtime.factory)
+        : undefined,
+      probeConstrainedCli: createConstrainedCliReadinessProbe(() => runtime?.connection)
+    },
+    close: () => runtime?.connection?.close()
+  };
+}
+
 export function createStructuredChatEngineFactory(options: {
   readonly socketConfigured: boolean;
   readonly getRpcConnection: () => RpcConnection | undefined;
@@ -836,7 +937,8 @@ export function createStructuredChatEngineFactory(options: {
       engineOptions?.executionMode,
       undefined,
       engineOptions?.needsStructuredOutput,
-      engineOptions?.userId
+      engineOptions?.userId,
+      engineOptions?.constrainedStructured
     );
   };
 }
@@ -1240,7 +1342,17 @@ export function buildNewsBriefingSource(deps: {
   });
   // Briefing tool is constructed at import time; it adopts the client late-bound
   // (mirrors LOADER-SEAM(sports) 3).
-  configureNewsBriefingService(datasetClient);
+  // The briefing only reads dismissed refs; the AI port is never called on that path.
+  configureNewsBriefingService(
+    datasetClient,
+    buildNewsStoryFeedbackPort(
+      {
+        generateJson: async () => ({ ok: false, error: "needs_config" }),
+        fingerprint: async () => null
+      },
+      deps.logger
+    )
+  );
   return datasetClient;
 }
 
@@ -1511,6 +1623,11 @@ export function createNotificationPreferencePort(
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) return true;
       const enabled = (raw as { enabled?: unknown }).enabled;
       return typeof enabled === "boolean" ? enabled : true;
+    },
+    async getSensitivity(scopedDb) {
+      return sensitivityFromRaw(
+        await preferencesRepository.get(scopedDb, NOTIFICATION_SENSITIVITY_PREFERENCE_KEY)
+      );
     }
   };
 }
@@ -1655,14 +1772,6 @@ export function createActionRowRelevancePort(): ActionRowRelevancePort {
     }
   };
 }
-
-const peopleManifest: typeof peopleModuleManifest = {
-  ...peopleModuleManifest,
-  routes: [
-    ...(peopleModuleManifest.routes ?? []),
-    { method: "GET", path: "/api/people/notes-directories" }
-  ]
-};
 
 /**
  * #1263: tasks bypasses the generic canonical-key-only grant here, because it has a legacy
@@ -1931,12 +2040,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         options: { retryLimit: 3, retryDelay: 60, retryBackoff: true }
       }
     ],
-    registerRoutes: (server, deps) =>
-      registerGoalsRoutes(server, {
+    registerRoutes: (server, deps) => {
+      configureGoalApprovalReferences(
+        createApprovalSourceReferences({ manifests: deps.listModuleManifests })
+      );
+      return registerGoalsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         boss: deps.boss
-      }),
+      });
+    },
     registerWorkers: async (boss, deps) => {
       const repository = new GoalsRepository();
       const memoryGraphRepo = new MemoryGraphRepository();
@@ -2149,6 +2262,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           const fn = deps.getResolveActionRequestFn?.() ?? unwiredActionResolver;
           return fn(actorUserId, id, status);
         },
+        getActionRequestPresentation: (actorUserId, id) =>
+          deps.getActionRequestPresentationFn?.()?.(actorUserId, id),
+        recoverActionRequests: async (actorUserId) => {
+          await deps.getRecoverActionRequestsFn?.()?.(actorUserId);
+        },
         // #1888 — the "Build it" button. packages/ai owns the ownership check and the status
         // transition; the queue lives out here, so the composition root supplies the send.
         // No queue means the field stays undefined and the route answers 503.
@@ -2230,6 +2348,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         adoptMcpTokenRevoke: deps.adoptMcpTokenRevoke,
         adoptCheckTokenMinter: deps.adoptCheckTokenMinter,
         resolveActiveModules: deps.resolveActiveModules,
+        routeCatalog: deps.routeCatalog,
+        actAsGrants: deps.actAsGrants,
         mcpServerUrl: deps.mcpServerUrl,
         boss: deps.boss,
         personaPreferences: new PreferencesRepository(),
@@ -2244,6 +2364,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             { actorUserId, requestId: "gateway:web-search-engine" },
             async (scopedDb) => (await resolveNewsWebSearch(scopedDb)).engine
           ),
+        passiveMemoryRecall: deps.passiveMemoryRecall,
         notesRecall: deps.notesRecall,
         googleConnectionService: deps.googleConnectionService,
         googleApiClient: deps.googleApiClient,
@@ -2284,6 +2405,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         listModuleManifests: deps.listModuleManifests,
+        ...(deps.listExternalBriefingToolNames
+          ? { listExternalBriefingToolNames: deps.listExternalBriefingToolNames }
+          : {}),
+        ...(deps.listExternalBriefingSources
+          ? { listExternalBriefingSources: deps.listExternalBriefingSources }
+          : {}),
         boss: deps.boss,
         dayPlanRead: briefingsAutoDayPlanRepository,
         feedbackRepository: usefulnessFeedbackRepository
@@ -2399,6 +2526,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [memorySqlMigrationDirectory],
     queueDefinitions: [...VAULT_INGEST_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
+      configureMemoryApprovalReferences(
+        createApprovalSourceReferences({ manifests: deps.listModuleManifests })
+      );
       registerMemoryGraphRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
@@ -2441,6 +2571,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const storyVerifier = createStoryFeedbackTargetVerifier(usefulnessFeedbackRepository);
       registry.register("news_story", storyVerifier);
       registry.register("sports_story", storyVerifier);
+      configureUsefulnessFeedbackPresentation(registry);
       registerUsefulnessFeedbackRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
@@ -2835,8 +2966,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: meetingsModuleManifest,
     sqlMigrationDirectories: [meetingsModuleSqlMigrationDirectory],
-    queueDefinitions: [],
+    queueDefinitions: [...MEETING_STOP_SUMMARY_QUEUES, ...MEETING_CAPTURE_MAINTENANCE_QUEUES],
     registerRoutes: (server, deps) => {
+      registerMeetingCaptureRoutes(server, {
+        ...createMeetingCaptureRuntime(deps),
+        scheduleSummary: createMeetingStopSummaryScheduler(deps.boss)
+      });
       registerMeetingRecordRoutes(server, {
         beforeRemove: deleteMeetingChatThreads,
         dataContext: deps.dataContext,
@@ -2859,7 +2994,21 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           deps.resolveActiveModules
         )
       });
-    }
+    },
+    registerWorkers: (boss, deps) =>
+      registerMeetingStopSummaryWorker(
+        boss,
+        deps.dataContext,
+        createMeetingOutputRuntime({
+          dataContext: deps.dataContext,
+          createConstrainedCliStructuredAdapter: deps.createConstrainedCliStructuredAdapter,
+          probeConstrainedCli: deps.probeConstrainedCli,
+          resolveActiveModules: createActiveModulesResolver({
+            dataContext: deps.dataContext,
+            manifests: getBuiltInModuleManifests
+          })
+        }).generator
+      )
   },
   {
     manifest: scratchpadModuleManifest,
@@ -2961,7 +3110,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     }
   },
   {
-    manifest: peopleManifest,
+    manifest: peopleModuleManifest,
     sqlMigrationDirectories: [peopleModuleSqlMigrationDirectory],
     queueDefinitions: [{ name: PERSON_INDEX_QUEUE }, { name: SYNC_PERSON_MEMORY_QUEUE }],
     registerRoutes: (server, deps) =>
@@ -3466,6 +3615,10 @@ export function registerBuiltInApiRoutes(
   let resolveActionRequestFn: AssistantToolGateway["resolveActionRequest"] | undefined;
   const getResolveActionRequestFn = (): AssistantToolGateway["resolveActionRequest"] | undefined =>
     resolveActionRequestFn;
+  let actionRequestPresentationFn: AssistantToolGateway["getActionRequestPresentation"] | undefined;
+  const getActionRequestPresentationFn = () => actionRequestPresentationFn;
+  let recoverActionRequestsFn: AssistantToolGateway["recoverActionRequests"] | undefined;
+  const getRecoverActionRequestsFn = () => recoverActionRequestsFn;
   // #1554 task #6: the persistent-runtime pool's onPersistentReap needs
   // SessionTokenRegistry.revokeBySessionId, which is likewise built INSIDE registerChatRoutes's
   // `wiring` closure — same late-bound "adopt" seam as dropSessionsForProvider above. Populated
@@ -3588,6 +3741,8 @@ export function registerBuiltInApiRoutes(
   const appMapService = createAppMapReadService({
     artifact: loadAppMap(APP_MAP_ARTIFACT_PATH),
     resolveActiveModules: dependencies.resolveActiveModules,
+    // #3168: installed modules' app-map entries, only for modules active for this actor.
+    resolveExternalAppMap: dependencies.resolveExternalAppMap,
     resolveFeatureFlagState: (featureFlagId) =>
       dependencies
         .listModuleManifests()
@@ -3637,6 +3792,10 @@ export function registerBuiltInApiRoutes(
     platformDiagnostics,
     chatEngineFactory,
     createCliStructuredAdapter: createCliStructuredAdapterFactory(structuredChatEngineFactory),
+    createConstrainedCliStructuredAdapter: createConstrainedCliStructuredAdapterFactory(
+      structuredChatEngineFactory
+    ),
+    probeConstrainedCli: createConstrainedCliReadinessProbe(getRpcConnection),
     personaPreview:
       dependencies.personaPreview ??
       createDefaultPersonaPreview(dependencies.dataContext, {
@@ -3698,8 +3857,12 @@ export function registerBuiltInApiRoutes(
     // resolveActionRequest closure reads back out through getResolveActionRequestFn below.
     adoptChatGateway: (gateway: AssistantToolGateway) => {
       resolveActionRequestFn = gateway.resolveActionRequest.bind(gateway);
+      actionRequestPresentationFn = gateway.getActionRequestPresentation.bind(gateway);
+      recoverActionRequestsFn = gateway.recoverActionRequests.bind(gateway);
     },
     getResolveActionRequestFn,
+    getActionRequestPresentationFn,
+    getRecoverActionRequestsFn,
     // #1554 task #6: mirrors adoptDropSessionsForProvider immediately above — publishes the chat
     // wiring closure's SessionTokenRegistry.revokeBySessionId into this per-server binding, which
     // the onReady hook below reads through onPersistentReap when it resolves the real engine

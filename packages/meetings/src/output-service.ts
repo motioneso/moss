@@ -1,11 +1,18 @@
-import type { AccessContext, DataContextRunner } from "@moss/db";
+import { projectMeetingOverview } from "./history-projection.js";
+import { MeetingRecordsRepository } from "./repository.js";
+import { MeetingStopSummaryRepository } from "./stop-summary-repository.js";
+import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type {
   GenerateMeetingOutputInput,
   MeetingOutputInputs,
   MeetingOutputResult
 } from "@moss/shared";
 import { MeetingOutputError, MeetingOutputsRepository } from "./output-repository.js";
-import { getMeetingOutputTemplate, validateMeetingOutput } from "./output-validation.js";
+import {
+  getMeetingOutputTemplate,
+  validateMeetingOutput,
+  MeetingOutputValidationError
+} from "./output-validation.js";
 
 export type MeetingOutputGenerator = (
   actor: AccessContext,
@@ -21,7 +28,8 @@ export class MeetingOutputService {
   constructor(
     private readonly dataContext: Pick<DataContextRunner, "withDataContext">,
     private readonly generator: MeetingOutputGenerator,
-    private readonly repository = new MeetingOutputsRepository()
+    private readonly repository = new MeetingOutputsRepository(),
+    private readonly stopSummaries = new MeetingStopSummaryRepository(undefined, repository)
   ) {}
 
   async generate(
@@ -40,35 +48,78 @@ export class MeetingOutputService {
       ].some((value) => !Number.isSafeInteger(value) || value < 0)
     )
       throw new MeetingOutputError("meeting_output_invalid_input", 400);
-    const encoded = JSON.stringify({ kind: "generate", ...input });
-    const reservation = await this.dataContext.withDataContext(actor, async (db) => {
-      await this.repository.lock(db, meetingId);
-      const previous = await this.repository.request(db, meetingId, input.requestKey, encoded);
-      if (previous)
-        return {
-          result: previous.result_json
-            ? (JSON.parse(previous.result_json) as MeetingOutputResult)
-            : { status: "pending" as const, requestKey: input.requestKey }
-        };
-      const pendingKey = await this.repository.pendingGeneration(db, meetingId);
-      if (pendingKey) throw new MeetingOutputError("meeting_output_busy", 409);
-      const head = await this.repository.head(db, meetingId);
-      const inputs = await this.repository.inputs(db, meetingId);
-      if (
-        (head?.version ?? 0) !== input.expectedOutputVersion ||
-        inputs.notesRevision !== input.expectedNotesRevision ||
-        (inputs.transcript?.transcriptRevision ?? 0) !== input.expectedTranscriptRevision
-      )
-        throw new MeetingOutputError("meeting_output_version_conflict", 409, {
-          outputVersion: head?.version ?? 0,
-          notesRevision: inputs.notesRevision,
-          transcriptRevision: inputs.transcript?.transcriptRevision ?? 0
-        });
-      if (!inputs.personalNotes.trim() && !inputs.transcript?.segments.length)
-        throw new MeetingOutputError("meeting_output_evidence_unavailable", 400);
-      await this.repository.reserve(db, meetingId, input.requestKey, encoded);
-      return { inputs };
+    const reservation = await this.dataContext.withDataContext(actor, (db) =>
+      this.reserve(db, meetingId, input)
+    );
+    return this.complete(actor, meetingId, input, reservation, "manual");
+  }
+
+  async generateOnStop(
+    actor: AccessContext,
+    meetingId: string,
+    requestKey: string
+  ): Promise<MeetingOutputResult | null> {
+    const admitted = await this.dataContext.withDataContext(actor, async (db) => {
+      try {
+        await this.repository.lock(db, meetingId);
+      } catch (error) {
+        // Deletion cascades the intent, but its metadata-only job may still be queued.
+        if (
+          error instanceof MeetingOutputError &&
+          error.code === "meeting_not_found" &&
+          error.statusCode === 404
+        )
+          return null;
+        throw error;
+      }
+      const input = await this.stopSummaries.admit(db, meetingId, requestKey);
+      if (!input) return null;
+      return { input, reservation: await this.reserve(db, meetingId, input) };
     });
+    return admitted
+      ? this.complete(actor, meetingId, admitted.input, admitted.reservation, "automatic-stop")
+      : null;
+  }
+
+  private async reserve(db: DataContextDb, meetingId: string, input: GenerateMeetingOutputInput) {
+    const encoded = JSON.stringify({ kind: "generate", ...input });
+    await this.repository.lock(db, meetingId);
+    const previous = await this.repository.request(db, meetingId, input.requestKey, encoded);
+    if (previous)
+      return {
+        result: previous.result_json
+          ? (JSON.parse(previous.result_json) as MeetingOutputResult)
+          : { status: "pending" as const, requestKey: input.requestKey }
+      };
+    const pendingKey = await this.repository.pendingGeneration(db, meetingId);
+    if (pendingKey) throw new MeetingOutputError("meeting_output_busy", 409);
+    const head = await this.repository.head(db, meetingId);
+    const inputs = await this.repository.inputs(db, meetingId);
+    if (
+      (head?.version ?? 0) !== input.expectedOutputVersion ||
+      inputs.notesRevision !== input.expectedNotesRevision ||
+      (inputs.transcript?.transcriptRevision ?? 0) !== input.expectedTranscriptRevision
+    )
+      throw new MeetingOutputError("meeting_output_version_conflict", 409, {
+        outputVersion: head?.version ?? 0,
+        notesRevision: inputs.notesRevision,
+        transcriptRevision: inputs.transcript?.transcriptRevision ?? 0
+      });
+    if (!inputs.personalNotes.trim() && !inputs.transcript?.segments.length)
+      throw new MeetingOutputError("meeting_output_evidence_unavailable", 400);
+    await this.repository.reserve(db, meetingId, input.requestKey, encoded);
+    return { inputs };
+  }
+
+  private async complete(
+    actor: AccessContext,
+    meetingId: string,
+    input: GenerateMeetingOutputInput,
+    reservation: Awaited<ReturnType<MeetingOutputService["reserve"]>>,
+    trigger: "manual" | "automatic-stop"
+  ): Promise<MeetingOutputResult> {
+    const template = getMeetingOutputTemplate(input.templateId, input.templateVersion)!;
+    const encoded = JSON.stringify({ kind: "generate", ...input });
     if (reservation.result)
       return reservation.result.status === "saved"
         ? { ...reservation.result, replayed: true }
@@ -80,7 +131,7 @@ export class MeetingOutputService {
       const signal = AbortSignal.timeout(110000);
       let rejectAbort: (() => void) | undefined;
       const aborted = new Promise<never>((_resolve, reject) => {
-        rejectAbort = () => reject(new MeetingOutputError("meeting_output_interrupted"));
+        rejectAbort = () => reject(new MeetingOutputError("meeting_output_timed_out"));
         signal.addEventListener("abort", rejectAbort, { once: true });
       });
       let generated: Awaited<ReturnType<MeetingOutputGenerator>>;
@@ -104,7 +155,7 @@ export class MeetingOutputService {
         "Capture gaps and participant attribution have not been independently verified."
       );
       const result = await this.dataContext.withDataContext(actor, async (db) => {
-        await this.repository.lock(db, meetingId);
+        const currentMeeting = await this.repository.lock(db, meetingId);
         const current = await this.repository.inputs(db, meetingId);
         const receipt = await this.repository.request(db, meetingId, input.requestKey, encoded);
         if (!receipt) throw new MeetingOutputError("meeting_output_interrupted");
@@ -125,6 +176,23 @@ export class MeetingOutputService {
           origin: "generated",
           stale
         });
+        if (
+          trigger === "automatic-stop" &&
+          !stale &&
+          currentMeeting.title === "Untitled meeting" &&
+          validated.overview.trim()
+        ) {
+          let title = projectMeetingOverview(
+            validated.overview.trim().split(/\n|(?<=[.!?])\s/u)[0]!
+          );
+          while (Buffer.byteLength(title) > 240) title = [...title].slice(0, -1).join("");
+          if (title && Buffer.byteLength(title) <= 240)
+            await new MeetingRecordsRepository().putTitle(db, {
+              meetingId,
+              expectedTitle: "Untitled meeting",
+              title
+            });
+        }
         const outcome = { status: "saved" as const, artifact, replayed: false };
         await this.repository.finish(db, meetingId, input.requestKey, outcome);
         return outcome;
@@ -133,7 +201,11 @@ export class MeetingOutputService {
     } catch (error) {
       // No provider errors, prompts or credentials are persisted or returned to callers.
       const code =
-        error instanceof MeetingOutputError ? error.code : "meeting_output_generation_failed";
+        error instanceof MeetingOutputError
+          ? error.code
+          : error instanceof MeetingOutputValidationError
+            ? `meeting_output_rejected_${error.reasonCode}`
+            : "meeting_output_generation_failed";
       const result: MeetingOutputResult = { status: "failed", requestKey: input.requestKey, code };
       return await this.dataContext.withDataContext(actor, async (db) => {
         await this.repository.lock(db, meetingId);

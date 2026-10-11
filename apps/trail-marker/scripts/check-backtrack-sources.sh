@@ -58,7 +58,7 @@ check() {
     name="$(basename "$file")"
     # Comments are not code: a doc comment may name what the file must never do.
     code="$(grep -v '^[[:space:]]*//' "$file")"
-    first="$(printf '%s\n' "$code" | grep -v '^[[:space:]]*$' | head -1 | sed 's/[[:space:]]*$//')"
+    first="$(printf '%s\n' "$code" | grep -v '^[[:space:]]*$' | sed -n '1p' | sed 's/[[:space:]]*$//')"
     last="$(printf '%s\n' "$code" | grep -v '^[[:space:]]*$' | tail -1 | sed 's/[[:space:]]*$//')"
     if is_debug_only "$name"; then
       if [ "$first" != "#if DEBUG" ]; then echo "error: $name does not start with #if DEBUG"; fail=1; fi
@@ -84,7 +84,14 @@ plant() {
   local source="$1" file="$2" label="$3" expected="$4" expression="$5" work out
   work="$(mktemp -d)"
   cp "$source"/*.swift "$work/"
-  sed -i '' "$expression" "$work/$file"
+  # Portable on both the Mac build runner and Linux source-check workers. A failed
+  # mutation is a harness failure, never a passing protection test.
+  if ! sed "$expression" "$work/$file" > "$work/$file.tmp"; then
+    rm -rf "$work"
+    echo "error: self-test: could not plant $label"
+    return 1
+  fi
+  mv "$work/$file.tmp" "$work/$file"
   out="$(check "$work")"
   local status=$?
   rm -rf "$work"

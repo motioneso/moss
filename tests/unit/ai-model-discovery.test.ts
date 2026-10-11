@@ -291,3 +291,42 @@ describe("CLI model discovery (#2208)", () => {
     });
   });
 });
+
+// #3057: Cloudflare's decision-model endpoint has no models list, so a Cloudflare provider's
+// discovery answers from the fixed Clef family with no network call.
+describe("Cloudflare decision-model discovery (#3057)", () => {
+  const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${"0123456789abcdef0123456789abcdef"}/ai`;
+
+  it("returns the fixed Clef family without calling fetch", async () => {
+    let calls = 0;
+    const result = await new ModelDiscoveryService().discoverModels("cf", {
+      providerKind: "system-one",
+      authMethod: "api_key",
+      baseUrl,
+      credential: { apiKey: "cf-token" },
+      fetch: (async () => {
+        calls += 1;
+        return new Response("{}", { status: 500 });
+      }) as unknown as typeof globalThis.fetch
+    });
+
+    expect(calls).toBe(0);
+    expect(result.reason).toBeUndefined();
+    expect(result.models).toEqual([
+      {
+        providerModelId: "clef",
+        displayName: "clef",
+        capabilities: ["json"],
+        tier: "economy",
+        releasedAt: null
+      },
+      {
+        providerModelId: "clef-flash",
+        displayName: "clef-flash",
+        capabilities: ["json"],
+        tier: "economy",
+        releasedAt: null
+      }
+    ]);
+  });
+});

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import {
   ConnectorsRepository,
@@ -11,6 +11,8 @@ import { CalendarRepository } from "@moss/calendar";
 import { PreferencesRepository } from "@moss/structured-state";
 import type { Kysely } from "kysely";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
+import { seedCalendarApprovalEvent } from "./fixtures/calendar-approval.js";
 
 // ─── Section A: CalendarRepository.deleteById ────────────────────────────────
 
@@ -304,11 +306,16 @@ describe("Section C — manifest structure + gateway routing", () => {
   // Gateway routing tests (need a real DB)
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
 
   beforeAll(async () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     dataContext = new DataContextRunner(appDb);
+  });
+
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(dataContext, [ids.userA, ids.userB]);
   });
   afterAll(async () => {
     await appDb.destroy();
@@ -329,7 +336,7 @@ describe("Section C — manifest structure + gateway routing", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => modules,
       repository: new AiRepository(),
-      runner: dataContext,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations: new ConfirmationRegistry(),
       notifier,
@@ -358,6 +365,11 @@ describe("Section C — manifest structure + gateway routing", () => {
   }
 
   it("callTool always emits an action_request card (never auto-runs)", async () => {
+    const event = await seedCalendarApprovalEvent(
+      dataContext,
+      ids.userA,
+      "google-evt-confirm-delete"
+    );
     const fakeDelete = {
       async createEvent() {
         throw new Error("should not be called");
@@ -375,13 +387,13 @@ describe("Section C — manifest structure + gateway routing", () => {
       calendarWrite: fakeDelete
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
 
     const callP = gateway.callTool(token, "calendar.deleteEvent", {
-      eventId: "some-uuid",
+      eventId: event.id,
       displayTitle: "Board sync"
     });
 
@@ -450,7 +462,7 @@ describe("Section C — manifest structure + gateway routing", () => {
       })
     );
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
@@ -465,6 +477,11 @@ describe("Section C — manifest structure + gateway routing", () => {
   });
 
   it("gateway falls to confirm even if a trusted_auto tier is stored and executionPolicy=auto is set on a hypothetical tool variant", async () => {
+    const event = await seedCalendarApprovalEvent(
+      dataContext,
+      ids.userA,
+      "google-evt-confirm-auto-variant"
+    );
     const autoVariant: MossModuleManifest = {
       ...calendarModuleManifest,
       assistantActionFamilies: [
@@ -503,12 +520,12 @@ describe("Section C — manifest structure + gateway routing", () => {
       calendarWrite: fakeDelete
     });
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
 
-    const callP = gateway.callTool(token, "calendar.deleteEvent", { eventId: "u" });
+    const callP = gateway.callTool(token, "calendar.deleteEvent", { eventId: event.id });
     const card = await waitForCard(emitted, "calendar.deleteEvent");
     // The tool did NOT auto-run (no execute call before confirm card)
     expect(executed).toBe(false);

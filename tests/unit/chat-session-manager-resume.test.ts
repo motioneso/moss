@@ -85,7 +85,7 @@ describe("ChatSessionManager.resumeThread", () => {
 
     expect(deps.persistence.listPriorTurns).toHaveBeenCalledWith(
       "u1",
-      { forceReplay: true },
+      { forceReplay: true, threadId: null },
       "drawer"
     );
   });
@@ -99,7 +99,7 @@ describe("ChatSessionManager.resumeThread", () => {
 
     expect(deps.persistence.listPriorTurns).toHaveBeenCalledWith(
       "u1",
-      { forceReplay: false },
+      { forceReplay: false, threadId: null },
       "drawer"
     );
   });

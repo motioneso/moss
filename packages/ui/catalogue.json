@@ -85,7 +85,7 @@
         {
           "prop": "variant",
           "kind": "enum",
-          "values": ["primary", "secondary", "quiet", "accentSoft", "danger", "field"],
+          "values": ["primary", "secondary", "quiet", "accentSoft", "danger", "field", "link"],
           "optional": true,
           "default": "primary"
         },
@@ -170,7 +170,13 @@
       "name": "chat-thread",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/chat-thread.tsx", "type": "registry:ui" }],
-      "dependencies": ["@moss/shared", "lucide-react", "react-markdown", "remark-gfm"],
+      "dependencies": [
+        "@moss/shared",
+        "@moss/shared/chat-action-outcome",
+        "lucide-react",
+        "react-markdown",
+        "remark-gfm"
+      ],
       "exports": ["ActivityPeek", "ChatFreshnessFooter", "Thread", "activityVerb", "groupRecords"],
       "options": [],
       "flags": []
@@ -215,6 +221,15 @@
       "flags": [{ "prop": "disabled", "optional": true }]
     },
     {
+      "name": "control-pill",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/control-pill.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["ControlPill"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "day-cell",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/day-cell.tsx", "type": "registry:ui" }],
@@ -230,10 +245,14 @@
       "name": "dialog",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/dialog.tsx", "type": "registry:ui" }],
-      "dependencies": [],
+      "dependencies": ["lucide-react"],
       "exports": ["Dialog"],
       "options": [],
-      "flags": []
+      "flags": [
+        { "prop": "dismissOnEscape", "optional": true },
+        { "prop": "dismissOnBackdrop", "optional": true },
+        { "prop": "closeDisabled", "optional": true }
+      ]
     },
     {
       "name": "disclosure-toggle",
@@ -330,6 +349,15 @@
       "flags": []
     },
     {
+      "name": "highlight",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/highlight.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["Highlight"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "icon-button",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/icon-button.tsx", "type": "registry:ui" }],
@@ -419,7 +447,22 @@
       "files": [{ "path": "packages/ui/src/menu.tsx", "type": "registry:ui" }],
       "dependencies": [],
       "exports": ["Menu"],
-      "options": [],
+      "options": [
+        {
+          "prop": "triggerVariant",
+          "kind": "enum",
+          "values": ["icon", "content"],
+          "optional": true,
+          "default": null
+        },
+        {
+          "prop": "placement",
+          "kind": "enum",
+          "values": ["bottom", "top"],
+          "optional": true,
+          "default": null
+        }
+      ],
       "flags": []
     },
     {
@@ -482,7 +525,10 @@
       "dependencies": [],
       "exports": ["PeekPanel"],
       "options": [],
-      "flags": []
+      "flags": [
+        { "prop": "modal", "optional": true },
+        { "prop": "dismissOnEscape", "optional": true }
+      ]
     },
     {
       "name": "radio-card-group",
@@ -491,7 +537,7 @@
       "dependencies": [],
       "exports": ["RadioCardGroup"],
       "options": [],
-      "flags": []
+      "flags": [{ "prop": "disabled", "optional": true }]
     },
     {
       "name": "row-button",

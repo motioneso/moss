@@ -88,6 +88,7 @@ export async function recordGatewayAudit(
     turnId?: string;
   }
 ): Promise<void> {
+  if (found.tool.risk === "read") return;
   return recordGatewayAuditRaw(
     deps,
     access,
@@ -95,7 +96,7 @@ export async function recordGatewayAudit(
       toolModuleId: found.dto.moduleId,
       toolName: found.dto.name,
       actionFamilyId: found.tool.actionFamilyId ?? null,
-      actionKind: found.tool.risk as "write" | "outbound" | "destructive"
+      actionKind: found.tool.risk
     },
     opts
   );

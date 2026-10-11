@@ -3,12 +3,17 @@ import { QueryClient, QueryClientProvider, type InfiniteData } from "@tanstack/r
 import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, hasSessionUnsavedChanges } from "@moss/module-web-sdk";
-import type { MeetingHistoryPage, MeetingRecord } from "@moss/shared";
+import {
+  type MeetingHistoryPage,
+  type MeetingRecord,
+  type MeetingCapturePreferences
+} from "@moss/shared";
 import { historyItem } from "./fixtures/meeting-history.js";
 import * as historyApi from "../../packages/meetings/src/web/history-client.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import { MeetingNotes } from "../../packages/meetings/src/web/meeting-record.js";
 import * as api from "../../packages/meetings/src/web/client.js";
+import { MeetingNotesPane } from "../../packages/meetings/src/web/meeting-notes-pane.js";
 import { useSignOutGuard } from "../../apps/web/src/shell/use-sign-out-guard.js";
 
 vi.mock("../../packages/meetings/src/web/client.js", async (original) => {
@@ -37,6 +42,12 @@ const meeting: MeetingRecord = {
   createdAt: "2026-10-03T12:00:00Z",
   updatedAt: "2026-10-03T12:00:00Z"
 };
+const preferences: MeetingCapturePreferences = {
+  defaultCaptureMode: null,
+  rememberedSource: null,
+  summarizeOnStop: true,
+  summaryTemplateId: "general"
+};
 let renderer: ReactTestRenderer;
 let client: QueryClient;
 let location: string;
@@ -61,12 +72,28 @@ async function waitForRender(assertion: () => void) {
   );
 }
 function button(label: string) {
-  return renderer.root.findAllByType("button").find((node) => node.children.join("") === label)!;
+  return renderer.root
+    .findAllByType("button")
+    .find(
+      (node) =>
+        node.props["aria-label"] === label ||
+        node.children.join("") === label ||
+        (String(node.props.className).includes("meetings-history-row") &&
+          node.findAll((child) => child.type === "span" && child.children.join("") === label)
+            .length > 0)
+    )!;
 }
 async function click(label: string) {
+  if (label === "Delete meeting" && !button(label)) await click("Meeting actions");
   await act(async () => {
+    expect(button(label)?.props.disabled).not.toBe(true);
     button(label).props.onClick();
   });
+  await flush();
+}
+async function awaitAutosave() {
+  const count = vi.mocked(api.saveMeetingNotes).mock.calls.length;
+  await waitForRender(() => expect(api.saveMeetingNotes).toHaveBeenCalledTimes(count + 1));
   await flush();
 }
 async function typeNotes(text: string) {
@@ -105,8 +132,33 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({ locale: { timezone: "UTC", region: "en-GB", dateFormat: "24" } })
         );
+      if (path === "/api/me/sessions")
+        return new Response(
+          JSON.stringify({
+            sessions: [
+              {
+                id: "linked-mac",
+                source: "companion",
+                deviceLabel: "Studio Mac",
+                lastSeenAt: meeting.createdAt
+              }
+            ]
+          })
+        );
+      if (path === "/api/companion/recording-capabilities")
+        return new Response(JSON.stringify({ devices: [] }));
+      if (path === "/api/meetings/output-availability")
+        return new Response(
+          JSON.stringify({ generationAvailability: "model-unavailable", templates: [] })
+        );
+      if (path === "/api/meetings/capture/devices")
+        return new Response(JSON.stringify({ devices: [], processingReady: false }));
       if (!path.startsWith("/api/meetings/records/"))
         throw new Error(`Unexpected unit request: ${path}`);
+      if (path.endsWith("/capture"))
+        return new Response(
+          JSON.stringify({ pendingLinks: [], capture: null, processingReady: false })
+        );
       if (path.endsWith("/outputs"))
         return new Response(
           JSON.stringify({ artifacts: [], candidates: [], headVersion: 0, templates: [] })
@@ -137,7 +189,19 @@ beforeEach(() => {
   });
   client.setQueryData(api.meetingKeys.record(meeting.id), { meeting });
   vi.mocked(api.getMeeting).mockResolvedValue({ meeting });
-  vi.mocked(api.getMeetingPreferences).mockResolvedValue({ defaultCaptureMode: null });
+  vi.mocked(api.getMeetingPreferences).mockResolvedValue(preferences);
+  vi.mocked(api.createMeeting).mockReset().mockResolvedValue({ meeting, created: true });
+  vi.mocked(api.saveMeetingNotes)
+    .mockReset()
+    .mockImplementation(async (input) => ({
+      status: "saved",
+      replayed: false,
+      meeting: {
+        ...meeting,
+        personalNotes: input.personalNotes,
+        notesRevision: input.expectedRevision + 1
+      }
+    }));
   vi.mocked(api.listMeetings).mockResolvedValue({ meetings: [meeting] });
   vi.mocked(historyApi.searchMeetingHistory).mockResolvedValue({
     meetings: [historyItem(meeting)],
@@ -164,17 +228,15 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     for (const text of ["", "One line", "One line\nTwo lines\nThree lines"]) {
       await typeNotes(text);
       expect(renderer.root.findByProps({ id: "meeting-review-tab-notes" }).children).toEqual([
-        "My notes"
+        "Notes"
       ]);
     }
   });
-  it("keeps typed notes through masthead history navigation and reopening", async () => {
+  it("keeps typed notes through list navigation and reopening before autosave", async () => {
     await mount();
     await typeNotes("Unsaved note");
-    await click("View meeting history");
-    expect(new URLSearchParams(location).get("selected")).toBe(meeting.id);
+    await click("Meetings");
     await click("Design review");
-    await click("Open review");
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
       "Unsaved note"
     );
@@ -190,7 +252,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       });
     await mount();
     await typeNotes("Submitted");
-    await click("Save notes");
+    await awaitAutosave();
     await typeNotes("Newer edits");
     await click("Retry save");
     expect(vi.mocked(api.saveMeetingNotes).mock.calls[1]?.[0]).toEqual(
@@ -199,7 +261,9 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
       "Newer edits"
     );
-    expect(button("Save notes").props.disabled).toBe(false);
+    expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toMatchObject({
+      phase: "idle"
+    });
   });
   it("requires conflict review and preserves typed text", async () => {
     vi.mocked(api.saveMeetingNotes).mockRejectedValue(
@@ -210,21 +274,74 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     });
     await mount();
     await typeNotes("My edits");
-    await click("Save notes");
+    await awaitAutosave();
     expect(renderer.root.findByProps({ id: "meeting-current-notes" }).props.value).toBe(
       "Other window"
     );
-    expect(button("Save notes").props.disabled).toBe(true);
+    expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toMatchObject({
+      phase: "conflict"
+    });
     await click("Keep my version");
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
       "My edits"
     );
-    expect(button("Save notes").props.disabled).toBe(false);
+    expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toMatchObject({
+      phase: "idle"
+    });
+  });
+  it("a row click does not mean its uncached notes editor is ready before going offline", async () => {
+    client.removeQueries({ queryKey: api.meetingKeys.record(meeting.id), exact: true });
+    let failRead!: (error: Error) => void;
+    vi.mocked(api.getMeeting).mockReturnValue(
+      new Promise((_resolve, reject) => {
+        failRead = reject;
+      })
+    );
+    await mount("/meetings");
+    await click(meeting.title);
+    expect(location).toBe(`?id=${meeting.id}`);
+    expect(api.getMeeting).toHaveBeenCalledWith(meeting.id);
+    expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(0);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Loading meeting…");
+    await act(async () => failRead(new TypeError("Failed to fetch while offline")));
+    await flush();
+    expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(0);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Couldn’t load this meeting");
+  });
+  it("waiting for the delayed record permits notes editing and the intended offline-save failure", async () => {
+    client.removeQueries({ queryKey: api.meetingKeys.record(meeting.id), exact: true });
+    let finishRead!: (value: { meeting: MeetingRecord }) => void;
+    vi.mocked(api.getMeeting).mockReturnValue(
+      new Promise((resolve) => {
+        finishRead = resolve;
+      })
+    );
+    await mount("/meetings");
+    await click(meeting.title);
+    expect(renderer.root.findAllByProps({ id: "meeting-personal-notes" })).toHaveLength(0);
+    await act(async () => finishRead({ meeting }));
+    await flush();
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props["aria-label"]).toBe(
+      "Notes"
+    );
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.disabled).not.toBe(
+      true
+    );
+    vi.mocked(api.saveMeetingNotes).mockRejectedValue(
+      new TypeError("Failed to fetch while offline")
+    );
+    await typeNotes("Keep these edits after canceling.");
+    await awaitAutosave();
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
+      "Keep these edits after canceling."
+    );
+    expect(JSON.stringify(renderer.toJSON())).toContain("Couldn’t save. Your edits are kept here.");
+    expect(hasSessionUnsavedChanges(client)).toBe(true);
   });
   it("canceling delete keeps edits and does not issue a delete", async () => {
     await mount();
     await typeNotes("Keep me");
-    await click("Delete draft");
+    await click("Delete meeting");
     await click("Cancel");
     expect(api.deleteMeeting).not.toHaveBeenCalled();
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe("Keep me");
@@ -232,12 +349,13 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
   it("explicit deletion invalidates history and removes editor cache", async () => {
     vi.mocked(api.deleteMeeting).mockResolvedValue(undefined);
     await mount();
-    await click("Delete draft");
-    await click("Permanently delete draft");
+    await click("Delete meeting");
+    await click("Permanently delete meeting");
     expect(api.deleteMeeting).toHaveBeenCalledWith(meeting.id);
     expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toBeUndefined();
+    expect(client.getQueryData(["meetings", "title", meeting.id])).toBeUndefined();
   });
-  it("clears a deleted selection and cached row while retaining history search and state", async () => {
+  it("clears the deleted route and cached rows while retaining search and pruning legacy filter caches", async () => {
     const remaining = historyItem({ ...meeting, id: "22334455-1122-4122-8122-112233445566" });
     const listKey = historyApi.historyKeys.search("private words", "notes-only");
     client.setQueryData(historyApi.historyKeys.view, { query: "private words" });
@@ -250,11 +368,9 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     vi.mocked(historyApi.getMeetingHistoryItem).mockResolvedValue({ meeting: remaining });
     vi.mocked(api.deleteMeeting).mockResolvedValue(undefined);
     await mount(`/meetings?id=${meeting.id}&selected=${meeting.id}&state=notes-only`);
-    await click("Delete draft");
-    await click("Permanently delete draft");
-    expect(new URLSearchParams(location)).toEqual(
-      new URLSearchParams("view=history&state=notes-only")
-    );
+    await click("Delete meeting");
+    await click("Permanently delete meeting");
+    expect(new URLSearchParams(location)).toEqual(new URLSearchParams());
     expect(client.getQueryData(historyApi.historyKeys.view)).toEqual({ query: "private words" });
     expect(
       client.getQueryData<InfiniteData<MeetingHistoryPage>>(listKey)?.pages[0]?.meetings
@@ -319,8 +435,8 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       });
       vi.mocked(api.deleteMeeting).mockResolvedValue(undefined);
       await mount();
-      await click("Delete draft");
-      await click("Permanently delete draft");
+      await click("Delete meeting");
+      await click("Permanently delete meeting");
       expect(listSignal.aborted).toBe(true);
       expect(detailSignal.aborted).toBe(true);
       await act(async () => {
@@ -338,10 +454,9 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
   it("keeps the current review and selection when deletion is not confirmed", async () => {
     vi.mocked(api.deleteMeeting).mockRejectedValue(new Error("offline"));
     await mount(`/meetings?id=${meeting.id}&selected=${meeting.id}`);
-    await click("Delete draft");
-    await click("Permanently delete draft");
+    await click("Delete meeting");
+    await click("Permanently delete meeting");
     expect(new URLSearchParams(location).get("id")).toBe(meeting.id);
-    expect(new URLSearchParams(location).get("selected")).toBe(meeting.id);
     expect(JSON.stringify(renderer.toJSON())).toContain("Couldn’t confirm deletion");
   });
   it.each(["history", "review"])(
@@ -365,53 +480,43 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
         meeting: id === other.id ? other : meeting
       }));
       await mount();
-      await click("Delete draft");
-      await click("Permanently delete draft");
-      const destination =
-        view === "history"
-          ? `?view=history&selected=${other.id}`
-          : `?id=${other.id}&selected=${other.id}`;
+      await click("Delete meeting");
+      await click("Permanently delete meeting");
+      const destination = view === "history" ? "" : `?id=${other.id}`;
       await act(async () => navigate(`/meetings${destination}`));
       await flush();
       await act(async () => finish());
       await flush();
       expect(location).toBe(destination);
-      expect(new URLSearchParams(location).get("selected")).toBe(other.id);
     }
   );
-  it("retries uncertain draft creation with one key", async () => {
+  it("retries uncertain meeting creation with one key", async () => {
     vi.mocked(api.createMeeting)
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValueOnce({ meeting, created: false });
     await mount("/meetings");
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-title" })
-        .props.onChange({ target: { value: "Design review" } })
-    );
-    await click("Create draft");
-    await click("Retry creating draft");
+    await click("New meeting");
+    await click("Retry opening meeting");
     expect(vi.mocked(api.createMeeting).mock.calls[1]?.[0]).toEqual(
       vi.mocked(api.createMeeting).mock.calls[0]?.[0]
     );
   });
-  it("never saves a default just by choosing a mode; explicit switch saves it", async () => {
-    vi.mocked(api.putMeetingPreferences).mockResolvedValue({ defaultCaptureMode: "selected-app" });
+  it("opens a notes-ready meeting without changing saved sources or starting capture", async () => {
+    const savedPreferences = { ...preferences, defaultCaptureMode: "selected-app" as const };
+    vi.mocked(api.getMeetingPreferences).mockResolvedValue(savedPreferences);
     await mount("/meetings");
-    await act(async () =>
-      renderer.root.findByProps({ type: "radio", value: "selected-app" }).props.onChange()
-    );
-    await flush();
+    await click("New meeting");
+    expect(api.createMeeting).toHaveBeenCalledWith({
+      requestKey: expect.any(String),
+      title: "Untitled meeting"
+    });
+    expect(new URLSearchParams(location).get("id")).toBe(meeting.id);
     expect(api.putMeetingPreferences).not.toHaveBeenCalled();
-    await act(async () =>
-      renderer.root
-        .findByProps({ "aria-label": "Use this capture mode as my default" })
-        .props.onChange({ target: { checked: true } })
-    );
-    await flush();
-    expect(api.putMeetingPreferences).toHaveBeenCalledWith(
-      { defaultCaptureMode: "selected-app" },
-      expect.anything()
+    expect(
+      vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith("/capture/start"))
+    ).toBe(false);
+    expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
+      "Saved notes"
     );
   });
   it("remounts with edits retained only in the authenticated query client", async () => {
@@ -430,19 +535,14 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       "Saved notes"
     );
   });
-  it("keeps uncertain create identity when Setup is left and reopened", async () => {
+  it("keeps uncertain create identity through another meeting and back", async () => {
     vi.mocked(api.createMeeting).mockRejectedValue(new Error("offline"));
     await mount("/meetings");
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-title" })
-        .props.onChange({ target: { value: "Design review" } })
-    );
-    await click("Create draft");
-    await click("View meeting history");
-    await click("New meeting draft");
-    expect(renderer.root.findByProps({ id: "meeting-title" }).props.value).toBe("Design review");
-    await click("Retry creating draft");
+    await click("New meeting");
+    await act(async () => navigate(`/meetings?id=${meeting.id}`));
+    await flush();
+    await click("Meetings");
+    await click("Retry opening meeting");
     expect(vi.mocked(api.createMeeting).mock.calls[1]?.[0]).toEqual(
       vi.mocked(api.createMeeting).mock.calls[0]?.[0]
     );
@@ -456,7 +556,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     );
     await mount();
     await typeNotes("Pending notes");
-    await click("Save notes");
+    await awaitAutosave();
     await act(async () => renderer.unmount());
     client.clear();
     await act(async () =>
@@ -480,13 +580,14 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       );
       await mount();
       await typeNotes("Private pending edit");
-      await click("Save notes");
+      await awaitAutosave();
       vi.mocked(api.getMeeting).mockRejectedValue(new ApiError(status, "Denied"));
       await act(async () => {
         await client.refetchQueries({ queryKey: api.meetingKeys.record(meeting.id) });
       });
       await flush();
       expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toBeUndefined();
+      expect(client.getQueryData(["meetings", "title", meeting.id])).toBeUndefined();
       await act(async () =>
         resolveSave({
           status: "saved",
@@ -501,7 +602,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       expect(JSON.stringify(renderer.toJSON())).not.toContain("Design review");
       // Re-entry after a later successful authorization must not recover the invalidated save.
       vi.mocked(api.getMeeting).mockResolvedValue({ meeting });
-      await click("Retry loading draft");
+      await click("Try again");
       expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
         "Saved notes"
       );
@@ -538,16 +639,15 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     await mount();
     await typeNotes("Needs saving");
     expect(hasSessionUnsavedChanges(client)).toBe(true);
-    await click("View meeting history");
+    await click("Meetings");
     expect(hasSessionUnsavedChanges(client)).toBe(true);
     await click("Design review");
-    await click("Open review");
     vi.mocked(api.saveMeetingNotes).mockResolvedValue({
       status: "saved",
       replayed: false,
       meeting: { ...meeting, personalNotes: "Needs saving", notesRevision: 2 }
     });
-    await click("Save notes");
+    await awaitAutosave();
     expect(hasSessionUnsavedChanges(client)).toBe(false);
   });
   it("uses the shared sign-out confirmation without a second notes beforeunload guard", async () => {
@@ -562,14 +662,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     let guard!: ReturnType<typeof useSignOutGuard>;
     function Review() {
       guard = useSignOutGuard(client, signOut);
-      return (
-        <MeetingNotes
-          meeting={meeting}
-          onDeleted={() => {}}
-          transcriptRevision={undefined}
-          onTranscriptRevisionChange={() => {}}
-        />
-      );
+      return <MeetingNotes meeting={meeting} onDeleted={() => {}} />;
     }
     await act(async () => {
       renderer = create(
@@ -605,9 +698,9 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       );
       await mount();
       await typeNotes("Submitted notes");
-      await click("Save notes");
+      await awaitAutosave();
       if (newerEdits) await typeNotes("Newer unsaved notes");
-      await click("View meeting history");
+      await click("Meetings");
       expect(renderer.root.findAllByType(MeetingNotes)).toHaveLength(0);
       expect(hasSessionUnsavedChanges(client)).toBe(true);
       await act(async () =>
@@ -637,7 +730,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       text: "Recover my edit"
     });
     vi.mocked(api.getMeeting).mockResolvedValue({ meeting });
-    await click("Retry");
+    await click("Try again");
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
       "Recover my edit"
     );
@@ -696,7 +789,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     );
     await mount();
     await typeNotes("Submitted");
-    await click("Save notes");
+    await awaitAutosave();
     await act(async () => {
       client.setQueryData(api.meetingKeys.record(meeting.id), {
         meeting: { ...meeting, personalNotes: "Revision three", notesRevision: 3 }
@@ -717,11 +810,15 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     expect(renderer.root.findByProps({ id: "meeting-personal-notes" }).props.value).toBe(
       "Submitted"
     );
-    expect(button("Save notes").props.disabled).toBe(true);
+    expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toMatchObject({
+      phase: "conflict"
+    });
     await click("Keep my version");
-    expect(button("Save notes").props.disabled).toBe(false);
+    expect(client.getQueryData(api.meetingKeys.editor(meeting.id))).toMatchObject({
+      phase: "idle"
+    });
   });
-  it("a delayed validation rejection unlocks the remounted setup title", async () => {
+  it("a delayed creation rejection unlocks retry after leaving and remounting the list", async () => {
     let rejectCreate!: (error: Error) => void;
     vi.mocked(api.createMeeting).mockReturnValue(
       new Promise((_resolve, reject) => {
@@ -729,24 +826,20 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       })
     );
     await mount("/meetings");
-    await act(async () =>
-      renderer.root
-        .findByProps({ id: "meeting-title" })
-        .props.onChange({ target: { value: "Design review" } })
-    );
+    await click("New meeting");
+    await act(async () => navigate(`/meetings?id=${meeting.id}`));
     await flush();
-    await click("Create draft");
-    await click("View meeting history");
-    await click("New meeting draft");
-    expect(renderer.root.findByProps({ id: "meeting-title" }).props.disabled).toBe(true);
+    await click("Meetings");
+    expect(button("Opening meeting…").props.disabled).toBe(true);
     await act(async () =>
       rejectCreate(new ApiError(400, "Invalid input", "meeting_invalid_input"))
     );
     await flush();
-    expect(renderer.root.findByProps({ id: "meeting-title" }).props.disabled).toBe(false);
-    expect(renderer.root.findByProps({ id: "meeting-title" }).props.value).toBe("Design review");
+    expect(button("New meeting").props.disabled).toBe(false);
+    expect(button("Retry opening meeting")).toBeDefined();
+    expect(api.createMeeting).toHaveBeenCalledTimes(1);
   });
-  it("a delete finishing after navigation does not leave the new setup", async () => {
+  it("a delete finishing after navigation preserves a newly created meeting", async () => {
     let resolveDelete!: () => void;
     vi.mocked(api.deleteMeeting).mockReturnValue(
       new Promise((resolve) => {
@@ -754,13 +847,19 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
       })
     );
     await mount();
-    await click("Delete draft");
-    await click("Permanently delete draft");
-    await click("View meeting history");
-    await click("New meeting draft");
+    await click("Delete meeting");
+    await click("Permanently delete meeting");
+    const newMeeting = { ...meeting, id: "22334455-1122-4122-8122-112233445566" };
+    vi.mocked(api.createMeeting).mockResolvedValue({ meeting: newMeeting, created: true });
+    vi.mocked(api.getMeeting).mockResolvedValue({ meeting: newMeeting });
+    await act(async () => navigate("/meetings"));
+    await flush();
+    await click("New meeting");
     await act(async () => resolveDelete());
     await flush();
-    expect(renderer.root.findByProps({ id: "meeting-title" })).toBeDefined();
+    expect(new URLSearchParams(location).get("id")).toBe(newMeeting.id);
+    expect(api.createMeeting).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Set up Meetings");
   });
   it("blocks rapid duplicate note submissions before a render", async () => {
     let resolveSave!: (value: Awaited<ReturnType<typeof api.saveMeetingNotes>>) => void;
@@ -772,7 +871,7 @@ describe("meeting UI interactions (unit transport stubs, not live proof)", () =>
     await mount();
     await typeNotes("Submit once");
     await act(async () => {
-      const save = button("Save notes").props.onClick;
+      const save = renderer.root.findByType(MeetingNotesPane).props.editor.save;
       save();
       save();
     });

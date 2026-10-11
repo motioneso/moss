@@ -51,7 +51,15 @@ export function toDetail(
     lastDiscoveryAt: row.lastDiscoveryAt ? row.lastDiscoveryAt.toISOString() : null,
     lastError: row.lastError,
     credentialPlacement: row.credentialPlacement,
-    tools: withGroups.map(({ invoke: _invoke, ...t }) => t),
+    tools: withGroups.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      group: tool.group,
+      inputSchema: tool.inputSchema,
+      readOnly: tool.readOnly,
+      idempotent: tool.idempotent,
+      destructive: tool.destructive
+    })),
     groups: groupNames.map((name) => ({
       name,
       toolCount: withGroups.filter((t) => t.group === name).length,

@@ -31,10 +31,18 @@ export const weatherModuleManifest = {
       actions: ["view"]
     }
   ],
+  features: [
+    {
+      id: "weather.chat_app_actions",
+      description:
+        "App actions read the forecast for the saved location or time-zone fallback. Retrieved weather is outside content; this read does not change saved preferences."
+    }
+  ],
   routes: [
     {
       method: "GET",
       path: "/api/weather/today",
+      chat: { access: "read" },
       responseSchema: getWeatherTodayRouteSchema.response[200],
       permissionId: "weather.view"
     }

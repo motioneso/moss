@@ -417,7 +417,8 @@ export function registerChatLiveRoutes(
           userName,
           seed.context,
           undefined,
-          bodyResult.surface
+          bodyResult.surface,
+          "evening_seed"
         );
         const {
           reply: assistantReply,

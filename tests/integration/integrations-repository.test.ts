@@ -1,8 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 
 import { createDatabase, DataContextRunner, type AccessContext, type MossDatabase } from "@moss/db";
-import { IntegrationsRepository } from "@moss/integrations";
+import {
+  createIntegrationsActiveModulesResolver,
+  createIntegrationsCipher,
+  createResolverCache,
+  IntegrationsRepository,
+  toDetail
+} from "@moss/integrations";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 describe("integrations connection repository", () => {
@@ -165,6 +171,120 @@ describe("integrations connection repository", () => {
         })
       )
     ).rejects.toThrow();
+  });
+
+  it("stamps owner-scoped stored connections and cannot transfer cached authority to another actor or admin", async () => {
+    const discovered = {
+      name: "read_widgets",
+      description: "Read widgets",
+      group: "Widgets",
+      inputSchema: { type: "object", properties: {} },
+      descriptorOwnerUserId: ids.userB,
+      isExternal: false,
+      externalContent: false
+    };
+    const created = await dataContext.withDataContext(userAContext(), async (scopedDb) => {
+      const input = {
+        name: "Descriptor ownership",
+        kind: "mcp" as const,
+        url: "https://mcp.example.com",
+        baseUrl: null,
+        specPasted: false,
+        credentialEnvelope: null,
+        credentialPlacement: null,
+        ownerUserId: ids.userB
+      };
+      const row = await repository.createConnection(scopedDb, input);
+      await repository.saveDiscovery(scopedDb, row.id, [discovered], null);
+      return (await repository.getConnection(scopedDb, row.id))!;
+    });
+    expect(created.ownerUserId).toBe(ids.userA);
+    expect(created.discoveredTools[0]).toHaveProperty("descriptorOwnerUserId", ids.userB);
+    expect(toDetail(created, created.discoveredTools).tools[0]).not.toHaveProperty(
+      "descriptorOwnerUserId"
+    );
+
+    const cache = createResolverCache();
+    const resolver = createIntegrationsActiveModulesResolver(async () => [], {
+      dataContext,
+      repository,
+      cipher: createIntegrationsCipher(),
+      resolverCache: cache,
+      logger: { warn: () => {} }
+    });
+    const permissionId = `integrations.${created.id}`;
+    const ownerModules = await resolver(ids.userA);
+    const ownerTool = ownerModules
+      .flatMap((module) => module.assistantTools ?? [])
+      .find((tool) => tool.permissionId === permissionId);
+    expect(ownerTool).toMatchObject({
+      descriptorOwnerUserId: ids.userA,
+      isExternal: true,
+      externalContent: true
+    });
+    expect(await resolver(ids.userA)).toEqual(ownerModules);
+
+    for (const actorUserId of [ids.userB, ids.adminUser]) {
+      const context = { actorUserId, requestId: "descriptor-ownership-other-actor" };
+      expect(
+        await dataContext.withDataContext(context, (scopedDb) =>
+          repository.getConnection(scopedDb, created.id)
+        )
+      ).toBeNull();
+      const modules = await resolver(actorUserId);
+      expect(
+        modules
+          .flatMap((module) => module.assistantTools ?? [])
+          .some((tool) => tool.permissionId === permissionId)
+      ).toBe(false);
+      expect(
+        await dataContext.withDataContext(context, (scopedDb) =>
+          repository.updateConnection(scopedDb, created.id, { name: "Attempted transfer" })
+        )
+      ).toBeNull();
+    }
+
+    const patch = { name: "Descriptor owner unchanged", ownerUserId: ids.userB };
+    const updated = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.updateConnection(scopedDb, created.id, patch)
+    );
+    expect(updated?.ownerUserId).toBe(ids.userA);
+    expect(updated?.name).toBe(patch.name);
+
+    await expect(
+      dataContext.withDataContext(userAContext(), (scopedDb) =>
+        sql`UPDATE app.integration_connections
+          SET owner_user_id = ${ids.userB}::uuid
+          WHERE id = ${created.id}::uuid`.execute(scopedDb.db)
+      )
+    ).rejects.toThrow(/row-level security/i);
+  });
+
+  it("keeps integration ownership under FORCE RLS with owner-only runtime policies", async () => {
+    const table = await sql<{ relrowsecurity: boolean; relforcerowsecurity: boolean }>`
+      SELECT relrowsecurity, relforcerowsecurity FROM pg_class
+      WHERE oid = 'app.integration_connections'::regclass
+    `.execute(appDb);
+    expect(table.rows).toEqual([{ relrowsecurity: true, relforcerowsecurity: true }]);
+
+    const policies = await sql<{
+      roles: string[];
+      cmd: string;
+      qual: string;
+      with_check: string | null;
+    }>`
+      SELECT roles, cmd, qual, with_check FROM pg_policies
+      WHERE schemaname = 'app' AND tablename = 'integration_connections'
+        AND roles && ARRAY['public', 'jarvis_app_runtime', 'jarvis_worker_runtime']::name[]
+      ORDER BY policyname
+    `.execute(appDb);
+    expect(policies.rows).toHaveLength(3);
+    for (const policy of policies.rows) {
+      expect(policy.qual).toBe("(owner_user_id = app.current_actor_user_id())");
+      if (policy.cmd !== "SELECT") {
+        expect(policy.with_check).toBe("(owner_user_id = app.current_actor_user_id())");
+      }
+    }
   });
 });
 

@@ -9,6 +9,13 @@ export function normalizeMeetingSearchText(value: string): string {
   );
 }
 
+/** Bounded display text only; original generated evidence stays in artifact_json unchanged. */
+export function projectMeetingOverview(value: string): string {
+  return [...normalizeMeetingSearchText(value).replace(/\0/g, "").replace(/\s+/gu, " ").trim()]
+    .slice(0, 240)
+    .join("");
+}
+
 export function projectMeetingSources(sources: readonly MeetingTranscriptSource[]) {
   const unique = new Map<string, Pick<MeetingTranscriptSource, "kind" | "label">>();
   for (const { kind, label } of sources) unique.set(JSON.stringify([kind, label]), { kind, label });

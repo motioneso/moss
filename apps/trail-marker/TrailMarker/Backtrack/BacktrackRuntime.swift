@@ -303,7 +303,7 @@ final class BacktrackRuntime: ObservableObject {
             enabled: enabled,
             consentAccepted: consentGiven >= sink.requiredConsentVersion,
             menuSwitchOn: menuSwitchOn,
-            pausedAll: connection.state == .disconnected,
+            pausedAll: connection.state == .disconnected || connection.state == .unlinking,
             screenLocked: screenLocked,
             sleeping: sleeping,
             idle: services.idleSeconds() >= Self.idleThreshold,

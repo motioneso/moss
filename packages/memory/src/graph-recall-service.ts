@@ -1,6 +1,7 @@
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 
 import type { EmbeddingProvider } from "./embedding-provider.js";
+import { MemoryGraphDashboardRepository } from "./graph-dashboard-repository.js";
 import { MemoryGraphRepository } from "./graph-repository.js";
 import type {
   MemoryFactProvenance,
@@ -40,7 +41,10 @@ export class GraphMemoryRecallService {
       subjectEntityId
     } satisfies NewMemoryFact);
 
-    const searchText = factSearchText(fact);
+    const names = await this.repository.getOtherSubjectNames(scopedDb, ownerUserId, [
+      fact.subjectEntityId
+    ]);
+    const searchText = factSearchText(fact, names.get(fact.subjectEntityId));
     await this.repository.upsertSearchDocument(
       scopedDb,
       ownerUserId,
@@ -72,8 +76,13 @@ export class GraphMemoryRecallService {
       queryEmbedding,
       { includeInactive: options.includeInactive, includeStale: options.includeStale }
     );
+    const names = await this.repository.getOtherSubjectNames(
+      scopedDb,
+      ownerUserId,
+      candidates.map((candidate) => candidate.fact.subjectEntityId)
+    );
     const items = candidates
-      .map((candidate) => toRecallItem(candidate, trimmedQuery))
+      .map((candidate) => toRecallItem(candidate, trimmedQuery, names))
       .filter((item) => options.includeInactive || item.score > 0)
       .filter(
         (item) =>
@@ -90,9 +99,14 @@ export class GraphMemoryRecallService {
   async core(scopedDb: DataContextDb, ownerUserId: string): Promise<MemoryRecallResult> {
     assertDataContextDb(scopedDb);
     const facts = await this.repository.listCoreFacts(scopedDb, ownerUserId, CORE_LIMIT);
+    const names = await this.repository.getOtherSubjectNames(
+      scopedDb,
+      ownerUserId,
+      facts.map((fact) => fact.subjectEntityId)
+    );
     return {
       query: "",
-      items: facts.map((fact) => factToRecallItem(fact, 1))
+      items: facts.map((fact) => factToRecallItem(fact, 1, names))
     };
   }
 
@@ -103,7 +117,13 @@ export class GraphMemoryRecallService {
   ): Promise<MemoryForgetResult> {
     assertDataContextDb(scopedDb);
     return {
-      deleted: await this.repository.forgetFact(scopedDb, ownerUserId, target.factId)
+      deleted: (
+        await new MemoryGraphDashboardRepository(this.repository).forgetFactWithConflictCleanup(
+          scopedDb,
+          ownerUserId,
+          target.factId
+        )
+      ).deleted
     };
   }
 
@@ -172,7 +192,11 @@ export class GraphMemoryRecallService {
   }
 }
 
-function toRecallItem(candidate: MemoryFactRecallCandidate, query: string): MemoryRecallItem {
+function toRecallItem(
+  candidate: MemoryFactRecallCandidate,
+  query: string,
+  names: ReadonlyMap<string, string>
+): MemoryRecallItem {
   const fact = candidate.fact;
   const keywordMatch = keywordScore(query, candidate.searchText);
   const score =
@@ -183,11 +207,17 @@ function toRecallItem(candidate: MemoryFactRecallCandidate, query: string): Memo
     0.05 * (fact.pinned ? 1 : 0) +
     0.05 * freshnessBoost(fact.lastConfirmedAt ?? fact.updatedAt ?? fact.createdAt);
 
-  return factToRecallItem(fact, roundScore(score));
+  return factToRecallItem(fact, roundScore(score), names);
 }
 
-function factToRecallItem(fact: MemoryFactRecord, score: number): MemoryRecallItem {
+function factToRecallItem(
+  fact: MemoryFactRecord,
+  score: number,
+  names: ReadonlyMap<string, string>
+): MemoryRecallItem {
+  const subjectName = names.get(fact.subjectEntityId);
   return {
+    ...(subjectName ? { subjectName } : {}),
     kind: "fact",
     id: fact.id,
     title: fact.predicate,
@@ -211,8 +241,8 @@ function directMatchScore(query: string, text: string): number {
   return keywordScore(query, text);
 }
 
-function factSearchText(fact: MemoryFactRecord): string {
-  return [fact.predicate, fact.objectText].filter(Boolean).join(" ");
+function factSearchText(fact: MemoryFactRecord, subjectName?: string): string {
+  return [subjectName, fact.predicate, fact.objectText].filter(Boolean).join(" ");
 }
 
 function keywordScore(query: string, text: string): number {

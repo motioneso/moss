@@ -1,3 +1,13 @@
+import {
+  newsImagePresentation,
+  newsFaviconPresentation,
+  newsRefreshPresentation,
+  newsConfirmPresentation,
+  newsRemoveSourcePresentation,
+  newsRemoveTopicPresentation,
+  newsAddTopicPresentation,
+  newsExclusionPresentation
+} from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest, ModuleAiRequirementManifest } from "@moss/module-sdk";
@@ -117,7 +127,7 @@ export const newsModuleManifest = {
       id: "news",
       label: "News",
       description:
-        "Read personalized headlines from enabled sources. Marking a story less like this removes it at once and refills its spot from loaded stories. Today's list shows each publisher's icon on a light tile, readable in both themes, name on hover.",
+        "Read personalized headlines. Less like this removes a story and refills its spot. Today shows publisher icons on light tiles with names on hover. Loading is distinct from empty headlines; failed reads offer Retry.",
       path: "/news",
       icon: "newspaper",
       order: 34,
@@ -165,28 +175,34 @@ export const newsModuleManifest = {
       actions: ["create", "update", "delete"]
     }
   ],
+  // #3065: preference/source/topic writes also refresh feeds and reconcile schedules;
+  // overview and personalization can do so on GET. Credentials remain blocked on every method.
   routes: [
     {
       method: "GET",
       path: "/api/news/catalog",
+      chat: { access: "read", content: "outside" },
       responseSchema: newsCatalogResponseSchema,
       permissionId: "news.view"
     },
     {
       method: "GET",
       path: "/api/news/overview",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: newsOverviewResponseSchema,
       permissionId: "news.view"
     },
     {
       method: "GET",
       path: "/api/news/prefs",
+      chat: { access: "read", content: "user_authored" },
       responseSchema: newsPrefsResponseSchema,
       permissionId: "news.view"
     },
     {
       method: "POST",
       path: "/api/news/prefs",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: createNewsPrefRequestSchema,
       responseSchema: createNewsPrefResponseSchema,
       permissionId: "news.prefs"
@@ -194,6 +210,7 @@ export const newsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/news/prefs/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: deleteNewsPrefResponseSchema,
       permissionId: "news.prefs"
     },
@@ -201,12 +218,14 @@ export const newsModuleManifest = {
     {
       method: "GET",
       path: "/api/news/personalization",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: getNewsPersonalizationSchema,
       permissionId: "news.view"
     },
     {
       method: "POST",
       path: "/api/news/source-exclusions",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: createNewsSourceExclusionSchema.body,
       responseSchema: createNewsSourceExclusionSchema,
       permissionId: "news.prefs"
@@ -214,12 +233,14 @@ export const newsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/news/source-exclusions/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: deleteNewsSourceExclusionSchema,
       permissionId: "news.prefs"
     },
     {
       method: "POST",
       path: "/api/news/sources/preview",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: previewNewsSourceSchema.body,
       responseSchema: previewNewsSourceSchema,
       permissionId: "news.prefs"
@@ -227,6 +248,7 @@ export const newsModuleManifest = {
     {
       method: "POST",
       path: "/api/news/sources",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: confirmNewsSourceSchema.body,
       responseSchema: confirmNewsSourceSchema,
       permissionId: "news.prefs"
@@ -234,12 +256,14 @@ export const newsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/news/sources/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: deleteNewsCustomSourceSchema,
       permissionId: "news.prefs"
     },
     {
       method: "POST",
       path: "/api/news/topics",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: createNewsTopicSchema.body,
       responseSchema: createNewsTopicSchema,
       permissionId: "news.prefs"
@@ -247,6 +271,7 @@ export const newsModuleManifest = {
     {
       method: "PATCH",
       path: "/api/news/topics/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       requestSchema: updateNewsTopicSchema.body,
       responseSchema: updateNewsTopicSchema,
       permissionId: "news.prefs"
@@ -254,35 +279,53 @@ export const newsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/news/topics/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: deleteNewsTopicSchema,
       permissionId: "news.prefs"
     },
     {
       method: "POST",
       path: "/api/news/refresh",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: triggerNewsRefreshSchema,
       permissionId: "news.prefs"
     },
     {
       method: "POST",
       path: "/api/news/revalidation",
+      chat: { access: "blocked", blockedBecause: "external_effect", content: "outside" },
       responseSchema: triggerNewsRevalidationSchema,
       permissionId: "news.prefs"
     },
     {
       method: "GET",
       path: "/api/news/images/:articleId",
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Load news image",
+        presentation: newsImagePresentation
+      },
       permissionId: "news.view"
     },
     {
       method: "GET",
       path: "/api/news/favicon/:domain",
+      chat: {
+        access: "read",
+        content: "outside",
+        outbound: true,
+        title: "Load publisher icon",
+        presentation: newsFaviconPresentation
+      },
       permissionId: "news.view"
     },
     // #2005 publisher credentials. news.credentials, never news.prefs.
     {
       method: "POST",
       path: "/api/news/sources/credentialed",
+      chat: { access: "blocked", blockedBecause: "secrets", content: "outside" },
       requestSchema: connectNewsCredentialedSourceSchema.body,
       responseSchema: connectNewsCredentialedSourceSchema,
       permissionId: "news.credentials"
@@ -290,6 +333,7 @@ export const newsModuleManifest = {
     {
       method: "POST",
       path: "/api/news/sources/:id/credential",
+      chat: { access: "blocked", blockedBecause: "secrets", content: "outside" },
       requestSchema: replaceNewsSourceCredentialSchema.body,
       responseSchema: replaceNewsSourceCredentialSchema,
       permissionId: "news.credentials"
@@ -297,12 +341,14 @@ export const newsModuleManifest = {
     {
       method: "DELETE",
       path: "/api/news/sources/:id/credential",
+      chat: { access: "blocked", blockedBecause: "secrets", content: "outside" },
       responseSchema: revokeNewsSourceCredentialSchema,
       permissionId: "news.credentials"
     },
     {
       method: "GET",
       path: "/api/news/credentials",
+      chat: { access: "blocked", blockedBecause: "secrets", content: "outside" },
       responseSchema: listNewsSourceCredentialsSchema,
       permissionId: "news.credentials"
     }
@@ -323,6 +369,7 @@ export const newsModuleManifest = {
         "List the actor's top news headlines right now (one short 'Title — Source' line, max 5), composed from their enabled sources and topics. Read-only; briefing-oriented, not a full article browser.",
       permissionId: "news.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: newsTopHeadlinesTodayExecute
     },
@@ -332,16 +379,21 @@ export const newsModuleManifest = {
         "Show the actor's News source health and credential status. Read-only; if access failed, directs the actor to replace the key in News settings.",
       permissionId: "news.view",
       risk: "read",
+      content: "outside",
       inputSchema: { type: "object", properties: {} },
       execute: newsCredentialedSourceStatusExecute
     },
     {
       name: "news.refreshNews",
+      actionLabel: "Refresh news",
+      approvalPresentation: newsRefreshPresentation,
+      approvalContent: "user_authored",
       description:
         "Ask the news service to refresh the actor's feed. The work runs asynchronously.",
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
@@ -365,6 +417,7 @@ export const newsModuleManifest = {
         "Verify a news publisher (URL or name) the actor wants to follow. Returns a confirmationId plus verified candidates (label + domain) for news.confirmSource. Read-only: verifies and caches candidates server-side, writes nothing.",
       permissionId: "news.prefs",
       risk: "read",
+      content: "outside",
       // Candidate labels are derived from fetched publisher pages/feeds — untrusted
       // external text, so the gateway wraps output in the trust envelope.
       externalContent: true,
@@ -382,6 +435,8 @@ export const newsModuleManifest = {
     },
     {
       name: "news.confirmSource",
+      actionLabel: "Follow news publisher",
+      approvalPresentation: newsConfirmPresentation,
       description:
         "Add a previously previewed publisher as a followed custom news source. Requires the confirmationId from news.previewSource plus the chosen candidate's label and domain exactly as previewed.",
       permissionId: "news.prefs",
@@ -410,11 +465,14 @@ export const newsModuleManifest = {
     // from tool INPUT only (execute hasn't run at prompt time).
     {
       name: "news.removeSource",
+      actionLabel: "Remove news publisher",
+      approvalPresentation: newsRemoveSourcePresentation,
       description:
         "Stop following a custom news source. Requires the source id (list them via the news personalization surface first). Removal also prunes the source's articles from the current briefing.",
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -429,11 +487,15 @@ export const newsModuleManifest = {
     },
     {
       name: "news.addTopic",
+      actionLabel: "Follow news topic",
+      approvalPresentation: newsAddTopicPresentation,
+      approvalContent: "user_authored",
       description:
         "Follow a custom news topic (e.g. 'local climate policy'). The topic is policy-checked before it is added.",
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -452,10 +514,13 @@ export const newsModuleManifest = {
     },
     {
       name: "news.removeTopic",
+      actionLabel: "Remove news topic",
+      approvalPresentation: newsRemoveTopicPresentation,
       description: "Stop following a custom news topic. Requires the topic id.",
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -470,11 +535,15 @@ export const newsModuleManifest = {
     },
     {
       name: "news.addExclusion",
+      actionLabel: "Exclude news publisher",
+      approvalPresentation: newsExclusionPresentation,
+      approvalContent: "user_authored",
       description:
         "Exclude a news publisher domain from the actor's briefing (also hides its subdomains). Excluded articles are pruned from the current briefing immediately.",
       permissionId: "news.prefs",
       actionFamilyId: "news_personalization",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       selfOperationGrant: "granted_at_install",
       inputSchema: {
@@ -492,6 +561,16 @@ export const newsModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "news.publisher_removal_approval",
+      description:
+        "Removing a publisher asks first and discloses deletion of any saved publisher credentials and removal of its articles, including subdomains, from saved briefings."
+    },
+    {
+      id: "news.chat_app_actions",
+      description:
+        "App actions read the News catalog and saved preferences. Credentials, source previews, feed refreshes and scheduling changes remain unavailable through generic actions."
+    },
     {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.news",

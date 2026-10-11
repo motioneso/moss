@@ -36,28 +36,15 @@ const basicControls: ChatControls = {
   openChatWith: () => {},
   openAssistantWithDraft: () => {}
 };
-const baseProps: MeetingHistoryProps = {
-  search: "",
-  filter: "all",
-  selectedId: first.id,
-  detailOpen: true,
-  onSearch: () => {},
-  onFilter: () => {},
-  onSelect: () => {},
-  onResults: () => {},
-  onOpen: () => {},
-  onNew: () => {}
-};
+const baseProps: MeetingHistoryProps = { search: "", onSearch: () => {}, onOpen: () => {} };
 let renderer: ReactTestRenderer | undefined;
 let client: QueryClient;
 let bumpHost: () => void;
-let selectedChat: string | null;
 const cleared = vi.fn();
 function Host({ children, initialChat }: { children: ReactNode; initialChat: string | null }) {
   const [meetingId, setMeetingId] = useState(initialChat);
   const [, setRevision] = useState(0);
   bumpHost = () => setRevision((revision) => revision + 1);
-  selectedChat = meetingId;
   // Match AppShell: clearing an active chat replaces this callback once.
   const clearMeetingChat = useCallback(
     (id: string) => {
@@ -191,111 +178,66 @@ describe("meeting chat host bridge identities", () => {
   });
 });
 
-describe("History denial with the real host bridge (mocked API, not live proof)", () => {
-  it("bounds a cold reload with a deleted selection and no open chat", async () => {
-    vi.mocked(historyApi.getMeetingHistoryItem).mockRejectedValue(new ApiError(404, "Unavailable"));
-    await mount();
-    expect(html()).toContain("This meeting is unavailable");
-    expect(html()).not.toContain(first.title);
-    expect(historyApi.searchMeetingHistory).toHaveBeenCalledTimes(2);
-    expect(historyApi.getMeetingHistoryItem).toHaveBeenCalledOnce();
-    expect(cleared).toHaveBeenCalledOnce();
+describe("minimal list uses direct navigation and retains denial boundaries", () => {
+  it("opens a row in one click without a selected detail request", async () => {
+    const onOpen = vi.fn();
+    await act(async () => {
+      renderer = create(tree({ ...baseProps, onOpen }));
+    });
+    await flush();
+    const row = renderer!.root
+      .findAllByType("button")
+      .find((node) => String(node.props.className).includes("meetings-history-row"));
+    expect(row).toBeDefined();
+    await act(async () => row!.props.onClick());
+    expect(onOpen).toHaveBeenCalledWith(second.id);
+    expect(historyApi.getMeetingHistoryItem).not.toHaveBeenCalled();
     await expectQuietHost();
   });
-
-  it.each([401, 403, 404])(
-    "bounds a selected %s revalidation, cache pruning and chat close",
-    async (status) => {
-      client.setQueryData(historyApi.historyKeys.search("", "all"), {
-        pages: [{ meetings: [first, second], nextCursor: null }],
-        pageParams: [undefined]
-      });
-      vi.mocked(historyApi.getMeetingHistoryItem).mockRejectedValue(
-        new ApiError(status, "Unavailable")
-      );
-      await mount(first.id);
-      expect(html()).toContain("This meeting is unavailable");
-      expect(html()).not.toContain(first.title);
-      expect(selectedChat).toBeNull();
-      expect(cleared).toHaveBeenCalledWith(first.id);
-      expect(historyApi.searchMeetingHistory).toHaveBeenCalledTimes(3);
-      expect(historyApi.getMeetingHistoryItem).toHaveBeenCalledOnce();
-      expect(client.getQueryData(historyApi.historyKeys.search("", "all"))).toMatchObject({
-        pages: [{ meetings: [second] }]
-      });
-      await expectQuietHost();
-    }
-  );
-
+  it.each([401, 403, 404])("hides cached list data after permission denial %s", async (status) => {
+    client.setQueryData(historyApi.historyKeys.search("", "all"), {
+      pages: [{ meetings: [first], nextCursor: null }],
+      pageParams: [undefined]
+    });
+    vi.mocked(historyApi.searchMeetingHistory).mockRejectedValue(
+      new ApiError(status, "Unavailable")
+    );
+    await mount();
+    expect(html()).toContain("Meetings are unavailable");
+    expect(html()).not.toContain(first.title);
+    expect(historyApi.getMeetingHistoryItem).not.toHaveBeenCalled();
+    await expectQuietHost();
+  });
   it.each([401, 403])(
-    "discards cached pages and cancels old reads after list %s",
+    "cancels older search and never restores its data after denial %s",
     async (status) => {
-      await mount(first.id);
+      await mount();
       let finish!: (page: MeetingHistoryPage) => void;
       let oldSignal: AbortSignal | undefined;
-      vi.mocked(historyApi.searchMeetingHistory).mockImplementation((input, signal) => {
-        if (input.filter === "all") {
-          oldSignal = signal;
-          return new Promise((resolve) => {
-            finish = resolve;
-          });
-        }
-        return Promise.reject(new ApiError(status, "Unavailable"));
-      });
+      vi.mocked(historyApi.searchMeetingHistory).mockImplementation((input, signal) =>
+        input.query === "changed"
+          ? Promise.reject(new ApiError(status, "Unavailable"))
+          : new Promise((resolve) => {
+              oldSignal = signal;
+              finish = resolve;
+            })
+      );
       await act(async () => {
         void client.refetchQueries({
           queryKey: historyApi.historyKeys.search("", "all"),
           exact: true
         });
       });
-      await act(async () =>
-        renderer!.update(tree({ ...baseProps, filter: "needs-review" }, first.id))
-      );
+      await act(async () => renderer!.update(tree({ ...baseProps, search: "changed" })));
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 275)));
       await flush();
-      expect(html()).toContain("Meeting history is unavailable");
-      expect(selectedChat).toBeNull();
       expect(oldSignal?.aborted).toBe(true);
-      expect(client.getQueryData(historyApi.historyKeys.search("", "all"))).toBeUndefined();
-      const searches = vi.mocked(historyApi.searchMeetingHistory).mock.calls.length;
+      expect(html()).not.toContain(first.title);
       await act(async () => finish({ meetings: [first], nextCursor: null }));
       await flush();
-      expect(client.getQueryData(historyApi.historyKeys.search("", "all"))).toBeUndefined();
       expect(html()).not.toContain(first.title);
-      expect(historyApi.searchMeetingHistory).toHaveBeenCalledTimes(searches);
+      expect(client.getQueryData(historyApi.historyKeys.search("", "all"))).toBeUndefined();
       await expectQuietHost();
     }
   );
-
-  it("ignores an aborted older selection denial and bounds a newly selected denial", async () => {
-    let rejectOld!: (error: Error) => void;
-    let oldSignal: AbortSignal | undefined;
-    vi.mocked(historyApi.getMeetingHistoryItem).mockImplementation((id, signal) => {
-      if (id !== first.id) return Promise.resolve({ meeting: second });
-      oldSignal = signal;
-      return new Promise((_resolve, reject) => {
-        rejectOld = reject;
-      });
-    });
-    await mount(second.id);
-    await act(async () =>
-      renderer!.update(tree({ ...baseProps, selectedId: second.id }, second.id))
-    );
-    await flush();
-    expect(oldSignal?.aborted).toBe(true);
-    await act(async () => rejectOld(new ApiError(404, "Unavailable")));
-    await flush();
-    expect(html()).toContain(second.title);
-    expect(html()).not.toContain("This meeting is unavailable");
-    expect(cleared).not.toHaveBeenCalled();
-    expect(selectedChat).toBe(second.id);
-    vi.mocked(historyApi.getMeetingHistoryItem).mockRejectedValue(new ApiError(404, "Unavailable"));
-    await act(async () => renderer!.update(tree(baseProps, second.id)));
-    await flush();
-    expect(html()).toContain("This meeting is unavailable");
-    expect(cleared).toHaveBeenCalledWith(first.id);
-    expect(selectedChat).toBe(second.id);
-    expect(historyApi.searchMeetingHistory).toHaveBeenCalledTimes(2);
-    expect(historyApi.getMeetingHistoryItem).toHaveBeenCalledTimes(3);
-    await expectQuietHost();
-  });
 });

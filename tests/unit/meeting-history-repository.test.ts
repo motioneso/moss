@@ -38,7 +38,7 @@ const row = {
 describe("meeting history repository", () => {
   it("keeps independent facts and emits metadata only", () => {
     const item = meetingHistoryItem(row);
-    expect(item.capture).toEqual({ status: "unavailable" });
+    expect(item.capture).toEqual({ status: "unavailable", durationMs: null });
     expect(item.summary).toMatchObject({
       status: "stale",
       version: 2,

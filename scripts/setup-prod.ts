@@ -162,6 +162,7 @@ const content = [
   `MOSS_MIGRATION_DATABASE_URL=${migrationDatabaseUrl}`,
   `MOSS_APP_DATABASE_URL=${appDatabaseUrl}`,
   `MOSS_AUTH_DATABASE_URL=${authDatabaseUrl}`,
+  "# Worker role URL is also required by the API capture-maintenance consumer.",
   `MOSS_WORKER_DATABASE_URL=${workerDatabaseUrl}`,
   "",
   "# Required production secrets (generate once; keep stable across restarts).",

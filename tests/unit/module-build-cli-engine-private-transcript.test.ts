@@ -108,6 +108,32 @@ describe("CliChatEngineImpl — Claude MCP lockdown", () => {
     ]);
   });
 
+  it("installs the permission and admission hook for MCP-bound workspace builds too", async () => {
+    const io = makeIo();
+    const engine = new CliChatEngineImpl("anthropic", "workspace-session", io);
+    await engine.launch({
+      neutralDir: "/tmp/neutral-workspace",
+      personaPath: "/tmp/persona.txt",
+      mcpToken: "jst_workspace",
+      mcpServerUrl: "http://127.0.0.1:3000/api/mcp",
+      workspaceWrite: true
+    });
+    const command = io.run.mock.calls.find(
+      (call) => call[0] === "tmux" && call[1].includes("send-keys")
+    );
+    expect(command?.[1].join(" ")).toContain(
+      "--settings '/tmp/neutral-workspace/.jarvis-claude-settings.json'"
+    );
+    expect(io.writeFile).toHaveBeenCalledWith(
+      "/tmp/neutral-workspace/.jarvis-claude-settings.json",
+      expect.stringContaining("/internal/vault-read-report")
+    );
+    expect(io.writeFile).toHaveBeenCalledWith(
+      "/tmp/neutral-workspace/.jarvis-claude-permission-token",
+      "jst_workspace\n"
+    );
+  });
+
   it("removes the entire per-session neutral dir on kill (§6.5)", async () => {
     const io = makeIo();
     const engine = new CliChatEngineImpl("anthropic", "kill-session", io);

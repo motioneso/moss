@@ -67,12 +67,12 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
 }
 
 async function openInstanceModules(page: Page): Promise<void> {
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Instance modules" }).click();
 }
@@ -284,7 +284,12 @@ test("chat surface routing: action request renders and settles without reload (#
   await test.step("Phase 5: reject the card; the turn POST settles; no reload was used", async () => {
     const card = page.locator('[role="region"][aria-label="Action request"]');
     await card.getByRole("button", { name: "Reject" }).click();
-    await expect(card.getByText("Not approved")).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByRole("status").filter({ hasText: /^You declined(?: · |$)/ })
+    ).toBeVisible({
+      timeout: 10_000
+    });
+    await expect(card).toHaveCount(0);
 
     if (!turnResponsePromise) throw new Error("Phase 2 did not arm the turn-response wait");
     const turnResponse = await turnResponsePromise;

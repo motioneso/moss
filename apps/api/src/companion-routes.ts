@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PgBoss } from "pg-boss";
+import { registerCompanionRecordingRoutes } from "./companion-recording-routes.js";
 
 import { redactSecrets } from "@moss/ai";
 import { CompanionAuthError, type CompanionContext, type MossAuthRuntime } from "@moss/auth";
@@ -51,7 +52,8 @@ import {
  *   - the signed-in browser, deciding an attempt it was handed the code for;
  *   - the linked Mac, holding a companion credential, acting on its own device row.
  *
- * A companion credential is accepted here and nowhere else. The reverse also holds by
+ * A companion credential is accepted here and by identity-only meeting approval bootstrap;
+ * it never authorizes meeting capture or transcript data. The reverse also holds by
  * construction: the general resolver passes every bearer token to the legacy UUID
  * session lookup, which rejects a `tm1_` value, so this credential authenticates no
  * other route in the product.
@@ -123,6 +125,7 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
   const { authRuntime, dataContext, focus, boss } = deps;
   const pairing = authRuntime.companionPairing;
   const devices = authRuntime.companionDevices;
+  registerCompanionRecordingRoutes(server, authRuntime);
   const backtrack = new BacktrackRepository();
 
   /** Decision 1: the instance switch alone, with no preferences read — the cheap half of state. */
@@ -231,18 +234,43 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
     }
   );
 
-  server.post<{ Body: { code: string; decision: "approve" | "deny" } }>(
+  server.post<{ Body: { code: string; decision: "approve" | "deny"; recordingPolicyVersion?: 1 } }>(
     "/api/companion/pair/decide",
     { schema: decidePairAttemptRouteSchema },
     async (request, reply) => {
       const actorUserId = await requireBrowserActor(request, reply, true);
       if (!actorUserId) return reply;
 
+      // Recording capability is a separate permission: never grant it through a legacy bearer.
+      const summary = await pairing.summarize({ approvalCode: request.body.code });
+      let browserSessionId: string | undefined;
+      if (summary?.recordingPolicyVersion === 1) {
+        try {
+          const browser = await authRuntime.sessionBindings.resolveBrowser({
+            headers: request.headers,
+            requestId: request.id
+          });
+          if (browser.actorUserId !== actorUserId) throw new Error("Unavailable");
+          browserSessionId = browser.sessionId;
+        } catch {
+          return reply.code(401).send({
+            error: "Sign in to approve this connection",
+            code: "recording_approval_required"
+          });
+        }
+        if (request.body.decision === "approve" && request.body.recordingPolicyVersion !== 1)
+          return reply.code(400).send({
+            error: "Review the recording connection permission",
+            code: "recording_policy_required"
+          });
+      }
       // The approving account comes from the session, never from the body.
       const result = await pairing.decide({
         approvalCode: request.body.code,
         decision: request.body.decision,
-        actorUserId
+        actorUserId,
+        browserSessionId,
+        recordingPolicyVersion: request.body.recordingPolicyVersion
       });
 
       if (result.ok) return { status: result.decision === "approve" ? "approved" : "denied" };
@@ -318,12 +346,18 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
 
   server.post(
     "/api/companion/logout",
-    { schema: companionLogoutRouteSchema },
+    { schema: companionLogoutRouteSchema, config: ipRateLimit(PAIR_RATE_MAX) },
     async (request, reply) => {
-      const ctx = await requireCompanion(request, reply);
-      if (!ctx) return reply;
-      await devices.logout(ctx);
-      return reply.code(204).send();
+      try {
+        await devices.logoutCredential({ headers: request.headers });
+        return reply.code(204).send();
+      } catch (error) {
+        if (error instanceof CompanionAuthError)
+          return reply
+            .code(error.httpStatus)
+            .send({ error: "Companion credential unavailable", code: error.code });
+        throw error;
+      }
     }
   );
 

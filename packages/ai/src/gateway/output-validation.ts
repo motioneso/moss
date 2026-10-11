@@ -7,8 +7,10 @@ const MAX_RENDERED_TOOL_RESULT_CHARS = 16_000;
 
 // Strip injection-vector sentinel tokens before wrapping external content.
 // These patterns mirror the set used in @moss/briefings sanitizeExternal.
+// A fragment must not consume later JSON fields/records across structural newlines.
+// Unmatched fragments still pass through HTML escaping below.
 const SENTINEL_PATTERN =
-  /<\/?tool_result[^>]*>|<\/?trusted_instructions[^>]*>|<\/?external_source[^>]*>/gi;
+  /<\/?tool_result[^>\r\n]*>|<\/?trusted_instructions[^>\r\n]*>|<\/?external_source[^>\r\n]*>/gi;
 
 function escapeHtml(value: string): string {
   return value

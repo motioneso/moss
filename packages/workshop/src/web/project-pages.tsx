@@ -3,7 +3,7 @@ import type { UIEvent } from "react";
 import { ArrowUp } from "lucide-react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
-import { Button, ButtonLink, Card, EmptyState, Masthead, RowIndex, RowIndexItem } from "@moss/ui";
+import { Button, ButtonLink, Dialog, EmptyState, Masthead, RowIndex, RowIndexItem } from "@moss/ui";
 import {
   ActivityPeek,
   ApiError,
@@ -42,16 +42,31 @@ function formatStartedOn(createdAt: string, locale: LocaleSettingsDto): string {
   return formatDate(createdAt, locale);
 }
 
-export function ProjectError({ title, retry }: { title: string; retry: () => void }) {
-  return (
-    <Card>
-      <div role="alert">
-        <p className="workshop-status">{title}</p>
-        <Button variant="secondary" onClick={retry}>
-          Try again
-        </Button>
-      </div>
-    </Card>
+export function ProjectError({
+  title,
+  retry,
+  retained = false
+}: {
+  title: string;
+  retry: () => void;
+  retained?: boolean;
+}) {
+  const action = (
+    <Button variant="secondary" onClick={retry}>
+      Try again
+    </Button>
+  );
+  return retained ? (
+    <div className="workshop-notice" role="alert">
+      <p className="workshop-status jds-caption">{title}</p>
+      {action}
+    </div>
+  ) : (
+    <div role="alert">
+      <EmptyState title={title}>
+        <div className="workshop-empty-action">{action}</div>
+      </EmptyState>
+    </div>
   );
 }
 
@@ -86,13 +101,14 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
         }
       />
       {query.isPending ? (
-        <p className="workshop-status" role="status">
+        <p className="workshop-status jds-caption" role="status">
           Loading your projects…
         </p>
       ) : null}
       {query.isError ? (
         <ProjectError
           title="Your projects could not be loaded. Try again to get the latest saved work."
+          retained={Boolean(query.data)}
           retry={() => void query.refetch()}
         />
       ) : null}
@@ -307,6 +323,7 @@ function WorkshopProjectContent({
   const [text, setText] = useState("");
   const [messageId, setMessageId] = useState(() => randomUuid());
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const keepProjectRef = useRef<HTMLButtonElement>(null);
   // Turns already sent but not yet back from the feed: they render in the thread
   // immediately so sending never looks stuck, and leave as their rows arrive.
   const [pending, setPending] = useState<readonly { messageId: string; text: string }[]>([]);
@@ -365,6 +382,8 @@ function WorkshopProjectContent({
       setText((current) => (current ? current : input.text));
     }
   });
+  const [now, setNow] = useState(() => Date.now());
+  const firstSeenRef = useRef(new Map<string, number>());
   const messages = useInfiniteQuery({
     queryKey: projectKeys.messages(projectId),
     queryFn: ({ pageParam }) => listMessages(projectId, pageParam),
@@ -380,13 +399,38 @@ function WorkshopProjectContent({
       const pages = query.state.data?.pages;
       const waiting =
         Array.isArray(pages) &&
-        pages.flatMap((page) => page.entries).some((entry) => entry.delivery === "pending");
+        isAwaitingReply(
+          pendingSince(
+            pages.flatMap((page) => page.entries),
+            firstSeenRef.current
+          ),
+          Date.now()
+        );
       return mutation.isPending || pending.length > 0 || waiting ? 2000 : false;
     }
   });
 
   const entries = messages.data?.pages.flatMap((page) => page.entries) ?? [];
-  const awaitingDelivery = entries.some((entry) => entry.delivery === "pending");
+  // Only the newest message can be waiting on a reply; older failures were superseded.
+  const sentAt = pendingSince(entries, firstSeenRef.current);
+  const awaitingDelivery = isAwaitingReply(sentAt, now);
+  const unanswered = Number.isFinite(sentAt) && !awaitingDelivery;
+  // The feed is oldest-first, so keep loading forward until the newest entry is in hand.
+  const { hasNextPage, isFetching, isError, fetchNextPage } = messages;
+  useEffect(() => {
+    if (hasNextPage && !isFetching && !isError) void fetchNextPage();
+  }, [hasNextPage, isFetching, isError, fetchNextPage]);
+  // Re-render when the newest pending message passes its give-up time.
+  useEffect(() => {
+    if (!Number.isFinite(sentAt)) return;
+    const wait = sentAt + REPLY_GIVE_UP_MS - Date.now();
+    if (wait <= 0) {
+      setNow(Date.now());
+      return;
+    }
+    const timer = setTimeout(() => setNow(Date.now()), wait + 50);
+    return () => clearTimeout(timer);
+  }, [sentAt]);
   // The model is working while a turn is saving, sent but not yet shown, or saved and
   // still awaiting its reply.
   const thinking = mutation.isPending || pending.length > 0 || awaitingDelivery;
@@ -454,62 +498,69 @@ function WorkshopProjectContent({
   return (
     <section className="workshop-chat" aria-label="Project conversation">
       {confirmingDelete ? (
-        <Card>
-          <div role="alertdialog" aria-label="Delete this project">
-            <p className="workshop-status">
-              Delete “{record.title}”? Its messages go with it. This cannot be undone.
+        <Dialog
+          title="Delete this project?"
+          initialFocusRef={keepProjectRef}
+          closeLabel="Close delete confirmation"
+          closeDisabled={deleteMutation.isPending}
+          dismissOnEscape={!deleteMutation.isPending}
+          dismissOnBackdrop={!deleteMutation.isPending}
+          onClose={() => {
+            if (!deleteMutation.isPending) setConfirmingDelete(false);
+          }}
+          footer={
+            <>
+              <Button
+                ref={keepProjectRef}
+                variant="secondary"
+                disabled={deleteMutation.isPending}
+                onClick={() => setConfirmingDelete(false)}
+              >
+                Keep it
+              </Button>
+              <Button
+                variant="danger"
+                disabled={deleteMutation.isPending || !canMutate}
+                onClick={() => deleteMutation.mutate()}
+              >
+                {deleteMutation.isPending ? "Deleting…" : "Delete project"}
+              </Button>
+            </>
+          }
+        >
+          <p className="workshop-status jds-caption">
+            Delete “{record.title}”? Its messages go with it. This cannot be undone.
+          </p>
+          {deleteMutation.isError ? (
+            <p className="jds-hint jds-hint--error" role="alert">
+              The project could not be deleted. Try again.
             </p>
-            {deleteMutation.isError ? (
-              <p className="workshop-status" role="alert">
-                The project could not be deleted. Try again.
-              </p>
-            ) : null}
-            <Button
-              variant="secondary"
-              disabled={deleteMutation.isPending}
-              onClick={() => setConfirmingDelete(false)}
-            >
-              Keep it
-            </Button>{" "}
-            <Button
-              variant="primary"
-              disabled={deleteMutation.isPending}
-              onClick={() => deleteMutation.mutate()}
-            >
-              {deleteMutation.isPending ? "Deleting…" : "Delete project"}
-            </Button>
-          </div>
-        </Card>
+          ) : null}
+        </Dialog>
       ) : null}
       {project.isError ? (
         <ProjectError
           title="The project could not be refreshed. Reload it before making changes."
+          retained
           retry={() => void project.refetch()}
         />
-      ) : null}
-      {messages.hasNextPage ? (
-        <div className="workshop-chat__earlier">
-          <Button
-            variant="quiet"
-            disabled={messages.isFetching || !canMutate}
-            onClick={() => void messages.fetchNextPage()}
-          >
-            {messages.isFetching ? "Loading…" : "Earlier messages"}
-          </Button>
-        </div>
       ) : null}
       <div className="workshop-chat__history" ref={historyRef} onScroll={handleHistoryScroll}>
         {messages.isPending ? <p role="status">Loading messages…</p> : null}
         {messages.isError ? (
           <ProjectError
             title="Messages could not be refreshed. Your unsent text is still here."
+            retained
             retry={() => void messages.refetch()}
           />
         ) : null}
-        {!messages.isPending && !messages.isError ? (
-          <Thread records={visibleTranscript} working={thinking} />
-        ) : null}
+        {messages.data ? <Thread records={visibleTranscript} working={thinking} /> : null}
         {thinking ? <ActivityPeek records={[]} inProgress /> : null}
+        {unanswered && !thinking ? (
+          <p role="status" className="workshop-status jds-caption">
+            Moss did not reply to your last message. Send it again to retry.
+          </p>
+        ) : null}
       </div>
       <WorkshopComposer
         label="Add to your project"
@@ -540,6 +591,25 @@ function WorkshopProjectContent({
       />
     </section>
   );
+}
+
+// A reply attempt gives up after 45s on the server; later than this a pending row is stale.
+const REPLY_GIVE_UP_MS = 90_000;
+
+/**
+ * Start time of the newest user message when it is still unanswered, else NaN. The earlier
+ * of the server stamp and the time this page first saw the row keeps a client clock that
+ * runs behind the server from stretching the wait.
+ */
+function pendingSince(entries: WorkshopFeedEntry[], firstSeen: Map<string, number>): number {
+  const newest = [...entries].reverse().find((entry) => entry.kind === "user_message");
+  if (!newest || newest.delivery !== "pending") return NaN;
+  if (!firstSeen.has(newest.messageId)) firstSeen.set(newest.messageId, Date.now());
+  return Math.min(Date.parse(newest.createdAt), firstSeen.get(newest.messageId)!);
+}
+
+function isAwaitingReply(sentAt: number, now: number): boolean {
+  return now - sentAt < REPLY_GIVE_UP_MS;
 }
 
 /**

@@ -33,6 +33,9 @@ export interface CreatePairAttemptRequest {
   readonly osVersion: string;
   /** base64url sha256 of the app's verifier; the raw verifier never leaves the Mac until redeem. */
   readonly verifierHash: string;
+  /** Independent recording proof requested as part of this connection, never inferred. */
+  readonly recordingProofHash?: string;
+  readonly recordingPolicyVersion?: 1;
 }
 
 export interface CreatePairAttemptResponse {
@@ -45,11 +48,13 @@ export interface CreatePairAttemptResponse {
 export interface PairAttemptSummaryResponse {
   readonly deviceName: string;
   readonly status: "pending" | "approved" | "denied";
+  readonly recordingPolicyVersion?: 1;
 }
 
 export interface DecidePairAttemptRequest {
   readonly code: string;
   readonly decision: "approve" | "deny";
+  readonly recordingPolicyVersion?: 1;
 }
 
 export interface DecidePairAttemptResponse {
@@ -67,6 +72,7 @@ export interface RedeemPairAttemptResponse {
   readonly device: { readonly id: string; readonly displayName: string };
   readonly account: { readonly name: string; readonly email: string };
   readonly expiresAt: string;
+  readonly recordingCapability?: { readonly policyVersion: 1; readonly revision: number };
 }
 
 /**
@@ -190,12 +196,18 @@ export const createPairAttemptRouteSchema = {
     type: "object",
     additionalProperties: false,
     required: ["deviceName", "platform", "appVersion", "osVersion", "verifierHash"],
+    dependencies: {
+      recordingProofHash: ["recordingPolicyVersion"],
+      recordingPolicyVersion: ["recordingProofHash"]
+    },
     properties: {
       deviceName: DEVICE_NAME_SCHEMA,
       platform: { type: "string", enum: ["macos"] },
       appVersion: VERSION_STRING_SCHEMA,
       osVersion: VERSION_STRING_SCHEMA,
-      verifierHash: BASE64URL_SHA256_SCHEMA
+      verifierHash: BASE64URL_SHA256_SCHEMA,
+      recordingProofHash: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      recordingPolicyVersion: { type: "integer", const: 1 }
     }
   },
   response: {
@@ -231,7 +243,8 @@ export const getPairAttemptRouteSchema = {
       required: ["deviceName", "status"],
       properties: {
         deviceName: { type: "string" },
-        status: { type: "string", enum: ["pending", "approved", "denied"] }
+        status: { type: "string", enum: ["pending", "approved", "denied"] },
+        recordingPolicyVersion: { type: "integer", const: 1 }
       }
     },
     401: errorResponseSchema,
@@ -247,7 +260,8 @@ export const decidePairAttemptRouteSchema = {
     required: ["code", "decision"],
     properties: {
       code: APPROVAL_CODE_SCHEMA,
-      decision: { type: "string", enum: ["approve", "deny"] }
+      decision: { type: "string", enum: ["approve", "deny"] },
+      recordingPolicyVersion: { type: "integer", const: 1 }
     }
   },
   response: {
@@ -282,7 +296,16 @@ export const redeemPairAttemptRouteSchema = {
         credential: { type: "string" },
         device: DEVICE_SUMMARY_SCHEMA,
         account: ACCOUNT_SUMMARY_SCHEMA,
-        expiresAt: { type: "string" }
+        expiresAt: { type: "string" },
+        recordingCapability: {
+          type: "object",
+          additionalProperties: false,
+          required: ["policyVersion", "revision"],
+          properties: {
+            policyVersion: { type: "integer", const: 1 },
+            revision: { type: "integer", minimum: 1 }
+          }
+        }
       }
     },
     202: {
@@ -633,3 +656,5 @@ export const backtrackUploadRouteSchema = {
     429: errorResponseSchema
   }
 } as const;
+
+export * from "./companion-recording-api.js";

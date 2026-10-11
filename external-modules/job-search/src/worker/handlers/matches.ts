@@ -441,7 +441,11 @@ export function createMatchSetStateHandler(store: JobSearchStore) {
       state = "dismissed";
     }
 
-    await store.setMatchState(matchId, state);
+    // No row updated means the role was never scored (the board lists unscored postings under
+    // the posting id) or is not this user's; reporting success would be wrong.
+    if (!(await store.setMatchState(matchId, state))) {
+      throw new InputError("This role is not scored yet, so it cannot be saved or passed.");
+    }
     return {
       matchId,
       state,

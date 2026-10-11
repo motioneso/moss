@@ -109,3 +109,5 @@ export * from "./recall-port.js";
 export * from "./repository.js";
 export * from "./routes.js";
 export * from "./skills/repository.js";
+
+export { createConstrainedCliStructuredAdapterFactory } from "./live/constrained-structured-adapter.js";

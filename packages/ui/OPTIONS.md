@@ -34,7 +34,7 @@ _No enum or boolean props._
 
 ## button-link
 
-- **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`, `field`
+- **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`, `field`, `link`
 - **size** (optional, default `md`): `sm`, `md`, `lg`
 - **block** (optional boolean flag)
 
@@ -78,6 +78,10 @@ _No enum or boolean props._
 
 - **disabled** (optional boolean flag)
 
+## control-pill
+
+_No enum or boolean props._
+
 ## day-cell
 
 - **out** (optional boolean flag)
@@ -85,7 +89,9 @@ _No enum or boolean props._
 
 ## dialog
 
-_No enum or boolean props._
+- **dismissOnEscape** (optional boolean flag)
+- **dismissOnBackdrop** (optional boolean flag)
+- **closeDisabled** (optional boolean flag)
 
 ## disclosure-toggle
 
@@ -116,6 +122,10 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## highlight
+
+_No enum or boolean props._
+
 ## icon-button
 
 - **variant** (optional, default `default`): `default`, `secondary`
@@ -142,7 +152,8 @@ _No enum or boolean props._
 
 ## menu
 
-_No enum or boolean props._
+- **triggerVariant** (optional): `icon`, `content`
+- **placement** (optional): `bottom`, `top`
 
 ## month-chip
 
@@ -166,11 +177,12 @@ _No enum or boolean props._
 
 ## peek-panel
 
-_No enum or boolean props._
+- **modal** (optional boolean flag)
+- **dismissOnEscape** (optional boolean flag)
 
 ## radio-card-group
 
-_No enum or boolean props._
+- **disabled** (optional boolean flag)
 
 ## row-button
 

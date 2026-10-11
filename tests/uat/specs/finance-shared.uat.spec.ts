@@ -135,11 +135,11 @@ test("Household shared pool: owner shares an account, member sees it attributed"
 
   // --- Sign in as the owner (UAT Admin) ------------------------------------------------
   await signIn(page, baseURL, UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD);
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible();
 
   // --- Enable through the real admin UI ------------------------------------------------
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Admin / Setup" }).click();
   await page.getByRole("button", { name: "Instance modules" }).click();
   await expect(page.getByRole("heading", { name: "Instance modules" })).toBeVisible();
@@ -187,8 +187,8 @@ test("Household shared pool: owner shares an account, member sees it attributed"
   ).toBeVisible();
 
   // --- Switch users: owner out, household member in ------------------------------------
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).click();
+  await page.getByRole("menuitem", { name: "Log out" }).click();
   await expect(page.locator("form.auth-form")).toBeVisible({ timeout: 30_000 });
   await signIn(page, baseURL, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_PASSWORD);
 
@@ -202,7 +202,9 @@ test("Household shared pool: owner shares an account, member sees it attributed"
   } catch {
     // No confirm dialog — the seeded instance AI provider satisfied #369's check.
   }
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: /^Account menu(?:,|$)/ })).toBeVisible({
+    timeout: 30_000
+  });
 
   // --- Member: merged feed shows the shared account, attributed ------------------------
   await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Finance" }).click();

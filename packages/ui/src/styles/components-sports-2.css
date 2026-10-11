@@ -31,22 +31,6 @@
   font-weight: 700;
   color: var(--accent-fg);
 }
-.sp-ticker__manage {
-  border-left: 1px solid var(--border-subtle);
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.sp-ticker__nav {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-}
-.sp-ticker__nav:hover {
-  background: var(--surface-2);
-}
 .sp-ticker__scroll:focus-visible {
   outline: 2px solid var(--focus-ring);
 }
@@ -415,22 +399,12 @@
 /* Roving tabindex means only the selected tab is tabbable, so this ring is the only thing
    telling a keyboard user which of the arrow-reachable tabs they're on. --focus-ring is a
    colour, not a shorthand — the app's focus treatment is this box-shadow. */
-.sp-gameday__tab:focus-visible,
-.sp-gameday__nav:focus-visible {
+.sp-gameday__tab:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .sp-gameday__tabscore {
   font-weight: var(--weight-bold);
-}
-.sp-gameday__nav {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-}
-.sp-gameday__nav:hover {
-  background: var(--surface-2);
 }
 
 /* Broadsheet body: around-the-leagues board + Standings (mrb4w77y; was Latest + Standings,
@@ -651,11 +625,6 @@
 
 /* Standings leagues settings (Ben 2026-09-03): the heading is a collapse toggle; its chevron sits
    faint until hovered. Country rows in the checklist reuse the same chevron treatment. */
-.sp-standings-settings__toggle {
-  border: 0;
-  background: transparent;
-  color: inherit;
-}
 .sp-standings-settings__toggle > svg {
   color: var(--text-faint);
 }
@@ -670,11 +639,6 @@
 .sp-standings-tree__league > span:last-child {
   font-weight: var(--weight-regular);
 }
-.sp-standings-tree__toggle {
-  border: 0;
-  background: transparent;
-  color: inherit;
-}
 .sp-standings-tree__toggle > svg {
   color: var(--text-faint);
 }
@@ -686,4 +650,9 @@
 .sp-tk__scorers {
   font-size: var(--text-xs);
   line-height: var(--leading-snug);
+}
+
+/* Standings preferences are a flat ruled settings section. */
+.sp-standings-tree {
+  border-top: 1px solid var(--line);
 }

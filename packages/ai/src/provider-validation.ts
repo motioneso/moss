@@ -6,8 +6,14 @@ import type {
   AiProviderKind,
   AiProviderTestResultDto
 } from "@moss/shared";
+import { decisionModelDialect } from "@moss/shared";
 
 import { inferWebSearchCapability } from "./model-discovery.js";
+
+/** #3057: the Cloudflare Test probe and its two preset-only messages. */
+const CLOUDFLARE_TEST_MODEL = "clef-flash";
+const NO_MODEL_LIST_MESSAGE =
+  "This service does not list its models, so the key could not be checked. Add a model by hand, then try it.";
 
 export interface ProviderValidationInput {
   readonly providerKind: AiProviderKind;
@@ -28,6 +34,14 @@ export async function testProviderCredential(
   if (!apiKey) return fail(input.providerKind, "Provider credential is missing.");
 
   try {
+    // #3057: a Cloudflare decision model has no models list; its Test sends one fixed probe.
+    if (
+      input.providerKind === "system-one" &&
+      decisionModelDialect(input.baseUrl) === "cloudflare"
+    ) {
+      return await testCloudflareDecisionModel(input, apiKey);
+    }
+
     const response = await fetchModels(input, apiKey);
     if (response.ok) {
       return {
@@ -35,6 +49,10 @@ export async function testProviderCredential(
         providerKind: input.providerKind,
         message: "Provider credential is valid."
       };
+    }
+    if (input.providerKind === "system-one" && response.status === 404) {
+      // #3057: a decision-model service with no models list is not a rejected key.
+      return fail(input.providerKind, NO_MODEL_LIST_MESSAGE);
     }
     return fail(
       input.providerKind,
@@ -45,6 +63,58 @@ export async function testProviderCredential(
   } catch {
     return fail(input.providerKind, "Provider test failed.");
   }
+}
+
+/**
+ * #3057: Cloudflare's decision-model endpoint has no models list, so the credential is checked by
+ * sending one tiny fixed yes/no probe through the same URL the sender uses. A 2xx with
+ * `success: true` passes; 401/403 means the token was rejected.
+ */
+async function testCloudflareDecisionModel(
+  input: ProviderValidationInput,
+  apiKey: string
+): Promise<AiProviderTestResultDto> {
+  const f = input.fetch ?? globalThis.fetch;
+  const base = (input.baseUrl ?? "").replace(/\/+$/, "");
+
+  let response: Response;
+  try {
+    response = await f(`${base}/run/@cf/cloudflare/${CLOUDFLARE_TEST_MODEL}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: CLOUDFLARE_TEST_MODEL,
+        state: { probe: "decision-model-test" },
+        questions: { reachable: { type: "noul", instructions: "Answer yes." } }
+      }),
+      redirect: "error"
+    });
+  } catch {
+    return fail(input.providerKind, "Provider test failed.");
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    return fail(input.providerKind, "Provider rejected the credential.");
+  }
+  if (!response.ok) return fail(input.providerKind, "Provider test failed.");
+
+  try {
+    const payload = await response.json();
+    if (
+      payload &&
+      typeof payload === "object" &&
+      (payload as { success?: unknown }).success === true
+    ) {
+      return {
+        ok: true,
+        providerKind: input.providerKind,
+        message: "Provider credential is valid."
+      };
+    }
+  } catch {
+    // A body that cannot be read is a failed test, handled below.
+  }
+  return fail(input.providerKind, "Provider test failed.");
 }
 
 export async function discoverProviderModels(

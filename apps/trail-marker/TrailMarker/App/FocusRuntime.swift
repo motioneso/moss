@@ -500,7 +500,7 @@ final class FocusRuntime: ObservableObject {
     /// Focus reads as unreachable then, which is true of the network but not why, so the Focus
     /// settings say paused instead.
     var connectionPaused: Bool {
-        if case .disconnected = connection.state { return true }
+        if connection.state == .disconnected || connection.state == .unlinking { return true }
         return false
     }
 

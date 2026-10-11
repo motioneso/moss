@@ -13,6 +13,8 @@ import {
   getMeetingRecordSchema,
   listMeetingRecordsSchema,
   putMeetingNotesSchema,
+  putMeetingTitleSchema,
+  type PutMeetingTitleInput,
   type CreateMeetingRecordInput,
   type PutMeetingNotesInput
 } from "@moss/shared";
@@ -31,7 +33,7 @@ export interface MeetingRecordRoutesDependencies extends MeetingHistoryRoutesDep
   readonly preferences?: Pick<PreferencesRepository, "get" | "upsert">;
   readonly repository?: Pick<
     MeetingRecordsRepository,
-    "create" | "get" | "list" | "putNotes" | "remove"
+    "create" | "get" | "list" | "putNotes" | "remove" | "putTitle"
   >;
 }
 
@@ -118,6 +120,27 @@ export function registerMeetingRecordRoutes(
         );
         return meeting ? { meeting } : reply.code(404).send({ code: "meeting_not_found" });
       } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+  server.put<{ Params: { id: string }; Body: Omit<PutMeetingTitleInput, "meetingId"> }>(
+    "/api/meetings/records/:id/title",
+    { schema: putMeetingTitleSchema },
+    async (request, reply) => {
+      try {
+        const actor = await dependencies.resolveAccessContext(request);
+        const result = await dependencies.dataContext.withDataContext(actor, (db) =>
+          repository.putTitle(db, { ...request.body, meetingId: request.params.id })
+        );
+        if (result.status === "not-found")
+          return reply.code(404).send({ code: "meeting_not_found" });
+        return result.status === "conflict"
+          ? reply.code(409).send({ code: "meeting_title_conflict", ...result })
+          : result;
+      } catch (error) {
+        if (error instanceof MeetingRecordInputError)
+          return reply.code(400).send({ code: "meeting_invalid_input" });
         return handleRouteError(error, reply);
       }
     }

@@ -15,6 +15,8 @@
  * two roots cannot disagree again.
  */
 
+import { ConstrainedStructuredEngine } from "./constrained-structured-engine.js";
+
 import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 import type { AiProviderExecutionMode } from "@moss/shared";
 import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
@@ -83,6 +85,7 @@ export interface ChatEngineSelectionOpts {
    * from every ordinary Anthropic chat session too (review finding B4).
    */
   readonly needsStructuredOutput?: boolean;
+  readonly constrainedStructured?: boolean;
   /** #2674: run the structured child as the owning user's slot (cli-runner, per-user mode). */
   readonly childIdentity?: StructuredChildIdentity;
   /** ACP chat wiring; only the composition root supplies this for the chat profile. */
@@ -187,6 +190,9 @@ export function createStructuredEngine(
   io: TmuxIo,
   opts: ChatEngineSelectionOpts = {}
 ): CliChatEngine | Promise<CliChatEngine> {
+  if (opts.constrainedStructured) {
+    return new ConstrainedStructuredEngine(provider, io, opts.homeBase, opts.childIdentity);
+  }
   if (opts.acpConnection && opts.acpUserId && opts.acpProjectId) {
     return new AcpChatEngine(provider, sessionKey, {
       tunnel: new RpcAcpTunnel(opts.acpConnection, sessionKey),

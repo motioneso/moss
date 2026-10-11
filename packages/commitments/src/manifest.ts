@@ -1,3 +1,4 @@
+import { commitmentPresentation, commitmentRoutePresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
@@ -40,31 +41,67 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     ]
   },
   routes: [
-    { method: "GET", path: "/api/commitments/candidates", permissionId: "commitments.view" },
-    { method: "GET", path: "/api/commitments/candidates/:id", permissionId: "commitments.view" },
+    {
+      method: "GET",
+      path: "/api/commitments/candidates",
+      chat: { access: "read" },
+      permissionId: "commitments.view"
+    },
+    {
+      method: "GET",
+      path: "/api/commitments/candidates/:id",
+      chat: { access: "read", coveredBy: "commitments.get" },
+      permissionId: "commitments.view"
+    },
     {
       method: "PATCH",
       path: "/api/commitments/candidates/:id/status",
+      chat: {
+        access: "write",
+        title: "Update commitment status",
+        presentation: commitmentRoutePresentation("status")
+      },
       permissionId: "commitments.update"
     },
     {
       method: "POST",
       path: "/api/commitments/candidates/:id/resolve",
+      chat: { access: "write", title: "Resolve commitment" },
       permissionId: "commitments.update"
     },
     {
       method: "POST",
       path: "/api/commitments/candidates/:id/suppress",
+      chat: {
+        access: "write",
+        title: "Suppress commitment",
+        presentation: commitmentRoutePresentation("suppress")
+      },
       permissionId: "commitments.update"
     },
-    { method: "POST", path: "/api/commitments/extract", permissionId: "commitments.extract" },
-    { method: "GET", path: "/api/commitments/extraction-state", permissionId: "commitments.view" }
+    {
+      method: "POST",
+      path: "/api/commitments/extract",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "commitments.extract"
+    },
+    {
+      method: "GET",
+      path: "/api/commitments/extraction-state",
+      chat: { access: "read" },
+      permissionId: "commitments.view"
+    }
   ],
   jobs: [
     { queueName: COMMITMENT_EXTRACTION_QUEUE, metadataOnly: true },
     { queueName: COMMITMENT_EMAIL_JUDGEMENT_QUEUE, metadataOnly: true }
   ],
   features: [
+    {
+      id: "commitments.chat_app_actions",
+      description:
+        "App actions read candidates, change their status or suppress them. Extraction remains unavailable through this path; candidate resolution currently returns unavailable rather than creating tasks or events."
+    },
     {
       // #2956: the Activity history line title for this module's structured calls.
       id: "structured.commitments.email-judgement",
@@ -86,6 +123,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
       description: "List commitment candidates extracted from your chats, notes, and email.",
       permissionId: "commitments.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         properties: {
@@ -110,6 +148,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
         "Check which email threads the commitments closer look has already judged, and when.",
       permissionId: "commitments.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["threadRefs"],
@@ -124,6 +163,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
       description: "Get details and evidence for a specific commitment candidate.",
       permissionId: "commitments.view",
       risk: "read",
+      content: "outside",
       inputSchema: {
         type: "object",
         required: ["candidateId"],
@@ -133,9 +173,12 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     },
     {
       name: "commitments.accept",
+      actionLabel: "Accept commitment",
+      approvalPresentation: commitmentPresentation("accept"),
       description: "Accept a commitment candidate as a real commitment.",
       permissionId: "commitments.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "commitment_review",
       selfOperationGrant: "granted_at_install",
@@ -148,9 +191,12 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     },
     {
       name: "commitments.reject",
+      actionLabel: "Reject commitment",
+      approvalPresentation: commitmentPresentation("reject"),
       description: "Reject a commitment candidate as not a real commitment.",
       permissionId: "commitments.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "commitment_review",
       selfOperationGrant: "granted_at_install",
@@ -163,9 +209,13 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     },
     {
       name: "commitments.snooze",
-      description: "Snooze a commitment candidate until a later date.",
+      actionLabel: "Snooze commitment",
+      approvalPresentation: commitmentPresentation("snooze"),
+      description:
+        "Snooze a commitment candidate until a later date; it returns to pending review once that date passes.",
       permissionId: "commitments.update",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       actionFamilyId: "commitment_review",
       selfOperationGrant: "granted_at_install",

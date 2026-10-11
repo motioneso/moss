@@ -5,6 +5,8 @@ import type {
   ChatPersistencePort
 } from "../../packages/chat/src/live/chat-session-manager.js";
 
+const THREAD_ID = "00000000-0000-4000-8000-000000000071";
+
 const soonIso = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
 const overdueIso = () => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -41,10 +43,13 @@ function makeDeps(overrides: Partial<ChatSessionManagerDeps> = {}): {
     resolveActiveProvider: vi
       .fn()
       .mockResolvedValue({ provider: "anthropic", model: "claude-3-opus" }),
+    getCurrentThreadState: vi.fn().mockResolvedValue({ id: THREAD_ID, incognito: false }),
     listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
     recordTurn: vi.fn().mockResolvedValue({ userMessageId: "u1", assistantMessageId: "a1" }),
     openNewConversation: vi.fn(),
-    getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: "UTC" }),
+    getThreadContext: vi
+      .fn()
+      .mockResolvedValue({ threadTitle: null, localTimezone: "UTC", incognito: false }),
     touchExistingThread: vi.fn().mockResolvedValue(true)
   };
 
@@ -65,6 +70,7 @@ function makeDeps(overrides: Partial<ChatSessionManagerDeps> = {}): {
   const deps: ChatSessionManagerDeps = {
     engineFactory: vi.fn().mockReturnValue(engine),
     persistence,
+    conversationProvenance: { recordAdmission: vi.fn().mockResolvedValue(undefined) },
     personaFs: {
       writeFile: vi.fn().mockResolvedValue(undefined),
       mkdir: vi.fn().mockResolvedValue(undefined)
@@ -96,6 +102,11 @@ describe("ChatSessionManager priority reorder", () => {
 
     await manager.submitTurn("user1", "TestUser", "what should I work on today");
 
+    expect(deps.conversationProvenance?.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+      "user1",
+      THREAD_ID,
+      "recall_cross_tool"
+    );
     const text = submittedTurnText(engine);
     expect(text.indexOf("[calendar")).toBeGreaterThan(-1);
     expect(text.indexOf("[calendar")).toBeLessThan(text.indexOf("[tasks"));
@@ -128,6 +139,11 @@ describe("ChatSessionManager priority reorder", () => {
     await manager.submitTurn("user1", "TestUser", "what should I work on today");
 
     expect(priorityModel.getModel).toHaveBeenCalledWith("user1");
+    expect(deps.conversationProvenance?.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+      "user1",
+      THREAD_ID,
+      "recall_cross_tool"
+    );
     const text = submittedTurnText(engine);
     expect(text.indexOf("[tasks")).toBeGreaterThan(-1);
     expect(text.indexOf("[tasks")).toBeLessThan(text.indexOf("[calendar"));
@@ -141,6 +157,11 @@ describe("ChatSessionManager priority reorder", () => {
     const result = await manager.submitTurn("user1", "TestUser", "what should I work on today");
 
     expect(result.reply).toBe("Here is your plan.");
+    expect(deps.conversationProvenance?.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+      "user1",
+      THREAD_ID,
+      "recall_cross_tool"
+    );
     const text = submittedTurnText(engine);
     expect(text.indexOf("[calendar")).toBeLessThan(text.indexOf("[tasks"));
   });
@@ -162,5 +183,6 @@ describe("ChatSessionManager priority reorder", () => {
     await manager.submitTurn("user1", "TestUser", "what should I work on today");
 
     expect(priorityModel.getModel).not.toHaveBeenCalled();
+    expect(deps.conversationProvenance?.recordAdmission).not.toHaveBeenCalled();
   });
 });

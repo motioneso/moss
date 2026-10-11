@@ -617,3 +617,22 @@
   gap: 10px;
   margin-top: 18px;
 }
+
+/* Consequential forms use canonical Fields with an explicit vertical stack. */
+.deldlg__body {
+  display: grid;
+  gap: var(--space-5);
+}
+.terminal-modal .jds-field + .jds-field {
+  margin-top: var(--space-5);
+}
+.term-modal__prompt {
+  margin-bottom: var(--space-3);
+}
+.provpick__cred-acts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}

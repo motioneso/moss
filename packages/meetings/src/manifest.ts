@@ -1,3 +1,13 @@
+import { meetingRecordTarget } from "./chat-targets.js";
+import {
+  createMeetingPresentation,
+  deleteMeetingPresentation,
+  meetingNotesPresentation,
+  meetingPreferencesPresentation,
+  meetingSummaryPresentation,
+  meetingTitlePresentation,
+  meetingTranscriptPresentation
+} from "./action-presentations.js";
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import { collectMeetingsExportSection } from "./data-lifecycle.js";
@@ -6,7 +16,7 @@ export const meetingsModuleSqlMigrationDirectory = fileURLToPath(
   new URL("../sql", import.meta.url)
 );
 
-/** Draft records and personal notes. Native recording is not available yet. */
+/** Owner-private meetings with an explicitly approved native recorder. */
 export const meetingsModuleManifest = {
   id: "meetings",
   name: "Meetings",
@@ -23,7 +33,11 @@ export const meetingsModuleManifest = {
       "sql/0278_meeting_outputs.sql",
       "sql/0279_meeting_exports.sql",
       "sql/0280_meeting_history.sql",
-      "sql/0283_meeting_account_export.sql"
+      "sql/0283_meeting_account_export.sql",
+      "sql/0284_meeting_capture.sql",
+      "sql/0288_meeting_recording_connections.sql",
+      "sql/0292_meeting_minimal.sql",
+      "sql/0295_meeting_capture_start_limits.sql"
     ],
     migrationDirectories: ["packages/meetings/sql"],
     ownedTables: [
@@ -35,23 +49,30 @@ export const meetingsModuleManifest = {
       "app.meeting_output_artifacts",
       "app.meeting_action_candidates",
       "app.meeting_export_receipts",
-      "app.meeting_export_requests"
+      "app.meeting_export_requests",
+      "app.meeting_capture_links",
+      "app.meeting_capture_grants",
+      "app.meeting_capture_receipts",
+      "app.meeting_capture_connections",
+      "app.meeting_capture_start_cancellations",
+      "app.meeting_stop_summaries",
+      "app.meeting_capture_start_limits"
     ]
   },
   permissions: [
     {
       id: "meetings.read",
-      label: "Read meeting drafts",
+      label: "Read meetings",
       description:
-        "Read the signed-in person's meeting drafts, personal notes, and retained transcript evidence.",
+        "Read the signed-in person's meetings, personal notes, and retained transcript evidence.",
       scope: "user",
       actions: ["view"]
     },
     {
       id: "meetings.write",
-      label: "Manage meeting drafts",
+      label: "Manage meetings",
       description:
-        "Create and delete drafts, save personal notes with version checks, manage capture defaults, and ingest transcript text.",
+        "Create and delete meetings, save personal notes with version checks, manage capture defaults, and ingest transcript text.",
       scope: "user",
       actions: ["create", "update", "delete"]
     }
@@ -64,48 +85,402 @@ export const meetingsModuleManifest = {
       icon: "mic",
       order: 36,
       description:
-        "Create meeting drafts, find their history, and edit personal notes. Recording is unavailable.",
+        "Create meetings, edit personal notes, and review transcripts. Explicit recording needs a connected Mac recorder authorized by initial linking and configured transcription.",
       permissionId: "meetings.read"
     }
   ],
+  settings: [
+    {
+      id: "meetings.module-settings",
+      label: "Meetings",
+      description:
+        "See your Mac link status, choose microphone plus system audio or microphone only, switch automatic summaries after Stop on or off, and unlink the Mac.",
+      path: "/settings?section=modules&module=meetings",
+      scope: "user",
+      permissionId: "meetings.write",
+      entry: "./settings"
+    }
+  ],
+  jobs: [{ queueName: "meetings.stop-summary", metadataOnly: true }],
   routes: [
-    { method: "POST", path: "/api/meetings/history/search", permissionId: "meetings.read" },
-    { method: "GET", path: "/api/meetings/history/:id", permissionId: "meetings.read" },
-    { method: "GET", path: "/api/meetings/records/:id/exports", permissionId: "meetings.read" },
-    { method: "POST", path: "/api/meetings/records/:id/exports", permissionId: "meetings.write" },
-    { method: "GET", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.read" },
+    {
+      method: "PUT",
+      path: "/api/meetings/records/:id/title",
+      chat: {
+        access: "write",
+        title: "Rename your meeting",
+        content: "user_authored",
+        presentation: meetingTitlePresentation
+      },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/output-availability",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/capture/connection",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/capture/commands",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/capture/claim",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/capture/devices",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/capture/cancel-start",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/capture/status",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/capture/control",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/capture/audio",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/records/:id/capture",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/capture/start",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/capture/control",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/history/search",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/history/:id",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/records/:id/exports",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/exports",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/records/:id/outputs",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
     {
       method: "GET",
       path: "/api/meetings/records/:id/outputs/:version",
+      chat: { access: "read" },
       permissionId: "meetings.read"
     },
-    { method: "POST", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.write" },
-    { method: "PUT", path: "/api/meetings/records/:id/outputs", permissionId: "meetings.write" },
+    {
+      method: "POST",
+      path: "/api/meetings/records/:id/outputs",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "PUT",
+      path: "/api/meetings/records/:id/outputs",
+      chat: {
+        access: "write",
+        title: "Edit a meeting summary",
+        presentation: meetingSummaryPresentation
+      },
+      permissionId: "meetings.write"
+    },
     {
       method: "POST",
       path: "/api/meetings/records/:id/actions/:candidateId/review",
+      chat: { access: "blocked", blockedBecause: "self_authority" },
       permissionId: "meetings.write"
     },
     {
       method: "POST",
       path: "/api/meetings/records/:id/transcript",
+      chat: {
+        access: "write",
+        title: "Add or correct retained meeting transcript text",
+        content: "user_authored",
+        presentation: meetingTranscriptPresentation
+      },
       permissionId: "meetings.write"
     },
-    { method: "GET", path: "/api/meetings/records/:id/transcript", permissionId: "meetings.read" },
+    {
+      method: "GET",
+      path: "/api/meetings/records/:id/transcript",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
     {
       method: "GET",
       path: "/api/meetings/records/:id/transcript/evidence",
+      chat: { access: "read" },
       permissionId: "meetings.read"
     },
-    { method: "GET", path: "/api/meetings/preferences", permissionId: "meetings.read" },
-    { method: "PUT", path: "/api/meetings/preferences", permissionId: "meetings.write" },
-    { method: "DELETE", path: "/api/meetings/records/:id", permissionId: "meetings.write" },
-    { method: "GET", path: "/api/meetings/records", permissionId: "meetings.read" },
-    { method: "GET", path: "/api/meetings/records/:id", permissionId: "meetings.read" },
-    { method: "POST", path: "/api/meetings/records", permissionId: "meetings.write" },
-    { method: "PUT", path: "/api/meetings/records/:id/notes", permissionId: "meetings.write" }
+    {
+      method: "GET",
+      path: "/api/meetings/preferences",
+      chat: { access: "read", content: "user_authored" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "PUT",
+      path: "/api/meetings/preferences",
+      chat: {
+        access: "write",
+        title:
+          "Change meeting capture mode, recording source, automatic summaries or summary style",
+        content: "user_authored",
+        presentation: meetingPreferencesPresentation
+      },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "DELETE",
+      path: "/api/meetings/records/:id",
+      chat: {
+        access: "destructive",
+        title: "Delete meeting, retained records and linked Moss chats",
+        content: "user_authored",
+        target: meetingRecordTarget,
+        presentation: deleteMeetingPresentation
+      },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/records",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "GET",
+      path: "/api/meetings/records/:id",
+      chat: { access: "read" },
+      permissionId: "meetings.read"
+    },
+    {
+      method: "POST",
+      path: "/api/meetings/records",
+      chat: {
+        access: "write",
+        title: "Create a meeting draft",
+        content: "user_authored",
+        presentation: createMeetingPresentation
+      },
+      permissionId: "meetings.write"
+    },
+    {
+      method: "PUT",
+      path: "/api/meetings/records/:id/notes",
+      chat: {
+        access: "write",
+        title: "Save your meeting notes",
+        presentation: meetingNotesPresentation
+      },
+      permissionId: "meetings.write"
+    }
   ],
   features: [
+    {
+      id: "meetings.chat_app_actions",
+      description:
+        "App actions read meetings/output availability; save drafts, titles, notes, transcripts, summaries and preferences. Cards show targets, content and evidence. Generate/export/record in Meetings. Deleting meetings and linked chats asks first."
+    },
+    {
+      id: "meetings.link_state",
+      description:
+        "When no Mac is linked, Meetings points to Trail Marker’s existing connect-in-browser flow. Download app has no destination yet. A linked Mac opens a ready workspace without source questions; linking, creating and opening never record."
+    },
+    {
+      id: "meetings.mac_link_controls",
+      description:
+        "Settings → Meetings shows link status, audio source, automatic summary and confirmed Unlink for the exact Mac. Pending and failed changes are explicit. Recording-capability revocation stays enforced; Unlink keeps retained meetings.",
+      remediations: [
+        {
+          id: "meetings.restore_mac_link",
+          path: "/settings?section=modules&module=meetings",
+          description:
+            "For missing or revoked recording access, unlink this Mac in Settings → Meetings and relink through Trail Marker. If Unlink is unconfirmed, use local Stop, check the connection and retry. Linking never starts capture."
+        }
+      ]
+    },
+    {
+      id: "meetings.automatic_summary",
+      description:
+        "Automatic summaries default on and use your default model without fallback, including supported Claude. Turn off Summarize automatically after Stop in Settings → Meetings. Only these rename Untitled meeting; Rewrite summary stays available."
+    },
+    {
+      id: "transcribe.meeting",
+      description:
+        "Capture time uses native acknowledgement. Silent/near-silent clips skip transcription and clear settled delays. Transient clips retry in bounded memory. Activity records model, duration and outcome without audio or transcript text."
+    },
+    {
+      id: "meetings.native_startup_recovery",
+      description:
+        "A brief microphone timing hiccup at Start can recover without Resume. Missing startup sources are checked once; uncertain audio is dropped and marked as a gap. Real source changes still pause. The Mac log records audio gaps."
+    },
+    {
+      id: "meetings.native_source_recovery",
+      description:
+        "Recovering audio… retries the same sources up to 8 times per recording. macOS may show its own permission dialog. Pause and Stop cancel recovery. Repeated interruptions need Resume; missed audio is marked as a gap.",
+      remediations: [
+        {
+          id: "meetings.resume_interrupted_audio",
+          path: "/meetings",
+          description:
+            "A visible warning restores a hidden recording pill if recovery cannot finish. Check the original sources and macOS permissions before Resume, or choose Stop. Missed audio is marked as a gap."
+        }
+      ]
+    },
+    {
+      id: "meetings.speaker_echo_control",
+      description:
+        "Mic + computer audio echo control checked on built-in Mac speakers. Headsets/Bluetooth, Zoom sharing the mic, and fallback on Macs rejecting setup are unchecked. Unsupported setup uses the same mic after cleanup; route changes need Resume."
+    },
+    {
+      id: "meetings.native_capture",
+      description:
+        "Link once and grant OS audio permissions. Start uses its default microphone and system audio unless Settings overrides it. Start or Resume begins recording; same-source recovery is automatic. A nav dot shows recording elsewhere. Mac only.",
+      errors: [
+        {
+          code: "meeting_capture_source_unavailable",
+          class: "prerequisite",
+          remediationRef: "meetings.connect_recorder",
+          description:
+            "The Mac or exact audio source is missing or ambiguous. Check the linked Mac and macOS default microphone, restore an existing source, or adjust recording mode in Settings. Moss never chooses between multiple available Macs."
+        },
+        {
+          code: "meeting_capture_processing_failed",
+          class: "transient",
+          description:
+            "Transient transcription failures retry while capture continues. Terminal failed clips retain one gap, shown at 250ms or longer. Provider end rounding up to 100ms is clamped to the clip; other invalid intervals are rejected."
+        },
+        {
+          code: "meeting_capture_rate_limited",
+          class: "transient",
+          description:
+            "Start is limited per account to 10 requests per minute and 60 per hour, alongside transport limits. Moss honors Retry-After while keeping Pause and Stop available."
+        },
+        {
+          code: "meeting_capture_unavailable",
+          class: "prerequisite",
+          remediationRef: "meetings.connect_recorder",
+          description:
+            "The recording connection is unavailable, expired or revoked. Check the Mac in Settings → Meetings. For missing or revoked recording access, unlink the Mac and reconnect through Trail Marker."
+        },
+        {
+          code: "meeting_capture_processing_unavailable",
+          class: "prerequisite",
+          remediationRef: "meetings.configure_transcription",
+          description:
+            "The configured transcription route is unavailable. An admin must check AI providers; no substitute provider is selected."
+        },
+        {
+          code: "meeting_capture_interrupted",
+          class: "transient",
+          description:
+            "Recording was interrupted by unlink, device expiry, permission revoke, session end, connection replacement or capture expiry. Check the Mac connection and create a new meeting after recording authority ends."
+        },
+        {
+          code: "meeting_capture_conflict",
+          class: "validation",
+          description:
+            "Capture state or selected sources changed. Refresh and review before trying again. After a completed recording, create New meeting so its transcript and clock remain separate."
+        },
+        {
+          code: "meeting_capture_limit",
+          class: "validation",
+          description:
+            "This recording reached a bounded session, source or receipt limit. Stop and review the meeting before starting another."
+        },
+        {
+          code: "meeting_capture_busy",
+          class: "transient",
+          description:
+            "The device is recording or finalizing another meeting, or a clip is still processing. Finalization lasts at most 60 seconds. The native recorder retains bounded transient audio and pauses when its buffer fills."
+        }
+      ],
+      remediations: [
+        {
+          id: "meetings.connect_recorder",
+          path: "/settings?section=modules&module=meetings",
+          description:
+            "Check the Mac and audio in Settings → Meetings. For missing or revoked recording access, unlink and relink through Trail Marker. Check macOS audio permissions, then press Start in New meeting."
+        },
+        {
+          id: "meetings.configure_transcription",
+          path: "/settings?section=aiproviders",
+          description:
+            "An admin configures the transcription endpoint and model in AI providers. The selected route must return clip timestamps; unsupported responses stop processing without provider fallback."
+        }
+      ]
+    },
+    {
+      id: "meetings.mac_recording_status",
+      description:
+        "White 222 × 32 pill: three live audio bars, light/dark-readable source menu, Pause/Resume, Stop and Hide X. Silence/stale audio flattens bars. Resume keeps sources. Stop clears the pill and red menu item."
+    },
+    {
+      id: "meetings.mac_recording_pill_visibility",
+      description:
+        "X hides the pill while recording continues. The red Meeting menu keeps Pause/Stop and Show recording pill. A persistent audio interruption shows it again with a warning. Showing a paused pill never resumes it. Each new Start shows the pill."
+    },
+    {
+      id: "meetings.mac_audio_sources",
+      description:
+        "Select a mic or None and toggle computer audio for this recording. System-only skips mic permission. Both-off is rejected; select audio. Paused edits stay paused. Changes await confirmation and keep Settings defaults."
+    },
     {
       id: "meetings.account_export",
       description:
@@ -114,7 +489,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.history",
       description:
-        "Search current titles, notes and transcripts across your history; filter review and export receipts. Select metadata, open Review or Ask Moss. Capture is unavailable; receipt states do not verify current Tasks or vault files.",
+        "The Meetings list searches titles, notes and transcripts. Rows grouped by week open the meeting directly and show the latest summary excerpt and acknowledged recording length when available.",
       errors: [
         {
           code: "meeting_history_access_denied",
@@ -149,7 +524,7 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.referenced_evidence",
       description:
-        "Open an exact cited passage beside the current transcript. Close evidence returns to review. Invalid links and unavailable revisions show an explanation; they never redirect a citation to newer text."
+        "Citations scroll to an exact passage beside your notes. Continue editing there, or use Meetings to return to the list. Invalid links and unavailable revisions explain the problem; citations never substitute newer text."
     },
     {
       id: "meetings.private_exports",
@@ -209,9 +584,14 @@ export const meetingsModuleManifest = {
       ]
     },
     {
+      id: "meetings.summary.validation",
+      description: "Checked a meeting summary",
+      errors: []
+    },
+    {
       id: "meetings.grounded_outputs",
       description:
-        "Generate evidence-checked summaries, decisions and actions with four templates. Compare versions and review exact sources. Generate requires a supported API-key route; CLI unavailable. Refresh summaries rechecks model configuration.",
+        "Generate evidence-checked summaries with your default model, without fallback. Claude availability depends on this server setup. Compare versions and exact sources; refresh to check availability without generating a summary.",
       errors: [
         {
           code: "meeting_output_unavailable",
@@ -220,10 +600,28 @@ export const meetingsModuleManifest = {
             "This output version is unavailable to the owner. Refresh the meeting and review another retained version."
         },
         {
+          code: "meeting_output_subscription_unsupported",
+          class: "validation",
+          description:
+            "Codex and other unconstrained subscription profiles do not support summaries yet. No replacement model is used. API-key and supported Claude profiles remain available."
+        },
+        {
+          code: "meeting_output_subscription_isolation_unavailable",
+          class: "validation",
+          description:
+            "Claude summaries aren’t available on this server setup. No other model was used."
+        },
+        {
+          code: "meeting_output_claude_subscription_unsupported",
+          class: "validation",
+          description:
+            "Summaries on this Claude subscription are not supported by the installed constrained runner yet. No other model is used. Ask an admin to check the installed CLI version."
+        },
+        {
           code: "meeting_output_route_unavailable",
           class: "validation",
           description:
-            "Summaries need an API-key model with summarization and structured-output support; CLI is unsupported. Admins check Settings → AI providers; other owners contact an admin. Refresh summaries after updating configuration, then generate."
+            "Your default model is unavailable or cannot produce structured summaries. No replacement is used. Check Settings → AI providers or ask an admin, then refresh summaries and try again."
         },
         {
           code: "meeting_output_route_changed",
@@ -250,16 +648,55 @@ export const meetingsModuleManifest = {
             "Tasks is unavailable for this owner. Enable Tasks in module settings before accepting this candidate."
         },
         {
+          code: "meeting_output_queue_unavailable",
+          class: "transient",
+          description:
+            "Recording stopped, but its summary could not be queued. Review the finalized transcript and use Rewrite summary for a new explicit attempt."
+        },
+        {
           code: "meeting_output_interrupted",
           class: "transient",
           description:
             "Generation was interrupted or its reservation expired. Start a new explicit request; replaying the old key will not run it again."
         },
         {
+          code: "meeting_output_timed_out",
+          class: "transient",
+          description: "The summary took too long and was stopped. Try again when you’re ready."
+        },
+        ...(
+          [
+            "json_parse",
+            "schema_validation",
+            "oversized_output",
+            "schema_invalid",
+            "length_exceeded",
+            "source_binding_missing",
+            "source_binding_invalid",
+            "source_identity_mismatch",
+            "source_revision_mismatch",
+            "utf16_range_invalid",
+            "owner_phrase_unsupported",
+            "due_phrase_unsupported",
+            "inputs_invalid"
+          ] as const
+        ).map((reason) => ({
+          code: `meeting_output_rejected_${reason}`,
+          class: "transient" as const,
+          description:
+            "The summary couldn’t be checked against your meeting notes or transcript. Try generating it again."
+        })),
+        {
+          code: "meeting_output_provider_failed",
+          class: "transient",
+          description:
+            "Your model couldn’t complete the summary. Check its connection in Settings → AI providers, or ask an admin, then try again. No other model was used."
+        },
+        {
           code: "meeting_output_generation_failed",
           class: "transient",
           description:
-            "Generation failed or its result was invalid. Review provider settings, then explicitly start a new request; no fallback provider is used."
+            "The summary could not be generated. Try again when you’re ready. No other model was used."
         },
         {
           code: "meeting_output_busy",
@@ -323,8 +760,25 @@ export const meetingsModuleManifest = {
     },
     {
       id: "meetings.questions",
+      remediations: [
+        {
+          id: "meetings.remove_chat_context",
+          path: "/meetings",
+          description:
+            "Remove the About this meeting chip in the chat drawer to continue ordinary subscription chat, or choose an API-key chat model for meeting questions."
+        }
+      ],
+      errors: [
+        {
+          code: "meeting_chat_unsupported",
+          class: "prerequisite",
+          remediationRef: "meetings.remove_chat_context",
+          description:
+            "Selected-meeting questions need an API-key chat model. Remove the About this meeting chip to continue ordinary chat with your subscription model."
+        }
+      ],
       description:
-        "Ask Moss uses current meeting evidence and exact citations in shared chat. Admin pins/locked defaults apply; unavailable enabled overrides fail closed. API-key only, no actions. Transient refresh errors preserve open drafts."
+        "Chat attaches the open meeting’s notes and transcript; its chip announces the title. API-key only, no actions. Remove About this meeting for ordinary subscription chat. Admin pins and locked defaults apply."
     },
     {
       id: "meetings.transcript_storage",
@@ -366,33 +820,39 @@ export const meetingsModuleManifest = {
     {
       id: "meetings.transcript_review",
       description:
-        "Read retained transcripts with source labels, timestamps, revision and provisional status, and omitted counts. Refresh manually or inspect previous/latest revisions. Recording remains unavailable."
+        "Transcript timestamps and sources sit beside notes or in phone tabs. Gaps under 250ms and exact duplicates hide; same-second gaps say under a second. Diagnostics stay intact. Chat links scroll to cited evidence, including older text."
     },
     {
       id: "meetings.capture_default",
       description:
-        "Explicitly save or clear a personal capture-mode default in meeting Setup. Choosing another mode does not change the saved default. Native recording remains unavailable."
+        "New recordings use the sole available Mac’s default microphone and system audio. Settings can switch to microphone-only. Existing exact source choices are preserved; missing or ambiguous sources never broaden capture."
     },
     {
       id: "meetings.notes_recovery",
       description:
-        "Unsaved notes survive signed-in app navigation in memory. Save before closing or signing out. On a version conflict, compare current saved notes before explicitly rebasing your edits."
+        "Notes autosave and remain in signed-in memory across navigation. Failed saves can retry the same request. Conflicts keep edits and show saved notes before an explicit Keep my version choice. Unsaved work warns before sign-out."
     },
     {
       id: "meetings.delete_draft",
       description:
-        "Permanently delete a draft, personal notes, retained transcript revisions and meeting chat, generated outputs and candidates after confirmation; accepted Tasks remain. Cancellation preserves unsaved edits; deletion cannot be undone."
+        "Delete meeting in the overflow menu permanently removes its notes, transcript, chat and summaries after confirmation. Accepted Tasks and vault copies remain. Cancel keeps unsaved edits."
     },
     {
       id: "meetings.draft_records",
       description:
-        "Review Summary and actions, Transcript and My notes at /meetings. Search current titles, notes and transcripts in History. Accept reviewed Tasks and save private copies. Native recording remains unavailable.",
+        "Untitled meeting has the same title in its page, list and chat chip. Rename inline; Notes and Summary sit beside the transcript. Overflow has search, rewrite, versions, export, copy and deletion. Add to Tasks requires owner review.",
       errors: [
         {
           code: "meeting_request_conflict",
           class: "validation",
           description:
             "A request key was already used with different input. Use a new key for a new change."
+        },
+        {
+          code: "meeting_title_conflict",
+          class: "transient",
+          description:
+            "The title changed elsewhere. Your draft is kept; review the current title before choosing to keep your version or load the saved title."
         },
         {
           code: "meeting_notes_conflict",
@@ -404,12 +864,12 @@ export const meetingsModuleManifest = {
           code: "meeting_invalid_input",
           class: "validation",
           description:
-            "The meeting draft or notes exceed the allowed size or contain invalid fields. Correct the input and retry."
+            "The meeting or notes exceed the allowed size or contain invalid fields. Correct the input and retry."
         },
         {
           code: "meeting_not_found",
           class: "validation",
-          description: "This meeting draft is unavailable to the signed-in person."
+          description: "This meeting is unavailable to the signed-in person."
         }
       ]
     }
@@ -429,7 +889,17 @@ export const meetingsModuleManifest = {
         { table: "app.meeting_output_artifacts", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_action_candidates", countPredicate: "owner_user_id = $1::uuid" },
         { table: "app.meeting_export_receipts", countPredicate: "owner_user_id = $1::uuid" },
-        { table: "app.meeting_export_requests", countPredicate: "owner_user_id = $1::uuid" }
+        { table: "app.meeting_export_requests", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_links", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_grants", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_receipts", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_connections", countPredicate: "owner_user_id = $1::uuid" },
+        {
+          table: "app.meeting_capture_start_cancellations",
+          countPredicate: "owner_user_id = $1::uuid"
+        },
+        { table: "app.meeting_stop_summaries", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.meeting_capture_start_limits", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }

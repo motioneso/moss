@@ -12,18 +12,22 @@ import {
   listUsefulnessFeedbackRouteSchema,
   undoUsefulnessFeedbackRouteSchema,
   updateUsefulnessFeedbackReasonRouteSchema,
-  type FeedbackSurface,
   type FeedbackTargetKind,
-  type UsefulnessFeedbackDto,
   type UsefulnessFeedbackKind
 } from "@moss/shared";
 
+import { serializeFeedback } from "./feedback-response.js";
+import { registerUsefulnessFeedbackSignalRoutes } from "./signal-routes.js";
 import { sanitizeFeedbackMetadata } from "./metadata.js";
 import { parseCreateBody, parseListQuery, parseReasonBody } from "./request-parsing.js";
 import { UsefulnessFeedbackRepository } from "./repository.js";
 import { compileStoryRelevanceRule, storyRelevanceDirectionForKind } from "./relevance/compile.js";
 import { isStoryTargetKind, storyModuleForTargetKind } from "./story-target.js";
-import { isAllowedFeedbackPair, type FeedbackTargetVerifierRegistry } from "./target-verifiers.js";
+import {
+  isAllowedFeedbackPair,
+  verifyFeedbackTarget,
+  type FeedbackTargetVerifierRegistry
+} from "./target-verifiers.js";
 
 export interface UsefulnessFeedbackRoutesDependencies {
   readonly dataContext: DataContextRunner;
@@ -51,9 +55,8 @@ export interface UsefulnessFeedbackRoutesDependencies {
   };
   /**
    * Called after a story preference is saved, edited or taken back, so the owning module can
-   * refresh what it shows. Deliberately unwired in this slice: #2018 (News) and #2019 (Sports)
-   * attach their refresh here, which keeps queue work out of this module while giving them a seam
-   * that does not require re-opening this file.
+   * refresh what it shows. The composition root supplies this callback; queue work stays out of
+   * this module. The record-only signals route is not given this dependency.
    */
   readonly onStoryPreferenceChanged?: (input: {
     readonly ownerUserId: string;
@@ -86,6 +89,12 @@ export function registerUsefulnessFeedbackRoutes(
   dependencies: UsefulnessFeedbackRoutesDependencies
 ): void {
   const repository = dependencies.repository ?? new UsefulnessFeedbackRepository();
+  registerUsefulnessFeedbackSignalRoutes(server, {
+    dataContext: dependencies.dataContext,
+    registry: dependencies.registry,
+    resolveAccessContext: dependencies.resolveAccessContext,
+    repository
+  });
 
   server.post(
     "/api/me/usefulness-feedback",
@@ -122,15 +131,12 @@ export function registerUsefulnessFeedbackRoutes(
             return { feedback: existing, created: false, notify: isStory };
           }
 
-          const verifier = dependencies.registry.get(input.targetKind);
-          if (!verifier) throw new HttpError(404, "Feedback target not found");
-          const verification = await verifier(scopedDb, {
+          const verification = await verifyFeedbackTarget(dependencies.registry, scopedDb, {
             actorUserId: access.actorUserId,
             targetKind: input.targetKind,
             targetRef: input.targetRef,
             surface: input.surface
           });
-          if (!verification) throw new HttpError(404, "Feedback target not found");
           if (input.kind === "remember_this" && !verification.canRemember) {
             throw new HttpError(400, "Feedback target cannot be remembered");
           }
@@ -379,32 +385,4 @@ async function notifyStoryPreferenceChanged(
     targetRef: feedback.target_ref,
     change
   });
-}
-
-function serializeFeedback(row: UsefulnessFeedbackSignal): UsefulnessFeedbackDto {
-  return {
-    id: row.id,
-    ownerUserId: row.owner_user_id,
-    targetKind: row.target_kind as FeedbackTargetKind,
-    targetRef: row.target_ref,
-    surface: row.surface as FeedbackSurface,
-    kind: row.kind as UsefulnessFeedbackKind,
-    sourceKind: row.source_kind,
-    sourceLabel: row.source_label,
-    priorityBand: row.priority_band,
-    effectKind: row.effect_kind,
-    effectRef: row.effect_ref,
-    metadata: row.metadata_json,
-    status: row.status,
-    reason: row.reason_text,
-    revision: row.revision,
-    ruleVersion: row.rule_version,
-    createdAt: toIsoString(row.created_at),
-    updatedAt: toIsoString(row.updated_at),
-    resolvedAt: row.resolved_at ? toIsoString(row.resolved_at) : null
-  };
-}
-
-function toIsoString(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }

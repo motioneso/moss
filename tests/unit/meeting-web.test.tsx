@@ -7,6 +7,8 @@ import { historyItem } from "./fixtures/meeting-history.js";
 import { historyKeys } from "../../packages/meetings/src/web/history-client.js";
 import { MeetingsPage } from "../../packages/meetings/src/web/meetings-page.js";
 import { meetingKeys } from "../../packages/meetings/src/web/client.js";
+import { meetingLinkKeys } from "../../packages/meetings/src/web/meeting-link-state.js";
+import { captureKeys } from "../../packages/meetings/src/web/capture-client.js";
 import {
   beginNoteSave,
   finishNoteSave,
@@ -29,6 +31,20 @@ function render(path: string, seed?: (client: QueryClient) => void) {
     // SSR fixtures show settled data; query lifecycle/focus is covered separately.
     defaultOptions: { queries: { retry: false, gcTime: Infinity, refetchOnMount: false } }
   });
+  client.setQueryData(meetingLinkKeys.sessions, {
+    sessions: [
+      {
+        id: "linked-mac",
+        source: "companion",
+        deviceLabel: "Studio Mac",
+        lastSeenAt: meeting.createdAt
+      }
+    ]
+  });
+  client.setQueryData(meetingLinkKeys.capabilities, {
+    devices: [{ deviceId: "linked-mac", state: "approved", revision: 1, policyVersion: 1 }]
+  });
+  client.setQueryData(captureKeys.devices, { devices: [], processingReady: true });
   seed?.(client);
   return renderToString(
     <QueryClientProvider client={client}>
@@ -39,7 +55,7 @@ function render(path: string, seed?: (client: QueryClient) => void) {
   );
 }
 
-describe("Meetings draft screen", () => {
+describe("Meetings screen", () => {
   it("discovers its package-owned route", () => {
     const found = scanModuleWeb({ rootDir: process.cwd() });
     expect(found.routes).toContainEqual(
@@ -47,24 +63,16 @@ describe("Meetings draft screen", () => {
     );
     expect(found.contributions.meetings).toContain("@moss/meetings/web");
   });
-  it("offers three explicit capture choices, with recording and source checks unavailable", () => {
-    const html = render("/meetings", (client) =>
-      client.setQueryData(meetingKeys.preferences, { defaultCaptureMode: null })
-    );
-    expect(html).toContain("Microphone and computer audio");
-    expect(html).toContain("Microphone and selected app");
-    expect(html).toContain("Microphone only");
-    expect(html).not.toContain('aria-pressed="true"');
-    expect(html).toMatch(
-      /disabled=""[^>]*aria-describedby="meeting-capture-unavailable"[^>]*>Start meeting/
-    );
-    expect(html).toContain("Recording isn’t available in this version of Moss");
-    expect(html).toContain("/settings?section=aiproviders");
-    expect(html).not.toContain("Ready to start");
+  it("opens on a minimal list with one New meeting action", () => {
+    const html = render("/meetings");
+    expect(html).toContain("New meeting");
+    expect(html).not.toContain("Meeting title (optional)");
+    expect(html).not.toContain("Prepare this meeting");
+    expect(html).not.toContain("Start meeting");
   });
   it("distinguishes loading from empty history", () => {
     const loading = render("/meetings?view=history");
-    expect(loading).toContain("Searching your meetings");
+    expect(loading).toContain("Loading meetings");
     expect(loading).not.toContain("Your first draft");
     const empty = render("/meetings?view=history", (client) =>
       client.setQueryData(historyKeys.search("", "all"), {
@@ -72,8 +80,8 @@ describe("Meetings draft screen", () => {
         pageParams: [undefined]
       })
     );
-    expect(empty).toContain("Your first draft starts here");
-    expect(empty).not.toContain("Searching your meetings");
+    expect(empty).toContain("No meetings yet. Start with New meeting.");
+    expect(empty).not.toContain("Loading meetings");
   });
   it("shows factual history columns and server search", () => {
     const html = render("/meetings?view=history", (client) =>
@@ -84,19 +92,20 @@ describe("Meetings draft screen", () => {
     );
     expect(html).toContain("Design review");
     expect(html).toContain("Search meetings");
-    expect(html).toContain("Processing");
-    expect(html).toContain("Capture");
-    expect(html).toContain("Unavailable");
+    expect(html).not.toContain("Processing");
+    expect(html).not.toContain("Capture");
+    expect(html).not.toContain("Unavailable");
     expect(html).not.toContain("Saved to vault");
   });
-  it("opens real notes and explicitly disables meeting chat", () => {
+  it("opens transcript and notes without a separate Ask Moss button", () => {
     const html = render(`/meetings?id=${meeting.id}`, (client) =>
       client.setQueryData(meetingKeys.record(meeting.id), { meeting })
     );
     expect(html).toContain("Design review");
     expect(html).toContain("First notes");
-    expect(html).toContain("Ask Moss needs an available transcript");
-    expect(html).toMatch(/disabled=""[^>]*aria-describedby="meeting-chat-unavailable"/);
+    expect(html).not.toContain("Ask Moss");
+    expect(html).toContain("Transcript");
+    expect(html).toContain("Personal notes");
   });
 });
 

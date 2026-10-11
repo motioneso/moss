@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { FeedbackTargetVerifier } from "@moss/usefulness-feedback";
 
 import { ChatRepository } from "./repository.js";
@@ -22,6 +23,21 @@ export function createChatFeedbackTargetVerifier(
 
     const canRemember = !thread.incognito && message.role === "user" && message.status === "stored";
     return {
+      approvalTarget: {
+        label: message.body,
+        version: createHash("sha256")
+          .update(
+            JSON.stringify([
+              message.id,
+              message.thread_id,
+              message.role,
+              message.status,
+              message.body,
+              thread.incognito
+            ])
+          )
+          .digest("hex")
+      },
       ownerUserId: input.actorUserId,
       targetKind: input.targetKind,
       targetRef: input.targetRef,

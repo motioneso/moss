@@ -6,7 +6,7 @@ import { parseSurfaceSessionKey } from "./chat-surface.js";
 import { isCredentialShaped } from "./notes-secret-filter.js";
 
 interface NotesReadToolTrustDeps {
-  readonly threads: Pick<ChatRepository, "getCurrentThread">;
+  readonly threads: Pick<ChatRepository, "getThreadById">;
   readonly memorySettings: Pick<ChatUserMemorySettingsRepository, "getOrCreate">;
 }
 
@@ -20,13 +20,20 @@ export function createNotesReadToolTrustBoundary(
     if (toolName !== "notes.search") return execute();
 
     const surface = readOwnedSurface(ctx.chatSessionId, ctx.actorUserId);
-    if (!surface) return emptyNotesResult();
+    if (!surface || !ctx.threadId) return emptyNotesResult();
 
     const [thread, settings] = await Promise.all([
-      deps.threads.getCurrentThread(scopedDb, ctx.actorUserId, surface),
+      deps.threads.getThreadById(scopedDb, ctx.threadId, surface),
       deps.memorySettings.getOrCreate(scopedDb, ctx.actorUserId)
     ]);
-    if (thread?.incognito || !settings.recallEnabled) return emptyNotesResult();
+    if (
+      !thread ||
+      thread.owner_user_id !== ctx.actorUserId ||
+      thread.surface !== surface ||
+      thread.incognito ||
+      !settings.recallEnabled
+    )
+      return emptyNotesResult();
 
     const result = await execute();
     const data = result.data as { chunks?: unknown };

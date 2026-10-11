@@ -1,0 +1,17 @@
+.meeting-source-menu {
+  top: auto;
+  bottom: calc(100% + var(--space-3));
+  right: 0;
+  width: 280px;
+  min-width: 280px;
+  z-index: 2;
+}
+.meeting-source-menu[hidden] {
+  display: none;
+}
+.meeting-source-menu button {
+  width: 100%;
+}
+.meeting-source-menu svg {
+  flex-shrink: 0;
+}

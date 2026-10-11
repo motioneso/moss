@@ -15,6 +15,8 @@ import type {
   StructuredTelemetryEvent
 } from "@moss/ai";
 import {
+  CLI_STRUCTURED_TIMEOUT_MESSAGE,
+  abortErrorFor,
   dedupeStructuredSources,
   modelActivityAction,
   modelActivityStructuredCode,
@@ -67,10 +69,10 @@ function acquireCliStructuredSlot(
   priority: StructuredRunPriority,
   signal?: AbortSignal
 ): Promise<() => void> {
+  // #3064: carry the abort reason so a gate timeout while queued files no line here —
+  // the gate owns the single timeout line.
   if (signal?.aborted) {
-    const error = new Error("aborted");
-    error.name = "AbortError";
-    return Promise.reject(error);
+    return Promise.reject(abortErrorFor(signal));
   }
   if (activeCliStructuredRuns === 0 && cliStructuredWaiters.foreground.length === 0) {
     activeCliStructuredRuns = 1;
@@ -83,9 +85,8 @@ function acquireCliStructuredSlot(
       const index = queue.indexOf(waiter);
       if (index >= 0) queue.splice(index, 1);
       signal?.removeEventListener("abort", waiter.abort!);
-      const error = new Error("aborted");
-      error.name = "AbortError";
-      reject(error);
+      // #3064: carry the abort reason (see above).
+      reject(abortErrorFor(signal));
     };
     cliStructuredWaiters[priority].push(waiter);
     signal?.addEventListener("abort", waiter.abort, { once: true });
@@ -178,14 +179,14 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
           timedOut = true;
           cancelled = true;
           emit({ kind: "timeout" });
-          reject(new CliChatUnavailableError("CLI structured generation timed out"));
+          reject(new CliChatUnavailableError(CLI_STRUCTURED_TIMEOUT_MESSAGE));
         }, this.timeoutMs);
         abort = () => {
           cancelled = true;
           void activeEngine.interrupt().catch(() => undefined);
-          const error = new Error("aborted");
-          error.name = "AbortError";
-          reject(error);
+          // #3064: carry the abort reason so the recorder can tell a gate timeout
+          // (owned by the gate's single line) from a user stop.
+          reject(abortErrorFor(input.signal));
         };
         input.signal?.addEventListener("abort", abort, { once: true });
       });
@@ -193,9 +194,8 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       try {
         const { rawText, sources } = await Promise.race([generated, stopped]);
         if (cancelled) {
-          const error = new Error("aborted");
-          error.name = "AbortError";
-          throw error;
+          // #3064: carry the abort reason (see above).
+          throw abortErrorFor(input.signal);
         }
         exit = "complete";
         return withSources({ rawText, usage: { inputTokens: 0, outputTokens: 0 } }, sources);
@@ -330,7 +330,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
           timedOut = true;
           emit({ kind: "timeout" });
           controller.abort();
-          reject(new CliChatUnavailableError("CLI structured generation timed out"));
+          reject(new CliChatUnavailableError(CLI_STRUCTURED_TIMEOUT_MESSAGE));
         }, this.timeoutMs);
       });
       try {

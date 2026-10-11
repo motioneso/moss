@@ -3,7 +3,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { emitWebVirtualModule, scanModuleWeb } from "../../packages/settings-ui/src/vite.js";
+import {
+  emitWebVirtualModule,
+  jarvisModuleWebPlugin,
+  scanModuleWeb
+} from "../../packages/settings-ui/src/vite.js";
 
 let roots: string[] = [];
 
@@ -97,6 +101,56 @@ describe("module web scanner", () => {
     ]);
     expect(result.contributions.fixture).toContain('import("@moss/fixture/web")');
     expect(result.contributions["settings-only"]).toBeUndefined();
+    expect(result.persistentControls).toEqual({});
+  });
+
+  it("discovers only explicitly exported persistent controls independently of full screens", async () => {
+    const rootDir = await makeRoot();
+    const manifest = (id: string) => `export const manifest = {
+      id: "${id}", name: "${id}", lifecycle: "user-toggleable"
+    };`;
+    await makePackage(rootDir, "screen", "@moss/screen", manifest("screen"));
+    await makePackage(rootDir, "both", "@moss/both", manifest("both"), {
+      "./web": "./src/web/index.tsx",
+      "./web/persistent-controls": "./src/web/persistent-controls.tsx"
+    });
+    await makePackage(rootDir, "controls", "@moss/controls", manifest("controls"), {
+      "./web/persistent-controls": "./src/web/persistent-controls.tsx"
+    });
+
+    const result = scanModuleWeb({ rootDir });
+    expect(Object.keys(result.contributions)).toEqual(["both", "screen"]);
+    expect(result.persistentControls).toEqual({
+      both: '() => import("@moss/both/web/persistent-controls")',
+      controls: '() => import("@moss/controls/web/persistent-controls")'
+    });
+    const source = emitWebVirtualModule(result);
+    const controlsRegistry = source.split("export const MODULE_PERSISTENT_CONTROLS =")[1];
+    expect(controlsRegistry).toContain(
+      '{ moduleId: "both", load: () => import("@moss/both/web/persistent-controls") }'
+    );
+    expect(controlsRegistry).toContain(
+      '{ moduleId: "controls", load: () => import("@moss/controls/web/persistent-controls") }'
+    );
+    expect(controlsRegistry).not.toMatch(/import\("@moss\/[^"]+\/web"\)/);
+    expect(controlsRegistry).not.toContain('"screen"');
+
+    const watched: string[] = [];
+    jarvisModuleWebPlugin({ rootDir }).load.call(
+      { addWatchFile: (file) => watched.push(file) },
+      "\0virtual:moss-module-web"
+    );
+    expect(watched).toEqual(expect.arrayContaining([...result.packageFiles]));
+  });
+
+  it("rejects a dedicated controls export without a readable module manifest", async () => {
+    const rootDir = await makeRoot();
+    await makePackage(rootDir, "controls", "@moss/controls", "export const INVALID = 42;", {
+      "./web/persistent-controls": "./src/web/persistent-controls.tsx"
+    });
+    expect(() => scanModuleWeb({ rootDir })).toThrow(
+      /persistent-controls.*manifest could not be parsed/
+    );
   });
 
   it("throws when two modules claim the same web route path", async () => {

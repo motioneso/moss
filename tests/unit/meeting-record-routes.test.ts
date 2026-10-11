@@ -34,6 +34,9 @@ function setup(
   const scopedDb = {} as DataContextDb;
   const contexts: AccessContext[] = [];
   const repository = {
+    putTitle: vi
+      .fn<MeetingRecordsRepository["putTitle"]>()
+      .mockResolvedValue({ status: "saved", meeting: record }),
     remove: vi.fn<MeetingRecordsRepository["remove"]>().mockResolvedValue(undefined),
     create: vi
       .fn<MeetingRecordsRepository["create"]>()

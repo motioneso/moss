@@ -31,7 +31,7 @@ import { MODULE_SETTINGS_SURFACES, MODULE_SETTING_KEYWORDS } from "virtual:moss-
 
 import { SettingsSearch, type SettingsSearchItem } from "./settings-search";
 
-import { getFamilyKeys, getMyModules } from "../api/client";
+import { getFamilyKeys, getModules, getMyModules } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { FeedbackProvider } from "./settings-feedback";
@@ -395,6 +395,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
     queryFn: getMyModules,
     retry: false
   });
+  const modulesQuery = useQuery({ queryKey: queryKeys.modules, queryFn: getModules, retry: false });
   const familyKeysQuery = useQuery({
     queryKey: queryKeys.ai.familyKeys,
     queryFn: getFamilyKeys,
@@ -576,17 +577,28 @@ export function SettingsPage({ me }: SettingsPageProps) {
       keywords: SECTION_KEYWORDS[section.id] ?? []
     }))
   );
+  const ownSettingsPathById = new Map(
+    (modulesQuery.data?.modules ?? []).flatMap((module) =>
+      module.settingsPath ? [[module.id, module.settingsPath] as const] : []
+    )
+  );
   const moduleSearchItems = buildModuleSettingsSearchItems(
     myModulesQuery.data?.modules ?? [],
     MODULE_SETTINGS_SURFACES,
     assistantName,
-    MODULE_SETTING_KEYWORDS
+    MODULE_SETTING_KEYWORDS,
+    new Set(ownSettingsPathById.keys())
   );
   const searchItems: SettingsSearchItem[] = [...sectionSearchItems, ...moduleSearchItems];
 
   const pickSearchResult = (id: string) => {
     if (id.startsWith(MODULE_SEARCH_ID_PREFIX)) {
       const moduleId = id.slice(MODULE_SEARCH_ID_PREFIX.length);
+      const ownPath = ownSettingsPathById.get(moduleId);
+      if (ownPath) {
+        navigate(ownPath);
+        return;
+      }
       const category = CAT_BY_ID[moduleId];
       setSearchParams(category ? { section: category } : { section: "modules", module: moduleId });
       return;

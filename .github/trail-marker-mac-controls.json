@@ -1,0 +1,458 @@
+{
+  "baseline_commit": "8dc951ae65d4a63932947ced9a2e065b688d8f24",
+  "workflow": ".github/workflows/trail-marker-mac.yml",
+  "baseline_steps": [
+    "actions/checkout@v4",
+    "Install XcodeGen",
+    "Generate Xcode project",
+    "Verify bounded audio mailbox concurrency and negative controls",
+    "Verify tap UID ownership in the installed Apple SDK",
+    "Compile Release without signing",
+    "Enable UI automation",
+    "Build and test"
+  ],
+  "native_controls": [
+    {
+      "control": "closed-callback-admission",
+      "test": "MeetingAudioBufferTests.testPauseClosesAdmissionWithoutDiscardingPrePauseAudio",
+      "assertion": "XCTAssertNil failed",
+      "script": "check-meeting-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (audio)"
+    },
+    {
+      "control": "pre-cutoff-samples-only",
+      "test": "MeetingAudioBufferTests.testPartialStopUsesOnlyWholeSamplesAtOrBeforeCutoff",
+      "assertion": "XCTAssertNil failed",
+      "script": "check-meeting-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (audio)"
+    },
+    {
+      "control": "hardware-sample-continuity",
+      "test": "MeetingAudioBufferTests.testUnknownHardwareSampleGapOrRepeatNeverBecomesInventedContinuity",
+      "assertion": "XCTAssertEqual failed",
+      "script": "check-meeting-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (audio)"
+    },
+    {
+      "control": "finite-capture-lease",
+      "test": "MeetingAudioBufferTests.testCaptureLeaseClosesAdmissionWithoutWaitingForControlThread",
+      "assertion": "XCTAssertFalse failed",
+      "script": "check-meeting-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (audio)"
+    },
+    {
+      "control": "T12-accepted-start-pill",
+      "test": "MeetingRecordingPresentationTests.testPillAndRedDotShowThroughPauseAndHideResetsOnlyAtNextStart",
+      "assertion": "XCTAssertTrue failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-paused-red-dot",
+      "test": "MeetingRecordingPresentationTests.testPillAndRedDotShowThroughPauseAndHideResetsOnlyAtNextStart",
+      "assertion": "XCTAssertTrue failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-silence-flat",
+      "test": "MeetingRecordingPresentationTests.testMeterIsFlatOnSilentMissingOrNonfiniteInputIncludingReconnect",
+      "assertion": "XCTAssertTrue failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-three-captured-bars",
+      "test": "MeetingRecordingPresentationTests.testMeterContainsOnlyThreeLatestCapturedPeaks",
+      "assertion": "XCTAssertEqual failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-pure-white-capsule",
+      "test": "MeetingRecordingPresentationTests.testRecordingPillPaletteMatchesReferenceInLightAndDarkAppearance",
+      "assertion": "XCTAssertEqualWithAccuracy failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-terminal-surfaces",
+      "test": "MeetingRecordingPresentationTests.testEveryTerminalPhaseClearsBothSurfacesAndMeter",
+      "assertion": "XCTAssertFalse failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-every-space",
+      "test": "MeetingRecordingPresentationTests.testPanelFloatsOnEverySpaceWithoutActivationOrHardware",
+      "assertion": "XCTAssertTrue failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-rendered-red-dot",
+      "test": "MeetingHostLifecycleTests.testAcceptedStartShowsPillAndDotThroughPauseThenStopClearsBoth",
+      "assertion": "XCTAssertEqual failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-hide-never-pauses",
+      "test": "MeetingHostLifecycleTests.testHideAndNativeCloseKeepCaptureRunningAndMenuRestoresPill",
+      "assertion": "XCTAssertEqual failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-show-preserves-session",
+      "test": "MeetingRecordingPresentationTests.testShowOnlyRestoresVisibilityAndNextStartResetsHide",
+      "assertion": "XCTAssertEqual failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-actual-captured-level",
+      "test": "MeetingRecordingPresentationTests.testActualCapturedPeakExpiresAndPauseNeverDisplaysRetainedAudio",
+      "assertion": "XCTAssertEqualWithAccuracy failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-paused-lease-expiry",
+      "test": "MeetingHostLifecycleTests.testLeaseExpiryClearsPausedSessionAndDropsItsRetainedAudio",
+      "assertion": "XCTAssertFalse failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T12-terminal-unsent-audio",
+      "test": "MeetingHostLifecycleTests.testEveryIdentityStopPathClearsSurfacesAndDiscardsUnsentAudio",
+      "assertion": "XCTAssertNil failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T13-logout-before-delete",
+      "test": "CompanionUnlinkTests.testLogoutMustSucceedBeforeEitherCredentialIsDeleted",
+      "assertion": "XCTAssertEqual failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T13-failed-logout-retains-keys",
+      "test": "CompanionUnlinkTests.testFailedLogoutRetainsBothCredentialsAndCanRetry",
+      "assertion": "XCTAssertNotNil failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "T13-persisted-unlink-intent",
+      "test": "CompanionUnlinkTests.testRestartKeepsPendingUnlinkAndNeverSendsHeartbeatOrStartsCapture",
+      "assertion": "XCTAssertEqual failed",
+      "script": "check-meeting-link-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (visibility-and-unlink)"
+    },
+    {
+      "control": "resume-source-change-pauses-accepted-intent",
+      "test": "MeetingHostLifecycleTests.testSourceChangePausesAnAlreadyAcceptedResumeWithLostReply",
+      "assertion": "An accepted Resume must be followed by Pause after source change",
+      "script": "check-meeting-resume-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (resume)"
+    },
+    {
+      "control": "resume-rejection-preserves-newer-stop",
+      "test": "MeetingControlOutboxTests.testDefinitiveResumeRejectionClearsOnlyThatIntentAndNeverStop",
+      "assertion": "A stale Resume rejection must preserve Stop",
+      "script": "check-meeting-resume-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (resume)"
+    },
+    {
+      "control": "resume-source-change-cancels-intent",
+      "test": "MeetingHostLifecycleTests.testSourceChangeCancelsQueuedResumeAndRequiresNewClick",
+      "assertion": "Source change must cancel queued Resume before transport",
+      "script": "check-meeting-resume-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (resume)"
+    },
+    {
+      "control": "resume-definitive-rejection-requires-click",
+      "test": "MeetingHostLifecycleTests.testRejectedResumeRequiresAnotherExplicitClickInsteadOfRetryingLater",
+      "assertion": "Definitive rejection must clear Resume intent",
+      "script": "check-meeting-resume-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (resume)"
+    },
+    {
+      "control": "resume-status-applies-recording-fence",
+      "test": "MeetingHostLifecycleTests.testNativeResumeWaitsForAuthoritativeStatusAndPreservesPausedObservation",
+      "assertion": "Authoritative status must open exactly one resumed epoch",
+      "script": "check-meeting-resume-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (resume)"
+    },
+    {
+      "control": "resume-previous-paused-observation",
+      "test": "MeetingHostLifecycleTests.testNativeResumeWaitsForAuthoritativeStatusAndPreservesPausedObservation",
+      "assertion": "Resume must preserve the previous-generation paused observation",
+      "script": "check-meeting-resume-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (resume)"
+    },
+    {
+      "control": "resume-disabled-unconfirmed-pause",
+      "test": "MeetingHostLifecycleTests.testNativeResumeWaitsForAuthoritativeStatusAndPreservesPausedObservation",
+      "assertion": "Resume is disabled until server Pause acknowledgment",
+      "script": "check-meeting-resume-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (resume)"
+    },
+    {
+      "control": "resume-queued-stop-dominance",
+      "test": "MeetingHostLifecycleTests.testStopCancelsQueuedResumeBeforeTransportAndKeepsHardwareClosed",
+      "assertion": "Stop must cancel queued Resume before transport",
+      "script": "check-meeting-resume-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (resume)"
+    },
+    {
+      "control": "resume-no-newer-authority-rebase",
+      "test": "MeetingControlOutboxTests.testResumeNeverRebasesAcrossNewerPauseStopOrSource",
+      "assertion": "Newer authority must cancel Resume instead of minting another request",
+      "script": "check-meeting-resume-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (resume)"
+    },
+    {
+      "control": "resume-pause-intent-dominance",
+      "test": "MeetingControlOutboxTests.testPendingPauseOrStopCannotBeOverriddenByResume",
+      "assertion": "Resume must not override pending Pause or Stop",
+      "script": "check-meeting-resume-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (resume)"
+    },
+    {
+      "control": "source-synchronous-old-device-close",
+      "test": "MeetingSourceSelectionTests.testLiveSourceChangeClosesOldReceiverBeforeControlAndWaitsForExactStatus",
+      "assertion": "Old device must close before source control transport",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-control-ack-keeps-hardware-closed",
+      "test": "MeetingSourceSelectionTests.testLiveSourceChangeClosesOldReceiverBeforeControlAndWaitsForExactStatus",
+      "assertion": "Control acknowledgment alone must never open replacement hardware",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-previous-paused-observation",
+      "test": "MeetingSourceSelectionTests.testLiveSourceChangeClosesOldReceiverBeforeControlAndWaitsForExactStatus",
+      "assertion": "Source change keeps the previous-generation paused observation",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-exact-control-acknowledgment",
+      "test": "MeetingSourceSelectionTests.testMismatchedSourceControlAcknowledgmentNeverReopensHardware",
+      "assertion": "Mismatched source control acknowledgment must reject the intent",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-exact-status-acknowledgment",
+      "test": "MeetingSourceSelectionTests.testMismatchedSourceStatusAcknowledgmentNeverReopensHardware",
+      "assertion": "Mismatched source status acknowledgment must reject the intent",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-status-revision-fence",
+      "test": "MeetingSourceSelectionTests.testOlderStatusResponseCannotUndoSourceAcknowledgmentOrOpenOldDevice",
+      "assertion": "Pre-cutover status must preserve the newer source intent",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-pending-control-suppresses-status",
+      "test": "MeetingSourceSelectionTests.testLostSourceReplyRetriesIdenticalIntentAndSuppressesPausedStatus",
+      "assertion": "No ordinary paused status while source outcome is pending",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-replacement-upload-acknowledgment",
+      "test": "MeetingSourceSelectionTests.testLiveSourceChangeClosesOldReceiverBeforeControlAndWaitsForExactStatus",
+      "assertion": "Replacement uploads wait for exact recording-epoch acknowledgment",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-queued-stop-dominance",
+      "test": "MeetingSourceSelectionTests.testStopCancelsQueuedSourceChangeBeforeTransportAndCannotReopen",
+      "assertion": "Stop must cancel queued source change before transport",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-cleanup-failure-stop-recovery",
+      "test": "MeetingSourceSelectionTests.testCleanupFailureKeepsStopRecoveryAndSendsNoSourceChange",
+      "assertion": "Source cleanup failure must preserve Stop recovery",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-cleanup-failure-blocks-control",
+      "test": "MeetingSourceSelectionTests.testCleanupFailureKeepsStopRecoveryAndSendsNoSourceChange",
+      "assertion": "Cleanup failure must never send a source control",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-teardown-cancels-intent",
+      "test": "MeetingSourceSelectionTests.testUnlinkAndLeaseExpiryCancelPendingSourceIntent",
+      "assertion": "Unlink and lease expiry must cancel the source intent",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-system-only-skips-microphone-permission",
+      "test": "MeetingSourceSelectionTests.testSystemOnlyStartNeverRequestsMicrophonePermissionOrCreatesMicrophone",
+      "assertion": "System-only capture must not consult microphone permission",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-pause-gap-authoritative-boundary",
+      "test": "MeetingSourceSelectionTests.testNormalResumeSplitsPauseGapAtAuthoritativeEpochStart",
+      "assertion": "Resume must end the old pause gap at the authoritative epoch start",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "source-lost-ack-stop-reconciles-gap-boundary",
+      "test": "MeetingSourceSelectionTests.testStopAfterLostSourceReplySplitsQueuedGapBeforeStatus",
+      "assertion": "Lost source acknowledgment Stop must never report a gap across epochs",
+      "script": "check-meeting-source-negative-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (source-selection)"
+    },
+    {
+      "control": "T13-approved-recovery-policy",
+      "test": "RecordingCapabilityRecoveryTests.testApprovedStatusRejectsInvalidPolicyOrRevisionWithoutReplacingCandidate",
+      "assertion": "XCTAssertTrue failed",
+      "script": "check-meeting-single-link-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (recovery)"
+    },
+    {
+      "control": "T13-approved-recovery-revision",
+      "test": "RecordingCapabilityRecoveryTests.testApprovedStatusRejectsInvalidPolicyOrRevisionWithoutReplacingCandidate",
+      "assertion": "XCTAssertTrue failed",
+      "script": "check-meeting-single-link-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (recovery)"
+    },
+    {
+      "control": "T13-cancelled-recovery-inert",
+      "test": "RecordingCapabilityRecoveryTests.testCancelledRecoveryIgnoresLateApprovalOrExpiry",
+      "assertion": "XCTAssertEqual failed",
+      "script": "check-meeting-single-link-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (recovery)"
+    },
+    {
+      "control": "T13-disconnected-recovery-inert",
+      "test": "RecordingCapabilityRecoveryTests.testDisconnectedRuntimeIgnoresLateApproval",
+      "assertion": "XCTAssertEqual failed",
+      "script": "check-meeting-single-link-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (recovery)"
+    },
+    {
+      "control": "T13-approved-recovery-same-proof",
+      "test": "RecordingCapabilityRecoveryTests.testLostApprovalResponseThenOfflineBeyondAttemptDeadlineRecoversSameProof",
+      "assertion": "XCTAssertEqual failed",
+      "script": "check-meeting-single-link-controls.py",
+      "before_job": "test",
+      "after_job": "negative-controls (recovery)"
+    }
+  ],
+  "portable_controls": [
+    {
+      "control": "level-silence-publication",
+      "before_job": "test",
+      "after_job": "baseline"
+    },
+    {
+      "control": "level-staleness",
+      "before_job": "test",
+      "after_job": "baseline"
+    },
+    {
+      "control": "level-clock-rollback",
+      "before_job": "test",
+      "after_job": "baseline"
+    },
+    {
+      "control": "level-captured-amplitude",
+      "before_job": "test",
+      "after_job": "baseline"
+    },
+    {
+      "control": "unpublished-drop",
+      "before_job": "test",
+      "after_job": "baseline"
+    },
+    {
+      "control": "silent-capacity-overflow",
+      "before_job": "test",
+      "after_job": "baseline"
+    },
+    {
+      "control": "reversed-sample-order",
+      "before_job": "test",
+      "after_job": "baseline"
+    }
+  ],
+  "implicit_checks": {
+    "backtrack_source_check_and_seven_planted_violations": "Unchanged project.yml TrailMarkerTests preBuildScripts; baseline plus each matrix positive and targeted test build",
+    "all_unit_and_ui_tests": "Unchanged scheme, test sources and unfiltered xcodebuild test invocation in baseline and every matrix warm-up",
+    "other_workflows": "No other workflow modified; proxy transport, link security/revocation and other checks retain their existing triggers and commands"
+  }
+}

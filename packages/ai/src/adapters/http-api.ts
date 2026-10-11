@@ -6,6 +6,8 @@
 
 import type { ChatSource, GenerateChatInput, ChatProviderAdapter } from "../chat-adapter.js";
 import {
+  abortErrorFor,
+  isGateTimeoutAbort,
   modelActivityAction,
   modelActivityStructuredCode,
   recordModelActivity,
@@ -25,6 +27,7 @@ import {
   type TranscribeAudioResult
 } from "./http-api-transcription.js";
 import type { ProviderKind } from "./transcript-reader.js";
+import { transcriptionHttpFailure } from "../transcription-errors.js";
 
 // ---------------------------------------------------------------------------
 // HttpApiAdapter
@@ -113,22 +116,30 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         ...(input.parentId ? { parentId: input.parentId } : {})
       },
       async () => {
-        const request = buildStructuredRequest(
-          this.providerKind,
-          this.apiKey,
-          this._baseUrl ?? null,
-          input
-        );
-        const response = await this._fetch(request.url, {
-          method: "POST",
-          headers: request.headers,
-          body: JSON.stringify(request.body),
-          signal: input.signal
-        });
-        if (!response.ok) {
-          throw new Error(`AI provider request failed: HTTP ${response.status}`);
+        try {
+          const request = buildStructuredRequest(
+            this.providerKind,
+            this.apiKey,
+            this._baseUrl ?? null,
+            input
+          );
+          const response = await this._fetch(request.url, {
+            method: "POST",
+            headers: request.headers,
+            body: JSON.stringify(request.body),
+            signal: input.signal
+          });
+          if (!response.ok) {
+            throw new Error(`AI provider request failed: HTTP ${response.status}`);
+          }
+          return extractStructuredResult(this.providerKind, await response.json());
+        } catch (error) {
+          // #3064: fetch rejects with a bare abort error that drops the signal's reason.
+          // Hand the gate's reason to the recorder skip below; anything else rethrows
+          // untouched. Upstream only checks the abort shape, which this keeps.
+          if (isGateTimeoutAbort(input.signal)) throw abortErrorFor(input.signal);
+          throw error;
         }
-        return extractStructuredResult(this.providerKind, await response.json());
       },
       { usageOf: structuredUsageOrUndefined }
     );
@@ -151,7 +162,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         kind: "transcription",
         action: "transcription",
         modelName: input.model.provider_model_id,
-        actionCode: "transcribe.voice_note",
+        actionCode: input.actionCode ?? "transcribe.voice_note",
         ...(input.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
         ...(input.turnId ? { turnId: input.turnId } : {}),
         ...(input.parentId ? { parentId: input.parentId } : {})
@@ -181,8 +192,8 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         rejectAbortedTranscription(response, input.signal);
         if (!response.ok) {
           void response.body?.cancel().catch(() => undefined);
-          // Never include the API key in error messages (security invariant)
-          throw new Error(`HTTP ${response.status}`);
+          // Keep only allow-listed status/retry facts, never the provider response body.
+          throw transcriptionHttpFailure(response);
         }
 
         if (input.timestamps === "segment") {

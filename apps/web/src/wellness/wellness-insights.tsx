@@ -1,25 +1,8 @@
+import { Button, SectionHead } from "@moss/ui";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "../api/query-keys";
 import { getWellnessInsights } from "../api/client";
 
-function MossMarkIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="3" />
-      <path d="M3 12h6" />
-      <path d="M15 12h6" />
-    </svg>
-  );
-}
 function ActivityIcon() {
   return (
     <svg
@@ -157,21 +140,22 @@ export function WellnessInsights({ onReviewNotes }: Props) {
 
   return (
     <div className="wl-insights">
-      <div className="wl-insights__hd">
-        <span className="ic">
-          <MossMarkIcon />
-        </span>
-        <span className="t">What this month is telling you</span>
-        <span className="meta">30 days</span>
-      </div>
+      <SectionHead number="02" title="What this month is telling you" meta="30 days" />
       <div className="wl-insights__body">
         {insightsQuery.isLoading ? (
           <div className="wl-insight" style={{ padding: "16px 0" }}>
-            <span className="wl-subtle-text">Loading insights&hellip;</span>
+            <span className="wl-subtle-text" role="status">
+              Loading insights&hellip;
+            </span>
           </div>
         ) : insightsQuery.isError ? (
           <div className="wl-insight">
-            <span className="wl-subtle-text">Couldn&apos;t load insights. Try refreshing.</span>
+            <span className="wl-subtle-text" role="status">
+              Couldn&apos;t load insights.{" "}
+              <Button variant="link" onClick={() => void insightsQuery.refetch()}>
+                Try again
+              </Button>
+            </span>
           </div>
         ) : insights.length === 0 ? (
           <div className="wl-insight" style={{ padding: "16px 0" }}>
@@ -192,12 +176,12 @@ export function WellnessInsights({ onReviewNotes }: Props) {
                 </div>
                 {it.action === "review-notes" ? (
                   <div className="wl-insight__act">
-                    <button type="button" className="wl-linkbtn" onClick={onReviewNotes}>
+                    <Button variant="link" onClick={onReviewNotes}>
                       Review those notes
                       <span className="ic">
                         <ArrowRightIcon />
                       </span>
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
               </div>

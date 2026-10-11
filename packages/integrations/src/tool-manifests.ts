@@ -339,6 +339,8 @@ function buildToolManifest(
     risk: "outbound",
     executionPolicy: "auto",
     isExternal: true,
+    // Only the stored connection owner supplies descriptor authority; remote tool fields do not.
+    descriptorOwnerUserId: conn.ownerUserId,
     externalContent: true,
     runsWithoutAsking,
     inputSchema: tool.inputSchema ?? { type: "object", properties: {} },

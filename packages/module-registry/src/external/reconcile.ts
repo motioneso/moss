@@ -23,6 +23,9 @@ export function reconcileExternalModules(
     const { id, manifest, packageHash } = discovery;
     const base = {
       id,
+      manifestHash: discovery.manifestHash,
+      packageHash,
+      descriptorApprovedByUserId: null,
       name: manifest.name,
       version: manifest.version,
       publisher: manifest.publisher,
@@ -33,7 +36,11 @@ export function reconcileExternalModules(
       // #1725: same default-to-[] reasoning as navigation above — the preferences route
       // and the settings pane can then treat "declares none" and "declares an empty list"
       // identically without an undefined check.
-      preferences: manifest.preferences ?? []
+      preferences: manifest.preferences ?? [],
+      // #3184: absent means the gear and Settings use the host-rendered page.
+      ...(manifest.settingsPath ? { settingsPath: manifest.settingsPath } : {}),
+      // #3168: absent means the module adds nothing to the app map.
+      ...(manifest.appMap ? { appMap: manifest.appMap } : {})
     };
     const row = rowsById.get(id);
 
@@ -83,6 +90,10 @@ export function reconcileExternalModules(
       modules.push({
         ...base,
         status: "enabled",
+        descriptorApprovedByUserId:
+          row.manifestHash === discovery.manifestHash
+            ? (row.descriptorApprovedByUserId ?? null)
+            : null,
         active: true,
         drifted: false,
         disabledReason: null,

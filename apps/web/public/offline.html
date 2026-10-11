@@ -3,45 +3,63 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f766e" />
+    <meta name="theme-color" content="#294b39" />
     <title>Moss Offline</title>
     <style>
+      /* Offline-safe snapshot of the default Park Press tokens. No stylesheet or
+         font request is required. OS dark mode is the deliberate offline fallback;
+         account-specific themes resume once the application can load again. */
       :root {
-        color: #172026;
-        background: #f7f8fa;
-        font-family:
-          Inter,
-          ui-sans-serif,
-          system-ui,
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          sans-serif;
+        --paper: #f2eee4;
+        --surface: #faf8f1;
+        --text: #282c25;
+        --text-muted: #676c60;
+        --border: #c6cbbc;
+        --accent: #294b39;
+        --font-sans: "Helvetica Neue", Helvetica, system-ui, sans-serif;
+        --font-display: "Archivo", var(--font-sans);
+        color-scheme: light dark;
+        color: var(--text);
+        background: var(--paper);
+        font-family: var(--font-sans);
       }
-
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #1c1a16;
+          --surface: #232019;
+          --text: #ece7dc;
+          --text-muted: #b7b1a2;
+          --border: rgba(255, 255, 255, 0.08);
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
       body {
         min-height: 100vh;
         margin: 0;
+        padding: 24px 16px;
         display: grid;
         place-items: center;
       }
-
       main {
-        width: min(28rem, calc(100vw - 2rem));
-        border: 1px solid #d9dee3;
-        border-radius: 8px;
-        background: #ffffff;
-        padding: 1.5rem;
+        width: min(28rem, 100%);
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        padding: 32px 0;
       }
-
       h1 {
-        margin: 0 0 0.5rem;
-        font-size: 1.25rem;
+        margin: 0 0 12px;
+        font-family: var(--font-display);
+        font-size: 30px;
+        font-weight: 900;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
       }
-
       p {
         margin: 0;
-        color: #5d6874;
+        color: var(--text-muted);
+        font-size: 15px;
         line-height: 1.5;
       }
     </style>

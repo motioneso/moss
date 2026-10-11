@@ -61,7 +61,7 @@ export function validatedNewsImageType(
   return null;
 }
 
-function currentImageArticle(
+export function currentImageArticle(
   snapshot: NewsSnapshotRecord | null,
   articleId: string,
   now: Date

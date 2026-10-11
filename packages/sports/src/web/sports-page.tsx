@@ -7,6 +7,7 @@ import "./styles/sports-8-clippings.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button, ButtonLink, IconButton } from "@moss/ui";
 import type {
   AmbiguousFollowedTeamRef,
   GamedayGame,
@@ -152,10 +153,13 @@ export function SportsPage() {
         <PageHeader />
         {overviewQuery.isError ? (
           <p className="sp-lede" role="status">
-            Sports are unavailable right now.
+            Sports are unavailable right now.{" "}
+            <Button variant="link" onClick={() => void overviewQuery.refetch()}>
+              Try again
+            </Button>
           </p>
         ) : (
-          <SportsSkeleton />
+          <SportsLoading />
         )}
       </div>
     );
@@ -181,6 +185,14 @@ export function SportsPage() {
       {/* The masthead names whichever game is showing, so tabbing to the second live match
           retitles the page with it rather than leaving the header on the lead game. */}
       <PageHeader game={activeGame?.game ?? null} />
+      {overviewQuery.isError ? (
+        <p className="sp-lede" role="status">
+          Could not refresh sports. Showing the last loaded scores and stories.{" "}
+          <Button variant="link" onClick={() => void overviewQuery.refetch()}>
+            Try again
+          </Button>
+        </p>
+      ) : null}
 
       <AmbiguousFollowNotice follows={data.ambiguousFollows} />
 
@@ -271,43 +283,19 @@ function eventTitle(game: GameSummary): string {
 // nyt_style_sports_mockup layout in sans).
 function PageHeader(props: { game?: GameSummary | null }) {
   const game = props.game ?? null;
+  if (!game) return null;
   return (
     <header className="sp-mast">
-      {/* Folio cleared (Ben 2026-07-07, /sports masthead note): the date line, the "The Sports
-          Desk" nameplate, and the Manage link are all removed from the masthead. The app topbar
-          already titles the page "Sports", so the page isn't left untitled; the followed-teams
-          label + Manage now live on the ticker head below (see SportsTicker). The section-nav bar
-          becomes the masthead's leading element. Reverses the folio build (mrb8p4e2/mrba9d2y). */}
-      {/* PREVIEW ONLY (mrbafoxu) — sport-section nav in the band between the folio rule and the
-          masthead's base rule. Ben asked to see the look now; the real links to sport-specific
-          pages are a future story that needs its own task issue + spec before routing/wiring, so
-          these are inert spans (not anchors) — appearance only, nothing navigates yet. */}
-      <nav className="sp-mast__nav" aria-label="Sports sections (preview)">
-        {["Soccer", "Hockey", "Football", "Baseball", "Basketball"].map((sport) => (
-          <span className="sp-mast__navlink" key={sport}>
-            {sport}
-          </span>
-        ))}
-        {/* "More" catch-all (mrbakozc) — the way into sports outside the followed set, so a user
-            can reach whatever sports news they want. Still inert preview; destination TBD. */}
-        <span className="sp-mast__navlink sp-mast__navlink--more">More</span>
-      </nav>
       {game ? <p className="sp-mast__event">{eventTitle(game)}</p> : null}
     </header>
   );
 }
 
-// Cold-load placeholder while the first overview fetch is in flight — matches the shapes of
-// the sections it stands in for so nothing jumps around once real data lands (#765 M2).
-function SportsSkeleton() {
+function SportsLoading() {
   return (
-    <div className="sp-skeleton" role="status" aria-label="Loading your teams">
-      {/* The around-strip skeleton row left with the strip itself (mrb4w77y — strip hidden,
-          its slate now loads inside the grid block below). */}
-      <div className="sp-skel sp-skel--ticker" aria-hidden="true" />
-      <div className="sp-skel sp-skel--hero" aria-hidden="true" />
-      <div className="sp-skel sp-skel--grid" aria-hidden="true" />
-    </div>
+    <p className="sp-lede" role="status">
+      Loading your teams…
+    </p>
   );
 }
 
@@ -374,7 +362,7 @@ function FeaturedStoryBand(props: { story: Headline; onStoryChanged: StoryFeedba
   const { story } = props;
   const [broken, setBroken] = useState(false);
   return (
-    <div className="sp-scorebar__storywrap sp-fbhost">
+    <div className="sp-fbhost">
       <a className="sp-scorebar__story" href={story.url} target="_blank" rel="noreferrer">
         {story.imageUrl && !broken ? (
           <img
@@ -440,12 +428,7 @@ function GamedayHero(props: {
   }
 
   return (
-    <section
-      className="sp-gameday"
-      aria-label="Today's games"
-      aria-roledescription="carousel"
-      {...pauseHandlers}
-    >
+    <section aria-label="Today's games" aria-roledescription="carousel" {...pauseHandlers}>
       <div className="sp-gameday__stage">
         {games.map((entry) => (
           <div
@@ -483,22 +466,12 @@ function GamedayHero(props: {
             />
           ))}
         </div>
-        <button
-          type="button"
-          className="sp-gameday__nav"
-          aria-label="Previous game"
-          onClick={() => step(-1)}
-        >
+        <IconButton size="sm" aria-label="Previous game" onClick={() => step(-1)}>
           <ChevronLeft size={16} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="sp-gameday__nav"
-          aria-label="Next game"
-          onClick={() => step(1)}
-        >
+        </IconButton>
+        <IconButton size="sm" aria-label="Next game" onClick={() => step(1)}>
           <ChevronRight size={16} aria-hidden="true" />
-        </button>
+        </IconButton>
       </div>
     </section>
   );
@@ -541,9 +514,7 @@ function GamedayTab(props: {
       {game.state === "live" ? <LiveDot /> : null}
       {/* Built as one string rather than interpolated children: JSX would split this into
           separate text nodes, which reads as "WAS at PHI" but isn't one selectable label. */}
-      <span className="sp-gameday__tabteams">
-        {`${left.shortName} ${soccer ? "v" : "at"} ${right.shortName}`}
-      </span>
+      <span>{`${left.shortName} ${soccer ? "v" : "at"} ${right.shortName}`}</span>
       {scored ? (
         <span className="sp-gameday__tabscore">{`${left.score ?? 0}–${right.score ?? 0}`}</span>
       ) : null}
@@ -592,7 +563,9 @@ function ScoreBarSide(props: { side: GameSide; competitionKey: string; edge: "l"
   const color = teamBarColor(props.competitionKey, side.teamKey);
   return (
     <div
-      className={`sp-scorebar__side sp-scorebar__side--${edge}`}
+      role="group"
+      aria-label={side.name}
+      className={`sp-scorebar__side${edge === "r" ? " sp-scorebar__side--r" : ""}`}
       style={color ? { background: color.bg, color: color.fg } : undefined}
     >
       {side.crestUrl ? (
@@ -724,9 +697,8 @@ function AmbiguousFollowChoice(props: { follow: AmbiguousFollowedTeamRef }) {
         {`We saved a team called ${savedName} before teams were pinned to a permanent number. Pick the right one and it comes straight back; until then its scores and standings are on hold.`}
       </p>
       {follow.candidates.map((candidate) => (
-        <button
-          className="sp-nofollow__btn"
-          type="button"
+        <Button
+          variant="secondary"
           key={candidate.sourceTeamId}
           disabled={saving !== null}
           onClick={() => {
@@ -734,7 +706,7 @@ function AmbiguousFollowChoice(props: { follow: AmbiguousFollowedTeamRef }) {
           }}
         >
           {saving === candidate.sourceTeamId ? `Saving ${candidate.name}...` : candidate.name}
-        </button>
+        </Button>
       ))}
       {error === null ? null : <p className="sp-empty__lede">{error}</p>}
     </div>
@@ -765,9 +737,9 @@ function EmptyState(props: {
             Pick the teams and competitions you care about — this page fills with their scores,
             results, and headlines.
           </p>
-          <a className="sp-nofollow__btn" href={SETTINGS_HREF}>
+          <ButtonLink variant="secondary" href={SETTINGS_HREF}>
             Choose teams to follow
-          </a>
+          </ButtonLink>
         </div>
       </section>
       {hasSlate ? (

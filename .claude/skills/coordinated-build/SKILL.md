@@ -1,6 +1,6 @@
 ---
 name: coordinated-build
-description: Use when you are a BUILD AGENT spawned by a dev coordinator to implement one approved spec in your own worktree/branch. Derived from the `start` skill but adapted for coordination mode — plan approval comes from the COORDINATOR (not a human gate), you escalate via herdr-pane-message, you self-monitor context, and you never touch the board/milestone/merge. Triggered by your handoff doc.
+description: Use when you are a BUILD AGENT spawned by a dev coordinator to implement one approved spec in your own worktree/branch. Plan approval comes from the COORDINATOR (not a human gate), you escalate via herdr-pane-message, you self-monitor context, and you never touch the board/milestone/merge. Triggered by your handoff doc.
 ---
 
 # coordinated-build — implement one spec under a coordinator
@@ -9,9 +9,8 @@ description: Use when you are a BUILD AGENT spawned by a dev coordinator to impl
 
 You were spawned by a **coordinator** with a committed **handoff doc** and an **approved spec**.
 Your job: take that spec from plan → build → PR, escalating to the coordinator at each gate.
-This is the `start` skill's plan+build stages adapted for coordination mode.
 
-**Key differences from stock `start`:**
+**How coordination mode works:**
 - The plan approval gate is the **coordinator**, not a human. You message it and wait.
 - You **escalate** blockers / forks / reviews / done to the coordinator's unique Herdr agent name
   (normally the registered name `coordinator`, with visible pane label `Coordinator`) via
@@ -178,5 +177,5 @@ status: **code-complete, unverified**. Full rule: `docs/DEVELOPMENT_STANDARDS.md
   host (though you have your own worktree, keep the habit).
 - **Doing the coordinator's closeout.** PR + report is your finish line; merge/board/milestone are not.
 
-See also: `plan-build` (your planning skill), `start` (the stock lifecycle this adapts),
+See also: `plan-build` (your planning skill),
 `coordinated-wrap-up`, `relay`, `herdr-pane-message`, and CLAUDE.md (Hard Invariants, recalls).

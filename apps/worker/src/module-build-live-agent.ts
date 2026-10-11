@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { recordModelActivity } from "@moss/ai";
 import type { ModuleBuildStep, Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
@@ -28,7 +29,28 @@ export interface ModuleBuildLiveAgentDeps {
 const STEP_TIMEOUT_MS = 30 * 60 * 1000;
 const STEP_POLL_MS = 1000;
 const READY_TIMEOUT_MS = 30 * 1000;
-const WORKSPACE_ROOT = join(import.meta.dirname, "../../..");
+const BUILD_SCRIPT = join("scripts", "build-external-module.ts");
+
+/**
+ * Walks up from `startDir` to the directory holding the module build script. The worker runs from
+ * `apps/worker/src` in source mode and from `<root>/dist` in the production bundle.
+ */
+export function resolveWorkspaceRoot(
+  startDir: string,
+  exists: (path: string) => boolean = existsSync
+): string {
+  for (let dir = startDir; ; dir = dirname(dir)) {
+    if (exists(join(dir, BUILD_SCRIPT))) return dir;
+    if (dirname(dir) === dir) throw new Error(`Cannot find the workspace root from ${startDir}`);
+  }
+}
+
+const CLAUDE_SESSION_FILES = [
+  ".jarvis-claude-permission-hook.mjs",
+  ".jarvis-claude-settings.json",
+  ".jarvis-claude-permission-token",
+  ".jarvis-claude-mcp.json"
+];
 
 export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
   return async (input: {
@@ -73,20 +95,21 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
       executionMode: "interactive",
       codexTokenEnvPath: null
     };
-    const launchLine = await buildLaunchCommand(
-      commandContext,
-      launchOptions,
-      sessionId,
-      personaPath
-    );
-    const handle = await deps.mux.open({
-      name: `jarvis-module-build-${sessionId}`,
-      cols: 220,
-      rows: 50,
-      launchLine
-    });
-
+    let handle: string | undefined;
     try {
+      const launchLine = await buildLaunchCommand(
+        commandContext,
+        launchOptions,
+        sessionId,
+        personaPath
+      );
+      handle = await deps.mux.open({
+        name: `jarvis-module-build-${sessionId}`,
+        cols: 220,
+        rows: 50,
+        launchLine
+      });
+
       const readyDeadline = Date.now() + READY_TIMEOUT_MS;
       while (!isComposerEmpty(deps.provider, await deps.mux.capturePane(handle))) {
         if (!(await deps.mux.isAlive(handle)) || Date.now() >= readyDeadline) {
@@ -119,7 +142,7 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
         const built = await deps.io.run(
           "pnpm",
           ["exec", "tsx", "scripts/build-external-module.ts", input.workingDir],
-          { cwd: WORKSPACE_ROOT }
+          { cwd: resolveWorkspaceRoot(import.meta.dirname) }
         );
         if (built.code !== 0) {
           throw new Error(`generated module did not build: ${built.stderr ?? "unknown error"}`);
@@ -133,8 +156,7 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
       const internalFiles = new Set([
         completionMarker,
         ".module-build-persona.md",
-        ".jarvis-claude-permission-hook.mjs",
-        ".jarvis-claude-settings.json"
+        ...CLAUDE_SESSION_FILES
       ]);
       const wroteFiles = listed.stdout
         .split("\n")
@@ -146,9 +168,24 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
       recordBuildTurn(deps, input.step, "error");
       throw error;
     } finally {
-      await deps.mux.kill(handle);
+      try {
+        if (handle !== undefined) await deps.mux.kill(handle);
+      } finally {
+        // finishBuild stages the whole directory. Never return it with a live session token.
+        if (deps.provider === "anthropic" && deps.mcpToken && deps.mcpServerUrl) {
+          await removeClaudeSessionFiles(deps.io, input.workingDir);
+        }
+      }
     }
   };
+}
+
+async function removeClaudeSessionFiles(io: TmuxIo, workingDir: string): Promise<void> {
+  const cleanup = await io.run("rm", [
+    "-f",
+    ...CLAUDE_SESSION_FILES.map((file) => join(workingDir, file))
+  ]);
+  if (cleanup.code !== 0) throw new Error("module build session files could not be removed");
 }
 
 /**

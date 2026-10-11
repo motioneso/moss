@@ -5,6 +5,7 @@ import type {
   AiModelTier,
   AiProviderDiscoveredModelDto
 } from "@moss/shared";
+import { CLOUDFLARE_DECISION_MODELS, decisionModelDialect } from "@moss/shared";
 import type { AiAuthMethod, AiProviderKind } from "@moss/db";
 
 const CACHE_TTL_MS = 3_600_000; // 1 hour
@@ -150,6 +151,16 @@ async function fetchApiKeyModels(input: ModelDiscoveryInput): Promise<{
 }> {
   const apiKey = readApiKey(input.credential);
   if (!apiKey) return { models: [] };
+
+  // #3057: Cloudflare's decision-model endpoint has no models list. Its preset is the fixed Clef
+  // family, so discovery answers from the catalog with no network call.
+  if (input.providerKind === "system-one" && decisionModelDialect(input.baseUrl) === "cloudflare") {
+    return {
+      models: CLOUDFLARE_DECISION_MODELS.map((id) => inferModel(id, "system-one")).filter(
+        (model): model is AiProviderDiscoveredModelDto => model !== null
+      )
+    };
+  }
 
   let response: Response;
   try {

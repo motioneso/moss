@@ -38,6 +38,33 @@ function mcpTool(name: string): DiscoveredTool {
 }
 
 describe("toDetail derived groups", () => {
+  it("projects public descriptors without host ownership or invocation metadata", () => {
+    const discovered = {
+      ...mcpTool("read_widgets"),
+      readOnly: true,
+      idempotent: false,
+      destructive: false,
+      descriptorOwnerUserId: "spoofed-owner",
+      isExternal: false,
+      externalContent: false,
+      invoke: { method: "GET", path: "/widgets", params: [], hasBody: false }
+    };
+    const row = connection({ discoveredTools: [discovered] });
+
+    const detail = toDetail(row, row.discoveredTools);
+
+    expect(detail.tools).toEqual([
+      {
+        ...mcpTool("read_widgets"),
+        readOnly: true,
+        idempotent: false,
+        destructive: false
+      }
+    ]);
+    expect(detail).not.toHaveProperty("descriptorOwnerUserId");
+    expect(detail).not.toHaveProperty("ownerUserId");
+  });
+
   it("over-threshold MCP tools (blank groups) get derived groups in the response, with Other last and tool names unchanged", () => {
     const lightActions = ["TurnOn", "TurnOff", "SetBrightness", "SetColor", "SetTemp"];
     const fanActions = ["TurnOn", "TurnOff", "SetSpeed", "Oscillate", "Reset"];

@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { RecordingCapabilityError } from "./recording-capabilities.js";
 
 import {
   COMPANION_APPROVAL_PATH,
@@ -56,6 +57,8 @@ export interface CompanionPairingService {
     approvalCode: string;
     decision: "approve" | "deny";
     actorUserId: string;
+    browserSessionId?: string;
+    recordingPolicyVersion?: 1;
   }): Promise<DecidePairAttemptResult>;
   redeem(input: RedeemPairAttemptRequest): Promise<RedeemResult>;
   cancel(input: RedeemPairAttemptRequest): Promise<void>;
@@ -73,6 +76,7 @@ interface AttemptRow {
   readonly status: "pending" | "approved" | "denied" | "redeemed";
   readonly user_id: string | null;
   readonly expires_at: Date;
+  readonly recording_policy_version?: number | null;
 }
 
 export function createCompanionPairingService(deps: PairingDeps): CompanionPairingService {
@@ -85,6 +89,12 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
 
   return {
     async create(input) {
+      if (
+        (input.recordingProofHash === undefined) !== (input.recordingPolicyVersion === undefined) ||
+        (input.recordingProofHash !== undefined &&
+          (!/^[a-f0-9]{64}$/.test(input.recordingProofHash) || input.recordingPolicyVersion !== 1))
+      )
+        throw new RecordingCapabilityError(400);
       // Lazy cleanup on the one endpoint an attacker cannot call for free: no scheduler,
       // and an abandoned attempt never outlives its window.
       await purgeExpired();
@@ -95,8 +105,8 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
       const result = await pool.query<{ id: string }>(
         `INSERT INTO app.companion_pair_attempts
            (approval_code_hash, verifier_hash, device_name, platform, app_version, os_version,
-            status, created_at, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8)
+            status, created_at, expires_at, recording_proof_hash, recording_policy_version)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10)
          RETURNING id`,
         [
           sha256Base64url(approvalCode),
@@ -106,7 +116,9 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
           input.appVersion,
           input.osVersion,
           now(),
-          expiresAt
+          expiresAt,
+          input.recordingProofHash ?? null,
+          input.recordingPolicyVersion ?? null
         ]
       );
 
@@ -126,7 +138,7 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
 
     async summarize({ approvalCode }) {
       const result = await pool.query<AttemptRow>(
-        `SELECT id, device_name, status, user_id, expires_at
+        `SELECT id, device_name, status, user_id, expires_at, recording_policy_version
            FROM app.companion_pair_attempts
           WHERE approval_code_hash = $1 AND expires_at > $2`,
         [sha256Base64url(approvalCode), now()]
@@ -138,24 +150,42 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
       // saying so would only confirm that a code once existed.
       if (row.status === "redeemed") return null;
 
-      return { deviceName: row.device_name, status: row.status };
+      return {
+        deviceName: row.device_name,
+        status: row.status,
+        ...(row.recording_policy_version === 1 ? { recordingPolicyVersion: 1 as const } : {})
+      };
     },
 
-    async decide({ approvalCode, decision, actorUserId }) {
+    async decide({
+      approvalCode,
+      decision,
+      actorUserId,
+      browserSessionId,
+      recordingPolicyVersion
+    }) {
       // Binds the approving account here, from the cookie session, never from the body.
       // The status guard makes a second decision on the same attempt impossible.
       const result = await pool.query<{ id: string }>(
         `UPDATE app.companion_pair_attempts
-            SET status = $1, user_id = $2
+            SET status = $1, user_id = $2,
+                recording_consent_version = CASE WHEN $1='approved' AND recording_proof_hash IS NOT NULL THEN $5::integer ELSE NULL END
           WHERE approval_code_hash = $3
             AND status = 'pending'
             AND expires_at > $4
+            AND (recording_proof_hash IS NULL OR $1='denied' OR
+              (recording_policy_version=$5::integer AND EXISTS (
+                SELECT 1 FROM app.better_auth_sessions s JOIN app.users u ON u.id=s.user_id
+                WHERE s.id=$6::uuid AND s.user_id=$2::uuid AND s.expires_at>$4 AND u.status='active'
+              )))
           RETURNING id`,
         [
           decision === "approve" ? "approved" : "denied",
           actorUserId,
           sha256Base64url(approvalCode),
-          now()
+          now(),
+          recordingPolicyVersion ?? null,
+          browserSessionId ?? null
         ]
       );
 
@@ -180,14 +210,19 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
 
         // One statement decides the race. Two concurrent redeems both match
         // status='approved', but only one UPDATE returns a row, so only one mints.
-        const claimed = await client.query<{ user_id: string; device_name: string }>(
+        const claimed = await client.query<{
+          user_id: string;
+          device_name: string;
+          recording_proof_hash: string | null;
+          recording_consent_version: number | null;
+        }>(
           `UPDATE app.companion_pair_attempts
               SET status = 'redeemed'
             WHERE id = $1
               AND status = 'approved'
               AND verifier_hash = $2
               AND expires_at > $3
-            RETURNING user_id, device_name`,
+            RETURNING user_id, device_name, recording_proof_hash, recording_consent_version`,
           [attemptId, sha256Base64url(verifier), now()]
         );
 
@@ -227,6 +262,16 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
           throw new Error("companion pairing: device insert returned no row");
         }
 
+        const recordingApproved =
+          !!claim.recording_proof_hash && claim.recording_consent_version === 1;
+        if (recordingApproved) {
+          await client.query(
+            `INSERT INTO app.companion_recording_capabilities(device_id,owner_user_id,proof_hash,policy_version,revision,approved_at)
+             VALUES($1,$2,$3,1,1,$4)`,
+            [deviceRow.id, claim.user_id, claim.recording_proof_hash, issuedAt]
+          );
+        }
+
         const account = await client.query<{ name: string | null; email: string }>(
           "SELECT name, email FROM app.users WHERE id = $1",
           [claim.user_id]
@@ -245,7 +290,10 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
             credential,
             device: { id: deviceRow.id, displayName: deviceRow.display_name },
             account: { name: accountRow.name ?? accountRow.email, email: accountRow.email },
-            expiresAt: expiresAt.toISOString()
+            expiresAt: expiresAt.toISOString(),
+            ...(recordingApproved
+              ? { recordingCapability: { policyVersion: 1 as const, revision: 1 } }
+              : {})
           }
         };
       } catch (error) {

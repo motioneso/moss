@@ -95,6 +95,7 @@ describe("activity filter state (#2956 slice D)", () => {
     expect(lineActivityModule("chat.tool_check")).toBe("ai");
     expect(lineActivityModule("embed.memory-passages")).toBe("memory");
     expect(lineActivityModule("transcribe.voice_note")).toBe("ai");
+    expect(lineActivityModule("transcribe.meeting")).toBe("meetings");
     expect(lineActivityModule("structured.briefings")).toBe("briefings");
     expect(lineActivityModule("structured.news")).toBe("news");
     expect(lineActivityModule("structured.sports")).toBe("sports");

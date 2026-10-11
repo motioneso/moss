@@ -343,7 +343,7 @@ describe("Meetings export worker grants and owner RLS", () => {
   });
 
   it.each(actors)(
-    "direct worker reads succeed with no owner WHERE and isolate $label on all eight tables",
+    "direct worker reads succeed with no owner WHERE and isolate $label on every declared export table",
     async (actor) => {
       await workerContext.withDataContext(actor, async (db) => {
         for (const { key, table, columns } of meetingExportTables) {
@@ -378,7 +378,18 @@ describe("Meetings export worker grants and owner RLS", () => {
           has_table_privilege('jarvis_worker_runtime', ${qualified}, 'DELETE') AS "delete"
       `.execute(bootstrapDb);
       expect(privileges.rows).toEqual([
-        { table_select: false, insert: false, update: false, delete: false }
+        {
+          table_select: false,
+          insert: [
+            "meeting_output_requests",
+            "meeting_output_artifacts",
+            "meeting_action_candidates"
+          ].includes(table),
+          update: ["meeting_records", "meeting_output_requests", "meeting_stop_summaries"].includes(
+            table
+          ),
+          delete: false
+        }
       ]);
       const columnPrivileges = await sql<{ column_name: string; readable: boolean }>`
         SELECT column_name,
@@ -391,7 +402,11 @@ describe("Meetings export worker grants and owner RLS", () => {
       );
       for (const column of columnPrivileges.rows) {
         expect(column.readable, `${table}.${column.column_name}`).toBe(
-          columns.some((original) => original === column.column_name)
+          columns.some((original) => original === column.column_name) ||
+            (table === "meeting_output_requests" &&
+              ["history_kind", "history_result_status", "history_result_code"].includes(
+                column.column_name
+              ))
         );
       }
     }
@@ -399,7 +414,7 @@ describe("Meetings export worker grants and owner RLS", () => {
 
   for (const { table, columns, derived } of meetingExportTables) {
     it.each(["INSERT", "UPDATE", "DELETE"] as const)(
-      `worker cannot %s ${table}`,
+      `worker cannot perform unsafe %s on ${table} (UPDATE targets owner_user_id)`,
       async (operation) => {
         const qualified = sql.table(`app.${table}`);
         const columnList = sql.join(columns.map((column) => sql.ref(column)));
@@ -418,7 +433,13 @@ describe("Meetings export worker grants and owner RLS", () => {
       }
     );
 
-    for (const column of derived) {
+    for (const column of derived.filter(
+      (column) =>
+        !(
+          table === "meeting_output_requests" &&
+          ["history_kind", "history_result_status", "history_result_code"].includes(column)
+        )
+    )) {
       it(`worker cannot read derived ${table}.${column}`, async () => {
         await expect(
           workerContext.withDataContext({ actorUserId: ids.userA }, (db) =>
@@ -429,13 +450,24 @@ describe("Meetings export worker grants and owner RLS", () => {
     }
 
     it(`owner assertion fails when ${table} worker policy is weakened, then rollback restores it`, async () => {
-      const policy = `${table}_export_worker`;
+      const { policy, roles, cmd } =
+        table === "meeting_stop_summaries"
+          ? {
+              policy: "meeting_stop_summaries_owner",
+              roles: ["jarvis_app_runtime", "jarvis_worker_runtime"],
+              cmd: "ALL"
+            }
+          : {
+              policy: `${table}_export_worker`,
+              roles: ["jarvis_worker_runtime"],
+              cmd: "SELECT"
+            };
       const before = await sql<{ qual: string; roles: string[]; cmd: string }>`
         SELECT qual, roles::text[] AS roles, cmd FROM pg_policies
         WHERE schemaname = 'app' AND tablename = ${table} AND policyname = ${policy}
       `.execute(bootstrapDb);
       expect(before.rows).toHaveLength(1);
-      expect(before.rows[0]).toMatchObject({ roles: ["jarvis_worker_runtime"], cmd: "SELECT" });
+      expect(before.rows[0]).toMatchObject({ roles, cmd });
       await expect(
         bootstrapDb.transaction().execute(async (transaction) => {
           await sql`ALTER POLICY ${sql.id(policy)} ON ${sql.table(`app.${table}`)} USING (true)`.execute(

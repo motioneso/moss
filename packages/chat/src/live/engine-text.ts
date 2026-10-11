@@ -4,6 +4,7 @@
  * (already substantial) retrieval orchestration lives in its own module rather than
  * growing the manager class further.
  */
+import type { ConversationProvenancePort } from "@moss/ai";
 import type { AnswerSourceSupport, ChatSurface } from "@moss/shared";
 import type { MemoryRecallItem } from "@moss/memory";
 import type { PriorityModelPreferenceV1 } from "@moss/priority";
@@ -18,15 +19,23 @@ import {
   collectCrossToolContextAndItems,
   planCrossToolReasoning,
   renderCrossToolContextBlock,
-  type CrossToolReadRunner
+  type CrossToolReadRunner,
+  type CrossToolTurnBinding
 } from "./cross-tool-reasoning.js";
 import { rankChatContext, reorderByPriority } from "../priority-consumer.js";
-import { combineHiddenContextBlocks } from "./chat-session-manager.js";
+import {
+  admissionForActor,
+  admitToContext,
+  prepareTurnText,
+  type AdmittedContext,
+  type PreparedTurn
+} from "./context-admission.js";
 import type { NotesContextRetriever } from "./notes-retrieval.js";
 import { renderCurrentTimeContext } from "./time-context.js";
 
 export interface EngineTextDeps {
   readonly persistence: Pick<ChatPersistencePort, "listPriorTurns" | "getThreadContext">;
+  readonly conversationProvenance?: Pick<ConversationProvenancePort, "recordAdmission">;
   readonly passiveRetrieval?: PassiveRetrievalPort;
   readonly notesRetrieval?: Pick<NotesContextRetriever, "retrieveWithItems">;
   readonly crossToolRead?: CrossToolReadRunner;
@@ -39,28 +48,83 @@ export async function buildEngineText(
   deps: EngineTextDeps,
   actorUserId: string,
   text: string,
-  surface?: ChatSurface
-): Promise<{ text: string; pendingItems: AnswerSourceSupport[] }> {
+  surface?: ChatSurface,
+  binding?: CrossToolTurnBinding,
+  extra?: { readonly attachmentManifest?: string; readonly moduleControl?: AdmittedContext | null }
+): Promise<PreparedTurn & { pendingItems: AnswerSourceSupport[] }> {
+  const turnBinding = binding
+    ? Object.freeze({ threadId: binding.threadId, chatSessionId: binding.chatSessionId })
+    : undefined;
+  const context = await retrieveTurnContext(deps, actorUserId, text, surface, turnBinding);
+  const admission = admissionForActor(deps.conversationProvenance, actorUserId);
+  // Retrieval can degrade to no context. Admission failures cannot degrade to exposing the block.
+  const [passive, crossTool, notes] = await Promise.all([
+    admitToContext(admission, turnBinding?.threadId ?? null, "recall_memory_turn", context.passive),
+    admitToContext(
+      admission,
+      turnBinding?.threadId ?? null,
+      "recall_cross_tool",
+      context.crossTool
+    ),
+    admitToContext(admission, turnBinding?.threadId ?? null, "recall_notes", context.notes)
+  ]);
+  return {
+    ...prepareTurnText({
+      userText: text,
+      timeContext: context.timeContext,
+      passive,
+      crossTool,
+      notes,
+      ...extra
+    }),
+    pendingItems: context.pendingItems
+  };
+}
+
+async function retrieveTurnContext(
+  deps: EngineTextDeps,
+  actorUserId: string,
+  text: string,
+  surface: ChatSurface | undefined,
+  binding: CrossToolTurnBinding | undefined
+): Promise<{
+  timeContext: string;
+  passive: string;
+  crossTool: string;
+  notes: string;
+  pendingItems: AnswerSourceSupport[];
+}> {
+  const empty = { passive: "", crossTool: "", notes: "", pendingItems: [] };
   const instant = deps.now?.() ?? new Date();
   let timezone: string | null = null;
 
   if (!deps.passiveRetrieval && !deps.crossToolRead && !deps.notesRetrieval) {
     try {
-      const threadCtx = await deps.persistence.getThreadContext(actorUserId, surface);
+      const threadCtx = await deps.persistence.getThreadContext(
+        actorUserId,
+        surface,
+        binding?.threadId ?? null
+      );
       timezone = threadCtx.localTimezone;
     } catch {
       // keep the null default — no timezone context available
     }
     const timeBlock = renderCurrentTimeContext(instant, timezone);
-    return { text: `${timeBlock}\n\n${text}`, pendingItems: [] };
+    return { ...empty, timeContext: timeBlock };
   }
   try {
     const [{ recent }, threadCtx] = await Promise.all([
-      deps.persistence.listPriorTurns(actorUserId, undefined, surface),
-      deps.persistence.getThreadContext(actorUserId, surface).then((context) => {
-        timezone = context.localTimezone;
-        return context;
-      })
+      deps.persistence.listPriorTurns(
+        actorUserId,
+        { threadId: binding?.threadId ?? null },
+        surface
+      ),
+      deps.persistence
+        .getThreadContext(actorUserId, surface, binding?.threadId ?? null)
+        .then((context) => {
+          timezone = context.localTimezone;
+          return context;
+        })
     ]);
 
     const timeBlock = renderCurrentTimeContext(instant, threadCtx.localTimezone);
@@ -105,7 +169,8 @@ export async function buildEngineText(
             crossToolPlan,
             deps.crossToolRead,
             localNow,
-            threadCtx.localTimezone ?? "UTC"
+            threadCtx.localTimezone ?? "UTC",
+            binding
           ).catch(() => ({ block: "", items: [] }))
         : Promise.resolve({ block: "", items: [] }),
       deps.notesRetrieval != null
@@ -151,15 +216,15 @@ export async function buildEngineText(
     const notesItems = notesResult.items.map((item) => notesItemToSupport(item, idx++));
     const pendingItems: AnswerSourceSupport[] = [...memoryItems, ...crossToolItems, ...notesItems];
 
-    const combined = combineHiddenContextBlocks(
-      passiveResult.block,
-      crossTool.block,
-      notesResult.block
-    );
-    const bodyText = combined ? `${combined}\n\n${text}` : text;
-    return { text: `${timeBlock}\n\n${bodyText}`, pendingItems };
+    return {
+      timeContext: timeBlock,
+      passive: passiveResult.block,
+      crossTool: crossTool.block,
+      notes: notesResult.block,
+      pendingItems
+    };
   } catch {
     const timeBlock = renderCurrentTimeContext(instant, timezone);
-    return { text: `${timeBlock}\n\n${text}`, pendingItems: [] };
+    return { ...empty, timeContext: timeBlock };
   }
 }

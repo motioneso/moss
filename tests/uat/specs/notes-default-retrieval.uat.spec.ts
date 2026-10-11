@@ -1,11 +1,17 @@
+import { execFileSync } from "node:child_process";
+
 import { expect, test, type Page } from "@playwright/test";
 
-import { attachNotesFailureEvidence } from "./notes-failure-evidence.js";
+import {
+  attachNotesFailureEvidence,
+  captureActionAuditEvidence
+} from "./notes-failure-evidence.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import {
   bringUpRealChatProvider,
   discoverCheapestChatModel,
   readUatJson,
+  requireUatProjectName,
   signInUatAdmin
 } from "./real-chat-signin.js";
 
@@ -91,11 +97,18 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
 
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const composer = page.getByRole("textbox", { name: "Message Moss" });
+  const createdNotes = page
+    .getByRole("dialog", { name: "Chat with Moss" })
+    .getByRole("status")
+    .filter({ hasText: /^Done: Create note$/ });
+  const createCount = await createdNotes.count();
   const path = `uat/notes-default-retrieval-${Date.now()}.md`;
   const syncNotBefore = Date.now();
+  // Neutral setup content avoids incidental retrieval before this unattended write.
+  // The later decision question intentionally exercises retrieval in a fresh conversation.
   await composer.fill(
-    `Use notes.create to create ${path} containing exactly: Launch snack decision: ${FACT}. ` +
-      "Do not ask a follow-up question."
+    `Use notes.create to create ${path} containing exactly: Snack choice: ${FACT}. ` +
+      "Use these exact inputs without further questions."
   );
   await composer.press("Enter");
 
@@ -111,9 +124,29 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
     })
   });
 
-  await expect(page.getByRole("status").filter({ hasText: "Executed: notes.create" })).toBeVisible({
-    timeout: 60_000
-  });
+  // Verify both the user-visible auto-run outcome and the real gateway execution.
+  await expect(createdNotes).toHaveCount(createCount + 1, { timeout: 60_000 });
+  await expect(createdNotes.last()).toBeVisible();
+  await expect
+    .poll(
+      () => {
+        const evidence = captureActionAuditEvidence(
+          execFileSync,
+          requireUatProjectName(),
+          UAT_ADMIN_ID,
+          new Date(syncNotBefore).toISOString(),
+          new Date().toISOString()
+        );
+        return (
+          evidence.error === null &&
+          evidence.entries.some(
+            (entry) => entry.toolName === "notes.create" && entry.outcome === "success"
+          )
+        );
+      },
+      { timeout: 60_000, message: "notes.create did not record a successful execution" }
+    )
+    .toBe(true);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   await expect
@@ -146,7 +179,7 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
     type: RETRIEVAL_TURN_ANNOTATION_TYPE,
     description: JSON.stringify({ retrievalTurnStartIso: new Date().toISOString() })
   });
-  await composer.fill("What snack did we choose for the launch?");
+  await composer.fill("What was our snack decision?");
   await composer.press("Enter");
 
   await expect(page.getByText(new RegExp(FACT, "i"))).toBeVisible({ timeout: 60_000 });

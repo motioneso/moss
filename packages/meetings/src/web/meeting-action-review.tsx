@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { randomUuid } from "@moss/module-web-sdk";
-import { Button, Divider, Field, FormLabel, Note, Switch } from "@moss/ui";
+import { Button, Divider, Field, FormLabel } from "@moss/ui";
 import type {
   MeetingActionCandidate,
   MeetingOutputArtifact,
@@ -12,8 +12,6 @@ import { OutputEvidence } from "./output-evidence.js";
 
 interface ReviewState {
   readonly title: string;
-  readonly ownerReviewed: boolean;
-  readonly matchesReviewed: boolean;
   readonly operation?: OutputOperation<ReviewMeetingActionInput>;
   readonly result?: MeetingActionCandidate;
 }
@@ -28,9 +26,7 @@ export function MeetingActionReview({
     candidate.meetingId,
     `action:${candidate.id}`,
     () => ({
-      title: candidate.proposal.text,
-      ownerReviewed: false,
-      matchesReviewed: false
+      title: candidate.proposal.text
     })
   );
   const { state, update, client } = session;
@@ -55,7 +51,7 @@ export function MeetingActionReview({
               ? {
                   title: state.title.trim(),
                   dueAt: null,
-                  createDespitePossibleMatches: state.matchesReviewed
+                  createDespitePossibleMatches: uncertain
                 }
               : {})
           };
@@ -95,7 +91,7 @@ export function MeetingActionReview({
       <Divider />
       {result.reviewState === "pending" ? (
         <Field>
-          <FormLabel htmlFor={`action-${candidate.id}`}>Suggested Task</FormLabel>
+          <FormLabel htmlFor={`action-${candidate.id}`}>Suggested task</FormLabel>
           <input
             id={`action-${candidate.id}`}
             className="jds-input meetings-input"
@@ -127,33 +123,11 @@ export function MeetingActionReview({
       <OutputEvidence evidence={candidate.proposal.evidence} artifact={artifact} />
       {result.reviewState === "pending" ? (
         <>
-          <div className="meetings-actions">
-            <Switch
-              ariaLabel="Create in my Tasks after owner review"
-              label="Create in my Tasks after owner review"
-              checked={state.ownerReviewed}
-              disabled={busy || state.operation?.status === "retry"}
-              onChange={(ownerReviewed) => update((current) => ({ ...current, ownerReviewed }))}
-            />
-          </div>
           {uncertain ? (
-            <Note variant="practical">
-              <p>
-                This may overlap {candidate.possibleMatchIds.length} earlier suggestion(s). Review
-                earlier versions and accepted Tasks first.
-              </p>
-              <div className="meetings-actions">
-                <Switch
-                  ariaLabel="Create a separate Task despite possible matches"
-                  label="Create a separate Task despite possible matches"
-                  checked={state.matchesReviewed}
-                  disabled={busy || state.operation?.status === "retry"}
-                  onChange={(matchesReviewed) =>
-                    update((current) => ({ ...current, matchesReviewed }))
-                  }
-                />
-              </div>
-            </Note>
+            <p className="jds-hint">
+              Possible duplicate of {candidate.possibleMatchIds.length} earlier suggestion(s). Add
+              to Tasks creates a separate task.
+            </p>
           ) : null}
           <div className="meetings-actions">
             {state.operation?.status === "retry" ? (
@@ -163,16 +137,10 @@ export function MeetingActionReview({
             ) : (
               <>
                 <Button
-                  disabled={
-                    busy ||
-                    !state.ownerReviewed ||
-                    !state.title.trim() ||
-                    state.title.includes("\0") ||
-                    (uncertain && !state.matchesReviewed)
-                  }
+                  disabled={busy || !state.title.trim() || state.title.includes("\0")}
                   onClick={() => void review("accept")}
                 >
-                  Accept Task
+                  Add to Tasks
                 </Button>
                 <Button variant="quiet" disabled={busy} onClick={() => void review("dismiss")}>
                   Dismiss

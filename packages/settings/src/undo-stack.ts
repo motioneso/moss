@@ -91,6 +91,13 @@ export class SettingsUndoStack {
     if (stack.entries.length > this.maxEntriesPerChat) stack.entries.shift();
   }
 
+  peek(actorUserId: string, chatId: string): SettingsUndoEntry | undefined {
+    const stack = this.actors.get(actorUserId)?.get(chatId);
+    if (!stack) return undefined;
+    this.sweepExpired(stack);
+    return stack.entries.at(-1);
+  }
+
   pop(actorUserId: string, chatId: string): SettingsUndoEntry | undefined {
     const stack = this.actors.get(actorUserId)?.get(chatId);
     if (!stack) return undefined;

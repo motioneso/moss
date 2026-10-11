@@ -1,11 +1,12 @@
 import type {
+  ActionRequestDetails,
   ChatActivityEventDto,
   ChatMessageDto,
   ChatSurface,
   SourceFreshnessV1,
   WorkflowApprovalDto
 } from "@moss/shared";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // The transcript shape lives in `@moss/shared` now (defined once for the shell and every module
 // thread); re-exported here so existing importers keep working while they migrate over.
@@ -32,6 +33,40 @@ function parsePreview(value: unknown): ActionRequestPreview | undefined {
     return undefined;
   }
   return { to: candidate.to, subject: candidate.subject, body: candidate.body };
+}
+
+function parseDetails(value: unknown): ActionRequestDetails | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.target !== null && typeof candidate.target !== "string") return undefined;
+  if (!Array.isArray(candidate.fields)) return undefined;
+  const fields: { label: string; value: string }[] = [];
+  for (const field of candidate.fields) {
+    if (!field || typeof field !== "object" || Array.isArray(field)) return undefined;
+    if (typeof field.label !== "string" || !field.label.trim() || typeof field.value !== "string")
+      return undefined;
+    fields.push({ label: field.label, value: field.value });
+  }
+  if (candidate.presentation !== undefined && candidate.presentation !== "human") return undefined;
+  const approvalKind = candidate.approvalKind;
+  if (
+    approvalKind !== undefined &&
+    approvalKind !== "memory_delete" &&
+    approvalKind !== "note_delete"
+  )
+    return undefined;
+  return {
+    target: candidate.target,
+    fields,
+    ...(candidate.presentation === "human" ? { presentation: "human" as const } : {}),
+    ...(approvalKind ? { approvalKind } : {})
+  };
+}
+
+function parseStringList(value: unknown): readonly string[] | undefined {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? value
+    : undefined;
 }
 
 function isChatRecordKind(value: string): value is ChatRecordKind {
@@ -82,8 +117,16 @@ export function useChatStream(
 } {
   const [records, setRecords] = useState<readonly TranscriptRecord[]>([]);
   const [streamErrorCount, setStreamErrorCount] = useState(0);
+  const [streamGeneration, setStreamGeneration] = useState(0);
+  const hydrationGeneration = useRef(0);
+  const streamScope = useRef({ surface, enabled });
+  streamScope.current = { surface, enabled };
 
-  const clearRecords = useCallback(() => setRecords([]), []);
+  const clearRecords = useCallback(() => {
+    hydrationGeneration.current += 1;
+    setRecords([]);
+    setStreamGeneration(hydrationGeneration.current);
+  }, []);
 
   useEffect(() => {
     setRecords([]);
@@ -92,22 +135,32 @@ export function useChatStream(
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let retries = 0;
     let disposed = false;
+    const generation = hydrationGeneration.current;
+    const isCurrent = () =>
+      !disposed &&
+      generation === hydrationGeneration.current &&
+      streamScope.current.enabled &&
+      streamScope.current.surface === surface;
 
     const open = () => {
+      if (!isCurrent()) return;
       const stream = new EventSource(chatStreamUrl(surface), { withCredentials: true });
       source = stream;
       // A connected stream clears earlier failures, so a recovered stream never ends a new
       // private chat. A private chat already ended stays ended in the drawer.
       stream.onopen = () => {
+        if (!isCurrent()) return;
         retries = 0;
         setStreamErrorCount(0);
       };
       stream.onmessage = (event) => {
+        if (!isCurrent()) return;
         // #1135 — reset error count on successful message so transient errors don't lock private chat
         setStreamErrorCount(0);
         const record = parseRecord(event.data);
         if (record) {
           setRecords((current) => {
+            if (!isCurrent()) return current;
             if (record.kind === "reply" && record.messageId) {
               // Replace the last streaming reply (no messageId) with the stored version (has messageId + sourceFreshness)
               const lastUnstored = [...current]
@@ -124,6 +177,7 @@ export function useChatStream(
       };
 
       stream.onerror = () => {
+        if (!isCurrent()) return;
         setStreamErrorCount((count) => count + 1);
         // EventSource retries a dropped connection itself, but an HTTP error response closes it
         // for good. Reopen it, or later action results never reach the drawer (#2737).
@@ -140,11 +194,12 @@ export function useChatStream(
       clearTimeout(retryTimer);
       source?.close();
     };
-  }, [enabled, surface]);
+  }, [enabled, surface, streamGeneration]);
 
   useEffect(() => {
     if (!surface || !enabled) return;
     let active = true;
+    const generation = hydrationGeneration.current;
 
     const refreshWorkflowApprovals = async () => {
       try {
@@ -158,12 +213,11 @@ export function useChatStream(
 
     void (async () => {
       try {
-        const [threadsResult, actionsResult, workflowApprovals] = await Promise.all([
+        const [threadsResult, workflowApprovals] = await Promise.all([
           listChatThreads(surface),
-          // #1253 — fetch pending action requests to re-hydrate approval cards on page reload
-          listPendingActionRequests().catch(() => ({ actions: [] })),
           listWorkflowApprovals().catch(() => [])
         ]);
+        if (!active || generation !== hydrationGeneration.current) return;
         const workflowRecords = workflowApprovals.map(workflowApprovalRecord);
         const { threads } = threadsResult;
         const thread = threads[0];
@@ -171,8 +225,14 @@ export function useChatStream(
           setRecords((current) => (current.length === 0 ? workflowRecords : current));
           return;
         }
+        // Recovery may persist overdue outcomes. Finish it before fetching history so the
+        // first reload includes those outcomes instead of an empty, already-expired card.
+        const actionsResult = await listPendingActionRequests(thread.id).catch(() => ({
+          actions: []
+        }));
+        if (!active || generation !== hydrationGeneration.current) return;
         const { messages } = await listChatThreadMessages(thread.id, surface);
-        if (!active) return;
+        if (!active || generation !== hydrationGeneration.current) return;
         const history = recordsFromMessages(messages);
         // #1253 — re-hydrate pending action request cards (only "pending" status; others already resolved)
         const pendingActions = actionsResult.actions.filter((a) => a.status === "pending");
@@ -181,14 +241,28 @@ export function useChatStream(
           return {
             kind: "action_request",
             text:
-              typeof summaryText === "string" && summaryText ? summaryText : "Approve this action?",
+              action.presentation?.summary ??
+              (typeof summaryText === "string" && summaryText ? summaryText : "Action request"),
             actionRequestId: action.id,
-            toolName: action.toolName
-            // preview is SSE-only; backend never persists it, so re-hydrated cards show no preview
+            toolName: action.toolName,
+            approvalAvailable:
+              action.approvalAvailable === true && action.presentation !== undefined,
+            ...(action.presentation
+              ? {
+                  summary: action.presentation.summary,
+                  nativePermission: action.presentation.nativePermission,
+                  externalTool: action.presentation.externalTool,
+                  exactArguments: action.presentation.exactArguments,
+                  outcomeTitle: action.presentation.outcomeTitle,
+                  details: action.presentation.details,
+                  preview: action.presentation.preview,
+                  outsideContentNotice: action.presentation.outsideContentNotice
+                }
+              : {})
           };
         });
         setRecords((current) =>
-          current.length === 0 ? [...history, ...actionRecords, ...workflowRecords] : current
+          mergeHydratedRecords(current, [...history, ...actionRecords, ...workflowRecords])
         );
       } catch {
         // The live stream remains authoritative; an unavailable history read must not block chat.
@@ -202,6 +276,31 @@ export function useChatStream(
   }, [enabled, surface]);
 
   return { records, clearRecords, streamErrorCount };
+}
+
+function mergeHydratedRecords(
+  current: readonly TranscriptRecord[],
+  history: readonly TranscriptRecord[]
+): readonly TranscriptRecord[] {
+  // Recovery or a concurrent expiry timer can notify before the history read settles. These
+  // correlated outcomes alone are not a new turn; ordinary live activity still wins outright.
+  const onlyActionOutcomes = current.every(
+    (record) =>
+      record.actionRequestId &&
+      ["action_result", "approved", "not_approved", "refusal", "refused"].includes(record.kind)
+  );
+  if (!onlyActionOutcomes) return current;
+  const merged = [...history];
+  for (const record of current) {
+    if (
+      !merged.some(
+        (item) => item.kind === record.kind && item.actionRequestId === record.actionRequestId
+      )
+    ) {
+      merged.push(record);
+    }
+  }
+  return merged;
 }
 
 function workflowApprovalRecord(approval: WorkflowApprovalDto): TranscriptRecord {
@@ -243,6 +342,14 @@ export function upsertTranscriptRecord(
   records: readonly TranscriptRecord[],
   record: TranscriptRecord
 ): TranscriptRecord[] {
+  // Approval notifications may be replayed after reconnect. Their server request identity
+  // outlives the engine's per-turn sequence numbers, so do not append another card/outcome.
+  if (record.actionRequestId) {
+    const existing = records.findIndex(
+      (item) => item.kind === record.kind && item.actionRequestId === record.actionRequestId
+    );
+    if (existing >= 0) return records.map((item, index) => (index === existing ? record : item));
+  }
   // ACP sequence numbers restart for each user turn. Stable ids and ordering therefore
   // only apply inside the current turn; scanning older turns lets a later `sequence: 1`
   // activity record jump in front of the first turn's `sequence: 2` record.
@@ -285,8 +392,7 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
         }
       ];
     }
-    const activity = message.activity.filter((event) => event.kind !== "action_result");
-    const actionResults = message.activity.filter((event) => event.kind === "action_result");
+    const activity = message.activity;
     return [
       ...activity.map(activityRecord),
       ...(activity.some((event) => event.kind === "tool")
@@ -295,18 +401,22 @@ export function recordsFromMessages(messages: readonly ChatMessageDto[]): Transc
             kind: "tool" as const,
             text: tool.name
           }))),
-      {
-        kind: message.status === "error" ? ("error" as const) : ("reply" as const),
-        text: message.body,
-        messageId: message.id,
-        sourceFreshness: message.sourceFreshness,
-        meetingContext: message.meetingContext,
-        answerProvenance: message.answerProvenance,
-        answerProvenanceCitedIds: message.answerProvenanceCitedIds,
-        ...(message.elapsedMs !== undefined ? { elapsedMs: message.elapsedMs } : {}),
-        ...(message.usage !== undefined ? { usage: message.usage } : {})
-      },
-      ...actionResults.map(activityRecord)
+      // Late action outcomes can be persisted without an assistant reply body.
+      ...(message.body
+        ? [
+            {
+              kind: message.status === "error" ? ("error" as const) : ("reply" as const),
+              text: message.body,
+              messageId: message.id,
+              sourceFreshness: message.sourceFreshness,
+              meetingContext: message.meetingContext,
+              answerProvenance: message.answerProvenance,
+              answerProvenanceCitedIds: message.answerProvenanceCitedIds,
+              ...(message.elapsedMs !== undefined ? { elapsedMs: message.elapsedMs } : {}),
+              ...(message.usage !== undefined ? { usage: message.usage } : {})
+            }
+          ]
+        : [])
     ];
   });
 }
@@ -315,6 +425,10 @@ function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
   return {
     kind: isChatRecordKind(activity.kind) ? activity.kind : "status",
     text: activity.text,
+    ...(activity.actionRequestId !== undefined
+      ? { actionRequestId: activity.actionRequestId }
+      : {}),
+    ...(activity.summary !== undefined ? { summary: activity.summary } : {}),
     ...(activity.id !== undefined ? { id: activity.id } : {}),
     ...(activity.sequence !== undefined ? { sequence: activity.sequence } : {}),
     ...(activity.toolName !== undefined ? { toolName: activity.toolName } : {}),
@@ -353,6 +467,10 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       toolName: typeof parsed.toolName === "string" ? parsed.toolName : undefined,
       toolCallId: typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined,
       summary: typeof parsed.summary === "string" ? parsed.summary : undefined,
+      nativePermission: parsed.nativePermission === true ? true : undefined,
+      externalTool: parsed.externalTool === true ? true : undefined,
+      exactArguments: typeof parsed.exactArguments === "string" ? parsed.exactArguments : undefined,
+      outcomeTitle: typeof parsed.outcomeTitle === "string" ? parsed.outcomeTitle : undefined,
       status:
         parsed.status === "pending" ||
         parsed.status === "approved" ||
@@ -371,16 +489,16 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
         parsed.result && typeof parsed.result === "object" && !Array.isArray(parsed.result)
           ? (parsed.result as Record<string, unknown>)
           : undefined,
-      affectsQueryKeys:
-        Array.isArray(parsed.affectsQueryKeys) &&
-        parsed.affectsQueryKeys.every((token) => typeof token === "string")
-          ? (parsed.affectsQueryKeys as readonly string[])
-          : undefined,
+      affectsQueryKeys: parseStringList(parsed.affectsQueryKeys),
+      affectsModules: parseStringList(parsed.affectsModules),
       sourceFreshness:
         parsed.sourceFreshness && typeof parsed.sourceFreshness === "object"
           ? (parsed.sourceFreshness as SourceFreshnessV1)
           : undefined,
       preview: parsePreview(parsed.preview),
+      details: parseDetails(parsed.details),
+      outsideContentNotice:
+        typeof parsed.outsideContentNotice === "boolean" ? parsed.outsideContentNotice : undefined,
       decidedBy:
         parsed.decidedBy === "person" ||
         parsed.decidedBy === "policy" ||

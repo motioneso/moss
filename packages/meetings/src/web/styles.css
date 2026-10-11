@@ -1,170 +1,146 @@
+@import "./capture-controls.css";
 .meetings-page {
   display: grid;
-  gap: var(--space-7);
-  padding: var(--space-4);
-  min-width: 0;
-}
-.meetings-body {
+  gap: var(--space-6);
   width: 100%;
-  display: grid;
-  gap: var(--space-7);
-}
-.meetings-section {
-  display: grid;
-  gap: var(--space-5);
   min-width: 0;
 }
-.meetings-actions {
+.meetings-body,
+.meetings-title,
+.meetings-history-heading {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+}
+.meetings-title h1,
+.meetings-pane-heading h2 {
+  margin: 0;
+}
+.meetings-list-heading,
+.meetings-record-heading {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
 }
-.meetings-modes {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
+.meetings-record-heading > div:first-child {
+  flex: 1;
+  min-width: 12rem;
 }
-.meetings-sources {
+.meetings-record-tools {
+  align-items: flex-start;
+}
+.meetings-capture {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-5);
+  gap: var(--space-3);
+  justify-items: stretch;
+}
+.meetings-capture p {
+  margin: 0;
 }
 .meetings-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   gap: var(--space-7);
+  align-items: start;
+  min-width: 0;
 }
-.meetings-title-input {
-  max-width: 44rem;
+.meetings-workspace > * {
+  min-width: 0;
 }
 .meetings-input {
   padding: var(--space-3);
   width: 100%;
 }
 .meetings-notes {
-  min-height: 20rem;
+  min-height: 24rem;
   resize: vertical;
 }
 .meetings-dialog {
   max-width: 36rem;
 }
-@media (max-width: 760px) {
-  .meetings-modes,
-  .meetings-sources,
-  .meetings-workspace {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .meetings-page {
-    padding: var(--space-2);
-  }
-}
-.meetings-page .jds-btn {
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
+.meetings-transcript-timeline {
+  display: grid;
+  gap: var(--space-5);
 }
 .meetings-transcript-turn {
   display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
   gap: var(--space-3);
   min-width: 0;
+  scroll-margin-block: var(--space-7);
 }
 .meetings-transcript-text {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.meetings-transcript-turn .meetings-actions {
-  overflow-wrap: anywhere;
-}
-
-.meetings-review-status {
-  justify-content: flex-start;
-}
-.meetings-page [role="tabpanel"] {
-  min-width: 0;
-}
-
-.meetings-history-filters {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(10rem, 16rem);
-  gap: var(--space-3);
-}
-.meetings-history-table {
-  max-width: 100%;
-  overflow-x: auto;
-}
-.meetings-history {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(15rem, 18rem);
-  gap: var(--space-7);
-  align-items: start;
-  min-width: 0;
-}
-.meetings-history-results {
-  grid-column: 1;
-}
-.meetings-history-followup {
-  /* Add to the parent section's space-5 gap for the space-7 section minimum. */
-  margin-block-start: var(--space-3);
-}
-.meetings-history--single {
-  grid-template-columns: minmax(0, 1fr);
-}
-.meetings-history-rail,
-.meetings-history-heading,
-.meetings-history-source-details,
-.meetings-history-rail-actions {
-  display: grid;
-  min-width: 0;
-}
-.meetings-history-rail {
-  gap: var(--space-5);
-  overflow-wrap: anywhere;
-}
-.meetings-history-heading {
-  gap: var(--space-2);
-}
-.meetings-history-source-details,
-.meetings-history-rail-actions {
-  gap: var(--space-3);
-}
-.meetings-history-source-list {
-  display: grid;
-  gap: var(--space-2);
+.meetings-transcript-gap {
   margin: 0;
-  padding-left: var(--space-4);
+  padding-block: var(--space-3);
 }
-.meetings-history-divider {
-  display: flex;
-  height: 100%;
+.meetings-history-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 10rem) minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+  width: 100%;
+  padding-block: var(--space-4);
 }
-.meetings-history-back,
-.meetings-history-mobile-status {
-  display: none;
+.meetings-history-gist {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-@media (max-width: 1080px) {
-  .meetings-history {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .meetings-history-divider {
-    display: none;
-  }
+.meetings-sources {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
 }
 @media (max-width: 760px) {
-  .meetings-history-filters {
+  .meetings-workspace,
+  .meetings-sources {
     grid-template-columns: minmax(0, 1fr);
   }
-  .meetings-history-status-column,
-  .meetings-history-rail,
-  .meetings-history--detail .meetings-history-results {
-    display: none;
+  .meetings-page {
+    padding-block-end: var(--space-12);
   }
-  .meetings-history-mobile-status,
-  .meetings-history-back {
-    display: block;
+  .meetings-history-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-2);
   }
-  .meetings-history--detail .meetings-history-rail {
-    display: grid;
+  .meetings-history-row > :first-child {
+    grid-column: 1 / -1;
   }
+  .meetings-record-tools {
+    margin-left: auto;
+  }
+  .meetings-capture {
+    max-width: 100%;
+  }
+  .meetings-capture-heading > .jds-btn,
+  .meetings-capture-heading > .jds-control-pill {
+    position: fixed;
+    bottom: var(--space-4);
+    right: var(--space-4);
+    z-index: 10;
+  }
+  .meetings-notes {
+    min-height: 20rem;
+  }
+}
+
+.meetings-download {
+  margin-top: var(--space-5);
+}
+
+.meetings-capture-heading {
+  justify-content: flex-end;
+}
+.meetings-capture-title {
+  flex: 1;
+  min-width: 12rem;
+  margin-right: auto;
 }

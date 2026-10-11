@@ -49,11 +49,14 @@ export async function signInUatAdmin(page: Page): Promise<void> {
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   const skipSetup = page.getByRole("button", { name: "Skip setup" });
-  const userMenu = page.locator(".jds-usermenu__trigger");
+  const userMenu = page.getByRole("button", { name: /^Account menu(?:,|$)/ });
   await expect(skipSetup.or(userMenu).first()).toBeVisible({ timeout: 30_000 });
   if (await skipSetup.isVisible()) {
     await skipSetup.click();
-    await page.getByRole("button", { name: "Skip anyway" }).click();
+    // The confirm dialog only shows when chat is unusable.
+    const skipAnyway = page.getByRole("button", { name: "Skip anyway" });
+    await expect(skipAnyway.or(userMenu).first()).toBeVisible();
+    if (await skipAnyway.isVisible()) await skipAnyway.click();
   }
   await expect(userMenu).toBeVisible();
 }

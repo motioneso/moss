@@ -6,6 +6,7 @@
  * behaviour it drives across those seams.
  */
 import { describe, expect, it } from "vitest";
+import { DEFAULT_CHAT_SURFACE } from "@moss/shared";
 
 import type { ProviderKind } from "../../packages/ai/src/index.js";
 import {
@@ -252,6 +253,20 @@ class FakePersistence implements ChatPersistencePort {
   }[] = [];
   newConversations = 0;
 
+  async getCurrentThreadState() {
+    return { id: `thread-${this.newConversations}`, incognito: false };
+  }
+
+  async getOwnedThreadState(actorUserId: string, threadId: string) {
+    const thread = await this.getCurrentThreadState();
+    if (actorUserId !== "user-1" || threadId !== thread.id) return undefined;
+    return { ...thread, surface: DEFAULT_CHAT_SURFACE };
+  }
+
+  async persistActionRecord(): Promise<boolean> {
+    return false;
+  }
+
   async resolveActiveProvider(): Promise<{ provider: ProviderKind; model: string }> {
     return this.active;
   }
@@ -339,6 +354,7 @@ function makeManager(over: Partial<ChatSessionManagerDeps> = {}): Harness {
       return e;
     },
     persistence,
+    conversationProvenance: { recordAdmission: async () => undefined },
     personaFs: noopPersonaFs,
     clock,
     idleMs: 1_000,
@@ -452,8 +468,9 @@ describe("ChatSessionManager", () => {
     while (engine.submitted.length === 0) await Promise.resolve();
 
     for (let index = 0; index < 22; index += 1) {
-      manager.injectRecord("user-1", {
+      await manager.injectOriginRecord("user-1", "thread-0", {
         kind: "action_result",
+        actionRequestId: `action-${index}`,
         text: `LinkedIn monitoring enabled ${"x".repeat(220)}`,
         toolName: `job-search.portal.set-enabled.${"y".repeat(140)}`,
         outcome: "executed",
@@ -466,6 +483,7 @@ describe("ChatSessionManager", () => {
     expect(persistence.recorded[0]?.actionResults).toHaveLength(20);
     expect(persistence.recorded[0]?.actionResults?.[0]).toEqual({
       kind: "action_result",
+      actionRequestId: "action-0",
       text: `LinkedIn monitoring enabled ${"x".repeat(172)}`,
       toolName: `job-search.portal.set-enabled.${"y".repeat(90)}`,
       outcome: "executed"

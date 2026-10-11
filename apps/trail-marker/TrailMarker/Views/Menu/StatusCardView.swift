@@ -161,6 +161,8 @@ struct StatusCardView: View {
         case .signInRequired(let reason):
             if case .revoked = reason { return "Your Trail Marker access was revoked from Moss." }
             return "Your session has expired. Please sign in to continue."
+        case .unlinking:
+            return connection.lastDiagnostic ?? "Capture is stopped. Waiting for Moss to confirm Unlink."
         case .notLinked:
             return "Connect this Mac to your Moss account."
         }
@@ -172,6 +174,7 @@ struct StatusCardView: View {
         case .disconnected: return ("pause.circle.fill", Color(nsColor: .secondaryLabelColor))
         case .reconnecting: return ("exclamationmark.circle.fill", Color(nsColor: .systemOrange))
         case .signInRequired: return ("exclamationmark.circle.fill", Color(nsColor: .systemRed))
+        case .unlinking: return ("arrow.triangle.2.circlepath", Color(nsColor: .systemOrange))
         case .notLinked: return ("link.circle.fill", Color(nsColor: .tertiaryLabelColor))
         }
     }

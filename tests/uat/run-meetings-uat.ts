@@ -9,11 +9,14 @@ export const MEETING_UAT_GROUPS = {
     "2981-meeting-drafts.uat.spec.ts",
     "2981-meeting-chat.uat.spec.ts",
     "2981-meeting-outputs.uat.spec.ts",
-    "2981-meeting-history.uat.spec.ts"
+    "2981-meeting-history.uat.spec.ts",
+    "2981-meeting-capture.uat.spec.ts",
+    "2981-meeting-automatic-summary.uat.spec.ts"
   ],
   chat: [
     "1089-1090-chat-drawer-private.uat.spec.ts",
     "1133-chat-attachments.uat.spec.ts",
+    "3324-chat-drawer-no-model.uat.spec.ts",
     "runtime-context.uat.spec.ts",
     "moss-assistant-name.uat.spec.ts"
   ],

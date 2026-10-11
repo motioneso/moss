@@ -64,35 +64,78 @@ export function getMeetingOutputTemplate(id: string, version: number) {
   );
 }
 
-function invalid(): never {
-  // Never include generated content or source text in validation errors.
-  throw new Error("Invalid meeting output");
+/** Bounded diagnostics only: never add generated text, source identifiers, or excerpts. */
+export type MeetingOutputValidationReasonCode =
+  | "schema_invalid"
+  | "length_exceeded"
+  | "source_binding_missing"
+  | "source_binding_invalid"
+  | "source_identity_mismatch"
+  | "source_revision_mismatch"
+  | "utf16_range_invalid"
+  | "owner_phrase_unsupported"
+  | "due_phrase_unsupported"
+  | "inputs_invalid";
+
+export class MeetingOutputValidationError extends Error {
+  readonly reasonCode: MeetingOutputValidationReasonCode;
+
+  constructor(reasonCode: MeetingOutputValidationReasonCode) {
+    super("Invalid meeting output");
+    this.name = "MeetingOutputValidationError";
+    this.reasonCode = reasonCode;
+  }
 }
 
-function record(value: unknown, keys: readonly string[]): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) invalid();
+function invalid(reasonCode: MeetingOutputValidationReasonCode = "schema_invalid"): never {
+  throw new MeetingOutputValidationError(reasonCode);
+}
+
+function record(
+  value: unknown,
+  keys: readonly string[],
+  reasonCode: MeetingOutputValidationReasonCode = "schema_invalid"
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) invalid(reasonCode);
   const result = value as Record<string, unknown>;
   if (
     Object.keys(result).length !== keys.length ||
     keys.some((key) => !Object.hasOwn(result, key))
   ) {
-    invalid();
+    invalid(reasonCode);
   }
   return result;
 }
 
-function text(value: unknown, maximum: number): string {
-  if (typeof value !== "string" || value.length > maximum || value.trim().length === 0) invalid();
+function text(
+  value: unknown,
+  maximum: number,
+  reasonCode?: MeetingOutputValidationReasonCode
+): string {
+  if (typeof value !== "string") invalid(reasonCode);
+  if (value.length > maximum) invalid(reasonCode ?? "length_exceeded");
+  if (value.trim().length === 0) invalid(reasonCode);
   return value;
 }
 
-function integer(value: unknown, minimum = 0): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum) invalid();
+function integer(
+  value: unknown,
+  minimum = 0,
+  reasonCode: MeetingOutputValidationReasonCode = "schema_invalid"
+): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum) {
+    invalid(reasonCode);
+  }
   return value;
 }
 
-function list(value: unknown, maximum = MAX_ITEMS): unknown[] {
-  if (!Array.isArray(value) || value.length > maximum) invalid();
+function list(
+  value: unknown,
+  maximum = MAX_ITEMS,
+  reasonCode: MeetingOutputValidationReasonCode = "schema_invalid"
+): unknown[] {
+  if (!Array.isArray(value)) invalid(reasonCode);
+  if (value.length > maximum) invalid("length_exceeded");
   // Array iteration must not silently skip a missing value in a non-JSON caller's input.
   return Array.from(value);
 }
@@ -104,18 +147,18 @@ function splitsSurrogate(text: string, offset: number): boolean {
 }
 
 function range(source: string, start: unknown, end: unknown): [number, number, string] {
-  const startCharacter = integer(start);
-  const endCharacter = integer(end);
+  const startCharacter = integer(start, 0, "utf16_range_invalid");
+  const endCharacter = integer(end, 0, "utf16_range_invalid");
   if (
     endCharacter <= startCharacter ||
     endCharacter > source.length ||
     splitsSurrogate(source, startCharacter) ||
     splitsSurrogate(source, endCharacter)
   ) {
-    invalid();
+    invalid("utf16_range_invalid");
   }
   const excerpt = source.slice(startCharacter, endCharacter);
-  if (excerpt.trim().length === 0) invalid();
+  if (excerpt.trim().length === 0) invalid("utf16_range_invalid");
   return [startCharacter, endCharacter, excerpt];
 }
 
@@ -123,23 +166,21 @@ function evidence(
   value: unknown,
   inputs: MeetingOutputInputs
 ): { reference: MeetingOutputEvidence; excerpt: string } {
-  if (typeof value !== "object" || value === null || !("kind" in value)) invalid();
+  if (typeof value !== "object" || value === null || !("kind" in value))
+    invalid("source_binding_invalid");
   if (value.kind === "transcript") {
-    const item = record(value, [
-      "kind",
-      "meetingId",
-      "segmentId",
-      "segmentRevision",
-      "startCharacter",
-      "endCharacter"
-    ]);
-    const segmentId = text(item.segmentId, 300);
-    const segmentRevision = integer(item.segmentRevision, 1);
-    if (item.meetingId !== inputs.meetingId) invalid();
-    const segment = inputs.transcript?.segments.find(
-      (segment) => segment.segmentId === segmentId && segment.revision === segmentRevision
+    const item = record(
+      value,
+      ["kind", "meetingId", "segmentId", "segmentRevision", "startCharacter", "endCharacter"],
+      "source_binding_invalid"
     );
-    if (!segment) invalid();
+    const segmentId = text(item.segmentId, 300, "source_binding_invalid");
+    const segmentRevision = integer(item.segmentRevision, 1, "source_binding_invalid");
+    if (typeof item.meetingId !== "string") invalid("source_binding_invalid");
+    if (item.meetingId !== inputs.meetingId) invalid("source_identity_mismatch");
+    const segment = inputs.transcript?.segments.find((segment) => segment.segmentId === segmentId);
+    if (!segment) invalid("source_identity_mismatch");
+    if (segment.revision !== segmentRevision) invalid("source_revision_mismatch");
     const [startCharacter, endCharacter, excerpt] = range(
       segment.text,
       item.startCharacter,
@@ -158,15 +199,15 @@ function evidence(
     };
   }
   if (value.kind === "personal-note") {
-    const item = record(value, [
-      "kind",
-      "meetingId",
-      "notesRevision",
-      "startCharacter",
-      "endCharacter"
-    ]);
-    const notesRevision = integer(item.notesRevision);
-    if (item.meetingId !== inputs.meetingId || notesRevision !== inputs.notesRevision) invalid();
+    const item = record(
+      value,
+      ["kind", "meetingId", "notesRevision", "startCharacter", "endCharacter"],
+      "source_binding_invalid"
+    );
+    const notesRevision = integer(item.notesRevision, 0, "source_binding_invalid");
+    if (typeof item.meetingId !== "string") invalid("source_binding_invalid");
+    if (item.meetingId !== inputs.meetingId) invalid("source_identity_mismatch");
+    if (notesRevision !== inputs.notesRevision) invalid("source_revision_mismatch");
     const [startCharacter, endCharacter, excerpt] = range(
       inputs.personalNotes,
       item.startCharacter,
@@ -183,7 +224,7 @@ function evidence(
       excerpt
     };
   }
-  return invalid();
+  return invalid("source_binding_invalid");
 }
 
 /**
@@ -194,11 +235,11 @@ export function validateMeetingOutput(
   value: unknown,
   inputs: MeetingOutputInputs
 ): MeetingOutputContent {
-  text(inputs.meetingId, 300);
-  integer(inputs.notesRevision);
-  if (typeof inputs.personalNotes !== "string") invalid();
+  text(inputs.meetingId, 300, "inputs_invalid");
+  integer(inputs.notesRevision, 0, "inputs_invalid");
+  if (typeof inputs.personalNotes !== "string") invalid("inputs_invalid");
   if (inputs.transcript) {
-    if (inputs.transcript.meetingId !== inputs.meetingId) invalid();
+    if (inputs.transcript.meetingId !== inputs.meetingId) invalid("inputs_invalid");
     const segmentIds = new Set<string>();
     for (const segment of inputs.transcript.segments) {
       if (
@@ -206,9 +247,9 @@ export function validateMeetingOutput(
         segmentIds.has(segment.segmentId) ||
         typeof segment.text !== "string"
       ) {
-        invalid();
+        invalid("inputs_invalid");
       }
-      integer(segment.revision, 1);
+      integer(segment.revision, 1, "inputs_invalid");
       segmentIds.add(segment.segmentId);
     }
   }
@@ -217,16 +258,26 @@ export function validateMeetingOutput(
   const boundedText = (value: unknown, maximum = MAX_ITEM_CHARACTERS): string => {
     const result = text(value, maximum);
     characters += result.length;
-    if (characters > MAX_OUTPUT_CHARACTERS) invalid();
+    if (characters > MAX_OUTPUT_CHARACTERS) invalid("length_exceeded");
     return result;
   };
   const claim = (value: unknown, action: boolean) => {
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value) &&
+      !Object.hasOwn(value, "evidence")
+    ) {
+      invalid("source_binding_missing");
+    }
     const item = record(
       value,
       action ? ["text", "evidence", "ownerPhrase", "duePhrase"] : ["text", "evidence"]
     );
-    const references = list(item.evidence, MAX_EVIDENCE).map((entry) => evidence(entry, inputs));
-    if (references.length === 0) invalid();
+    const references = list(item.evidence, MAX_EVIDENCE, "source_binding_invalid").map((entry) =>
+      evidence(entry, inputs)
+    );
+    if (references.length === 0) invalid("source_binding_missing");
     return {
       item,
       text: boundedText(item.text),
@@ -234,10 +285,14 @@ export function validateMeetingOutput(
       excerpts: references.map((entry) => entry.excerpt)
     };
   };
-  const phrase = (value: unknown, excerpts: readonly string[]): string | null => {
+  const phrase = (
+    value: unknown,
+    excerpts: readonly string[],
+    reasonCode: "owner_phrase_unsupported" | "due_phrase_unsupported"
+  ): string | null => {
     if (value === null) return null;
     const result = boundedText(value, MAX_PHRASE_CHARACTERS);
-    if (!excerpts.some((excerpt) => excerpt.includes(result))) invalid();
+    if (!excerpts.some((excerpt) => excerpt.includes(result))) invalid(reasonCode);
     return result;
   };
   return {
@@ -252,8 +307,8 @@ export function validateMeetingOutput(
       return {
         text: result.text,
         evidence: result.evidence,
-        ownerPhrase: phrase(result.item.ownerPhrase, result.excerpts),
-        duePhrase: phrase(result.item.duePhrase, result.excerpts)
+        ownerPhrase: phrase(result.item.ownerPhrase, result.excerpts, "owner_phrase_unsupported"),
+        duePhrase: phrase(result.item.duePhrase, result.excerpts, "due_phrase_unsupported")
       };
     }),
     warnings: list(output.warnings).map((value) => boundedText(value))

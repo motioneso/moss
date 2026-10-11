@@ -15,13 +15,15 @@ import { sha256Base64url } from "./companion-crypto.js";
  * The authenticated half of the Trail Marker companion (#2560).
  *
  * `resolve` is a separate resolver from `resolveAccessContext` and is wired only to
- * `/api/companion/*`. It reads a bearer credential and never a cookie, so a signed-in
+ * `/api/companion/*` and identity-only meeting approval bootstrap. It reads a bearer
+ * credential and never a cookie, so a signed-in
  * browser cannot reach these operations, and a companion credential cannot reach any
- * other route: the general resolver hands every bearer token to the legacy UUID
+ * meeting data/control route: the general resolver hands every bearer token to the legacy UUID
  * session lookup, which rejects a `tm1_` value outright.
  *
  * Everything here is scoped to the caller's own device row. There is no operation that
- * names another device, another account, or any user content.
+ * names another device, another account, or any user content. Meeting bootstrap only
+ * proposes an opaque meeting ID; separate cookie approval and an mm1 grant authorize capture.
  */
 
 const CREDENTIAL_INACTIVITY_DAYS = 90;
@@ -54,7 +56,7 @@ export interface CompanionDevicesService {
     input: CompanionHeartbeatRequest
   ): Promise<CompanionHeartbeatResponse>;
   rename(ctx: CompanionContext, displayName: string): Promise<CompanionDeviceSummary>;
-  logout(ctx: CompanionContext): Promise<void>;
+  logoutCredential(input: { headers: IncomingHttpHeaders }): Promise<void>;
 }
 
 interface CompanionDevicesDeps {
@@ -163,11 +165,18 @@ export function createCompanionDevicesService(deps: CompanionDevicesDeps): Compa
       return { id: row.id, displayName: row.display_name };
     },
 
-    async logout(ctx) {
-      // Deleting the row is the revocation. Nothing is retained to retry with.
-      await pool.query("DELETE FROM app.companion_devices WHERE id = $1 AND user_id = $2", [
-        ctx.deviceId,
-        ctx.actorUserId
+    async logoutCredential({ headers }) {
+      const credential = readCompanionCredential(headers);
+      if (
+        headers.cookie !== undefined ||
+        !credential ||
+        !/^tm1_[A-Za-z0-9_-]{43}$/.test(credential)
+      )
+        throw new CompanionAuthError("companion_credential_invalid", 401);
+      // Logout alone may retire an expired credential or confirm that it was already removed.
+      // No identity or reusable authorization is returned, including on a lost-response retry.
+      await pool.query("DELETE FROM app.companion_devices WHERE credential_hash = $1", [
+        sha256Base64url(credential)
       ]);
     }
   };

@@ -57,14 +57,22 @@ async function setup(page: Page): Promise<MockApiState> {
       text: "Approve another action",
       actionRequestId: OTHER_ID,
       toolName: "example.write",
-      summary: "Another action"
+      summary: "Another action",
+      outcomeTitle: "Another action",
+      details: {
+        presentation: "human",
+        target: "Example setting",
+        fields: [{ label: "Value", value: "Updated" }]
+      }
     },
     {
       kind: "action_request",
       text: "Delete quarterly-plan.md",
       actionRequestId: DELETE_ID,
       toolName: "notes.delete",
-      summary: "Delete quarterly-plan.md"
+      summary: "Delete quarterly-plan.md",
+      outcomeTitle: "Delete quarterly-plan.md",
+      details: { presentation: "human", target: "Quarterly plan", fields: [] }
     }
   ];
   let streamServed = false;

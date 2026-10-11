@@ -1,0 +1,15 @@
+{
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@moss/ui": ["packages/ui/src/index.ts"],
+      "react": ["apps/web/node_modules/@types/react/index.d.ts"],
+      "react/jsx-runtime": ["apps/web/node_modules/@types/react/jsx-runtime.d.ts"],
+      "react/jsx-dev-runtime": ["apps/web/node_modules/@types/react/jsx-dev-runtime.d.ts"],
+      "react-dom/server": ["apps/web/node_modules/@types/react-dom/server.d.ts"],
+      "lucide-react": ["apps/web/node_modules/lucide-react/dist/lucide-react.d.ts"]
+    }
+  },
+  "include": ["build.tsx"]
+}

@@ -466,7 +466,8 @@ async function invoke(
       const provider = params.provider;
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
       return host.probeProvider(provider, requireSessionKey(req), {
-        forceFresh: params.forceFresh
+        forceFresh: params.forceFresh,
+        constrainedStructured: params.constrainedStructured === true
       });
     }
     case "recordLoginRejected": {

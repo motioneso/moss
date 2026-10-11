@@ -1,4 +1,9 @@
 import { assertDataContextDb } from "@moss/db";
+import {
+  approvalChoice,
+  presentApprovalFields,
+  type ToolApprovalPresentation
+} from "@moss/module-sdk";
 import type { ToolExecute, ToolResult } from "@moss/module-sdk";
 import { PreferencesRepository } from "@moss/structured-state";
 import {
@@ -43,4 +48,18 @@ export const chatSetResponseStyleExecute: ToolExecute = async (
     current?.revision ?? null
   );
   return { data: { style: next.responseStyle } };
+};
+
+export const chatResponseStylePresentation: ToolApprovalPresentation = async (_db, input) => {
+  const fields = presentApprovalFields(
+    input,
+    {
+      style: {
+        label: "Answer length",
+        present: approvalChoice({ concise: "Concise", balanced: "Balanced", detailed: "Detailed" })
+      }
+    },
+    ["style"]
+  );
+  return fields ? { target: "Chat preferences", fields } : null;
 };

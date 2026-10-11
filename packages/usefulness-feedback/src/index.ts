@@ -8,3 +8,5 @@ export * from "./story-target.js";
 export * from "./story-verifier.js";
 export * from "./routes.js";
 export * from "./target-verifiers.js";
+
+export { configureUsefulnessFeedbackPresentation } from "./approval-presentation.js";

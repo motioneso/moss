@@ -43,6 +43,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.moss.trailmarker
         PRODUCT_NAME: "Trail Marker"
         PRODUCT_MODULE_NAME: TrailMarker
+        SWIFT_OBJC_BRIDGING_HEADER: TrailMarker/TrailMarker-Bridging-Header.h
         INFOPLIST_FILE: TrailMarker/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: TrailMarker/Resources/TrailMarker.entitlements
         GENERATE_INFOPLIST_FILE: NO

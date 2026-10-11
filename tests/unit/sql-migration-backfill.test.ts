@@ -117,6 +117,20 @@ function statusDb(): Kysely<MossDatabase> {
 }
 
 describe("canonical SQL migration sidecars", () => {
+  it("applies missing lower-numbered migrations after a higher main migration", async () => {
+    const higherSql = "SELECT 'main 0294';\n";
+    await writeFile(join(directory, "0294_main_fixture.sql"), higherSql);
+    fixture.ledger.set("0294", createHash("sha256").update(higherSql).digest("hex"));
+    await writeFile(join(directory, "0284_capture_fixture.sql"), "SELECT 'capture 0284';\n");
+    await writeFile(join(directory, "0288_connection_fixture.sql"), "SELECT 'connection 0288';\n");
+    const result = await migrate();
+    expect(result.applied.map((file) => file.version)).toEqual(["0284", "0288"]);
+    expect(result.skipped.map((file) => file.version)).toEqual(["0294"]);
+    expect(fixture.queries.filter((query) => query.text === "COMMIT")).toHaveLength(2);
+    expect(fixture.queries.some((query) => query.text === higherSql)).toBe(false);
+    expect((await migrate()).applied).toEqual([]);
+  });
+
   it("preserves exact SQL-only SHA256 including BOM, Unicode and CRLF", async () => {
     const bytes = Buffer.from("\ufeff-- héllo 🌱\r\nSELECT 1;\r\n");
     await writeFile(join(directory, sqlName), bytes);

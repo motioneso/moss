@@ -366,3 +366,19 @@ window titles: `title_changed`, `window_changed`, `app_changed`, `excluded`,
 validated description. `result_too_old` includes elapsed seconds and the 30-second
 limit. These diagnostics distinguish context changes from model-output or latency
 problems; discarded results still contribute no distraction time.
+
+## Clef probe (screenshots judged directly)
+
+Cloudflare's Clef answers the same questions as Jev and also accepts images. This probe sends a
+screenshot straight to Clef and, with `--compare`, beside today's describe-then-Jev path. Each image
+must be a PNG, JPEG or WebP of at most 4 MiB.
+
+```bash
+python3 save_clef_key.py   # account ID, then the token (hidden); saved owner-only
+python3 -B clef_probe.py shot.png --goal "Write the Q4 report"          # preview only
+python3 -B clef_probe.py shot.png --goal "Write the Q4 report" --live   # clef and clef-flash
+python3 -B clef_probe.py shot.png --goal "..." --live --compare         # also OpenRouter + Jev
+```
+
+`--live` uploads the whole image to Cloudflare; `--compare` also uploads it to OpenRouter. The
+account ID is the one listed for the token's account, not a zone or token ID.

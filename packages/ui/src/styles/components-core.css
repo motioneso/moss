@@ -282,7 +282,6 @@
 .jds-card--interactive:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
 }
 
 /* ---------------------------------------------------------------
@@ -553,21 +552,20 @@
   text-transform: uppercase;
   color: var(--text-subtle);
 }
-/* Tone modifiers (Job Search mockup's Eyebrow: gold for a hero's date/status line, muted for a
-   quieter aside). Gold maps the mockup's `--gold-hover` to this system's `--gold-strong` — same
-   "emphasized gold" role, this codebase's name for it. */
+/* Tone modifiers: gold-ink for a hero's date/status line (clears 4.5:1 on paper), muted for a
+   quieter aside. */
 .jds-eyebrow--gold {
-  color: var(--gold-strong);
+  color: var(--gold-ink);
 }
 .jds-eyebrow--muted {
-  color: var(--ink-3);
+  color: var(--text-faint);
 }
 /* Bold weight and the hero-band tone (Today's eyebrow). */
 .jds-eyebrow--strong {
   font-weight: var(--weight-bold);
 }
 .jds-eyebrow--hero {
-  color: var(--hero-fg-muted);
+  color: var(--hero-fg);
 }
 /* The board hero's "credible matches" label, baseline-aligned beside the 72px count — same
    eyebrow size (--text-2xs already matches its 11px override), just accent-toned. */
@@ -977,4 +975,20 @@
     height: 44px;
     transform: translate(-50%, -50%);
   }
+}
+
+.jds-control-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.jds-highlight {
+  background: var(--accent-soft);
+  color: var(--text);
 }

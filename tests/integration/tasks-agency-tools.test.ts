@@ -12,10 +12,12 @@ import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { TasksRepository, tasksModuleManifest } from "@moss/tasks";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
 
 describe("Tasks agency tools through AssistantToolGateway", () => {
   let appDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let aiRepository: AiRepository;
   let tasksRepository: TasksRepository;
   let tokens: SessionTokenRegistry;
@@ -36,7 +38,9 @@ describe("Tasks agency tools through AssistantToolGateway", () => {
     await appDb.destroy();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA, ids.userB]);
+
     // #1308 defect 2: build the array as a local `sink` FIRST and close the notifier over that
     // local, not over the outer `emitted` binding. `emitted` is a `let` that every beforeEach
     // reassigns to a new array; the notifier below only ever reads the `sink` it was created
@@ -54,7 +58,7 @@ describe("Tasks agency tools through AssistantToolGateway", () => {
     gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [tasksModuleManifest],
       repository: aiRepository,
-      runner,
+      ...conversations.gatewayDependencies,
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => sink.push({ chatSessionId, record }) },
@@ -114,7 +118,7 @@ describe("Tasks agency tools through AssistantToolGateway", () => {
 
   function tokenFor(userId: string) {
     return tokens.mint({
-      actorUserId: userId,
+      ...conversations.bindingFor(userId),
       chatSessionId: `tasks-${userId}`,
       allowedToolNames: null
     });

@@ -1,4 +1,8 @@
-import { projectMeetingRequestInput, projectMeetingRequestResult } from "./history-projection.js";
+import {
+  projectMeetingRequestInput,
+  projectMeetingRequestResult,
+  projectMeetingOverview
+} from "./history-projection.js";
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -119,7 +123,7 @@ export class MeetingOutputsRepository {
     assertUuid(meetingId, "Meeting id");
     const row = await db.db
       .selectFrom("app.meeting_output_artifacts")
-      .selectAll()
+      .select("artifact_json")
       .where("meeting_id", "=", meetingId)
       .where("inactive", "=", false)
       .orderBy("version", "desc")
@@ -199,7 +203,14 @@ export class MeetingOutputsRepository {
     assertUuid(requestKey, "Meeting output request key");
     const row = await db.db
       .selectFrom("app.meeting_output_requests")
-      .selectAll()
+      .select([
+        "meeting_id",
+        "owner_user_id",
+        "request_key",
+        "input_json",
+        "result_json",
+        "expires_at"
+      ])
       .where("meeting_id", "=", meetingId)
       .where("request_key", "=", requestKey)
       .executeTakeFirst();
@@ -291,6 +302,7 @@ export class MeetingOutputsRepository {
         meeting_id: input.meetingId,
         version,
         artifact_json: JSON.stringify(artifact),
+        history_overview: projectMeetingOverview(artifact.content.overview),
         history_origin: artifact.origin,
         history_notes_revision: artifact.inputs.notesRevision,
         history_transcript_revision: artifact.inputs.transcript?.transcriptRevision ?? 0,
@@ -314,8 +326,7 @@ export class MeetingOutputsRepository {
             proposal_json: JSON.stringify(action),
             possible_match_ids: sql<
               string[]
-            >`${JSON.stringify(existing.map((item) => item.id))}::jsonb`,
-            accepted_task_id: null
+            >`${JSON.stringify(existing.map((item) => item.id))}::jsonb`
           })
           .onConflict((conflict) => conflict.columns(["meeting_id", "identity_key"]).doNothing())
           .execute();

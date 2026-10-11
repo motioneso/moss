@@ -21,8 +21,18 @@ function setup(active = true) {
   const tokens = new SessionTokenRegistry();
   const confirmations = new ConfirmationRegistry();
   const gateway = new AssistantToolGateway({
+    // Exercise the existing permission rules with a verified clean conversation.
+    provenance: {
+      isTainted: async () => false,
+      recordAdmission: async () => {},
+      runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+    },
     resolveActiveModules: async () => [],
-    repository: { createPendingAssistantAction, insertActionAuditLog } as never,
+    repository: {
+      createPendingAssistantAction,
+      insertActionAuditLog,
+      expireAssistantAction: async () => ({ id: "action-1", status: "timed_out" })
+    } as never,
     runner: {
       withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) => work({})
     } as never,
@@ -33,6 +43,7 @@ function setup(active = true) {
     yoloMode
   });
   const token = tokens.mint({
+    threadId: "clean-thread",
     actorUserId: "actor-1",
     chatSessionId: "chat-1",
     allowedToolNames: null

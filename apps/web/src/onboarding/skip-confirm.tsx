@@ -1,4 +1,5 @@
-import { TriangleAlert } from "lucide-react";
+import { useRef } from "react";
+import { Button, Dialog } from "@moss/ui";
 
 import type { OnboardingStatusResponse } from "@moss/shared";
 
@@ -8,11 +9,15 @@ import { hasConnectedProvider } from "./chat-availability.js";
  * #369 — "Skip setup" must not silently dead-end into a chat that can't answer. When no provider
  * is connected, skipping is still allowed but it must be HONEST: confirm the consequence first.
  *
- * `needsSkipConfirm` is true ⇔ chat would NOT work after the skip (no provider has reached the
- * `ready` install state). Once a provider is connected, skipping is harmless — confirm nothing.
+ * `needsSkipConfirm` is true ⇔ chat would NOT work after the skip: no provider has reached the
+ * `ready` install state and the chat route is not usable (members inherit the shared setup).
+ * Once chat is usable, skipping is harmless — confirm nothing.
  */
-export function needsSkipConfirm(status: OnboardingStatusResponse | undefined): boolean {
-  return !hasConnectedProvider(status);
+export function needsSkipConfirm(
+  status: OnboardingStatusResponse | undefined,
+  chatAvailable = false
+): boolean {
+  return !chatAvailable && !hasConnectedProvider(status);
 }
 
 /** Verbatim consequence copy (spec-locked). Exported so tests/callers share one source. */
@@ -30,46 +35,27 @@ export function SkipConfirmDialog(props: {
   readonly onCancel: () => void;
   readonly pending: boolean;
 }) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
   return (
-    <div
-      className="onb-skipconfirm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="onb-skipconfirm-t"
-    >
-      <button
-        className="onb-skipconfirm__scrim"
-        type="button"
-        aria-label="Cancel"
-        onClick={props.onCancel}
-      />
-      <div className="onb-skipconfirm__card">
-        <span className="onb-skipconfirm__mark" aria-hidden="true">
-          <TriangleAlert size={20} />
-        </span>
-        <h2 id="onb-skipconfirm-t" className="onb-skipconfirm__t">
-          Skip setup without connecting a provider?
-        </h2>
-        <p className="onb-skipconfirm__s">{SKIP_CONSEQUENCE_COPY}</p>
-        <div className="onb-skipconfirm__actions">
-          <button
-            className="ghost-button"
-            type="button"
-            disabled={props.pending}
-            onClick={props.onCancel}
-          >
+    <Dialog
+      title="Skip setup without connecting a provider?"
+      description={SKIP_CONSEQUENCE_COPY}
+      initialFocusRef={cancelRef}
+      onClose={() => {
+        if (!props.pending) props.onCancel();
+      }}
+      footer={
+        <>
+          <Button ref={cancelRef} variant="quiet" disabled={props.pending} onClick={props.onCancel}>
             Cancel
-          </button>
-          <button
-            className="primary-button"
-            type="button"
-            disabled={props.pending}
-            onClick={props.onConfirm}
-          >
+          </Button>
+          <Button disabled={props.pending} onClick={props.onConfirm}>
             Skip anyway
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </>
+      }
+    >
+      {null}
+    </Dialog>
   );
 }

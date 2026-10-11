@@ -363,7 +363,7 @@ async function renderInteractiveComposer(
       lockedModelUnavailable: false,
       privateMode: false,
       queuedText: null,
-      onSend: () => {},
+      onSend: () => true,
       onQueue: () => {},
       onDiscardQueuedText: () => {},
       onStop: () => {}
@@ -461,7 +461,7 @@ async function renderComposer(
         lockedModelUnavailable: false,
         privateMode: false,
         queuedText: null,
-        onSend: () => {},
+        onSend: () => true,
         onQueue: () => {},
         onDiscardQueuedText: () => {},
         onStop: () => {}

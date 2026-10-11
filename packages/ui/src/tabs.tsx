@@ -16,7 +16,12 @@ export interface TabsProps<T extends string> {
 export function Tabs<T extends string>({ id, ariaLabel, value, items, onChange }: TabsProps<T>) {
   return (
     <div className="jds-tabs__root">
-      <div className="jds-tabs__list" role="tablist" aria-label={ariaLabel}>
+      <div
+        className="jds-tabs__list"
+        role="tablist"
+        aria-label={ariaLabel}
+        hidden={items.length < 2}
+      >
         {items.map((item, index) => (
           <button
             key={item.value}
@@ -63,8 +68,8 @@ export function Tabs<T extends string>({ id, ariaLabel, value, items, onChange }
           key={item.value}
           className="jds-tabs__panel"
           id={`${id}-panel-${item.value}`}
-          role="tabpanel"
-          aria-labelledby={`${id}-tab-${item.value}`}
+          role={items.length > 1 ? "tabpanel" : undefined}
+          aria-labelledby={items.length > 1 ? `${id}-tab-${item.value}` : undefined}
           hidden={value !== item.value}
         >
           {item.content}

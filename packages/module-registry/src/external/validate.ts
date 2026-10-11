@@ -19,7 +19,12 @@ import type {
   ModuleWebDeclaration
 } from "@moss/module-sdk";
 import { validateClassifierDeclaration } from "./validate-classifier.js";
-import { validateModuleNavigation, validateModulePreferences } from "./validate-declarations.js";
+import {
+  validateModuleNavigation,
+  validateModulePreferences,
+  validateModuleSettingsPath
+} from "./validate-declarations.js";
+import { validateModuleAppMap } from "./app-map.js";
 import { assertValidFetchHosts } from "@moss/host-fetch/policy";
 import {
   isValidModuleParamsSchema,
@@ -131,7 +136,11 @@ function validateActionFamilies(
       errors.push(`action family ${family.id} has invalid allowedTiers`);
       continue;
     }
-    if (family.defaultTier !== "ask_each_time" && family.defaultTier !== "always_confirm") {
+    if (
+      family.defaultTier !== "ask_each_time" &&
+      family.defaultTier !== "always_confirm" &&
+      family.defaultTier !== "trusted_auto"
+    ) {
       errors.push(`action family ${family.id} has an invalid defaultTier`);
       continue;
     }
@@ -139,10 +148,28 @@ function validateActionFamilies(
       errors.push(`action family ${family.id} defaultTier must appear in allowedTiers`);
       continue;
     }
+    // A module may default a family to trusted_auto only for routine work: a family tagged
+    // "routine", or one whose only allowed tier is trusted_auto. Tools in such a family may not be
+    // destructive or outbound (checked per tool).
+    if (
+      family.defaultTier === "trusted_auto" &&
+      family.freedom !== "routine" &&
+      !(family.allowedTiers.length === 1 && family.allowedTiers[0] === "trusted_auto")
+    ) {
+      errors.push(
+        `action family ${family.id} may default to trusted_auto only when tagged routine or when trusted_auto is its only allowed tier`
+      );
+      continue;
+    }
+    if (family.freedom !== undefined && family.freedom !== "routine" && family.freedom !== "new") {
+      errors.push(`action family ${family.id} freedom must be "routine" or "new"`);
+      continue;
+    }
     families.push({
       id: family.id,
       label: family.label,
       description: family.description,
+      ...(family.freedom !== undefined ? { freedom: family.freedom } : {}),
       defaultTier: family.defaultTier,
       allowedTiers: family.allowedTiers as readonly MossActionPermissionTier[]
     });
@@ -173,6 +200,14 @@ function validateAssistantToolPolicy(
     tool.executionPolicy !== "confirm"
   ) {
     errors.push('assistant tool executionPolicy must be "auto" or "confirm"');
+  }
+  if (
+    family?.defaultTier === "trusted_auto" &&
+    (tool.risk === "destructive" || tool.risk === "outbound")
+  ) {
+    errors.push(
+      `assistant tool in family ${family.id} cannot be ${String(tool.risk)} because the family defaults to trusted_auto`
+    );
   }
   if (tool.executionPolicy === "auto") {
     if (!family) {
@@ -216,6 +251,23 @@ function validateAssistantToolPolicy(
       !tool.confirmWhenKeys.every((key) => isNonEmptyString(key)))
   ) {
     errors.push("assistant tool confirmWhenKeys must be an array of non-empty strings");
+  }
+  if (tool.confirmAbove !== undefined) {
+    const rule = tool.confirmAbove as Record<string, unknown> | null;
+    if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+      errors.push("assistant tool confirmAbove must be an object");
+    } else if (
+      !isNonEmptyString(rule.inputKey) ||
+      !isNonEmptyString(rule.preferenceKey) ||
+      (rule.baseKey !== undefined && !isNonEmptyString(rule.baseKey)) ||
+      typeof rule.scale !== "number" ||
+      !Number.isFinite(rule.scale) ||
+      rule.scale <= 0
+    ) {
+      errors.push(
+        "assistant tool confirmAbove needs inputKey:string, preferenceKey:string, scale:number>0 and optional baseKey:string"
+      );
+    }
   }
   if (tool.confirmWhen !== undefined) {
     if (!Array.isArray(tool.confirmWhen)) {
@@ -790,6 +842,12 @@ export function validateExternalModuleManifest(
   // file only to keep this one under the 1000-line check; see that file for the design.
   const preferences = validateModulePreferences(obj, errors);
 
+  // #3184: module-relative path of the module's own settings page.
+  const settingsPath = validateModuleSettingsPath(obj, errors);
+
+  // #3168: screens, settings and features the module adds to Moss's app map.
+  const appMap = validateModuleAppMap(obj, expectedId, errors);
+
   // #1282: positive validation of the briefing contribution declaration. Same shape as
   // every other allow-listed surface above: unknown keys rejected outright rather than
   // ignored, bounded strings, and a cross-check that the handler has a worker to run in.
@@ -880,6 +938,8 @@ export function validateExternalModuleManifest(
     ...(database !== undefined ? { database } : {}),
     ...(navigation !== undefined ? { navigation } : {}),
     ...(preferences !== undefined ? { preferences } : {}),
+    ...(settingsPath !== undefined ? { settingsPath } : {}),
+    ...(appMap !== undefined ? { appMap } : {}),
     // #1282: this literal is an allow-list — a validated field that is not re-emitted
     // here vanishes from the manifest with validation still returning ok. Omitting this
     // line is silent, and only tests/unit/external-module-briefing-manifest.test.ts

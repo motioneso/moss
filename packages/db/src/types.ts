@@ -163,6 +163,8 @@ export interface ExternalModulesTable {
   package_hash: string;
   disabled_reason: string | null;
   enabled_by: string | null;
+  // Approval of the current accepted hashes; legacy rows deliberately remain unattributed.
+  descriptor_approved_by: string | null;
   enabled_at: NullableTimestampColumn;
   // #1753: NULL for every enabled/disabled row, NOT NULL for every draft row (DB CHECK
   // enforces the pairing). The one admin-author a draft runs for alone.
@@ -187,7 +189,8 @@ export interface MeetingRecordsTable {
   id: ColumnType<string, string | undefined, never>;
   owner_user_id: ColumnType<string, string | undefined, never>;
   request_key: ColumnType<string, string, never>;
-  title: ColumnType<string, string, never>;
+  title: ColumnType<string, string, string>;
+  creation_title: ColumnType<string, string | undefined, never>;
   personal_notes: ColumnType<string, string | undefined, string>;
   notes_revision: ColumnType<number, number | undefined, number>;
   created_at: TimestampColumn;
@@ -273,6 +276,7 @@ export interface MeetingOutputArtifactsTable {
   artifact_json: string;
   inactive: boolean;
   created_at: TimestampColumn;
+  history_overview: ColumnType<string, string | undefined, string>;
 }
 export interface MeetingActionCandidatesTable {
   id: ColumnType<string, string | undefined, never>;
@@ -287,7 +291,7 @@ export interface MeetingActionCandidatesTable {
     "pending" | undefined,
     "pending" | "accepted" | "dismissed"
   >;
-  accepted_task_id: string | null;
+  accepted_task_id: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface WorkshopProjectsTable {
@@ -407,8 +411,13 @@ export type AiModelStatus = "active" | "disabled";
 export type AiModelTier = "reasoning" | "interactive" | "economy";
 // #2208: who created a model row. Discovery may prune only its own ('discovered') rows.
 export type AiConfiguredModelOrigin = "discovered" | "manual";
-export type AiAssistantActionRisk = "write" | "outbound" | "destructive";
-export type AiAssistantActionStatus = "pending" | "confirmed" | "rejected" | "cancelled";
+export type AiAssistantActionRisk = "read" | "write" | "outbound" | "destructive";
+export type AiAssistantActionStatus =
+  | "pending"
+  | "confirmed"
+  | "rejected"
+  | "cancelled"
+  | "timed_out";
 export type ChatMessageRole = "user" | "assistant";
 export type ChatMessageStatus = "stored" | "pending" | "blocked" | "no_model" | "working" | "error";
 export type BriefingCadence = "manual" | "daily" | "weekly";
@@ -826,6 +835,11 @@ export interface AiConfiguredModelsTable {
 
 export interface AiAssistantActionRequestsTable {
   id: string;
+  chat_thread_id: string | null;
+  chat_session_id: string | null;
+  expires_at: NullableTimestampColumn;
+  outcome_recorded_at: NullableTimestampColumn;
+  outcome_ignored_at: NullableTimestampColumn;
   owner_user_id: string;
   tool_module_id: string;
   tool_module_name: string;
@@ -930,6 +944,20 @@ export interface ChatThreadsTable {
   updated_at: TimestampColumn;
   last_active_at: TimestampColumn;
   conversation_summary: string | null;
+}
+
+export interface ChatConversationProvenanceTable {
+  thread_id: string;
+  owner_user_id: string;
+  tainted_at: NullableTimestampColumn;
+  first_admission_path: ColumnType<string | null, string | null | undefined, string | null>;
+  created_at: TimestampColumn;
+}
+
+export interface ChatAutomaticActionReservationsTable {
+  thread_id: string;
+  owner_user_id: string;
+  reservation_id: string;
 }
 
 export interface ChatClassifierShadowRecordsTable {
@@ -1884,6 +1912,10 @@ export interface MossDatabase {
   "app.meeting_output_requests": MeetingOutputRequestsTable;
   "app.meeting_output_artifacts": MeetingOutputArtifactsTable;
   "app.meeting_action_candidates": MeetingActionCandidatesTable;
+  "app.meeting_capture_start_limits": {
+    owner_user_id: ColumnType<string, string | undefined, never>;
+    started_at: Date[];
+  };
   "app.meeting_records": MeetingRecordsTable;
   "app.meeting_note_writes": MeetingNoteWritesTable;
   "app.meeting_transcript_batches": MeetingTranscriptBatchesTable;
@@ -1928,6 +1960,8 @@ export interface MossDatabase {
   "app.moss_model_activity_log": MossModelActivityLogTable;
   "app.moss_activity_detail": MossActivityDetailTable;
   "app.chat_threads": ChatThreadsTable;
+  "app.chat_conversation_provenance": ChatConversationProvenanceTable;
+  "app.chat_automatic_action_reservations": ChatAutomaticActionReservationsTable;
   "app.chat_messages": ChatMessagesTable;
   "app.chat_classifier_shadow_records": ChatClassifierShadowRecordsTable;
   "app.chat_classifier_release_eligibility": ChatClassifierReleaseEligibilityTable;

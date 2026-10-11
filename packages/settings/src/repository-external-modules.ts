@@ -48,6 +48,8 @@ export interface ExternalModuleState {
   readonly id: string;
   readonly status: "enabled" | "disabled" | "draft";
   readonly packageHash: string | null;
+  readonly manifestHash: string;
+  readonly descriptorApprovedByUserId: string | null;
   readonly disabledReason: string | null;
   /** #1753: NULL unless status is 'draft', in which case it is the one user this row runs for. */
   readonly ownerUserId: string | null;
@@ -80,13 +82,23 @@ export async function listExternalModuleStates(
   assertDataContextDb(scopedDb);
   const rows = await scopedDb.db
     .selectFrom("app.external_modules")
-    .select(["id", "status", "package_hash", "disabled_reason", "owner_user_id"])
+    .select([
+      "id",
+      "status",
+      "manifest_hash",
+      "package_hash",
+      "descriptor_approved_by",
+      "disabled_reason",
+      "owner_user_id"
+    ])
     .orderBy("id")
     .execute();
   return rows.map((r) => ({
     id: r.id,
     status: r.status,
     packageHash: r.package_hash,
+    manifestHash: r.manifest_hash,
+    descriptorApprovedByUserId: r.descriptor_approved_by,
     disabledReason: r.disabled_reason,
     ownerUserId: r.owner_user_id
   }));
@@ -95,7 +107,8 @@ export async function listExternalModuleStates(
 /**
  * Admin: enable an external module, recording the manifest + package hashes trusted at
  * this moment (#917). Upsert — enabling an already-enabled module re-captures the hash
- * (an admin re-approving a changed package). RLS INSERT/UPDATE require
+ * (an admin re-approving the current installation). This is distinct from the per-user
+ * module toggle, which never calls this hash-acceptance writer. RLS INSERT/UPDATE require
  * current_actor_is_admin(); a non-admin call is rejected at the policy layer.
  */
 export async function setExternalModuleEnabled(
@@ -112,6 +125,7 @@ export async function setExternalModuleEnabled(
       manifest_hash: input.manifestHash,
       package_hash: input.packageHash,
       disabled_reason: null,
+      descriptor_approved_by: input.actorUserId,
       enabled_by: input.actorUserId,
       enabled_at: new Date(),
       owner_user_id: null,
@@ -128,6 +142,7 @@ export async function setExternalModuleEnabled(
         // enforces this exists precisely because a leftover owner_user_id from a prior
         // draft row would be meaningless once the module is instance-wide).
         owner_user_id: null,
+        descriptor_approved_by: input.actorUserId,
         enabled_by: input.actorUserId,
         enabled_at: new Date(),
         updated_at: new Date()
@@ -177,6 +192,7 @@ export async function setExternalModuleDraft(
       manifest_hash: input.manifestHash,
       package_hash: input.packageHash,
       disabled_reason: null,
+      descriptor_approved_by: null,
       enabled_by: null,
       enabled_at: null,
       owner_user_id: input.ownerUserId,
@@ -189,6 +205,7 @@ export async function setExternalModuleDraft(
         manifest_hash: input.manifestHash,
         package_hash: input.packageHash,
         disabled_reason: null,
+        descriptor_approved_by: null,
         enabled_by: null,
         enabled_at: null,
         owner_user_id: input.ownerUserId,
@@ -232,6 +249,7 @@ export async function writeExternalModuleDisabledRow(
       manifest_hash: "",
       package_hash: "",
       disabled_reason: input.reason,
+      descriptor_approved_by: null,
       enabled_by: null,
       enabled_at: null,
       owner_user_id: null,
@@ -242,6 +260,7 @@ export async function writeExternalModuleDisabledRow(
       oc.column("id").doUpdateSet({
         status: "disabled",
         disabled_reason: input.reason,
+        descriptor_approved_by: null,
         enabled_by: null,
         enabled_at: null,
         updated_at: new Date()
@@ -297,6 +316,7 @@ export async function updateExternalModuleStaging(
       manifest_hash: "",
       package_hash: "",
       disabled_reason: null,
+      descriptor_approved_by: null,
       enabled_by: null,
       enabled_at: null,
       owner_user_id: null,
@@ -373,7 +393,7 @@ export async function setExternalModulePurgeRequested(
   return true;
 }
 
-/** Full admin-facing distribution state per row (#964). Superset of ExternalModuleState. */
+/** Admin-facing distribution state (#964); descriptor approval stays in runtime state. */
 export interface ExternalModuleAdminState {
   readonly id: string;
   readonly status: "enabled" | "disabled" | "draft";
@@ -444,6 +464,7 @@ export async function markExternalModuleRemoved(
     .set({
       status: "disabled",
       disabled_reason: "removed by admin",
+      descriptor_approved_by: null,
       staged_version: null,
       staged_package_hash: null,
       staged_at: null,
@@ -503,6 +524,7 @@ export async function shipExternalModule(
       package_hash: input.packageHash,
       disabled_reason: null,
       owner_user_id: null,
+      descriptor_approved_by: input.actorUserId,
       enabled_by: input.actorUserId,
       enabled_at: new Date(),
       updated_at: new Date()

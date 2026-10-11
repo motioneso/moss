@@ -1,3 +1,4 @@
+import { briefingRerunPresentation } from "./approval-presentation.js";
 import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
@@ -51,8 +52,9 @@ export const briefingsModuleManifest = {
       id: "briefings.settings",
       label: "Briefings",
       description:
-        "Set the morning briefing time, the evening wind-down and its time, and which " +
-        "sources feed the morning briefing: news, sports, read tools, email and calendar signals.",
+        "Set the morning and evening briefing times and choose the morning sources, including " +
+        "news, sports, read tools, email and calendar signals, and a switch for each module you " +
+        "have turned on that offers a briefing source.",
       path: "/settings?section=modules&module=briefings",
       scope: "user",
       permissionId: "briefings.update"
@@ -112,6 +114,8 @@ export const briefingsModuleManifest = {
   assistantTools: [
     {
       name: "briefings.rerun",
+      actionLabel: "Re-run a briefing",
+      approvalPresentation: briefingRerunPresentation,
       description:
         "Re-run one of the user's own briefings now. Pick it by briefingType (morning, evening, " +
         "weekly_review) or by definitionId; give exactly one. Returns status queued, " +
@@ -121,6 +125,7 @@ export const briefingsModuleManifest = {
       permissionId: "briefings.run",
       actionFamilyId: "briefing_runs",
       risk: "write",
+      content: "user_authored",
       executionPolicy: "auto",
       // Re-running only writes a new dated report; earlier reports stay. Not destructive, so
       // installing the module grants normal use (Ben's ruling on Food, 2026-08-19).
@@ -171,6 +176,7 @@ export const briefingsModuleManifest = {
         "failed, or not_found. Check again later while pending; never re-run to check.",
       permissionId: "briefings.view",
       risk: "read",
+      content: "outside",
       externalContent: true,
       inputSchema: {
         type: "object",
@@ -213,12 +219,15 @@ export const briefingsModuleManifest = {
     {
       method: "GET",
       path: "/api/briefings/definitions",
+      // Listing definitions schedules/unschedules the actor's jobs as a self-heal.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: listBriefingDefinitionsResponseSchema,
       permissionId: "briefings.view"
     },
     {
       method: "POST",
       path: "/api/briefings/definitions",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: createBriefingDefinitionRequestSchema,
       responseSchema: createBriefingDefinitionResponseSchema,
       permissionId: "briefings.create"
@@ -226,6 +235,7 @@ export const briefingsModuleManifest = {
     {
       method: "PATCH",
       path: "/api/briefings/definitions/:id",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: updateBriefingDefinitionRequestSchema,
       responseSchema: updateBriefingDefinitionResponseSchema,
       permissionId: "briefings.update"
@@ -233,6 +243,7 @@ export const briefingsModuleManifest = {
     {
       method: "POST",
       path: "/api/briefings/definitions/:id/run",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       requestSchema: runBriefingDefinitionRequestSchema,
       responseSchema: runBriefingDefinitionResponseSchema,
       permissionId: "briefings.run"
@@ -240,12 +251,15 @@ export const briefingsModuleManifest = {
     {
       method: "GET",
       path: "/api/briefings/definitions/:id/runs",
+      // Both run reads upsert feedback/catch-up targets; neither is read-only.
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: listBriefingRunsResponseSchema,
       permissionId: "briefings.view"
     },
     {
       method: "GET",
       path: "/api/briefings/definitions/:id/runs/:runId",
+      chat: { access: "blocked", blockedBecause: "external_effect" },
       responseSchema: getBriefingRunResponseSchema,
       permissionId: "briefings.view"
     }
@@ -281,9 +295,7 @@ export const briefingsModuleManifest = {
     {
       id: "briefings.chat_rerun",
       description:
-        "Ask Moss in chat to re-run your morning, evening or weekly review briefing. It " +
-        "queues one run without an approval card and can say when it is ready or failed. " +
-        "Asking again while it is being written starts no second run.",
+        "Ask Moss in chat to re-run your morning, evening or weekly review briefing. Approval identifies your saved briefing. It queues one run and can report readiness or failure; asking again while it runs starts no second run.",
       errors: [
         {
           code: "briefing_run_in_flight",

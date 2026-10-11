@@ -44,7 +44,8 @@ describe("assistant action resolution without a wired gateway", () => {
         routes: [
           { method: "POST", url: "/api/chat/action-requests/:id/resolve" },
           { method: "POST", url: "/api/mcp" },
-          { method: "POST", url: "/internal/permission" }
+          { method: "POST", url: "/internal/permission" },
+          { method: "POST", url: "/internal/vault-read-report" }
         ]
       }
     });

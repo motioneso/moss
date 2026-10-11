@@ -64,6 +64,8 @@ export interface ModuleDto {
   readonly lifecycle: "required" | "optional" | "user-toggleable" | "workspace-toggleable";
   readonly navigation: readonly ModuleNavigationEntryDto[];
   readonly settings: readonly ModuleSettingsSurfaceDto[];
+  /** Additional frontend query-key tokens invalidated after this module changes through chat. */
+  readonly chatRefreshTokens?: readonly string[];
   /** #917: true for active external (non-compiled) modules. Absent/false for built-ins. */
   readonly external?: boolean;
   /** #918: web contribution declaration. Absent for built-ins and modules without one. */
@@ -75,6 +77,12 @@ export interface ModuleDto {
    * still-being-built module" — never someone else's. Absent once the module has shipped.
    */
   readonly draft?: boolean;
+  /**
+   * #3184: absolute app route of the module's own settings page (`/m/<id>/...`). When present,
+   * the top-bar gear opens it and the host Settings page links to it instead of rendering the
+   * module's switches and credential slots. Absent for modules using the host-rendered page.
+   */
+  readonly settingsPath?: string;
 }
 
 export interface InstanceSettingDto {
@@ -234,6 +242,7 @@ const moduleSchema = {
     },
     navigation: { type: "array", items: moduleNavigationEntrySchema },
     settings: { type: "array", items: moduleSettingsSurfaceSchema },
+    chatRefreshTokens: { type: "array", items: { type: "string" } },
     // #917: declared so fast-json-stringify does not strip it (undeclared fields are
     // silently dropped). NOT in `required` — built-ins emit external:false explicitly,
     // but existing producers/fixtures that omit it stay valid.
@@ -241,7 +250,9 @@ const moduleSchema = {
     // #918: web contribution declaration. NOT in `required` — absent for built-ins.
     web: moduleWebSchema,
     // #1756: present-and-true only for the caller's own still-running draft; absent otherwise.
-    draft: { type: "boolean" }
+    draft: { type: "boolean" },
+    // #3184: declared so fast-json-stringify keeps it.
+    settingsPath: { type: "string" }
   }
 } as const;
 

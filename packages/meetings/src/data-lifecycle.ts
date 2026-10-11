@@ -15,13 +15,19 @@ export interface MeetingsExportSection {
   readonly action_candidates: readonly ExportRow[];
   readonly export_receipts: readonly ExportRow[];
   readonly export_requests: readonly ExportRow[];
+  readonly stop_summaries: readonly ExportRow[];
+  readonly capture_grants: readonly ExportRow[];
+  readonly capture_connections: readonly ExportRow[];
+  readonly capture_start_cancellations: readonly ExportRow[];
+  readonly capture_start_limits: readonly ExportRow[];
 }
 
 /**
  * Export retained source rows, including superseded notes, transcripts and outputs. TEXT JSON
  * stays byte-for-byte intact: it can contain evidence and provenance no longer in the current
  * view. Derived history/search projections are omitted. Chat, preferences and accepted Tasks
- * are included elsewhere in account export; this collector reads only Meetings-owned tables.
+ * are included elsewhere in account export; this collector reads only Meetings-owned tables. Capture exports include retained state/gaps,
+ * never grant verifiers, credential hashes, browser-session IDs, or transient audio.
  */
 export async function collectMeetingsExportSection(
   scopedDb: unknown,
@@ -35,7 +41,7 @@ export async function collectMeetingsExportSection(
       scopedDb,
       sql<Record<string, unknown>>`
       SELECT id::text AS id, owner_user_id::text AS "ownerUserId",
-        request_key::text AS "requestKey", title, personal_notes AS "personalNotes",
+        request_key::text AS "requestKey", title, creation_title AS "creationTitle", personal_notes AS "personalNotes",
         notes_revision AS "notesRevision", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM app.meeting_records
       WHERE owner_user_id = ${ownerUserId}::uuid
@@ -120,6 +126,44 @@ export async function collectMeetingsExportSection(
       FROM app.meeting_export_requests
       WHERE owner_user_id = ${ownerUserId}::uuid
       ORDER BY meeting_id, request_key
+    `
+    ),
+    capture_connections: await readRows(
+      scopedDb,
+      sql<Record<string, unknown>>`
+      SELECT device_id::text AS "deviceId",owner_user_id::text AS "ownerUserId",device_name AS "deviceName",inventory_json AS "inventoryJson",last_seen_at AS "lastSeenAt",expires_at AS "expiresAt"
+      FROM app.meeting_capture_connections WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY device_id
+    `
+    ),
+    capture_start_cancellations: await readRows(
+      scopedDb,
+      sql<Record<string, unknown>>`
+      SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",request_key::text AS "requestKey",created_at AS "createdAt"
+      FROM app.meeting_capture_start_cancellations WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY created_at,request_key
+    `
+    ),
+    capture_start_limits: await readRows(
+      scopedDb,
+      sql<
+        Record<string, unknown>
+      >`SELECT owner_user_id::text AS "ownerUserId", started_at AS "startedAt" FROM app.meeting_capture_start_limits WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY owner_user_id`
+    ),
+    stop_summaries: await readRows(
+      scopedDb,
+      sql<Record<string, unknown>>`
+      SELECT meeting_id::text AS "meetingId",owner_user_id::text AS "ownerUserId",grant_id::text AS "grantId",request_key::text AS "requestKey",template_id AS "templateId",status,code,due_at AS "dueAt",created_at AS "createdAt",early_enqueued AS "earlyEnqueued",input_json AS "inputJson"
+      FROM app.meeting_stop_summaries WHERE owner_user_id = ${ownerUserId}::uuid ORDER BY created_at,meeting_id
+    `
+    ),
+    capture_grants: await readRows(
+      scopedDb,
+      sql<Record<string, unknown>>`
+      SELECT id::text AS id, meeting_id::text AS "meetingId", owner_user_id::text AS "ownerUserId",
+        device_name AS "deviceName", status, state_json AS "stateJson",
+        created_at AS "createdAt", expires_at AS "expiresAt"
+      FROM app.meeting_capture_grants
+      WHERE owner_user_id = ${ownerUserId}::uuid
+      ORDER BY created_at, id
     `
     )
   };

@@ -4,6 +4,9 @@ Status: approved by Ben on 2026-09-21 ("let's get this built quickly", answers b
 `2026-09-20-trail-marker-focus-judgment.md` §6, §9, §10, §12 (rung 3 was already agreed at a design
 level; this fills in what that spec left open). Part of #2570.
 
+Amended by [Judge the screenshot directly](2026-10-05-trail-marker-judge-screenshot.md) (#3067):
+a third screenshot source, the decision model bound as the judge (§3, §5, §6).
+
 ## 1. What this adds
 
 Today (slice 1, merged/landing in #2584) a judgment uses only the frontmost app name and a

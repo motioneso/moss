@@ -29,6 +29,8 @@ import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { registerMcpTransportRoute } from "../../packages/chat/src/mcp-transport.js";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createCleanConversationFixture } from "./fixtures/clean-conversations.js";
+import { ConversationProvenanceStore } from "../../packages/chat/src/conversation-provenance.js";
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
 
 import { loadChatScriptFixture } from "../uat/fixtures/scripted-provider/script-schema.js";
@@ -58,6 +60,8 @@ const WRITE_MCP_NAME = "mcp__jarvis__example_write";
 
 describe("scripted claude fixture executable (#1121 Task 3)", () => {
   let appDb: Kysely<MossDatabase>;
+  let runner: DataContextRunner;
+  let conversations: Awaited<ReturnType<typeof createCleanConversationFixture>>;
   let app: FastifyInstance;
   let tokens: SessionTokenRegistry;
   let gateway: AssistantToolGateway;
@@ -75,7 +79,7 @@ describe("scripted claude fixture executable (#1121 Task 3)", () => {
   beforeAll(async () => {
     await resetFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
-    const runner = new DataContextRunner(appDb);
+    runner = new DataContextRunner(appDb);
     const repository = new AiRepository();
 
     tokens = new SessionTokenRegistry();
@@ -86,6 +90,7 @@ describe("scripted claude fixture executable (#1121 Task 3)", () => {
       resolveActiveModules: async () => [exampleToolModule],
       repository,
       runner,
+      provenance: new ConversationProvenanceStore(runner),
       tokens,
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
@@ -103,7 +108,8 @@ describe("scripted claude fixture executable (#1121 Task 3)", () => {
     await appDb.destroy();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    conversations = await createCleanConversationFixture(runner, [ids.userA]);
     exampleToolCalls.length = 0;
     emitted.length = 0;
     cwd = mkdtempSync(join(tmpdir(), "uat-scripted-claude-cwd-"));
@@ -144,7 +150,7 @@ describe("scripted claude fixture executable (#1121 Task 3)", () => {
     const dir = mkdtempSync(join(tmpdir(), "uat-scripted-claude-mcp-"));
     const sessionId = randomUUID();
     const token = tokens.mint({
-      actorUserId: ids.userA,
+      ...conversations.bindingFor(ids.userA),
       chatSessionId: randomUUID(),
       allowedToolNames: null
     });
