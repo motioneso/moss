@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { formatInZone, isValidTimeZone, type LocaleSettingsDto } from "@moss/shared";
+import {
+  formatLocaleDate,
+  formatLocaleDateTime,
+  formatLocaleTime,
+  isValidTimeZone,
+  type LocaleSettingsDto
+} from "@moss/shared";
 
 import { getLocaleSettings } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
@@ -16,10 +22,9 @@ import { queryKeys } from "../api/query-keys.js";
  * are therefore wrong for the user. Route every display site through this module; the
  * `check:no-ambient-dates` gate enforces it.
  *
- * Timestamps stay UTC at rest — only their *presentation* is zoned here. Core
- * Intl-wrapping delegates to `@moss/shared`'s `formatInZone`/`isValidTimeZone`
- * (the single source of truth for timezone-aware formatting, #636); day-bucketing
- * call sites use shared `localDay` directly instead of a local wrapper.
+ * Timestamps stay UTC at rest — only their *presentation* is zoned here. The
+ * formatters are `@moss/shared`'s `formatLocale*` (the one person-time formatter shared
+ * with the server, #3390); day-bucketing call sites use shared `localDay` directly.
  */
 
 /**
@@ -40,60 +45,14 @@ function toDate(input: DateInput): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function localeTag(region: string): string | undefined {
-  const tag = region.trim();
-  return tag.length > 0 ? tag : undefined;
-}
-
-function format(
-  input: DateInput,
-  locale: LocaleSettingsDto,
-  options: Intl.DateTimeFormatOptions
-): string {
-  return formatInZone(
-    input,
-    locale.timezone,
-    { hour12: locale.dateFormat === "12", ...options },
-    localeTag(locale.region)
-  );
-}
-
-const DATE_OPTS: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric" };
-const DATETIME_OPTS: Intl.DateTimeFormatOptions = {
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit"
-};
-const TIME_OPTS: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-
 /** Format an instant as a date in the user's locale (default: medium date). */
-export function formatDate(
-  input: DateInput,
-  locale: LocaleSettingsDto,
-  options?: Intl.DateTimeFormatOptions
-): string {
-  return format(input, locale, options ?? DATE_OPTS);
-}
+export const formatDate = formatLocaleDate;
 
 /** Format an instant as date + time in the user's locale. */
-export function formatDateTime(
-  input: DateInput,
-  locale: LocaleSettingsDto,
-  options?: Intl.DateTimeFormatOptions
-): string {
-  return format(input, locale, options ?? DATETIME_OPTS);
-}
+export const formatDateTime = formatLocaleDateTime;
 
 /** Format an instant as a time-of-day in the user's locale (honours 12/24-hour preference). */
-export function formatTime(
-  input: DateInput,
-  locale: LocaleSettingsDto,
-  options?: Intl.DateTimeFormatOptions
-): string {
-  return format(input, locale, options ?? TIME_OPTS);
-}
+export const formatTime = formatLocaleTime;
 
 /**
  * Format a zone-less wall-clock "HH:MM" (e.g. a dose time already expressed in its own zone)

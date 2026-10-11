@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import pg from "pg";
 
 import { createApiServer } from "../../apps/api/src/server.js";
-import { AiRepository, registerAiRoutes } from "@moss/ai";
+import { AiRepository, MAX_SCREEN_TOOL_RESULT_CHARS, registerAiRoutes } from "@moss/ai";
 import { CalendarRepository } from "@moss/calendar";
 import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
 import { EmailRepository } from "@moss/email";
@@ -594,7 +594,7 @@ describe("AI read-only assistant tool execution foundation", () => {
     }
   });
 
-  it("caps oversized REST assistant tool output after sanitizing it", async () => {
+  it("rejects REST assistant tool output over the screen limit after sanitizing it", async () => {
     const module: MossModuleManifest = {
       id: "security-cap-probe",
       name: "Security Cap Probe",
@@ -614,7 +614,24 @@ describe("AI read-only assistant tool execution foundation", () => {
             required: ["visible"]
           },
           execute: async () => ({
-            data: { visible: `${"x".repeat(20_000)}REST_OVERSIZED_TAIL` }
+            data: { visible: `${"x".repeat(MAX_SCREEN_TOOL_RESULT_CHARS)}REST_OVERSIZED_TAIL` }
+          })
+        },
+        {
+          name: "security.largeUndeclared",
+          description: "Large undeclared field probe.",
+          permissionId: "security.view",
+          risk: "read",
+          outputSchema: {
+            type: "object",
+            properties: { visible: { type: "string" } },
+            required: ["visible"]
+          },
+          execute: async () => ({
+            data: {
+              visible: "kept",
+              hidden: `${"x".repeat(MAX_SCREEN_TOOL_RESULT_CHARS)}REST_UNDECLARED_TAIL`
+            }
           })
         }
       ]
@@ -629,21 +646,23 @@ describe("AI read-only assistant tool execution foundation", () => {
     );
     await app.ready();
 
-    try {
-      const response = await app.inject({
+    const invoke = (toolName: string) =>
+      app.inject({
         method: "POST",
-        url: "/api/ai/assistant-tools/security.largeOutput/invoke",
+        url: `/api/ai/assistant-tools/${toolName}/invoke`,
         headers: { "content-type": "application/json" },
         payload: { input: {} }
       });
 
-      expect(response.statusCode).toBe(200);
-      expect(response.body.length).toBeLessThan(18_000);
-      expect(response.body).toContain("[truncated tool result]");
-      expect(response.body).not.toContain("REST_OVERSIZED_TAIL");
+    try {
+      const oversized = await invoke("security.largeOutput");
+      expect(oversized.statusCode).toBe(413);
+      expect(oversized.json()).toEqual({ error: "The tool result is too large to show." });
 
-      const result = response.json<InvocationResponse>().invocation.result;
-      expect(JSON.stringify(result).length).toBeLessThanOrEqual(16_500);
+      // Undeclared fields are stripped before the size check, so a small declared result passes.
+      const undeclared = await invoke("security.largeUndeclared");
+      expect(undeclared.statusCode).toBe(200);
+      expect(undeclared.json<InvocationResponse>().invocation.result).toEqual({ visible: "kept" });
     } finally {
       await app.close();
     }

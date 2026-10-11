@@ -1,8 +1,9 @@
-import type { DataContextDb, DataContextRunner } from "@moss/db";
+import type { DataContextDb, DataContextRunner, PreferencesPort } from "@moss/db";
 import type { NotesRecallPort, NotesRecallSnippet } from "@moss/notes";
 
 import { ChatUserMemorySettingsRepository } from "../memory-settings-repository.js";
 import type { UserMemorySettings } from "../memory-settings-repository.js";
+import { readPersonLocale } from "../person-locale.js";
 import { renderNotesContextBlock } from "./chat-context-blocks.js";
 import { isCredentialShaped } from "./notes-secret-filter.js";
 import { estimateTokens } from "./recall-seed.js";
@@ -19,6 +20,8 @@ export interface NotesContextRetrieverDeps {
   readonly settingsRepo?: {
     getOrCreate(scopedDb: DataContextDb, userId: string): Promise<UserMemorySettings>;
   };
+  /** Reads the person's locale so note dates fall on their day. */
+  readonly localePreferences?: Pick<PreferencesPort, "get">;
 }
 
 export interface NotesContextRetrieverInput {
@@ -88,7 +91,8 @@ export class NotesContextRetriever {
         });
 
         const items = capItems([...safe].sort((a, b) => b.score - a.score));
-        const block = renderNotesContextBlock(items);
+        const locale = await readPersonLocale(scopedDb, this.deps.localePreferences);
+        const block = renderNotesContextBlock(items, locale.timezone);
         return { block, items };
       }
     );

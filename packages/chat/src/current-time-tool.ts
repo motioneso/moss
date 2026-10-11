@@ -1,5 +1,6 @@
 import { isValidTimeZone, resolveLocalDay, timeZoneOffsetMinutes } from "@moss/module-sdk/time";
 import type { ToolExecute } from "@moss/module-sdk";
+import { DEFAULT_LOCALE_SETTINGS, formatLocaleTime } from "@moss/shared";
 
 export const chatGetCurrentTimeOutputSchema = {
   type: "object",
@@ -14,29 +15,30 @@ export const chatGetCurrentTimeOutputSchema = {
   }
 } as const;
 
-function formatLocalTime(instant: Date, timezone: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: timezone,
-    hourCycle: "h23",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(instant);
-}
-
-/** #1869 slice 2: on-purpose clock check tool, sampled once per invocation, never cached. */
+/**
+ * #1869 slice 2: on-purpose clock check tool, sampled once per invocation, never cached. The
+ * local time uses the person's region and 12/24-hour choice; without a resolved locale it falls
+ * back to the same default Settings shows, never UTC.
+ */
 export function createChatGetCurrentTimeExecute(now: () => Date = () => new Date()): ToolExecute {
   return async (_scopedDb, _input, ctx) => {
     const instant = now();
-    const requestedZone = ctx.localTimezone;
-    const timezone = requestedZone && isValidTimeZone(requestedZone) ? requestedZone : "UTC";
+    const locale = ctx.locale ?? DEFAULT_LOCALE_SETTINGS;
+    const requestedZone = ctx.localTimezone ?? locale.timezone;
+    const timezone = isValidTimeZone(requestedZone)
+      ? requestedZone
+      : DEFAULT_LOCALE_SETTINGS.timezone;
     const { localDate } = resolveLocalDay(instant, timezone);
     return {
       data: {
         utcInstant: instant.toISOString(),
         timezone,
         localDate,
-        localTime: formatLocalTime(instant, timezone),
+        localTime: formatLocaleTime(
+          instant,
+          { ...locale, timezone },
+          { hour: "numeric", minute: "2-digit", second: "2-digit" }
+        ),
         utcOffsetMinutes: timeZoneOffsetMinutes(instant, timezone)
       }
     };

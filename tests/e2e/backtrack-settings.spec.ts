@@ -4,7 +4,8 @@ import type { BacktrackStatusResponse, MeSessionDto } from "@moss/shared";
 import { mockApi } from "./mock-api.js";
 
 // Moss Settings -> Backtrack (#2638 plan §4.8): the screen states, and what the browser sends.
-// Time-zone work uses a fixed zone and a fixed clock, so the expected range is exact.
+// Time-zone work uses a fixed clock and a saved zone (Tokyo) unlike the browser's (Los Angeles),
+// so the expected range is exact and proves the person's zone wins (#3396).
 
 test.use({ timezoneId: "America/Los_Angeles" });
 
@@ -66,6 +67,11 @@ async function setup(
     notifications: [],
     tasks: []
   });
+  await page.route("**/api/me/locale", (route) =>
+    route.fulfill({
+      json: { locale: { timezone: "Asia/Tokyo", region: "en-US", dateFormat: "MDY" } }
+    })
+  );
   const sessions = Array.from({ length: options.macs ?? 0 }, mac);
   await page.route("**/api/me/sessions", (route) => route.fulfill({ json: { sessions } }));
   await page.route("**/api/backtrack/status", (route) => {
@@ -108,7 +114,7 @@ test("turning Recording off pauses every Mac", async ({ page }) => {
   await expect.poll(() => sent.puts).toEqual([{ paused: true }]);
 });
 
-test("Today asks first, then sends the browser-local day as a range", async ({ page }) => {
+test("Today asks first, then sends the person's day as a range", async ({ page }) => {
   const sent = await setup(page, { macs: 1 });
   await page.clock.setFixedTime(new Date("2026-10-04T20:00:00.000Z"));
   await page.goto(URL_PATH);
@@ -123,10 +129,11 @@ test("Today asks first, then sends the browser-local day as a range", async ({ p
     .getByRole("dialog", { name: "Delete today?" })
     .getByRole("button", { name: "Delete today" })
     .click();
-  // 13:00 on 4 October in Los Angeles (PDT): midnight to midnight is 07:00Z to 07:00Z.
+  // 05:00 on 5 October in Tokyo (13:00 on 4 October in the browser's Los Angeles):
+  // Tokyo midnight to midnight is 15:00Z to 15:00Z.
   await expect
     .poll(() => sent.deletes)
-    .toEqual([{ from: "2026-10-04T07:00:00.000Z", to: "2026-10-05T07:00:00.000Z" }]);
+    .toEqual([{ from: "2026-10-04T15:00:00.000Z", to: "2026-10-05T15:00:00.000Z" }]);
   await expect(page.getByText("Deleted 3 stored segments.")).toBeVisible();
 });
 

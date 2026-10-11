@@ -40,6 +40,7 @@ function build(
   options: {
     risk?: ModuleAssistantToolManifest["risk"];
     yolo?: boolean;
+    tier?: "ask_each_time" | "trusted_auto";
     tainted?: boolean;
     threadId?: string | null;
     resolution?: PerCallResolution;
@@ -75,10 +76,16 @@ function build(
     assistantTools: [tool]
   };
   const isTainted = vi.fn(async () => options.tainted ?? false);
+  const runAutomatic = vi.fn<NonNullable<ConversationProvenancePort["runAutomatic"]>>(
+    async (_actor, _thread, callback) =>
+      options.tainted ? { kind: "confirm" } : { kind: "ran", value: await callback() }
+  );
   const provenance: ConversationProvenancePort = {
     isTainted,
+    isMarked: async () => options.tainted ?? false,
     recordAdmission: vi.fn(),
-    runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+    // The durable store refuses the clean-conversation claim once a conversation is tainted.
+    runAutomatic: runAutomatic as NonNullable<ConversationProvenancePort["runAutomatic"]>
   };
   const createPending = vi.fn(async () => ({ id: "action-1" }));
   const audit = vi.fn(async () => undefined);
@@ -102,7 +109,7 @@ function build(
     provenance,
     yoloMode,
     actionPolicy: () => ({
-      getFamilyTier: async () => "trusted_auto",
+      getFamilyTier: async () => options.tier ?? "trusted_auto",
       getFamilyManifest: async () => family
     }),
     ...(options.resolution
@@ -126,6 +133,7 @@ function build(
     createPending,
     audit,
     records,
+    runAutomatic,
     confirmations,
     isTainted,
     yoloMode,
@@ -188,18 +196,73 @@ describe("conversation taint lookup", () => {
 });
 
 describe("bound conversation policy at every gateway entry", () => {
+  it("tainted writes ask when only Moss's own rating would run them", async () => {
+    for (const risk of ["write", "outbound", "destructive"] as const) {
+      const h = build({ tainted: true, tier: "ask_each_time", risk, tool: { isExternal: true } });
+      await rejectPending(h, h.gateway.callTool(h.token, h.tool.name, {}));
+      expect(h.isTainted).toHaveBeenLastCalledWith("actor-a", "thread-a");
+    }
+  });
+
   it.each([false, true])(
-    "tainted writes ask before trusted-auto or YOLO (YOLO=%s)",
+    "tainted writes the user trusted run without a clean claim (YOLO=%s)",
     async (yolo) => {
-      for (const risk of ["write", "outbound", "destructive"] as const) {
-        const h = build({ tainted: true, yolo, risk, tool: { isExternal: risk !== "write" } });
-        await rejectPending(h, h.gateway.callTool(h.token, h.tool.name, {}));
-        expect(h.isTainted).toHaveBeenCalledTimes(2);
-        expect(h.isTainted).toHaveBeenLastCalledWith("actor-a", "thread-a");
-        expect(h.yoloMode).not.toHaveBeenCalled();
-      }
+      const h = build({ tainted: true, yolo, tool: { isExternal: false } });
+      expect(await h.gateway.callTool(h.token, h.tool.name, {})).toMatchObject({ ok: true });
+      expect(h.handler).toHaveBeenCalledOnce();
+      expect(h.createPending).not.toHaveBeenCalled();
+      const held = build({ tainted: true, yolo, risk: "destructive" });
+      await rejectPending(held, held.gateway.callTool(held.token, held.tool.name, {}));
     }
   );
+
+  it.each([false, true])(
+    "a marked conversation leaves an outbound connected tool to YOLO (YOLO=%s)",
+    async (yolo) => {
+      const h = build({ tainted: true, yolo, risk: "outbound", tier: "ask_each_time" });
+      if (!yolo) {
+        await rejectPending(h, h.gateway.callTool(h.token, h.tool.name, {}));
+        return;
+      }
+      expect(await h.gateway.callTool(h.token, h.tool.name, {})).toMatchObject({ ok: true });
+      expect(h.handler).toHaveBeenCalledOnce();
+      expect(h.createPending).not.toHaveBeenCalled();
+      expect(h.runAutomatic).not.toHaveBeenCalled();
+      expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, "dry-run")).toEqual({
+        kind: "would_run",
+        approvalMode: "yolo"
+      });
+    }
+  );
+
+  it("YOLO still asks in a marked conversation for forced, per-call and first-party outbound calls", async () => {
+    const forced = build({
+      tainted: true,
+      yolo: true,
+      resolution: {
+        ...(resolution(false) as Extract<PerCallResolution, { kind: "proceed" }>),
+        risk: "write",
+        forceConfirm: true
+      }
+    });
+    await rejectPending(forced, forced.gateway.callTool(forced.token, forced.tool.name, {}));
+    const limited = build({
+      tainted: true,
+      yolo: true,
+      tool: { isExternal: false, requiresConfirmation: async () => true }
+    });
+    await rejectPending(limited, limited.gateway.callTool(limited.token, limited.tool.name, {}));
+    const firstParty = build({
+      tainted: true,
+      yolo: true,
+      risk: "outbound",
+      tool: { isExternal: false }
+    });
+    await rejectPending(
+      firstParty,
+      firstParty.gateway.callTool(firstParty.token, firstParty.tool.name, {})
+    );
+  });
 
   it.each([false, true])("clean writes retain automatic execution (YOLO=%s)", async (yolo) => {
     const h = build({ yolo });
@@ -213,11 +276,17 @@ describe("bound conversation policy at every gateway entry", () => {
   });
 
   it.each(["dry-run", "execute"] as const)(
-    "gate %s declines tainted non-reads without a card or side effect",
+    "gate %s declines untrusted tainted non-reads without a card or side effect",
     async (mode) => {
       for (const yolo of [false, true])
         for (const risk of ["write", "outbound", "destructive"] as const) {
-          const h = build({ tainted: true, yolo, risk, tool: { isExternal: risk !== "write" } });
+          const h = build({
+            tainted: true,
+            yolo: yolo && risk === "destructive",
+            tier: "ask_each_time",
+            risk,
+            tool: { isExternal: true }
+          });
           expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, mode)).toEqual({
             kind: "declined",
             reason: "would_confirm"
@@ -248,15 +317,26 @@ describe("bound conversation policy at every gateway entry", () => {
     ]
   ] as const;
   it.each(failureCases)(
-    "%s requires approval across ordinary and gate writes",
+    "%s requires approval across ordinary and gate writes without the user's trust",
     async (_label, options) => {
-      for (const yolo of [false, true]) {
-        const h = build({ ...options, yolo });
+      {
+        const h = build({ ...options, tier: "ask_each_time" });
         for (const mode of ["dry-run", "execute"] as const)
           expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, mode)).toEqual({
             kind: "declined",
             reason: "would_confirm"
           });
+        await rejectPending(h, h.gateway.callTool(h.token, h.tool.name, {}));
+        expect(JSON.stringify(h.records)).not.toContain("private storage detail");
+      }
+    }
+  );
+
+  it.each(failureCases)(
+    "%s gives the user's trust no durable mark to run past",
+    async (_label, options) => {
+      for (const yolo of [false, true]) {
+        const h = build({ ...options, yolo, tier: "trusted_auto", tool: { isExternal: false } });
         await rejectPending(h, h.gateway.callTool(h.token, h.tool.name, {}));
         expect(JSON.stringify(h.records)).not.toContain("private storage detail");
       }
@@ -288,19 +368,26 @@ describe("bound conversation policy at every gateway entry", () => {
     }
   );
 
-  it.each([false, true])(
-    "outbound GET resolved as read requires confirmation only while tainted (tainted=%s)",
-    async (tainted) => {
-      const h = build({ tainted, yolo: true, resolution: resolution(true) });
+  it.each([
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true]
+  ])(
+    "outbound GET resolved as read asks only while tainted without YOLO (tainted=%s, YOLO=%s)",
+    async (tainted, yolo) => {
+      const asks = tainted && !yolo;
+      const h = build({ tainted, yolo, resolution: resolution(true) });
       for (const mode of ["dry-run", "execute"] as const) {
         const outcome = await h.gateway.callToolForGate(h.token, h.tool.name, {}, mode);
         expect(outcome.kind).toBe(
-          tainted ? "declined" : mode === "dry-run" ? "would_run" : "executed"
+          asks ? "declined" : mode === "dry-run" ? "would_run" : "executed"
         );
-        if (tainted) expect(outcome).toEqual({ kind: "declined", reason: "would_confirm" });
+        if (asks) expect(outcome).toEqual({ kind: "declined", reason: "would_confirm" });
+        if (!asks && mode === "dry-run") expect(outcome).toMatchObject({ approvalMode: "auto" });
       }
       const pending = h.gateway.callTool(h.token, h.tool.name, {});
-      if (tainted) await rejectPending(h, pending);
+      if (asks) await rejectPending(h, pending);
       else expect(await pending).toMatchObject({ ok: true });
     }
   );
@@ -316,10 +403,10 @@ describe("bound conversation policy at every gateway entry", () => {
   });
 
   it("rechecks taint at execution after a clean dry run", async () => {
-    const h = build({ yolo: true });
+    const h = build({ tier: "ask_each_time" });
     expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, "dry-run")).toEqual({
       kind: "would_run",
-      approvalMode: "yolo"
+      approvalMode: "auto"
     });
     h.isTainted.mockResolvedValue(true);
     expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, "execute")).toEqual({
@@ -329,34 +416,31 @@ describe("bound conversation policy at every gateway entry", () => {
     expect(h.handler).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])(
-    "rechecks taint after asynchronous policy work (YOLO=%s)",
-    async (yolo) => {
-      for (const entry of ["ordinary", "dry-run", "execute"] as const) {
-        let tainted = false;
-        const checked = vi.fn(async () => tainted);
-        const h = build({
-          yolo,
-          tool: {
-            requiresConfirmation: async () => {
-              tainted = true;
-              return false;
-            }
-          },
-          deps: { provenance: { isTainted: checked, recordAdmission: vi.fn() } }
+  it("rechecks taint after asynchronous policy work", async () => {
+    for (const entry of ["ordinary", "dry-run", "execute"] as const) {
+      let tainted = false;
+      const checked = vi.fn(async () => tainted);
+      const h = build({
+        tier: "ask_each_time",
+        tool: {
+          requiresConfirmation: async () => {
+            tainted = true;
+            return false;
+          }
+        },
+        deps: { provenance: { isTainted: checked, recordAdmission: vi.fn() } }
+      });
+      if (entry === "ordinary")
+        await rejectPending(h, h.gateway.callTool(h.token, h.tool.name, {}));
+      else
+        expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, entry)).toEqual({
+          kind: "declined",
+          reason: "would_confirm"
         });
-        if (entry === "ordinary")
-          await rejectPending(h, h.gateway.callTool(h.token, h.tool.name, {}));
-        else
-          expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, entry)).toEqual({
-            kind: "declined",
-            reason: "would_confirm"
-          });
-        expect(h.handler).not.toHaveBeenCalled();
-        expect(checked).toHaveBeenCalledTimes(entry === "ordinary" ? 3 : 2);
-      }
+      expect(h.handler).not.toHaveBeenCalled();
+      expect(checked).toHaveBeenCalledOnce();
     }
-  );
+  });
 
   it("keeps in-flight thread A bound when the current session resumes clean B", async () => {
     let release!: () => void;
@@ -367,9 +451,9 @@ describe("bound conversation policy at every gateway entry", () => {
       async (_actor: string, thread: string | undefined) => thread !== "thread-b"
     );
     const h = build({
-      yolo: true,
+      tier: "ask_each_time",
       deps: {
-        resolveLocalTimezone: async () => {
+        resolveLocale: async () => {
           await waiting;
           return null;
         },
@@ -396,27 +480,70 @@ describe("bound conversation policy at every gateway entry", () => {
     await rejectPending(h, pending);
     expect(lookup).toHaveBeenNthCalledWith(1, "actor-a", "thread-a");
     expect(await h.gateway.callTool(resumed, h.tool.name, {})).toMatchObject({ ok: true });
-    expect(lookup).toHaveBeenNthCalledWith(3, "actor-a", "thread-b");
+    expect(lookup).toHaveBeenNthCalledWith(2, "actor-a", "thread-b");
     expect(h.handler).toHaveBeenCalledOnce();
   });
 });
 
 describe("policy confirmation floor", () => {
+  const lookup = (tier: "ask_each_time" | "trusted_auto") => ({
+    getFamilyTier: async () => tier,
+    getFamilyManifest: async () => family
+  });
+
   it.each(["write", "outbound", "destructive", "read"] as const)(
     "tainted %s defeats sorted-safe and resolved-call shortcuts",
     async (risk) => {
       const h = build({ risk });
-      const lookup = {
-        getFamilyTier: async () => "trusted_auto" as const,
-        getFamilyManifest: async () => family
+      expect(
+        await resolvePolicy(
+          h.tool,
+          "example",
+          false,
+          lookup("trusted_auto"),
+          true,
+          true,
+          true,
+          true
+        )
+      ).toBe("confirm");
+      expect(
+        await resolvePolicy(h.tool, "example", false, lookup("ask_each_time"), true, true, true)
+      ).toBe(risk === "read" ? "run" : "confirm");
+    }
+  );
+
+  it("tainted promoted family runs unless its per-call limit asks", async () => {
+    const h = build({ tool: { isExternal: false } });
+    expect(
+      await resolvePolicy(h.tool, "example", false, lookup("trusted_auto"), false, false, true)
+    ).toBe("run");
+    expect(
+      await resolvePolicy(h.tool, "example", true, lookup("trusted_auto"), false, false, true)
+    ).toBe("confirm");
+  });
+
+  it.each([false, true])(
+    "tainted trusted write runs within the user's per-call limit and asks above it (YOLO=%s)",
+    async (yolo) => {
+      const tool = {
+        isExternal: false,
+        requiresConfirmation: async (_db: unknown, input: Record<string, unknown>) =>
+          Number(input.amount) > 100
       };
-      expect(await resolvePolicy(h.tool, "example", false, lookup, true, true, true, true)).toBe(
-        "confirm"
+      const small = build({ tainted: true, yolo, tool });
+      expect(
+        await small.gateway.callTool(small.token, small.tool.name, { amount: 50 })
+      ).toMatchObject({ ok: true });
+      expect(small.handler).toHaveBeenCalledOnce();
+      expect(small.createPending).not.toHaveBeenCalled();
+
+      const large = build({ tainted: true, yolo, tool });
+      await rejectPending(
+        large,
+        large.gateway.callTool(large.token, large.tool.name, { amount: 150 })
       );
-      if (risk === "read")
-        expect(await resolvePolicy(h.tool, "example", false, lookup, true, true, true, false)).toBe(
-          "run"
-        );
+      expect(large.handler).not.toHaveBeenCalled();
     }
   );
 });

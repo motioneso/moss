@@ -1,7 +1,8 @@
 import { assertDataContextDb, isUuid } from "@moss/db";
 import { presentApprovalFields, type RouteApprovalPresentation } from "@moss/module-sdk";
+import { DEFAULT_LOCALE_SETTINGS, formatLocaleDateTime } from "@moss/shared";
 
-export const notificationReadPresentation: RouteApprovalPresentation = async (db, input) => {
+export const notificationReadPresentation: RouteApprovalPresentation = async (db, input, ctx) => {
   assertDataContextDb(db);
   if (
     Object.keys(input.params).length !== 1 ||
@@ -19,7 +20,12 @@ export const notificationReadPresentation: RouteApprovalPresentation = async (db
   return row
     ? {
         target: row.title,
-        fields: [{ label: "Received", value: row.created_at.toISOString() }],
+        fields: [
+          {
+            label: "Received",
+            value: formatLocaleDateTime(row.created_at, ctx.locale ?? DEFAULT_LOCALE_SETTINGS)
+          }
+        ],
         version: JSON.stringify(row)
       }
     : null;

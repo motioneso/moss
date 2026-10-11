@@ -26,6 +26,7 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name.js";
+import { DEFAULT_LOCALE } from "../locale/locale-format";
 import {
   MORNING_NEWS_TOOL,
   MORNING_SPORTS_TOOL,
@@ -155,10 +156,12 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
       putSourceBehavior(input.id, { enabled: input.enabled }),
     onSuccess: (data) => writeSourceBehaviorCache(queryClient, data)
   });
+  // A new definition stores the person's zone, so saves wait for it to load.
   const busy =
     definitionsQuery.isLoading ||
     toolsQuery.isLoading ||
     sourceBehaviorsQuery.isLoading ||
+    localeQuery.isPending ||
     mutation.isPending ||
     sourceBehaviorMutation.isPending;
   const error =
@@ -307,6 +310,19 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
   );
 }
 
+/**
+ * Zone a digest save sends (#877 finding 4, #3396). A new digest, or one stuck at the server's
+ * "UTC" default, takes the person's zone; any other prior choice is theirs and stays. If their
+ * zone failed to load, the stored zone stays and only a brand-new digest takes the default.
+ */
+export function digestSaveTimezone(
+  current: string | undefined,
+  personTimezone: string | undefined
+): string {
+  if (personTimezone === undefined) return current ?? DEFAULT_LOCALE.timezone;
+  return current === undefined || current === "UTC" ? personTimezone : current;
+}
+
 export function NotificationSettings(props: {
   readonly onBack: () => void;
   readonly onCat?: (id: string) => void;
@@ -351,7 +367,7 @@ export function NotificationSettings(props: {
     queryKey: queryKeys.settings.locale,
     queryFn: getLocaleSettings
   });
-  const localTimezone = localeQuery.data?.locale.timezone;
+  const personTimezone = localeQuery.data?.locale.timezone;
   const mutation = useMutation({
     mutationFn: (input: {
       readonly moduleId: string;
@@ -393,7 +409,8 @@ export function NotificationSettings(props: {
   };
   const preferences = preferencesQuery.data?.preferences ?? [];
   const digest = digestQuery.data?.digest;
-  const digestBusy = digestQuery.isLoading || digestMutation.isPending;
+  // Saves wait for the person's zone so a first save stores it, not the default.
+  const digestBusy = digestQuery.isLoading || localeQuery.isPending || digestMutation.isPending;
   const updateDigest = (
     patch: Partial<{
       enabled: boolean;
@@ -407,10 +424,7 @@ export function NotificationSettings(props: {
       cadence: "daily" as const,
       scheduleMetadata: {
         targetTime: "07:00",
-        // #877 finding 4: use the persisted locale tz (matching the briefings
-        // pane's ~148 pattern), not the browser-ambient runtime zone — falls
-        // back to UTC only until /api/me/locale resolves.
-        timezone: localTimezone ?? "UTC",
+        timezone: undefined,
         dayOfWeek: undefined
       }
     };
@@ -420,15 +434,7 @@ export function NotificationSettings(props: {
         cadence: patch.cadence ?? current.cadence,
         scheduleMetadata: {
           targetTime: patch.targetTime ?? current.scheduleMetadata.targetTime,
-          // #877 finding 4: a digest saved before this fix (or created by the
-          // server's own "UTC" default) has scheduleMetadata.timezone stuck at
-          // "UTC". Upgrade only that default to the persisted locale on the
-          // next save; an explicit prior choice (anything else) is the user's
-          // and must be preserved, not silently overwritten.
-          timezone:
-            current.scheduleMetadata.timezone === "UTC"
-              ? (localTimezone ?? current.scheduleMetadata.timezone)
-              : current.scheduleMetadata.timezone,
+          timezone: digestSaveTimezone(current.scheduleMetadata.timezone, personTimezone),
           dayOfWeek: patch.dayOfWeek ?? current.scheduleMetadata.dayOfWeek
         }
       }

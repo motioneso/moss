@@ -42,6 +42,16 @@ describe("deriveTodayMode", () => {
     );
   });
 
+  it("judges the evening gate in the person's zone, not a stored UTC zone (#3390)", () => {
+    const definition = briefingDefinition({ targetTime: "19:00", timezone: "UTC" });
+
+    // 19:00 UTC is noon in Los Angeles; the gate opens at 19:00 Pacific (02:00Z).
+    expect(deriveTodayMode(definition, locale, new Date("2026-06-29T19:00:00.000Z"))).toBe("day");
+    expect(deriveTodayMode(definition, locale, new Date("2026-06-30T02:00:00.000Z"))).toBe(
+      "evening"
+    );
+  });
+
   it("stays day mode when evening briefing is disabled", () => {
     expect(
       deriveTodayMode(

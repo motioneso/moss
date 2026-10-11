@@ -1,3 +1,5 @@
+import { localDay } from "@moss/shared";
+
 import type { AdmittedContext } from "./context-admission.js";
 import { neutralizeSeedFraming } from "./prompt-safety.js";
 import { estimateTokens } from "./recall-seed.js";
@@ -21,8 +23,10 @@ export function renderSummaryBlock(summary: string): string {
   return `<prior-context>\n${neutralizeSeedFraming(summary)}\n</prior-context>`;
 }
 
+/** `modified` is the person's own calendar day in `timeZone`. */
 export function renderNotesContextBlock(
-  snippets: readonly { sourcePath: string; updatedAt: Date; text: string }[]
+  snippets: readonly { sourcePath: string; updatedAt: Date; text: string }[],
+  timeZone: string
 ): string {
   if (snippets.length === 0) return "";
   const lines = [
@@ -32,7 +36,7 @@ export function renderNotesContextBlock(
     "",
     ...snippets.map(
       (snippet) =>
-        `- [${neutralizeSeedFraming(snippet.sourcePath)} modified=${snippet.updatedAt.toISOString().slice(0, 10)}] ${neutralizeSeedFraming(snippet.text)}`
+        `- [${neutralizeSeedFraming(snippet.sourcePath)} modified=${localDay(snippet.updatedAt, timeZone)}] ${neutralizeSeedFraming(snippet.text)}`
     ),
     "</retrieved_context>"
   ];

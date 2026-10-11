@@ -1,17 +1,12 @@
 import { WELLNESS_EXPORT_CATEGORIES, type WellnessExportCategory } from "@moss/shared";
 import type { QueryClient } from "@tanstack/react-query";
 
+/** Null dates are untouched and follow the person's default range. */
 export interface ExportDraft {
-  readonly from: string;
-  readonly to: string;
+  readonly from: string | null;
+  readonly to: string | null;
   readonly categories: readonly WellnessExportCategory[];
   readonly jobId: string | null;
-}
-
-export function exportDay(daysAgo = 0): string {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() - daysAgo);
-  return date.toISOString().slice(0, 10);
 }
 
 function validDay(value: unknown): value is string {
@@ -38,8 +33,8 @@ export function readExportDraft(client: QueryClient, userId: string | null): Exp
       if (raw && typeof raw === "object") {
         const draft = raw as Record<string, unknown>;
         if (
-          validDay(draft.from) &&
-          validDay(draft.to) &&
+          (draft.from === null || validDay(draft.from)) &&
+          (draft.to === null || validDay(draft.to)) &&
           Array.isArray(draft.categories) &&
           draft.categories.every((category) => WELLNESS_EXPORT_CATEGORIES.includes(category)) &&
           (draft.jobId === null || (typeof draft.jobId === "string" && draft.jobId.length <= 200))
@@ -56,8 +51,8 @@ export function readExportDraft(client: QueryClient, userId: string | null): Exp
     }
   }
   return {
-    from: exportDay(90),
-    to: exportDay(),
+    from: null,
+    to: null,
     categories: [...WELLNESS_EXPORT_CATEGORIES],
     jobId: null
   };

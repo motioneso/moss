@@ -1,5 +1,6 @@
 import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { addLocalDays, todayLocalDayKey } from "@moss/module-sdk/time";
 import { Button, ButtonLink, Dialog, Note } from "@moss/ui";
 import {
   WELLNESS_EXPORT_CATEGORIES,
@@ -15,9 +16,9 @@ import {
 } from "../api/client";
 import { requestWellnessExport } from "../api/wellness-export";
 import { queryKeys } from "../api/query-keys";
+import { useUserLocale } from "../locale/locale-format";
 import {
   exportDraftKey,
-  exportDay,
   exportRangeDays,
   readExportDraft,
   saveExportDraft,
@@ -68,6 +69,15 @@ const CATEGORY_LABELS: { readonly [K in WellnessExportCategory]: string } = {
   insights: "Insights"
 };
 
+/** Default range: the 90 days up to today, as calendar days in the person's time zone. */
+export function defaultExportRange(
+  timeZone: string,
+  now: Date = new Date()
+): { readonly from: string; readonly to: string } {
+  const today = todayLocalDayKey(timeZone, now);
+  return { from: addLocalDays(today, -90), to: today };
+}
+
 const SENSITIVE_COPY =
   "This export will contain sensitive health and wellness data. Anyone you share it with will see it. Generate only if you trust the recipient (e.g. your doctor or therapist).";
 
@@ -100,7 +110,11 @@ function AccountExportModal({ open, onClose, userId }: Props & { userId: string 
     select: (mutation) => mutation.state.status
   });
   const isStarting = pendingStarts.length > 0;
-  const { from, to, categories, jobId } = draft;
+  const locale = useUserLocale();
+  const defaults = defaultExportRange(locale.timezone);
+  const { categories, jobId } = draft;
+  const from = draft.from ?? defaults.from;
+  const to = draft.to ?? defaults.to;
   const [acknowledged, setAcknowledged] = useState(false);
   const starting = useRef(false);
   function updateDraft(next: ExportDraft) {
@@ -135,7 +149,7 @@ function AccountExportModal({ open, onClose, userId }: Props & { userId: string 
 
   const startMutation = useMutation({
     mutationKey: ["wellness-export", "start", userId],
-    mutationFn: (selection: ExportDraft) =>
+    mutationFn: (selection: ExportDraft & { readonly from: string; readonly to: string }) =>
       requestWellnessExport({
         from: selection.from,
         to: selection.to,
@@ -231,7 +245,7 @@ function AccountExportModal({ open, onClose, userId }: Props & { userId: string 
               type="date"
               className="wl-input"
               value={to}
-              max={exportDay()}
+              max={defaults.to}
               disabled={isStarting}
               onChange={(e) => updateDraft({ ...draft, to: e.target.value })}
             />
@@ -287,7 +301,7 @@ function AccountExportModal({ open, onClose, userId }: Props & { userId: string 
             onClick={() => {
               if (!canGenerate || starting.current) return;
               starting.current = true;
-              startMutation.mutate({ ...draft, categories: [...categories] });
+              startMutation.mutate({ ...draft, from, to, categories: [...categories] });
             }}
           >
             {isStarting ? "Starting…" : "Generate export"}

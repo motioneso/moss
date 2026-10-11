@@ -1,9 +1,14 @@
 import type { JsonSchema, ToolResult } from "@moss/module-sdk";
 import { renderToolResult } from "@moss/module-sdk";
 
+import {
+  renderToolTimestampContext,
+  type TimestampContextPerson
+} from "./tool-timestamp-context.js";
 import type { GatewayToolResponse } from "./types.js";
 
 const MAX_RENDERED_TOOL_RESULT_CHARS = 16_000;
+export const MAX_SCREEN_TOOL_RESULT_CHARS = 2_000_000;
 
 // Strip injection-vector sentinel tokens before wrapping external content.
 // These patterns mirror the set used in @moss/briefings sanitizeExternal.
@@ -82,20 +87,25 @@ export function sanitizeAssistantToolResult(
 export function renderAndCap(
   schema: JsonSchema | undefined,
   result: ToolResult,
-  toolName?: string
+  toolName?: string,
+  person?: TimestampContextPerson
 ): Record<string, unknown> {
   const sanitized = sanitizeAssistantToolResult(schema, result);
   const text = capRenderedToolResult(renderToolResult(sanitized));
-  return { text: toolName ? wrapWithTrustBoundary(toolName, text) : text };
+  const rendered = toolName ? wrapWithTrustBoundary(toolName, text) : text;
+  const timestampContext = renderToolTimestampContext(sanitized.data, text, person, (reference) =>
+    wrapWithTrustBoundary("timestamp-reference", reference)
+  );
+  return { text: rendered, ...(timestampContext ? { timestampContext } : {}) };
 }
 
-/** @deprecated Use {@link renderAndCap} instead. */
-export function boundedAssistantToolResultData(result: ToolResult): Record<string, unknown> {
-  const rendered = renderToolResult(result);
-  if (rendered.length <= MAX_RENDERED_TOOL_RESULT_CHARS) {
-    return result.data;
-  }
-  return { text: capRenderedToolResult(rendered) };
+/**
+ * A module screen renders the structured result, so it gets the data whole. The chat-sized
+ * render cap would swap it for a text summary the screen cannot read. Null means the data is
+ * over the hard screen limit.
+ */
+export function screenToolResultData(result: ToolResult): Record<string, unknown> | null {
+  return JSON.stringify(result.data).length <= MAX_SCREEN_TOOL_RESULT_CHARS ? result.data : null;
 }
 
 export function capRenderedToolResult(text: string): string {
@@ -238,5 +248,8 @@ export function liveStreamResult(
   if (tool.streamsStructuredResult === true && result.structuredData !== undefined) {
     return result.structuredData;
   }
-  return result.data;
+  if (!("timestampContext" in result.data)) return result.data;
+  const display = { ...result.data };
+  delete display.timestampContext;
+  return display;
 }

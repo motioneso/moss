@@ -766,11 +766,16 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     passiveRetrieval: deps.passiveMemoryRecall
       ? new PassiveContextRetriever({
           dataContext: deps.dataContext,
-          graphRecall: deps.passiveMemoryRecall
+          graphRecall: deps.passiveMemoryRecall,
+          localePreferences: deps.localePreferences
         })
       : undefined,
     notesRetrieval: deps.notesRecall
-      ? new NotesContextRetriever({ dataContext: deps.dataContext, notesRecall: deps.notesRecall })
+      ? new NotesContextRetriever({
+          dataContext: deps.dataContext,
+          notesRecall: deps.notesRecall,
+          localePreferences: deps.localePreferences
+        })
       : undefined,
     crossToolRead: deps.crossToolGateway
       ? buildCrossToolReadAdapter(deps.crossToolGateway)

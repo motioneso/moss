@@ -38,7 +38,7 @@ interface WorkerDependencies {
   readonly dataContext: DataContextRunner;
   readonly getLocalePreference: (
     scopedDb: Parameters<Parameters<DataContextRunner["withDataContext"]>[1]>[0]
-  ) => Promise<{ timezone?: string } | null>;
+  ) => Promise<unknown>;
   readonly providers: ReadonlyMap<ProactiveSource, ProactiveMonitorProvider>;
 }
 

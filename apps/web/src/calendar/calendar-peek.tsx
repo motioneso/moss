@@ -1,9 +1,8 @@
 import { CalendarCheck, Clock, GitCommitHorizontal, MapPin, Users, X } from "lucide-react";
 import { CategoryDot, HeldBanner, PeekCloseButton, PeekPanel } from "@moss/ui";
 import { useAssistantName } from "../api/use-assistant-name.js";
+import { useUserLocale, zonedClockMinutes } from "../locale/locale-format.js";
 import { dateRangeLabel, fmtDur, fmtTime, type CalendarViewEvent } from "./calendar-model.js";
-
-const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
 
 interface CalendarPeekProps {
   readonly event: CalendarViewEvent | null;
@@ -12,7 +11,9 @@ interface CalendarPeekProps {
 
 export function CalendarPeek({ event, onClose }: CalendarPeekProps) {
   const assistantName = useAssistantName();
+  const locale = useUserLocale();
   if (!event) return null;
+  const clock = (d: Date) => fmtTime(zonedClockMinutes(d, locale.timezone) ?? 0, locale);
   const isBlock = event.kind === "block";
   const isTentative = event.status === "needsAction" || event.status === "tentative";
   const evColor = isBlock ? "var(--accent-fg)" : "var(--steel)";
@@ -48,11 +49,7 @@ export function CalendarPeek({ event, onClose }: CalendarPeekProps) {
           </span>
           <div>
             <div className="cal-peek__rowmain">
-              {event.allDay
-                ? "All day"
-                : fmtTime(minutesOfDay(event.startsAt)) +
-                  " – " +
-                  fmtTime(minutesOfDay(event.endsAt))}
+              {event.allDay ? "All day" : clock(event.startsAt) + " – " + clock(event.endsAt)}
               {!event.allDay ? (
                 <span className="cal-peek__dur">
                   {" "}
@@ -61,7 +58,7 @@ export function CalendarPeek({ event, onClose }: CalendarPeekProps) {
                 </span>
               ) : null}
             </div>
-            <div className="cal-peek__rowsub">{dateRangeLabel(event)}</div>
+            <div className="cal-peek__rowsub">{dateRangeLabel(event, locale)}</div>
           </div>
         </div>
         {event.where ? (

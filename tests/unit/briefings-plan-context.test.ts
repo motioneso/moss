@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readPlanContext, type DayPlanDto } from "@moss/shared";
+import { DEFAULT_LOCALE_SETTINGS, readPlanContext, type DayPlanDto } from "@moss/shared";
 
 import {
   projectPlanContext,
@@ -383,12 +383,12 @@ describe("planOvernightChanges (T21)", () => {
     expect(planOvernightChanges(context(), events(), tasks())).toEqual([]);
   });
   it("planSection renders overnight lines after the blocks and stays empty without a plan", () => {
-    const section = planSection(context(), tasks(), []);
+    const section = planSection(context(), tasks(), [], DEFAULT_LOCALE_SETTINGS);
     expect(section.lines.some((line) => line.startsWith("Overnight change:"))).toBe(true);
     expect(section.lines.findIndex((line) => line.startsWith("Overnight change:"))).toBeGreaterThan(
       0
     );
-    expect(planSection(null, tasks(), []).lines).toEqual([]);
+    expect(planSection(null, tasks(), [], DEFAULT_LOCALE_SETTINGS).lines).toEqual([]);
   });
 });
 

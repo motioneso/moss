@@ -305,7 +305,7 @@ Rules the scanner and tests enforce:
 Conventions:
 
 - **HTTP**: use `requestJson` from `@moss/module-web-sdk` — identical behavior to the shell's
-  client (cookie credentials, `X-Timezone`, typed `ApiError`). Paths are relative (`/api/...`).
+  client (cookie credentials, typed `ApiError`). Paths are relative (`/api/...`).
 - **React Query keys**: `[moduleId, ...]` tuples, e.g. `["your-module", "overview"]`.
 - **Design system**: follow [`docs/design-system.md`](design-system.md). First-party modules
   use `@moss/ui` components and tokens fully and keep their own CSS to layout; third-party modules

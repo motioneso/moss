@@ -162,7 +162,7 @@ export function createAppActionResolver(deps: {
             message: validationError
           }
         };
-      const target = policy.target ? await policy.target(scopedDb, params) : null;
+      const target = policy.target ? await policy.target(scopedDb, params, ctx) : null;
       if (policy.target && target === null) return { kind: "refuse", reason: "unknown_route" };
       const label = typeof target === "object" && target ? target.label : target;
       let presented: HumanActionDetails | null;
@@ -315,7 +315,6 @@ export function createAppActionsService(deps: {
 
       // Fastify rejects a JSON content type with an empty body, so a bodyless call omits it.
       if (hasBody) headers["content-type"] = "application/json";
-      if (ctx.localTimezone) headers["x-timezone"] = ctx.localTimezone;
 
       const response = await deps.server.inject({
         method: input.method,
