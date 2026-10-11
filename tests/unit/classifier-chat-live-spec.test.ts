@@ -25,8 +25,8 @@ async function sources(): Promise<Sources> {
 // Every behavioural assertion the chat spec must keep, verbatim, with its count.
 const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
   ["await expect(composer).toBeEnabled();", 1],
-  [".toBeGreaterThanOrEqual(1)", 1],
-  ["await expect(page.locator(ACTION_CARD)).toHaveCount(0);", 3],
+  ["await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toBeVisible();", 1],
+  ["await askUntilCard(", 7],
   [".toBeVisible({ timeout: 180_000 })", 1],
   ["expect((await toolServerCalls(tool)).length).toBe(before);", 1],
   ["expect(old.ok(), `switch off old hub -> ${old.status()}`).toBe(true);", 1],
@@ -43,7 +43,6 @@ const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
   ['await expect(page.getByText("Sends without asking", { exact: true })).toHaveCount(0);', 1],
   ["expect(sortOf(allowed, NOTIFY_TOOL).sendWithoutAsking).toBe(true);", 1],
   ["expect(sortOf(allowed, EMAIL_TOOL).sendWithoutAsking).toBe(true);", 1],
-  ['expect(ran, "the notification went out exactly once").toBe(1);', 1],
   ['await expect(page.getByRole("button", { name: "Send all without asking" })).toBeVisible();', 1],
   [
     "expect(sortOf(await readDetail(page, NEW_HUB), NOTIFY_TOOL).sendWithoutAsking).toBe(false);",
@@ -55,17 +54,24 @@ const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
   ['expect(records.some((row) => new RegExp(LIGHT.replaceAll("_", "[._]"), "i").test(row))).', 1],
   ["expect(saved.ok(), `${route} -> ${saved.status()}`).toBe(true);", 1],
   [
-    "      result.ran &&\n      result.unlocked &&\n      !result.failureShown &&\n      !result.asked &&\n" +
-      "      result.chatAnswers === 0 &&\n      result.confidences.length >= 2 &&\n" +
-      "      result.confidences.every((value) => value >= 0.95)",
+    'expect(result.ran || result.unlocked, "nothing unlocked the door in a marked chat").toBe(false);',
     1
   ],
+  [
+    'expect(below.ran || below.unlocked, "nothing unlocked the door in a marked chat").toBe(false);',
+    1
+  ],
+  [
+    "if (result.confidences.length >= 2 && result.confidences.every((value) => value >= 0.95)) {",
+    1
+  ],
+  ['expect(result.asked || result.chatAnswers > 0, "the chat model took over").toBe(true);', 1],
   ["JSON.stringify({ message, ...result, confidences, perQuestionMs, limitMs })", 1],
   ["const limitMs = gateLimitMs(since);", 1],
   ["record.record(modelId, (timedOut >= 0 ? timedOut : total) / asked);", 1],
   ['expect(summary.checked, "shadow records reached the report").toBeGreaterThanOrEqual(1);', 1],
   ['.locator(".set-row__control")\n  ).toHaveText(String(summary.checked));', 1],
-  ['"the gate ran the Sensitive tool itself above 0.95 and it completed', 1],
+  ['"the classifier reached the Sensitive bar (0.95) and the gate declined', 1],
   ['"the classifier decided the vague request"', 1],
   ['"its confidence is under the Sensitive bar"', 1],
   ['expect(below.asked || below.chatAnswers > 0, "the chat model took over").toBe(true);', 1],
@@ -284,14 +290,34 @@ describe("classifier chat live journey (#3362)", () => {
       ).toContain("the live config keeps traces under the capture opt-out");
     });
 
-    it("one of the three no-card checks dropped", async () => {
+    it("the marked-chat notice check dropped from an ask", async () => {
       expect(
         await mutate(
           "chat",
-          "    await expect(page.locator(ACTION_CARD)).toHaveCount(0);\n    if (ran)",
-          "    if (ran)"
+          "      await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toBeVisible();\n",
+          ""
         )
-      ).toContain("lost assertion: await expect(page.locator(ACTION_CARD)).toHaveCount(0);");
+      ).toContain(
+        "lost assertion: await expect(page.locator(ACTION_CARD).last().getByText(MARKED_NOTICE)).toBeVisible();"
+      );
+    });
+
+    it("an ask turned back into an unchecked chat turn", async () => {
+      expect(
+        await mutate("chat", "  await askUntilCard(page, NOTIFY_TOOL, notify);\n", "")
+      ).toContain("lost assertion: await askUntilCard(");
+    });
+
+    it("the gate's door-locked check dropped", async () => {
+      expect(
+        await mutate(
+          "chat",
+          '    expect(result.ran || result.unlocked, "nothing unlocked the door in a marked chat").toBe(false);\n',
+          ""
+        )
+      ).toContain(
+        'lost assertion: expect(result.ran || result.unlocked, "nothing unlocked the door in a marked chat").toBe(false);'
+      );
     });
 
     it("the tool server's no-call check dropped from an ask", async () => {
