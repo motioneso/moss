@@ -12,6 +12,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { MODULE_WEB_CONTRIBUTIONS, MODULE_WEB_ROUTES } from "virtual:moss-module-web";
 import { confineModuleCss } from "@moss/module-css-confine";
 import { WORKSHOP_MODULE_ID } from "@moss/shared";
+import { Button } from "@moss/ui";
 
 import {
   ApiError,
@@ -21,6 +22,7 @@ import {
   getMyModules,
   getOnboardingStatus,
   shipExternalModule,
+  signOut,
   throwAwayExternalModuleDraft
 } from "./api/client";
 import { assistantName, bindAssistantUser, loadPersonaSettings } from "./api/use-assistant-name.js";
@@ -175,10 +177,10 @@ export function App() {
   // nav entry — for a health-data module that means the page (and its API calls) never mount
   // for a disabled actor. We can only confirm the module is ENABLED once /api/me/modules
   // resolves successfully; until then the gate shows a loader. The gate FAILS CLOSED: if that
-  // request errors we cannot prove the actor is enabled, so we redirect rather than risk
-  // rendering the health-data UI for a disabled actor (Codex code-review).
-  const myModulesEnabled = (moduleId: string): "loading" | "enabled" | "denied" => {
-    if (myModulesQuery.isError) return "denied"; // fail closed: cannot prove enabled
+  // request errors we cannot prove the actor is enabled, so we offer Retry without mounting
+  // the health-data UI or losing the requested address (Codex code-review).
+  const myModulesEnabled = (moduleId: string): "loading" | "enabled" | "denied" | "error" => {
+    if (myModulesQuery.isError) return "error"; // fail closed: cannot prove enabled
     if (!myModulesQuery.isSuccess) return "loading";
     // Affirmative enablement only: require an explicit active row. "Not listed" (backend skew,
     // partial/malformed response) is NOT proof of enablement for a health-data route — deny it
@@ -230,11 +232,11 @@ export function App() {
   }
 
   if (meQuery.error instanceof ApiError && meQuery.error.code === "account_pending_approval") {
-    return <PendingApprovalScreen />;
+    return <AccountStatusScreen status="pending" />;
   }
 
   if (meQuery.error instanceof ApiError && meQuery.error.code === "account_deactivated") {
-    return <DeactivatedScreen />;
+    return <AccountStatusScreen status="deactivated" />;
   }
 
   if (!meQuery.data) {
@@ -274,6 +276,7 @@ export function App() {
       return (
         <BrowserRouter>
           <OnboardingWizard
+            actorUserId={meQuery.data.user.id}
             initialStatus={onboardingStatus}
             onDone={() =>
               void queryClient.invalidateQueries({ queryKey: queryKeys.onboarding.status })
@@ -312,7 +315,7 @@ export function App() {
             <Route
               path={webRoutePath("wellness")}
               element={
-                <ModuleGatedRoute gate={wellnessGate}>
+                <ModuleGatedRoute gate={wellnessGate} onRetry={() => void myModulesQuery.refetch()}>
                   <WellnessPage />
                 </ModuleGatedRoute>
               }
@@ -322,7 +325,10 @@ export function App() {
                 key={path}
                 path={moduleId === WORKSHOP_MODULE_ID ? `${path}/*` : path}
                 element={
-                  <ModuleGatedRoute gate={myModulesEnabled(moduleId)}>
+                  <ModuleGatedRoute
+                    gate={myModulesEnabled(moduleId)}
+                    onRetry={() => void myModulesQuery.refetch()}
+                  >
                     <Component />
                   </ModuleGatedRoute>
                 }
@@ -346,7 +352,13 @@ export function App() {
             <Route path={webRoutePath("link-trail-marker")} element={<LinkTrailMarkerPage />} />
             <Route
               path="*"
-              element={<NotFoundRedirect modulesLoading={modulesQuery.isLoading} />}
+              element={
+                <NotFoundRedirect
+                  modulesLoading={modulesQuery.isLoading}
+                  modulesError={modulesQuery.isError}
+                  onRetry={() => void modulesQuery.refetch()}
+                />
+              }
             />
           </Routes>
         </Suspense>
@@ -357,9 +369,8 @@ export function App() {
 
 /**
  * Renders a module's SPA route only when the actor's per-user module state proves the module
- * is enabled. "loading" → a loader (no flash of the gated UI); "denied" (disabled OR the
- * state request errored — fail closed) → redirect to /tasks so the gated UI never mounts;
- * "enabled" → render the children.
+ * is enabled. Unknown reads show loading/error with Retry at the requested address. Explicit
+ * denial redirects to /tasks. Neither unknown nor denied states mount the gated children.
  */
 /**
  * #916 — the catch-all "*" route. External module routes are only added to the tree once
@@ -369,19 +380,30 @@ export function App() {
  * query ever has a chance to add it. Hold on a loading screen for `/m/*` paths while modules are
  * still loading; only redirect once we know the path truly isn't a module (or isn't external).
  */
-function NotFoundRedirect(props: { readonly modulesLoading: boolean }) {
+function NotFoundRedirect(props: {
+  readonly modulesLoading: boolean;
+  readonly modulesError: boolean;
+  readonly onRetry: () => void;
+}) {
   const location = useLocation();
-  if (props.modulesLoading && location.pathname.startsWith("/m/")) {
-    return <LoadingScreen />;
+  if (location.pathname.startsWith("/m/")) {
+    if (props.modulesLoading) return <LoadingScreen />;
+    if (props.modulesError)
+      return <FatalState message="Could not load modules. Try again." onRetry={props.onRetry} />;
   }
   return <Navigate to={webRoutePath("today")} replace />;
 }
 
 function ModuleGatedRoute(props: {
-  readonly gate: "loading" | "enabled" | "denied";
+  readonly gate: "loading" | "enabled" | "denied" | "error";
+  readonly onRetry: () => void;
   readonly children: ReactNode;
 }) {
   if (props.gate === "loading") return <LoadingScreen />;
+  if (props.gate === "error")
+    return (
+      <FatalState message="Could not check module access. Try again." onRetry={props.onRetry} />
+    );
   if (props.gate === "denied") return <Navigate to="/tasks" replace />;
   return <>{props.children}</>;
 }
@@ -587,27 +609,68 @@ function FatalState(props: { readonly message: string; readonly onRetry: () => v
   );
 }
 
-function PendingApprovalScreen() {
+function AccountStatusScreen(props: { readonly status: "pending" | "deactivated" }) {
+  const queryClient = useQueryClient();
+  const [status, setStatus] = useState(props.status);
+  useEffect(() => setStatus(props.status), [props.status]);
+  const recheck = useMutation({
+    mutationFn: getMe,
+    onSuccess: (me) => queryClient.setQueryData(queryKeys.auth.me, me),
+    onError: (error) => {
+      if (!(error instanceof ApiError)) return;
+      if (error.code === "account_deactivated") setStatus("deactivated");
+      else if (error.code === "account_pending_approval") setStatus("pending");
+    }
+  });
+  const logout = useMutation({
+    mutationFn: signOut,
+    onSuccess: () => {
+      queryClient.clear();
+      window.location.assign("/");
+    }
+  });
+  const stillBlocked =
+    recheck.error instanceof ApiError &&
+    (recheck.error.code === "account_pending_approval" ||
+      recheck.error.code === "account_deactivated");
+  const pending = recheck.isPending || logout.isPending;
   return (
     <main className="center-screen">
       <section className="auth-panel">
         <h1>{assistantName()}</h1>
-        <p>Your account is pending approval by an administrator.</p>
-        <p className="form-hint">
-          You will be able to sign in once your account has been approved.
+        <p>
+          {status === "pending"
+            ? "Your account is pending approval by an administrator."
+            : "Your account has been deactivated."}
         </p>
-      </section>
-    </main>
-  );
-}
-
-function DeactivatedScreen() {
-  return (
-    <main className="center-screen">
-      <section className="auth-panel">
-        <h1>{assistantName()}</h1>
-        <p className="form-error">Your account has been deactivated.</p>
-        <p className="form-hint">Please contact your administrator for assistance.</p>
+        <p className="form-hint">
+          {status === "pending"
+            ? "Check again after your administrator approves it."
+            : "Please contact your administrator for assistance."}
+        </p>
+        {recheck.isError && !stillBlocked ? (
+          <p role="alert" className="form-error">
+            Could not check your account. Try again.
+          </p>
+        ) : null}
+        {stillBlocked ? (
+          <p role="status">
+            {status === "deactivated"
+              ? "Your account is still deactivated."
+              : "Your account is still pending approval."}
+          </p>
+        ) : null}
+        {logout.isError ? (
+          <p role="alert" className="form-error">
+            Could not sign out. Try again.
+          </p>
+        ) : null}
+        <Button type="button" disabled={pending} onClick={() => recheck.mutate()}>
+          {recheck.isPending ? "Checking…" : "Check again"}
+        </Button>
+        <Button type="button" disabled={pending} onClick={() => logout.mutate()}>
+          {logout.isPending ? "Signing out…" : "Sign out"}
+        </Button>
       </section>
     </main>
   );
