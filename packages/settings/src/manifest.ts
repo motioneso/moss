@@ -185,6 +185,14 @@ export const settingsModuleManifest: MossModuleManifest = {
       permissionId: "settings.write"
     },
     {
+      method: "POST",
+      path: "/api/me/quiet-hours/resolution",
+
+      // Settling differing saved schedules is the owner's explicit pick in Settings, never Moss's.
+      chat: { access: "blocked", blockedBecause: "module_promise" },
+      permissionId: "settings.write"
+    },
+    {
       method: "GET",
       path: "/api/me/notification-preferences",
       chat: { access: "read", content: "user_authored" },

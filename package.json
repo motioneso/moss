@@ -106,6 +106,7 @@
     "test:integration:3309": "tsx scripts/test-integration.ts tests/integration/chat-reminders-permissions.test.ts tests/integration/chat-reminders-delivery.test.ts tests/integration/chat-reminders-save.test.ts tests/integration/foundation-schema-catalog.test.ts",
     "test:integration:3310": "tsx scripts/test-integration.ts tests/integration/chat-reminders-cancel.test.ts tests/integration/chat-reminders-cancel-turn.test.ts tests/integration/chat-reminders-permissions.test.ts tests/integration/chat-reminders-delivery.test.ts tests/integration/chat-reminders-save.test.ts tests/integration/foundation-schema-catalog.test.ts",
     "test:integration:3311": "tsx scripts/test-integration.ts tests/integration/chat-reminders-context.test.ts tests/integration/chat-reminders-permissions.test.ts tests/integration/chat-reminders-delivery.test.ts tests/integration/chat-reminders-save.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/main-chat.test.ts tests/integration/chat-live.test.ts",
+    "test:integration:3131": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/settings-quiet-hours-resolution.test.ts tests/integration/settings-quiet-hours-carry-forward.test.ts tests/integration/settings-quiet-hours.test.ts",
     "test:integration:3195": "tsx scripts/test-integration.ts tests/integration/chat-reminder-live-arrival.test.ts tests/integration/chat-reminders-delivery.test.ts tests/integration/chat-reminders-context.test.ts tests/integration/chat-reminders-cancel.test.ts tests/integration/chat-live.test.ts tests/integration/main-chat.test.ts",
     "test:integration:3065": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/route-guard.test.ts tests/integration/app-actions-grant.test.ts tests/integration/app-actions-tools.test.ts tests/integration/memory-dashboard.test.ts tests/integration/memory-candidate-paging.test.ts tests/integration/memory-forget-approval.test.ts tests/integration/memory-graph-tools.test.ts tests/integration/conversation-provenance-binding.test.ts tests/integration/chat-conversation-selection.test.ts tests/integration/conversation-provenance.test.ts tests/integration/conversation-automatic-reservation.test.ts tests/integration/native-vault-read-admission.test.ts tests/integration/classifier-context-admission.test.ts",
     "test:integration:3128": "tsx scripts/test-integration.ts tests/integration/chat-interrupted-turn.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/chat-live.test.ts tests/integration/main-chat.test.ts tests/integration/chat-message-order.test.ts tests/integration/chat-private-mode.test.ts tests/integration/chat-token-budgets.test.ts tests/integration/chat-reminders-context.test.ts tests/integration/chat-privacy-history-leak.test.ts",
@@ -146,7 +147,8 @@
     "test:uat:3192": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3192-owner-main.uat.spec.ts",
     "test:uat:3164": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3164-quiet-hours-writers.uat.spec.ts",
     "test:uat:3165": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3165-quiet-hours-carry-forward.uat.spec.ts",
-    "test:uat:3130": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3130-quiet-hours-editor.uat.spec.ts"
+    "test:uat:3130": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3130-quiet-hours-editor.uat.spec.ts",
+    "test:uat:3131": "MOSS_UAT_CAPTURE_OFF=1 tsx tests/uat/run-uat.ts 3131-quiet-hours-conflict-choice.uat.spec.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",
