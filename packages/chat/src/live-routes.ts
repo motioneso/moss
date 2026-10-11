@@ -511,6 +511,13 @@ export function registerChatLiveRoutes(
   );
 
   server.get("/api/chat/stream", async (request, reply) => {
+    let closed = reply.raw.destroyed;
+    let unsubscribe: (() => void) | undefined;
+    // The response connection can close during any of the startup awaits.
+    reply.raw.once("close", () => {
+      closed = true;
+      unsubscribe?.();
+    });
     const access = await resolveOr401(dependencies, request, reply);
     if (!access) return reply;
     if (rejectMeetingChatOnGeneralRoute(request, reply)) return reply;
@@ -549,9 +556,10 @@ export function registerChatLiveRoutes(
       }
     }
 
+    if (closed) return reply;
+
     // Subscriptions are keyed by the caller's actor + surface — a stream only ever
     // receives that actor's transcript records, never another user's.
-    let unsubscribe: () => void;
     try {
       unsubscribe = runtime.manager.subscribe(
         access.actorUserId,
@@ -577,11 +585,6 @@ export function registerChatLiveRoutes(
     // a minute or more, which reads as a hung stream. A comment frame is inert by the SSE spec
     // (EventSource ignores any line that is not a field), so the browser is unaffected.
     reply.raw.write(": connected\n\n");
-
-    request.raw.on("close", () => {
-      unsubscribe();
-      if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.end();
-    });
 
     // Keep the Fastify handler open until the client disconnects.
     return reply;
