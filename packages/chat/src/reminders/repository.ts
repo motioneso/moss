@@ -1,4 +1,4 @@
-// #3309: storage for relative reminders. Row security and the table's triggers own every
+// #3309: storage for chat reminders, relative or (#3150) at a local clock time. Row security and the table's triggers own every
 // rule; this file only names the queries.
 
 import { randomUUID } from "node:crypto";
@@ -9,6 +9,7 @@ import {
   assertDataContextDb,
   type ChatReminderContextState,
   type ChatReminderState,
+  type ChatReminderTiming,
   type DataContextDb
 } from "@moss/db";
 
@@ -27,6 +28,7 @@ export interface DueReminder {
   readonly state: ChatReminderState;
   readonly version: number;
   readonly dueAt: Date;
+  readonly deadlineAt: Date | null;
 }
 
 export interface OwnedReminder {
@@ -34,16 +36,33 @@ export interface OwnedReminder {
   readonly text: string;
   readonly state: ChatReminderState;
   readonly contextState: ChatReminderContextState;
+  readonly timing: ChatReminderTiming;
   readonly dueAt: Date;
+  readonly deadlineAt: Date | null;
+  readonly late: boolean | null;
   readonly createdAt: Date;
 }
+
+/** When a new reminder is due: a delay the database adds to its clock, or a local clock time. */
+export type ReminderTimingInput =
+  | { readonly timing: "relative"; readonly delaySeconds: number }
+  | {
+      readonly timing: "local_clock";
+      readonly dueAt: Date;
+      readonly localDue: string;
+      readonly timeZone: string;
+      readonly deadlineAt: Date | null;
+    };
 
 const OWNED_COLUMNS = [
   "id",
   "reminder_text",
   "state",
   "context_state",
+  "timing",
   "due_at",
+  "deadline_at",
+  "late",
   "created_at"
 ] as const;
 
@@ -52,7 +71,10 @@ function toOwned(row: {
   reminder_text: string;
   state: ChatReminderState;
   context_state: ChatReminderContextState;
+  timing: ChatReminderTiming;
   due_at: Date;
+  deadline_at: Date | null;
+  late: boolean | null;
   created_at: Date;
 }): OwnedReminder {
   return {
@@ -60,7 +82,10 @@ function toOwned(row: {
     text: row.reminder_text,
     state: row.state,
     contextState: row.context_state,
+    timing: row.timing,
     dueAt: new Date(row.due_at),
+    deadlineAt: row.deadline_at === null ? null : new Date(row.deadline_at),
+    late: row.late,
     createdAt: new Date(row.created_at)
   };
 }
@@ -81,11 +106,12 @@ export class ReminderRepository {
       readonly id?: string;
       readonly threadId: string;
       readonly sourceMessageId: string;
-      readonly delaySeconds: number;
+      readonly when: ReminderTimingInput;
       readonly text: string;
     }
   ): Promise<SavedReminder> {
     assertDataContextDb(scopedDb);
+    const when = input.when;
     const row = await scopedDb.db
       .insertInto("app.chat_reminders")
       .values({
@@ -95,7 +121,16 @@ export class ReminderRepository {
         source_message_id: input.sourceMessageId,
         reserved_message_id: randomUUID(),
         reminder_text: input.text,
-        delay_seconds: input.delaySeconds
+        ...(when.timing === "relative"
+          ? { delay_seconds: when.delaySeconds }
+          : {
+              timing: "local_clock" as const,
+              delay_seconds: null,
+              due_at: when.dueAt,
+              local_due: when.localDue,
+              time_zone: when.timeZone,
+              deadline_at: when.deadlineAt
+            })
       })
       .returning(["id", "version", "due_at"])
       .executeTakeFirstOrThrow();
@@ -118,7 +153,8 @@ export class ReminderRepository {
         "reminder_text",
         "state",
         "version",
-        "due_at"
+        "due_at",
+        "deadline_at"
       ])
       .where("id", "=", reminderId)
       .forUpdate()
@@ -132,7 +168,8 @@ export class ReminderRepository {
       text: row.reminder_text,
       state: row.state,
       version: row.version,
-      dueAt: new Date(row.due_at)
+      dueAt: new Date(row.due_at),
+      deadlineAt: row.deadline_at === null ? null : new Date(row.deadline_at)
     };
   }
 
@@ -157,6 +194,18 @@ export class ReminderRepository {
       .where("state", "=", "queued")
       .executeTakeFirstOrThrow();
     if (result.numUpdatedRows !== 1n) throw new Error("chat reminder was not marked failed");
+  }
+
+  /** #3150: ends a reminder whose deadline passed before delivery. Nothing is posted. */
+  async markExpired(scopedDb: DataContextDb, reminderId: string): Promise<void> {
+    assertDataContextDb(scopedDb);
+    const result = await scopedDb.db
+      .updateTable("app.chat_reminders")
+      .set({ state: "expired" })
+      .where("id", "=", reminderId)
+      .where("state", "=", "queued")
+      .executeTakeFirstOrThrow();
+    if (result.numUpdatedRows !== 1n) throw new Error("chat reminder was not marked expired");
   }
 
   /** Reads a row the delivery lock cannot see, because the worker may lock only queued rows. */

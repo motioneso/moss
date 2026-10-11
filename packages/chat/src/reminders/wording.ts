@@ -3,6 +3,8 @@
 import type { ChatReminderState } from "@moss/db";
 
 import type { ReminderCancelResult, ReminderList } from "./cancel.js";
+import { deadlinePhrase, whenPhrase, type ReminderLocale } from "./clock-wording.js";
+import { localWallClock } from "./local-clock.js";
 import type { ReminderUnsupportedReason } from "./recognizer.js";
 import type { OwnedReminder } from "./repository.js";
 
@@ -19,18 +21,24 @@ export function reminderSavedReply(delaySeconds: number, text: string): string {
 }
 
 export function reminderRefusedReply(reason: ReminderUnsupportedReason): string {
-  const tryThis = 'Try "remind me in 10 minutes to stretch".';
+  const tryThis = 'Try "remind me in 10 minutes to stretch" or "remind me at 3pm to call Sam".';
   switch (reason) {
     case "out_of_range":
       return `I can set a reminder from 1 second up to 30 days ahead. ${tryThis}`;
     case "text_length":
       return `Keep the reminder to 500 characters or fewer. ${tryThis}`;
-    case "clock_or_recurrence":
-      return `I can only set a one-off reminder a set time from now, not at a clock time or on repeat. ${tryThis}`;
+    case "recurrence":
+      return `I can only set a one-off reminder, not one that repeats, so I didn't set anything. ${tryThis}`;
+    case "unsupported_day":
+      return `I can set a clock-time reminder for today or tomorrow only, so I didn't set anything. ${tryThis}`;
+    case "needs_am_pm":
+      return "Say am or pm, or use a 24-hour time like 15:00, so I set the right time. I didn't set anything yet.";
+    case "deadline_needs_clock":
+      return 'A deadline works only with a clock-time reminder, so I didn\'t set anything. Try "remind me at 3pm to call Sam, but not after 4pm".';
     case "ambiguous":
       return `That has more than one time in it, so I didn't set anything. ${tryThis}`;
-    case "needs_relative_duration":
-      return `Tell me how long from now, in seconds, minutes, hours or days. ${tryThis}`;
+    case "needs_time":
+      return `Tell me how long from now, or a clock time today or tomorrow. ${tryThis}`;
   }
 }
 
@@ -68,10 +76,11 @@ export const REMINDER_MANAGE_MAIN_ONLY_REPLY =
 const FINISHED_LABEL: Readonly<Record<Exclude<ChatReminderState, "queued">, string>> = {
   delivered: "sent",
   cancelled: "cancelled",
-  failed: "couldn't be sent"
+  failed: "couldn't be sent",
+  expired: "skipped, past its deadline"
 };
 
-export function reminderListReply(list: ReminderList): string {
+export function reminderListReply(list: ReminderList, locale: ReminderLocale): string {
   if (list.open.length === 0 && list.finished.length === 0) {
     return "You haven't set any reminders in chat.";
   }
@@ -79,12 +88,12 @@ export function reminderListReply(list: ReminderList): string {
   lines.push(
     list.open.length === 0
       ? "No chat reminders are waiting."
-      : `Chat reminders waiting:\n${list.open.map((reminder) => `- ${reminder.text}, ${timeLeft(reminder.dueAt, list.now)}`).join("\n")}`
+      : `Chat reminders waiting:\n${list.open.map((reminder) => `- ${reminder.text}, ${waitingLabel(reminder, list.now, locale)}`).join("\n")}`
   );
   if (list.finished.length > 0) {
     lines.push(
       `Recent chat reminders:\n${list.finished
-        .map((reminder) => `- ${reminder.text} (${finishedLabel(reminder.state)})`)
+        .map((reminder) => `- ${reminder.text} (${finishedLabel(reminder)})`)
         .join("\n")}`
     );
   }
@@ -103,6 +112,8 @@ export function reminderCancelReply(result: ReminderCancelResult): string {
       return `Too late to cancel, I already sent that reminder: ${result.reminder.text}`;
     case "already_failed":
       return `That reminder couldn't be sent, so there was nothing to cancel: ${result.reminder.text}`;
+    case "already_expired":
+      return `That reminder passed its deadline and was skipped, so there was nothing to cancel: ${result.reminder.text}`;
     case "ambiguous":
       return `More than one reminder matches, so I didn't cancel any. Which one?\n${bullets(result.matches)}`;
     case "needs_target":
@@ -118,8 +129,21 @@ function bullets(reminders: readonly OwnedReminder[]): string {
   return reminders.map((reminder) => `- ${reminder.text}`).join("\n");
 }
 
-function finishedLabel(state: ChatReminderState): string {
-  return state === "queued" ? "waiting" : FINISHED_LABEL[state];
+function finishedLabel(reminder: OwnedReminder): string {
+  if (reminder.state === "queued") return "waiting";
+  if (reminder.state === "delivered" && reminder.late) return "sent late";
+  return FINISHED_LABEL[reminder.state];
+}
+
+/** A clock-time reminder shows its local time and deadline; a relative one shows time left. */
+function waitingLabel(reminder: OwnedReminder, now: Date, locale: ReminderLocale): string {
+  if (reminder.timing !== "local_clock") return timeLeft(reminder.dueAt, now);
+  const today = localWallClock(now, locale.timeZone).slice(0, 10);
+  const localDue = localWallClock(reminder.dueAt, locale.timeZone);
+  const when = whenPhrase(localDue, today, locale.clockFormat);
+  if (reminder.deadlineAt === null) return when;
+  const localDeadline = localWallClock(reminder.deadlineAt, locale.timeZone);
+  return `${when}, skipped if not sent by ${deadlinePhrase(localDeadline, localDue, today, locale.clockFormat)}`;
 }
 
 function timeLeft(dueAt: Date, now: Date): string {
