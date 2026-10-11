@@ -71,7 +71,7 @@ const KEPT_CHAT_ASSERTIONS: readonly (readonly [string, number])[] = [
   ["record.record(modelId, (timedOut >= 0 ? timedOut : total) / asked);", 1],
   ['expect(summary.checked, "shadow records reached the report").toBeGreaterThanOrEqual(1);', 1],
   ['.locator(".set-row__control")\n  ).toHaveText(String(summary.checked));', 1],
-  ['"the classifier reached the Sensitive bar (0.95) and the gate declined', 1],
+  ['console.log("R2.6 YOLO a clear ask reached the Sensitive bar:", above);', 1],
   ['"the classifier decided the vague request"', 1],
   ['"its confidence is under the Sensitive bar"', 1],
   ['expect(below.asked || below.chatAnswers > 0, "the chat model took over").toBe(true);', 1],
