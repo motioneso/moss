@@ -227,6 +227,11 @@ interface UnresolvedPrn {
   readonly date: string;
 }
 
+interface FailedDose {
+  readonly input: DoseWrite;
+  readonly date: string;
+}
+
 function AccountMedToday({
   theme: _theme,
   onManage,
@@ -250,6 +255,17 @@ function AccountMedToday({
   });
   const unresolvedPrn = unresolvedQuery.data;
   const ambiguousPrnFailure = unresolvedPrn != null;
+
+  // Rejections live in the account's query cache so one that lands after leaving Today still shows on return.
+  const failedKey = ["wellness", "failed-dose", userId] as const;
+  const failedQuery = useQuery<FailedDose | null>({
+    queryKey: failedKey,
+    queryFn: () => null,
+    initialData: null,
+    enabled: false,
+    gcTime: Infinity
+  });
+  const failedDose = failedQuery.data?.date === date ? failedQuery.data.input : null;
 
   const scheduleQuery = useQuery({
     queryKey: queryKeys.wellness.schedule(date),
@@ -277,6 +293,8 @@ function AccountMedToday({
         !(error instanceof ApiError && error.status >= 400 && error.status < 500)
       ) {
         queryClient.setQueryData(unresolvedKey, { input, date } satisfies UnresolvedPrn);
+      } else {
+        queryClient.setQueryData(failedKey, { input, date } satisfies FailedDose);
       }
     },
     onSuccess: () => {
@@ -292,15 +310,6 @@ function AccountMedToday({
   const isSaving = logMutation.isPending || pendingDoseWrites.length > 0;
   const resumablePrnDraft = unresolvedPrn?.input ?? pendingPrn;
 
-  const latestPrnUncertain =
-    logMutation.isError &&
-    logMutation.variables?.status === "prn" &&
-    !(
-      logMutation.error instanceof ApiError &&
-      logMutation.error.status >= 400 &&
-      logMutation.error.status < 500
-    );
-
   // PRN ("as needed") dose entry. Reason is optional — the user may log a dose without
   // a reason (persists as null). PRN doses are repeatable: each submit inserts a new log.
   const [prnOpenFor, setPrnOpenFor] = useState<string | null>(
@@ -313,6 +322,7 @@ function AccountMedToday({
     if (input.status === "prn" && ambiguousPrnFailure) return;
     writeInFlight.current = true;
     setPrnRechecked(false);
+    queryClient.setQueryData(failedKey, null);
     logMutation.mutate(input, {
       onSuccess: () => {
         if (input.status === "prn") {
@@ -404,35 +414,26 @@ function AccountMedToday({
             </Button>
           </div>
         ) : null}
-        {logMutation.isError && !latestPrnUncertain ? (
+        {failedDose ? (
           <div role="alert">
             <p>
               Could not save this dose as{" "}
-              {logMutation.variables?.status === "prn"
-                ? "an as-needed dose"
-                : logMutation.variables?.status}
-              . The last confirmed status is still shown.
+              {failedDose.status === "prn" ? "an as-needed dose" : failedDose.status}.
             </p>
             <Button
               variant="link"
               disabled={
                 scheduleQuery.isError ||
                 isSaving ||
-                (logMutation.variables?.status === "prn" && ambiguousPrnFailure)
+                (failedDose.status === "prn" && ambiguousPrnFailure)
               }
-              onClick={() => {
-                if (logMutation.variables) submitDose(logMutation.variables);
-              }}
+              onClick={() => submitDose(failedDose)}
             >
               Retry dose
             </Button>
           </div>
         ) : null}
-        {prnRechecked ? (
-          <p role="status">
-            Schedule checked. Review the logged-today count before logging another dose.
-          </p>
-        ) : null}
+        {prnRechecked ? <p role="status">Saved doses checked.</p> : null}
         {scheduleQuery.isPending ? (
           <p className="wl-subtle-text" role="status">
             Loading medication schedule…

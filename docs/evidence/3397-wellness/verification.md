@@ -122,3 +122,16 @@ account separation, late outcomes, unchanged reason and absence of session-stora
 content. The failure case also verifies that settling while a different account is shown
 leaves that account unchanged and restores the original account's uncertainty on return.
 Final serialized TypeScript and independent re-review remain coordinator gates.
+
+## Live verification and review follow-up (2026-10-11)
+
+- Provisioned real-UI UAT `tests/uat/specs/audit-wellness.uat.spec.ts` passed on head
+  7f4cecacc (1 passed, 43.9s) in an isolated instance. It stops the isolated app service
+  for the dose failure, because browser offline mode pauses the write instead of failing
+  it. This supersedes the "not run" UAT status above; the earlier entries record the
+  blocked attempts at the time.
+- Codex re-review follow-up: a scheduled rejection that lands after leaving Today is kept
+  in account-scoped query cache and retried with the same slot and status. The new
+  regression was observed failing before the fix. Remaining export and dose copy was
+  trimmed to status and recovery controls.
+- Required CI remains the merge gate.

@@ -373,7 +373,7 @@ export const wellnessModuleManifest = {
           code: "wellness_dose_save_failed",
           class: "transient",
           description:
-            "Dose failures keep the last confirmed status. Uncertain as-needed outcomes and reasons stay in account-separated memory across other dose updates and route re-entry, blocking another insert until a saved-dose read succeeds."
+            "Dose failures keep the last confirmed status. Rejected writes, even ones landing after leaving Today, and uncertain as-needed outcomes survive route re-entry per account; uncertain ones block another insert until saved doses are read."
         }
       ],
       remediations: [

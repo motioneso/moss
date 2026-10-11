@@ -291,8 +291,8 @@ function AccountExportModal({ open, onClose, userId }: Props & { userId: string 
               style={{ marginBottom: 10 }}
             >
               {startMutation.error instanceof ApiError && startMutation.error.status === 409
-                ? "An export is already in progress with different parameters. Keep this selection and try again when that export finishes."
-                : "Export failed. Your selection is still here. Please try again."}
+                ? "Another export with different settings is in progress."
+                : "Export failed."}
             </div>
           ) : null}
 
@@ -311,18 +311,14 @@ function AccountExportModal({ open, onClose, userId }: Props & { userId: string 
         </>
       ) : isExpired || isUnavailable ? (
         <div role="status">
-          <p>
-            {isExpired ? "This export has expired." : "This export is no longer available."} Your
-            selected range and categories are still here.
-          </p>
+          <p>{isExpired ? "This export has expired." : "This export is no longer available."}</p>
           <Button variant="primary" onClick={reset}>
             Generate again
           </Button>
         </div>
       ) : statusQuery.isError ? (
         <p role="alert">
-          Could not check your export. Your job is still saved; retry its status before starting
-          another export.{" "}
+          Could not check your export.{" "}
           <Button variant="link" onClick={() => void statusQuery.refetch()}>
             Try again
           </Button>

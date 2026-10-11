@@ -148,6 +148,42 @@ describe("Wellness dose recovery", () => {
     );
   });
 
+  it("keeps a scheduled rejection that lands after leaving Today and retries the same write", async () => {
+    let reject!: (error: Error) => void;
+    vi.mocked(api.logMedicationDose).mockImplementationOnce(
+      () => new Promise((_, no) => (reject = no))
+    );
+    const { host, render } = await medication("taken");
+    const content = <MedToday theme="light" onManage={() => {}} timeZone="UTC" />;
+    await act(async () => host.querySelector<HTMLElement>('[role="button"]')!.click());
+    await vi.waitFor(() => expect(api.logMedicationDose).toHaveBeenCalledTimes(1));
+    await render(null);
+    await act(async () => reject(new Error("offline")));
+    await render(content);
+    await vi.waitFor(() =>
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+        "Could not save this dose as skipped"
+      )
+    );
+    vi.mocked(api.logMedicationDose).mockResolvedValueOnce({
+      log: {
+        id: "fictional-log",
+        medicationId: "fictional-med",
+        status: "skipped",
+        dose: null,
+        prnReason: null,
+        scheduledFor: schedule().slots[0]!.scheduledFor,
+        loggedAt: new Date().toISOString()
+      }
+    });
+    await click(host, "Retry dose");
+    await vi.waitFor(() => expect(api.logMedicationDose).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(api.logMedicationDose).mock.calls[1]).toEqual(
+      vi.mocked(api.logMedicationDose).mock.calls[0]
+    );
+    await vi.waitFor(() => expect(host.querySelector('[role="alert"]')).toBeNull());
+  });
+
   it("retains an ambiguous PRN draft and rechecks saved doses without repeating the insert", async () => {
     vi.mocked(api.logMedicationDose).mockRejectedValueOnce(new Error("connection lost"));
     const { host } = await medication("pending", true);
@@ -322,7 +358,7 @@ describe("Unresolved as-needed outcome lifetime", () => {
     vi.mocked(api.getMedicationSchedule).mockResolvedValueOnce(mixed);
     await click(host, "Check saved doses");
     await vi.waitFor(() => expect(button(host, "Log dose").disabled).toBe(false));
-    expect(host.textContent).toContain("Schedule checked");
+    expect(host.textContent).toContain("Saved doses checked");
     expect(host.querySelector<HTMLInputElement>('[aria-label="Reason for this dose"]')!.value).toBe(
       "Fictional retained reason"
     );
@@ -349,7 +385,7 @@ describe("Wellness export recovery", () => {
     const { host } = await mount(<WellnessExportModal open onClose={() => {}} />);
     await selectExport(host);
     await vi.waitFor(() =>
-      expect(host.querySelector('[role="alert"]')?.textContent).toContain("different parameters")
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain("different settings")
     );
     expect(host.querySelector<HTMLInputElement>("#wlexport-from")!.value).not.toBe("");
     expect(button(host, "Generate export").disabled).toBe(false);
