@@ -186,7 +186,10 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   await composer.fill(RETRIEVAL_QUESTION);
   await composer.press("Enter");
 
-  await expect(chatDialog.getByText(new RegExp(FACT, "i"))).toBeVisible({ timeout: 60_000 });
+  // A collapsed tool peek line can also hold the fact; only rendered text counts.
+  await expect(
+    chatDialog.getByText(new RegExp(FACT, "i")).filter({ visible: true }).first()
+  ).toBeVisible({ timeout: 60_000 });
   // The question never names the fact, so the only stored turn cannot carry it.
   expect(RETRIEVAL_QUESTION).not.toMatch(new RegExp(FACT, "i"));
   await expectOnlyUserTurn(page, freshThreadId, RETRIEVAL_QUESTION);
