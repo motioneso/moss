@@ -220,16 +220,36 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   await expectToolOutcome(projectName, "notes.edit", editNotBefore, "success");
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
-  const deletedNotes = chatDialog.getByRole("status").filter({ hasText: /^Done: Delete note$/ });
+  // Delete is destructive, so it always asks first, even with YOLO on (#3417).
+  const legitFile = `${NOTES_ROOT}/${legitPath}`;
+  execInVaultAsOwner(projectName, `test -f ${legitFile}`);
+  const deleteCard = chatDialog
+    .locator(".action-request-card")
+    .filter({ hasText: "Delete note" })
+    .last();
+  const deletedNotes = chatDialog
+    .getByRole("status")
+    .filter({ hasText: /^Approved · Delete note$/ });
   const deleteCount = await deletedNotes.count();
   const deleteNotBefore = Date.now();
   await composer.fill(
     `Use the notes.delete tool to delete path "${legitPath}". Use these exact inputs without further questions.`
   );
   await composer.press("Enter");
+  await expect(deleteCard.getByRole("button", { name: "Approve", exact: true })).toBeVisible({
+    timeout: 60_000
+  });
+  const deleteResolved = page.waitForResponse(
+    (response) =>
+      /\/api\/chat\/action-requests\/[^/]+\/resolve$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "POST"
+  );
+  await deleteCard.getByRole("button", { name: "Approve", exact: true }).click();
+  expect((await deleteResolved).status()).toBe(204);
   await expect(deletedNotes).toHaveCount(deleteCount + 1, { timeout: 60_000 });
   await expect(deletedNotes.last()).toBeVisible();
   await expectToolOutcome(projectName, "notes.delete", deleteNotBefore, "success");
+  execInVaultAsOwner(projectName, `test ! -e ${legitFile}`);
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   // --- (b) rejectSymlinkParent: an ANCESTOR directory of the target is a symlink ----------

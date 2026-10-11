@@ -26,4 +26,14 @@ describe("notes live specs (#3277)", () => {
     expect(text).toMatch(/await expectThreadCarries\(/);
     expect(text).toMatch(/await expectOnlyUserTurn\(/);
   });
+
+  it("the path spec approves the delete card and checks the note left the vault", async () => {
+    const text = await source("notes-path-recheck.uat.spec.ts");
+    expect(text, "delete always asks first (#3417)").toMatch(
+      /deleteCard\.getByRole\("button", \{ name: "Approve", exact: true \}\)\.click\(\)/
+    );
+    expect(text).toMatch(/\^Approved · Delete note\$/);
+    expect(text, "note exists before the delete").toMatch(/`test -f \$\{legitFile\}`/);
+    expect(text, "note is gone after the delete").toMatch(/`test ! -e \$\{legitFile\}`/);
+  });
 });
