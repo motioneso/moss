@@ -10,6 +10,7 @@ import {
 } from "../../packages/meetings/src/web/meeting-transcript.js";
 import { transcriptTime } from "../../packages/meetings/src/web/transcript-time.js";
 import { parseTranscriptEvidence } from "../../packages/meetings/src/web/transcript-evidence.js";
+import { meetingsModuleManifest } from "../../packages/meetings/src/manifest.js";
 import {
   getMeetingTranscript,
   getMeetingTranscriptEvidence,
@@ -58,6 +59,107 @@ const fixture: MeetingTranscriptView = {
 };
 afterEach(() => vi.unstubAllGlobals());
 describe("retained transcript review", () => {
+  it("describes omitted lines without promising full retained local search", () => {
+    const before = JSON.stringify(fixture);
+    const html = renderToString(<TranscriptTimeline {...fixture} />).replaceAll("<!-- -->", "");
+    expect(html).toContain("3 lines not shown.");
+    expect(html).not.toContain("Search or follow a cited timestamp to find the text.");
+    expect(JSON.stringify(fixture)).toBe(before);
+  });
+
+  it("keeps local matches case-insensitive and scopes an empty match to loaded timeline lines", () => {
+    const before = JSON.stringify(fixture);
+    const matching = renderToString(<TranscriptTimeline {...fixture} search="A CORRECTION" />);
+    expect(matching).toContain("A correction");
+    expect(matching).not.toContain("No loaded timeline lines match.");
+    const unmatched = renderToString(<TranscriptTimeline {...fixture} search="omitted phrase" />);
+    expect(unmatched).toContain("No loaded timeline lines match.");
+    expect(unmatched).toContain('role="status"');
+    expect(unmatched).not.toContain("A correction");
+    expect(unmatched).not.toContain("No transcript lines match.");
+    expect(JSON.stringify(fixture)).toBe(before);
+  });
+
+  it("labels and describes the local search field even when no lines are omitted", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } }
+    });
+    client.setQueryData(meetingKeys.transcript("meeting"), {
+      ...fixture,
+      snapshot: { ...fixture.snapshot, omittedSegments: 0 }
+    });
+    try {
+      const html = renderToString(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <MeetingTranscript meetingId="meeting" search="correction" />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+      expect(html).toContain('for="meeting-transcript-search"');
+      expect(html).toContain("Search transcript timeline");
+      expect(html).toContain('aria-describedby="meeting-transcript-search-scope"');
+      expect(html).toContain('id="meeting-transcript-search-scope"');
+      expect(html).toContain("Searches shown lines only.");
+      expect(html).not.toContain("not shown");
+    } finally {
+      client.clear();
+    }
+  });
+
+  it("excludes a separate retained citation from timeline search without hiding the excerpt", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } }
+    });
+    const query = "segmentId=s1&segmentRevision=1&startCharacter=0&endCharacter=14";
+    const reference = parseTranscriptEvidence("meeting", new URLSearchParams(query));
+    const retained = {
+      evidence: {
+        segment: { ...fixture.snapshot.segments[0], revision: 1, text: "Cited old text" },
+        excerpt: "Cited old text"
+      }
+    };
+    client.setQueryData(meetingKeys.transcript("meeting"), fixture);
+    const evidenceKey = ["meetings", "evidence", "meeting", reference];
+    client.setQueryData(evidenceKey, retained);
+    const render = (search: string) =>
+      renderToString(
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={[`/meetings?id=meeting&${query}`]}>
+            <MeetingTranscript meetingId="meeting" search={search} />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+    try {
+      const unmatched = render("Cited old text");
+      expect(unmatched).toContain("Search transcript timeline");
+      expect(unmatched).toContain("Searches shown lines only.");
+      expect(unmatched).toContain("No loaded timeline lines match.");
+      expect(unmatched).toContain('id="meeting-reference-meeting"');
+      expect(unmatched).toContain("Cited old text");
+      expect(unmatched).not.toContain('id="meeting-line-s1"');
+      const matching = render("CORRECTION");
+      expect(matching).toContain('id="meeting-line-s1"');
+      expect(matching).toContain("A correction");
+      expect(matching).toContain("Cited old text");
+      expect(matching).not.toContain("No loaded timeline lines match.");
+      expect(client.getQueryData(evidenceKey)).toEqual(retained);
+      expect(client.getQueryData(meetingKeys.transcript("meeting"))).toEqual(fixture);
+    } finally {
+      client.clear();
+    }
+  });
+
+  it("declares the local search boundary and configured-chat prerequisite", () => {
+    const feature = meetingsModuleManifest.features.find(
+      (item) => item.id === "meetings.transcript_search"
+    );
+    expect(feature?.description).toContain("filters loaded timeline lines only");
+    expect(feature?.description).toContain("separate cited excerpts aren’t searched");
+    expect(feature?.description).toContain("meeting chat needs a ready configured model");
+    expect(feature?.description.length).toBeLessThanOrEqual(240);
+  });
+
   it.each([
     [11, "interrupted"],
     [12, "interrupted"],
@@ -173,7 +275,7 @@ describe("retained transcript review", () => {
     expect(html).toContain("Still being finalised");
     expect(html).toContain('class="meetings-transcript-turn meetings-transcript-turn--live"');
     expect(html).toContain('class="meetings-transcript-text jds-hint"');
-    expect(html).toContain("lines are outside");
+    expect(html).toContain("lines not shown.");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("anonymous-1");
     expect(html).not.toContain("<script>");

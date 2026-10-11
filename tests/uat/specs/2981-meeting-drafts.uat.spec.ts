@@ -363,7 +363,9 @@ test("Retained transcript review shows real source labels and immutable earlier 
     await expect(evidence).toBeFocused();
     await expect(transcript).toContainText("Synthetic corrected wording.");
     await openMeetingAction(page, "Search transcript");
-    await page.getByRole("searchbox", { name: "Search transcript", exact: true }).fill("corrected");
+    await page
+      .getByRole("searchbox", { name: "Search transcript timeline", exact: true })
+      .fill("corrected");
     await expect(transcript.locator(".meetings-transcript-turn")).toHaveCount(1);
     await page.getByRole("button", { name: "Close search", exact: true }).click();
   } finally {
