@@ -171,8 +171,8 @@ export const chatModuleManifest = {
     {
       id: "chat.conversation_write_confirmation",
       description:
-        "Every write, including installed and connected tools, asks on outside or unknown history, even in YOLO. " +
-        "Admission is recorded before exposure and survives restart. Native vault reads stop if their conversation cannot be recorded.",
+        "Outside history makes writes ask unless trusted by Auto-approve actions, a no-ask action group or a per-call limit. " +
+        "Unknown history asks. Admission is recorded first and survives restart. Native vault reads stop if it cannot be recorded.",
       featureFlagId: "chat.module"
     },
     {

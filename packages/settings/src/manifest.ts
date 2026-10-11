@@ -699,7 +699,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       id: "app.outsideContentApproval",
       description:
-        "Outside results, forwarded errors, recall, attachments and outside-agent launch make writes ask, even in YOLO. Public app source, app-map reads and simple saved-setting acknowledgements do not add outside content."
+        "Outside content makes writes ask unless the user trusted them by Auto-approve actions, a no-ask action group or a per-call limit. Sending, deletion and over-limit calls still ask. App source and app-map reads add no outside content."
     },
     {
       id: "app.ownerToolDescriptors",
@@ -714,7 +714,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       id: "app.callAction",
       description:
-        "Call app routes as you. Destructive actions ask. After outside content enters a chat, writes and outbound reads ask, including in YOLO mode. Missing provenance also asks. Successful changes refresh screens.",
+        "Call app routes as you. Destructive actions ask. After outside content enters a chat, writes ask unless Auto-approve actions is on, and outbound reads always ask. Missing provenance also asks. Successful changes refresh screens.",
       errors: [
         {
           code: "context_admission_unavailable",

@@ -281,7 +281,8 @@ put an approval card on every write, even under YOLO. In a tainted conversation:
 | `destructive` risk, any trust                                                      | asks                 |
 | `confirmWhenTainted` call (e.g. an outbound GET through the app)                   | asks                 |
 
-A trusted write in a tainted conversation dispatches directly. It skips the clean-conversation
+The quick-pick classifier path follows the same table, so a trusted write it picks runs in a marked
+conversation. A trusted write in a tainted conversation dispatches directly. It skips the clean-conversation
 claim that automatic runs use, because that claim exists to refuse tainted conversations. Trust
 runs past a durable outside-content mark only (`isMarked`). A missing or foreign binding, an
 unreadable provenance row, or another automatic run holding the conversation still asks.

@@ -508,7 +508,8 @@ function boundGateway(
   actorUserId: string,
   threadId: string | null,
   pausePolicy?: () => Promise<void>,
-  provenance: ConversationProvenancePort = new ConversationProvenanceStore(runner)
+  provenance: ConversationProvenancePort = new ConversationProvenanceStore(runner),
+  risk: "write" | "outbound" = "outbound"
 ) {
   const calls = vi.fn(async () => ({ data: { changed: true } }));
   const family = {
@@ -532,10 +533,11 @@ function boundGateway(
         ...fixtureApproval("Record local sentinel write", "Provenance test sentinel"),
         description: "Local sentinel write",
         permissionId: "provenance-test.write",
-        risk: "outbound",
+        risk,
         content: "user_authored",
-        isExternal: true,
-        descriptorOwnerUserId: actorUserId,
+        ...(risk === "outbound"
+          ? { isExternal: true, descriptorOwnerUserId: actorUserId }
+          : { isExternal: false }),
         executionPolicy: "auto",
         actionFamilyId: family.id,
         inputSchema: { type: "object", properties: {} },
@@ -628,6 +630,24 @@ describe("gateway decisions use durable token-bound conversation state", () => {
       }
     }
   );
+
+  it("runs a trusted local write only past the owner's own durable mark", async () => {
+    const own = await create();
+    const foreign = await create();
+    await store.recordAdmission(ids.userA, own.id, "attachment_read");
+    await store.recordAdmission(ids.userA, foreign.id, "attachment_read");
+    const h = boundGateway(ids.userA, own.id, undefined, undefined, "write");
+    expect(await h.gateway.callTool(h.token, "provenance-test.write", {})).toMatchObject({
+      ok: true
+    });
+    expect(h.calls).toHaveBeenCalledOnce();
+    await expectPending(boundGateway(ids.userA, null, undefined, undefined, "write"));
+    const other = boundGateway(ids.userB, foreign.id, undefined, undefined, "write");
+    expect(
+      await other.gateway.callToolForGate(other.token, "provenance-test.write", {}, "dry-run")
+    ).toEqual({ kind: "declined", reason: "would_confirm" });
+    expect(other.calls).not.toHaveBeenCalled();
+  });
 
   it("uses the same durable taint in a restarted gateway and token manager", async () => {
     const a = await create();

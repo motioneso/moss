@@ -281,6 +281,17 @@ describe("bound conversation policy at every gateway entry", () => {
   );
 
   it.each(failureCases)(
+    "%s gives the user's trust no durable mark to run past",
+    async (_label, options) => {
+      for (const yolo of [false, true]) {
+        const h = build({ ...options, yolo, tier: "trusted_auto", tool: { isExternal: false } });
+        await rejectPending(h, h.gateway.callTool(h.token, h.tool.name, {}));
+        expect(JSON.stringify(h.records)).not.toContain("private storage detail");
+      }
+    }
+  );
+
+  it.each(failureCases)(
     "declared user-authored reads remain available with %s",
     async (_label, options) => {
       const h = build({
