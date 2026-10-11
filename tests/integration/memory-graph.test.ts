@@ -9,6 +9,7 @@ import {
   createMemoryCandidateSignature,
   GraphMemoryRecallService,
   MemoryCandidatesRepository,
+  MemoryGraphDashboardRepository,
   MemoryGraphRepository,
   registerMemoryGraphRoutes,
   StubEmbeddingProvider,
@@ -254,7 +255,13 @@ describe("MemoryGraphRepository", () => {
         });
         expect(corrected).not.toBeNull();
 
-        expect(await repo.forgetFact(db, ids.userA, corrected!.id)).toBe(true);
+        expect(
+          await new MemoryGraphDashboardRepository(repo).forgetFactWithConflictCleanup(
+            db,
+            ids.userA,
+            corrected!.id
+          )
+        ).toEqual({ deleted: true });
 
         const rows = await sql<{ status: string; superseded_by_fact_id: string | null }>`
           SELECT status, superseded_by_fact_id FROM app.memory_facts
