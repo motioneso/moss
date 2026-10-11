@@ -2,7 +2,7 @@
 
 Date: 2026-10-10
 
-Status: Draft for Ben's review. Direction approved by Ben 2026-10-10. Build-ready after spec approval and the phase 0 proofs below.
+Status: Approved (Ben, 2026-10-10). Build-ready after the phase 0 proofs below.
 
 Owner: Ben
 
