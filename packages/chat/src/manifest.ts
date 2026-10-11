@@ -118,8 +118,8 @@ export const chatModuleManifest = {
     {
       id: "chat.time_context",
       description:
-        "Chat tool results include compact references giving each timestamp's date and time in the person's time zone, " +
-        "12/24-hour choice and region. Larger results report how many references were left out. Times without a reference keep the instruction to convert them. Original timestamps stay unchanged.",
+        "Chat tool results include references giving each timestamp's date and time in the person's time zone, region and 12/24-hour choice. " +
+        "Times without a reference keep the instruction to convert them. Original timestamps stay unchanged.",
       featureFlagId: "chat.module"
     },
     {
