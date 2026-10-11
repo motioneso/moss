@@ -127,6 +127,20 @@ describe("conversation provenance ownership and lifecycle", () => {
     ]);
   });
 
+  it("reports a durable mark only for an owned admitted thread with no automatic run in flight", async () => {
+    const thread = await create();
+    expect(await store.isMarked(ids.userA, undefined)).toBe(false);
+    expect(await store.isMarked(ids.userA, randomUUID())).toBe(false);
+    expect(await store.isMarked(ids.userA, thread.id)).toBe(false);
+    const held = await store.runAutomatic(ids.userA, thread.id, () =>
+      store.isMarked(ids.userA, thread.id)
+    );
+    expect(held).toEqual({ kind: "ran", value: false });
+    await store.recordAdmission(ids.userA, thread.id, "attachment_read");
+    expect(await store.isMarked(ids.userA, thread.id)).toBe(true);
+    expect(await store.isMarked(ids.userB, thread.id)).toBe(false);
+  });
+
   it("preserves the first admission across repeated and concurrent writes, resume and restart", async () => {
     const a = await create();
     await store.recordAdmission(ids.userA, a.id, "app_action_outside");
@@ -488,11 +502,14 @@ describe("rollback-only provenance negative controls", () => {
 
 // The handler is a no-provider sentinel. Provenance lookups, action rows, ownership and
 // confirmation use the real SQL-backed production classes in the isolated CI database.
+// The sentinel is an owned connected tool that sends data out, so YOLO and trusted-auto run it
+// only in a clean conversation (#3338).
 function boundGateway(
   actorUserId: string,
   threadId: string | null,
   pausePolicy?: () => Promise<void>,
-  provenance: ConversationProvenancePort = new ConversationProvenanceStore(runner)
+  provenance: ConversationProvenancePort = new ConversationProvenanceStore(runner),
+  risk: "write" | "outbound" = "outbound"
 ) {
   const calls = vi.fn(async () => ({ data: { changed: true } }));
   const family = {
@@ -516,9 +533,11 @@ function boundGateway(
         ...fixtureApproval("Record local sentinel write", "Provenance test sentinel"),
         description: "Local sentinel write",
         permissionId: "provenance-test.write",
-        risk: "write",
+        risk,
         content: "user_authored",
-        isExternal: false,
+        ...(risk === "outbound"
+          ? { isExternal: true, descriptorOwnerUserId: actorUserId }
+          : { isExternal: false }),
         executionPolicy: "auto",
         actionFamilyId: family.id,
         inputSchema: { type: "object", properties: {} },
@@ -611,6 +630,24 @@ describe("gateway decisions use durable token-bound conversation state", () => {
       }
     }
   );
+
+  it("runs a trusted local write only past the owner's own durable mark", async () => {
+    const own = await create();
+    const foreign = await create();
+    await store.recordAdmission(ids.userA, own.id, "attachment_read");
+    await store.recordAdmission(ids.userA, foreign.id, "attachment_read");
+    const h = boundGateway(ids.userA, own.id, undefined, undefined, "write");
+    expect(await h.gateway.callTool(h.token, "provenance-test.write", {})).toMatchObject({
+      ok: true
+    });
+    expect(h.calls).toHaveBeenCalledOnce();
+    await expectPending(boundGateway(ids.userA, null, undefined, undefined, "write"));
+    const other = boundGateway(ids.userB, foreign.id, undefined, undefined, "write");
+    expect(
+      await other.gateway.callToolForGate(other.token, "provenance-test.write", {}, "dry-run")
+    ).toEqual({ kind: "declined", reason: "would_confirm" });
+    expect(other.calls).not.toHaveBeenCalled();
+  });
 
   it("uses the same durable taint in a restarted gateway and token manager", async () => {
     const a = await create();
