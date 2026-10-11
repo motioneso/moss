@@ -41,6 +41,7 @@ async function history(rows: ChatMessage[]): Promise<ChatMessageDto[]> {
     id: THREAD,
     owner_user_id: OWNER
   } as never);
+  vi.spyOn(repository, "reconcileInterruptedTurns").mockResolvedValue(0);
   vi.spyOn(repository, "listMessages").mockResolvedValue(rows);
   const scopedDb = { [dataContextBrand]: true } as unknown as DataContextDb;
   const app = Fastify({ logger: false });
