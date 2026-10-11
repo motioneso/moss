@@ -14,7 +14,7 @@ export interface ReminderList {
   /** Waiting reminders, soonest first. */
   readonly open: readonly OwnedReminder[];
 
-  /** Delivered, cancelled or failed reminders, newest first. */
+  /** Delivered, cancelled, failed or expired reminders, newest first. */
   readonly finished: readonly OwnedReminder[];
 }
 
@@ -29,6 +29,7 @@ export type ReminderCancelResult =
   | { readonly kind: "already_cancelled"; readonly reminder: OwnedReminder }
   | { readonly kind: "already_delivered"; readonly reminder: OwnedReminder }
   | { readonly kind: "already_failed"; readonly reminder: OwnedReminder }
+  | { readonly kind: "already_expired"; readonly reminder: OwnedReminder }
   | { readonly kind: "ambiguous"; readonly matches: readonly OwnedReminder[] }
   | { readonly kind: "needs_target"; readonly open: readonly OwnedReminder[] }
   | { readonly kind: "not_found" }
@@ -144,5 +145,7 @@ async function settle(
       return { kind: "already_cancelled", reminder: locked };
     case "failed":
       return { kind: "already_failed", reminder: locked };
+    case "expired":
+      return { kind: "already_expired", reminder: locked };
   }
 }

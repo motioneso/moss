@@ -36,11 +36,15 @@ function reminder(
     state,
     contextState,
     dueAt: new Date(NOW.getTime() + dueInSeconds * 1000),
-    createdAt: NOW
+    createdAt: NOW,
+    timing: "relative",
+    deadlineAt: null,
+    late: null
   };
 }
 
 const NOW = new Date("2026-10-10T12:00:00Z");
+const LOCALE = { timeZone: "America/Los_Angeles", clockFormat: "12" } as const;
 
 describe("recognizing list and cancel", () => {
   it.each([
@@ -199,21 +203,21 @@ describe("list and cancel wording", () => {
       open: [reminder("stretch", "queued", 90), reminder("call Sam", "queued", -2)],
       finished: [reminder("water plants", "delivered"), reminder("pay rent", "cancelled")]
     };
-    expect(reminderListReply(list)).toBe(
+    expect(reminderListReply(list, LOCALE)).toBe(
       "Chat reminders waiting:\n- stretch, in 1 minute and 30 seconds\n- call Sam, due now\n\n" +
         "Recent chat reminders:\n- water plants (sent)\n- pay rent (cancelled)"
     );
   });
 
   it("says when there are no reminders at all", () => {
-    expect(reminderListReply({ now: NOW, open: [], finished: [] })).toBe(
+    expect(reminderListReply({ now: NOW, open: [], finished: [] }, LOCALE)).toBe(
       "You haven't set any reminders in chat."
     );
   });
 
   it("says when nothing is waiting but some have finished", () => {
     expect(
-      reminderListReply({ now: NOW, open: [], finished: [reminder("stretch", "failed")] })
+      reminderListReply({ now: NOW, open: [], finished: [reminder("stretch", "failed")] }, LOCALE)
     ).toBe(
       "No chat reminders are waiting.\n\nRecent chat reminders:\n- stretch (couldn't be sent)"
     );

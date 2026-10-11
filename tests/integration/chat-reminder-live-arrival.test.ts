@@ -126,7 +126,12 @@ async function saveDue(actorUserId: string = ids.userA, text = "stretch"): Promi
     `remind me in 1 minute to ${text}`
   );
   const saved = await asOwner(actorUserId, (db) =>
-    reminders.create(db, { threadId, sourceMessageId, delaySeconds: 60, text })
+    reminders.create(db, {
+      threadId,
+      sourceMessageId,
+      when: { timing: "relative", delaySeconds: 60 },
+      text
+    })
   );
   await bootstrap.query("BEGIN");
   try {

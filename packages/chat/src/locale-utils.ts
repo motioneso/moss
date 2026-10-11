@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE_SETTINGS, isValidTimeZone } from "@moss/shared";
+import { DEFAULT_LOCALE_SETTINGS, type LocaleDateFormat, isValidTimeZone } from "@moss/shared";
 
 /** Extract an IANA timezone string from a raw locale preference blob. Returns null on any invalid input. */
 export function extractTimezone(raw: unknown): string | null {
@@ -15,4 +15,11 @@ export function extractTimezone(raw: unknown): string | null {
  */
 export function resolveEffectiveTimezone(raw: unknown): string {
   return extractTimezone(raw) ?? DEFAULT_LOCALE_SETTINGS.timezone;
+}
+
+/** The actor's 12- or 24-hour clock, falling back to the same default `GET /api/me/locale` shows. */
+export function resolveClockFormat(raw: unknown): LocaleDateFormat {
+  const format =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>).dateFormat : null;
+  return format === "12" || format === "24" ? format : DEFAULT_LOCALE_SETTINGS.dateFormat;
 }
