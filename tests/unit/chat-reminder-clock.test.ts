@@ -187,7 +187,7 @@ describe("resolving a clock reminder in the owner's zone", () => {
   it("refuses a deadline more than 12 hours after the reminder", () => {
     // 14:00 to 13:00 means 13:00 the next day, 23 hours later.
     const resolved = resolveLocalClock(spec(null, 14, 0, { hour: 13, minute: 0 }), NOON, LA);
-    expect(resolved).toEqual({ kind: "refused", reason: "deadline_before_due" });
+    expect(resolved).toEqual({ kind: "refused", reason: "deadline_too_far" });
   });
 
   it("reads an instant back as the owner's wall clock", () => {
@@ -257,11 +257,7 @@ describe("clock reminder replies", () => {
       "The clocks go back on Sunday, November 1, so 2:30 AM happens twice that day. I didn't set anything. Pick a time outside that hour."
     );
     expect(
-      reminderClockRefusedReply(
-        { kind: "refused", reason: "deadline_before_due" },
-        "2026-10-10",
-        "12"
-      )
+      reminderClockRefusedReply({ kind: "refused", reason: "deadline_too_far" }, "2026-10-10", "12")
     ).toContain("within 12 hours");
   });
 });

@@ -1,5 +1,6 @@
-// #3309: storage for chat reminders, relative or (#3150) at a local clock time. Row security and the table's triggers own every
-// rule; this file only names the queries.
+// #3309, #3150: storage for chat reminders, set a time from now or at a local clock time. Row
+// security, the table's checks and its triggers own the storage rules; this file only names the
+// queries. A time the clocks show twice is refused by the turn, before it reaches storage.
 
 import { randomUUID } from "node:crypto";
 

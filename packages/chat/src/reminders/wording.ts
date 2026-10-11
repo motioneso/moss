@@ -1,6 +1,7 @@
 // #3309: every reminder reply is written by code, so the wording here is the whole contract.
 
 import type { ChatReminderState } from "@moss/db";
+import { localDayKey } from "@moss/module-sdk";
 
 import type { ReminderCancelResult, ReminderList } from "./cancel.js";
 import { deadlinePhrase, whenPhrase, type ReminderLocale } from "./clock-wording.js";
@@ -36,7 +37,7 @@ export function reminderRefusedReply(reason: ReminderUnsupportedReason): string 
     case "deadline_needs_clock":
       return 'A deadline works only with a clock-time reminder, so I didn\'t set anything. Try "remind me at 3pm to call Sam, but not after 4pm".';
     case "ambiguous":
-      return `That has more than one time in it, so I didn't set anything. ${tryThis}`;
+      return `I couldn't tell exactly when you meant, so I didn't set anything. ${tryThis}`;
     case "needs_time":
       return `Tell me how long from now, or a clock time today or tomorrow. ${tryThis}`;
   }
@@ -138,7 +139,7 @@ function finishedLabel(reminder: OwnedReminder): string {
 /** A clock-time reminder shows its local time and deadline; a relative one shows time left. */
 function waitingLabel(reminder: OwnedReminder, now: Date, locale: ReminderLocale): string {
   if (reminder.timing !== "local_clock") return timeLeft(reminder.dueAt, now);
-  const today = localWallClock(now, locale.timeZone).slice(0, 10);
+  const today = localDayKey(now, locale.timeZone);
   const localDue = localWallClock(reminder.dueAt, locale.timeZone);
   const when = whenPhrase(localDue, today, locale.clockFormat);
   if (reminder.deadlineAt === null) return when;

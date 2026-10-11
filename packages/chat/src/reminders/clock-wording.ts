@@ -11,7 +11,7 @@ export interface ReminderLocale {
   readonly clockFormat: LocaleDateFormat;
 }
 
-export function formatClock(time: LocalClockTime, clockFormat: LocaleDateFormat): string {
+function formatClock(time: LocalClockTime, clockFormat: LocaleDateFormat): string {
   const minute = String(time.minute).padStart(2, "0");
   if (clockFormat === "24") return `${String(time.hour).padStart(2, "0")}:${minute}`;
   const hour = time.hour % 12 === 0 ? 12 : time.hour % 12;
@@ -34,7 +34,7 @@ export function dayPhrase(localDate: string, today: string): string {
 }
 
 /** Splits a `YYYY-MM-DDTHH:mm` wall clock into its date and time. */
-export function splitWallClock(local: string): { localDate: string; time: LocalClockTime } {
+function splitWallClock(local: string): { localDate: string; time: LocalClockTime } {
   const [localDate = "", clock = "00:00"] = local.split("T");
   const [hour, minute] = clock.split(":").map(Number) as [number, number];
   return { localDate, time: { hour, minute } };
@@ -86,7 +86,7 @@ export function reminderClockRefusedReply(
       return `The clocks go forward ${dayPhrase(refusal.localDate, today)}, so ${formatClock(refusal.time, clockFormat)} doesn't happen that day. I didn't set anything. Pick a time outside that hour.`;
     case "dst_fold":
       return `The clocks go back ${dayPhrase(refusal.localDate, today)}, so ${formatClock(refusal.time, clockFormat)} happens twice that day. I didn't set anything. Pick a time outside that hour.`;
-    case "deadline_before_due":
-      return "The deadline has to come after the reminder time, and within 12 hours of it, so I didn't set anything.";
+    case "deadline_too_far":
+      return "The deadline has to be within 12 hours after the reminder time, so I didn't set anything.";
   }
 }

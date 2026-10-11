@@ -227,6 +227,12 @@ export const chatModuleManifest = {
             "A bare hour like 'at 3' could be morning or afternoon, so Moss saves nothing. Say 3pm, 3am or 15:00."
         },
         {
+          code: "reminder_time_unclear",
+          class: "validation",
+          description:
+            "A request Moss cannot pin to one time, like 'tonight at 7am', 'at 3ish' or 'at 3pm or 4pm', is refused and nothing is saved."
+        },
+        {
           code: "reminder_day_unsupported",
           class: "validation",
           description:

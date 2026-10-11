@@ -20,7 +20,9 @@ ALTER TABLE app.chat_reminders
       AND delay_seconds IS NULL AND local_due IS NOT NULL AND time_zone IS NOT NULL)
   ),
   ADD CONSTRAINT chat_reminders_deadline_after_due CHECK (
-    deadline_at IS NULL OR (deadline_at > due_at AND deadline_at <= due_at + interval '30 days')
+    deadline_at IS NULL
+    OR (timing = 'local_clock'
+      AND deadline_at > due_at AND deadline_at <= due_at + interval '12 hours')
   );
 
 ALTER TABLE app.chat_reminders DROP CONSTRAINT chat_reminders_state_check;
@@ -35,7 +37,8 @@ ALTER TABLE app.chat_reminders
   );
 
 -- A relative reminder's due time comes from the database clock. A local-clock reminder brings its
--- due time, and the wall clock it names in its zone must resolve to that exact instant.
+-- due time, and its wall clock and instant must match in both directions, which refuses a time the
+-- clocks skip. A time the clocks show twice passes here; the code refuses it before saving.
 CREATE OR REPLACE FUNCTION app.enforce_chat_reminder_insert()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -54,6 +57,10 @@ BEGIN
   IF NEW.timing = 'local_clock' THEN
     IF (NEW.local_due::timestamp AT TIME ZONE NEW.time_zone) IS DISTINCT FROM NEW.due_at THEN
       RAISE EXCEPTION 'chat reminder local time does not match its due time'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF to_char(NEW.due_at AT TIME ZONE NEW.time_zone, 'YYYY-MM-DD"T"HH24:MI') <> NEW.local_due THEN
+      RAISE EXCEPTION 'chat reminder local time is skipped by the clocks'
         USING ERRCODE = 'check_violation';
     END IF;
     IF NEW.due_at <= now() OR NEW.due_at > now() + interval '30 days' THEN

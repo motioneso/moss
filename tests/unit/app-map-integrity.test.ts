@@ -193,6 +193,7 @@ describe("app-map integrity and truthfulness", () => {
     const codes = appMap.errors.map((error) => error.code);
     for (const code of [
       "reminder_needs_am_pm",
+      "reminder_time_unclear",
       "reminder_day_unsupported",
       "reminder_time_passed",
       "reminder_time_changes_with_clocks",

@@ -11,7 +11,7 @@ import {
 import type { LocalClockSpec, LocalClockTime } from "./clock-recognizer.js";
 
 /** A deadline further than this after the reminder time is almost always a mistake. */
-export const REMINDER_DEADLINE_MAX_AFTER_MS = 12 * 3600 * 1000;
+const REMINDER_DEADLINE_MAX_AFTER_MS = 12 * 3600 * 1000;
 
 export interface ResolvedLocalClock {
   readonly kind: "resolved";
@@ -32,7 +32,7 @@ export type LocalClockRefusal =
       readonly localDate: string;
       readonly time: LocalClockTime;
     }
-  | { readonly kind: "refused"; readonly reason: "deadline_before_due" };
+  | { readonly kind: "refused"; readonly reason: "deadline_too_far" };
 
 export function resolveLocalClock(
   spec: LocalClockSpec,
@@ -68,7 +68,7 @@ export function resolveLocalClock(
   const deadline = toInstant(deadlineDate, spec.deadline, timeZone);
   if (deadline.kind === "refused") return deadline;
   if (deadline.instant.getTime() - due.instant.getTime() > REMINDER_DEADLINE_MAX_AFTER_MS) {
-    return { kind: "refused", reason: "deadline_before_due" };
+    return { kind: "refused", reason: "deadline_too_far" };
   }
   return {
     kind: "resolved",

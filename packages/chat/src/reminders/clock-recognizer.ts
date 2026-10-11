@@ -4,7 +4,7 @@
 
 import type { ReminderRecognition } from "./recognizer.js";
 
-export type ReminderDay = "today" | "tonight" | "tomorrow";
+type ReminderDay = "today" | "tonight" | "tomorrow";
 
 /** A 24-hour wall-clock time. */
 export interface LocalClockTime {
@@ -111,7 +111,7 @@ type ParsedTime =
  * Reads one clock time. "3pm", "3:30 pm", "15:30", "09:00" and "noon" are clear. A bare hour
  * from 1 to 12 with no am or pm could be either, so it is refused, except "tonight" means pm.
  */
-export function parseClockTime(raw: string, evening: boolean): ParsedTime {
+function parseClockTime(raw: string, evening: boolean): ParsedTime {
   if (raw === "noon") return { kind: "time", time: { hour: 12, minute: 0 } };
 
   const match = /^(\d{1,2})(?::(\d{2}))? ?(?:(a)|(p))?\.?m?\.?$/.exec(raw);

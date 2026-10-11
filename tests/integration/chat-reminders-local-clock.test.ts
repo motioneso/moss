@@ -327,6 +327,76 @@ describe("what the database accepts for a clock reminder", () => {
       )
     ).rejects.toThrow(/permission denied for table chat_reminders/);
   });
+
+  it("refuses a time the clocks skip, even with the instant Postgres would guess", async () => {
+    // 02:30 on 2027-03-14 never shows on a New York clock; Postgres still maps it to an instant.
+    const guess = await bootstrap.query<{ due: Date }>(
+      `SELECT ('2027-03-14T02:30'::timestamp AT TIME ZONE 'America/New_York') AS due`
+    );
+    await expect(
+      insertRaw({
+        dueAt: guess.rows[0].due,
+        localDue: "2027-03-14T02:30",
+        timeZone: "America/New_York"
+      })
+    ).rejects.toThrow(/local time is skipped by the clocks/);
+  });
+
+  it("refuses a deadline more than 12 hours after the reminder", async () => {
+    await expect(saveClock("check", 12 * 3600_000 + 60_000, ids.userB)).rejects.toThrow(
+      /chat_reminders_deadline_after_due/
+    );
+  });
+
+  it("refuses a deadline on a reminder set a time from now", async () => {
+    const threadId = await mainThreadId(ids.userB);
+    const saved = await asOwner(ids.userB, async (db) =>
+      reminders.create(db, {
+        threadId,
+        sourceMessageId: await sourceMessage(db, ids.userB, threadId),
+        when: { timing: "relative", delaySeconds: 600 },
+        text: "check"
+      })
+    );
+    // Triggers off, so only the table's checks stand between the row and the deadline.
+    await bootstrap.query("BEGIN");
+    try {
+      await bootstrap.query("SET LOCAL session_replication_role = replica");
+      await expect(
+        bootstrap.query(
+          `UPDATE app.chat_reminders SET deadline_at = due_at + interval '1 hour' WHERE id = $1`,
+          [saved.id]
+        )
+      ).rejects.toThrow(/chat_reminders_deadline_after_due/);
+    } finally {
+      await bootstrap.query("ROLLBACK");
+    }
+  });
+});
+
+describe("what the worker may change on a clock reminder", () => {
+  function workerSets(reminderId: string, values: Record<string, unknown>) {
+    return asWorker(ids.userB, (db) =>
+      db.db.updateTable("app.chat_reminders").set(values).where("id", "=", reminderId).execute()
+    );
+  }
+
+  it.each([
+    ["deadline", { deadline_at: new Date(Date.now() + 6 * 3600_000) }],
+    ["timing", { timing: "relative", delay_seconds: 600, local_due: null, time_zone: null }],
+    ["wall clock", { local_due: "2099-01-01T09:00" }],
+    ["time zone", { time_zone: "Asia/Tokyo" }]
+  ])("never lets it rewrite the %s", async (_field, values) => {
+    const saved = await saveClock("water plants", 3600_000, ids.userB);
+    await expect(workerSets(saved.id, values)).rejects.toThrow(/identity cannot be changed/);
+  });
+
+  it("never lets it give a failed reminder an expired time", async () => {
+    const saved = await saveClock("water plants", 3600_000, ids.userB);
+    await expect(
+      workerSets(saved.id, { state: "failed", expired_at: new Date(Date.now() + 7200_000) })
+    ).rejects.toThrow(/chat_reminders_expired_shape/);
+  });
 });
 
 describe("a reminder past its deadline", () => {
