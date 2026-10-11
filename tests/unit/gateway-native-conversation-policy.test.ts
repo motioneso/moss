@@ -162,10 +162,24 @@ describe("outside-agent conversation taint", () => {
 
   it.each([
     { toolName: "Bash", toolInput: { command: "echo hello" } },
-    { toolName: "Write", kind: "delete", toolInput: { file_path: "/tmp/output.txt" } }
+    { toolName: "Write", kind: "delete", toolInput: { file_path: "/tmp/output.txt" } },
+    { toolName: "Write", kind: "move", toolInput: { file_path: "/tmp/output.txt" } },
+    { toolName: "Write", kind: "execute", toolInput: { file_path: "/tmp/output.txt" } }
   ])("YOLO still asks for $toolName $kind in a marked conversation", async (mutation) => {
     const h = build({ marked: true });
     await reject(h, h.gateway.requestAcpBuiltInPermission(h.token, { ...request, ...mutation }));
+  });
+
+  it("YOLO keeps hard denials in a marked conversation", async () => {
+    const h = build({ marked: true });
+    expect(
+      await h.gateway.requestAcpBuiltInPermission(h.token, {
+        ...request,
+        toolName: "UnknownTool",
+        toolInput: {}
+      })
+    ).toMatchObject({ decision: "deny", asked: false });
+    expect(h.createPending).not.toHaveBeenCalled();
   });
 
   it("a marked conversation without YOLO keeps every card", async () => {

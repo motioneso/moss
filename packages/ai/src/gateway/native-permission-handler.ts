@@ -60,7 +60,7 @@ export async function requestNativeToolPermission(
     localTimezone: (await deps.resolveLocalTimezone?.(actorUserId)) ?? undefined
   };
 
-  const yoloOn =
+  const yoloAllows =
     (await nativeYoloCanAutoAllow(toolName, input, request.workingDirectory)) &&
     (await (async () => {
       try {
@@ -69,11 +69,11 @@ export async function requestNativeToolPermission(
         return false;
       }
     })());
-  // Under YOLO a durable outside-content mark no longer asks (#3417). Any other taint does.
-  const userTrusted = yoloOn && (await isConversationTainted(deps.provenance, ctx));
-  const yoloGranted = userTrusted ? await isConversationMarked(deps.provenance, ctx) : yoloOn;
+  // Under YOLO a durable outside-content mark does not ask (#3417). Any other taint does.
+  const tainted = yoloAllows && (await isConversationTainted(deps.provenance, ctx));
+  const userTrusted = tainted && (await isConversationMarked(deps.provenance, ctx));
 
-  if (yoloGranted) {
+  if (yoloAllows && (!tainted || userTrusted)) {
     // Reserve the permission decision and create its pending record. A final grant is only
     // truthful after admission succeeds; the native operation itself remains unobserved.
     const reserve = () =>

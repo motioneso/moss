@@ -306,14 +306,16 @@ export async function requestAcpBuiltInPermission(
       family === "shell" ||
       family === "web" ||
       classification.verdict === "ask");
+  let yoloSetting: boolean | undefined;
   const yoloOn = async () =>
-    (await deps.yoloMode?.({
-      actorUserId,
-      requestId,
-      chatSessionId,
-      ...(threadId ? { threadId } : {})
-    })) === true;
-  // Under YOLO a durable outside-content mark no longer raises the floor (#3417). Shell and
+    (yoloSetting ??=
+      (await deps.yoloMode?.({
+        actorUserId,
+        requestId,
+        chatSessionId,
+        ...(threadId ? { threadId } : {})
+      })) === true);
+  // Under YOLO a durable outside-content mark does not raise the floor (#3417). Shell and
   // destructive requests keep it.
   const userTrusted =
     taintRaisesFloor &&
@@ -348,7 +350,7 @@ export async function requestAcpBuiltInPermission(
         ),
         ...(arrivalTurnId ? { turnId: arrivalTurnId } : {})
       });
-    // Pure write permission has no result-admission path; keep its decision audit guarded.
+    // Pure write permission has no result-admission path; the grant writes its decision audit.
     // Reads/web/shell acquire durable taint before their final audit and allow delivery.
     const grant = async () => {
       if (!admissionPath) await auditPermission(true);

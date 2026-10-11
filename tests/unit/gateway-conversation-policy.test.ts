@@ -76,11 +76,16 @@ function build(
     assistantTools: [tool]
   };
   const isTainted = vi.fn(async () => options.tainted ?? false);
+  const runAutomatic = vi.fn<NonNullable<ConversationProvenancePort["runAutomatic"]>>(
+    async (_actor, _thread, callback) =>
+      options.tainted ? { kind: "confirm" } : { kind: "ran", value: await callback() }
+  );
   const provenance: ConversationProvenancePort = {
     isTainted,
     isMarked: async () => options.tainted ?? false,
     recordAdmission: vi.fn(),
-    runAutomatic: async (_actor, _thread, callback) => ({ kind: "ran", value: await callback() })
+    // The durable store refuses the clean-conversation claim once a conversation is tainted.
+    runAutomatic: runAutomatic as NonNullable<ConversationProvenancePort["runAutomatic"]>
   };
   const createPending = vi.fn(async () => ({ id: "action-1" }));
   const audit = vi.fn(async () => undefined);
@@ -128,6 +133,7 @@ function build(
     createPending,
     audit,
     records,
+    runAutomatic,
     confirmations,
     isTainted,
     yoloMode,
@@ -221,6 +227,7 @@ describe("bound conversation policy at every gateway entry", () => {
       expect(await h.gateway.callTool(h.token, h.tool.name, {})).toMatchObject({ ok: true });
       expect(h.handler).toHaveBeenCalledOnce();
       expect(h.createPending).not.toHaveBeenCalled();
+      expect(h.runAutomatic).not.toHaveBeenCalled();
       expect(await h.gateway.callToolForGate(h.token, h.tool.name, {}, "dry-run")).toEqual({
         kind: "would_run",
         approvalMode: "yolo"
@@ -228,7 +235,7 @@ describe("bound conversation policy at every gateway entry", () => {
     }
   );
 
-  it("YOLO still asks in a marked conversation for forced and per-call confirmations", async () => {
+  it("YOLO still asks in a marked conversation for forced, per-call and first-party outbound calls", async () => {
     const forced = build({
       tainted: true,
       yolo: true,
@@ -245,6 +252,16 @@ describe("bound conversation policy at every gateway entry", () => {
       tool: { isExternal: false, requiresConfirmation: async () => true }
     });
     await rejectPending(limited, limited.gateway.callTool(limited.token, limited.tool.name, {}));
+    const firstParty = build({
+      tainted: true,
+      yolo: true,
+      risk: "outbound",
+      tool: { isExternal: false }
+    });
+    await rejectPending(
+      firstParty,
+      firstParty.gateway.callTool(firstParty.token, firstParty.tool.name, {})
+    );
   });
 
   it.each([false, true])("clean writes retain automatic execution (YOLO=%s)", async (yolo) => {
@@ -367,8 +384,7 @@ describe("bound conversation policy at every gateway entry", () => {
           asks ? "declined" : mode === "dry-run" ? "would_run" : "executed"
         );
         if (asks) expect(outcome).toEqual({ kind: "declined", reason: "would_confirm" });
-        if (!asks && mode === "dry-run")
-          expect(outcome).toMatchObject({ approvalMode: tainted ? "yolo" : "auto" });
+        if (!asks && mode === "dry-run") expect(outcome).toMatchObject({ approvalMode: "auto" });
       }
       const pending = h.gateway.callTool(h.token, h.tool.name, {});
       if (asks) await rejectPending(h, pending);
