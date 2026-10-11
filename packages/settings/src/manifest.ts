@@ -699,7 +699,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     {
       id: "app.outsideContentApproval",
       description:
-        "Outside content makes writes ask unless the user trusted them by Auto-approve actions, a no-ask action group or a per-call limit. Sending, deletion and over-limit calls still ask. App source and app-map reads add no outside content."
+        "Outside content makes writes ask unless the user trusted them by Auto-approve actions or a no-ask action group within its limit. Sending, deletion and over-limit calls still ask. App source and app-map reads add no outside content."
     },
     {
       id: "app.ownerToolDescriptors",

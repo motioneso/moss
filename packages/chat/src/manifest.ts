@@ -171,7 +171,7 @@ export const chatModuleManifest = {
     {
       id: "chat.conversation_write_confirmation",
       description:
-        "Outside history makes writes ask unless trusted by Auto-approve actions, a no-ask action group or a per-call limit. " +
+        "Outside history makes writes ask unless trusted by Auto-approve actions or a no-ask action group within its limit. " +
         "Unknown history asks. Admission is recorded first and survives restart. Native vault reads stop if it cannot be recorded.",
       featureFlagId: "chat.module"
     },

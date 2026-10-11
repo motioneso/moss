@@ -290,8 +290,8 @@ unreadable provenance row, or another automatic run holding the conversation sti
 Outbound tools keep the floor because they send data to arbitrary destinations. Add-on module
 writes can also reach the hosts their manifest declares (Finance to Plaid, Job search to its job
 boards). Under user trust, injected text in a tainted conversation could steer such a write to
-send private data to one of those hosts without a card. This is an accepted exposure of the
-ruling. Host pinning limits it to hosts the user accepted at install.
+send private data to one of those hosts without a card. Ben has not ruled on this exposure; it is
+raised for his decision on #3338. Host pinning limits it to hosts the user accepted at install.
 
 The launch taint itself is unchanged, so native and ACP built-in permissions (file edits, shell,
 web) still ask in a tainted conversation.
@@ -304,10 +304,12 @@ that merely echo the user's own change. Notes and memory remain outside content.
 
 **Scope ruling (Ben, 2026-10-05): strict.** The user's own notes and memory taint like mail,
 because a note can hold clipped or forwarded text the user did not write. Automatic recall runs on
-most turns, so most changes in a chat will ask. Ben chose this as the starting point; loosening it
+most turns, so most untrusted changes in a chat will ask (trusted writes run, per the #3338 table
+above). Ben chose this as the starting point; loosening it
 (own notes exempt, or an "allow changes for this chat" choice) is a later change if it proves noisy.
 
-Cost: "read my mail and make a task for each" asks once per task. That is accepted for now. Batching
+Cost: "read my mail and make a task for each" asks once per task unless the user trusted task
+creation. That is accepted for now. Batching
 approvals is a later change if it proves noisy.
 
 ### Current Slice 7 implementation ruling (2026-10-06)
