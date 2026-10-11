@@ -18,6 +18,7 @@ import {
   LinkTrailMarkerPage
 } from "../../apps/web/src/companion/link-trail-marker-page.js";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
+import { ApiError } from "../../apps/web/src/api/client.js";
 import { MacCompanion } from "../../apps/web/src/settings/settings-profile-subviews.js";
 
 function renderApproval(recordingPolicyVersion?: 1): string {
@@ -39,6 +40,103 @@ function renderApproval(recordingPolicyVersion?: 1): string {
     )
   );
 }
+
+function renderRequest(path: string, client = new QueryClient()): string {
+  return renderToStaticMarkup(
+    createElement(
+      QueryClientProvider,
+      { client },
+      createElement(MemoryRouter, { initialEntries: [path] }, createElement(LinkTrailMarkerPage))
+    )
+  );
+}
+
+function renderReadError(status: number): string {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryOnMount: false } }
+  });
+  client
+    .getQueryCache()
+    .build(client, { queryKey: queryKeys.companionPairAttempt("abc") })
+    .setState({
+      status: "error",
+      error: new ApiError(status, "Fixture error"),
+      fetchStatus: "idle"
+    });
+  return renderRequest("/link/trail-marker#code=abc", client);
+}
+
+describe("Trail Marker request status", () => {
+  it.each(["pending", "approved"])("keeps a long device name wrappable when %s", (status) => {
+    const client = new QueryClient();
+    const deviceName = `Example-${"LongDeviceName".repeat(4)}`;
+    client.setQueryData(queryKeys.companionPairAttempt("abc"), { deviceName, status });
+    const host = document.createElement("div");
+    host.innerHTML = renderRequest("/link/trail-marker#code=abc", client);
+    const card = host.querySelector<HTMLElement>(".jds-card")!;
+    expect(card.style.minWidth).toBe("0px");
+    expect(card.style.overflowWrap).toBe("anywhere");
+    const name = card.querySelector("strong")!;
+    expect(name.textContent).toBe(deviceName);
+    if (status === "pending") expect(name.parentElement!.style.minWidth).toBe("0px");
+    client.clear();
+  });
+
+  it("announces a missing request code and offers no approval", () => {
+    const html = renderRequest("/link/trail-marker");
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("missing its request code");
+    expect(html).not.toContain(">Approve</button>");
+    expect(html).not.toContain("Checking the request");
+  });
+
+  it("announces the initial request check", () => {
+    const html = renderRequest("/link/trail-marker#code=abc");
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Checking the request");
+  });
+
+  it("does not describe a transport failure as an expired request", () => {
+    const html = renderReadError(503);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Couldn&#x27;t check this request");
+    expect(html).toContain("Check request again");
+    expect(html).not.toContain("no longer open");
+  });
+
+  it("explains an invalid request without offering a transport retry", () => {
+    const html = renderReadError(400);
+    expect(html).toContain("This request link couldn&#x27;t be used");
+    expect(html).not.toContain("Check request again");
+  });
+
+  it("explains a closed request without suggesting an ineffective retry", () => {
+    const html = renderReadError(404);
+    expect(html).toContain("That request is no longer open");
+    expect(html).toContain("Start a new one from the Mac");
+    expect(html).not.toContain("Check request again");
+  });
+
+  it.each([401, 403])("distinguishes account verification failure %s", (status) => {
+    const html = renderReadError(status);
+    expect(html).toContain("account access couldn&#x27;t be verified");
+    expect(html).not.toContain("no longer open");
+    expect(html).not.toContain(">Approve</button>");
+  });
+
+  it("keeps the device context for an already answered request", () => {
+    const client = new QueryClient();
+    client.setQueryData(queryKeys.companionPairAttempt("abc"), {
+      deviceName: "Example Mac",
+      status: "approved"
+    });
+    const html = renderRequest("/link/trail-marker#code=abc", client);
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Example Mac");
+    expect(html).toContain("was already answered");
+    expect(html).not.toContain(">Approve</button>");
+  });
+});
 
 describe("Trail Marker approval page copy", () => {
   it("lists the four things a linked Mac may do", () => {

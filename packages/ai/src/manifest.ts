@@ -170,6 +170,19 @@ export const aiModuleManifest = {
       ]
     },
     {
+      id: "ai.module_screen_tool_results",
+      description:
+        "Module screens such as Finance, Food and Job search load their data by running the module's assistant tools. A screen receives the whole tool result up to 2,000,000 characters. Chat uses a separate, smaller limit.",
+      errors: [
+        {
+          code: "ai.module_screen_tool_results.too_large",
+          class: "validation",
+          description:
+            'The result is over the screen limit, so the screen shows "Request failed (413)" (HTTP 413). Narrow what the screen loads, such as a shorter date range or a filter, then reload.'
+        }
+      ]
+    },
+    {
       // #2956: the Activity history line title for the module-build planning call.
       id: "structured.moss.workshop-build-plan",
       description: "Planned a module build"

@@ -82,7 +82,7 @@
       {
         "id": "finance.settings",
         "label": "Finance settings",
-        "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom; a new install starts on Handle routine and ask about new), the Moss can move up to dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button.",
+        "description": "Everything Finance can configure: How much Moss does alone (Ask about everything, Handle routine and ask about new, Run it all and review weekly, or Custom; a new install starts on Handle routine and ask about new), the Moss can move up to dollar limit, a Customize list of per-action switches, Bank connection keys for admins, and this week's activity with an Undo button on each row and an Earlier weeks button. Freedom and dollar-limit controls stay unavailable until their reads succeed. Read failures have separate explanations and Retry; unverified fallback values are not presented as confirmed settings.",
         "path": "/settings"
       }
     ],
@@ -113,11 +113,11 @@
       },
       {
         "id": "finance.settings-freedom",
-        "description": "On Finance settings, How much Moss does alone offers three steps plus Custom. Ask about everything makes Moss suggest every change. Handle routine, ask about new lets Moss sort merchants it knows and move money up to the limit, and asks about anything new. Run it all, review weekly lets Moss do everything up to the limit. Custom shows when the switches under Customize match none of the three. A step saves at once; if saving fails the choice goes back with an error."
+        "description": "On Finance settings, How much Moss does alone offers three steps plus Custom. Ask about everything makes Moss suggest every change. Handle routine, ask about new lets Moss sort merchants it knows and move money up to the limit, and asks about anything new. Run it all, review weekly lets Moss do everything up to the limit. Custom shows when the switches under Customize match none of the three. A step saves at once; if saving fails the choice goes back with an error. Until policy and limit reads succeed, controls are unavailable. Retry reloads failed settings without writing; a failed refresh keeps the last confirmed values."
       },
       {
         "id": "finance.settings-limit",
-        "description": "On Finance settings, Moss can move up to, per move sets the dollar limit (a whole number from 0 to 100000, default 100). Moss asks for approval before any move or assigned total above it, at every step. It saves when you press Enter or click away; a bad or failed entry goes back to the saved amount with an error."
+        "description": "On Finance settings, Moss can move up to, per move sets the dollar limit (a whole number from 0 to 100000, default 100). Moss asks for approval before any move or assigned total above it, at every step. It saves when you press Enter or click away; a bad or failed entry goes back to the saved amount with an error. Until policy and limit reads succeed, controls are unavailable. Retry reloads failed settings without writing; a failed refresh keeps the last confirmed values."
       },
       {
         "id": "finance.settings-actions",

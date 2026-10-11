@@ -3,14 +3,15 @@ import { GitCommitHorizontal } from "lucide-react";
 import { AllDayChip, EventChip, NowLine, TodayPill, type EventChipVariant } from "@moss/ui";
 
 import {
-  DOW_SHORT,
   fmtHour,
   fmtTime,
+  fmtWeekday,
   isToday,
   nowMin,
   packDay,
   type CalendarViewEvent
 } from "./calendar-model.js";
+import { useUserLocale } from "../locale/locale-format.js";
 
 export interface DayData {
   readonly date: Date;
@@ -25,6 +26,7 @@ interface EventBlockProps {
 }
 
 function EventBlock({ e, hourH, dense, onPick }: EventBlockProps) {
+  const locale = useUserLocale();
   const ppm = hourH / 60;
   const top = e.startMin * ppm;
   const height = Math.max((e.endMin - e.startMin) * ppm, 28);
@@ -44,7 +46,7 @@ function EventBlock({ e, hourH, dense, onPick }: EventBlockProps) {
       color={isBlock ? "var(--accent-fg)" : "var(--steel)"}
       title={e.title}
       holdIcon={isBlock ? <GitCommitHorizontal size={11} /> : undefined}
-      time={showTime ? fmtTime(e.startMin) : undefined}
+      time={showTime ? fmtTime(e.startMin, locale) : undefined}
       where={showWhere ? e.where : undefined}
       onClick={() => onPick(e)}
       style={{
@@ -65,17 +67,19 @@ interface TimeGridProps {
 
 export function CalendarTimeGrid({ days, hourH, onPick }: TimeGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const locale = useUserLocale();
+  const timeZone = locale.timezone;
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const nowPx = nowMin() * (hourH / 60);
+    const nowPx = nowMin(timeZone) * (hourH / 60);
     el.scrollTop = Math.max(0, nowPx - el.clientHeight / 2);
-  }, [hourH]);
+  }, [hourH, timeZone]);
 
   const tmpl = `var(--cal-gutter, 60px) repeat(${days.length}, minmax(0, 1fr))`;
   const anyAllDay = days.some((d) => d.events.some((e) => e.allDay));
-  const todayNowMin = nowMin();
+  const todayNowMin = nowMin(timeZone);
 
   return (
     <div
@@ -92,10 +96,10 @@ export function CalendarTimeGrid({ days, hourH, onPick }: TimeGridProps) {
         {days.map((d) => (
           <div
             key={d.date.toISOString()}
-            className={"cal-tg__dayhd" + (isToday(d.date) ? " is-today" : "")}
+            className={"cal-tg__dayhd" + (isToday(d.date, timeZone) ? " is-today" : "")}
           >
-            <span className="cal-tg__dow">{DOW_SHORT[d.date.getDay()]}</span>
-            <TodayPill variant="grid">{d.date.getDate()}</TodayPill>
+            <span className="cal-tg__dow">{fmtWeekday(d.date, locale)}</span>
+            <TodayPill variant="grid">{d.date.getUTCDate()}</TodayPill>
           </div>
         ))}
       </div>
@@ -126,14 +130,14 @@ export function CalendarTimeGrid({ days, hourH, onPick }: TimeGridProps) {
             {Array.from({ length: 24 }, (_, h) =>
               h === 0 ? null : (
                 <span key={h} className="cal-tg__hr" style={{ top: h * hourH }}>
-                  {fmtHour(h)}
+                  {fmtHour(h, locale)}
                 </span>
               )
             )}
           </div>
           {days.map((d) => {
             const packed = packDay([...d.events]);
-            const todayCol = isToday(d.date);
+            const todayCol = isToday(d.date, timeZone);
             return (
               <div
                 key={d.date.toISOString()}
