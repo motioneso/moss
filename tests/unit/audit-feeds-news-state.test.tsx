@@ -8,7 +8,11 @@ import {
   QueryClientProvider
 } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { NewsHeadline, NewsOverviewResponse } from "@moss/shared";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  type NewsHeadline,
+  type NewsOverviewResponse
+} from "@moss/shared";
 import NewsSettings from "../../packages/news/src/settings/index.js";
 import { NewsPage } from "../../packages/news/src/web/news-page.js";
 import { newsQueryKeys } from "../../packages/news/src/web/query-keys.js";
@@ -95,6 +99,7 @@ function primeSettings() {
   });
   client.setQueryData(newsQueryKeys.credentials, { credentials: [] });
   client.setQueryData(newsQueryKeys.feedback, { feedback: [] });
+  client.setQueryData(["settings", "locale"], { locale: DEFAULT_LOCALE_SETTINGS });
 }
 
 describe("audit feeds: preference reads", () => {

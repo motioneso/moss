@@ -184,11 +184,10 @@ test("Sports retains pause through mixed input, manual selection and live reduce
   ).toBeEnabled();
   await page.waitForTimeout(10_000);
   expect(await activeSlide(carousel)).toBe(manuallySelected);
+  // Resume runs rotation while the pointer and focus stay on the Resume button.
   await carousel.getByRole("button", { name: "Resume rotation", exact: true }).click();
-  await page.mouse.move(0, 0);
-  await page.getByRole("button", { name: /^Account menu(?:,|$)/ }).focus();
   await expect.poll(() => activeSlide(carousel), { timeout: 12_000 }).not.toBe(manuallySelected);
   console.log(
-    "[live proof] Sports rotation stayed paused after manual selection and focus/hover departure; reduced motion changed live and preserved the user stop"
+    "[live proof] Sports rotation stayed paused after manual selection, Resume restarted it with pointer and focus still inside; reduced motion changed live and preserved the user stop"
   );
 });

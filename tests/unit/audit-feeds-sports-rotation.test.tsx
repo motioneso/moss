@@ -36,6 +36,10 @@ function carousel() {
   return tree.root.findByProps({ className: "sp-carousel" });
 }
 
+function focusIn() {
+  return { currentTarget: document.createElement("section"), relatedTarget: null };
+}
+
 function activeTitle() {
   const active = tree.root.findByProps({
     className: "sp-carousel__slide sp-carousel__slide--active"
@@ -93,7 +97,7 @@ describe("audit feeds: Sports rotation", () => {
     await mountStories();
     await act(async () => {
       carousel().props.onMouseEnter();
-      carousel().props.onFocus();
+      carousel().props.onFocus(focusIn());
       carousel().props.onMouseLeave();
     });
     await tick();
@@ -105,7 +109,7 @@ describe("audit feeds: Sports rotation", () => {
     const currentTarget = document.createElement("section");
     await act(async () => {
       carousel().props.onMouseEnter();
-      carousel().props.onFocus();
+      carousel().props.onFocus(focusIn());
       carousel().props.onBlur({ currentTarget, relatedTarget: null });
     });
     await tick();
@@ -117,7 +121,7 @@ describe("audit feeds: Sports rotation", () => {
     const currentTarget = document.createElement("section");
     const relatedTarget = document.createElement("button");
     currentTarget.append(relatedTarget);
-    await act(async () => carousel().props.onFocus());
+    await act(async () => carousel().props.onFocus(focusIn()));
     await act(async () => carousel().props.onBlur({ currentTarget, relatedTarget }));
     await tick();
     expect(activeTitle()).toBe("First story");
@@ -129,7 +133,7 @@ describe("audit feeds: Sports rotation", () => {
     expect(button("Resume rotation").props["aria-pressed"]).toBe(true);
     await act(async () => {
       carousel().props.onMouseEnter();
-      carousel().props.onFocus();
+      carousel().props.onFocus(focusIn());
       carousel().props.onMouseLeave();
       carousel().props.onBlur({
         currentTarget: document.createElement("section"),
@@ -141,6 +145,27 @@ describe("audit feeds: Sports rotation", () => {
     await tick(21_000);
     expect(activeTitle()).toBe("Second story");
     await act(async () => button("Resume rotation").props.onClick());
+    await tick();
+    expect(activeTitle()).toBe("First story");
+  });
+
+  it("runs after an explicit Resume while pointer and focus stay inside", async () => {
+    await mountStories();
+    await act(async () => {
+      carousel().props.onMouseEnter();
+      carousel().props.onFocus(focusIn());
+    });
+    await act(async () => button("Pause rotation").props.onClick());
+    await act(async () => button("Resume rotation").props.onClick());
+    await tick();
+    expect(activeTitle()).toBe("Second story");
+  });
+
+  it("pauses again when the pointer re-enters after an explicit Resume", async () => {
+    await mountStories();
+    await act(async () => button("Pause rotation").props.onClick());
+    await act(async () => button("Resume rotation").props.onClick());
+    await act(async () => carousel().props.onMouseEnter());
     await tick();
     expect(activeTitle()).toBe("First story");
   });

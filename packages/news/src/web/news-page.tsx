@@ -201,7 +201,7 @@ function EmptyState({
         description={
           data.degraded
             ? "No matching stories in the loaded front page. Some sources are unavailable, so coverage may be incomplete."
-            : "No matching stories in the loaded front page. Your followed topic is still saved."
+            : "No matching stories in the loaded front page."
         }
       >
         <Button variant="secondary" onClick={onClear}>
@@ -226,7 +226,7 @@ function EmptyState({
         noSources
           ? "Pick the publications and topics you care about. This page becomes their combined front page."
           : data.degraded
-            ? "Your sources could not be updated. This does not confirm that there are no stories. Try again shortly."
+            ? "Your sources could not be updated. Try again shortly."
             : "Your sources didn't return any stories just now. Check back shortly, or adjust your sources and topics."
       }
     >

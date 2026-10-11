@@ -3,7 +3,11 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { NewsHeadline, UsefulnessFeedbackDto } from "@moss/shared";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  type NewsHeadline,
+  type UsefulnessFeedbackDto
+} from "@moss/shared";
 import { NewsPage } from "../../packages/news/src/web/news-page.js";
 import { StoryFeedbackMenu } from "../../packages/news/src/web/story-feedback-menu.js";
 import { StoryFeedbackSettings } from "../../packages/news/src/settings/story-feedback.js";
@@ -94,6 +98,7 @@ async function mountMenu() {
 }
 async function mountSettings() {
   client.setQueryData(newsQueryKeys.feedback, { feedback: [feedback] });
+  client.setQueryData(["settings", "locale"], { locale: DEFAULT_LOCALE_SETTINGS });
   await act(async () => {
     tree = create(
       createElement(QueryClientProvider, { client }, createElement(StoryFeedbackSettings))
