@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-10-11
+
+#### Fixed
+
+- **Briefings show times in your own time zone.** Your briefings now show event times in the time zone and 12- or 24-hour clock you chose in Settings, and arrive at the time you set in that time zone. [PR #3412](https://github.com/motioneso/moss/pull/3412)
+
 ### 2026-10-10
 
 #### Fixed
