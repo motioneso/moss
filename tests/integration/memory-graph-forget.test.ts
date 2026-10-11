@@ -141,8 +141,7 @@ describe("forgetting a memory fact cleans up conflicts", () => {
     expect(third.fact?.status).toBe("superseded");
   });
 
-  // The chat approval path skips conflict cleanup: #3415.
-  it.skip("the memory.forget tool cleans up conflicts the same way", async () => {
+  it("the memory.forget tool cleans up conflicts the same way", async () => {
     const { facts, groupId } = await seedConflict(["first", "second"]);
     const [first, second] = facts;
 

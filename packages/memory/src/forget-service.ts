@@ -5,6 +5,7 @@ import { assertDataContextDb, isUuid, type DataContextDb } from "@moss/db";
 import type { ToolContext } from "@moss/module-sdk";
 
 import { factLabel } from "./chat-targets.js";
+import { MemoryGraphDashboardRepository } from "./graph-dashboard-repository.js";
 import { MemoryGraphRepository } from "./graph-repository.js";
 
 interface ForgetRow {
@@ -61,21 +62,33 @@ export class MemoryForgetService {
     if (!current || this.toTarget(current).version !== version) return false;
     // PostgreSQL rechecks xmin after a concurrent update; no changed row can slip between
     // the final label check and the deletion. A failed claim never changes the search index.
-    const deleted = await sql<{ id: string }>`
+    const deleted = await sql<{ id: string; conflict_group_id: string | null }>`
       DELETE FROM app.memory_facts
       WHERE owner_user_id = ${ownerUserId}::uuid AND id = ${factId}::uuid
         AND xmin::text = ${current.row_version}
-      RETURNING id
+      RETURNING id, conflict_group_id
     `.execute(db.db);
-    if (deleted.rows.length === 0) return false;
+    const removed = deleted.rows[0];
+    if (!removed) return false;
     // Other deletion paths lock the document first; edits lock the fact first. Never wait
-    // on a document while holding this fact: contention aborts and rolls back the deletion.
+    // on a document, or on any conflict-sibling row, while holding this fact: contention
+    // aborts and rolls back the deletion.
     await sql`
       SELECT id FROM app.memory_search_documents
       WHERE owner_user_id = ${ownerUserId}::uuid AND target_kind = 'fact' AND target_id = ${factId}::uuid
       FOR UPDATE NOWAIT
     `.execute(db.db);
-    await new MemoryGraphRepository().deactivateSearchDocument(db, ownerUserId, "fact", factId);
+    const graph = new MemoryGraphRepository();
+    await graph.deactivateSearchDocument(db, ownerUserId, "fact", factId);
+    if (removed.conflict_group_id) {
+      await new MemoryGraphDashboardRepository(graph).releaseSoleConflictSibling(
+        db,
+        ownerUserId,
+        factId,
+        removed.conflict_group_id,
+        { nowait: true }
+      );
+    }
     return true;
   }
 
