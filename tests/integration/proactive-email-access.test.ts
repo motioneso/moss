@@ -291,6 +291,11 @@ describe("quiet hours through the real authority", () => {
       await bootstrap.query(`DELETE FROM app.proactive_cards WHERE owner_user_id = $1`, [
         ids.userA
       ]);
+      // Each scenario starts with an unspent email budget (#3146).
+      await bootstrap.query(
+        `DELETE FROM app.proactive_email_finding_charges WHERE owner_user_id = $1`,
+        [ids.userA]
+      );
     } finally {
       await bootstrap.end();
     }
