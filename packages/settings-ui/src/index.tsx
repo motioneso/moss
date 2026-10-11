@@ -3,6 +3,8 @@ import { useId, useState, type ReactNode } from "react";
 import { Badge as SharedBadge } from "@moss/ui";
 export { Switch, Segmented, Avatar, Indicator } from "@moss/ui";
 import { Segmented } from "@moss/ui";
+import { formatLocaleDateTime, type LocaleSettingsDto } from "@moss/shared";
+export { useUserLocale } from "./locale.js";
 export type { GeneratedSettingsSurface } from "./scanner.js";
 export * from "./router.js";
 export { Select } from "@moss/ui";
@@ -34,14 +36,13 @@ export function NotWired(props: { readonly children?: ReactNode }) {
   );
 }
 
-/* Shared full-datetime formatter for settings panes (#449). Renders a locale
-   date+time string, falling back to `fallback` when the input isn't a parseable
-   timestamp (NaN guard). Use for any settings surface that shows an absolute
-   `toLocaleString()` instant; date-only and the audit `Mon DD · HH:MM` format
-   are intentionally separate. */
-export function formatTimestamp(iso: string, fallback: string): string {
+/* Shared full-datetime formatter for settings panes (#449). Renders the instant
+   in the person's saved timezone, region and 12/24-hour choice (#3396), falling
+   back to `fallback` when the input isn't a parseable timestamp. Date-only and
+   the audit `Mon DD · HH:MM` format are intentionally separate. */
+export function formatTimestamp(iso: string, fallback: string, locale: LocaleSettingsDto): string {
   const date = new Date(iso);
-  return isNaN(date.getTime()) ? fallback : date.toLocaleString();
+  return isNaN(date.getTime()) ? fallback : formatLocaleDateTime(date, locale);
 }
 
 /* Settings shared UI — pane scaffolding (PaneHead/Group/Row/Field/Choice/Note/

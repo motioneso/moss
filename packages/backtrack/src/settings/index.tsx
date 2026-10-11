@@ -1,14 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { Badge, Group, Note, PaneHead, Row, Switch, formatTimestamp } from "@moss/settings-ui";
-import type {
-  BacktrackDeleteRequest,
-  BacktrackDeleteResponse,
-  BacktrackPreferencesRequest,
-  BacktrackPreferencesResponse,
-  BacktrackStatusResponse,
-  ListMySessionsResponse
+import { localDayRange, todayLocalDayKey } from "@moss/module-sdk/time";
+import {
+  Badge,
+  Group,
+  Note,
+  PaneHead,
+  Row,
+  Switch,
+  formatTimestamp,
+  useUserLocale
+} from "@moss/settings-ui";
+import {
+  formatLocaleDate,
+  type BacktrackDeleteRequest,
+  type BacktrackDeleteResponse,
+  type BacktrackPreferencesRequest,
+  type BacktrackPreferencesResponse,
+  type BacktrackStatusResponse,
+  type ListMySessionsResponse,
+  type LocaleSettingsDto
 } from "@moss/shared";
 import { Button, Dialog, EmptyState } from "@moss/ui";
 
@@ -22,7 +34,10 @@ const STATUS_KEY = ["backtrack", "status"] as const;
 const SESSIONS_KEY = ["settings", "sessions"] as const;
 const HOUR_MS = 60 * 60 * 1000;
 
-async function requestJson<T>(path: string, init?: RequestInit & { body?: unknown }): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  init?: Omit<RequestInit, "body"> & { body?: unknown }
+): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("accept", "application/json");
   if (init?.body !== undefined) headers.set("content-type", "application/json");
@@ -36,37 +51,32 @@ async function requestJson<T>(path: string, init?: RequestInit & { body?: unknow
   return (await response.json()) as T;
 }
 
-/** [from, to) for one calendar day in the browser's time zone (decision 7). */
-export function localDayRange(
-  year: number,
-  monthIndex: number,
-  day: number
-): Required<BacktrackDeleteRequest> {
-  return {
-    from: new Date(year, monthIndex, day).toISOString(),
-    to: new Date(year, monthIndex, day + 1).toISOString()
-  };
+/** [from, to) for one calendar day (`YYYY-MM-DD`) in the person's time zone (decision 7). */
+function dayRange(localDate: string, timeZone: string): Required<BacktrackDeleteRequest> {
+  const { start, end } = localDayRange(localDate, timeZone);
+  return { from: start.toISOString(), to: end.toISOString() };
 }
 
 export function lastHourRange(now: Date): Required<BacktrackDeleteRequest> {
   return { from: new Date(now.getTime() - HOUR_MS).toISOString(), to: now.toISOString() };
 }
 
-export function todayRange(now: Date): Required<BacktrackDeleteRequest> {
-  return localDayRange(now.getFullYear(), now.getMonth(), now.getDate());
+export function todayRange(now: Date, timeZone: string): Required<BacktrackDeleteRequest> {
+  return dayRange(todayLocalDayKey(timeZone, now), timeZone);
 }
 
-/** Today as a native `type="date"` value, in the browser's time zone: the latest day to offer. */
-export function todayDateValue(now: Date): string {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+/** Today as a native `type="date"` value, in the person's time zone: the latest day to offer. */
+export function todayDateValue(now: Date, timeZone: string): string {
+  return todayLocalDayKey(timeZone, now);
 }
 
 /** Parses a native `type="date"` value (`YYYY-MM-DD`); undefined when it isn't one. */
-export function chosenDayRange(value: string): Required<BacktrackDeleteRequest> | undefined {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return undefined;
-  return localDayRange(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+export function chosenDayRange(
+  value: string,
+  timeZone: string
+): Required<BacktrackDeleteRequest> | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  return dayRange(value, timeZone);
 }
 
 interface DeleteConfirmation {
@@ -77,12 +87,8 @@ interface DeleteConfirmation {
 }
 
 /** A chosen day for the confirmation title, e.g. "Saturday, October 4". */
-function formatDay(fromIso: string): string {
-  return new Date(fromIso).toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric"
-  });
+export function formatDay(fromIso: string, locale: LocaleSettingsDto): string {
+  return formatLocaleDate(fromIso, locale, { weekday: "long", month: "long", day: "numeric" });
 }
 
 function formatBytes(bytes: number): string {
@@ -97,6 +103,7 @@ function plural(count: number, one: string, many: string): string {
 
 export default function BacktrackSettings() {
   const queryClient = useQueryClient();
+  const locale = useUserLocale();
   const status = useQuery({
     queryKey: STATUS_KEY,
     queryFn: () => requestJson<BacktrackStatusResponse>("/api/backtrack/status")
@@ -199,7 +206,7 @@ export default function BacktrackSettings() {
                   description:
                     "This removes what Backtrack kept since midnight today. It can't be undone.",
                   action: "Delete today",
-                  range: () => todayRange(new Date())
+                  range: () => todayRange(new Date(), locale.timezone)
                 })
               }
             >
@@ -242,19 +249,19 @@ export default function BacktrackSettings() {
                 type="date"
                 className="jds-input"
                 aria-label="Day to delete"
-                max={todayDateValue(new Date())}
+                max={todayDateValue(new Date(), locale.timezone)}
                 value={day}
                 onChange={(event) => setDay(event.target.value)}
               />
               <Button
                 variant="danger"
                 size="sm"
-                disabled={remove.isPending || chosenDayRange(day) === undefined}
+                disabled={remove.isPending || chosenDayRange(day, locale.timezone) === undefined}
                 onClick={() => {
-                  const range = chosenDayRange(day);
+                  const range = chosenDayRange(day, locale.timezone);
                   if (!range) return;
                   setConfirming({
-                    title: `Delete ${formatDay(range.from)}?`,
+                    title: `Delete ${formatDay(range.from, locale)}?`,
                     description:
                       "This removes what Backtrack kept on that day, midnight to midnight. It can't be undone.",
                     action: "Delete the day",
@@ -377,7 +384,7 @@ export default function BacktrackSettings() {
         {data.lastReceivedAt ? (
           <Row
             name="Last received"
-            control={<span>{formatTimestamp(data.lastReceivedAt, "Unknown")}</span>}
+            control={<span>{formatTimestamp(data.lastReceivedAt, "Unknown", locale)}</span>}
           />
         ) : null}
       </Group>

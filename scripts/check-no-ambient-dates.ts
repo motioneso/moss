@@ -195,6 +195,7 @@ async function* walk(directory: string): AsyncGenerator<string> {
 /**
  * #877 finding 1: every module package's `src/web` directory (its web contribution to the
  * shell via the module-web-registry — see docs/superpowers/specs/2026-07-04-module-web-registry.md).
+ * #3396 added each `src/settings` directory and `@moss/settings-ui`, which render settings panes.
  * Discovered dynamically (not hardcoded to `packages/sports`) so a future module's web/ tree is
  * covered automatically instead of needing a gate update per module.
  */
@@ -211,11 +212,15 @@ async function moduleWebRoots(): Promise<string[]> {
     if (!entry.isDirectory()) {
       continue;
     }
-    const webDir = join(packagesDir, entry.name, "src", "web");
-    if (await isDirectory(webDir)) {
-      roots.push(webDir);
+    // #3396: module settings panes render in the browser too.
+    for (const sub of ["web", "settings"]) {
+      const dir = join(packagesDir, entry.name, "src", sub);
+      if (await isDirectory(dir)) {
+        roots.push(dir);
+      }
     }
   }
+  roots.push(join(packagesDir, "settings-ui", "src"));
   return roots;
 }
 
