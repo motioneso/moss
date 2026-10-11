@@ -105,7 +105,19 @@ const RESTORED_RUN_ASSERTIONS: readonly (readonly [string, number])[] = [
   ["const devices = await askUntilRan(\n    page,\n    DEVICES,", 1],
   ['await askUntilRan(page, LIGHT, "Turn the hallway light off with the hub tool.");', 1],
   ["await setYolo(page, true);", 4],
-  ["await setYolo(page, false);", 3]
+  ["await setYolo(page, false);", 4],
+  ['await setGate(page, "on");\n  await setYolo(page, false);', 1],
+  [
+    "      outcome.ran &&\n      outcome.unlocked &&\n      !outcome.failureShown &&\n      !outcome.asked &&\n      outcome.chatAnswers === 0",
+    1
+  ],
+  ["    handled,\n", 1],
+  ['expect(above, "both classifier answers reach the Sensitive bar").toBe(true);', 1],
+  [
+    'expect(yoloBelow.asked || yoloBelow.chatAnswers > 0, "the chat model took over").toBe(true);',
+    1
+  ],
+  ["      yoloBelow.confidences.some((value) => value < 0.95),", 1]
 ];
 
 const KEPT_SETUP_ASSERTIONS: readonly (readonly [string, number])[] = [
@@ -352,7 +364,7 @@ describe("classifier chat live journey (#3362)", () => {
       expect(
         await mutate(
           "chat",
-          '    expect(result.ran || result.unlocked, "nothing unlocked the door in a marked chat").toBe(false);\n',
+          '  expect(result.ran || result.unlocked, "nothing unlocked the door in a marked chat").toBe(false);\n',
           ""
         )
       ).toContain(

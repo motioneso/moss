@@ -86,7 +86,8 @@ async function askInNewChat(page: Page, message: string): Promise<void> {
 }
 
 // Claude chats are marked at launch. Connected tools still ask without YOLO, even when the
-// owner allowed sending; under YOLO they run. Destructive tools always ask (#3338, #3417).
+// owner allowed sending; under YOLO they run, including classifier-Sensitive tools. The gateway
+// rates every connected tool outbound; its destructive floor applies to other manifests (#3417).
 
 /** The tool server receives the call and no approval card appears, including after settling. */
 async function askUntilRan(page: Page, tool: string, message: string): Promise<number> {
@@ -391,7 +392,7 @@ test("11. YOLO with the gate on: a marked chat keeps a Sensitive tool asking and
       "on conflict do nothing"
   );
   await setGate(page, "on");
-  await setYolo(page, true);
+  await setYolo(page, false);
   // Clears any 30-second cooldown left by the shadow turns.
   await page.waitForTimeout(35_000);
 
@@ -483,10 +484,25 @@ test("11. YOLO with the gate on: a marked chat keeps a Sensitive tool asking and
     return { ...result, confidences };
   };
 
-  // Clear asks: in a marked chat the gateway declines the gate's call ("destructive risk, any trust
-  // -> asks"), so the door stays locked whatever the classifier's confidence. A turn that reaches
-  // the Sensitive bar (0.95) must still hand over to the chat model. Each turn's confidences and
-  // timing are logged; reaching the bar is reported, not required.
+  // With YOLO off the marked chat still asks, including above the classifier's Sensitive bar.
+  const result = await turn("yolo-off-clear", "Unlock the front door on my smart hub now.");
+  expect(result.ran || result.unlocked, "nothing unlocked the door in a marked chat").toBe(false);
+  if (result.confidences.length >= 2 && result.confidences.every((value) => value >= 0.95)) {
+    expect(result.asked || result.chatAnswers > 0, "the chat model took over").toBe(true);
+  }
+  await page.waitForTimeout(35_000);
+  const below = await turn(
+    "yolo-off-vague",
+    "Hmm, maybe the door thing? Not sure, whatever you think."
+  );
+  expect(below.ran || below.unlocked, "nothing unlocked the door in a marked chat").toBe(false);
+  expect(below.asked || below.chatAnswers > 0, "the chat model took over").toBe(true);
+
+  await setYolo(page, true);
+  await page.waitForTimeout(35_000);
+  // Restore the original gate execution checks. Its persisted reply records only gate origin,
+  // not confidence; the Claude activity rows also omit confidence (#3427). Check any real
+  // confidences that do exist, but never substitute inferred or shadow confidence for this turn.
   const clearAsks = [
     "Unlock the front door on my smart hub now.",
     "Use my smart hub to unlock the front door.",
@@ -495,24 +511,43 @@ test("11. YOLO with the gate on: a marked chat keeps a Sensitive tool asking and
     "Use the unlock door action on my new smart hub to unlock the front door right now.",
     "Smart hub: unlock the front door."
   ];
+  let handled = false;
   let above = false;
   for (const [index, message] of clearAsks.entries()) {
-    const result = await turn(`clear-${index + 1}`, message);
-    expect(result.ran || result.unlocked, "nothing unlocked the door in a marked chat").toBe(false);
-    if (result.confidences.length >= 2 && result.confidences.every((value) => value >= 0.95)) {
-      expect(result.asked || result.chatAnswers > 0, "the chat model took over").toBe(true);
-      above = true;
+    const outcome = await turn(`clear-${index + 1}`, message);
+    if (
+      outcome.ran &&
+      outcome.unlocked &&
+      !outcome.failureShown &&
+      !outcome.asked &&
+      outcome.chatAnswers === 0
+    ) {
+      handled = true;
+      above =
+        outcome.confidences.length >= 2 && outcome.confidences.every((value) => value >= 0.95);
+      if (outcome.confidences.length > 0) {
+        expect(above, "both classifier answers reach the Sensitive bar").toBe(true);
+      }
       break;
     }
     await page.waitForTimeout(35_000);
   }
+  expect(
+    handled,
+    "the gate ran the Sensitive tool itself and it completed: door unlocked, no card, no chat answer"
+  ).toBe(true);
   console.log("R2.6 YOLO a clear ask reached the Sensitive bar:", above);
+  console.log("R2.6 gate confidence is unavailable under the Claude sign-in until #3427");
 
-  // Below the bar: the gate declines and runs nothing itself, and the chat model carries on.
-  const below = await turn("vague", "Hmm, maybe the door thing? Not sure, whatever you think.");
-  expect(below.ran || below.unlocked, "nothing unlocked the door in a marked chat").toBe(false);
-  // No check on the classifier's confidence here. A sign-in model logs none (#3427).
-  expect(below.asked || below.chatAnswers > 0, "the chat model took over").toBe(true);
+  // Below the bar the gate hands over. Under YOLO the chat model may itself choose to run the door.
+  const yoloBelow = await turn("vague", "Hmm, maybe the door thing? Not sure, whatever you think.");
+  if (yoloBelow.confidences.length > 0) {
+    expect(
+      yoloBelow.confidences.some((value) => value < 0.95),
+      "its confidence is under the Sensitive bar"
+    ).toBe(true);
+  }
+  expect(yoloBelow.asked || yoloBelow.chatAnswers > 0, "the chat model took over").toBe(true);
 
   const off = await page.request.put("/api/me/yolo", { data: { enabled: false } });
   expect(off.ok()).toBe(true);
