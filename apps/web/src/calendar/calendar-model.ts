@@ -28,31 +28,6 @@ export interface CalendarViewEvent {
   _cols?: number;
 }
 
-export const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-export const DOW_LONG = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday"
-] as const;
-export const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December"
-] as const;
-
 // Calendar days are plain dates held as UTC-midnight `Date`s and read with UTC getters,
 // so day math never depends on the browser's zone. Instants become plain dates and
 // clock minutes in the person's saved timezone.
@@ -263,33 +238,34 @@ export function navigateCursor(cursor: Date, view: CalendarView, dir: -1 | 1): D
   return plainDate(y, m, Math.min(cursor.getUTCDate(), lastDay));
 }
 
-export function rangeLabel(cursor: Date, view: CalendarView, days: Date[]): string {
-  if (view === "day") {
-    return (
-      DOW_LONG[cursor.getUTCDay()] +
-      ", " +
-      MONTH_NAMES[cursor.getUTCMonth()] +
-      " " +
-      cursor.getUTCDate()
-    );
-  }
+export function rangeLabel(
+  cursor: Date,
+  view: CalendarView,
+  days: Date[],
+  locale: LocaleSettingsDto
+): string {
+  const wall = { ...locale, timezone: WALL_CLOCK };
+  if (view === "day") return formatLocaleDate(cursor, wall, { month: "long", day: "numeric" });
   if (view === "week" && days.length >= 2) {
-    const a = days[0]!;
-    const b = days[days.length - 1]!;
-    if (a.getUTCMonth() === b.getUTCMonth()) {
-      return MONTH_NAMES[a.getUTCMonth()] + " " + a.getUTCDate() + " – " + b.getUTCDate();
-    }
-    return (
-      (MONTH_NAMES[a.getUTCMonth()] ?? "").slice(0, 3) +
-      " " +
-      a.getUTCDate() +
-      " – " +
-      (MONTH_NAMES[b.getUTCMonth()] ?? "").slice(0, 3) +
-      " " +
-      b.getUTCDate()
-    );
+    const short = { month: "short", day: "numeric" } as const;
+    const first = formatLocaleDate(days[0]!, wall, short);
+    const last = formatLocaleDate(days[days.length - 1]!, wall, short);
+    return first + " – " + last;
   }
-  return MONTH_NAMES[cursor.getUTCMonth()] + " " + cursor.getUTCFullYear();
+  return formatLocaleDate(cursor, wall, { month: "long", year: "numeric" });
+}
+
+export function fmtWeekday(date: Date, locale: LocaleSettingsDto): string {
+  return formatLocaleDate(date, { ...locale, timezone: WALL_CLOCK }, { weekday: "short" });
+}
+
+export function fmtMonthShort(date: Date, locale: LocaleSettingsDto): string {
+  return formatLocaleDate(date, { ...locale, timezone: WALL_CLOCK }, { month: "short" });
+}
+
+// 2000-01-02 is a Sunday; the grid's weeks start on Sunday.
+export function weekdayHeaders(locale: LocaleSettingsDto): string[] {
+  return Array.from({ length: 7 }, (_, i) => fmtWeekday(plainDate(2000, 0, 2 + i), locale));
 }
 
 export function packDay(evs: CalendarViewEvent[]): CalendarViewEvent[] {

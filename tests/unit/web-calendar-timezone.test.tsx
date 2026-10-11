@@ -14,7 +14,9 @@ import {
   fmtTime,
   groupEventsByDay,
   isToday,
+  navigateCursor,
   nowMin,
+  rangeLabel,
   plainDate,
   todayIn,
   type CalendarViewEvent
@@ -30,6 +32,12 @@ process.env.TZ = "UTC";
 const TZ = "America/Los_Angeles";
 const LA_24: LocaleSettingsDto = { timezone: TZ, region: "en-US", dateFormat: "24" };
 const LA_12: LocaleSettingsDto = { ...LA_24, dateFormat: "12" };
+// Unlike the app's built-in default in every field, so a screen that ignores the saved setting fails.
+const TOKYO_GB_12: LocaleSettingsDto = {
+  timezone: "Asia/Tokyo",
+  region: "en-GB",
+  dateFormat: "12"
+};
 const NOW = "2026-06-21T03:30:00.000Z";
 
 const api = vi.hoisted(() => ({
@@ -104,6 +112,30 @@ describe("calendar model in the person's timezone", () => {
 
   it("labels the date in the person's timezone", () => {
     expect(dateRangeLabel(eveningView(), LA_24)).toBe("Saturday, June 20");
+  });
+
+  it("ends an event at the person's midnight on the day before", () => {
+    // Jun 20 20:00 to Jun 21 00:00 in Los Angeles.
+    const view = dtoToViewEvent(
+      { ...evening, startsAt: "2026-06-21T03:00:00.000Z", endsAt: "2026-06-21T07:00:00.000Z" },
+      TZ
+    );
+    expect(view && dateRangeLabel(view, LA_24)).toBe("Saturday, June 20");
+  });
+
+  it("labels the toolbar range in the person's region", () => {
+    const day = plainDate(2026, 5, 20);
+    const week = [plainDate(2026, 5, 14), day];
+    expect(rangeLabel(day, "day", [day], LA_24)).toBe("June 20");
+    expect(rangeLabel(day, "week", week, LA_24)).toBe("Jun 14 – Jun 20");
+    expect(rangeLabel(day, "month", [day], LA_24)).toBe("June 2026");
+    expect(rangeLabel(day, "day", [day], TOKYO_GB_12)).toBe("20 June");
+    expect(rangeLabel(day, "week", week, TOKYO_GB_12)).toBe("14 Jun – 20 Jun");
+  });
+
+  it("keeps a month step inside the shorter month", () => {
+    expect(dayKey(navigateCursor(plainDate(2026, 0, 31), "month", 1))).toBe("2026-02-28");
+    expect(dayKey(navigateCursor(plainDate(2026, 2, 31), "month", -1))).toBe("2026-02-28");
   });
 });
 
@@ -181,12 +213,73 @@ describe("calendar screens in the person's timezone", () => {
     expect(today?.querySelector(".cal-mchip__t")?.textContent).toBe("20:30");
   });
 
+  it("follows a saved setting unlike the default on every screen", async () => {
+    api.getLocaleSettings.mockResolvedValue({ locale: TOKYO_GB_12 });
+    // Jun 21 12:30-13:45 in Tokyo, which is also Tokyo's today.
+    const view = dtoToViewEvent(evening, TOKYO_GB_12.timezone);
+    if (!view) throw new Error("bad dto");
+    const day = plainDate(2026, 5, 21);
+    const byDay = groupEventsByDay([view], TOKYO_GB_12.timezone);
+
+    await render(<CalendarPeek event={view} onClose={() => undefined} />);
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(texts(".cal-peek__rowmain")[0]).toContain("12:30 pm – 1:45 pm");
+    });
+    expect(texts(".cal-peek__rowsub")).toEqual(["Sunday 21 June"]);
+
+    await render(
+      <CalendarTimeGrid
+        days={[{ date: day, events: byDay.get(dayKey(day)) ?? [] }]}
+        hourH={60}
+        onPick={() => {}}
+      />
+    );
+    expect(texts(".cal-tg__hr")).toContain("1 pm");
+    expect(texts(".cal-ev__meta")).toEqual(["12:30 pm"]);
+    expect(container.querySelector(".cal-tg__col")?.className).toContain("is-today");
+    expect((container.querySelector(".cal-now") as HTMLElement).style.top).toBe(
+      `${12 * 60 + 30}px`
+    );
+
+    await render(
+      <CalendarMonth
+        cursor={plainDate(2026, 5, 1)}
+        eventsByDay={byDay}
+        onPickDay={() => {}}
+        onPick={() => {}}
+      />
+    );
+    const today = container.querySelector(".cal-mcell.is-today");
+    expect(today?.querySelector(".cal-mcell__date")?.textContent).toBe("21");
+    expect(today?.querySelector(".cal-mchip__t")?.textContent).toBe("12:30 pm");
+  });
+
   it("opens on the person's today and shows that day's events", async () => {
     await render(<CalendarPage />);
     expect(container.querySelector(".cal-range")?.textContent).toBe("SatJune 20");
     await vi.waitFor(async () => {
       await act(async () => {});
       expect(texts(".cal-ev__titletext")).toEqual(["Evening call"]);
+    });
+  });
+
+  it("counts held blocks on the person's today", async () => {
+    // Both are Jun 20 in Los Angeles; on the machine's clock only the morning one is.
+    const evenHold = { ...evening, id: "hold-pm", title: "Focus", isMossBlock: true };
+    const mornHold = {
+      ...evenHold,
+      id: "hold-am",
+      startsAt: "2026-06-20T18:00:00.000Z",
+      endsAt: "2026-06-20T19:00:00.000Z"
+    };
+    api.listCalendarEvents.mockResolvedValue({ events: [evenHold, mornHold] });
+    await render(<CalendarPage />);
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(container.querySelector(".cal-legend__note")?.textContent).toContain(
+        "holding 2 blocks around"
+      );
     });
   });
 });

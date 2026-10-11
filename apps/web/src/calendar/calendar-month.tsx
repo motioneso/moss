@@ -1,12 +1,12 @@
 import { DayCell, MonthChip, TodayPill } from "@moss/ui";
 import {
-  DOW_SHORT,
-  MONTH_NAMES,
   buildMonthCells,
   dayKey,
+  fmtMonthShort,
   fmtTime,
   isToday,
   plainDateOf,
+  weekdayHeaders,
   type CalendarViewEvent
 } from "./calendar-model.js";
 import { useUserLocale } from "../locale/locale-format.js";
@@ -27,8 +27,8 @@ export function CalendarMonth({ cursor, eventsByDay, onPickDay, onPick }: Calend
   return (
     <div className="cal-month" style={{ minWidth: 7 * 144, minHeight: 42 + rowCount * 112 }}>
       <div className="cal-month__head">
-        {DOW_SHORT.map((d) => (
-          <div key={d} className="cal-month__dow">
+        {weekdayHeaders(locale).map((d, i) => (
+          <div key={i} className="cal-month__dow">
             {d}
           </div>
         ))}
@@ -54,9 +54,7 @@ export function CalendarMonth({ cursor, eventsByDay, onPickDay, onPick }: Calend
                 <>
                   <TodayPill variant="month">{date.getUTCDate()}</TodayPill>
                   {date.getUTCDate() === 1 ? (
-                    <span className="mo">
-                      {(MONTH_NAMES[date.getUTCMonth()] ?? "").slice(0, 3)}
-                    </span>
+                    <span className="mo">{fmtMonthShort(date, locale)}</span>
                   ) : null}
                 </>
               }

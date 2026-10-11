@@ -3,9 +3,9 @@ import { GitCommitHorizontal } from "lucide-react";
 import { AllDayChip, EventChip, NowLine, TodayPill, type EventChipVariant } from "@moss/ui";
 
 import {
-  DOW_SHORT,
   fmtHour,
   fmtTime,
+  fmtWeekday,
   isToday,
   nowMin,
   packDay,
@@ -98,7 +98,7 @@ export function CalendarTimeGrid({ days, hourH, onPick }: TimeGridProps) {
             key={d.date.toISOString()}
             className={"cal-tg__dayhd" + (isToday(d.date, timeZone) ? " is-today" : "")}
           >
-            <span className="cal-tg__dow">{DOW_SHORT[d.date.getUTCDay()]}</span>
+            <span className="cal-tg__dow">{fmtWeekday(d.date, locale)}</span>
             <TodayPill variant="grid">{d.date.getUTCDate()}</TodayPill>
           </div>
         ))}

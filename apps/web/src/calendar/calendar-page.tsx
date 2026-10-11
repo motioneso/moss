@@ -12,6 +12,7 @@ import {
   buildWeekDays,
   dayKey,
   dtoToViewEvent,
+  fmtWeekday,
   groupEventsByDay,
   isToday,
   loadPersistedCursor,
@@ -20,7 +21,6 @@ import {
   navigateCursor,
   rangeLabel,
   todayIn,
-  DOW_SHORT,
   type CalendarView,
   type CalendarViewEvent
 } from "./calendar-model.js";
@@ -33,7 +33,8 @@ const HOUR_H = 58;
 export function CalendarPage() {
   const assistantName = useAssistantName();
   const [view, setView] = useState<CalendarView>(loadPersistedView);
-  const timeZone = useUserLocale().timezone;
+  const locale = useUserLocale();
+  const timeZone = locale.timezone;
   const [savedCursor, setCursor] = useState<Date | null>(loadPersistedCursor);
   const cursor = useMemo(() => savedCursor ?? todayIn(timeZone), [savedCursor, timeZone]);
   const [workWeek, setWorkWeek] = useState<boolean>(loadPersistedWorkWeek);
@@ -88,7 +89,7 @@ export function CalendarPage() {
     }));
   }, [view, cursor, weekDays, eventsByDay]);
 
-  const label = rangeLabel(cursor, view, view === "week" ? weekDays : [cursor]);
+  const label = rangeLabel(cursor, view, view === "week" ? weekDays : [cursor], locale);
 
   const heldToday = useMemo(
     () =>
@@ -97,7 +98,7 @@ export function CalendarPage() {
   );
 
   function go(dir: -1 | 1) {
-    setCursor(navigateCursor(cursor, view, dir));
+    setCursor((c) => navigateCursor(c ?? todayIn(timeZone), view, dir));
   }
   function pickDay(date: Date) {
     setCursor(date);
@@ -122,8 +123,8 @@ export function CalendarPage() {
           <h2 className="cal-range">
             {view === "day" ? (
               <>
-                <span className="cal-range__dow">{DOW_SHORT[cursor.getUTCDay()]}</span>
-                {label.replace(/^\S+,?\s*/, "")}
+                <span className="cal-range__dow">{fmtWeekday(cursor, locale)}</span>
+                {label}
               </>
             ) : (
               label
