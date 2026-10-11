@@ -6,10 +6,13 @@ import { Button, EmptyState, IconButton, LegendSwatch, Segmented } from "@moss/u
 import { listCalendarEvents } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useAssistantName } from "../api/use-assistant-name.js";
+import { useUserLocale } from "../locale/locale-format.js";
 import "../styles/kit-calendar.css";
 import {
   buildWeekDays,
+  dayKey,
   dtoToViewEvent,
+  fmtWeekday,
   groupEventsByDay,
   isToday,
   loadPersistedCursor,
@@ -17,7 +20,7 @@ import {
   loadPersistedWorkWeek,
   navigateCursor,
   rangeLabel,
-  DOW_SHORT,
+  todayIn,
   type CalendarView,
   type CalendarViewEvent
 } from "./calendar-model.js";
@@ -30,7 +33,10 @@ const HOUR_H = 58;
 export function CalendarPage() {
   const assistantName = useAssistantName();
   const [view, setView] = useState<CalendarView>(loadPersistedView);
-  const [cursor, setCursor] = useState<Date>(loadPersistedCursor);
+  const locale = useUserLocale();
+  const timeZone = locale.timezone;
+  const [savedCursor, setCursor] = useState<Date | null>(loadPersistedCursor);
+  const cursor = useMemo(() => savedCursor ?? todayIn(timeZone), [savedCursor, timeZone]);
   const [workWeek, setWorkWeek] = useState<boolean>(loadPersistedWorkWeek);
   const [peek, setPeek] = useState<CalendarViewEvent | null>(null);
 
@@ -38,8 +44,8 @@ export function CalendarPage() {
     localStorage.setItem("moss.cal.view", view);
   }, [view]);
   useEffect(() => {
-    localStorage.setItem("moss.cal.cursor", cursor.toISOString());
-  }, [cursor]);
+    if (savedCursor) localStorage.setItem("moss.cal.cursor", savedCursor.toISOString());
+  }, [savedCursor]);
   useEffect(() => {
     localStorage.setItem("moss.cal.workweek", workWeek ? "1" : "0");
   }, [workWeek]);
@@ -52,12 +58,15 @@ export function CalendarPage() {
   const allViewEvents = useMemo(
     () =>
       (calendarQuery.data?.events ?? [])
-        .map(dtoToViewEvent)
+        .map((dto) => dtoToViewEvent(dto, timeZone))
         .filter((e): e is CalendarViewEvent => e !== null),
-    [calendarQuery.data]
+    [calendarQuery.data, timeZone]
   );
 
-  const eventsByDay = useMemo(() => groupEventsByDay(allViewEvents), [allViewEvents]);
+  const eventsByDay = useMemo(
+    () => groupEventsByDay(allViewEvents, timeZone),
+    [allViewEvents, timeZone]
+  );
 
   const [searchParams] = useSearchParams();
   useEffect(() => {
@@ -76,20 +85,20 @@ export function CalendarPage() {
     const activeDays = view === "day" ? [cursor] : view === "week" ? weekDays : [];
     return activeDays.map((d) => ({
       date: d,
-      events: eventsByDay.get(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`) ?? []
+      events: eventsByDay.get(dayKey(d)) ?? []
     }));
   }, [view, cursor, weekDays, eventsByDay]);
 
-  const label = rangeLabel(cursor, view, view === "week" ? weekDays : [cursor]);
+  const label = rangeLabel(cursor, view, view === "week" ? weekDays : [cursor], locale);
 
-  const heldToday = useMemo(() => {
-    const now = new Date();
-    const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-    return (eventsByDay.get(key) ?? []).filter((e) => e.kind === "block").length;
-  }, [eventsByDay]);
+  const heldToday = useMemo(
+    () =>
+      (eventsByDay.get(dayKey(todayIn(timeZone))) ?? []).filter((e) => e.kind === "block").length,
+    [eventsByDay, timeZone]
+  );
 
   function go(dir: -1 | 1) {
-    setCursor((c) => navigateCursor(c, view, dir));
+    setCursor((c) => navigateCursor(c ?? todayIn(timeZone), view, dir));
   }
   function pickDay(date: Date) {
     setCursor(date);
@@ -100,7 +109,7 @@ export function CalendarPage() {
     <div className="cal-wrap" style={{ "--cal-h": HOUR_H + "px" } as React.CSSProperties}>
       <div className="cal-toolbar">
         <div className="cal-toolbar__left">
-          <Button variant="secondary" size="sm" onClick={() => setCursor(new Date())}>
+          <Button variant="secondary" size="sm" onClick={() => setCursor(todayIn(timeZone))}>
             Today
           </Button>
           <div className="cal-nav">
@@ -114,8 +123,8 @@ export function CalendarPage() {
           <h2 className="cal-range">
             {view === "day" ? (
               <>
-                <span className="cal-range__dow">{DOW_SHORT[cursor.getDay()]}</span>
-                {label.replace(/^\S+,?\s*/, "")}
+                <span className="cal-range__dow">{fmtWeekday(cursor, locale)}</span>
+                {label}
               </>
             ) : (
               label
@@ -155,7 +164,7 @@ export function CalendarPage() {
             <LegendSwatch tone="hold" />
             {assistantName} holding
           </span>
-          {view === "day" && isToday(cursor) && heldToday > 0 ? (
+          {view === "day" && isToday(cursor, timeZone) && heldToday > 0 ? (
             <span className="cal-legend__note">
               {assistantName} is holding {heldToday} block{heldToday === 1 ? "" : "s"} around what
               matters today.
