@@ -110,6 +110,17 @@ it("states the local time in the person's 12/24-hour choice (#3394)", () => {
 
   expect(twentyFour).toContain("2026-08-31 (Monday) 14:50 (America/Los_Angeles");
   expect(twelve).toContain("2026-08-31 (Monday) 2:50 PM (America/Los_Angeles");
+  expect(twentyFour).toContain(
+    "Write clock times on the user's 24-hour clock, for example 14:30. Never use AM or PM."
+  );
+  expect(twelve).toContain(
+    "Write clock times on the user's 12-hour clock with AM or PM, for example 2:30 PM."
+  );
+});
+
+it("tells the model the default 24-hour clock when nothing is saved (#3394)", () => {
+  const block = renderCurrentTimeContext(new Date("2026-08-31T21:50:00.000Z"), null);
+  expect(block).toContain("24-hour clock, for example 14:30. Never use AM or PM.");
 });
 
 it("uses the thread context's locale for the turn's time block (#3394)", async () => {

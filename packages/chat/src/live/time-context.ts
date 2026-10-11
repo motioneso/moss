@@ -45,6 +45,7 @@ export function renderCurrentTimeContext(
       "If you mention the current time, say plainly — once, the first time you mention it — that you do not know their local time zone, then answer from the UTC time above. Never guess the user's time zone, region or location, never name a time zone or offset you were not given, and do not show time zone arithmetic unless the user asks for it."
     );
   }
+  lines.push(clockInstruction(locale));
   lines.push(
     "This is the authoritative current time for this turn; it supersedes earlier current-time context, not timestamps in tool results.",
     "Stay consistent with the authoritative time for each turn: let the date and weekday move forward when the current time does, and do not flip-flop about the known time zone."
@@ -54,4 +55,14 @@ export function renderCurrentTimeContext(
   );
   lines.push("</current_time_context>");
   return lines.join("\n");
+}
+
+const CLOCK_EXAMPLE = new Date("2026-01-01T14:30:00.000Z");
+
+/** Tells the model to write times on the person's clock; it rewrites 24-hour times as AM/PM otherwise. */
+function clockInstruction(locale: LocaleSettingsDto): string {
+  const example = formatLocaleTime(CLOCK_EXAMPLE, { ...locale, timezone: "UTC" });
+  return locale.dateFormat === "12"
+    ? `Write clock times on the user's 12-hour clock with AM or PM, for example ${example}.`
+    : `Write clock times on the user's 24-hour clock, for example ${example}. Never use AM or PM.`;
 }
