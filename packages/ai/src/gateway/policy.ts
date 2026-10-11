@@ -1,7 +1,8 @@
 import type {
   ModuleAssistantToolManifest,
   ModuleAssistantActionFamilyManifest,
-  MossActionPermissionTier
+  MossActionPermissionTier,
+  ToolContext
 } from "@moss/module-sdk";
 
 export type PolicyDecision = "run" | "confirm";
@@ -162,7 +163,7 @@ export async function resolveFirstRunNotice(
 export function summarizeToolAction(
   tool: ModuleAssistantToolManifest,
   input: Record<string, unknown>,
-  ctx: { actorUserId: string; requestId: string; chatSessionId: string; localTimezone?: string }
+  ctx: ToolContext
 ): string {
   if (typeof tool.summarize === "function") {
     return tool.summarize(input, ctx);

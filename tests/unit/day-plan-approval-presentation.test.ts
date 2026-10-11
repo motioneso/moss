@@ -42,14 +42,33 @@ describe("day-plan human disclosure", () => {
     const view = await createDayPlanPresentation(
       db,
       route({ date: "2026-10-08", timeZone: "UTC", sourceRunId: "run-id" }),
-      ctx
+      {
+        ...ctx,
+        locale: { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "24" }
+      }
     );
     expect(view?.target).toBe("Day plan · 2026-10-08 · UTC");
     expect(view?.fields).toContainEqual({
       label: "Briefing",
-      value: "Morning · 2026-10-07T08:00:00.000Z"
+      value: "Morning · Oct 7, 2026, 01:00"
     });
     expect(JSON.stringify(view)).not.toContain("run-id");
+  });
+  it("shows the briefing time in the person's 12-hour choice, and the default locale without one", async () => {
+    const body = { date: "2026-10-08", timeZone: "UTC", sourceRunId: "run-id" };
+    const twelve = await createDayPlanPresentation(db, route(body), {
+      ...ctx,
+      locale: { timezone: "America/Los_Angeles", region: "en-US", dateFormat: "12" }
+    });
+    expect(twelve?.fields).toContainEqual({
+      label: "Briefing",
+      value: "Morning · Oct 7, 2026, 1:00 AM"
+    });
+    const fallback = await createDayPlanPresentation(db, route(body), ctx);
+    expect(fallback?.fields).toContainEqual({
+      label: "Briefing",
+      value: "Morning · Oct 7, 2026, 01:00"
+    });
   });
   it("fully represents nested tasks, corrections and commitments through owner-scoped names", async () => {
     const view = await saveDayPlanPresentation(

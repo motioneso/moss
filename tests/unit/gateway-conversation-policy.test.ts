@@ -394,7 +394,7 @@ describe("bound conversation policy at every gateway entry", () => {
     const h = build({
       tier: "ask_each_time",
       deps: {
-        resolveLocalTimezone: async () => {
+        resolveLocale: async () => {
           await waiting;
           return null;
         },

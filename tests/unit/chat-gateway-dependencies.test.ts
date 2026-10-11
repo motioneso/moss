@@ -91,7 +91,7 @@ describe("buildChatGatewayDependencies", () => {
   });
 });
 
-describe("buildChatGatewayDependencies → resolveLocalTimezone (#2157)", () => {
+describe("buildChatGatewayDependencies → resolveLocale (#2157, #3394)", () => {
   const runner = {
     withDataContext: async (_ctx: unknown, fn: (db: unknown) => unknown) => fn({})
   } as unknown as DataContextRunner;
@@ -112,25 +112,27 @@ describe("buildChatGatewayDependencies → resolveLocalTimezone (#2157)", () => 
     });
   }
 
-  it("returns the actor's stored timezone", async () => {
-    const deps = build({ timezone: "Europe/Berlin", region: "de-DE", dateFormat: "24" });
-    await expect(deps.resolveLocalTimezone!("user1")).resolves.toBe("Europe/Berlin");
+  it("returns the actor's stored locale", async () => {
+    const deps = build({ timezone: "Europe/Berlin", region: "de-DE", dateFormat: "12" });
+    await expect(deps.resolveLocale!("user1")).resolves.toEqual({
+      timezone: "Europe/Berlin",
+      region: "de-DE",
+      dateFormat: "12"
+    });
   });
 
   it("falls back to the same default GET /api/me/locale shows when nothing is stored", async () => {
     // Live defect: Settings showed America/Los_Angeles (route default) while the clock tool got
     // a blank context and answered in UTC. Both must agree.
     const deps = build(undefined);
-    await expect(deps.resolveLocalTimezone!("user1")).resolves.toBe(
-      DEFAULT_LOCALE_SETTINGS.timezone
-    );
+    await expect(deps.resolveLocale!("user1")).resolves.toEqual(DEFAULT_LOCALE_SETTINGS);
   });
 
   it("ignores an invalid stored zone instead of leaking it into tool context", async () => {
     const deps = build({ timezone: "Not/AZone" });
-    await expect(deps.resolveLocalTimezone!("user1")).resolves.toBe(
-      DEFAULT_LOCALE_SETTINGS.timezone
-    );
+    await expect(deps.resolveLocale!("user1")).resolves.toMatchObject({
+      timezone: DEFAULT_LOCALE_SETTINGS.timezone
+    });
   });
 
   it("is left unwired when no locale port is provided", () => {
@@ -143,7 +145,7 @@ describe("buildChatGatewayDependencies → resolveLocalTimezone (#2157)", () => 
       notifier: {} as SessionNotifier,
       collaborators: {}
     });
-    expect(deps.resolveLocalTimezone).toBeUndefined();
+    expect(deps.resolveLocale).toBeUndefined();
   });
 });
 

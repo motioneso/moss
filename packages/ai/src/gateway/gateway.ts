@@ -1,4 +1,5 @@
 import { emitInputValidationFailure } from "./validation-failure.js";
+import { localeContext } from "./locale-context.js";
 import { randomUUID } from "node:crypto";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
@@ -6,6 +7,7 @@ import type {
   ModuleAssistantToolManifest,
   MossModuleManifest,
   ToolContext,
+  ToolLocale,
   ToolResult,
   ToolServices
 } from "@moss/module-sdk";
@@ -129,12 +131,8 @@ export interface AssistantToolGatewayDependencies {
     readonly ctx: ToolContext;
     readonly execute: () => Promise<ToolResult>;
   }) => Promise<ToolResult>;
-  /**
-   * Returns the user's configured IANA timezone (e.g. "America/Chicago"), or null if unknown.
-   * Injected by the composition root; used to populate ToolContext.localTimezone so tools that
-   * format user-visible date/time strings (e.g. calendar approval cards) use the correct timezone.
-   */
-  readonly resolveLocalTimezone?: (actorUserId: string) => Promise<string | null>;
+  /** The person's effective locale; fills ToolContext.locale and localTimezone for user-visible times. */
+  readonly resolveLocale?: (actorUserId: string) => Promise<ToolLocale | null>;
   /**
    * Returns which web search engine is active for this actor: "brave" (the web.search tool calls
    * the Brave API directly), "model-native" (the web.search tool runs one structured search
@@ -390,7 +388,7 @@ export class AssistantToolGateway {
   > {
     const { actorUserId, chatSessionId, threadId, allowedToolNames } =
       this.deps.tokens.verify(token);
-    const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
+    const locale = (await this.deps.resolveLocale?.(actorUserId)) ?? undefined;
     let progressTool: ExecutableTool | undefined;
     let progressAdmission: Promise<void> | undefined;
     const ctx: ToolContext = {
@@ -398,7 +396,7 @@ export class AssistantToolGateway {
       requestId: `mcp_${randomUUID()}`,
       chatSessionId,
       ...(threadId ? { threadId } : {}),
-      localTimezone,
+      ...localeContext(locale),
       // Only the MCP transport passes a sink; every other caller sends nowhere.
       ...(onProgress
         ? {
@@ -572,12 +570,12 @@ export class AssistantToolGateway {
     if (!declared) return { ok: false, error: `Tool not available: ${toolName}` };
     const requestId = `cross-tool_${randomUUID()}`;
     const access: AccessContext = { actorUserId, requestId };
-    const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
+    const locale = (await this.deps.resolveLocale?.(actorUserId)) ?? undefined;
     const ctx: ToolContext = {
       actorUserId,
       requestId,
       chatSessionId: bound?.chatSessionId ?? "",
-      localTimezone,
+      ...localeContext(locale),
       ...(bound?.threadId ? { threadId: bound.threadId } : {})
     };
     const prepared = await prepareToolCall(
@@ -604,7 +602,8 @@ export class AssistantToolGateway {
         data: renderAndCap(
           found.tool.outputSchema,
           result,
-          toolHasOutsideContent(found.tool) ? found.tool.name : undefined
+          toolHasOutsideContent(found.tool) ? found.tool.name : undefined,
+          ctx
         )
       };
     } catch {

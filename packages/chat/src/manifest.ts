@@ -116,6 +116,13 @@ export const chatModuleManifest = {
   ],
   features: [
     {
+      id: "chat.time_context",
+      description:
+        "Chat tool results include references giving each timestamp's date and time in the person's time zone, region and 12/24-hour choice. " +
+        "Times without a reference keep the instruction to convert them. Original timestamps stay unchanged.",
+      featureFlagId: "chat.module"
+    },
+    {
       id: "chat.pending_action_disclosure",
       description:
         "App cards show exact server targets and human-readable changes. Memory and note deletion use red Approve. " +

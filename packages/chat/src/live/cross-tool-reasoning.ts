@@ -1,5 +1,10 @@
 import { neutralizeSeedFraming } from "./prompt-safety.js";
 import { estimateTokens } from "./recall-seed.js";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  formatLocaleDateTime,
+  type LocaleSettingsDto
+} from "@moss/shared";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -218,7 +223,7 @@ export function normalizeCalendarResult(
   data: Record<string, unknown>,
   query: string,
   localNowIso: string,
-  timezone = "UTC"
+  locale: LocaleSettingsDto = DEFAULT_LOCALE_SETTINGS
 ): CrossToolEvidenceItem[] {
   const events = Array.isArray(data.events) ? data.events : [];
   const qLower = query.toLowerCase();
@@ -248,11 +253,10 @@ export function normalizeCalendarResult(
       title,
       summary,
       sourceLabel: startsAt
-        ? `Calendar: ${new Date(startsAt).toLocaleString("en-US", {
-            timeZone: timezone,
+        ? `Calendar: ${formatLocaleDateTime(startsAt, locale, {
             month: "short",
             day: "numeric",
-            hour: "2-digit",
+            hour: "numeric",
             minute: "2-digit"
           })}`
         : "Calendar",
@@ -373,13 +377,13 @@ export async function collectCrossToolContext(
   plan: CrossToolReasoningPlan,
   reader: CrossToolReadRunner,
   localNowIso: string,
-  timezone = "UTC",
+  locale: LocaleSettingsDto = DEFAULT_LOCALE_SETTINGS,
   binding?: CrossToolTurnBinding
 ): Promise<string> {
   if (!plan.shouldRun || plan.sources.length === 0) return "";
 
   const allItems = await withDeadline(
-    runSourcesWithConcurrencyLimit(actorUserId, plan, reader, localNowIso, timezone, binding),
+    runSourcesWithConcurrencyLimit(actorUserId, plan, reader, localNowIso, locale, binding),
     TOTAL_TIMEOUT_MS
   ).catch(() => [] as CrossToolEvidenceItem[]);
 
@@ -396,13 +400,13 @@ export async function collectCrossToolContextAndItems(
   plan: CrossToolReasoningPlan,
   reader: CrossToolReadRunner,
   localNowIso: string,
-  timezone = "UTC",
+  locale: LocaleSettingsDto = DEFAULT_LOCALE_SETTINGS,
   binding?: CrossToolTurnBinding
 ): Promise<{ block: string; items: CrossToolEvidenceItem[] }> {
   if (!plan.shouldRun || plan.sources.length === 0) return { block: "", items: [] };
 
   const allItems = await withDeadline(
-    runSourcesWithConcurrencyLimit(actorUserId, plan, reader, localNowIso, timezone, binding),
+    runSourcesWithConcurrencyLimit(actorUserId, plan, reader, localNowIso, locale, binding),
     TOTAL_TIMEOUT_MS
   ).catch(() => [] as CrossToolEvidenceItem[]);
 
@@ -422,7 +426,7 @@ async function runSourcesWithConcurrencyLimit(
   plan: CrossToolReasoningPlan,
   reader: CrossToolReadRunner,
   localNowIso: string,
-  timezone = "UTC",
+  locale: LocaleSettingsDto = DEFAULT_LOCALE_SETTINGS,
   binding?: CrossToolTurnBinding
 ): Promise<CrossToolEvidenceItem[]> {
   const results: CrossToolEvidenceItem[] = [];
@@ -433,7 +437,7 @@ async function runSourcesWithConcurrencyLimit(
 
   const runOne = (source: CrossToolSource) => {
     const p = withDeadline(
-      fetchSource(actorUserId, source, plan.query, reader, localNowIso, timezone, binding),
+      fetchSource(actorUserId, source, plan.query, reader, localNowIso, locale, binding),
       PER_SOURCE_TIMEOUT_MS
     ).catch(() => [] as CrossToolEvidenceItem[]);
     inFlight.add(p);
@@ -470,7 +474,7 @@ async function fetchSource(
   query: string,
   reader: CrossToolReadRunner,
   localNowIso: string,
-  timezone = "UTC",
+  locale: LocaleSettingsDto = DEFAULT_LOCALE_SETTINGS,
   binding?: CrossToolTurnBinding
 ): Promise<CrossToolEvidenceItem[]> {
   const tools = SOURCE_TOOLS[source];
@@ -485,7 +489,7 @@ async function fetchSource(
     if (source === "notes") normalized = normalizeNotesResult(result.data, query);
     else if (source === "email") normalized = normalizeEmailResult(result.data, query);
     else if (source === "calendar")
-      normalized = normalizeCalendarResult(result.data, query, localNowIso, timezone);
+      normalized = normalizeCalendarResult(result.data, query, localNowIso, locale);
     else if (source === "tasks") normalized = normalizeTasksResult(result.data, toolName);
 
     items.push(...normalized);

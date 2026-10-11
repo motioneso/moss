@@ -7,7 +7,7 @@ describe("first-party Moss MCP transport", () => {
     const tokens = new SessionTokenRegistry();
     const createPendingAssistantAction = vi.fn();
     const emit = vi.fn();
-    const resolveLocalTimezone = vi.fn();
+    const resolveLocale = vi.fn();
     const yoloMode = vi.fn();
     const gateway = new AssistantToolGateway({
       // This fixture exercises ordinary policy on an explicitly clean conversation.
@@ -26,7 +26,7 @@ describe("first-party Moss MCP transport", () => {
       confirmations: new ConfirmationRegistry(),
       notifier: { emit },
       confirmTimeoutMs: 5,
-      resolveLocalTimezone,
+      resolveLocale,
       yoloMode
     });
     const token = tokens.mint({
@@ -44,7 +44,7 @@ describe("first-party Moss MCP transport", () => {
     ).resolves.toEqual({ decision: "allow", reason: "First-party Moss MCP transport." });
     expect(createPendingAssistantAction).not.toHaveBeenCalled();
     expect(emit).not.toHaveBeenCalled();
-    expect(resolveLocalTimezone).not.toHaveBeenCalled();
+    expect(resolveLocale).not.toHaveBeenCalled();
     expect(yoloMode).not.toHaveBeenCalled();
   });
 
@@ -84,7 +84,7 @@ describe("first-party Moss MCP transport", () => {
       transitions += 1;
       return { ...action };
     });
-    const resolveLocalTimezone = vi.fn(async () => null);
+    const resolveLocale = vi.fn(async () => null);
     const gateway = new AssistantToolGateway({
       // This fixture exercises ordinary policy on an explicitly clean conversation.
       provenance: {
@@ -110,7 +110,7 @@ describe("first-party Moss MCP transport", () => {
       confirmations: new ConfirmationRegistry(),
       notifier: { emit: () => undefined },
       confirmTimeoutMs: 1,
-      resolveLocalTimezone
+      resolveLocale
     });
     const token = tokens.mint({
       threadId: "clean-thread",
@@ -130,7 +130,7 @@ describe("first-party Moss MCP transport", () => {
     expect(expireAssistantAction).toHaveBeenCalled();
     expect(transitions).toBe(1);
     expect(action?.status).toBe("timed_out");
-    expect(resolveLocalTimezone).toHaveBeenCalledOnce();
+    expect(resolveLocale).toHaveBeenCalledOnce();
   });
 });
 
