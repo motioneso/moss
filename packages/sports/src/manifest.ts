@@ -221,7 +221,8 @@ export const sportsModuleManifest = {
     {
       id: "sports",
       label: "Sports",
-      description: "Follow scores, schedules, and standings for selected teams.",
+      description:
+        "Follow selected teams, scores, schedules and standings. Initial loading and read failures are distinct from a quiet day; failed reads offer Retry.",
       path: "/sports",
       icon: "trophy",
       order: 35,

@@ -29,6 +29,13 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve };
 }
 
+function namedButtonTag(html: string, label: string): string {
+  return (
+    (html.match(/<button\b[^>]*>/g) ?? []).find((tag) => tag.includes(`aria-label="${label}"`)) ??
+    ""
+  );
+}
+
 function renderWithQuery(client: QueryClient): string {
   return renderToString(
     createElement(QueryClientProvider, { client }, createElement(SportsSettings))
@@ -104,7 +111,12 @@ describe("SportsSettings", () => {
     client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
     client.setQueryData(FOLLOWS_KEY, { follows: [] });
     const html = renderWithQuery(client);
-    expect(html).toContain("sp-search__input");
+    const search = (html.match(/<input\b[^>]*>/g) ?? []).find((tag) =>
+      tag.includes('aria-label="Find a team or league"')
+    );
+    expect(search).toContain('type="search"');
+    expect(search).toContain('class="jds-input"');
+    expect(html).toContain('aria-expanded="false" aria-controls="sp-browse-panel"');
     // ...and the old flat search hint is gone.
     expect(html).not.toContain("Search above to find teams or leagues to follow.");
   });
@@ -569,8 +581,10 @@ describe("SportsSettings", () => {
     expect(html).toContain("sp-summary");
     expect(html).toContain("sp-chip");
     expect(html).toContain("ARS");
-    // removable affordance present
-    expect(html).toContain("sp-chip__remove");
+    // The shared remove control keeps the followed team's exact accessible action.
+    const remove = namedButtonTag(html, "Unfollow ARS");
+    expect(remove).toContain("jds-iconbtn");
+    expect(remove).not.toContain('disabled=""');
   });
 
   it("renders a whole-league follow as an All-league chip", () => {
@@ -607,8 +621,10 @@ describe("SportsSettings", () => {
     });
     const html = renderWithQuery(client);
     expect(html).toContain("Unrecognized league (xyz.retired)");
-    // still removable
-    expect(html).toContain("sp-chip__remove");
+    // The retired league remains removable even though it is absent from the catalog.
+    const remove = namedButtonTag(html, "Unfollow Unrecognized league (xyz.retired)");
+    expect(remove).toContain("jds-iconbtn");
+    expect(remove).not.toContain('disabled=""');
   });
 
   it("leagueMatches returns competitions whose label matches the query", () => {
@@ -683,7 +699,13 @@ describe("follow key mismatch on a colliding team (Ben, dev, 2026-09-04)", () =>
     );
     expect(html).toContain('aria-label="Unfollow Pacific Tigers"');
     expect(html).toContain('aria-label="Follow Pacific Lutheran Lutes"');
-    expect(html.match(/sp-team is-active/g)).toHaveLength(1);
+    const tigers = namedButtonTag(html, "Unfollow Pacific Tigers");
+    const lutes = namedButtonTag(html, "Follow Pacific Lutheran Lutes");
+    expect(tigers).toContain('aria-pressed="true"');
+    expect(tigers).toContain("jds-btn--active");
+    expect(lutes).toContain('aria-pressed="false"');
+    expect(lutes).not.toContain("jds-btn--active");
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
   });
 
   it("resolves the tile back to the saved follow, so the next click unfollows instead of re-following", () => {
@@ -728,7 +750,7 @@ describe("follow key mismatch on a colliding team (Ben, dev, 2026-09-04)", () =>
   });
 });
 
-describe("is-active styling coverage (#691)", () => {
+describe("shared selected-state coverage (#691)", () => {
   const followed = indexFollows([
     {
       id: "f1",
@@ -739,7 +761,7 @@ describe("is-active styling coverage (#691)", () => {
     }
   ]);
 
-  it("marks a followed team is-active in search results, unfollowed team not", () => {
+  it("marks a followed team selected in search results", () => {
     const html = renderToString(
       createElement(SearchResults, {
         query: "ars",
@@ -753,11 +775,13 @@ describe("is-active styling coverage (#691)", () => {
         actionState: null
       })
     );
-    expect(html).toContain("is-active");
-    expect(html).toMatch(/sp-team is-active/);
+    const followedButton = namedButtonTag(html, "Unfollow Arsenal");
+    expect(followedButton).toContain("jds-btn--chip");
+    expect(followedButton).toContain("jds-btn--active");
+    expect(followedButton).toContain('aria-pressed="true"');
   });
 
-  it("does not mark an unfollowed team is-active", () => {
+  it("does not mark an unfollowed team selected", () => {
     const html = renderToString(
       createElement(SearchResults, {
         query: "ars",
@@ -771,7 +795,10 @@ describe("is-active styling coverage (#691)", () => {
         actionState: null
       })
     );
-    expect(html).not.toContain("is-active");
+    const unfollowedButton = namedButtonTag(html, "Follow Arsenal");
+    expect(unfollowedButton).toContain("jds-btn--chip");
+    expect(unfollowedButton).toContain('aria-pressed="false"');
+    expect(unfollowedButton).not.toContain("jds-btn--active");
   });
 
   it("SearchResults shows a partial-coverage note without swallowing existing results", () => {

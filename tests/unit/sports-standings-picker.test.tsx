@@ -216,6 +216,7 @@ describe("standings picker", () => {
       "[aria-label='Select standings league']"
     )!;
     expect(trigger.textContent).toBe("NBA");
+    expect(trigger.classList.contains("jds-btn--field")).toBe(true);
 
     await act(async () => {
       trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
@@ -223,6 +224,9 @@ describe("standings picker", () => {
     expect(container.textContent).toContain("Following");
     expect(container.textContent).not.toContain("England");
     expect(document.activeElement?.textContent).toBe("NBA");
+    expect(document.activeElement?.classList.contains("jds-btn--quiet")).toBe(true);
+    expect(document.activeElement?.getAttribute("role")).toBe("menuitemradio");
+    expect(document.activeElement?.getAttribute("aria-checked")).toBe("true");
 
     await act(async () => {
       document.activeElement?.dispatchEvent(
@@ -310,6 +314,7 @@ describe("standings picker", () => {
         .click()
     );
     expect(trigger.textContent).toBe("Premier League");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(trigger);
   });
 
@@ -389,6 +394,14 @@ describe("standings picker", () => {
     await renderSettings(client);
     expect(container!.querySelector("select")).toBeNull();
     // Collapsed by default: the header carries the count, the checklist is hidden.
+    expect(container!.querySelector(".sp-standings-tree")?.classList.contains("jds-card")).toBe(
+      false
+    );
+    expect(
+      container!
+        .querySelector(".sp-standings-settings__toggle")
+        ?.classList.contains("jds-disclosure")
+    ).toBe(true);
     expect(container!.querySelector(".sp-standings-settings__toggle")?.textContent).toContain(
       "1 of 3"
     );

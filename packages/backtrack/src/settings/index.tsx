@@ -168,6 +168,7 @@ export default function BacktrackSettings() {
       desc="Deleting is permanent, and it works whether or not a Mac is linked."
     >
       <Row
+        className="set-row--stack-narrow"
         name="Delete recent history"
         desc="Removes what Backtrack kept in that time, for you only."
         control={
@@ -232,6 +233,7 @@ export default function BacktrackSettings() {
       />
       {choosingDay ? (
         <Row
+          className="set-row--stack-narrow"
           name="Delete one day"
           desc="The day runs from midnight to midnight in this browser's time zone."
           control={
