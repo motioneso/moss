@@ -277,9 +277,20 @@ put an approval card on every write, even under YOLO. In a tainted conversation:
 | A call over the user's per-call limit (`confirmAbove`, e.g. Finance freedom limit) | asks                 |
 | Moss's own rating: classifier `runsWithoutAsking` on a connected tool              | asks                 |
 | Moss's own rating: a per-call `app.callAction` write without YOLO                  | asks                 |
-| `outbound` risk, any trust                                                         | asks                 |
+| `outbound` risk without YOLO                                                       | asks                 |
+| `outbound` risk under YOLO, where YOLO would run it in a clean conversation        | runs                 |
 | `destructive` risk, any trust                                                      | asks                 |
-| `confirmWhenTainted` call (e.g. an outbound GET through the app)                   | asks                 |
+| `confirmWhenTainted` call (e.g. an outbound GET through the app) without YOLO      | asks                 |
+| `confirmWhenTainted` call under YOLO                                               | runs                 |
+| `forceConfirm` or a per-call `requiresConfirmation` result, any trust              | asks                 |
+
+**YOLO ruling (Ben, 2026-10-11, #3417): "I don't want it to ask for approvals for pretty much
+everything when YOLO mode is on."** Under YOLO a durable outside-content mark changes almost no decision.
+A marked conversation runs what YOLO runs in a clean one, except ACP shell and destructive requests
+(below): integration tools (all `outbound`),
+outbound app GETs, and ordinary writes. Non-external first-party `outbound` tools and destructive
+tools still ask, as they do under YOLO in a clean conversation. Without YOLO the table above is
+unchanged.
 
 The quick-pick classifier path follows the same table, so a trusted write it picks runs in a marked
 conversation. A trusted write in a tainted conversation dispatches directly. It skips the clean-conversation
@@ -287,14 +298,20 @@ claim that automatic runs use, because that claim exists to refuse tainted conve
 runs past a durable outside-content mark only (`isMarked`). A missing or foreign binding, an
 unreadable provenance row, or another automatic run holding the conversation still asks.
 
-Outbound tools keep the floor because they send data to arbitrary destinations. Add-on module
-writes can also reach the hosts their manifest declares (Finance to Plaid, Job search to its job
-boards). Under user trust, injected text in a tainted conversation could steer such a write to
-send private data to one of those hosts without a card. Ben has not ruled on this exposure; it is
-raised for his decision on #3338. Host pinning limits it to hosts the user accepted at install.
+Without YOLO, outbound tools keep the floor because they send data to arbitrary destinations.
+Add-on module writes can still reach the hosts their manifest declares when a no-ask action group
+trusts them. Ben has not ruled on that non-YOLO exposure; it is raised for his decision on #3338.
+Under YOLO the user has accepted the exposure (#3417): injected text in a marked conversation can
+steer a connected tool, an outbound GET or an add-on module write (Finance to Plaid, Job search to
+its job boards) to send private data out without a card. Host pinning still limits module writes
+to hosts the user accepted at install.
 
-The launch taint itself is unchanged, so native and ACP built-in permissions (file edits, shell,
-web) still ask in a tainted conversation.
+The launch taint itself is unchanged. Without YOLO, native and ACP built-in permissions (file
+edits, shell, web) still ask in a tainted conversation. Under YOLO a durable mark no longer raises
+their floor: ACP writes and web fetches, folder-policy asks other than shell, and native workspace
+file edits run as they would in a clean conversation, skipping the clean-conversation claim. ACP
+shell and any destructive request (delete, move, execute kinds) keep the tainted floor. Any taint
+other than a durable mark still asks on every path.
 
 **Content declarations.** The five originally identified tools were not the complete boundary.
 Every built-in read tool now declares `content: "user_authored" | "outside"`, enforced at API boot.

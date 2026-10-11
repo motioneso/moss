@@ -545,6 +545,7 @@ function boundGateway(
       }
     ]
   };
+  const claims = provenance.runAutomatic ? vi.spyOn(provenance, "runAutomatic") : undefined;
   const tokens = new SessionTokenRegistry();
   const confirmations = new ConfirmationRegistry();
   const records: GatewaySessionRecord[] = [];
@@ -572,7 +573,16 @@ function boundGateway(
     chatSessionId: randomUUID(),
     allowedToolNames: null
   });
-  return { gateway, token, records, calls };
+  return { gateway, token, records, calls, claims };
+}
+
+/** Under YOLO a write past a durable mark runs on the user's trust, without the clean claim (#3417). */
+async function expectRunsPastMark(h: ReturnType<typeof boundGateway>) {
+  expect(await h.gateway.callTool(h.token, "provenance-test.write", {})).toMatchObject({
+    ok: true
+  });
+  expect(h.calls).toHaveBeenCalledOnce();
+  expect(h.claims).not.toHaveBeenCalled();
 }
 
 async function expectPending(h: ReturnType<typeof boundGateway>) {
@@ -601,23 +611,29 @@ describe("gateway decisions use durable token-bound conversation state", () => {
     const inFlight = boundGateway(ids.userA, a.id);
     await asActor(ids.userA, (db) => threads.touchThread(db, b.id));
     expect(await store.isTainted(ids.userA, b.id)).toBe(false);
-    await expectPending(inFlight);
+    await expectRunsPastMark(inFlight);
     const clean = boundGateway(ids.userA, b.id);
     expect(await clean.gateway.callTool(clean.token, "provenance-test.write", {})).toMatchObject({
       ok: true
     });
     expect(clean.calls).toHaveBeenCalledOnce();
+    expect(clean.claims).toHaveBeenCalledOnce();
   });
 
   it.each(["execute", "dry-run"] as const)(
-    "gate %s declines tainted, missing and foreign bindings",
+    "gate %s runs past the owner's durable mark and declines missing and foreign bindings",
     async (mode) => {
       const a = await create();
       const cleanForeign = await create();
       expect(await store.isTainted(ids.userA, cleanForeign.id)).toBe(false);
       await store.recordAdmission(ids.userA, a.id, "attachment_read");
+      const marked = boundGateway(ids.userA, a.id);
+      expect(
+        await marked.gateway.callToolForGate(marked.token, "provenance-test.write", {}, mode)
+      ).toMatchObject(mode === "execute" ? { kind: "executed" } : { kind: "would_run" });
+      expect(marked.calls).toHaveBeenCalledTimes(mode === "execute" ? 1 : 0);
+      expect(marked.claims).not.toHaveBeenCalled();
       for (const [actor, thread] of [
-        [ids.userA, a.id],
         [ids.userA, null],
         [ids.userB, cleanForeign.id]
       ] as const) {
@@ -652,8 +668,8 @@ describe("gateway decisions use durable token-bound conversation state", () => {
   it("uses the same durable taint in a restarted gateway and token manager", async () => {
     const a = await create();
     await store.recordAdmission(ids.userA, a.id, "app_action_outside");
-    await expectPending(boundGateway(ids.userA, a.id));
-    await expectPending(boundGateway(ids.userA, a.id));
+    await expectRunsPastMark(boundGateway(ids.userA, a.id));
+    await expectRunsPastMark(boundGateway(ids.userA, a.id));
   });
 
   it("the foreign-binding gateway assertion fails for a deliberately leaky clean-row lookup", async () => {
@@ -688,6 +704,7 @@ describe("gateway decisions use durable token-bound conversation state", () => {
     const h = boundGateway(ids.userA, a.id, () =>
       store.recordAdmission(ids.userA, a.id, "attachment_read")
     );
-    await expectPending(h);
+    // A stale clean read would take the claim, which the store refuses once the thread is marked.
+    await expectRunsPastMark(h);
   });
 });

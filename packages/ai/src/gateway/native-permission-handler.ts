@@ -13,7 +13,8 @@ import { nativePolicyOutcomeTitle } from "./native-policy-outcome-title.js";
 import {
   CONTEXT_ADMISSION_UNAVAILABLE,
   recordContextAdmission,
-  runAutomaticAction
+  runAutomaticAction,
+  runTrustedAction
 } from "./content-admission.js";
 import {
   approvalRefusalReason,
@@ -70,12 +71,14 @@ export async function requestNativeToolPermission(
         return false;
       }
     })());
-  const yoloGranted = yoloAllows && !(await isConversationTainted(deps.provenance, ctx));
+  // Under YOLO a durable outside-content mark does not ask (#3417). Any other taint does.
+  const tainted = yoloAllows && (await isConversationTainted(deps.provenance, ctx));
+  const userTrusted = tainted && (await isConversationMarked(deps.provenance, ctx));
 
-  if (yoloGranted) {
+  if (yoloAllows && (!tainted || userTrusted)) {
     // Reserve the permission decision and create its pending record. A final grant is only
     // truthful after admission succeeds; the native operation itself remains unobserved.
-    const automatic = await runAutomaticAction(deps.provenance, ctx, () =>
+    const reserve = () =>
       deps.runner.withDataContext(access, async (scopedDb: DataContextDb) => {
         const pending = await deps.repository.createPendingAssistantAction(scopedDb, {
           chatThreadId: ctx.threadId,
@@ -90,8 +93,10 @@ export async function requestNativeToolPermission(
           requestId
         });
         return pending;
-      })
-    );
+      });
+    const automatic = userTrusted
+      ? await runTrustedAction(reserve)
+      : await runAutomaticAction(deps.provenance, ctx, reserve);
     if (automatic.kind === "failed")
       return { decision: "deny", reason: CONTEXT_ADMISSION_UNAVAILABLE };
     if (automatic.kind === "ran") {

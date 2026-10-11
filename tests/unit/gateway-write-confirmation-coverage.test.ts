@@ -291,7 +291,7 @@ describe("the user's trust after outside content", () => {
     }
   });
 
-  it("names outside content on a connected outbound write YOLO runs in a clean chat", async () => {
+  it("runs a connected outbound write past the mark under YOLO, as in a clean chat", async () => {
     const tool = admissionTool("connected.outbound", {
       risk: "outbound",
       isExternal: true,
@@ -301,7 +301,15 @@ describe("the user's trust after outside content", () => {
     expect(await runsInCleanChat(module, tool, true)).toBe(true);
     const h = setup(module, tool, true);
     await admitOutside(h);
-    await expectWriteHeld(h, true);
+    const claims = h.runAutomatic.mock.calls.length;
+    expect(await h.gateway.callToolForGate(h.token, tool.name, {}, "dry-run")).toEqual({
+      kind: "would_run",
+      approvalMode: "yolo"
+    });
+    expect(await h.gateway.callTool(h.token, tool.name, {})).toMatchObject({ ok: true });
+    expect(h.execute).toHaveBeenCalledOnce();
+    expect(h.runAutomatic).toHaveBeenCalledTimes(claims);
+    expect(h.createPending).not.toHaveBeenCalled();
   });
 });
 
