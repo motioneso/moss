@@ -455,12 +455,6 @@ button.module-link {
   font-size: 0.9rem;
 }
 
-.workspace-area {
-  min-width: 0;
-  display: grid;
-  grid-template-rows: auto 1fr;
-}
-
 .topbar {
   min-height: var(--topbar-h);
   display: flex;
@@ -597,43 +591,6 @@ button.module-link {
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-}
-
-.content-surface {
-  min-width: 0;
-  padding: var(--space-7) var(--space-6);
-}
-
-/* #1756: wraps the page + (when open on the caller's own running draft) the docked chat drawer.
-   Plain block by default — identical to `.content-surface` filling the row on its own. */
-.workspace-body {
-  min-width: 0;
-}
-
-@media (min-width: 721px) {
-  .workspace-body--docked {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 380px;
-    align-items: stretch;
-    height: calc(100dvh - var(--topbar-h));
-    overflow: hidden;
-  }
-
-  .workspace-body--docked .content-surface {
-    overflow-y: auto;
-    height: 100%;
-  }
-
-  /* Expanded chat replaces the topbar and page, so it takes the full window height. */
-  .topbar[hidden],
-  .workspace-body--expanded .content-surface[hidden] {
-    display: none;
-  }
-
-  .workspace-body--expanded {
-    grid-template-columns: minmax(0, 1fr);
-    height: 100dvh;
-  }
 }
 
 /* Today editorial empty-state line */
@@ -959,10 +916,6 @@ button.module-link {
 }
 
 @media (max-width: 560px) {
-  .content-surface {
-    padding: 0.75rem;
-  }
-
   .note-create-form,
   .note-detail-form {
     grid-template-columns: 1fr;
