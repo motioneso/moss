@@ -308,7 +308,7 @@ test.describe("#3065 real-model app approval paths (owner opt-in)", () => {
     });
 
     let drawer = await openProofScreen(page);
-    let nativeThreadId = "";
+    let nativeThreadId: string | undefined;
     await test.step("the model's own native file read is followed by an approval", async () => {
       const turn = await startTurn(
         page,
@@ -440,6 +440,7 @@ test.describe("#3065 real-model app approval paths (owner opt-in)", () => {
         "What proof phrase did we choose for the 3065 launch picnic? Answer from automatic context only; do not call any tools or change settings."
       );
       const proof = await readTurnProof(page, await turn.completion);
+      expect(nativeThreadId, "the native step must record its thread").toBeDefined();
       expect(proof.threadId, "recall must run in the new side chat").not.toBe(nativeThreadId);
       expect(proof.message.body).toContain(recallFact);
       expect(

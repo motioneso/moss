@@ -6,8 +6,8 @@ interface SpecRules {
   /** The call that starts the side chat, and the send it must precede. */
   readonly start: string;
   readonly send: string;
-  /** The check that the side chat's turn landed in a different conversation. */
-  readonly freshThread: RegExp;
+  /** The checks that both thread ids exist and the side chat's turn landed in a different one. */
+  readonly freshThread: readonly RegExp[];
   readonly screenshots: number;
   readonly extra: (text: string) => string[];
   /** Every assertion the move to the Conversations controls must keep, verbatim, with its count. */
@@ -18,7 +18,11 @@ const APP_ACTIONS: SpecRules = {
   file: "3065-app-actions-real.uat.spec.ts",
   start: "await startSideChat(page, drawer);",
   send: 'const turn = await startTurn(\n        page,\n        drawer,\n        "What proof phrase',
-  freshThread: /expect\(proof\.threadId, "[^"]+"\)\.not\.toBe\(nativeThreadId\);/,
+  freshThread: [
+    /\n {6}nativeThreadId = proof\.threadId;\n/,
+    /expect\(nativeThreadId, "[^"]+"\)\.toBeDefined\(\);/,
+    /expect\(proof\.threadId, "[^"]+"\)\.not\.toBe\(nativeThreadId\);/
+  ],
   screenshots: 0,
   extra: (text) => {
     const found: string[] = [];
@@ -70,7 +74,11 @@ const BRIEFING: SpecRules = {
   file: "2809-briefing-rerun-from-chat.uat.spec.ts",
   start: "await startSideChat(page, dialog);",
   send: "const second = await ask(dialog, RERUN_ASK);",
-  freshThread: /expect\(await drawerThreadId\(page\), "[^"]+"\)\.not\.toBe\(\s*firstThread\s*\);/,
+  freshThread: [
+    /expect\(firstThread\)\.toBeDefined\(\);/,
+    /expect\(secondThread\)\.toBeDefined\(\);/,
+    /expect\(secondThread, "[^"]+"\)\.not\.toBe\(firstThread\);/
+  ],
   screenshots: 3,
   extra: () => [],
   kept: [
@@ -107,6 +115,11 @@ function problems(rules: SpecRules, text: string): string[] {
   if (sides.length !== opens.length) found.push("an overlay open does not start a side chat");
 
   const helper = /async function startSideChat\([^)]*\)[\s\S]*?\n}\n/.exec(text)?.[0] ?? "";
+  const listen = helper.indexOf("page.waitForResponse(");
+  const click = helper.indexOf('name: "New side chat"');
+  if (listen < 0 || click < 0 || listen > click) {
+    found.push("side chat listens for the clear after clicking");
+  }
   if (!/url\.pathname === "\/api\/chat\/clear"/.test(helper)) {
     found.push("side chat does not wait for the drawer clear");
   }
@@ -125,7 +138,9 @@ function problems(rules: SpecRules, text: string): string[] {
   if (start < 0 || send < 0 || start > send || text.lastIndexOf(rules.start) !== start) {
     found.push("does not start exactly one side chat before the next send");
   }
-  if (!rules.freshThread.test(text)) found.push("does not prove the side chat is a new thread");
+  if (!rules.freshThread.every((check) => check.test(text))) {
+    found.push("does not prove the side chat is a new thread");
+  }
 
   const direct = text.match(/\.screenshot\(/g) ?? [];
   const guarded =
@@ -211,8 +226,29 @@ describe.each([APP_ACTIONS, BRIEFING])("$file on the Conversations controls (#32
     });
 
     it("no proof of a new thread", async () => {
-      expect(await mutate(rules, rules.freshThread, "")).toContain(
-        "does not prove the side chat is a new thread"
+      for (const check of rules.freshThread) {
+        expect(await mutate(rules, check, "\n")).toContain(
+          "does not prove the side chat is a new thread"
+        );
+      }
+    });
+
+    it("listening for the clear only after clicking", async () => {
+      const text = await source(rules.file);
+      const helper = /async function startSideChat\([^)]*\)[\s\S]*?\n}\n/.exec(text)![0];
+      const click =
+        /\n {2}await [a-z]+\.getByRole\("button", \{ name: "New side chat"[^\n]*\n/.exec(
+          helper
+        )![0];
+      const late = helper
+        .replace(click, "\n")
+        .replace(
+          "\n  const cleared = page.waitForResponse(",
+          `${click}  const cleared = page.waitForResponse(`
+        );
+      expect(late).not.toBe(helper);
+      expect(problems(rules, text.replace(helper, late))).toContain(
+        "side chat listens for the clear after clicking"
       );
     });
 

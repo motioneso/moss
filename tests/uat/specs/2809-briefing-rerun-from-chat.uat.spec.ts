@@ -234,9 +234,9 @@ test("chat re-runs the evening briefing once and reports it ready (#2809)", asyn
     // from memory and has to call the tool: already running, and still exactly one open job.
     await startSideChat(page, dialog);
     const second = await ask(dialog, RERUN_ASK);
-    expect(await drawerThreadId(page), "the second ask must run in the new side chat").not.toBe(
-      firstThread
-    );
+    const secondThread = await drawerThreadId(page);
+    expect(secondThread).toBeDefined();
+    expect(secondThread, "the second ask must run in the new side chat").not.toBe(firstThread);
     await expect(rerunOutcome).toHaveCount(1);
     await expect(rerunOutcome).toBeVisible();
     await expect(
