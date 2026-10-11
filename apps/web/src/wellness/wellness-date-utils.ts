@@ -65,3 +65,13 @@ export function recentMoodAverage(
     ) / 10
   );
 }
+
+/** A conservative instant bound before the oldest local day; callers filter by local day.
+ * Padding one calendar day includes the leading edge in every supported IANA timezone.
+ * This bounds the time window without capping the number of observations in it.
+ */
+export function checkinWindowSince(oldestLocalDay: string): string {
+  return new Date(
+    new Date(`${oldestLocalDay}T00:00:00.000Z`).getTime() - 24 * 60 * 60 * 1000
+  ).toISOString();
+}
