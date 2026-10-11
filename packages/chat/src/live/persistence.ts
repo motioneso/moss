@@ -9,7 +9,7 @@
  * episodic-embed job (unless the thread is incognito).
  */
 import type { AiConfiguredModelSafeRow, AiRepository, ProviderKind } from "@moss/ai";
-import { extractTimezone, resolveEffectiveTimezone } from "../locale-utils.js";
+import { extractTimezone, resolveClockFormat, resolveEffectiveTimezone } from "../locale-utils.js";
 import { sql, type Kysely } from "kysely";
 import {
   assertDataContextDb,
@@ -517,7 +517,17 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         "reminder" in turn
           ? await decideReminderTurn(
               scopedDb,
-              { reminders: this.reminders, boss: this.boss },
+              {
+                reminders: this.reminders,
+                boss: this.boss,
+                locale: async () => {
+                  const raw = await this.localePreferences?.get(scopedDb, "locale");
+                  return {
+                    timeZone: resolveEffectiveTimezone(raw),
+                    clockFormat: resolveClockFormat(raw)
+                  };
+                }
+              },
               actorUserId,
               thread,
               turn.reminder

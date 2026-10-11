@@ -73,7 +73,8 @@ export const chatModuleManifest = {
       "sql/0307_chat_summary_worker_publish.sql",
       "sql/0308_chat_reminder_cancel.sql",
       "sql/0309_chat_reminder_context_acknowledged.sql",
-      "sql/0310_chat_live_turns.sql"
+      "sql/0310_chat_live_turns.sql",
+      "sql/0311_chat_local_clock_reminders.sql"
     ],
     migrationDirectories: ["packages/chat/sql"],
     ownedTables: [
@@ -208,8 +209,84 @@ export const chatModuleManifest = {
       description:
         "In Main chat, 'remind me in 10 minutes to stretch' saves a reminder Moss posts once in Main, " +
         "noting if late; its next reply knows it and frees the slot. Up to 20 at once, 30 days ahead. " +
-        "No clock times, repeats or private chats.",
+        "No deadline, repeats or private chats.",
       featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.clock_reminders",
+      description:
+        "In Main chat, 'remind me tomorrow at 9am to call Sam' saves a reminder for that time in your " +
+        "time zone, today, tonight or tomorrow only. Moss confirms it in your 12- or 24-hour clock and names the time zone. " +
+        "Repeats are not available.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "reminder_needs_am_pm",
+          class: "validation",
+          description:
+            "A bare hour like 'at 3' could be morning or afternoon, so Moss saves nothing. Say 3pm, 3am or 15:00."
+        },
+        {
+          code: "reminder_time_unclear",
+          class: "validation",
+          description:
+            "A request Moss cannot pin to one time, like 'tonight at 7am', 'at midnight', 'at 3ish' or 'at 3pm or 4pm', is refused and nothing is saved."
+        },
+        {
+          code: "reminder_day_unsupported",
+          class: "validation",
+          description:
+            "Weekdays, dates and repeats are refused and nothing is saved. Say today, tonight or tomorrow, or a time from now."
+        },
+        {
+          code: "reminder_time_passed",
+          class: "validation",
+          description:
+            "A time pinned to today that has already passed is refused. Say tomorrow. With no day word, a passed time means tomorrow."
+        },
+        {
+          code: "reminder_time_changes_with_clocks",
+          class: "validation",
+          description:
+            "On a daylight saving day, a time the clocks skip or show twice is refused and nothing is saved. Pick a time outside that hour."
+        },
+        {
+          code: "reminder_time_zone_wrong",
+          class: "prerequisite",
+          remediationRef: "chat.set_reminder_time_zone",
+          description:
+            "Clock times use the time zone in your profile. The confirmation names that zone. If it is not where you are, change the time zone in your profile."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.set_reminder_time_zone",
+          description:
+            "Set your time zone in Settings, Account & preferences, then cancel the reminder and set it again.",
+          path: "/settings?section=profile"
+        }
+      ]
+    },
+    {
+      id: "chat.reminder_deadline",
+      description:
+        "A clock reminder can carry a deadline: 'remind me at 3pm to call Sam, not after 4pm'. If Moss " +
+        "was offline at the due time, it posts once on return, marked late, but never after the deadline.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "reminder_deadline_invalid",
+          class: "validation",
+          description:
+            "A deadline must come after the reminder time and within 12 hours of it, and only clock-time reminders take one. Nothing is saved."
+        },
+        {
+          code: "reminder_skipped_after_deadline",
+          class: "transient",
+          description:
+            "Moss could not send a reminder before its deadline, usually because it was offline, so it was skipped and never posts. The list shows it as skipped."
+        }
+      ]
     },
     {
       id: "chat.reminder_live_arrival",
@@ -222,8 +299,9 @@ export const chatModuleManifest = {
     {
       id: "chat.reminder_list",
       description:
-        "In Main chat, 'list my reminders' shows reminders set in chat: waiting ones with time left, then " +
-        "up to 10 recent ones marked sent, cancelled or couldn't be sent. Task reminders are not included.",
+        "In Main chat, 'list my reminders' shows waiting chat reminders with time left or their clock " +
+        "time and deadline, then up to 10 recent ones: sent, sent late, cancelled, skipped past its " +
+        "deadline, or couldn't be sent. Not task reminders.",
       featureFlagId: "chat.module"
     },
     {
