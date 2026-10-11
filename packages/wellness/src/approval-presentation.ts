@@ -8,6 +8,7 @@ import {
   type ApprovalFieldPresenter,
   type RouteApprovalPresentation
 } from "@moss/module-sdk";
+import { DEFAULT_LOCALE_SETTINGS, formatLocaleDateTime } from "@moss/shared";
 
 const nullable =
   (present: ApprovalFieldPresenter): ApprovalFieldPresenter =>
@@ -42,7 +43,7 @@ const checkinFields: ApprovalFieldMap = {
 };
 
 export function checkinPresentation(update: boolean): RouteApprovalPresentation {
-  return async (db, input) => {
+  return async (db, input, ctx) => {
     assertDataContextDb(db);
     if (input.query && Object.keys(input.query).length) return null;
     if (Object.keys(input.params).length !== (update ? 1 : 0)) return null;
@@ -70,7 +71,7 @@ export function checkinPresentation(update: boolean): RouteApprovalPresentation 
       .executeTakeFirst();
     return row
       ? {
-          target: `Mood check-in from ${row.checked_in_at.toISOString()}`,
+          target: `Mood check-in from ${formatLocaleDateTime(row.checked_in_at, ctx.locale ?? DEFAULT_LOCALE_SETTINGS)}`,
           fields,
           version: JSON.stringify(row)
         }
