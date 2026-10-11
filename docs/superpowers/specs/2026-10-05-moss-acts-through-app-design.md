@@ -69,12 +69,12 @@ Facts the design rests on:
 
 Three new chat tools and one new gateway rule.
 
-| Piece                | Job                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------- |
-| `app.findAction`     | Search the route catalog by plain words; return matching routes with input shape      |
-| `app.readSource`     | Read a source file under an allowlisted root, so Moss can learn inputs a schema omits |
-| `app.callAction`     | Call one catalog route as the signed-in user, through the server's own front door     |
-| Outside-content rule | Any change in a conversation that has read outside content asks first                 |
+| Piece                | Job                                                                                      |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `app.findAction`     | Search the route catalog by plain words; return matching routes with input shape         |
+| `app.readSource`     | Read a source file under an allowlisted root, so Moss can learn inputs a schema omits    |
+| `app.callAction`     | Call one catalog route as the signed-in user, through the server's own front door        |
+| Outside-content rule | A change the user has not trusted asks first once the conversation reads outside content |
 
 Moss's loop: find the action, read the schema or the handler if needed, call it. Server validation
 rejects bad guesses with the same error the browser would get, and Moss corrects and retries.
@@ -192,12 +192,13 @@ the plan's seams step lists them with `file:line`.
 | Route class   | Conversation clean | Conversation has read outside content |
 | ------------- | ------------------ | ------------------------------------- |
 | `read`        | runs               | runs                                  |
-| `write`       | runs               | asks                                  |
+| `write`       | runs               | asks, unless the user trusted it      |
 | `destructive` | asks               | asks                                  |
 | `blocked`     | refused            | refused                               |
 
 This matches Ben's 2026-08-19 ruling that installed modules get normal use and only destructive
-actions ask. YOLO does not override the outside-content column or the destructive row.
+actions ask. YOLO never overrides the destructive row. Since #3338, YOLO does count as the user's
+trust in the outside-content column; see the trust ruling below.
 
 Auto runs share the gateway's existing rate limit (`gateway.ts:171`).
 
@@ -259,11 +260,41 @@ throws away (`session-runtime-helpers.ts:458-496`). Neither can hold this state.
 Taint lasts for the life of the conversation. A fresh user message does not clean it, because
 injected text stays in the model's context across turns. The model cannot clear it.
 
-At the policy decision boundary, a tainted conversation requires approval for writes. That includes
-Moss tools that normally run automatically (for example
-`settings.themeMode.set`, `settings/manifest.ts:480-490`) and the classifier gate's
-send-without-asking path. Native/ACP permission decisions have the explicitly qualified boundary
-in the current implementation ruling below.
+At the policy decision boundary, a tainted conversation requires approval for writes the user has
+not trusted. Native/ACP permission decisions have the explicitly qualified boundary in the current
+implementation ruling below.
+
+**Trust ruling (Ben, 2026-10-10, #3338; restated 2026-10-11 as "Let chat run small trusted
+writes"): the user's own trust beats the outside-content mark.**
+ACP agents admit outside content at launch, so every ACP chat starts tainted and the strict rule
+put an approval card on every write, even under YOLO. In a tainted conversation:
+
+| Write runs because                                                                 | Tainted conversation |
+| ---------------------------------------------------------------------------------- | -------------------- |
+| YOLO is on                                                                         | runs                 |
+| Its action family is `trusted_auto`, set by the user or granted at install         | runs                 |
+| A call within the user's per-call limit on such a family (e.g. a $50 Finance move) | runs                 |
+| A call over the user's per-call limit (`confirmAbove`, e.g. Finance freedom limit) | asks                 |
+| Moss's own rating: classifier `runsWithoutAsking` on a connected tool              | asks                 |
+| Moss's own rating: a per-call `app.callAction` write without YOLO                  | asks                 |
+| `outbound` risk, any trust                                                         | asks                 |
+| `destructive` risk, any trust                                                      | asks                 |
+| `confirmWhenTainted` call (e.g. an outbound GET through the app)                   | asks                 |
+
+The quick-pick classifier path follows the same table, so a trusted write it picks runs in a marked
+conversation. A trusted write in a tainted conversation dispatches directly. It skips the clean-conversation
+claim that automatic runs use, because that claim exists to refuse tainted conversations. Trust
+runs past a durable outside-content mark only (`isMarked`). A missing or foreign binding, an
+unreadable provenance row, or another automatic run holding the conversation still asks.
+
+Outbound tools keep the floor because they send data to arbitrary destinations. Add-on module
+writes can also reach the hosts their manifest declares (Finance to Plaid, Job search to its job
+boards). Under user trust, injected text in a tainted conversation could steer such a write to
+send private data to one of those hosts without a card. Ben has not ruled on this exposure; it is
+raised for his decision on #3338. Host pinning limits it to hosts the user accepted at install.
+
+The launch taint itself is unchanged, so native and ACP built-in permissions (file edits, shell,
+web) still ask in a tainted conversation.
 
 **Content declarations.** The five originally identified tools were not the complete boundary.
 Every built-in read tool now declares `content: "user_authored" | "outside"`, enforced at API boot.
@@ -273,10 +304,12 @@ that merely echo the user's own change. Notes and memory remain outside content.
 
 **Scope ruling (Ben, 2026-10-05): strict.** The user's own notes and memory taint like mail,
 because a note can hold clipped or forwarded text the user did not write. Automatic recall runs on
-most turns, so most changes in a chat will ask. Ben chose this as the starting point; loosening it
+most turns, so most untrusted changes in a chat will ask (trusted writes run, per the #3338 table
+above). Ben chose this as the starting point; loosening it
 (own notes exempt, or an "allow changes for this chat" choice) is a later change if it proves noisy.
 
-Cost: "read my mail and make a task for each" asks once per task. That is accepted for now. Batching
+Cost: "read my mail and make a task for each" asks once per task unless the user trusted task
+creation. That is accepted for now. Batching
 approvals is a later change if it proves noisy.
 
 ### Current Slice 7 implementation ruling (2026-10-06)
@@ -346,7 +379,10 @@ text, candidate labels, native paths or result content.
   `native_tool_result` before returning because later output is outside server observation.
 - ACP read/web/shell allows record their family paths at every observed allow exit. The ACP engine
   also records `outside_agent_launch` before launch because operations can arrive without a
-  permission ask. This conservative fallback is active. Server-side native/ACP reservations cover
+  permission ask. This conservative fallback is active. Since #3338 it no longer blocks writes the
+  user trusted (see the trust ruling above); it still gates built-in permissions and every write
+  the user has not trusted. Moss cannot see every read an outside agent makes, so the launch
+  record counts the same as an observed read. Server-side native/ACP reservations cover
   the observed permission/audit callback, not unobservable external-process completion.
 
 **Later owner-descriptor ruling (2026-10-06).** Integration trust uses the immutable connection

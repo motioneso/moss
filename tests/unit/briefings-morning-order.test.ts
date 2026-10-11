@@ -100,3 +100,22 @@ describe("tidyMorningSections (#2775)", () => {
     expect(out.indexOf("## Attend the workshop")).toBeLessThan(out.indexOf("## Prepare lunch"));
   });
 });
+
+describe("tidyMorningSections on a 24-hour clock (#3390)", () => {
+  const input = text(
+    "Headline.",
+    "## Cook dinner",
+    "Dinner is at 18:30.",
+    "## Join the standup",
+    "The standup starts at 09:15."
+  );
+
+  it("orders bare 24-hour times for a 24-hour person", () => {
+    const out = tidyMorningSections(input, TITLES, "24");
+    expect(out.indexOf("## Join the standup")).toBeLessThan(out.indexOf("## Cook dinner"));
+  });
+
+  it("leaves bare times alone for a 12-hour person", () => {
+    expect(tidyMorningSections(input, TITLES, "12")).toBe(input);
+  });
+});
