@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Note } from "@moss/settings-ui";
 import type { UsefulnessFeedbackDto } from "@moss/shared";
 
+import { formatDate, useUserLocale } from "../web/locale.js";
 import { sportsQueryKeys } from "../web/query-keys.js";
 import {
   listSportsStoryFeedback,
@@ -19,6 +20,7 @@ function metadataText(feedback: UsefulnessFeedbackDto, key: string): string | nu
 
 export function StoryPreferencesSection() {
   const queryClient = useQueryClient();
+  const locale = useUserLocale();
   const feedbackQuery = useQuery({
     queryKey: STORY_FEEDBACK_KEY,
     queryFn: listSportsStoryFeedback
@@ -71,7 +73,7 @@ export function StoryPreferencesSection() {
                   {source ? <span>{source}</span> : null}
                   {item.reason ? <span>{item.reason}</span> : null}
                   <time dateTime={item.updatedAt}>
-                    {new Date(item.updatedAt || item.createdAt).toLocaleDateString()}
+                    {formatDate(item.updatedAt || item.createdAt, locale)}
                   </time>
                 </div>
                 {isEditing ? (
