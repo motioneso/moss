@@ -5,7 +5,8 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 import type { AiAssistantActionDto, ListThemesResponse, MeResponse } from "@moss/shared";
-import { buildUatComposeArgs, UAT_PORT_RANGE_SIZE, UAT_PORT_RANGE_START } from "../provisioner.js";
+import { readClaimedWebPort } from "../provisioned-run.js";
+import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_ID } from "../seed/admin.js";
 import { requireUatBaseURL, requireUatProjectName, signInUatAdmin } from "./real-chat-signin.js";
 import {
@@ -15,6 +16,7 @@ import {
   APP_ACTION_THEME_PATH,
   themePutEvidence
 } from "./app-actions-fixture.js";
+import { disposableStackProblems } from "./app-actions-real-proof.js";
 
 export const uatLevel = {
   level: "solo-admin",
@@ -45,14 +47,14 @@ test("an approved app action changes a named theme once, without reload, across 
   page
 }) => {
   test.setTimeout(300_000);
-  const baseURL = new URL(requireUatBaseURL());
-  expect(baseURL.protocol).toBe("http:");
-  expect(baseURL.hostname).toBe("127.0.0.1");
-  expect(Number(baseURL.port)).toBeGreaterThanOrEqual(UAT_PORT_RANGE_START);
-  expect(Number(baseURL.port)).toBeLessThan(UAT_PORT_RANGE_START + UAT_PORT_RANGE_SIZE);
-  expect(baseURL.username + baseURL.password + baseURL.search + baseURL.hash).toBe("");
-  expect(baseURL.pathname).toBe("/");
-  expect(requireUatProjectName()).toMatch(/^uat-\d+_[0-9a-f]{8}$/);
+  expect(
+    disposableStackProblems({
+      baseURL: requireUatBaseURL(),
+      projectName: requireUatProjectName(),
+      claimedWebPort: readClaimedWebPort()
+    }),
+    "only the local throwaway UAT stack is allowed"
+  ).toEqual([]);
   expect(
     process.env.JARVIS_UAT_REAL_CHAT_CONFIGURED,
     "This proof needs no real model login"
