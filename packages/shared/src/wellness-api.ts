@@ -60,6 +60,7 @@ export interface CreateCheckinResponse {
 }
 export interface ListCheckinsResponse {
   readonly checkins: readonly CheckinDto[];
+  readonly nextCursor?: string | null;
 }
 
 export interface UpdateCheckinRequest {
@@ -570,16 +571,15 @@ export const createCheckinRequestSchema = {
   }
 } as const;
 
-export const createCheckinResponseSchema = {
-  type: "object",
-  required: ["checkin"],
-  properties: { checkin: checkinDtoSchema }
-} as const;
+export const createCheckinResponseSchema = updateCheckinResponseSchema;
 
 export const listCheckinsResponseSchema = {
   type: "object",
   required: ["checkins"],
-  properties: { checkins: { type: "array", items: checkinDtoSchema } }
+  properties: {
+    checkins: { type: "array", items: checkinDtoSchema },
+    nextCursor: nullableStringSchema
+  }
 } as const;
 
 export const medicationDtoSchema = {

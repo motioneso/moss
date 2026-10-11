@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Reliable source and export recovery.** Source links and exports show saved state clearly, offer recovery, and explain which private notes are included. [PR #3404](https://github.com/motioneso/moss/pull/3404)
 - **Clear News feedback and Sports pause controls.** News preferences show saved and failed changes clearly, and Sports carousels can stay paused while scores refresh. [PR #3403](https://github.com/motioneso/moss/pull/3403)
 - **Chat reconnects after closing during startup.** Closing or reloading chat while it starts no longer leaves Moss stuck thinking. [PR #3445](https://github.com/motioneso/moss/pull/3445)
 - **Reliable dialog focus.** Dialogs keep keyboard focus usable when a focused control becomes unavailable. [PR #3401](https://github.com/motioneso/moss/pull/3401)
